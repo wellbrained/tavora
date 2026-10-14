@@ -24,7 +24,6 @@ export function parseAction(raw: unknown): HostAction | null {
 
   switch (a.type) {
     case "show-welcome":
-    case "show-settings":
       return only() ? { type: a.type } : null;
     case "open-game":
     case "choose-game-image":

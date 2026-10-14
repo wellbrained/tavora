@@ -140,9 +140,12 @@ test("a removed game keeps its data in Trash and comes back when restored", asyn
   await expect(panels(page)).toHaveCount(0);
 
   await page.getByTestId("rail-settings").click();
+  await page.getByTestId("settings-nav-trash").click();
   await expect(page.getByTestId("trash-satisfactory")).toContainText("Satisfactory");
   await page.getByTestId("restore-satisfactory").click();
   await expect(page.getByTestId("trash-empty")).toBeVisible();
+  await page.getByTestId("settings-close").click();
+  await expect(page.getByTestId("settings")).toHaveCount(0);
 
   // Its workspace and module data are back as they were.
   await openGame(page, "satisfactory");
@@ -164,8 +167,10 @@ test("a game in Trash is deleted for good after 30 days or when the player says 
 
   // Delete now, from Settings.
   await page.getByTestId("rail-settings").click();
+  await page.getByTestId("settings-nav-trash").click();
   await page.getByTestId("delete-poe2").click();
   await page.getByTestId("confirm-submit").click();
+  // The confirmation opened over Settings, which is still open.
   await expect(page.getByTestId("trash-poe2")).toHaveCount(0);
   await expect(page.getByTestId("trash-satisfactory")).toBeVisible();
   await running.app.close();
@@ -186,9 +191,11 @@ test("a game in Trash is deleted for good after 30 days or when the player says 
 
   const again = await launch(userData);
   await again.page.getByTestId("rail-settings").click();
+  await again.page.getByTestId("settings-nav-trash").click();
   await expect(again.page.getByTestId("trash-empty")).toBeVisible();
   expect(await exists(dataDir)).toBe(false);
   expect(await gamePartitions()).toEqual([]);
+  await again.page.keyboard.press("Escape");
 
   // Added again, the game starts from nothing.
   await again.page.getByTestId("rail-add-game").click();
@@ -226,9 +233,13 @@ test("Tavora starts on Home or on the last game, as chosen in Settings", async (
   const { app, page, userData } = await launch();
   await expect(page.getByTestId("rail-game-poe2")).toHaveAttribute("aria-current", "page");
 
+  // Settings opens over the game, which stays where it was.
   await page.getByTestId("rail-settings").click();
   await page.getByTestId("startup-welcome").click();
   await expect(page.getByTestId("startup-welcome")).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("settings")).toHaveCount(0);
+  await expect(page.getByTestId("rail-game-poe2")).toHaveAttribute("aria-current", "page");
   await app.close();
 
   const again = await launch(userData);

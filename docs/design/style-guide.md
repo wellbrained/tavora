@@ -139,6 +139,7 @@ stay Tavora's own and no theme can replace them.
 | Toast | Top centre over the toolbar, because module panels draw above the lower area. One line. |
 | Rail | Flame (Home) at the top, then favorites, then games and folders, then Add game, Settings and Collapse at the bottom. The active game gets a 3 px gold bar on its left edge. |
 | Panel header | 28 px, module name in Compact text. Close is always shown; Reload or Stop appear when the panel needs them. A status dot plus a word shows loading, unresponsive or failed. |
+| Settings | A large dialog over the app (1040 by 760 px, smaller windows minus a 24 px margin), as in Claude and Discord. A grouped section menu on the left, then one section at a time: a title, then rows with the setting's name and one sentence on the left and its control on the right, separated by dividers rather than cards. Two to four short choices use a segmented control. |
 | Empty state | One sentence and one action. No illustrations. |
 
 - **Focus:** every interactive element shows a 2 px `--ring` outline with 2 px

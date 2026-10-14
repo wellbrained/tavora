@@ -63,6 +63,9 @@ export type DialogRequest = PromptRequest | ConfirmRequest | { kind: "add-game" 
 
 export const dialog = shallowRef<DialogRequest | null>(null);
 
+/** Settings is its own dialog, so a confirmation can open on top of it. */
+export const settingsOpen = ref(false);
+
 export function prompt(request: Omit<PromptRequest, "kind" | "value" | "maxLength"> & { value?: string; maxLength?: number }) {
   dialog.value = { kind: "prompt", value: "", maxLength: 80, ...request };
 }
@@ -93,5 +96,5 @@ export function useFloating(): (open: boolean) => void {
   return set;
 }
 
-const overlayOpen = computed(() => openMenus.value > 0 || dialog.value !== null);
+const overlayOpen = computed(() => openMenus.value > 0 || dialog.value !== null || settingsOpen.value);
 watch(overlayOpen, (open) => api.setOverlay(open));

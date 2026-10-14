@@ -242,8 +242,7 @@ export class Host {
     const library = this.library;
     switch (action.type) {
       case "show-welcome":
-      case "show-settings":
-        return this.showScreen(action.type === "show-welcome" ? "welcome" : "settings");
+        return this.showScreen("welcome");
       case "open-game":
         return this.openGame(action.gameId);
       case "add-game": {

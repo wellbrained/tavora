@@ -8,7 +8,7 @@
  */
 export type InstanceStatus = "loading" | "ready" | "failed" | "unresponsive" | "crashed";
 
-export type Screen = "welcome" | "settings" | "game";
+export type Screen = "welcome" | "game";
 export type RootSort = "recent" | "manual";
 export type Startup = "welcome" | "last-game";
 export type RootItem = { kind: "game"; id: string } | { kind: "folder"; id: string };
@@ -70,7 +70,6 @@ export interface HostViewState {
 /** Everything the host UI can ask the main process to do. Parsed strictly in main. */
 export type HostAction =
   | { type: "show-welcome" }
-  | { type: "show-settings" }
   | { type: "open-game"; gameId: string }
   | { type: "add-game"; catalogId: string }
   | { type: "add-game"; name: string }

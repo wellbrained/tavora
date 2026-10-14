@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, Plus, Setting
 import { computed, reactive, ref } from "vue";
 import type { FolderView, GameView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
-import { act, dialog, prompt, state, submitAction } from "../host";
+import { act, dialog, prompt, settingsOpen, state, submitAction } from "../host";
 import { folderMenu, gameMenu } from "../rail-actions";
 import GameIcon from "./GameIcon.vue";
 import MenuArea from "./menus/MenuArea.vue";
@@ -382,13 +382,13 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       </button>
       <button
         type="button"
-        :class="cn('text-muted-foreground hover:bg-accent hover:text-foreground flex h-10 items-center gap-3 rounded-lg px-3.5', state!.screen === 'settings' && 'bg-accent text-foreground')"
+        class="text-muted-foreground hover:bg-accent hover:text-foreground flex h-10 items-center gap-3 rounded-lg px-3.5"
         data-rail-item
         data-testid="rail-settings"
         aria-label="Settings"
+        aria-haspopup="dialog"
         title="Settings"
-        :aria-current="state!.screen === 'settings' ? 'page' : undefined"
-        @click="act({ type: 'show-settings' })"
+        @click="settingsOpen = true"
       >
         <Settings class="size-5 flex-none" :stroke-width="1.5" />
         <span v-if="expanded" class="text-sm font-medium">Settings</span>
