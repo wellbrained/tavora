@@ -197,7 +197,7 @@ export class ModuleView {
         game,
         data,
         panelState,
-        // No permission can be granted yet (see docs/sdk/protocol.md).
+        // No permission can be granted yet (see apps/docs/reference/protocol.md).
         capabilities: new Set<Capability>(),
         getViewport: () => ({ ...this.viewport }),
         isSuspended: () => this.suspended,

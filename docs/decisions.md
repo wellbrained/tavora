@@ -29,3 +29,4 @@
 | 2026-10-14 | Module panels are hidden while a host menu or dialog is open | Native views draw above the host page and would cover them |
 | 2026-10-14 | No news on Home for now; it shows recently played games | News sourcing and licensing are still open |
 | 2026-10-14 | Core modules in Milestone C are Notes and To-Dos; Browser gets its own milestone, Boards come later | Browser needs its own security design |
+| 2026-10-14 | Developer docs live in this repo as `apps/docs` (VitePress); the marketing site stays in Tavora-website | Manifest, protocol and SDK docs change in the same PRs as the code; the SDK API reference is generated from its sources by TypeDoc and the manifest JSON Schema is published with the site. VitePress keeps the docs on Vue |

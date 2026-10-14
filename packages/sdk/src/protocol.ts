@@ -1,5 +1,5 @@
 // Wire protocol v1 between a module and the Tavora host, carried over a
-// MessagePort. Specified in docs/sdk/protocol.md.
+// MessagePort. Specified in apps/docs/reference/protocol.md.
 //
 // Identity (which module, which game, which panel) is never part of a
 // message. The host binds it to the port when it creates the channel.

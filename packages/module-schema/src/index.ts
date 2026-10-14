@@ -1,4 +1,4 @@
-// Manifest v1 for tavora.module.json (docs/sdk/manifest.md). The JSON Schema
+// Manifest v1 for tavora.module.json (apps/docs/reference/manifest.md). The JSON Schema
 // in schema/ describes the same rules for editors; tests keep the two in step.
 
 export interface ModuleViewport {

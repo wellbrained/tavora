@@ -1,0 +1,14 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["../../packages/sdk/src/index.ts"],
+  "tsconfig": "../../packages/sdk/tsconfig.build.json",
+  "plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme"],
+  "out": "api",
+  "docsRoot": ".",
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "hideGenerator": true,
+  "githubPages": false,
+  "sourceLinkTemplate": "https://github.com/wellbrained/tavora/blob/main/{path}#L{line}"
+}
