@@ -33,7 +33,7 @@ Requires Node 22+ and pnpm (via `corepack enable`).
 pnpm install
 pnpm build                              # SDK, host, official and example modules
 pnpm --filter @tavora/desktop start     # opens Tavora with Notes, To-Dos and the example modules
-pnpm --filter @tavora/docs dev          # developer docs (local only)
+pnpm --filter @tavora/docs dev          # developer docs at http://127.0.0.1:4001
 ```
 
 To package a standalone test build after `pnpm build`:
