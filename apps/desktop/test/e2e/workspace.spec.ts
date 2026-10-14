@@ -4,9 +4,12 @@ import {
   expectModuleText,
   inModule,
   launch,
+  openGame,
   openModule,
   panels,
+  RAIL_WIDTH,
   REACT,
+  setContentSize,
   VANILLA,
 } from "./harness";
 
@@ -41,13 +44,13 @@ test("React and vanilla modules load, get trusted game context and persist data"
   await expectModuleText(app, VANILLA, "count", "3");
 
   // Each game has its own workspace and its own module data.
-  await page.selectOption('[data-testid="game-select"]', "satisfactory");
+  await openGame(page, "satisfactory");
   await expect(page.getByTestId("empty-workspace")).toBeVisible();
   await openModule(page, VANILLA);
   await expectModuleText(app, VANILLA, "game", "Satisfactory");
   await expectModuleText(app, VANILLA, "count", "0");
 
-  await page.selectOption('[data-testid="game-select"]', "poe2");
+  await openGame(page, "poe2");
   await expect(panels(page)).toHaveCount(2);
   await expectModuleText(app, VANILLA, "count", "3");
   await expectModuleText(app, REACT, "count", "1");
@@ -67,9 +70,9 @@ test("modules receive resize events matching their panel size", async () => {
   await openModule(page, REACT);
   await expectModuleText(app, VANILLA, "status", "Connected");
 
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1000, 700));
-  // Two equal columns of 500px; the panel area is the window minus toolbar
-  // (48px) and panel headers (28px).
+  await setContentSize(app, RAIL_WIDTH + 1000, 700);
+  // Two equal columns of 500px; the panel area is the window minus the rail,
+  // the toolbar (48px) and panel headers (28px).
   await expectModuleText(app, VANILLA, "viewport", "500 × 624");
   await expectModuleText(app, REACT, "viewport", "500 × 624");
   expect(await inModule(app, VANILLA, "[innerWidth, innerHeight].join('x')")).toBe("500x624");
@@ -78,7 +81,7 @@ test("modules receive resize events matching their panel size", async () => {
 
 test("panels are refused when they would be smaller than the module's minimum size", async () => {
   const { app, page } = await launch();
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1000, 700));
+  await setContentSize(app, RAIL_WIDTH + 1000, 700);
   // minWidth is 320, so three panels fit in 1000px and a fourth does not.
   for (let i = 0; i < 4; i++) await openModule(page, VANILLA);
   await expect(panels(page)).toHaveCount(3);

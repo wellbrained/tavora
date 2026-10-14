@@ -5,7 +5,7 @@ import path from "node:path";
 import { LIMITS } from "@tavora/sdk/protocol";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BridgeSession, type BridgeContext } from "./bridge";
-import { THEMES } from "./games";
+import { THEME } from "./games";
 import { DataRegistry } from "./storage";
 
 class FakePort extends EventEmitter {
@@ -44,7 +44,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     panelState: registry.panelState,
     capabilities: new Set(),
     getViewport: () => ({ width: 400, height: 300 }),
-    getTheme: () => THEMES.dark,
+    getTheme: () => THEME,
     isSuspended: () => false,
   };
 }
