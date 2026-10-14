@@ -29,3 +29,4 @@
 | 2026-10-14 | Module panels are hidden while a host menu or dialog is open | Native views draw above the host page and would cover them |
 | 2026-10-14 | No news on Home for now; it shows recently played games | News sourcing and licensing are still open |
 | 2026-10-14 | Core modules in Milestone C are Notes and To-Dos; Browser gets its own milestone, Boards come later | Browser needs its own security design |
+| 2026-10-14 | Windows builds stay unsigned until the first public release, which is signed; SignPath Foundation (free for open source) is the first choice, a Certum open-source certificate the fallback | Unsigned is fine for a few testers; strangers need a publisher name, and the updater only verifies update signatures when the installed version was signed |
