@@ -39,9 +39,14 @@ test("panels open side by side, and as tabs once there is no room", async () => 
   await setContentSize(app, RAIL_WIDTH + 1000, 500);
   // minWidth is 320, so three columns fit in 1000px and a fourth does not.
   // minHeight is 240, so there is no room to split one either.
-  for (let i = 0; i < 4; i++) await openModule(page, VANILLA);
+  for (let i = 0; i < 3; i++) await openModule(page, VANILLA);
+  await expect(groups(page)).toHaveCount(3);
+  // The fourth becomes a tab in the focused group: the third one, once its tab is clicked.
+  await panels(page).nth(2).click();
+  await openModule(page, VANILLA);
   await expect(panels(page)).toHaveCount(4);
   await expect(groups(page)).toHaveCount(3);
+  await expect(groups(page).nth(2).locator("[data-panel-tab]")).toHaveCount(2);
   for (const index of [0, 1, 2, 3]) await expectModuleText(app, VANILLA, "status", "Connected", index);
 
   // The newest panel is the selected tab; the one behind it is hidden and paused.
