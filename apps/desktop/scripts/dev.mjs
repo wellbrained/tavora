@@ -2,14 +2,23 @@
 // Tavora restarts by itself when the main process or a preload changes.
 // Release builds never use this; see TAVORA_DEV_SERVER in src/main/index.ts.
 import { spawn } from "node:child_process";
+import { parseArgs } from "node:util";
 import electron from "electron";
 import { context } from "esbuild";
 import { createServer } from "vite";
 import { rendererConfig, root, targets } from "./targets.mjs";
 
+// `pnpm dev --port <n>` picks the port, so a tool like CoreHub can decide it.
+const { values } = parseArgs({ options: { port: { type: "string", default: "5173" } }, strict: false });
+const port = Number(values.port);
+if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  console.error(`[dev] --port must be a port number, got "${values.port}"`);
+  process.exit(1);
+}
+
 const server = await createServer({
   configFile: rendererConfig,
-  server: { host: "127.0.0.1", port: 5173, strictPort: true },
+  server: { host: "127.0.0.1", port, strictPort: true },
 });
 await server.listen();
 const url = `http://127.0.0.1:${server.config.server.port}/`;
