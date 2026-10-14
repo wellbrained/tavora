@@ -12,6 +12,7 @@ export default defineConfig({
   cleanUrls: true,
   sitemap: { hostname: "https://docs.mytavora.app" },
   lastUpdated: true,
+  vite: { server: { host: "127.0.0.1", port: 4001, strictPort: true } },
   // Tavora ships one dark theme for now (see docs/design/style-guide.md).
   appearance: "force-dark",
   head: [["meta", { name: "theme-color", content: "#171412" }]],
