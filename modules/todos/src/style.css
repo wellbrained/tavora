@@ -28,7 +28,7 @@
   width: 20px;
   height: 20px;
   margin: 0;
-  border: 1.5px solid color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  border: 1.5px solid color-mix(in oklab, var(--primary) 45%, var(--muted-foreground));
   border-radius: 9999px;
   background: transparent;
   cursor: pointer;

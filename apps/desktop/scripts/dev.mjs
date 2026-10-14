@@ -2,10 +2,12 @@
 // Tavora restarts by itself when the main process or a preload changes.
 // Release builds never use this; see TAVORA_DEV_SERVER in src/main/index.ts.
 import { spawn } from "node:child_process";
+import { existsSync, readdirSync } from "node:fs";
+import path from "node:path";
 import { parseArgs } from "node:util";
 import electron from "electron";
 import { context } from "esbuild";
-import { createServer } from "vite";
+import { build, createServer } from "vite";
 import { rendererConfig, root, targets } from "./targets.mjs";
 
 // `pnpm dev --port <n>` picks the port, so a tool like CoreHub can decide it.
@@ -45,7 +47,6 @@ function start() {
 function restart() {
   clearTimeout(restartTimer);
   restartTimer = setTimeout(() => {
-    console.log("[dev] main process changed, restarting Tavora");
     const previous = app;
     if (!previous) return; // still restarting; the new start picks up this build
     app = undefined;
@@ -67,11 +68,46 @@ const reload = {
         first = false;
         if (--pending === 0) start();
       } else if (pending === 0) {
+        console.log("[dev] main process changed, restarting Tavora");
         restart();
       }
     });
   },
 };
+
+// The official modules (repo modules/) are loaded from their built bundles,
+// so they are built in watch mode too. A rebuild restarts Tavora like a main
+// process change, which reloads every panel with the new bundle.
+const modulesDir = path.resolve(root, "../../modules");
+const officialModules = readdirSync(modulesDir, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && existsSync(path.join(modulesDir, entry.name, "tavora.module.json")))
+  .map((entry) => path.join(modulesDir, entry.name));
+pending += officialModules.length;
+
+const watchers = await Promise.all(
+  officialModules.map(async (dir) => {
+    const name = path.basename(dir);
+    const watcher = await build({
+      configFile: path.join(dir, "vite.config.ts"),
+      root: path.join(dir, "src"),
+      logLevel: "warn",
+      build: { watch: {} },
+    });
+    let first = true;
+    watcher.on("event", (event) => {
+      if (event.code === "ERROR") console.log(`[dev] module ${name} failed to build; fix the error and save again`);
+      if (event.code !== "END") return;
+      if (first) {
+        first = false;
+        if (--pending === 0) start();
+      } else if (pending === 0) {
+        console.log(`[dev] module ${name} changed, restarting Tavora`);
+        restart();
+      }
+    });
+    return watcher;
+  }),
+);
 
 const contexts = await Promise.all(targets.map((options) => context({ ...options, plugins: [reload] })));
 await Promise.all(contexts.map((ctx) => ctx.watch()));
@@ -95,6 +131,7 @@ async function stop(code) {
     await exited;
   }
   await Promise.all(contexts.map((ctx) => ctx.dispose()));
+  await Promise.all(watchers.map((watcher) => watcher.close()));
   await server.close();
   process.exit(code);
 }

@@ -138,7 +138,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
     :class="
       cn(
         'group/task relative rounded-md',
-        expanded ? 'bg-card border' : 'hover:bg-accent',
+        expanded ? 'bg-background my-1 border' : 'hover:bg-accent/60',
         drop === 'before' && 'drop-before',
         drop === 'after' && 'drop-after',
       )
@@ -148,7 +148,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
     :data-pinned="task.pinned"
     @contextmenu.prevent="menuOpen = true"
   >
-    <div class="flex min-h-9 items-start gap-1.5 py-1 pr-1 pl-1">
+    <div class="flex min-h-9 items-start gap-1.5 py-1 pr-1 pl-0.5">
       <span
         v-if="!compact"
         class="text-muted-foreground flex h-7 w-4 flex-none cursor-grab items-center justify-center opacity-0 group-hover/task:opacity-100"
