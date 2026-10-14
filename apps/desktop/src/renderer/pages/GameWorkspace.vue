@@ -26,6 +26,9 @@ const THEME = { name: "tavora", className: "dockview-theme-tavora", colorScheme:
 /** How long the layout must be still before it is saved. */
 const SAVE_DELAY_MS = 300;
 
+/** Who publishes a module: Tavora itself, or a package found on this computer. */
+const PROVENANCE_LABEL = { official: "Official", local: "Local" } as const;
+
 const view = computed(() => state.value!);
 const game = computed(() => (view.value.currentGameId ? view.value.library.games[view.value.currentGameId] : undefined));
 
@@ -242,6 +245,10 @@ const groupActions = GroupActions as unknown as VueComponent;
           @click="act({ type: 'open-module', moduleId: module.id })"
         >
           <Plus :stroke-width="1.5" /> {{ module.name }}
+          <span
+            class="text-muted-foreground bg-background rounded-sm px-1 text-xs"
+            :data-testid="`provenance-${module.id}`"
+          >{{ PROVENANCE_LABEL[module.provenance] }}</span>
         </Button>
       </div>
       <span class="text-info ml-auto text-sm" role="status" data-testid="notice">{{ view.notice ?? "" }}</span>

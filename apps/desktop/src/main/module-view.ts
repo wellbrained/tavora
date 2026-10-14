@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { MessageChannelMain, session, WebContentsView, type Session } from "electron";
 import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
-import { MODULE_TOKENS } from "./module-style";
+import { THEME } from "./games";
 import { contentTypeFor, MODULE_CSP, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BridgeSession } from "./bridge";
 import type { InstalledModule } from "./registry";
@@ -112,7 +112,7 @@ export class ModuleView {
     });
 
     // No white flash before the page has painted.
-    this.view.setBackgroundColor(MODULE_TOKENS.background);
+    this.view.setBackgroundColor(THEME.tokens.background);
 
     const contents = this.view.webContents;
     const origin = moduleOrigin(module.manifest.id);

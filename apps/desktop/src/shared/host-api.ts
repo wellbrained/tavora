@@ -113,6 +113,8 @@ export interface HostViewState {
     /** The smallest panel content area the module works in. */
     minWidth: number;
     minHeight: number;
+    /** Official modules ship with Tavora; local ones were found on disk. */
+    provenance: "official" | "local";
   }[];
   /** Panels of the current game, in the order they were opened. */
   panels: PanelView[];

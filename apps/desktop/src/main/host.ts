@@ -87,6 +87,8 @@ const FREEZE_TIMEOUT_MS = 250;
 export interface HostOptions {
   userData: string;
   moduleDirs: string[];
+  /** Modules that ship with Tavora, shown as Official. */
+  officialModuleDirs: string[];
   rendererDir: string;
   modulePreload: string;
   hostPreload: string;
@@ -156,7 +158,7 @@ export class Host {
 
   static async create(options: HostOptions): Promise<Host> {
     const { userData } = options;
-    const modules = await discoverModules(options.moduleDirs);
+    const modules = await discoverModules({ official: options.officialModuleDirs, local: options.moduleDirs });
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
     const expired = purgeExpired(library, new Date());
     const workspace = await loadWorkspace(
@@ -725,6 +727,7 @@ export class Host {
         available: game !== null && this.supportsGame(module, game.id),
         minWidth: module.manifest.viewport.minWidth,
         minHeight: module.manifest.viewport.minHeight,
+        provenance: module.provenance,
       })),
       panels: workspace.instances.map((record) => ({
         instanceId: record.instanceId,

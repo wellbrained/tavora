@@ -1,0 +1,148 @@
+/* Tavora default theme for the official modules, matching the host UI
+   (apps/desktop/src/renderer/styles.css and docs/design/style-guide.md).
+   These values are only the starting point: connectModule() replaces them
+   with the tokens the host sends through ui.getTheme, so a later theme
+   reaches the modules without rebuilding them. */
+@import "tailwindcss";
+@import "tw-animate-css";
+/* Fonts are bundled; modules cannot load anything from the web. */
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+/* The shared components and helpers in this package use Tailwind classes too. */
+@source "./";
+
+:root {
+  color-scheme: dark;
+
+  --background: #171412;
+  --foreground: #f2ece0;
+  --card: #201c19;
+  --card-foreground: #f2ece0;
+  --popover: #201c19;
+  --popover-foreground: #f2ece0;
+  --primary: #e0a243;
+  --primary-hover: #f0b85c;
+  --primary-foreground: #171412;
+  --secondary: #2a2521;
+  --secondary-foreground: #f2ece0;
+  --muted: #2a2521;
+  --muted-foreground: #9a958c;
+  --accent: #2a2521;
+  --accent-foreground: #f2ece0;
+  --destructive: #e5675a;
+  --border: #35302b;
+  --input: #6b665c;
+  --ring: #e0a243;
+
+  --rail: #100e0d;
+  --success: #8cbf7f;
+  --warning: #e3c75f;
+  --info: #6fa8dc;
+
+  --radius: 8px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-rail: var(--rail);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: "Inter Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+  /* Type scale from the style guide; nothing is smaller than 12px. */
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 18px;
+  --text-base: 14px;
+  --text-base--line-height: 20px;
+  --text-lg: 16px;
+  --text-lg--line-height: 22px;
+  --text-xl: 20px;
+  --text-xl--line-height: 26px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground m-0 overflow-hidden font-sans text-base;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 35%, transparent);
+  }
+  input[type="checkbox"] {
+    accent-color: var(--primary);
+  }
+  /* Thin scrollbars in theme colours, never the system's light ones. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--input) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--input);
+    border-radius: 4px;
+  }
+  input[type="search"]::-webkit-search-cancel-button {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}

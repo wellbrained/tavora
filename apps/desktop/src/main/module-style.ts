@@ -5,27 +5,10 @@
 // defaults (white margins, light form controls, serif text), so a module
 // that styles nothing still looks like part of Tavora, and one with its own
 // design keeps it.
+import { THEME } from "./games";
 
-/** The default theme's tokens; the same values as src/renderer/styles.css. */
-export const MODULE_TOKENS = {
-  background: "#171412",
-  foreground: "#f2ece0",
-  card: "#201c19",
-  primary: "#e0a243",
-  "primary-hover": "#f0b85c",
-  "primary-foreground": "#171412",
-  secondary: "#2a2521",
-  "muted-foreground": "#9a958c",
-  accent: "#2a2521",
-  destructive: "#e5675a",
-  border: "#35302b",
-  input: "#6b665c",
-  ring: "#e0a243",
-  success: "#8cbf7f",
-  warning: "#e3c75f",
-  info: "#6fa8dc",
-  radius: "8px",
-} as const;
+/** The theme's tokens, as modules see them (games.ts, kept equal to the host UI's). */
+export const MODULE_TOKENS: Readonly<Record<string, string>> = { ...THEME.tokens, radius: `${THEME.radius}px` };
 
 export interface ModuleFonts {
   /** Inter's Latin subset as a woff2 data URL. */
