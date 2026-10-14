@@ -1,0 +1,8 @@
+:root { --bg: #18181b; --text: #f2ece0; --muted: #9a958c; --accent: #e0a243; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, sans-serif; }
+main { padding: 16px; }
+h1 { font-size: 16px; margin: 0 0 8px; }
+dt { color: var(--muted); }
+dd { margin: 0 0 8px; }
+button { background: var(--accent); color: #18181b; border: 0; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+button:disabled { opacity: 0.5; }
