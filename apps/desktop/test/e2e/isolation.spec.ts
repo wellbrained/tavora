@@ -1,4 +1,4 @@
-// Milestone A gate tests (docs/threat-model.md, G1 to G7). A hostile module
+// Isolation gate tests (docs/threat-model.md, G1 to G9). A hostile module
 // attacks the host while a well-behaved module holds data worth stealing.
 
 import { createServer, type Server } from "node:http";
@@ -47,7 +47,7 @@ interface ProbeResults {
   network: Record<string, Settled | boolean>;
   windowOpen: string;
   localStorageSecret: string | null;
-  bridge: Record<string, { ok?: boolean; result?: unknown; error?: { code: string }; timeout?: boolean }>;
+  bridge: Record<string, { ok?: boolean; result?: unknown; error?: { code: string; capability?: string; supported?: number[] }; timeout?: boolean }>;
 }
 
 test("a hostile module cannot escape its sandbox, spoof identity or reach the network", async () => {
@@ -93,6 +93,12 @@ test("a hostile module cannot escape its sandbox, spoof identity or reach the ne
 
   // G3: identity comes from the host, not the message.
   const { bridge } = results;
+  expect(bridge.beforeHandshake).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
+  expect(bridge.futureProtocol).toMatchObject({ ok: false, error: { code: "INCOMPATIBLE", supported: [1] } });
+  expect(bridge.handshake).toMatchObject({
+    ok: true,
+    result: { protocol: 1, module: { id: HOSTILE }, capabilities: [] },
+  });
   expect(bridge.game).toMatchObject({ ok: true, result: { id: "poe2" } });
   expect(bridge.gameWithSpoofedParams).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
   expect(bridge.spoofedStorageRead).toMatchObject({ ok: true, result: null });
@@ -102,7 +108,20 @@ test("a hostile module cannot escape its sandbox, spoof identity or reach the ne
   expect(bridge.wrongVersion).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
   expect(bridge.nonJsonValue).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
   expect(bridge.oversized).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
+  expect(bridge.overQuota).toMatchObject({ ok: false, error: { code: "QUOTA_EXCEEDED" } });
   expect(bridge.traversalKey).toMatchObject({ ok: true });
+  expect(bridge.traversalDocument).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  expect(bridge.spoofedDocumentList).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+
+  // G9: capabilities that were never granted fail the same way every time.
+  for (const [probe, capability] of [
+    ["networkFetch", "network"],
+    ["filesOpen", "files"],
+    ["clipboardRead", "clipboard"],
+    ["sharedDataRead", "sharedData"],
+  ] as const) {
+    expect(bridge[probe], probe).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability } });
+  }
 
   // The "spoofed" write landed in the attacker's own store, not the victim's.
   await panels(page, VANILLA).getByTestId("close").click();

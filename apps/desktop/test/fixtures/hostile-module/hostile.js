@@ -20,7 +20,7 @@ function getPort() {
       window.removeEventListener("message", onMessage);
       resolve(event.ports[0]);
     });
-    window.postMessage({ type: "tavora:hello", v: 0 }, location.origin);
+    window.postMessage({ type: "tavora:hello", v: 1 }, location.origin);
   });
 }
 
@@ -35,7 +35,7 @@ function rpc(port, message) {
       port.removeEventListener("message", onMessage);
       resolve(event.data);
     });
-    port.postMessage({ v: 0, id, ...message });
+    port.postMessage({ v: 1, id, ...message });
   });
 }
 
@@ -103,6 +103,10 @@ window.runProbes = async ({ serverUrl, otherModuleUrl }) => {
   const port = await getPort();
   port.start();
   results.bridge = {
+    // Protocol rules come before anything else.
+    beforeHandshake: await rpc(port, { method: "game.getCurrent" }),
+    futureProtocol: await rpc(port, { method: "bridge.handshake", params: { protocol: 2, sdkVersion: "9.9.9" } }),
+    handshake: await rpc(port, { method: "bridge.handshake", params: { protocol: 1, sdkVersion: "0.1.0" } }),
     game: await rpc(port, { method: "game.getCurrent" }),
     gameWithSpoofedParams: await rpc(port, { method: "game.getCurrent", params: { gameId: "satisfactory" } }),
     spoofedStorageRead: await rpc(port, {
@@ -115,10 +119,24 @@ window.runProbes = async ({ serverUrl, otherModuleUrl }) => {
     }),
     protoMethod: await rpc(port, { method: "__proto__" }),
     constructorMethod: await rpc(port, { method: "constructor" }),
-    wrongVersion: await rpc(port, { v: 1, method: "game.getCurrent" }),
+    wrongVersion: await rpc(port, { v: 0, method: "game.getCurrent" }),
     nonJsonValue: await rpc(port, { method: "storage.set", params: { key: "d", value: new Date() } }),
-    oversized: await rpc(port, { method: "storage.set", params: { key: "big", value: "x".repeat(2 * 1024 * 1024) } }),
+    oversized: await rpc(port, { method: "storage.set", params: { key: "big", value: "x".repeat(9 * 1024 * 1024) } }),
+    overQuota: await rpc(port, { method: "storage.set", params: { key: "big", value: "x".repeat(6 * 1024 * 1024) } }),
     traversalKey: await rpc(port, { method: "storage.set", params: { key: "../../../escape", value: 1 } }),
+    traversalDocument: await rpc(port, {
+      method: "documents.put",
+      params: { id: "../../vanilla", title: "x", data: 1 },
+    }),
+    spoofedDocumentList: await rpc(port, {
+      method: "documents.list",
+      params: { moduleId: "local.example.vanilla-module" },
+    }),
+    // Capabilities nobody granted. The host must refuse them with a stable error.
+    networkFetch: await rpc(port, { method: "network.fetch", params: { url: `${serverUrl}/bridge-fetch` } }),
+    filesOpen: await rpc(port, { method: "files.open" }),
+    clipboardRead: await rpc(port, { method: "clipboard.readText" }),
+    sharedDataRead: await rpc(port, { method: "sharedData.read", params: { key: "x" } }),
   };
 
   return results;
@@ -126,4 +144,11 @@ window.runProbes = async ({ serverUrl, otherModuleUrl }) => {
 
 window.tryNavigate = (url) => {
   location.href = url;
+};
+
+// Blocks the renderer's main thread for good, like an infinite loop in a module.
+window.hang = () => {
+  setTimeout(() => {
+    for (;;);
+  }, 0);
 };

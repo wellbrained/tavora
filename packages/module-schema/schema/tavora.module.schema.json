@@ -1,0 +1,154 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "tavora.module.schema.json",
+  "title": "Tavora module manifest (tavora.module.json), apiVersion 1",
+  "description": "Describes a Tavora module package. Tavora Desktop rejects a manifest with unknown fields instead of ignoring them. The TypeScript validator in @tavora/module-schema is the reference; this schema is checked against it in tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "version",
+    "apiVersion",
+    "entry",
+    "games",
+    "viewport",
+    "permissions"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Lets editors find this schema. Ignored by Tavora."
+    },
+    "id": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(\\.[a-z0-9][a-z0-9-]*){1,4}$",
+      "description": "Unique module id: publisher.module-name, lowercase and dot-separated. Never change it after release: data and permissions are keyed on it.",
+      "examples": [
+        "community.example.campaign-companion"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "\\S",
+      "description": "Name shown to players."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "\\S",
+      "description": "One or two sentences shown in the module picker."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-[0-9A-Za-z.-]+)?$",
+      "description": "Module version, semver.",
+      "examples": [
+        "1.0.0"
+      ]
+    },
+    "apiVersion": {
+      "const": "1",
+      "description": "Manifest and bridge contract version. Only \"1\" exists."
+    },
+    "entry": {
+      "type": "string",
+      "allOf": [
+        {
+          "$ref": "#/definitions/packagePath"
+        },
+        {
+          "pattern": "\\.html$"
+        }
+      ],
+      "description": "HTML page Tavora loads, relative to the package root.",
+      "examples": [
+        "dist/index.html"
+      ]
+    },
+    "icon": {
+      "type": "string",
+      "allOf": [
+        {
+          "$ref": "#/definitions/packagePath"
+        },
+        {
+          "pattern": "\\.(png|webp)$"
+        }
+      ],
+      "description": "Square PNG or WebP icon inside the package, at least 128 × 128 pixels.",
+      "examples": [
+        "assets/icon.png"
+      ]
+    },
+    "games": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+      },
+      "description": "Game ids this module is made for. Empty means any game.",
+      "examples": [
+        [
+          "poe2"
+        ]
+      ]
+    },
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minWidth",
+        "minHeight"
+      ],
+      "description": "Panel sizes in CSS pixels. Tavora never makes the panel smaller than the minimum.",
+      "properties": {
+        "minWidth": {
+          "$ref": "#/definitions/dimension"
+        },
+        "minHeight": {
+          "$ref": "#/definitions/dimension"
+        },
+        "preferredWidth": {
+          "$ref": "#/definitions/dimension"
+        },
+        "preferredHeight": {
+          "$ref": "#/definitions/dimension"
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network"
+      ],
+      "description": "Capabilities the module asks for. None can be granted yet, so every list must be empty.",
+      "properties": {
+        "network": {
+          "type": "array",
+          "maxItems": 0,
+          "description": "Hosts the module may reach through the host. Not supported yet: must be empty."
+        }
+      }
+    }
+  },
+  "definitions": {
+    "dimension": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "packagePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?!/)(?!.*//)(?!(.*/)?\\.\\.?(/|$))[^\\\\:\\u0000]+$",
+      "description": "Relative path inside the package: no leading slash, no '.' or '..' segments, no backslashes or colons."
+    }
+  }
+}

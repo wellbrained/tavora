@@ -8,7 +8,8 @@ const out = path.join(root, "out");
 
 await rm(out, { recursive: true, force: true });
 
-const common = { bundle: true, sourcemap: true, logLevel: "warning", absWorkingDir: root };
+// "source" resolves workspace packages to their TypeScript sources.
+const common = { bundle: true, sourcemap: true, logLevel: "warning", absWorkingDir: root, conditions: ["source"] };
 
 await Promise.all([
   build({

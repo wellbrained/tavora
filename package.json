@@ -22,5 +22,6 @@
       "electron",
       "esbuild"
     ]
-  }
+  },
+  "license": "MIT"
 }

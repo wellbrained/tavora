@@ -1,0 +1,20 @@
+{
+  "name": "@tavora/example-vue-module",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "vue-tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@tavora/sdk": "workspace:*",
+    "vue": "3.5.43"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.9",
+    "vite": "8.3.4",
+    "vue-tsc": "3.3.11"
+  },
+  "license": "MIT"
+}

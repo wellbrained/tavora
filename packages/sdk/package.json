@@ -1,13 +1,30 @@
 {
   "name": "@tavora/sdk",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Typed client for Tavora modules: talks to the Tavora Desktop host over its bridge.",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p ."
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./protocol": "./src/protocol.ts"
-  }
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./protocol": {
+      "source": "./src/protocol.ts",
+      "types": "./dist/protocol.d.ts",
+      "default": "./dist/protocol.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "license": "MIT"
 }

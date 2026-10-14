@@ -1,4 +1,7 @@
+import { glob, readFile } from "node:fs/promises";
+import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
+import schema from "../schema/tavora.module.schema.json" with { type: "json" };
 import { isGameId, isModuleId, validateManifest } from "./index";
 
 const valid = {
@@ -48,6 +51,96 @@ describe("validateManifest", () => {
   it("rejects non-objects", () => {
     expect(validateManifest(null).ok).toBe(false);
     expect(validateManifest([]).ok).toBe(false);
+  });
+
+  it("accepts the optional $schema, description and icon fields", () => {
+    const full = {
+      ...valid,
+      $schema: "./node_modules/@tavora/module-schema/schema/tavora.module.schema.json",
+      description: "Tracks campaign progress.",
+      icon: "assets/icon.png",
+    };
+    expect(validateManifest(full)).toEqual({ ok: true, manifest: full });
+  });
+
+  it("rejects unknown viewport fields", () => {
+    expect(validateManifest({ ...valid, viewport: { minWidth: 320, minHeight: 240, maxWidth: 9 } })).toEqual({
+      ok: false,
+      errors: ["unknown viewport fields: maxWidth"],
+    });
+  });
+});
+
+// Every case is checked by the validator and by the JSON Schema, and both
+// must agree, so editors flag exactly what Tavora refuses to load.
+const cases: [string, unknown, boolean][] = [
+  ["minimal", valid, true],
+  ["full", { ...valid, $schema: "x", description: "Plans builds.", icon: "assets/icon.webp" }, true],
+  ["any game", { ...valid, games: [] }, true],
+  ["prerelease version", { ...valid, version: "2.0.0-beta.1" }, true],
+  ["nested entry", { ...valid, entry: "a/b/c/index.html" }, true],
+  ["dotted file name", { ...valid, entry: "dist/.index.html" }, true],
+  ["missing id", { ...valid, id: undefined }, false],
+  ["one-part id", { ...valid, id: "notes" }, false],
+  ["uppercase id", { ...valid, id: "Community.example" }, false],
+  ["long id", { ...valid, id: `a.${"b".repeat(127)}` }, false],
+  ["blank name", { ...valid, name: "   " }, false],
+  ["long name", { ...valid, name: "n".repeat(81) }, false],
+  ["blank description", { ...valid, description: "" }, false],
+  ["long description", { ...valid, description: "d".repeat(301) }, false],
+  ["numeric $schema", { ...valid, $schema: 1 }, false],
+  ["two-part version", { ...valid, version: "1.0" }, false],
+  ["leading zero version", { ...valid, version: "01.0.0" }, false],
+  ["api version 2", { ...valid, apiVersion: "2" }, false],
+  ["numeric api version", { ...valid, apiVersion: 1 }, false],
+  ["entry with ..", { ...valid, entry: "dist/../index.html" }, false],
+  ["entry with .", { ...valid, entry: "./index.html" }, false],
+  ["absolute entry", { ...valid, entry: "/index.html" }, false],
+  ["entry with backslash", { ...valid, entry: "dist\\index.html" }, false],
+  ["entry with scheme", { ...valid, entry: "https://x.example/index.html" }, false],
+  ["entry with empty segment", { ...valid, entry: "dist//index.html" }, false],
+  ["entry with null byte", { ...valid, entry: "dist/\u0000.html" }, false],
+  ["script entry", { ...valid, entry: "dist/index.js" }, false],
+  ["svg icon", { ...valid, icon: "icon.svg" }, false],
+  ["icon outside package", { ...valid, icon: "../icon.png" }, false],
+  ["remote icon", { ...valid, icon: "https://x.example/icon.png" }, false],
+  ["games not an array", { ...valid, games: "poe2" }, false],
+  ["bad game id", { ...valid, games: ["Poe 2"] }, false],
+  ["missing viewport", { ...valid, viewport: undefined }, false],
+  ["zero width", { ...valid, viewport: { minWidth: 0, minHeight: 240 } }, false],
+  ["fractional width", { ...valid, viewport: { minWidth: 1.5, minHeight: 240 } }, false],
+  ["huge height", { ...valid, viewport: { minWidth: 320, minHeight: 10_001 } }, false],
+  ["bad preferred size", { ...valid, viewport: { minWidth: 320, minHeight: 240, preferredHeight: -1 } }, false],
+  ["unknown viewport field", { ...valid, viewport: { minWidth: 320, minHeight: 240, x: 1 } }, false],
+  ["missing permissions", { ...valid, permissions: undefined }, false],
+  ["network hosts", { ...valid, permissions: { network: ["api.example.com"] } }, false],
+  ["shared data permission", { ...valid, permissions: { network: [], sharedData: { consume: [] } } }, false],
+  ["unknown field", { ...valid, nodeIntegration: true }, false],
+];
+
+describe("JSON Schema", () => {
+  const ajv = new Ajv({ allErrors: true, strict: true });
+  const validate = ajv.compile(schema);
+
+  it.each(cases)("agrees with the validator: %s", (_name, manifest, expected) => {
+    // Drop undefined fields the way JSON.parse would never produce them.
+    const input = JSON.parse(JSON.stringify(manifest)) as unknown;
+    expect(validateManifest(input).ok).toBe(expected);
+    expect(validate(input)).toBe(expected);
+  });
+
+  it("validates every example and fixture manifest in the repo", async () => {
+    const root = new URL("../../../", import.meta.url);
+    let checked = 0;
+    for await (const file of glob(["examples/*/tavora.module.json", "apps/desktop/test/fixtures/*/tavora.module.json"], {
+      cwd: root,
+    })) {
+      checked++;
+      const manifest = JSON.parse(await readFile(new URL(file, root), "utf8")) as unknown;
+      expect(validateManifest(manifest), file).toMatchObject({ ok: true });
+      expect(validate(manifest), file).toBe(true);
+    }
+    expect(checked).toBeGreaterThanOrEqual(4);
   });
 });
 

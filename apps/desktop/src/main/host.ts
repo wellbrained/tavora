@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import { BrowserWindow, ipcMain, nativeTheme, protocol, session, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, ipcMain, nativeTheme, protocol, session, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
 import { isGameId, isModuleId } from "@tavora/module-schema";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { GAMES, THEMES } from "./games";
 import { ModuleView, type InstanceStatus } from "./module-view";
 import { discoverModules, type InstalledModule } from "./registry";
-import { StoreRegistry } from "./storage";
+import { DataRegistry } from "./storage";
 import {
   fitsMinimums,
   layoutColumns,
@@ -43,7 +43,7 @@ export interface HostViewState {
 }
 
 export class Host {
-  private readonly stores: StoreRegistry;
+  private readonly data: DataRegistry;
   private readonly views = new Map<string, ModuleView>();
   private readonly viewsByContents = new Map<number, ModuleView>();
   private notice: string | null = null;
@@ -55,7 +55,7 @@ export class Host {
     private readonly modules: Map<string, InstalledModule>,
     private readonly workspace: WorkspaceState,
   ) {
-    this.stores = new StoreRegistry(options.userData);
+    this.data = new DataRegistry(options.userData);
     this.window = new BrowserWindow({
       width: 1280,
       height: 800,
@@ -85,6 +85,8 @@ export class Host {
     await registerHostProtocol(options.rendererDir);
 
     const host = new Host(options, modules, workspace);
+    const livePanels = new Set(Object.values(workspace.games).flatMap((game) => game.instances.map((i) => i.instanceId)));
+    await host.data.panelState.prune(livePanels);
     host.registerIpc();
     host.registerWindowEvents();
     await host.window.loadURL(`${HOST_SCHEME}://app/index.html`);
@@ -114,6 +116,10 @@ export class Host {
       if (!view || !event.senderFrame || event.senderFrame.parent !== null) return;
       view.connect();
     });
+    ipcMain.on("tavora:pong", (event: IpcMainEvent) => {
+      if (event.senderFrame?.parent !== null) return;
+      this.viewsByContents.get(event.sender.id)?.pong();
+    });
 
     // Host UI side: only the host window's main frame may call these.
     const fromHost = (event: IpcMainInvokeEvent) =>
@@ -132,12 +138,19 @@ export class Host {
     ipcMain.handle("host:reload-panel", (event, instanceId: unknown) => {
       if (fromHost(event) && typeof instanceId === "string") this.views.get(instanceId)?.reload();
     });
+    ipcMain.handle("host:stop-panel", (event, instanceId: unknown) => {
+      if (fromHost(event) && typeof instanceId === "string") this.views.get(instanceId)?.stop();
+    });
   }
 
   private registerWindowEvents(): void {
     this.window.on("resize", () => this.layout());
-    this.window.on("minimize", () => this.forEachView((view) => view.emitLifecycle("lifecycle.suspend")));
-    this.window.on("restore", () => this.forEachView((view) => view.emitLifecycle("lifecycle.resume")));
+    const suspend = () => this.forEachView((view) => view.suspend());
+    const resume = () => this.forEachView((view) => view.resume());
+    this.window.on("minimize", suspend);
+    this.window.on("hide", suspend);
+    this.window.on("restore", resume);
+    this.window.on("show", resume);
     this.window.on("closed", () => {
       for (const view of this.views.values()) view.dispose();
       this.views.clear();
@@ -186,6 +199,8 @@ export class Host {
     this.records.splice(index, 1);
     this.save();
     this.destroyView(instanceId);
+    // Closing a panel ends its UI state; module settings and documents stay.
+    void this.data.panelState.remove(instanceId).catch((error: unknown) => console.error("[tavora]", error));
     this.layout();
   }
 
@@ -202,7 +217,9 @@ export class Host {
       instanceId: record.instanceId,
       module,
       game: this.game,
-      store: this.stores.get(module.manifest.id, this.game.id),
+      data: this.data.get(module.manifest.id, this.game.id),
+      panelState: this.data.panelState,
+      hostVersion: app.getVersion(),
       preload: this.options.modulePreload,
       devTools: this.options.devTools,
       getTheme: () => this.theme(),

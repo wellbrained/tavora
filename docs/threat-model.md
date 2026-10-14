@@ -1,6 +1,6 @@
 # Module isolation threat model
 
-**Status:** Milestone A draft (2026-10-14). Covers the local desktop host only; the catalog, publishing pipeline and update channel get their own model in Milestone E.
+**Status:** updated for Milestone B (2026-10-14). Covers the local desktop host only; the catalog, publishing pipeline and update channel get their own model in Milestone E.
 
 ## What we protect
 
@@ -37,7 +37,7 @@ A published or locally installed community module whose author is hostile, or wh
 
 Out of scope for Milestone A: a malicious host build, local malware already running as the user, physical access, and the update/signing channel.
 
-## Required guarantees (Milestone A gate)
+## Required guarantees (Milestone A and B gates)
 
 | # | Guarantee | Mechanism | Test |
 | --- | --- | --- | --- |
@@ -45,17 +45,19 @@ Out of scope for Milestone A: a malicious host build, local malware already runn
 | G2 | No module can read or write another module's storage | host storage keyed by bound identity; separate sessions for web storage | unit + e2e: hostile module cannot see the other module's keys or localStorage |
 | G3 | No module can choose or spoof its identity or game | identity bound in main to the sending webContents when the port is created; message params never carry identity | unit + e2e: forged `moduleId`/`gameId` fields are ignored |
 | G4 | No network access unless the host mediates it | CSP, `webRequest` deny-all except own origin, unreachable proxy, WebRTC limited to proxied UDP | e2e: fetch, image, WebSocket, beacon and navigation to a local test server all fail, server sees zero hits |
-| G5 | A crash does not take down the host or other modules | separate renderer processes, `render-process-gone` handling, reload | e2e: crash one module, the other keeps working, host shows a reload action |
+| G5 | A crash, hang or failed load does not take down the host or other modules, and loses no saved data | separate renderer processes, `render-process-gone` and HTTP status handling, a heartbeat to each panel's preload, Reload and Stop actions, atomic writes | e2e: crash, hang and load-failure recovery with the other module still working and data intact |
 | G6 | Modules can't escape their own bundle on disk | protocol handler resolves real paths inside the module root only | unit: `..`, encoded `..`, backslashes, null bytes, symlinks out of the root |
 | G7 | Modules can't open windows, navigate away, download or request device permissions | `setWindowOpenHandler` deny, `will-navigate` same-origin only, downloads cancelled, permission handlers deny | e2e: `window.open`, cross-origin navigation |
-| G8 | A module can't exhaust host resources through the bridge | message size cap, key/value validation, per-store quota | unit |
+| G8 | A module can't exhaust host resources through the bridge | message size cap, in-flight cap, JSON validation, quotas for settings, documents and panel state | unit + e2e: oversized and over-quota writes are refused |
+| G9 | A module can't use a capability it was not granted | reserved methods checked against the granted set (always empty in v1) before anything else runs | unit + e2e: `network.fetch`, `files.open`, `clipboard.readText`, `sharedData.read` fail with `PERMISSION_DENIED` |
 
 ## Known limits and open risks
 
 - **Webview isolation is not proven safe by this spike.** It relies on Chromium site isolation and the OS sandbox. A Chromium renderer exploit would break G1–G4. Mitigation: keep Electron current, enable the OS sandbox everywhere, set Electron fuses at packaging time (no `RunAsNode`, no `NODE_OPTIONS`, ASAR integrity, cookie encryption).
-- **The OS sandbox is disabled when tests run as root in CI containers** (`--no-sandbox`). The JavaScript-level guarantees above are still exercised; OS-level sandbox coverage needs a non-root CI runner.
+- **The gate tests need the OS sandbox on.** They run as a normal user (Chromium refuses its sandbox as root), and CI allows unprivileged user namespaces so the sandbox works there too. A run with `--no-sandbox` would not prove G1.
 - **DNS prefetch and other browser side channels** may still leak hostnames even with requests blocked. Needs a packet-level check on Windows and Linux.
 - **Timing and covert channels** between modules on the same machine are not addressed.
+- **The heartbeat cannot tell a hang from long synchronous work.** A module that blocks its main thread for more than 10 s is shown as not responding until it answers again. That is the honest state from the player's view, but the Stop action ends it.
 - **Same module, several panels** share a renderer process. A crash in one instance can take down its siblings of the same module, not other modules.
 - **Data a module already received cannot be recalled** after a grant is revoked (relevant from Milestone F).
 - **Tauri was not evaluated.** Electron was spiked first for a single Chromium engine on Windows and Linux. Revisit only if memory overhead is unacceptable.
