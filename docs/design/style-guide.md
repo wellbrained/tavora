@@ -119,7 +119,8 @@ Everything sits on a 4 px grid with one 8 px corner radius.
 - **Logo:** the flame mark sits at the top of the rail (32 px) and is the Home
   button. The full emblem appears once on Home (about 120 px). The app icon and
   taskbar use the emblem kit files. The logo is never recoloured, stretched,
-  outlined or placed on a light background.
+  outlined or placed on a light background. Vector masters live in
+  [`brand/logo`](../../brand/logo/README.md).
 - **Game art:** Tavora ships no game logos or cover art. Games show a monogram
   (for example PE2 for Path of Exile 2) on a tone derived from the game id, or
   an image the player uploads.
