@@ -57,7 +57,7 @@ Modules run from their built files, so run `pnpm build` once first; after changi
 
 ## Checks
 
-Tests run locally. GitHub Actions only runs them for release tags (`v*`) or when started by hand.
+Tests run locally. GitHub Actions only runs them for release tags (`v*`) or when started by hand. The docs site is published to GitHub Pages (docs.mytavora.app) by its own workflow whenever the docs or the SDK sources change on `main`.
 
 ```sh
 pnpm check       # everything below, in order
