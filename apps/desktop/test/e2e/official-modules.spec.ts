@@ -200,6 +200,27 @@ test("to-dos: groups, steps, objectives and finished tasks, kept after a restart
   }
   await expect.poll(() => taskTitles(app)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor", "Defeat the Executioner"]);
 
+  // Clicking a group's header row collapses and expands it; double-clicking its name renames it.
+  const bossesHeader = `${groupNamed("Bosses")}.querySelector('[data-testid="group-header"]')`;
+  await inModule(app, TODOS, `${bossesHeader}.click()`);
+  await expect.poll(() => taskTitles(app)).toEqual(["Find the Ancient Crypt"]);
+  await inModule(app, TODOS, `${bossesHeader}.click()`);
+  await expect.poll(() => taskTitles(app)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor", "Defeat the Executioner"]);
+  await inModule(
+    app,
+    TODOS,
+    `(() => {
+      const name = ${groupNamed("Bosses")}.querySelector('[data-testid="group-name"]');
+      name.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+      name.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 2 }));
+      name.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, detail: 2 }));
+    })()`,
+  );
+  await expect.poll(() => inModule(app, TODOS, `!!${q("group-name-input")}`)).toBe(true);
+  await inModule(app, TODOS, `${q("group-name-input")}.blur()`);
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  await expect.poll(() => taskTitles(app)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor", "Defeat the Executioner"]);
+
   // Steps are added inside a task's details.
   await inModule(app, TODOS, `${taskTitled("Defeat the Executioner")}.querySelector('[data-testid="task-open"]').click()`);
   await expect.poll(() => inModule(app, TODOS, `!!${q("task-details")}`)).toBe(true);

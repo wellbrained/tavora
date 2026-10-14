@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 import AddInput from "./AddInput.vue";
 import type { TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
@@ -65,6 +65,27 @@ function finishRename(event: Event) {
   if (name.trim() && name.trim() !== props.group.name) change((data) => renameGroup(data, props.group.id, name));
 }
 
+// The whole header row collapses and expands the group. On the name a
+// double-click renames instead, so a single click there waits briefly to see
+// whether a second one follows.
+const DOUBLE_CLICK_MS = 250;
+let clickTimer: ReturnType<typeof setTimeout> | undefined;
+
+function onHeaderClick(event: MouseEvent) {
+  if (renaming.value || (event.target as Element).closest("button, input, [role=menu]")) return;
+  if (!(event.target as Element).closest("[data-testid=group-name]")) return emit("toggleCollapsed");
+  clearTimeout(clickTimer);
+  if (event.detail > 1) return;
+  clickTimer = setTimeout(() => emit("toggleCollapsed"), DOUBLE_CLICK_MS);
+}
+
+onBeforeUnmount(() => clearTimeout(clickTimer));
+
+function onNameDoubleClick() {
+  clearTimeout(clickTimer);
+  void startRename();
+}
+
 function add(text: string) {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
@@ -95,13 +116,22 @@ function dropMark(index: number): "before" | "after" | null {
 
 <template>
   <section
-    :class="cn('rounded-md', drop?.groupId === group.id && (collapsed || !group.tasks.length) && 'bg-primary/15')"
+    :class="
+      cn(
+        'bg-card overflow-hidden rounded-lg border',
+        drop?.groupId === group.id && (collapsed || !group.tasks.length) && 'border-primary bg-primary/10',
+      )
+    "
     :aria-label="group.name"
     :data-testid="`group-${group.id}`"
     @dragover="overGroup"
     @drop.prevent="emit('drop')"
   >
-    <header class="group/header flex h-9 items-center gap-1 pr-1 pl-1">
+    <header
+      :class="cn('group/header hover:bg-accent/40 relative flex h-10 cursor-pointer items-center gap-1 pr-1 pl-1.5 select-none', !collapsed && 'border-b')"
+      data-testid="group-header"
+      @click="onHeaderClick"
+    >
       <button
         type="button"
         class="text-muted-foreground hover:text-foreground flex size-6 flex-none items-center justify-center rounded-md"
@@ -124,12 +154,25 @@ function dropMark(index: number): "before" | "after" | null {
         @keydown.enter="($event.target as HTMLInputElement).blur()"
         @keydown.escape="renaming = false"
       />
-      <h2 v-else class="min-w-0 flex-1 truncate px-1 text-sm font-semibold" data-testid="group-name" @dblclick="startRename">
-        {{ group.name }}
-      </h2>
-      <span class="text-muted-foreground flex-none text-xs tabular-nums" data-testid="group-count">
-        {{ group.tasks.length ? (remaining ? `${remaining} left` : "All done") : "" }}
+      <div v-else class="min-w-0 flex-1">
+        <h2 class="max-w-full truncate px-1 text-sm font-semibold" style="width: fit-content" title="Double-click to rename" data-testid="group-name" @dblclick="onNameDoubleClick">
+          {{ group.name }}
+        </h2>
+      </div>
+      <span
+        v-if="group.tasks.length"
+        :class="cn('flex-none rounded-full px-2 py-0.5 text-xs tabular-nums', remaining ? 'bg-background text-muted-foreground' : 'bg-primary/15 text-primary')"
+        data-testid="group-count"
+      >
+        {{ remaining ? `${remaining} left` : "All done" }}
       </span>
+      <!-- How much of the group is done, as a thin line along the header's bottom edge. -->
+      <span
+        v-if="group.tasks.length && !collapsed"
+        class="bg-primary absolute bottom-[-1px] left-0 h-px transition-[width] duration-300 motion-reduce:transition-none"
+        :style="{ width: `${(doneCount / group.tasks.length) * 100}%` }"
+        aria-hidden="true"
+      />
       <DropdownMenu>
         <DropdownMenuTrigger
           class="text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md opacity-0 group-hover/header:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
@@ -158,7 +201,7 @@ function dropMark(index: number): "before" | "after" | null {
       </DropdownMenu>
     </header>
 
-    <div v-if="!collapsed" class="pb-1 pl-1">
+    <div v-if="!collapsed" class="p-1">
       <ul role="list">
         <li v-for="{ task, index } in visible" :key="task.id" @dragover="overTask($event, index)">
           <TaskRow
@@ -179,7 +222,7 @@ function dropMark(index: number): "before" | "after" | null {
         {{ doneCount }} finished {{ doneCount === 1 ? "to-do" : "to-dos" }} hidden.
       </p>
       <AddInput
-        class="ml-1"
+        align-to-tasks
         :placeholder="`Add to ${group.name}`"
         :maxlength="MAX.title"
         :data-testid="`add-task-${group.id}`"
