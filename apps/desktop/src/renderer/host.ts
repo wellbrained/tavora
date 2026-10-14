@@ -33,6 +33,8 @@ export interface MenuItem {
   label: string;
   testid?: string;
   danger?: boolean;
+  /** Starts a new section of the menu. */
+  separator?: boolean;
   disabled?: boolean;
   /** Opens a nested list. */
   submenu?: () => MenuItem[];
@@ -81,8 +83,16 @@ export async function submitAction(action: HostAction): Promise<string | null> {
 }
 
 // Module panels are separate native views drawn above this page, so they
-// are hidden while a menu or dialog floats over the workspace.
+// are hidden while a menu, dialog or drag floats over the workspace. Still
+// images of them stand in meanwhile.
 const openMenus = ref(0);
+
+/** True while a panel or group is dragged, or a split is being resized. */
+export const dragging = ref(false);
+
+/** Still images of the panels, by instance id, while they are hidden. */
+export const frozen = shallowRef<Record<string, string>>({});
+api.onFrozen((images) => (frozen.value = images));
 
 /** For a menu component: reports its open state, also when it unmounts open. */
 export function useFloating(): (open: boolean) => void {
@@ -96,5 +106,10 @@ export function useFloating(): (open: boolean) => void {
   return set;
 }
 
-const overlayOpen = computed(() => openMenus.value > 0 || dialog.value !== null || settingsOpen.value);
-watch(overlayOpen, (open) => api.setOverlay(open));
+export const overlayOpen = computed(
+  () => openMenus.value > 0 || dialog.value !== null || settingsOpen.value || dragging.value,
+);
+watch(overlayOpen, (open) => {
+  if (!open) frozen.value = {};
+  api.setOverlay(open);
+});
