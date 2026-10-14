@@ -37,7 +37,7 @@ pnpm --filter @tavora/desktop start     # opens Tavora with the example modules
 pnpm dev
 ```
 
-Opens Tavora without building it. Changes to the host UI (`apps/desktop/src/renderer`) show up instantly with hot reload, keeping the app's state. Changes to the main process or preloads (`src/main`, `src/preload`, `src/shared`) restart Tavora by itself after a second. Closing Tavora or pressing Ctrl+C ends it. The dev server uses port 4001; `pnpm dev --port <n>` picks another.
+Opens Tavora without building it. Changes to the host UI (`apps/desktop/src/renderer`) show up instantly with hot reload, keeping the app's state. Changes to the main process or preloads (`src/main`, `src/preload`, `src/shared`) restart Tavora by itself after a second. Closing Tavora or pressing Ctrl+C ends it. The dev server uses port 4000; `pnpm dev --port <n>` picks another.
 
 Modules run from their built files, so run `pnpm build` once first; after changing a module, rebuild it and reload its panel. Development mode only works from the source tree: packaged builds never load the dev server.
 
