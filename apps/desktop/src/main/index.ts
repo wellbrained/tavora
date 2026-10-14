@@ -21,10 +21,12 @@ app.on("web-contents-created", (_event, contents) => {
   contents.on("will-attach-webview", (event) => event.preventDefault());
 });
 
+// A packaged build carries the example modules in its resources folder;
+// a dev run loads them straight from the repo.
 const repoRoot = path.resolve(__dirname, "../../../..");
 const moduleDirs = process.env.TAVORA_MODULE_DIRS
   ? process.env.TAVORA_MODULE_DIRS.split(path.delimiter).filter(Boolean)
-  : [path.join(repoRoot, "examples")];
+  : [app.isPackaged ? path.join(process.resourcesPath, "modules") : path.join(repoRoot, "examples")];
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

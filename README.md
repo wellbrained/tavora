@@ -31,6 +31,15 @@ pnpm build                              # SDK, host and example modules
 pnpm --filter @tavora/desktop start     # opens Tavora with the example modules
 ```
 
+To get an app you can start without a terminal, package it after `pnpm build`:
+
+```sh
+pnpm --filter @tavora/desktop package --win    # release/Tavora-<version>-portable.exe and a zip
+pnpm --filter @tavora/desktop package --linux  # release/Tavora-<version>.AppImage
+```
+
+The packaged app carries the example modules and keeps its data in the normal per-user folder. These builds are unsigned, so Windows SmartScreen asks before the first start.
+
 ## Checks
 
 Tests run locally. GitHub Actions only runs them for release tags (`v*`) or when started by hand.

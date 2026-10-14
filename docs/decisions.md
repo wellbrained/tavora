@@ -29,3 +29,4 @@
 | 2026-10-14 | Module panels are hidden while a host menu or dialog is open | Native views draw above the host page and would cover them |
 | 2026-10-14 | No news on Home for now; it shows recently played games | News sourcing and licensing are still open |
 | 2026-10-14 | Core modules in Milestone C are Notes and To-Dos; Browser gets its own milestone, Boards come later | Browser needs its own security design |
+| 2026-10-14 | Test builds are packaged with electron-builder: Windows portable exe and zip, Linux AppImage, unsigned, with the example modules inside | Lets the app be tried without a dev setup; installers, signing and updates wait for a release process |
