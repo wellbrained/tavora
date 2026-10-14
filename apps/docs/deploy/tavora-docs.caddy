@@ -1,0 +1,17 @@
+docs.mytavora.app {
+    bind 167.233.235.154 2a01:4f8:c013:d350::1
+    root * /srv/tavora-docs/current
+    encode zstd gzip
+    header X-Content-Type-Options nosniff
+    # VitePress cleanUrls: /guide/getting-started serves guide/getting-started.html.
+    try_files {path} {path}.html {path}/index.html
+    @html path / *.html
+    header @html Cache-Control "no-cache"
+    @assets path /assets/*
+    header @assets Cache-Control "public, max-age=31536000, immutable"
+    handle_errors 404 {
+        rewrite * /404.html
+        file_server
+    }
+    file_server
+}
