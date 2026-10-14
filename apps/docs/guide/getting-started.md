@@ -68,5 +68,6 @@ Nothing is shared between games or between modules. See [Where data lives](../re
 
 - Bundle everything. Modules have no network access, so no CDN scripts, web fonts or remote images.
 - Use relative asset paths (Vite: `base: "./"`). The page is served from `tavora-module://<module-id>/`.
+- Don't use Ctrl+K (Cmd+K on macOS) as a shortcut. Tavora takes it for its own search before your page sees the key.
 - Point the manifest's `entry` at the built HTML file.
 - Add `"$schema"` to the manifest so your editor checks it. The schema is published at `https://docs.mytavora.app/schema/tavora.module.schema.json`.

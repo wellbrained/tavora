@@ -2,6 +2,7 @@
 // dialog, menu and toast that are shown over it.
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import type { ActionResult, HostAction, HostViewState } from "../shared/host-api";
+import type { SettingsSection } from "./components/settings/settings-index";
 
 export const api = window.tavoraHost;
 export const state = shallowRef<HostViewState | null>(null);
@@ -68,6 +69,27 @@ export const dialog = shallowRef<DialogRequest | null>(null);
 /** Settings is its own dialog, so a confirmation can open on top of it. */
 export const settingsOpen = ref(false);
 
+/** Where Settings opens: a section, and optionally a setting to point out. */
+export const settingsTarget = shallowRef<{ section: SettingsSection; setting?: string }>({ section: "general" });
+
+export function openSettings(target: { section: SettingsSection; setting?: string } = { section: "general" }): void {
+  settingsTarget.value = target;
+  settingsOpen.value = true;
+}
+
+/** The search box behind Ctrl+K. */
+export const searchOpen = ref(false);
+api.onShortcut((shortcut) => {
+  if (shortcut === "search") searchOpen.value = !searchOpen.value;
+});
+// Main catches Ctrl+K before any page sees it; this covers key events that
+// reach the page without passing through main, such as synthetic ones.
+addEventListener("keydown", (event) => {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== "k") return;
+  event.preventDefault();
+  searchOpen.value = !searchOpen.value;
+});
+
 export function prompt(request: Omit<PromptRequest, "kind" | "value" | "maxLength"> & { value?: string; maxLength?: number }) {
   dialog.value = { kind: "prompt", value: "", maxLength: 80, ...request };
 }
@@ -107,7 +129,7 @@ export function useFloating(): (open: boolean) => void {
 }
 
 export const overlayOpen = computed(
-  () => openMenus.value > 0 || dialog.value !== null || settingsOpen.value || dragging.value,
+  () => openMenus.value > 0 || dialog.value !== null || settingsOpen.value || searchOpen.value || dragging.value,
 );
 watch(overlayOpen, (open) => {
   if (!open) frozen.value = {};

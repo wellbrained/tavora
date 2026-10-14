@@ -2,7 +2,7 @@
 
 Local-first, second-monitor gaming companion for Windows and Linux. Each game gets its own dockable workspace; community modules are self-contained web bundles that run inside a permission-checked host.
 
-**Status:** Milestone C, the local player MVP, in progress. Done so far: the official Notes and To-Dos modules, the game library (built-in list and custom games, favorites, folders, Trash) on a collapsible game rail, plus everything from Milestone B (manifest v1, bridge protocol v1, `@tavora/sdk` 0.1.0, example modules in vanilla TypeScript, React and Vue). Nothing here is a released or stable API yet. See [docs/threat-model.md](docs/threat-model.md) for what the host guarantees and how it is tested.
+**Status:** Milestone C, the local player MVP, in progress. Done so far: Ctrl+K search and Settings search, the official Notes and To-Dos modules, the game library (built-in list and custom games, favorites, folders, Trash) on a collapsible game rail, plus everything from Milestone B (manifest v1, bridge protocol v1, `@tavora/sdk` 0.1.0, example modules in vanilla TypeScript, React and Vue). Nothing here is a released or stable API yet. See [docs/threat-model.md](docs/threat-model.md) for what the host guarantees and how it is tested.
 
 ## Layout
 
@@ -20,7 +20,7 @@ Local-first, second-monitor gaming companion for Windows and Linux. Each game ge
 | `apps/docs` | Developer docs for [docs.mytavora.app](https://docs.mytavora.app/) (VitePress): guide, [manifest](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md), and generated SDK API |
 | `brand/logo` | Vector logo SVGs: master, lockup, emblem, wordmark and flame ([README](brand/logo/README.md)) |
 | `docs/design/` | [Style guide](docs/design/style-guide.md): tokens, type, components, accessibility and theme rules |
-| `docs/` | Threat model and decision log |
+| `docs/` | Threat model, decision log and [backlog](docs/backlog.md) |
 
 The marketing site at [mytavora.app](https://mytavora.app/) lives in its separate `tavora-website` repository.
 
