@@ -91,9 +91,35 @@ Writes are atomic: a crash leaves either the old or the new document, never a mi
 | `workspace.resize` | `{ width, height }` | the panel's size changed |
 | `ui.theme` | theme, as `ui.getTheme` | the host theme changed |
 | `documents.changed` | `{ id, revision, deleted }` | another panel of this module changed a document |
-| `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
+| `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden, its tab is in the background, or another group is maximized); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
 | `lifecycle.resume` | `null` | the panel is visible again |
 | `lifecycle.dispose` | `null` | the panel is closing. Best effort only: it may never arrive, so never rely on it to save |
+
+## Default look
+
+Tavora inserts a stylesheet into every module page before it renders, as a
+*user* stylesheet. It sits above the browser's defaults and below everything
+the module writes, so any rule of the module's own wins. It makes a page that
+styles nothing look like part of Tavora: no page margin, the theme's
+background and text colour, Inter at 14 px, dark buttons, fields and
+scrollbars, a gold focus ring, muted `small` and `dt` text, and headings
+sized like the host's.
+
+It also defines the theme's tokens as CSS custom properties, the same values
+`ui.getTheme` returns, so a module can use them in its own CSS without the
+SDK:
+
+| Property | Use |
+| --- | --- |
+| `--tavora-background`, `--tavora-foreground` | Page background and text |
+| `--tavora-card` | Raised surfaces and fields |
+| `--tavora-primary`, `--tavora-primary-hover`, `--tavora-primary-foreground` | The one main action, its hover, and text on it |
+| `--tavora-secondary`, `--tavora-accent` | Default buttons; hover and selection surfaces |
+| `--tavora-muted-foreground` | Secondary text |
+| `--tavora-border`, `--tavora-input`, `--tavora-ring` | Dividers, field outlines, focus ring |
+| `--tavora-destructive`, `--tavora-success`, `--tavora-warning`, `--tavora-info` | States |
+| `--tavora-radius` | Corner radius of controls |
+| `--tavora-font-sans`, `--tavora-font-mono` | Text and code fonts |
 
 ## Errors
 

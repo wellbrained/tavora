@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { MessageChannelMain, session, WebContentsView, type Session } from "electron";
 import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
+import { THEME } from "./games";
 import { contentTypeFor, MODULE_CSP, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BridgeSession } from "./bridge";
 import type { InstalledModule } from "./registry";
@@ -19,6 +20,8 @@ export interface ModuleViewOptions {
   preload: string;
   devTools: boolean;
   getTheme(): TavoraTheme;
+  /** Tavora's default look for the page, below the module's own styles (module-style.ts). */
+  baseCss: string;
   onStatus(status: InstanceStatus): void;
 }
 
@@ -108,6 +111,9 @@ export class ModuleView {
       },
     });
 
+    // No white flash before the page has painted.
+    this.view.setBackgroundColor(THEME.tokens.background);
+
     const contents = this.view.webContents;
     const origin = moduleOrigin(module.manifest.id);
     const sameModule = (url: string) => url.startsWith(`${origin}/`);
@@ -140,6 +146,12 @@ export class ModuleView {
       console.warn(`[tavora] module ${module.manifest.id} failed to load ${url}: HTTP ${httpResponseCode}`);
       this.disconnect();
       this.setStatus("failed");
+    });
+    // A user stylesheet: every rule the module writes still wins over it.
+    contents.on("dom-ready", () => {
+      contents.insertCSS(options.baseCss, { cssOrigin: "user" }).catch(() => {
+        // The page went away before the styles landed.
+      });
     });
     contents.on("did-finish-load", () => {
       if (this.status !== "loading") return;

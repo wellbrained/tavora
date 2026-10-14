@@ -2,63 +2,120 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { emptyWorkspace, fitsMinimums, layoutColumns, loadWorkspace, saveWorkspace } from "./workspace";
+import type { SavedLayout } from "./layout";
+import { emptyWorkspace, loadWorkspace, planSnapshot, saveWorkspace, type Snapshot } from "./workspace";
 
-const area = { x: 0, y: 76, width: 1001, height: 600 };
-const ID = "123e4567-e89b-42d3-a456-426614174000";
+const A = "00000000-0000-4000-8000-00000000000a";
+const B = "00000000-0000-4000-8000-00000000000b";
+const C = "00000000-0000-4000-8000-00000000000c";
+const S = "00000000-0000-4000-8000-0000000000ff";
 
-describe("layoutColumns", () => {
-  it("splits the area into columns that cover it exactly", () => {
-    const columns = layoutColumns(3, area);
-    expect(columns.map((c) => c.width)).toEqual([333, 333, 335]);
-    expect(columns.map((c) => c.x)).toEqual([0, 333, 666]);
-    expect(columns.every((c) => c.y === 76 && c.height === 600)).toBe(true);
-    expect(layoutColumns(0, area)).toEqual([]);
-  });
+const twoColumns = (left: string, right: string): SavedLayout => ({
+  width: 1000,
+  height: 600,
+  direction: "row",
+  root: {
+    kind: "split",
+    size: 600,
+    children: [
+      { kind: "group", size: 500, panels: [left], active: left },
+      { kind: "group", size: 500, panels: [right], active: right },
+    ],
+  },
 });
 
-describe("fitsMinimums", () => {
-  it("checks every panel against its own minimum", () => {
-    expect(fitsMinimums(area, [{ minWidth: 320, minHeight: 240 }, { minWidth: 320, minHeight: 240 }])).toBe(true);
-    expect(fitsMinimums(area, [{ minWidth: 320, minHeight: 240 }, { minWidth: 600, minHeight: 240 }])).toBe(false);
-    expect(fitsMinimums(area, [{ minWidth: 100, minHeight: 700 }])).toBe(false);
-  });
-});
+const tempFile = async () => path.join(await mkdtemp(path.join(tmpdir(), "tavora-ws-")), "workspace.json");
 
 describe("loadWorkspace", () => {
   it("returns an empty workspace when nothing is saved", async () => {
-    const file = path.join(await mkdtemp(path.join(tmpdir(), "tavora-ws-")), "workspace.json");
-    expect(await loadWorkspace(file, ["poe2", "satisfactory"], () => true)).toEqual({
-      version: 1,
-      games: { poe2: { instances: [] }, satisfactory: { instances: [] } },
-    });
+    expect(await loadWorkspace(await tempFile(), ["poe2", "satisfactory"], () => true)).toEqual(
+      emptyWorkspace(["poe2", "satisfactory"]),
+    );
+  });
+
+  it("reads a version 1 file, which has panels but no layout", async () => {
+    const file = await tempFile();
+    await writeFile(file, JSON.stringify({ version: 1, games: { poe2: { instances: [{ instanceId: A, moduleId: "local.example.a" }] } } }));
+    const state = await loadWorkspace(file, ["poe2"], () => true);
+    expect(state.games.poe2).toEqual({ instances: [{ instanceId: A, moduleId: "local.example.a" }], layout: null, snapshots: [] });
   });
 
   it("round-trips and drops unknown games, missing modules and bad records", async () => {
-    const file = path.join(await mkdtemp(path.join(tmpdir(), "tavora-ws-")), "workspace.json");
+    const file = await tempFile();
+    const snapshot: Snapshot = {
+      id: S,
+      name: "Mapping",
+      savedAt: "2026-10-14T12:00:00.000Z",
+      layout: twoColumns(A, C),
+      modules: { [A]: "local.example.a", [C]: "local.example.gone" },
+    };
     await saveWorkspace(file, {
-      version: 1,
+      version: 2,
       games: {
-        poe2: { instances: [{ instanceId: ID, moduleId: "local.example.a" }] },
-        satisfactory: {
+        poe2: {
           instances: [
-            { instanceId: ID, moduleId: "local.example.gone" },
-            { instanceId: "../../x", moduleId: "local.example.a" },
+            { instanceId: A, moduleId: "local.example.a" },
+            { instanceId: B, moduleId: "local.example.gone" },
           ],
+          layout: twoColumns(A, B),
+          snapshots: [snapshot, { ...snapshot, id: "nope" }],
         },
-        removed: { instances: [{ instanceId: ID, moduleId: "local.example.a" }] },
+        satisfactory: { instances: [{ instanceId: "../../x", moduleId: "local.example.a" }], layout: null, snapshots: [] },
+        removed: { instances: [{ instanceId: A, moduleId: "local.example.a" }], layout: null, snapshots: [] },
       },
     });
     const state = await loadWorkspace(file, ["poe2", "satisfactory"], (id) => id === "local.example.a");
-    expect(state.games).toEqual({
-      poe2: { instances: [{ instanceId: ID, moduleId: "local.example.a" }] },
-      satisfactory: { instances: [] },
-    });
+    expect(Object.keys(state.games)).toEqual(["poe2", "satisfactory"]);
+    const poe2 = state.games.poe2!;
+    expect(poe2.instances).toEqual([{ instanceId: A, moduleId: "local.example.a" }]);
+    // The panel of the missing module leaves the layout.
+    expect(poe2.layout!.root.children).toEqual([{ kind: "group", size: 500, panels: [A], active: A }]);
+    // So does the snapshot's placeholder for it; the broken snapshot is dropped.
+    expect(poe2.snapshots).toHaveLength(1);
+    expect(poe2.snapshots[0]!.modules).toEqual({ [A]: "local.example.a" });
+    expect(state.games.satisfactory!.instances).toEqual([]);
   });
 
   it("ignores an unreadable file", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "tavora-ws-"));
-    await writeFile(path.join(dir, "a.json"), "{oops");
-    expect(await loadWorkspace(path.join(dir, "a.json"), ["poe2"], () => true)).toEqual(emptyWorkspace(["poe2"]));
+    const file = await tempFile();
+    await writeFile(file, "{oops");
+    expect(await loadWorkspace(file, ["poe2"], () => true)).toEqual(emptyWorkspace(["poe2"]));
+  });
+});
+
+describe("planSnapshot", () => {
+  const snapshot: Snapshot = {
+    id: S,
+    name: "Two notes",
+    savedAt: "2026-10-14T12:00:00.000Z",
+    layout: twoColumns(A, B),
+    modules: { [A]: "notes", [B]: "notes" },
+  };
+  let next = 0;
+  const newId = () => `00000000-0000-4000-8000-${String(++next).padStart(12, "0")}`;
+
+  it("reuses the panels it was saved from", () => {
+    const plan = planSnapshot(snapshot, [{ instanceId: B, moduleId: "notes" }, { instanceId: A, moduleId: "notes" }], newId);
+    expect(plan.layout).toEqual(twoColumns(A, B));
+    expect(plan.close).toEqual([]);
+  });
+
+  it("reuses other panels of the same module, opens what is missing and closes the rest", () => {
+    next = 0;
+    const plan = planSnapshot(
+      snapshot,
+      [
+        { instanceId: C, moduleId: "notes" },
+        { instanceId: B, moduleId: "todos" },
+      ],
+      newId,
+    );
+    const opened = "00000000-0000-4000-8000-000000000001";
+    expect(plan.layout).toEqual(twoColumns(C, opened));
+    expect(plan.instances).toEqual([
+      { instanceId: C, moduleId: "notes" },
+      { instanceId: opened, moduleId: "notes" },
+    ]);
+    expect(plan.close).toEqual([{ instanceId: B, moduleId: "todos" }]);
   });
 });
