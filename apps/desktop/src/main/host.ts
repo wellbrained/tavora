@@ -92,6 +92,11 @@ export interface HostOptions {
   hostPreload: string;
   icon: string;
   devTools: boolean;
+  /**
+   * Development only: the Vite dev server that serves the host UI with hot
+   * reload, instead of the built files in `rendererDir`.
+   */
+  devServer?: string | undefined;
 }
 
 /** Built on first use; it carries the module font, so it is not small. */
@@ -165,7 +170,7 @@ export class Host {
       screen.getAllDisplays().map((display) => display.workArea),
       screen.getPrimaryDisplay().workArea,
     );
-    await registerHostProtocol(options.rendererDir, path.join(userData, "game-icons"));
+    await registerHostProtocol(options.rendererDir, path.join(userData, "game-icons"), options.devServer);
 
     // Dark only for now: native menus, dialogs and scrollbars match the UI.
     nativeTheme.themeSource = "dark";
@@ -182,7 +187,7 @@ export class Host {
     host.screen = library.startup === "last-game" && library.lastGameId ? "game" : "welcome";
     host.registerIpc();
     host.registerWindowEvents();
-    await host.window.loadURL(`${HOST_SCHEME}://app/index.html`);
+    await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
     if (host.screen === "game") host.openCurrentGame();
     return host;
   }
@@ -772,10 +777,11 @@ export class Host {
 
 /**
  * Serves the trusted host UI, plus game icons the player picked, and blocks
- * all network for the host renderer.
+ * all network for the host renderer. With a dev server, the host UI comes
+ * from there instead, and only that server is reachable.
  */
-async function registerHostProtocol(rendererDir: string, iconDir: string): Promise<void> {
-  const root = await realpath(rendererDir);
+async function registerHostProtocol(rendererDir: string, iconDir: string, devServer?: string): Promise<void> {
+  const root = devServer ? null : await realpath(rendererDir);
   await mkdir(iconDir, { recursive: true });
   const icons = await realpath(iconDir);
   const origin = `${HOST_SCHEME}://app`;
@@ -784,9 +790,8 @@ async function registerHostProtocol(rendererDir: string, iconDir: string): Promi
     const url = new URL(request.url);
     let file: string | null = null;
     if (url.host === "app") {
-      file = url.pathname.startsWith("/game-icons/")
-        ? await resolveAsset(icons, url.pathname.slice("/game-icons".length))
-        : await resolveAsset(root, url.pathname);
+      if (url.pathname.startsWith("/game-icons/")) file = await resolveAsset(icons, url.pathname.slice("/game-icons".length));
+      else if (root) file = await resolveAsset(root, url.pathname);
     }
     if (!file) return new Response("Not found", { status: 404 });
     return new Response(await readFile(file), {
@@ -797,8 +802,32 @@ async function registerHostProtocol(rendererDir: string, iconDir: string): Promi
       },
     });
   });
+  const allowed = [`${origin}/`, "devtools://"];
+  if (devServer) {
+    const server = new URL(devServer);
+    allowed.push(`${server.origin}/`, `ws://${server.host}/`);
+    // Vite injects styles while it hot-reloads, so its pages get a looser
+    // policy; still no remote content.
+    session.defaultSession.webRequest.onHeadersReceived({ urls: [`${server.origin}/*`] }, (details, callback) => {
+      callback({ responseHeaders: { ...details.responseHeaders, "Content-Security-Policy": [devCsp(server)] } });
+    });
+  }
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
-    callback({ cancel: !(details.url.startsWith(`${origin}/`) || details.url.startsWith("devtools://")) });
+    callback({ cancel: !allowed.some((prefix) => details.url.startsWith(prefix)) });
   });
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+}
+
+function devCsp(server: URL): string {
+  return [
+    "default-src 'none'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    `img-src 'self' data: ${HOST_SCHEME}://app`,
+    "font-src 'self'",
+    `connect-src 'self' ws://${server.host}`,
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join("; ");
 }
