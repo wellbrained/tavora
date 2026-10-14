@@ -37,8 +37,9 @@ export type {
   TavoraGame,
   TavoraTheme,
   TavoraViewport,
+  ThemeToken,
 } from "./protocol.js";
-export { LIMITS, PROTOCOL_VERSION } from "./protocol.js";
+export { LIMITS, PROTOCOL_VERSION, THEME_TOKENS } from "./protocol.js";
 
 /** Version of this SDK package, sent to the host during the handshake. */
 export const SDK_VERSION = "0.1.0";

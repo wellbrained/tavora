@@ -29,3 +29,9 @@
 | 2026-10-14 | Module panels are hidden while a host menu or dialog is open | Native views draw above the host page and would cover them |
 | 2026-10-14 | No news on Home for now; it shows recently played games | News sourcing and licensing are still open |
 | 2026-10-14 | Core modules in Milestone C are Notes and To-Dos; Browser gets its own milestone, Boards come later | Browser needs its own security design |
+| 2026-10-14 | Notes and To-Dos live in `modules/`, use only the public `@tavora/sdk` and share `@tavora/official-ui` (theme, shadcn-vue components, save helpers) bundled into each | Official modules prove the SDK is enough; each still ships as one self-contained bundle |
+| 2026-10-14 | Provenance comes from where a module was found: the official folder means Official, anything else Local. The `tavora.` id prefix is reserved for official modules | A manifest cannot claim to be official; Community arrives with the catalog |
+| 2026-10-14 | `ui.getTheme` also sends every semantic token and the corner radius | Modules can match the host exactly, and a later theme reaches them without a rebuild |
+| 2026-10-14 | Notes: one document per note plus a fixed `scratchpad`; title is the first line; rich text with Tiptap (MIT) and Markdown shortcuts; autosave after 400 ms | Familiar notebook behaviour, and a note's text can be searched without opening it |
+| 2026-10-14 | To-Dos: one document per game holding groups, tasks and steps; every change is a pure function re-applied on `CONFLICT` | Two panels editing at once both keep their changes, and order is kept in one place |
+| 2026-10-14 | Not in C3: Create To-Do from note text (waits for cross-module grants, Milestone F), images, tables and folders in Notes, opening links from a module | Recommended to Dominik; links need a host-mediated open that cannot leak data, the rest needs its own design |
