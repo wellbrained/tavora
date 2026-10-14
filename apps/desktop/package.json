@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
     "start": "electron .",
     "typecheck": "tsc --noEmit -p . && vue-tsc --noEmit -p src/renderer",
     "test:e2e": "playwright test"
