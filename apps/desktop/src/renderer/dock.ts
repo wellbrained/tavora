@@ -11,7 +11,7 @@ import {
 import type { LayoutNode, SavedLayout } from "../shared/host-api";
 
 /** Height of a group's tab bar; module content starts below it. */
-export const TAB_HEIGHT = 28;
+export const TAB_HEIGHT = 36;
 export const PANEL_COMPONENT = "panel";
 
 type GridNode = SerializedDockview["grid"]["root"];

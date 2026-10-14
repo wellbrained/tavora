@@ -7,7 +7,7 @@
   --dv-paneview-active-outline-color: var(--ring);
   --dv-tabs-and-actions-container-font-size: 13px;
   /* Matches TAB_HEIGHT in dock.ts. */
-  --dv-tabs-and-actions-container-height: 28px;
+  --dv-tabs-and-actions-container-height: 36px;
   --dv-drag-over-background-color: color-mix(in srgb, var(--primary) 15%, transparent);
   --dv-drag-over-border-color: var(--primary);
   --dv-drag-over-border: 1px solid var(--primary);
@@ -71,4 +71,22 @@
 .dockview-theme-tavora .dv-tab:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
+}
+
+/* Each group is a card: rounded, outlined and set apart from its
+   neighbours by the dock's gap. The corner radius matches PANEL_RADIUS in
+   src/main/module-view.ts, which rounds the module's native view to fit. */
+.dockview-theme-tavora .dv-groupview {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.dockview-theme-tavora .dv-groupview.dv-active-group {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+}
+
+/* A drag resize shows on the gap between cards. */
+.dockview-theme-tavora .dv-sash {
+  border-radius: 2px;
 }
