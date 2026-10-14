@@ -30,10 +30,13 @@ pnpm --filter @tavora/desktop start     # opens Tavora with the example modules
 
 ## Checks
 
+Tests run locally. GitHub Actions only runs them for release tags (`v*`) or when started by hand.
+
 ```sh
+pnpm check       # everything below, in order
 pnpm typecheck
 pnpm test        # unit tests (vitest)
-pnpm test:e2e    # Electron gate tests (Playwright); on Linux CI wrap in xvfb-run -a
+pnpm test:e2e    # Electron gate tests (Playwright); on headless Linux wrap in xvfb-run -a
 ```
 
 The e2e tests must run as a normal user, not root: Chromium refuses to start its sandbox as root, and the gate tests are only meaningful with the sandbox on.
