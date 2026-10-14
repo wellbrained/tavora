@@ -128,12 +128,22 @@ test("a crashed module does not take down the host or other modules (G5)", async
   await expectModuleText(app, VANILLA, "status", "Connected");
   await expect.poll(() => inModule(app, HOSTILE, "typeof window.runProbes").catch(() => null)).toBe("function");
 
-  await app.evaluate(({ webContents }, id) => {
-    webContents
-      .getAllWebContents()
-      .find((contents) => contents.getURL().startsWith(`tavora-module://${id}/`))!
-      .forcefullyCrashRenderer();
-  }, HOSTILE);
+  // Host UI and both modules must each have their own renderer process,
+  // otherwise one crash would take the others with it.
+  const pids = await app.evaluate(({ BrowserWindow, webContents }, ids) => {
+    const all = webContents.getAllWebContents();
+    return {
+      host: BrowserWindow.getAllWindows()[0]!.webContents.getOSProcessId(),
+      modules: ids.map((id) =>
+        all.find((contents) => contents.getURL().startsWith(`tavora-module://${id}/`))!.getOSProcessId(),
+      ),
+    };
+  }, [VANILLA, HOSTILE]);
+  const [, hostilePid] = pids.modules;
+  expect(new Set([pids.host, ...pids.modules]).size).toBe(3);
+
+  // Kill the module's renderer the way a real crash would end it.
+  process.kill(hostilePid!, "SIGKILL");
 
   await expect(panels(page, HOSTILE)).toHaveAttribute("data-status", "crashed");
   await expect(panels(page, HOSTILE).getByTestId("reload")).toBeVisible();
