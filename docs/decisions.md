@@ -2,7 +2,7 @@
 
 The installer, updater, feed, release-channel and signing decisions below describe the planned release process. Current test packaging remains portable exe/zip and AppImage; automatic updates, NSIS installers and the feed are not implemented yet. The existing `pnpm dev` Vite hot reload workflow supersedes the earlier rebuild-only proposal from PR #6.
 
-2026-10-14 developer docs live in this repo as `apps/docs` (VitePress); the marketing site stays in `tavora-website`. Manifest, protocol and SDK docs change alongside code; TypeDoc generates the API reference and the manifest schema is published with the built site. Hosting remains separate and unimplemented.
+2026-10-14 developer docs live in this repo as `apps/docs` (VitePress); the marketing site stays in `tavora-website`. Manifest, protocol and SDK docs change alongside code; TypeDoc generates the API reference and the manifest schema is published with the built site. The site is published at docs.mytavora.app through GitHub Pages, deployed by `.github/workflows/docs.yml` when the docs or the sources they are generated from change on `main`.
 
 2026-10-14 merge validation: startup removes expired-game browser partitions before opening Chromium sessions, avoiding Windows file locks. The SDK remembers current suspension and informs late suspend subscribers, so a panel hidden while connecting still pauses its work. Existing expiry and docking gate tests cover both behaviors; the SDK has a late-subscription regression test.
 
