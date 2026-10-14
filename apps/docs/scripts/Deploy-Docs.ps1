@@ -1,11 +1,12 @@
 # Builds the docs on this PC and publishes them to docs.mytavora.app on the Hetzner server
-# (Caddy serves /srv/tavora-docs/current). Requires a clean, committed checkout.
+# (Caddy serves /srv/tavora-docs/current). Only apps/docs has to be committed: changes elsewhere in the repo
+# belong to the Tavora app and do not block a docs deploy (the build still reads the SDK sources as they are).
 param()
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $docs = Join-Path $repo 'apps\docs'
-$changes = & git -C $repo status --porcelain
-if ($LASTEXITCODE -ne 0 -or $changes) { throw 'Commit the docs changes before deploying.' }
+$changes = & git -C $repo status --porcelain -- apps/docs
+if ($LASTEXITCODE -ne 0 -or $changes) { throw 'Commit the changes in apps/docs before deploying.' }
 $revision = (& git -C $repo rev-parse --short=12 HEAD).Trim()
 if ($revision -notmatch '^[a-f0-9]{12}$') { throw 'Invalid source revision.' }
 & pnpm --dir $repo --filter @tavora/docs build

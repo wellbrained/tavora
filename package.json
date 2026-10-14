@@ -8,8 +8,8 @@
   },
   "scripts": {
     "dev": "pnpm --filter @tavora/desktop dev",
-    "typecheck": "pnpm -r typecheck",
-    "build": "pnpm -r build",
+    "typecheck": "pnpm -r --filter \"!@tavora/docs\" typecheck",
+    "build": "pnpm -r --filter \"!@tavora/docs\" build",
     "test": "vitest run",
     "test:e2e": "pnpm --filter @tavora/desktop test:e2e",
     "check": "pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e"
