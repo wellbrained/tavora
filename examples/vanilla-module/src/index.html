@@ -17,10 +17,27 @@
         <dd data-testid="viewport">–</dd>
         <dt>Theme</dt>
         <dd data-testid="theme">–</dd>
-        <dt>Clicks saved for this game</dt>
-        <dd data-testid="count">–</dd>
+        <dt>Panel</dt>
+        <dd data-testid="lifecycle">–</dd>
       </dl>
-      <button type="button" data-testid="increment" disabled>Add a click</button>
+
+      <section>
+        <h2>Clicks saved for this game</h2>
+        <p data-testid="count">–</p>
+        <button type="button" data-testid="increment" disabled>Add a click</button>
+      </section>
+
+      <section>
+        <h2>Shared note <small>revision <span data-testid="note-revision">–</span></small></h2>
+        <textarea data-testid="note" rows="3" disabled></textarea>
+        <p><button type="button" data-testid="save-note" disabled>Save note</button> <span data-testid="note-status"></span></p>
+      </section>
+
+      <section>
+        <h2>This panel's view: <span data-testid="view">–</span></h2>
+        <button type="button" data-testid="view-list" disabled>List</button>
+        <button type="button" data-testid="view-grid" disabled>Grid</button>
+      </section>
     </main>
   </body>
 </html>

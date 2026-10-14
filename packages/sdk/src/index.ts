@@ -1,45 +1,97 @@
 // @tavora/sdk: thin typed client for modules running inside Tavora Desktop.
-// Draft contract from the project kit (docs/15). Not a stable API.
 // The host enforces every check; this package only marshals typed calls.
+// Protocol reference: docs/sdk/protocol.md.
 
 import {
   HELLO_MESSAGE,
   PORT_MESSAGE,
   PROTOCOL_VERSION,
+  type Capability,
+  type DocumentChange,
+  type DocumentSummary,
   type ErrorCode,
+  type ErrorPayload,
   type EventName,
   type Events,
+  type HandshakeResult,
   type HostMessage,
   type JsonValue,
   type MethodName,
   type Methods,
+  type PutDocumentParams,
+  type TavoraDocument,
   type TavoraGame,
   type TavoraTheme,
   type TavoraViewport,
-} from "./protocol";
+} from "./protocol.js";
 
-export type { ErrorCode, JsonValue, TavoraGame, TavoraTheme, TavoraViewport } from "./protocol";
+export type {
+  Capability,
+  DocumentChange,
+  DocumentSummary,
+  ErrorCode,
+  HandshakeResult,
+  JsonValue,
+  PutDocumentParams,
+  TavoraDocument,
+  TavoraGame,
+  TavoraTheme,
+  TavoraViewport,
+} from "./protocol.js";
+export { LIMITS, PROTOCOL_VERSION } from "./protocol.js";
+
+/** Version of this SDK package, sent to the host during the handshake. */
+export const SDK_VERSION = "0.1.0";
 
 export class TavoraError extends Error {
-  constructor(
-    readonly code: ErrorCode,
-    message: string,
-  ) {
-    super(message);
+  readonly code: ErrorCode;
+  /** Set for PERMISSION_DENIED. */
+  readonly capability: Capability | undefined;
+  /** Set for CONFLICT: the document's current revision. */
+  readonly revision: number | undefined;
+
+  constructor(payload: ErrorPayload) {
+    super(payload.message);
     this.name = "TavoraError";
+    this.code = payload.code;
+    this.capability = payload.capability;
+    this.revision = payload.revision;
   }
 }
 
 type Unsubscribe = () => void;
 
 export interface TavoraSDK {
+  /** What the host reported when this module connected. */
+  readonly host: HandshakeResult;
   game: {
     getCurrent(): Promise<TavoraGame>;
   };
+  /** Small key/value settings, private to this module in the current game. */
   storage: {
-    get<T extends JsonValue = JsonValue>(key: string): Promise<T | null>;
+    /** T is not checked at runtime; the host only guarantees the value is JSON. */
+    get<T = JsonValue>(key: string): Promise<T | null>;
     set(key: string, value: JsonValue): Promise<void>;
     delete(key: string): Promise<void>;
+    keys(): Promise<string[]>;
+  };
+  /**
+   * Named documents (builds, plans, checklists), private to this module in
+   * the current game and shared by all of its panels.
+   */
+  documents: {
+    list(): Promise<DocumentSummary[]>;
+    get<T = JsonValue>(id: string): Promise<(TavoraDocument & { data: T }) | null>;
+    /** Creates or replaces a document. Pass ifRevision to avoid overwriting another panel's change. */
+    put(document: PutDocumentParams): Promise<DocumentSummary>;
+    delete(id: string, options?: { ifRevision?: number }): Promise<void>;
+    /** Fires when another panel of this module changes a document. */
+    onChange(fn: (change: DocumentChange) => void): Unsubscribe;
+  };
+  /** UI state for this one panel (selection, scroll, open tab). Cleared when the panel is closed. */
+  panel: {
+    getState<T = JsonValue>(): Promise<T | null>;
+    setState(value: JsonValue | null): Promise<void>;
   };
   workspace: {
     getViewport(): Promise<TavoraViewport>;
@@ -50,6 +102,7 @@ export interface TavoraSDK {
     onThemeChange(fn: (theme: TavoraTheme) => void): Unsubscribe;
   };
   lifecycle: {
+    /** The panel is hidden; pause timers and animations. */
     onSuspend(fn: () => void): Unsubscribe;
     onResume(fn: () => void): Unsubscribe;
     /** Best effort only: autosave must not depend on this firing. */
@@ -68,16 +121,16 @@ let connection: Promise<TavoraSDK> | undefined;
 
 /**
  * Connects to the Tavora host. Safe to call more than once: every call
- * returns the same connection for this window.
+ * returns the same connection for this window. Rejects with a TavoraError
+ * (HOST_UNAVAILABLE, INCOMPATIBLE) if the module cannot run here.
  */
 export function connect(options: ConnectOptions = {}): Promise<TavoraSDK> {
-  connection ??= openPort(options.connectTimeoutMs ?? 5000).then(
-    (port) => createClient(port, options.requestTimeoutMs ?? 10_000),
-    (error: unknown) => {
+  connection ??= openPort(options.connectTimeoutMs ?? 5000)
+    .then((port) => createClient(port, options.requestTimeoutMs ?? 10_000))
+    .catch((error: unknown) => {
       connection = undefined;
       throw error;
-    },
-  );
+    });
   return connection;
 }
 
@@ -85,7 +138,12 @@ function openPort(timeoutMs: number): Promise<MessagePort> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       window.removeEventListener("message", onMessage);
-      reject(new TavoraError("HOST_UNAVAILABLE", "Tavora host did not respond. Is this module running inside Tavora?"));
+      reject(
+        new TavoraError({
+          code: "HOST_UNAVAILABLE",
+          message: "Tavora host did not respond. Is this module running inside Tavora?",
+        }),
+      );
     }, timeoutMs);
 
     function onMessage(event: MessageEvent) {
@@ -100,9 +158,12 @@ function openPort(timeoutMs: number): Promise<MessagePort> {
   });
 }
 
-function createClient(port: MessagePort, requestTimeoutMs: number): TavoraSDK {
+async function createClient(port: MessagePort, requestTimeoutMs: number): Promise<TavoraSDK> {
   let nextId = 1;
-  const pending = new Map<number, { resolve(value: unknown): void; reject(error: TavoraError): void; timer: ReturnType<typeof setTimeout> }>();
+  const pending = new Map<
+    number,
+    { resolve(value: unknown): void; reject(error: TavoraError): void; timer: ReturnType<typeof setTimeout> }
+  >();
   const listeners = new Map<EventName, Set<(data: unknown) => void>>();
 
   port.onmessage = (event: MessageEvent<HostMessage>) => {
@@ -125,7 +186,7 @@ function createClient(port: MessagePort, requestTimeoutMs: number): TavoraSDK {
     pending.delete(message.id);
     clearTimeout(entry.timer);
     if (message.ok) entry.resolve(message.result);
-    else entry.reject(new TavoraError(message.error.code, message.error.message));
+    else entry.reject(new TavoraError(message.error));
   };
   port.start();
 
@@ -134,7 +195,7 @@ function createClient(port: MessagePort, requestTimeoutMs: number): TavoraSDK {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(id);
-        reject(new TavoraError("TIMEOUT", `${method} timed out`));
+        reject(new TavoraError({ code: "TIMEOUT", message: `${method} timed out` }));
       }, requestTimeoutMs);
       pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
       port.postMessage({ v: PROTOCOL_VERSION, id, method, params });
@@ -149,17 +210,37 @@ function createClient(port: MessagePort, requestTimeoutMs: number): TavoraSDK {
     return () => set.delete(listener);
   }
 
+  const host = await call("bridge.handshake", { protocol: PROTOCOL_VERSION, sdkVersion: SDK_VERSION });
+
   return {
+    host,
     game: {
       getCurrent: () => call("game.getCurrent"),
     },
     storage: {
-      get: <T extends JsonValue = JsonValue>(key: string) => call("storage.get", { key }) as Promise<T | null>,
+      get: <T = JsonValue>(key: string) => call("storage.get", { key }) as Promise<T | null>,
       set: async (key, value) => {
         await call("storage.set", { key, value });
       },
       delete: async (key) => {
         await call("storage.delete", { key });
+      },
+      keys: () => call("storage.keys"),
+    },
+    documents: {
+      list: () => call("documents.list"),
+      get: <T = JsonValue>(id: string) =>
+        call("documents.get", { id }) as Promise<(TavoraDocument & { data: T }) | null>,
+      put: (document) => call("documents.put", document),
+      delete: async (id, options = {}) => {
+        await call("documents.delete", { id, ...options });
+      },
+      onChange: (fn) => on("documents.changed", fn),
+    },
+    panel: {
+      getState: <T = JsonValue>() => call("panel.getState") as Promise<T | null>,
+      setState: async (value) => {
+        await call("panel.setState", { value });
       },
     },
     workspace: {

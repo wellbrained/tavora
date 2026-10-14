@@ -2,7 +2,10 @@
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, sans-serif; }
 main { padding: 16px; }
 h1 { font-size: 16px; margin: 0 0 8px; }
-dt { color: var(--muted); }
+h2 { font-size: 14px; margin: 16px 0 4px; }
+small, dt { color: var(--muted); font-weight: normal; }
 dd { margin: 0 0 8px; }
+p { margin: 4px 0; }
+textarea { box-sizing: border-box; width: 100%; background: transparent; color: var(--text); border: 1px solid var(--muted); border-radius: 6px; padding: 6px; font: inherit; }
 button { background: var(--accent); color: #18181b; border: 0; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
 button:disabled { opacity: 0.5; }

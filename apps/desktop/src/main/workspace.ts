@@ -20,7 +20,7 @@ export interface WorkspaceState {
   games: Record<string, { instances: InstanceRecord[] }>;
 }
 
-const INSTANCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export const INSTANCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export function emptyWorkspace(gameIds: readonly string[]): WorkspaceState {
   return {

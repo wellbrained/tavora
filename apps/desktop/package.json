@@ -19,5 +19,6 @@
   "dependencies": {
     "@tavora/module-schema": "workspace:*",
     "@tavora/sdk": "workspace:*"
-  }
+  },
+  "license": "MIT"
 }

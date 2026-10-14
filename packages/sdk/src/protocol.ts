@@ -1,10 +1,11 @@
-// Wire protocol v0 between a module and the Tavora host, carried over a
-// MessagePort. Draft for Milestone A; it will change before a public release.
+// Wire protocol v1 between a module and the Tavora host, carried over a
+// MessagePort. Specified in docs/sdk/protocol.md.
 //
-// Identity (which module, which game) is never part of a message. The host
-// binds it to the port when it creates the channel.
+// Identity (which module, which game, which panel) is never part of a
+// message. The host binds it to the port when it creates the channel.
 
-export const PROTOCOL_VERSION = 0;
+/** Major protocol version. Every message carries it as `v`. */
+export const PROTOCOL_VERSION = 1;
 
 /** Posted by the SDK on its own window to ask the host for a bridge port. */
 export const HELLO_MESSAGE = "tavora:hello";
@@ -34,22 +35,84 @@ export interface TavoraTheme {
 
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
+export interface HandshakeResult {
+  protocol: typeof PROTOCOL_VERSION;
+  host: { name: "tavora-desktop"; version: string };
+  module: { id: string; version: string };
+  /** Capabilities this module has been granted. */
+  capabilities: Capability[];
+}
+
+export interface DocumentSummary {
+  id: string;
+  title: string;
+  revision: number;
+  updatedAt: string;
+  bytes: number;
+}
+
+export interface TavoraDocument extends DocumentSummary {
+  data: JsonValue;
+}
+
+export interface PutDocumentParams {
+  /** Omit to create a new document with a host-generated id. */
+  id?: string;
+  title: string;
+  data: JsonValue;
+  /** Reject with CONFLICT unless the stored revision still matches. */
+  ifRevision?: number;
+}
+
+export interface DocumentChange {
+  id: string;
+  revision: number;
+  deleted: boolean;
+}
+
+/**
+ * Capabilities gate methods beyond the always-available core. None of the
+ * gated ones can be granted yet; calling them fails with PERMISSION_DENIED.
+ */
+export type Capability = "network" | "files" | "clipboard" | "sharedData";
+
 /** Request methods and their params/result types. */
 export interface Methods {
+  "bridge.handshake": { params: { protocol: number; sdkVersion: string }; result: HandshakeResult };
   "game.getCurrent": { params: undefined; result: TavoraGame };
   "storage.get": { params: { key: string }; result: JsonValue | null };
   "storage.set": { params: { key: string; value: JsonValue }; result: null };
   "storage.delete": { params: { key: string }; result: null };
+  "storage.keys": { params: undefined; result: string[] };
+  "documents.list": { params: undefined; result: DocumentSummary[] };
+  "documents.get": { params: { id: string }; result: TavoraDocument | null };
+  "documents.put": { params: PutDocumentParams; result: DocumentSummary };
+  "documents.delete": { params: { id: string; ifRevision?: number }; result: null };
+  "panel.getState": { params: undefined; result: JsonValue | null };
+  "panel.setState": { params: { value: JsonValue | null }; result: null };
   "workspace.getViewport": { params: undefined; result: TavoraViewport };
   "ui.getTheme": { params: undefined; result: TavoraTheme };
 }
 
 export type MethodName = keyof Methods;
 
+/** Methods reserved for later milestones, and the capability each needs. */
+export const RESERVED_METHODS: Readonly<Record<string, Capability>> = {
+  "network.fetch": "network",
+  "files.open": "files",
+  "files.save": "files",
+  "clipboard.writeText": "clipboard",
+  "clipboard.readText": "clipboard",
+  "sharedData.publish": "sharedData",
+  "sharedData.read": "sharedData",
+  "sharedData.subscribe": "sharedData",
+};
+
 /** Events the host pushes to the module. */
 export interface Events {
   "workspace.resize": TavoraViewport;
   "ui.theme": TavoraTheme;
+  "documents.changed": DocumentChange;
   "lifecycle.suspend": null;
   "lifecycle.resume": null;
   "lifecycle.dispose": null;
@@ -58,15 +121,38 @@ export interface Events {
 export type EventName = keyof Events;
 
 export type ErrorCode =
+  /** Malformed message, wrong protocol version or over a limit. */
   | "BAD_REQUEST"
+  /** The method is not part of the protocol. */
   | "UNKNOWN_METHOD"
+  /** Params are missing or have the wrong shape. */
   | "INVALID_PARAMS"
-  | "QUOTA_EXCEEDED"
+  /** The method exists but this module has not been granted its capability. */
   | "PERMISSION_DENIED"
+  /** A storage, document or panel-state limit would be exceeded. */
+  | "QUOTA_EXCEEDED"
+  /** `ifRevision` did not match the stored revision. */
+  | "CONFLICT"
+  /** The SDK and host speak different protocol versions. */
+  | "INCOMPATIBLE"
+  /** Something failed inside the host. Details are logged there, not sent. */
   | "INTERNAL"
+  // Raised by the SDK itself, never sent by the host:
+  /** The host did not answer in time. */
   | "TIMEOUT"
-  | "DISCONNECTED"
+  /** connect() found no Tavora host, e.g. the page was opened in a normal browser. */
   | "HOST_UNAVAILABLE";
+
+export interface ErrorPayload {
+  code: ErrorCode;
+  message: string;
+  /** Present for PERMISSION_DENIED. */
+  capability?: Capability;
+  /** Present for CONFLICT. */
+  revision?: number;
+  /** Present for INCOMPATIBLE and BAD_REQUEST version errors. */
+  supported?: number[];
+}
 
 export interface RequestMessage {
   v: typeof PROTOCOL_VERSION;
@@ -77,7 +163,7 @@ export interface RequestMessage {
 
 export type ResponseMessage =
   | { v: typeof PROTOCOL_VERSION; id: number; ok: true; result: unknown }
-  | { v: typeof PROTOCOL_VERSION; id: number; ok: false; error: { code: ErrorCode; message: string } };
+  | { v: typeof PROTOCOL_VERSION; id: number; ok: false; error: ErrorPayload };
 
 export interface EventMessage {
   v: typeof PROTOCOL_VERSION;
@@ -89,8 +175,21 @@ export type HostMessage = ResponseMessage | EventMessage;
 
 export const LIMITS = {
   /** Largest serialized request the host accepts. */
-  maxMessageBytes: 1024 * 1024,
+  maxMessageBytes: 8 * 1024 * 1024,
+  /** Requests a module may have waiting at once. */
+  maxInFlight: 64,
   maxKeyLength: 256,
-  /** Total serialized size of one module's storage for one game. */
+  /** Settings storage per module and game. */
   maxStoreBytes: 5 * 1024 * 1024,
+  /** One document's data. */
+  maxDocumentBytes: 4 * 1024 * 1024,
+  /** All documents of one module in one game. */
+  maxDocumentsBytes: 50 * 1024 * 1024,
+  maxDocuments: 1000,
+  maxTitleLength: 200,
+  /** UI state for one panel. */
+  maxPanelStateBytes: 256 * 1024,
 } as const;
+
+/** Document ids: host-generated UUIDs or module-chosen slugs. */
+export const DOCUMENT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;

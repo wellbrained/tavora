@@ -9,6 +9,7 @@ const api = {
   openModule: (moduleId: string): Promise<void> => ipcRenderer.invoke("host:open-module", moduleId),
   closePanel: (instanceId: string): Promise<void> => ipcRenderer.invoke("host:close-panel", instanceId),
   reloadPanel: (instanceId: string): Promise<void> => ipcRenderer.invoke("host:reload-panel", instanceId),
+  stopPanel: (instanceId: string): Promise<void> => ipcRenderer.invoke("host:stop-panel", instanceId),
   onState: (listener: (state: HostViewState) => void): void => {
     ipcRenderer.on("host:state", (_event, state: HostViewState) => listener(state));
   },
