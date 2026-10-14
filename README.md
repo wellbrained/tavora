@@ -17,7 +17,7 @@ Local-first, second-monitor gaming companion for Windows and Linux. Each game ge
 | `examples/react-module` | The same example built with React |
 | `examples/vue-module` | The same example built with Vue |
 | `apps/desktop/test/fixtures/hostile-module` | Deliberately hostile module used by the gate tests |
-| `apps/docs` | Developer docs (VitePress): guide, [manifest](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md), and generated SDK API |
+| `apps/docs` | Developer docs for [docs.mytavora.app](https://docs.mytavora.app/) (VitePress): guide, [manifest](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md), and generated SDK API |
 | `docs/design/` | [Style guide](docs/design/style-guide.md): tokens, type, components, accessibility and theme rules |
 | `docs/` | Threat model and decision log |
 
