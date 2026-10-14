@@ -17,7 +17,7 @@ Local-first, second-monitor gaming companion for Windows and Linux. Each game ge
 | `examples/react-module` | The same example built with React |
 | `examples/vue-module` | The same example built with Vue |
 | `apps/desktop/test/fixtures/hostile-module` | Deliberately hostile module used by the gate tests |
-| `apps/docs` | Developer docs (VitePress): guide, [manifest](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md), and generated SDK API |
+| `apps/docs` | Developer docs for [docs.mytavora.app](https://docs.mytavora.app/) (VitePress): guide, [manifest](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md), and generated SDK API |
 | `docs/design/` | [Style guide](docs/design/style-guide.md): tokens, type, components, accessibility and theme rules |
 | `docs/` | Threat model and decision log |
 
@@ -57,7 +57,7 @@ Modules run from their built files, so run `pnpm build` once first; after changi
 
 ## Checks
 
-Tests run locally. GitHub Actions only runs them for release tags (`v*`) or when started by hand.
+Tests run locally. GitHub Actions only runs them for release tags (`v*`) or when started by hand. The docs site is published to GitHub Pages (docs.mytavora.app) by its own workflow whenever the docs or the SDK sources change on `main`.
 
 ```sh
 pnpm check       # everything below, in order

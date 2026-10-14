@@ -10,6 +10,7 @@ export default defineConfig({
   description: "Build modules for Tavora: the SDK, the module manifest and the bridge protocol.",
   lang: "en",
   cleanUrls: true,
+  sitemap: { hostname: "https://docs.mytavora.app" },
   lastUpdated: true,
   // Tavora ships one dark theme for now (see docs/design/style-guide.md).
   appearance: "force-dark",
