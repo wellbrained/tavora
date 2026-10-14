@@ -152,8 +152,11 @@ export async function setContentSize(app: ElectronApplication, width: number, he
   });
 }
 
+/** Opens a module from the module library behind the header's Add module button. */
 export async function openModule(page: Page, moduleId: string): Promise<void> {
-  await page.click(`[data-testid="open-${moduleId}"]`);
+  await page.getByTestId("add-module").click();
+  await page.getByTestId(`open-${moduleId}`).click();
+  await expect(page.getByTestId("add-module-dialog")).toHaveCount(0);
 }
 
 /** The tabs of open panels, optionally of one module. */

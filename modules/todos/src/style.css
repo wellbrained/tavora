@@ -17,3 +17,65 @@
 .drop-after::after {
   bottom: -1px;
 }
+
+/* To-do and step checkboxes: a round ring that fills with the accent and
+   draws its tick when done. */
+.todo-check {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  border: 1.5px solid color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  border-radius: 9999px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease;
+}
+.todo-check.todo-check-sm {
+  width: 16px;
+  height: 16px;
+}
+.todo-check::before {
+  content: "";
+  width: 62%;
+  height: 62%;
+  background: var(--primary-foreground);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  transform: scale(0);
+  transition: transform 150ms ease;
+}
+.todo-check:hover {
+  border-color: var(--primary);
+}
+.todo-check:hover:not(:checked)::before {
+  background: var(--primary);
+  transform: scale(0.8);
+  opacity: 0.5;
+}
+.todo-check:checked {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+.todo-check:checked::before {
+  transform: scale(1);
+}
+.todo-check:active {
+  transform: scale(0.9);
+}
+.todo-check:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .todo-check,
+  .todo-check::before {
+    transition: none;
+  }
+}

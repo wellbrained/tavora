@@ -151,7 +151,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
     <div class="flex min-h-9 items-start gap-1.5 py-1 pr-1 pl-1">
       <span
         v-if="!compact"
-        class="text-muted-foreground mt-1.5 flex size-4 flex-none cursor-grab items-center justify-center opacity-0 group-hover/task:opacity-100"
+        class="text-muted-foreground flex h-7 w-4 flex-none cursor-grab items-center justify-center opacity-0 group-hover/task:opacity-100"
         draggable="true"
         aria-hidden="true"
         title="Drag to move"
@@ -160,14 +160,17 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
       >
         <GripVertical class="size-3.5" :stroke-width="1.5" />
       </span>
-      <input
-        type="checkbox"
-        class="mt-2 size-4 flex-none"
-        :checked="task.done"
-        :aria-label="task.done ? `Mark “${task.title}” as not done` : `Mark “${task.title}” as done`"
-        data-testid="task-done"
-        @change="setTaskDone(checked($event))"
-      />
+      <!-- Controls sit in 28 px boxes, the height of the title's first line, so they line up with it. -->
+      <span class="flex h-7 flex-none items-center px-0.5">
+        <input
+          type="checkbox"
+          class="todo-check"
+          :checked="task.done"
+          :aria-label="task.done ? `Mark “${task.title}” as not done` : `Mark “${task.title}” as done`"
+          data-testid="task-done"
+          @change="setTaskDone(checked($event))"
+        />
+      </span>
       <button
         v-if="!expanded"
         type="button"
@@ -176,7 +179,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
         data-testid="task-open"
         @click="emit('toggle')"
       >
-        <span :class="cn('w-full text-sm break-words', task.done && 'text-muted-foreground line-through')" data-testid="task-title">{{
+        <span :class="cn('w-full text-sm leading-5 break-words', task.done && 'text-muted-foreground line-through')" data-testid="task-title">{{
           task.title
         }}</span>
         <span
@@ -193,18 +196,20 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
         v-else
         ref="titleInput"
         v-model="title"
-        class="focus-visible:border-ring h-8 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-medium outline-none"
+        class="focus-visible:border-ring h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-medium outline-none"
         aria-label="Title"
         data-testid="task-title-input"
         :maxlength="MAX.title"
         @blur="saveTitle"
         @keydown="onTitleKey"
       />
-      <Pin v-if="task.pinned && !expanded && !compact" class="text-primary mt-2 size-3.5 flex-none" :stroke-width="1.5" aria-label="Pinned" />
+      <span v-if="task.pinned && !expanded && !compact" class="flex h-7 flex-none items-center">
+        <Pin class="text-primary size-3.5" :stroke-width="1.5" aria-label="Pinned" />
+      </span>
       <button
         v-if="expanded"
         type="button"
-        class="text-muted-foreground hover:text-foreground mt-0.5 flex size-7 flex-none items-center justify-center rounded-md"
+        class="text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md"
         aria-label="Close details"
         title="Close details"
         data-testid="task-close"
@@ -216,7 +221,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
         <DropdownMenuTrigger
           :class="
             cn(
-              'text-muted-foreground hover:text-foreground mt-0.5 flex size-7 flex-none items-center justify-center rounded-md opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100',
+              'text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100',
               (expanded || menuOpen) && 'opacity-100',
             )
           "
@@ -294,7 +299,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
           <li v-for="step in task.steps" :key="step.id" class="group/step flex items-center gap-2 rounded-md pl-1" :data-testid="`step-${step.id}`">
             <input
               type="checkbox"
-              class="size-4 flex-none"
+              class="todo-check todo-check-sm"
               :checked="step.done"
               :aria-label="`Step done: ${step.title}`"
               data-testid="step-done"

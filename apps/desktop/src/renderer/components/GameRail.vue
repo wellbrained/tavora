@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, Plus, Settings } from "@lucide/vue";
-import { computed, reactive, ref } from "vue";
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, Settings } from "@lucide/vue";
+import { computed, onBeforeUnmount, reactive, ref } from "vue";
 import type { FolderView, GameView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
 import { act, dialog, openSettings, prompt, state, submitAction } from "../host";
@@ -13,9 +13,29 @@ import RailGame from "./RailGame.vue";
 const COMPACT = 72;
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 420;
+/** Below this window width an expanded rail is shown compact, so the workspace keeps its room. */
+const NARROW_WINDOW = 1100;
 
 const library = computed(() => state.value!.library);
-const expanded = computed(() => library.value.rail.expanded);
+
+// In a narrow window the rail is compact whatever the saved setting says;
+// the toggle then only expands it until the window widens again, and the
+// saved setting is left alone.
+const narrowQuery = matchMedia(`(max-width: ${NARROW_WINDOW - 1}px)`);
+const narrow = ref(narrowQuery.matches);
+const peek = ref(false);
+function onNarrowChange() {
+  narrow.value = narrowQuery.matches;
+  peek.value = false;
+}
+narrowQuery.addEventListener("change", onNarrowChange);
+onBeforeUnmount(() => narrowQuery.removeEventListener("change", onNarrowChange));
+
+const expanded = computed(() => (narrow.value ? peek.value : library.value.rail.expanded));
+function toggleRail() {
+  if (narrow.value) peek.value = !peek.value;
+  else void act({ type: "set-rail", expanded: !expanded.value });
+}
 const manual = computed(() => library.value.sort === "manual");
 const favorites = computed(() => library.value.favorites.map((id) => library.value.games[id]).filter(isGame));
 const openFolders = reactive(new Set<string>());
@@ -365,30 +385,31 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
             </div>
           </div>
         </template>
+        <!-- Add game is a tile under the last game, like one more entry in the list. -->
+        <div class="rail-entry group relative mt-1 flex items-center px-2">
+          <button
+            type="button"
+            :class="cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent')"
+            data-rail-item
+            data-testid="rail-add-game"
+            aria-label="Add game"
+            title="Add game"
+            @click="dialog = { kind: 'add-game' }"
+          >
+            <span
+              class="rail-icon bg-card text-primary group-hover:bg-primary group-hover:text-primary-foreground flex size-12 flex-none items-center justify-center rounded-[12px]"
+            >
+              <Plus class="size-6" :stroke-width="1.75" />
+            </span>
+            <span v-if="expanded" class="text-sm font-medium">Add game</span>
+          </button>
+        </div>
       </section>
     </div>
 
+    <!-- Player things live at the bottom on their own: Settings now, the
+         player's profile once there are accounts. -->
     <div class="flex flex-col gap-1 border-t py-2">
-      <!-- Add game is a tile like the games above it; the utility buttons
-           below stay quiet icons and only light up on hover. -->
-      <div class="rail-entry group relative flex items-center px-2 pb-1">
-        <button
-          type="button"
-          :class="cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent')"
-          data-rail-item
-          data-testid="rail-add-game"
-          aria-label="Add game"
-          title="Add game"
-          @click="dialog = { kind: 'add-game' }"
-        >
-          <span
-            class="rail-icon bg-card text-primary group-hover:bg-primary group-hover:text-primary-foreground flex size-12 flex-none items-center justify-center rounded-[12px]"
-          >
-            <Plus class="size-6" :stroke-width="1.75" />
-          </span>
-          <span v-if="expanded" class="text-sm font-medium">Add game</span>
-        </button>
-      </div>
       <button
         type="button"
         :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors', expanded && 'hover:bg-accent')"
@@ -405,22 +426,19 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         </span>
         <span v-if="expanded" class="text-sm font-medium">Settings</span>
       </button>
-      <button
-        type="button"
-        :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors', expanded && 'hover:bg-accent')"
-        data-rail-item
-        data-testid="rail-toggle"
-        :aria-label="expanded ? 'Collapse game list' : 'Expand game list'"
-        :title="expanded ? 'Collapse game list' : 'Expand game list'"
-        :aria-expanded="expanded"
-        @click="act({ type: 'set-rail', expanded: !expanded })"
-      >
-        <span class="flex w-12 flex-none justify-center">
-          <component :is="expanded ? PanelLeftClose : PanelLeftOpen" class="size-5" :stroke-width="1.5" />
-        </span>
-        <span v-if="expanded" class="text-sm font-medium">Collapse</span>
-      </button>
     </div>
+
+    <button
+      type="button"
+      class="app-no-drag bg-rail text-muted-foreground hover:text-foreground hover:border-primary/60 focus-visible:ring-ring absolute top-5 -right-3 z-20 grid size-6 place-items-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      data-testid="rail-toggle"
+      :aria-label="expanded ? 'Collapse game list' : 'Expand game list'"
+      :title="expanded ? 'Collapse game list' : 'Expand game list'"
+      :aria-expanded="expanded"
+      @click="toggleRail"
+    >
+      <component :is="expanded ? ChevronLeft : ChevronRight" class="size-3.5" :stroke-width="2" />
+    </button>
 
     <div
       v-if="expanded"
