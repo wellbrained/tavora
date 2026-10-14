@@ -21,6 +21,16 @@ app.on("web-contents-created", (_event, contents) => {
   contents.on("will-attach-webview", (event) => event.preventDefault());
 });
 
+// `pnpm dev` serves the host UI with hot reload and restarts Tavora when
+// main code changes. Packaged builds always use the built files.
+const devServer = !app.isPackaged ? process.env.TAVORA_DEV_SERVER : undefined;
+// The dev script asks Tavora to quit before restarting it; quit properly so
+// unsaved layouts and window bounds are written first.
+if (devServer) {
+  process.on("message", (message) => message === "quit" && app.quit());
+  process.on("SIGTERM", () => app.quit());
+}
+
 const repoRoot = path.resolve(__dirname, "../../../..");
 const moduleDirs = process.env.TAVORA_MODULE_DIRS
   ? process.env.TAVORA_MODULE_DIRS.split(path.delimiter).filter(Boolean)
@@ -51,6 +61,7 @@ if (!app.requestSingleInstanceLock()) {
         hostPreload: path.join(__dirname, "../preload/host.cjs"),
         icon: path.join(__dirname, "../../assets/icon-256.png"),
         devTools: !app.isPackaged && process.env.TAVORA_DEVTOOLS === "1",
+        devServer,
       });
     })
     .catch((error: unknown) => {
