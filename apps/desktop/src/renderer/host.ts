@@ -62,7 +62,7 @@ export interface ConfirmRequest {
   run(): Promise<string | null>;
 }
 
-export type DialogRequest = PromptRequest | ConfirmRequest | { kind: "add-game" };
+export type DialogRequest = PromptRequest | ConfirmRequest | { kind: "add-game" } | { kind: "add-module" };
 
 export const dialog = shallowRef<DialogRequest | null>(null);
 

@@ -3,7 +3,7 @@
 // lays out tabs, groups and splits in this page; each panel's module runs in
 // a native view that the main process draws over the panel's content area,
 // at the bounds this page reports.
-import { Plus } from "@lucide/vue";
+import { LayoutGrid, Plus } from "@lucide/vue";
 import {
   DockviewVue,
   type DockviewApi,
@@ -14,20 +14,22 @@ import {
 import { computed, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds } from "../../shared/host-api";
 import { Button } from "@/components/ui/button";
-import { act, api as host, dragging, state } from "../host";
+import { act, api as host, dialog, dragging, state } from "../host";
 import { fromDockview, groupMinimum, guardDrop, placePanel, toDockview, type PanelInfo } from "../dock";
+import GameIcon from "../components/GameIcon.vue";
 import GroupActions from "../components/workspace/GroupActions.vue";
 import LayoutsMenu from "../components/workspace/LayoutsMenu.vue";
 import PanelContent from "../components/workspace/PanelContent.vue";
 import PanelTab from "../components/workspace/PanelTab.vue";
 import { DOCK } from "../components/workspace/dock-context";
 
-const THEME = { name: "tavora", className: "dockview-theme-tavora", colorScheme: "dark" as const, gap: 0 };
+/** Width of a panel card's border (dock.css), in px. */
+const CARD_BORDER = 1;
+/** Space between panel cards and around the dock, in px. */
+const GAP = 8;
+const THEME = { name: "tavora", className: "dockview-theme-tavora", colorScheme: "dark" as const, gap: GAP };
 /** How long the layout must be still before it is saved. */
 const SAVE_DELAY_MS = 300;
-
-/** Who publishes a module: Tavora itself, or a package found on this computer. */
-const PROVENANCE_LABEL = { official: "Official", local: "Local" } as const;
 
 const view = computed(() => state.value!);
 const game = computed(() => (view.value.currentGameId ? view.value.library.games[view.value.currentGameId] : undefined));
@@ -35,7 +37,10 @@ const game = computed(() => (view.value.currentGameId ? view.value.library.games
 function info(instanceId: string): PanelInfo | undefined {
   const panel = view.value.panels.find((item) => item.instanceId === instanceId);
   const module = panel && view.value.modules.find((item) => item.id === panel.moduleId);
-  return panel && module ? { title: panel.name, minWidth: module.minWidth, minHeight: module.minHeight } : undefined;
+  // A panel card's 1 px border on each side comes out of the module's room.
+  return panel && module
+    ? { title: panel.name, minWidth: module.minWidth + 2 * CARD_BORDER, minHeight: module.minHeight + 2 * CARD_BORDER }
+    : undefined;
 }
 
 // ── Where panels are ───────────────────────────────────────────────────
@@ -231,33 +236,21 @@ const groupActions = GroupActions as unknown as VueComponent;
 
 <template>
   <main class="flex h-full min-w-0 flex-col" data-testid="workspace">
-    <header class="app-drag flex h-12 flex-none items-center gap-4 border-b pr-[calc(100vw-env(titlebar-area-x,0px)-env(titlebar-area-width,100vw)+1rem)] pl-4">
-      <h1 class="max-w-60 flex-none truncate text-lg font-semibold">{{ game?.name }}</h1>
-      <div class="app-no-drag flex min-w-0 gap-2 overflow-x-auto" role="group" aria-label="Open a module">
-        <Button
-          v-for="module in view.modules"
-          :key="module.id"
-          size="sm"
-          variant="secondary"
-          :data-testid="`open-${module.id}`"
-          :disabled="!module.available"
-          :title="module.available ? (module.description ?? `Open ${module.name}`) : `${module.name} does not support this game`"
-          @click="act({ type: 'open-module', moduleId: module.id })"
-        >
-          <Plus :stroke-width="1.5" /> {{ module.name }}
-          <span
-            class="text-muted-foreground bg-background rounded-sm px-1 text-xs"
-            :data-testid="`provenance-${module.id}`"
-          >{{ PROVENANCE_LABEL[module.provenance] }}</span>
+    <header class="app-drag flex h-14 flex-none items-center gap-3 pr-[calc(100vw-env(titlebar-area-x,0px)-env(titlebar-area-width,100vw)+1rem)] pl-4">
+      <GameIcon v-if="game" :game="game" :size="32" />
+      <h1 class="max-w-72 min-w-0 truncate text-lg font-semibold">{{ game?.name }}</h1>
+      <span class="text-info ml-auto min-w-0 truncate text-sm" role="status" data-testid="notice">{{ view.notice ?? "" }}</span>
+      <div class="app-no-drag flex flex-none items-center gap-2">
+        <LayoutsMenu />
+        <Button size="sm" variant="secondary" data-testid="add-module" @click="dialog = { kind: 'add-module' }">
+          <Plus :stroke-width="1.5" /> Add module
         </Button>
       </div>
-      <span class="text-info ml-auto text-sm" role="status" data-testid="notice">{{ view.notice ?? "" }}</span>
-      <div class="app-no-drag"><LayoutsMenu /></div>
     </header>
 
     <div ref="root" class="relative min-h-0 flex-1" @pointerdown.capture="onPointerDown">
       <DockviewVue
-        class="absolute inset-0"
+        class="absolute inset-x-2 top-0 bottom-2"
         :theme="THEME"
         :components="components"
         :default-tab-component="tab"
@@ -268,11 +261,15 @@ const groupActions = GroupActions as unknown as VueComponent;
       />
       <div
         v-if="!view.panels.length"
-        class="bg-background absolute inset-0 flex flex-col items-center justify-center gap-1 text-center"
+        class="bg-background absolute inset-x-2 top-0 bottom-2 flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed text-center"
         data-testid="empty-workspace"
       >
-        <p>No modules open yet.</p>
-        <p class="text-muted-foreground">Open one from the bar above. Your layout is saved for this game.</p>
+        <LayoutGrid class="text-muted-foreground mb-2 size-12" :stroke-width="1" />
+        <p class="text-lg font-semibold">Start building your workspace</p>
+        <p class="text-muted-foreground max-w-sm text-sm">Add modules for {{ game?.name }}. Arrange them however you like; the layout is saved for this game.</p>
+        <Button variant="outline" class="border-primary/60 text-primary hover:bg-primary/10 hover:text-primary mt-3" data-testid="empty-add-module" @click="dialog = { kind: 'add-module' }">
+          <Plus :stroke-width="1.5" /> Add module
+        </Button>
       </div>
     </div>
   </main>

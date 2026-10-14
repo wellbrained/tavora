@@ -82,6 +82,9 @@ function moduleSession(module: InstalledModule, game: TavoraGame): Session {
   return ses;
 }
 
+/** Corner radius of a panel card in the host UI (dock.css), in px. */
+const PANEL_RADIUS = 10;
+
 /** One panel instance of a module, bound to one game. */
 export class ModuleView {
   readonly view: WebContentsView;
@@ -113,6 +116,8 @@ export class ModuleView {
 
     // No white flash before the page has painted.
     this.view.setBackgroundColor(THEME.tokens.background);
+    // Panels are rounded cards in the host UI; the view follows their corners.
+    this.view.setBorderRadius(PANEL_RADIUS - 1);
 
     const contents = this.view.webContents;
     const origin = moduleOrigin(module.manifest.id);

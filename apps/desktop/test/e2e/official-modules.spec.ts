@@ -90,6 +90,7 @@ const taskTitles = (app: ElectronApplication, scope = "", index = 0) =>
 
 test("official modules are marked Official, other installed modules Local", async () => {
   const { app, page } = await launch();
+  await page.getByTestId("add-module").click();
   await expect(page.getByTestId(`provenance-${NOTES}`)).toHaveText("Official");
   await expect(page.getByTestId(`provenance-${TODOS}`)).toHaveText("Official");
   await expect(page.getByTestId(`provenance-${VUE}`)).toHaveText("Local");
