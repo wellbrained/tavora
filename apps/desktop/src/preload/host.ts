@@ -7,10 +7,13 @@ const api: TavoraHostApi = {
   getState: () => ipcRenderer.invoke("host:get-state"),
   act: (action) => ipcRenderer.invoke("host:action", action),
   searchCatalog: (query) => ipcRenderer.invoke("host:search-catalog", query),
-  setWorkspaceRect: (rect) => ipcRenderer.send("host:workspace-rect", rect),
+  setPanelBounds: (bounds) => ipcRenderer.send("host:panel-bounds", bounds),
   setOverlay: (open) => ipcRenderer.send("host:overlay", open),
   onState: (listener) => {
     ipcRenderer.on("host:state", (_event, state: HostViewState) => listener(state));
+  },
+  onFrozen: (listener) => {
+    ipcRenderer.on("host:frozen", (_event, images: Record<string, string>) => listener(images));
   },
 };
 

@@ -104,7 +104,7 @@ Everything sits on a 4 px grid with one 8 px corner radius.
 | Radius | 8 px (4 px for small chips, round for avatars) | Buttons, inputs, cards, menus, game icons |
 | Rail | 72 px collapsed; 256 px default, 180 to 420 px when resized | Game rail |
 | Game icon | 48 px in the rail, 64 px on Home | Monogram or uploaded image |
-| Panel header | 28 px | Module panel title bar |
+| Panel tab | 28 px | Tab bar of each panel group |
 | Control height | 32 px (28 px compact) | Buttons, inputs, menu rows |
 | Hit target | at least 28 px | Anything clickable |
 
@@ -138,7 +138,10 @@ stay Tavora's own and no theme can replace them.
 | Dialog | 420 px wide, title plus one sentence, buttons bottom right with the primary last. Escape and the backdrop cancel. Focus stays inside. |
 | Toast | Top centre over the toolbar, because module panels draw above the lower area. One line. |
 | Rail | Flame (Home) at the top, then favorites, then games and folders, then Add game, Settings and Collapse at the bottom. The active game gets a 3 px gold bar on its left edge. |
-| Panel header | 28 px, module name in Compact text. Close is always shown; Reload or Stop appear when the panel needs them. A status dot plus a word shows loading, unresponsive or failed. |
+| Panel tab | 28 px, module name in Compact text. Close is always shown; Reload or Stop appear when the panel needs them. A status dot plus a word shows loading, unresponsive or failed. The selected tab of the focused group carries a 2 px gold underline; other tabs have none. |
+| Docking | Panels sit in groups of tabs, and groups split side by side or stacked, nested as deep as needed. A new panel goes beside the focused group when its row has room for every panel's minimum width, then below it, then beside or below the roomiest other group, and only then becomes a tab. The row or column it joins is shared out evenly. A drag or split that would push a panel below its module's minimum size is refused. Splits have no visible handle until hovered, then a gold line. |
+| Panel menu | Right-click on a tab or the group's ⋯ button: Split right, Split down, Move to next or previous group, Maximize or Restore, Close panel. Everything a drag can do is here too. |
+| Layouts menu | In the workspace toolbar: Save current layout, then each saved layout with Apply, Update, Rename and Delete. Applying keeps open panels of the same module and their content. |
 | Settings | A large dialog over the app (1040 by 760 px, smaller windows minus a 24 px margin), as in Claude and Discord. A grouped section menu on the left, then one section at a time: a title, then rows with the setting's name and one sentence on the left and its control on the right, separated by dividers rather than cards. Two to four short choices use a segmented control. |
 | Empty state | One sentence and one action. No illustrations. |
 
@@ -151,8 +154,11 @@ stay Tavora's own and no theme can replace them.
   what will happen ("Move to Trash", "Delete for good").
 - **Native views:** module panels are separate native views drawn above the
   host page. Anything that floats over the workspace (menus, dialogs) hides the
-  panels while it is open; tooltips use the native `title` so they are never
-  hidden.
+  panels while it is open, showing a still image of each in its place, so the
+  workspace does not flash empty. Dragging a tab and resizing a split do the
+  same. Tooltips use the native `title` so they are never hidden.
+- **Layouts:** the arrangement autosaves per game. Closing a panel or deleting
+  a saved layout never deletes module data.
 
 ## Accessibility
 

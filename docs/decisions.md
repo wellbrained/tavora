@@ -29,3 +29,8 @@
 | 2026-10-14 | Module panels are hidden while a host menu or dialog is open | Native views draw above the host page and would cover them |
 | 2026-10-14 | No news on Home for now; it shows recently played games | News sourcing and licensing are still open |
 | 2026-10-14 | Core modules in Milestone C are Notes and To-Dos; Browser gets its own milestone, Boards come later | Browser needs its own security design |
+| 2026-10-14 | Docking uses dockview (`dockview-vue` 8.3.1, MIT), pinned with an override for `dockview-core` | Nested splits, tab groups and drag and drop in Vue without writing a docking engine; pinned because the host draws native views over its layout |
+| 2026-10-14 | The host UI owns the dock; the main process stores and validates layouts (`src/main/layout.ts`) and places module views at the bounds the UI reports | Module views are native and must follow the dock exactly; a malformed or oversized layout from the UI is refused, not saved |
+| 2026-10-14 | Panels in background tabs or behind a maximized group are hidden and suspended | They cost nothing while out of sight, like a minimized window |
+| 2026-10-14 | Layouts autosave per game; named layouts (up to 50 per game) store the arrangement and which module each panel shows, not module data | Applying a layout reuses open panels of the same module, so notes and state survive switching |
+| 2026-10-14 | A new panel goes beside the focused group when its row fits every minimum width, and the row is then shared out evenly | Three panels on a wide screen should become three equal columns, not halves of halves |

@@ -91,7 +91,7 @@ Writes are atomic: a crash leaves either the old or the new document, never a mi
 | `workspace.resize` | `{ width, height }` | the panel's size changed |
 | `ui.theme` | theme, as `ui.getTheme` | the host theme changed |
 | `documents.changed` | `{ id, revision, deleted }` | another panel of this module changed a document |
-| `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
+| `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden, its tab is in the background, or another group is maximized); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
 | `lifecycle.resume` | `null` | the panel is visible again |
 | `lifecycle.dispose` | `null` | the panel is closing. Best effort only: it may never arrive, so never rely on it to save |
 

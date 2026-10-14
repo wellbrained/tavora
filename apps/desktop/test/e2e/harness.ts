@@ -156,8 +156,9 @@ export async function openModule(page: Page, moduleId: string): Promise<void> {
   await page.click(`[data-testid="open-${moduleId}"]`);
 }
 
+/** The tabs of open panels, optionally of one module. */
 export function panels(page: Page, moduleId?: string) {
-  return page.locator(moduleId ? `.header[data-module-id="${moduleId}"]` : ".header");
+  return page.locator(moduleId ? `[data-panel-tab][data-module-id="${moduleId}"]` : "[data-panel-tab]");
 }
 
 export async function clickInModule(app: ElectronApplication, moduleId: string, testId: string, index = 0) {

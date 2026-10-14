@@ -1,6 +1,8 @@
 import { isGameId, isModuleId } from "@tavora/module-schema";
 import type { HostAction } from "../shared/host-api";
-import { INSTANCE_ID } from "./workspace";
+import { INSTANCE_ID } from "./ids";
+import { parseLayout } from "./layout";
+import { MAX_SNAPSHOT_NAME } from "./workspace";
 
 export type { ActionResult, HostAction } from "../shared/host-api";
 
@@ -10,7 +12,7 @@ const text = (value: unknown, max = 200): value is string => typeof value === "s
 const label = (value: unknown): value is string | null => value === null || text(value, 16);
 const index = (value: unknown): value is number | undefined =>
   value === undefined || (Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 10_000);
-const folderId = (value: unknown): value is string => typeof value === "string" && INSTANCE_ID.test(value);
+const uuid = (value: unknown): value is string => typeof value === "string" && INSTANCE_ID.test(value);
 
 /**
  * Checks a message from the host UI. The host UI is trusted code, but its
@@ -51,7 +53,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "move-game":
       return only("gameId", "folderId", "index") &&
         isGameId(a.gameId) &&
-        (a.folderId === null || folderId(a.folderId)) &&
+        (a.folderId === null || uuid(a.folderId)) &&
         index(a.index)
         ? { type: a.type, gameId: a.gameId, folderId: a.folderId, ...(a.index === undefined ? {} : { index: a.index }) }
         : null;
@@ -64,17 +66,17 @@ export function parseAction(raw: unknown): HostAction | null {
         ? { type: a.type, name: a.name, gameIds: a.gameIds }
         : null;
     case "rename-folder":
-      return only("folderId", "name") && folderId(a.folderId) && text(a.name)
+      return only("folderId", "name") && uuid(a.folderId) && text(a.name)
         ? { type: a.type, folderId: a.folderId, name: a.name }
         : null;
     case "set-folder-label":
-      return only("folderId", "label") && folderId(a.folderId) && label(a.label)
+      return only("folderId", "label") && uuid(a.folderId) && label(a.label)
         ? { type: a.type, folderId: a.folderId, label: a.label }
         : null;
     case "delete-folder":
-      return only("folderId") && folderId(a.folderId) ? { type: a.type, folderId: a.folderId } : null;
+      return only("folderId") && uuid(a.folderId) ? { type: a.type, folderId: a.folderId } : null;
     case "move-folder":
-      return only("folderId", "index") && folderId(a.folderId) && index(a.index) && a.index !== undefined
+      return only("folderId", "index") && uuid(a.folderId) && index(a.index) && a.index !== undefined
         ? { type: a.type, folderId: a.folderId, index: a.index }
         : null;
     case "set-sort":
@@ -98,8 +100,22 @@ export function parseAction(raw: unknown): HostAction | null {
     case "close-panel":
     case "reload-panel":
     case "stop-panel":
-      return only("instanceId") && typeof a.instanceId === "string" && INSTANCE_ID.test(a.instanceId)
+      return only("instanceId") && uuid(a.instanceId)
         ? { type: a.type, instanceId: a.instanceId }
+        : null;
+    case "save-layout": {
+      const layout = only("layout") ? parseLayout(a.layout) : null;
+      return layout ? { type: a.type, layout } : null;
+    }
+    case "save-snapshot":
+      return only("name") && text(a.name, MAX_SNAPSHOT_NAME) ? { type: a.type, name: a.name } : null;
+    case "update-snapshot":
+    case "apply-snapshot":
+    case "delete-snapshot":
+      return only("snapshotId") && uuid(a.snapshotId) ? { type: a.type, snapshotId: a.snapshotId } : null;
+    case "rename-snapshot":
+      return only("snapshotId", "name") && uuid(a.snapshotId) && text(a.name, MAX_SNAPSHOT_NAME)
+        ? { type: a.type, snapshotId: a.snapshotId, name: a.name }
         : null;
     default:
       return null;

@@ -38,9 +38,53 @@ export interface PanelView {
   moduleId: string;
   name: string;
   status: InstanceStatus;
-  /** Position relative to the workspace area. */
-  x: number;
+}
+
+/**
+ * A docking layout: a tree of splits whose leaves are tab groups of panels.
+ * Splits alternate direction level by level, starting with `direction` at
+ * the root. Sizes are in pixels of the `width` by `height` area the layout
+ * was saved at; restoring scales them to the area there is.
+ */
+export interface SavedLayout {
   width: number;
+  height: number;
+  /** "row" places the root's children side by side, "column" stacks them. */
+  direction: "row" | "column";
+  root: LayoutSplit;
+}
+
+export interface LayoutSplit {
+  kind: "split";
+  size: number;
+  children: LayoutNode[];
+}
+
+export interface LayoutGroup {
+  kind: "group";
+  size: number;
+  /** Panel instance ids, in tab order. */
+  panels: string[];
+  /** The panel whose tab is selected. */
+  active: string;
+}
+
+export type LayoutNode = LayoutSplit | LayoutGroup;
+
+/** A named layout the player saved for a game. */
+export interface SnapshotView {
+  id: string;
+  name: string;
+  savedAt: string;
+}
+
+/** Where a visible panel's content is, in window content coordinates. */
+export interface PanelBounds {
+  instanceId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 /** What the host UI renders. Contains no module data. */
@@ -61,10 +105,23 @@ export interface HostViewState {
     startup: Startup;
     rail: { expanded: boolean; width: number };
   };
-  modules: { id: string; name: string; description: string | null; available: boolean }[];
+  modules: {
+    id: string;
+    name: string;
+    description: string | null;
+    available: boolean;
+    /** The smallest panel content area the module works in. */
+    minWidth: number;
+    minHeight: number;
+  }[];
+  /** Panels of the current game, in the order they were opened. */
   panels: PanelView[];
+  /** The current game's saved layout; panels missing from it are placed by the host UI. */
+  layout: SavedLayout | null;
+  /** Changes whenever `layout` was replaced by the main process, e.g. by applying a snapshot. */
+  layoutEpoch: number;
+  snapshots: SnapshotView[];
   notice: string | null;
-  panelHeaderHeight: number;
 }
 
 /** Everything the host UI can ask the main process to do. Parsed strictly in main. */
@@ -93,7 +150,13 @@ export type HostAction =
   | { type: "open-module"; moduleId: string }
   | { type: "close-panel"; instanceId: string }
   | { type: "reload-panel"; instanceId: string }
-  | { type: "stop-panel"; instanceId: string };
+  | { type: "stop-panel"; instanceId: string }
+  | { type: "save-layout"; layout: SavedLayout }
+  | { type: "save-snapshot"; name: string }
+  | { type: "update-snapshot"; snapshotId: string }
+  | { type: "apply-snapshot"; snapshotId: string }
+  | { type: "rename-snapshot"; snapshotId: string; name: string }
+  | { type: "delete-snapshot"; snapshotId: string };
 
 /** `id` is set when the action created something (a game, a folder). */
 export type ActionResult = { ok: true; id?: string } | { ok: false; error: string };
@@ -103,21 +166,19 @@ export interface CatalogMatch {
   name: string;
 }
 
-export interface WorkspaceRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 /** Exposed to the host UI as `window.tavoraHost` by the host preload. */
 export interface TavoraHostApi {
   getState(): Promise<HostViewState | null>;
   act(action: HostAction): Promise<ActionResult>;
   searchCatalog(query: string): Promise<CatalogMatch[]>;
-  /** Where module panels go, in window content coordinates. */
-  setWorkspaceRect(rect: WorkspaceRect): void;
-  /** Hides module panels while a menu or dialog would be drawn under them. */
+  /** Where the visible panels are. Panels not listed are hidden. */
+  setPanelBounds(bounds: PanelBounds[]): void;
+  /**
+   * Hides module panels while a menu, dialog or drag would be drawn under
+   * them. Before hiding, the host sends a still image of each visible panel
+   * to `onFrozen`, so the workspace does not go blank.
+   */
   setOverlay(open: boolean): void;
   onState(listener: (state: HostViewState) => void): void;
+  onFrozen(listener: (images: Record<string, string>) => void): void;
 }

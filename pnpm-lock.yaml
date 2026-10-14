@@ -4,6 +4,10 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  dockview: 8.3.1
+  dockview-core: 8.3.1
+
 importers:
 
   .:
@@ -35,6 +39,9 @@ importers:
       clsx:
         specifier: 2.1.1
         version: 2.1.1
+      dockview-vue:
+        specifier: 8.3.1
+        version: 8.3.1(vue@3.5.43(typescript@5.9.3))
       reka-ui:
         specifier: 2.11.0
         version: 2.11.0(vue@3.5.43(typescript@5.9.3))
@@ -762,6 +769,17 @@ packages:
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
+
+  dockview-core@8.3.1:
+    resolution: {integrity: sha512-6Loais9hlIRo25sTQSWGWlgbPr22ddoLBzpGDFaTnocawnC45twp5f2S2WxUz5/HPa/a65I4yxKUqZa8xrcc5Q==}
+
+  dockview-vue@8.3.1:
+    resolution: {integrity: sha512-cXwd+y7lV/lOYZz7ROsYK4nSmfMJAij0+8Er2Ce6GfoPl/4M4wLIRp5QhzNTifuS1kA7URLeDpkpm7zTXmKmlw==}
+    peerDependencies:
+      vue: ^3.4.0
+
+  dockview@8.3.1:
+    resolution: {integrity: sha512-2odBC9cDKcVCVx8Db86vq9s9JZKzbgvdkxDzcfsrD9nORLc5UqhLgLvVcJguorBv7CyEpKDzFO1JVLYWJCYrJA==}
 
   electron@44.7.2:
     resolution: {integrity: sha512-u3Pbz0Hi1sSSwBMz2v8LiagsfUG4QURPUe/qphM+g4THKP8o4BYdnuboyhlLO8HIC/KfV5rvltyacbP4jEq9yw==}
@@ -1707,6 +1725,17 @@ snapshots:
   defu@6.1.7: {}
 
   detect-libc@2.1.2: {}
+
+  dockview-core@8.3.1: {}
+
+  dockview-vue@8.3.1(vue@3.5.43(typescript@5.9.3)):
+    dependencies:
+      dockview: 8.3.1
+      vue: 3.5.43(typescript@5.9.3)
+
+  dockview@8.3.1:
+    dependencies:
+      dockview-core: 8.3.1
 
   electron@44.7.2:
     dependencies:
