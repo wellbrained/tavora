@@ -1,12 +1,13 @@
 {
   "name": "@tavora/docs",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "pnpm generate && vitepress dev",
     "build": "pnpm generate && vitepress build",
     "preview": "vitepress preview",
+    "deploy:server": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Deploy-Docs.ps1",
     "generate": "typedoc && node scripts/copy-schema.mjs"
   },
   "devDependencies": {
