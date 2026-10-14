@@ -124,6 +124,57 @@
   }
 }
 
+/* Rail entries: a pill on the left edge shows state (short on hover, full
+   height when active), and the icon tilts slightly and glows on hover. */
+@layer components {
+  .rail-pill {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 4px;
+    height: 0;
+    border-radius: 0 4px 4px 0;
+    background: var(--primary);
+    transform: translateY(-50%);
+    transition: height 160ms ease-out;
+    pointer-events: none;
+  }
+  .rail-entry:hover .rail-pill,
+  .rail-entry:focus-within .rail-pill {
+    height: 20px;
+  }
+  .rail-entry[data-active="true"] .rail-pill {
+    height: 40px;
+  }
+  .rail-icon {
+    transition:
+      transform 160ms ease-out,
+      box-shadow 160ms ease-out,
+      filter 160ms ease-out;
+  }
+  .rail-entry:hover .rail-icon {
+    transform: rotate(-4deg) scale(1.06);
+    box-shadow: 0 0 16px 1px color-mix(in oklab, var(--primary) 40%, transparent);
+  }
+  .rail-entry[data-active="true"] .rail-icon {
+    box-shadow: 0 0 12px 0 color-mix(in oklab, var(--primary) 25%, transparent);
+  }
+  /* The flame has no tile, so it glows along its own outline. */
+  .rail-entry:hover .rail-icon.rail-icon-bare {
+    box-shadow: none;
+    filter: drop-shadow(0 0 8px color-mix(in oklab, var(--primary) 60%, transparent));
+  }
+  .rail-entry[data-active="true"] .rail-icon.rail-icon-bare {
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-entry:hover .rail-icon {
+    transform: none;
+  }
+}
+
 /* Drop position markers on the rail while dragging. */
 @layer components {
   .drop-before::before,
