@@ -31,6 +31,19 @@ pnpm build                              # SDK, host and example modules
 pnpm --filter @tavora/desktop start     # opens Tavora with the example modules
 ```
 
+### Developing
+
+```sh
+pnpm dev     # after one `pnpm build`: opens Tavora and rebuilds the host as you save
+```
+
+- **Host UI** (`apps/desktop/src/renderer`): saving a file rebuilds the UI and reloads the window in about a second. App state lives in the main process, so the open game and its panels stay as they are.
+- **Main process and preloads** (`src/main`, `src/preload`, and the SDK and module-schema sources they import): saving rebuilds them and restarts Tavora.
+- **Example modules** are not watched; rebuild them with `pnpm build` and use Reload on the panel.
+- Closing the window stops `pnpm dev`.
+
+Dev mode runs the same build as `pnpm build`: the UI is still served from `tavora-host://` with the same CSP and network block, so nothing tested here behaves differently in a packaged build. The price is a full window reload instead of hot module replacement, which would need the host renderer to load from a local dev server.
+
 ## Checks
 
 Tests run locally. GitHub Actions only runs them for release tags (`v*`) or when started by hand.
