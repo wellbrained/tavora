@@ -20,7 +20,7 @@ Every module package has a `tavora.module.json` at its root. Tavora refuses to l
 }
 ```
 
-The JSON Schema in [`packages/module-schema/schema/tavora.module.schema.json`](../../packages/module-schema/schema/tavora.module.schema.json) gives editors completion and errors. The validator in `@tavora/module-schema` is what Tavora actually runs; tests keep the two in agreement.
+The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https://github.com/wellbrained/tavora/blob/main/packages/module-schema/schema/tavora.module.schema.json)) gives editors completion and errors. The validator in `@tavora/module-schema` is what Tavora actually runs; tests keep the two in agreement.
 
 ## Fields
 
@@ -31,7 +31,7 @@ The JSON Schema in [`packages/module-schema/schema/tavora.module.schema.json`](.
 | `name` | yes | 1 to 80 characters, not only spaces. |
 | `description` | no | 1 to 300 characters, not only spaces. |
 | `version` | yes | Semver, e.g. `1.0.0` or `2.0.0-beta.1`. |
-| `apiVersion` | yes | `"1"` (a string). The [bridge protocol](protocol.md) major version the module was built for. |
+| `apiVersion` | yes | `"1"` (a string). The [bridge protocol](./protocol.md) major version the module was built for. |
 | `entry` | yes | The HTML page to load, as a path inside the package. Must end in `.html`. |
 | `icon` | no | A `.png` or `.webp` file inside the package, square, at least 128 × 128. |
 | `games` | yes | Game ids the module is made for, e.g. `["poe2"]`. An empty array means any game. |
@@ -43,6 +43,6 @@ Paths (`entry`, `icon`) are relative to the package root and must stay inside it
 
 ## What is not in v1 yet
 
-- Permissions other than an empty `network` list. `sharedData`, `files` and `clipboard` arrive with their capabilities (see [Capabilities](protocol.md#capabilities)).
+- Permissions other than an empty `network` list. `sharedData`, `files` and `clipboard` arrive with their capabilities (see [Capabilities](./protocol.md#capabilities)).
 - Author, homepage, license and screenshots. These belong to the catalog listing (Milestone E), not to what the desktop host needs to run a module.
 - Localized names.

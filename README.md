@@ -17,11 +17,13 @@ Local-first, second-monitor gaming companion for Windows and Linux. Each game ge
 | `examples/react-module` | The same example built with React |
 | `examples/vue-module` | The same example built with Vue |
 | `apps/desktop/test/fixtures/hostile-module` | Deliberately hostile module used by the gate tests |
-| `docs/sdk/` | [Manifest](docs/sdk/manifest.md) and [bridge protocol](docs/sdk/protocol.md) reference |
+| `apps/docs` | Developer docs (VitePress): guide, [manifest](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md), and generated SDK API |
 | `docs/design/` | [Style guide](docs/design/style-guide.md): tokens, type, components, accessibility and theme rules |
 | `docs/` | Threat model and decision log |
 
-Planned later, not created yet: `apps/{api,website,portal,docs}`, `packages/{cli,module-runtime,shared-types}`, `services/review-worker`, `infra/`.
+The marketing site at [mytavora.app](https://mytavora.app/) lives in its separate `tavora-website` repository.
+
+Planned later, not created yet: `apps/{api,portal}`, `packages/{cli,module-runtime,shared-types}`, `services/review-worker`, `infra/`.
 
 ## Getting started
 
@@ -31,6 +33,7 @@ Requires Node 22+ and pnpm (via `corepack enable`).
 pnpm install
 pnpm build                              # SDK, host, official and example modules
 pnpm --filter @tavora/desktop start     # opens Tavora with Notes, To-Dos and the example modules
+pnpm --filter @tavora/docs dev          # developer docs (local only)
 ```
 
 To package a standalone test build after `pnpm build`:
