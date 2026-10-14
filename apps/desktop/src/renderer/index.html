@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tavora</title>
+    <link rel="stylesheet" href="host.css" />
+    <script src="host.js" defer></script>
+  </head>
+  <body>
+    <header class="toolbar">
+      <span class="brand"><span class="flame" aria-hidden="true">▲</span> Tavora</span>
+      <label class="game">
+        <span class="visually-hidden">Current game</span>
+        <select id="game" data-testid="game-select"></select>
+      </label>
+      <div id="modules" class="modules" role="group" aria-label="Add module"></div>
+      <span id="notice" class="notice" role="status" data-testid="notice"></span>
+    </header>
+    <div id="headers" class="headers"></div>
+    <main id="empty" class="empty" data-testid="empty-workspace">
+      <p>This workspace is empty.</p>
+      <p class="muted">Add a module from the toolbar to get started.</p>
+    </main>
+  </body>
+</html>

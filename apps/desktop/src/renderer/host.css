@@ -1,0 +1,75 @@
+:root {
+  color-scheme: dark light;
+  --bg: #18181b;
+  --surface: #232327;
+  --border: #34343a;
+  --text: #f2ece0;
+  --muted: #9a958c;
+  --accent: #e0a243;
+  --danger: #e5675a;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f7f3ea;
+    --surface: #ffffff;
+    --border: #ddd6c8;
+    --text: #1f1c17;
+    --muted: #6b665c;
+    --accent: #a8690f;
+    --danger: #b3382c;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+button, select { font: inherit; color: inherit; }
+.toolbar {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 600; letter-spacing: 0.02em; }
+.flame { color: var(--accent); }
+select, .modules button, .header button {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.modules { display: flex; gap: 6px; }
+.modules button:disabled { opacity: 0.5; cursor: not-allowed; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.notice { color: var(--accent); margin-left: auto; }
+.headers { position: relative; height: 28px; }
+.header {
+  position: absolute;
+  top: 0;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 10px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.header .name { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.header .status { color: var(--muted); }
+.header .status.crashed { color: var(--danger); }
+.header button { padding: 0 6px; line-height: 20px; }
+.empty { display: grid; place-content: center; height: calc(100% - 76px); text-align: center; }
+.empty[hidden] { display: none; }
+.muted { color: var(--muted); }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
