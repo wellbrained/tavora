@@ -59,6 +59,9 @@ import { writeFileAtomic } from "./fsutil";
 import { fitsMinimums, layoutColumns, loadWorkspace, saveWorkspace, type InstanceRecord, type Rect, type WorkspaceState } from "./workspace";
 import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
 
+/** Height of the window button overlay, one pixel less than the 48 px workspace header. */
+const TITLE_BAR_HEIGHT = 47;
+
 export const PANEL_HEADER_HEIGHT = 28;
 
 export interface HostOptions {
@@ -102,6 +105,13 @@ export class Host {
       title: "Tavora",
       icon: options.icon,
       backgroundColor: THEME.colors.background,
+      // No native title bar or menu: the host page runs to the window edges
+      // and the system draws only the window buttons over its top right
+      // corner, in Tavora's colours. Its height leaves the 1 px border under
+      // the workspace header visible.
+      titleBarStyle: "hidden",
+      titleBarOverlay: { color: THEME.colors.background, symbolColor: THEME.colors.text, height: TITLE_BAR_HEIGHT },
+      autoHideMenuBar: true,
       show: false,
       webPreferences: {
         preload: options.hostPreload,
@@ -113,6 +123,7 @@ export class Host {
         devTools: options.devTools,
       },
     });
+    this.window.removeMenu();
     if (windowState.maximized) this.window.maximize();
     this.window.once("ready-to-show", () => this.window.show());
   }

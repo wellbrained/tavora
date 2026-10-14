@@ -43,9 +43,13 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="flex h-full min-w-0 flex-col" data-testid="workspace">
-    <header class="flex h-12 flex-none items-center gap-4 border-b px-4">
+    <!-- Moves the window; the right padding keeps the notice clear of the
+         window buttons the system draws over this corner. -->
+    <header
+      class="app-drag flex h-12 flex-none items-center gap-4 border-b pr-[calc(100vw-env(titlebar-area-x,0px)-env(titlebar-area-width,100vw)+1rem)] pl-4"
+    >
       <h1 class="max-w-60 flex-none truncate text-lg font-semibold">{{ game?.name }}</h1>
-      <div class="flex gap-2 overflow-x-auto" role="group" aria-label="Open a module">
+      <div class="app-no-drag flex gap-2 overflow-x-auto" role="group" aria-label="Open a module">
         <Button
           v-for="module in view.modules"
           :key="module.id"

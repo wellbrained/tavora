@@ -113,6 +113,17 @@
   }
 }
 
+/* The window has no native title bar: these areas move it, and anything
+   clickable inside them has to opt out. */
+@layer utilities {
+  .app-drag {
+    -webkit-app-region: drag;
+  }
+  .app-no-drag {
+    -webkit-app-region: no-drag;
+  }
+}
+
 /* Drop position markers on the rail while dragging. */
 @layer components {
   .drop-before::before,
