@@ -54,6 +54,8 @@ import {
   type GameIcon,
   type Library,
 } from "./library";
+import { MODULE_FONTS } from "./module-fonts";
+import { moduleBaseCss } from "./module-style";
 import { ModuleView } from "./module-view";
 import { discoverModules, type InstalledModule } from "./registry";
 import { DataRegistry } from "./storage";
@@ -91,6 +93,9 @@ export interface HostOptions {
   icon: string;
   devTools: boolean;
 }
+
+/** Built on first use; it carries the module font, so it is not small. */
+let moduleCss: string | undefined;
 
 const ICON_URL = `${HOST_SCHEME}://app/game-icons/`;
 
@@ -573,6 +578,7 @@ export class Host {
       preload: this.options.modulePreload,
       devTools: this.options.devTools,
       getTheme: () => THEME,
+      baseCss: (moduleCss ??= moduleBaseCss(MODULE_FONTS)),
       onStatus: () => this.pushState(),
     });
     const contentsId = view.webContentsId;

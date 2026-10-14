@@ -34,3 +34,4 @@
 | 2026-10-14 | Panels in background tabs or behind a maximized group are hidden and suspended | They cost nothing while out of sight, like a minimized window |
 | 2026-10-14 | Layouts autosave per game; named layouts (up to 50 per game) store the arrangement and which module each panel shows, not module data | Applying a layout reuses open panels of the same module, so notes and state survive switching |
 | 2026-10-14 | A new panel goes beside the focused group when its row fits every minimum width, and the row is then shared out evenly | Three panels on a wide screen should become three equal columns, not halves of halves |
+| 2026-10-14 | Every module page gets Tavora's default look as a user stylesheet, with the tokens as `--tavora-*` properties and Inter embedded | A module that styles nothing (or forgets the page margin) looked foreign inside Tavora; a user stylesheet only replaces browser defaults, so modules with their own design are unaffected |

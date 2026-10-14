@@ -95,6 +95,32 @@ Writes are atomic: a crash leaves either the old or the new document, never a mi
 | `lifecycle.resume` | `null` | the panel is visible again |
 | `lifecycle.dispose` | `null` | the panel is closing. Best effort only: it may never arrive, so never rely on it to save |
 
+## Default look
+
+Tavora inserts a stylesheet into every module page before it renders, as a
+*user* stylesheet. It sits above the browser's defaults and below everything
+the module writes, so any rule of the module's own wins. It makes a page that
+styles nothing look like part of Tavora: no page margin, the theme's
+background and text colour, Inter at 14 px, dark buttons, fields and
+scrollbars, a gold focus ring, muted `small` and `dt` text, and headings
+sized like the host's.
+
+It also defines the theme's tokens as CSS custom properties, the same values
+`ui.getTheme` returns, so a module can use them in its own CSS without the
+SDK:
+
+| Property | Use |
+| --- | --- |
+| `--tavora-background`, `--tavora-foreground` | Page background and text |
+| `--tavora-card` | Raised surfaces and fields |
+| `--tavora-primary`, `--tavora-primary-hover`, `--tavora-primary-foreground` | The one main action, its hover, and text on it |
+| `--tavora-secondary`, `--tavora-accent` | Default buttons; hover and selection surfaces |
+| `--tavora-muted-foreground` | Secondary text |
+| `--tavora-border`, `--tavora-input`, `--tavora-ring` | Dividers, field outlines, focus ring |
+| `--tavora-destructive`, `--tavora-success`, `--tavora-warning`, `--tavora-info` | States |
+| `--tavora-radius` | Corner radius of controls |
+| `--tavora-font-sans`, `--tavora-font-mono` | Text and code fonts |
+
 ## Errors
 
 | Code | Meaning | Extra fields |

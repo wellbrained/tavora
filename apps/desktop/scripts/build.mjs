@@ -21,6 +21,7 @@ await Promise.all([
     format: "cjs",
     target: "node22",
     external: ["electron"],
+    loader: { ".woff2": "base64" },
   }),
   // Sandboxed preloads can only require a few electron modules, so they are
   // bundled for the browser with everything inlined.

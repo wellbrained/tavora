@@ -194,7 +194,7 @@ but Tavora's usability rules always win.
 | Workspace | Open modules, panel layout, saved layouts (C2) | Same |
 | App behaviour | Start on Home or last game, list order | Same |
 | Tavora's own controls | Never changeable | Never changeable: panel headers, docking controls, permission and security dialogs, recovery actions |
-| Modules | Semantic tokens through `ui.getTheme`; any framework, no Tailwind or shadcn-vue needed; matching is recommended, not required | Same tokens, taken from the active theme |
+| Modules | Every module page starts from Tavora's default look (font, colours, buttons, fields, scrollbars, no page margin) and gets the tokens as `--tavora-*` properties and through `ui.getTheme`. Any framework, no Tailwind or shadcn-vue needed. A module's own styles win; matching is recommended, not required | Same, taken from the active theme |
 
 - **Precedence:** Tavora's usability rules, then the installed theme and chosen
   variation, then personal overrides, each checked and clamped against the
