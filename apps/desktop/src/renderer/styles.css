@@ -150,7 +150,9 @@
     transition:
       transform 160ms ease-out,
       box-shadow 160ms ease-out,
-      filter 160ms ease-out;
+      filter 160ms ease-out,
+      background-color 160ms ease-out,
+      color 160ms ease-out;
   }
   .rail-entry:hover .rail-icon {
     transform: rotate(-4deg) scale(1.06);

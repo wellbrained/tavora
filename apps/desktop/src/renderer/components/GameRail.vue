@@ -368,22 +368,30 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       </section>
     </div>
 
-    <div class="flex flex-col gap-1 border-t p-2">
+    <div class="flex flex-col gap-1 border-t py-2">
+      <!-- Add game is a tile like the games above it; the utility buttons
+           below stay quiet icons and only light up on hover. -->
+      <div class="rail-entry group relative flex items-center px-2 pb-1">
+        <button
+          type="button"
+          :class="cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent')"
+          data-rail-item
+          data-testid="rail-add-game"
+          aria-label="Add game"
+          title="Add game"
+          @click="dialog = { kind: 'add-game' }"
+        >
+          <span
+            class="rail-icon bg-card text-primary group-hover:bg-primary group-hover:text-primary-foreground flex size-12 flex-none items-center justify-center rounded-[12px]"
+          >
+            <Plus class="size-6" :stroke-width="1.75" />
+          </span>
+          <span v-if="expanded" class="text-sm font-medium">Add game</span>
+        </button>
+      </div>
       <button
         type="button"
-        class="text-muted-foreground hover:bg-accent hover:text-foreground flex h-10 items-center gap-3 rounded-lg px-3.5"
-        data-rail-item
-        data-testid="rail-add-game"
-        aria-label="Add game"
-        title="Add game"
-        @click="dialog = { kind: 'add-game' }"
-      >
-        <Plus class="size-5 flex-none" :stroke-width="1.5" />
-        <span v-if="expanded" class="text-sm font-medium">Add game</span>
-      </button>
-      <button
-        type="button"
-        class="text-muted-foreground hover:bg-accent hover:text-foreground flex h-10 items-center gap-3 rounded-lg px-3.5"
+        :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-3.5 transition-colors', expanded && 'hover:bg-accent')"
         data-rail-item
         data-testid="rail-settings"
         aria-label="Settings"
@@ -391,12 +399,12 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         title="Settings"
         @click="settingsOpen = true"
       >
-        <Settings class="size-5 flex-none" :stroke-width="1.5" />
+        <Settings class="size-5 flex-none transition-transform duration-300 group-hover:rotate-45 motion-reduce:group-hover:rotate-0" :stroke-width="1.5" />
         <span v-if="expanded" class="text-sm font-medium">Settings</span>
       </button>
       <button
         type="button"
-        class="text-muted-foreground hover:bg-accent hover:text-foreground flex h-10 items-center gap-3 rounded-lg px-3.5"
+        :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-3.5 transition-colors', expanded && 'hover:bg-accent')"
         data-rail-item
         data-testid="rail-toggle"
         :aria-label="expanded ? 'Collapse game list' : 'Expand game list'"
