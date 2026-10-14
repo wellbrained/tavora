@@ -16,7 +16,6 @@ export interface InstanceRecord {
 /** Saved per-game layout. Panel instances only; module data lives in storage. */
 export interface WorkspaceState {
   version: 1;
-  currentGameId: string;
   games: Record<string, { instances: InstanceRecord[] }>;
 }
 
@@ -25,14 +24,14 @@ export const INSTANCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
 export function emptyWorkspace(gameIds: readonly string[]): WorkspaceState {
   return {
     version: 1,
-    currentGameId: gameIds[0] ?? "",
     games: Object.fromEntries(gameIds.map((id) => [id, { instances: [] }])),
   };
 }
 
 /**
- * Reads the saved workspace, keeping only games and modules that still
- * exist. A missing or unreadable file gives an empty workspace.
+ * Reads the saved workspace, keeping only games in the library (Trash
+ * included) and modules that are still installed. A missing or unreadable
+ * file gives empty workspaces.
  */
 export async function loadWorkspace(
   file: string,
@@ -45,9 +44,6 @@ export async function loadWorkspace(
     saved = JSON.parse(await readFile(file, "utf8")) as Partial<WorkspaceState>;
   } catch {
     return state;
-  }
-  if (typeof saved.currentGameId === "string" && gameIds.includes(saved.currentGameId)) {
-    state.currentGameId = saved.currentGameId;
   }
   for (const gameId of gameIds) {
     const instances = saved.games?.[gameId]?.instances;

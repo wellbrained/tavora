@@ -19,3 +19,13 @@
 | 2026-10-14 | `@tavora/sdk` ships built ESM plus types; workspace packages expose TypeScript sources under a `source` export condition | Examples build against the package as authors will, while host, tests and typecheck never depend on a stale build |
 | 2026-10-14 | The host pings each panel's preload; no answer for 10 s marks it unresponsive | Chromium only detects hangs when input goes unanswered, which misses a panel nobody is clicking |
 | 2026-10-14 | SDK not published to npm yet | Publishing needs the `@tavora` npm scope and a release process; decide before Milestone D |
+| 2026-10-14 | Everything Tavora ships is Vue: host UI and official modules | Dominik works in Vue; React stays only as a community example module |
+| 2026-10-14 | Host UI stack: Vue 3, Reka UI, shadcn-vue (sources kept in `src/renderer/components/ui`), Tailwind CSS with CSS custom properties; not Nuxt UI | Confirmed in kit doc 19: owned, editable components on accessible primitives, and tokens that theme packages can supply later |
+| 2026-10-14 | Default theme only, dark, in Milestone C; theme packages, variations and personal overrides get their own milestone after Browser | One well-tested theme first; the token system keeps themes possible without a redesign. Details in [the style guide](design/style-guide.md) |
+| 2026-10-14 | Token names follow shadcn-vue, plus `rail`, `success`, `warning`, `info` | shadcn-vue components and their updates work unchanged |
+| 2026-10-14 | Games come from a built-in list of popular games or are added by name; icons are monograms or images the player picks | No online game database before the catalog server; Tavora ships no game art |
+| 2026-10-14 | Removed games go to Trash for 30 days with all their data, then are deleted at startup, including module data and browser storage | Mistakes can be undone, and nothing of a deleted game lingers on disk |
+| 2026-10-14 | Host UI actions go over one strictly parsed `host:action` channel | One place to validate everything the UI can ask for |
+| 2026-10-14 | Module panels are hidden while a host menu or dialog is open | Native views draw above the host page and would cover them |
+| 2026-10-14 | No news on Home for now; it shows recently played games | News sourcing and licensing are still open |
+| 2026-10-14 | Core modules in Milestone C are Notes and To-Dos; Browser gets its own milestone, Boards come later | Browser needs its own security design |

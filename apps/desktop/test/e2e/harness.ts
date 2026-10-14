@@ -1,4 +1,4 @@
-import { mkdtemp } from "node:fs/promises";
+import { access, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,8 +31,63 @@ export async function newUserData(): Promise<string> {
 
 export const FIXTURES = path.join(desktopDir, "test/fixtures");
 
-export async function launch(userData?: string, extraModuleDirs: string[] = []): Promise<Running> {
+/** Content size the harness gives the window, so layouts do not depend on the test display. */
+export const WINDOW = { width: 1400, height: 900 } as const;
+/** Width of the collapsed game rail. */
+export const RAIL_WIDTH = 72;
+
+function seedGame(id: string, name: string, text: string, addedAt: string) {
+  return {
+    id,
+    catalogId: id,
+    name,
+    icon: { kind: "monogram", text },
+    showNews: true,
+    addedAt,
+    lastPlayedAt: id === "poe2" ? addedAt : null,
+    trashedAt: null,
+  };
+}
+
+/** A library with Path of Exile 2 and Satisfactory that opens on Path of Exile 2. */
+export function seedLibrary() {
+  const at = "2026-10-01T12:00:00.000Z";
+  return {
+    version: 1,
+    games: {
+      poe2: seedGame("poe2", "Path of Exile 2", "PE2", at),
+      satisfactory: seedGame("satisfactory", "Satisfactory", "S", at),
+    },
+    folders: {},
+    root: [
+      { kind: "game", id: "poe2" },
+      { kind: "game", id: "satisfactory" },
+    ],
+    favorites: [],
+    sort: "manual",
+    rail: { expanded: false, width: 256 },
+    startup: "last-game",
+    lastGameId: "poe2",
+  };
+}
+
+export interface LaunchOptions {
+  /** Write the two-game library before the first start (default true). */
+  seed?: boolean;
+}
+
+export async function launch(
+  userData?: string,
+  extraModuleDirs: string[] = [],
+  { seed = true }: LaunchOptions = {},
+): Promise<Running> {
   const dir = userData ?? (await newUserData());
+  const libraryFile = path.join(dir, "library.json");
+  const exists = await access(libraryFile).then(
+    () => true,
+    () => false,
+  );
+  if (seed && !exists) await writeFile(libraryFile, JSON.stringify(seedLibrary()));
   const app = await electron.launch({
     args: [desktopDir],
     env: {
@@ -42,7 +97,8 @@ export async function launch(userData?: string, extraModuleDirs: string[] = []):
     },
   });
   const page = await app.firstWindow();
-  await expect(page.locator('[data-testid="game-select"] option')).toHaveCount(2);
+  await expect(page.getByTestId("rail")).toBeVisible();
+  await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0]!.setContentSize(size.width, size.height), WINDOW);
   return { app, page, userData: dir };
 }
 
@@ -80,6 +136,20 @@ export async function expectModuleText(
       ).catch(() => null),
     )
     .toBe(expected);
+}
+
+/** Opens a game from the rail and waits for its workspace. */
+export async function openGame(page: Page, gameId: string): Promise<void> {
+  await page.getByTestId(`rail-game-${gameId}`).click();
+  await expect(page.getByTestId(`rail-game-${gameId}`)).toHaveAttribute("aria-current", "page");
+}
+
+/** Sets the window's content size. */
+export async function setContentSize(app: ElectronApplication, width: number, height: number): Promise<void> {
+  await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0]!.setContentSize(size.width, size.height), {
+    width,
+    height,
+  });
 }
 
 export async function openModule(page: Page, moduleId: string): Promise<void> {

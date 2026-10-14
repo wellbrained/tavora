@@ -1,7 +1,8 @@
-import { cp, mkdir, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { build as viteBuild } from "vite";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const out = path.join(root, "out");
@@ -34,17 +35,7 @@ await Promise.all([
       external: ["electron"],
     }),
   ),
-  build({
-    ...common,
-    entryPoints: ["src/renderer/host.ts"],
-    outfile: "out/renderer/host.js",
-    platform: "browser",
-    format: "iife",
-    target: "chrome130",
-  }),
 ]);
 
-await mkdir(path.join(out, "renderer"), { recursive: true });
-for (const file of ["index.html", "host.css"]) {
-  await cp(path.join(root, "src/renderer", file), path.join(out, "renderer", file));
-}
+// The host UI is Vue, built by Vite.
+await viteBuild({ configFile: path.join(root, "vite.renderer.config.ts"), logLevel: "warn" });

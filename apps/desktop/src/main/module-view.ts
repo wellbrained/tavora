@@ -4,14 +4,10 @@ import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavor
 import { contentTypeFor, MODULE_CSP, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BridgeSession } from "./bridge";
 import type { InstalledModule } from "./registry";
+import type { InstanceStatus } from "../shared/host-api";
 import type { ModuleData, PanelStateStore } from "./storage";
 
-/**
- * loading: the page is loading. ready: loaded and running. failed: the page
- * could not be loaded. unresponsive: the renderer stopped responding and may
- * recover. crashed: the renderer is gone until the panel is reloaded.
- */
-export type InstanceStatus = "loading" | "ready" | "failed" | "unresponsive" | "crashed";
+export type { InstanceStatus } from "../shared/host-api";
 
 export interface ModuleViewOptions {
   instanceId: string;

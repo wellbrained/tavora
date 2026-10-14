@@ -1,0 +1,16 @@
+{
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": [],
+    // The host UI uses no workspace packages; without this, libraries that
+    // also publish a "source" export are type-checked from their sources.
+    "customConditions": [],
+    // shadcn-vue component sources (components/ui) are written without it.
+    "exactOptionalPropertyTypes": false,
+    "baseUrl": ".",
+    "paths": { "@/*": ["./*"] }
+  },
+  "include": ["**/*.ts", "**/*.vue", "../shared/**/*.ts"]
+}

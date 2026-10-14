@@ -49,6 +49,7 @@ if (!app.requestSingleInstanceLock()) {
         rendererDir: path.join(__dirname, "../renderer"),
         modulePreload: path.join(__dirname, "../preload/module.cjs"),
         hostPreload: path.join(__dirname, "../preload/host.cjs"),
+        icon: path.join(__dirname, "../../assets/icon-256.png"),
         devTools: !app.isPackaged && process.env.TAVORA_DEVTOOLS === "1",
       });
     })
