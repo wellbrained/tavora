@@ -2,7 +2,8 @@ import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { isJsonValue, ModuleStore, StorageError, StoreRegistry } from "./storage";
+import { HostError } from "./errors";
+import { DataRegistry, isJsonValue, ModuleStore, PanelStateStore } from "./storage";
 
 let dir: string;
 
@@ -39,11 +40,11 @@ describe("ModuleStore", () => {
 
   it("rejects bad keys and non-JSON values", async () => {
     const store = new ModuleStore(path.join(dir, "storage.json"));
-    expect(() => store.set("", 1)).toThrow(StorageError);
-    expect(() => store.set("k".repeat(257), 1)).toThrow(StorageError);
-    expect(() => store.get(42)).toThrow(StorageError);
+    expect(() => store.set("", 1)).toThrow(HostError);
+    expect(() => store.set("k".repeat(257), 1)).toThrow(HostError);
+    expect(() => store.get(42)).toThrow(HostError);
     for (const value of [undefined, new Date(), new Map(), NaN, Infinity, () => 1, 1n, new Uint8Array(1)]) {
-      expect(() => store.set("k", value)).toThrow(StorageError);
+      expect(() => store.set("k", value)).toThrow(HostError);
     }
   });
 
@@ -74,6 +75,41 @@ describe("ModuleStore", () => {
   });
 });
 
+describe("ModuleStore.keys", () => {
+  it("lists keys in order", async () => {
+    const store = new ModuleStore(path.join(dir, "storage.json"));
+    await store.set("b", 1);
+    await store.set("a", 2);
+    expect(await store.keys()).toEqual(["a", "b"]);
+  });
+});
+
+describe("PanelStateStore", () => {
+  const A = "123e4567-e89b-42d3-a456-426614174000";
+  const B = "123e4567-e89b-42d3-a456-426614174001";
+
+  it("stores, clears and prunes per-panel state", async () => {
+    const store = new PanelStateStore(path.join(dir, "panel-state"));
+    await store.set(A, { tab: 1 });
+    await store.set(B, { tab: 2 });
+    expect(await new PanelStateStore(path.join(dir, "panel-state")).get(A)).toEqual({ tab: 1 });
+
+    await store.set(A, null);
+    expect(await store.get(A)).toBeNull();
+
+    await store.set(A, { tab: 3 });
+    await store.prune(new Set([B]));
+    expect(await store.get(A)).toBeNull();
+    expect(await store.get(B)).toEqual({ tab: 2 });
+  });
+
+  it("limits size and rejects ids that are not panel ids", async () => {
+    const store = new PanelStateStore(path.join(dir, "panel-state"));
+    expect(() => store.set(A, "x".repeat(300 * 1024))).toThrow(HostError);
+    expect(() => store.get("../../etc/passwd")).toThrow();
+  });
+});
+
 describe("isJsonValue", () => {
   it("rejects structures nested deeper than the limit", () => {
     let deep: unknown = 1;
@@ -84,21 +120,23 @@ describe("isJsonValue", () => {
   });
 });
 
-describe("StoreRegistry", () => {
+describe("DataRegistry", () => {
   it("keeps modules and games apart on disk", async () => {
-    const registry = new StoreRegistry(dir);
-    await registry.get("local.example.a", "poe2").set("count", 1);
-    await registry.get("local.example.b", "poe2").set("count", 2);
-    await registry.get("local.example.a", "satisfactory").set("count", 3);
+    const registry = new DataRegistry(dir);
+    await registry.get("local.example.a", "poe2").settings.set("count", 1);
+    await registry.get("local.example.b", "poe2").settings.set("count", 2);
+    await registry.get("local.example.a", "satisfactory").settings.set("count", 3);
+    await registry.get("local.example.a", "poe2").documents.put({ id: "d", title: "d", data: 1 });
 
-    expect(await registry.get("local.example.a", "poe2").get("count")).toBe(1);
-    expect(await registry.get("local.example.b", "poe2").get("count")).toBe(2);
-    expect(await registry.get("local.example.a", "satisfactory").get("count")).toBe(3);
+    expect(await registry.get("local.example.a", "poe2").settings.get("count")).toBe(1);
+    expect(await registry.get("local.example.b", "poe2").settings.get("count")).toBe(2);
+    expect(await registry.get("local.example.a", "satisfactory").settings.get("count")).toBe(3);
+    expect(await registry.get("local.example.b", "poe2").documents.list()).toEqual([]);
     expect(registry.get("local.example.a", "poe2")).toBe(registry.get("local.example.a", "poe2"));
   });
 
   it("refuses ids that could form a path", async () => {
-    const registry = new StoreRegistry(dir);
+    const registry = new DataRegistry(dir);
     await mkdir(path.join(dir, "module-data"), { recursive: true });
     expect(() => registry.get("../../etc", "poe2")).toThrow();
     expect(() => registry.get("local.example.a", "../x")).toThrow();

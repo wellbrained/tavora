@@ -16,7 +16,13 @@ const headersEl = document.querySelector<HTMLDivElement>("#headers")!;
 const noticeEl = document.querySelector<HTMLSpanElement>("#notice")!;
 const emptyEl = document.querySelector<HTMLElement>("#empty")!;
 
-const STATUS_LABEL = { loading: "Loading", ready: "", crashed: "Stopped working" } as const;
+const STATUS_LABEL: Record<HostViewState["panels"][number]["status"], string> = {
+  loading: "Loading",
+  ready: "",
+  failed: "Could not load",
+  unresponsive: "Not responding",
+  crashed: "Stopped working",
+};
 
 function button(label: string, onClick: () => void, attrs: Record<string, string> = {}): HTMLButtonElement {
   const el = document.createElement("button");
@@ -67,8 +73,11 @@ function render(state: HostViewState): void {
       status.textContent = STATUS_LABEL[panel.status];
       header.append(name, status);
 
-      if (panel.status === "crashed") {
+      if (panel.status === "crashed" || panel.status === "failed") {
         header.append(button("Reload", () => void host.reloadPanel(panel.instanceId), { "data-testid": "reload" }));
+      }
+      if (panel.status === "unresponsive") {
+        header.append(button("Stop", () => void host.stopPanel(panel.instanceId), { "data-testid": "stop" }));
       }
       header.append(
         button("×", () => void host.closePanel(panel.instanceId), {

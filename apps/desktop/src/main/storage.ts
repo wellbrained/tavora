@@ -1,48 +1,29 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { isGameId, isModuleId } from "@tavora/module-schema";
 import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
+import { DocumentStore } from "./documents";
+import { HostError } from "./errors";
+import { SerialQueue, writeFileAtomic } from "./fsutil";
+import { readJsonOrSetAside, serializeJson } from "./json";
+import { INSTANCE_ID } from "./workspace";
 
-export class StorageError extends Error {
-  constructor(
-    readonly code: "INVALID_PARAMS" | "QUOTA_EXCEEDED",
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-const MAX_DEPTH = 64;
-
-/** Accepts only plain JSON data: no Dates, Maps, typed arrays, NaN or cycles. */
-export function isJsonValue(value: unknown, depth = 0): value is JsonValue {
-  if (depth > MAX_DEPTH) return false;
-  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
-  if (typeof value === "number") return Number.isFinite(value);
-  if (Array.isArray(value)) return value.every((item) => isJsonValue(item, depth + 1));
-  if (typeof value === "object") {
-    const proto = Object.getPrototypeOf(value);
-    if (proto !== Object.prototype && proto !== null) return false;
-    return Object.values(value).every((item) => isJsonValue(item, depth + 1));
-  }
-  return false;
-}
+export { isJsonValue } from "./json";
 
 export function validateKey(key: unknown): asserts key is string {
   if (typeof key !== "string" || key.length === 0 || key.length > LIMITS.maxKeyLength) {
-    throw new StorageError("INVALID_PARAMS", `key must be a string of 1 to ${LIMITS.maxKeyLength} characters`);
+    throw new HostError("INVALID_PARAMS", `key must be a string of 1 to ${LIMITS.maxKeyLength} characters`);
   }
 }
 
 /**
- * Private key/value storage for one module in one game. Values are kept
+ * Private key/value settings for one module in one game. Values are kept
  * serialized so the quota is measured on exactly what is written to disk.
- * Writes are serialized and atomic (write to a temp file, then rename).
  */
 export class ModuleStore {
   private entries: Map<string, string> | undefined;
   private bytes = 0;
-  private queue: Promise<unknown> = Promise.resolve();
+  private readonly queue = new SerialQueue();
 
   constructor(
     readonly file: string,
@@ -51,23 +32,25 @@ export class ModuleStore {
 
   get(key: unknown): Promise<JsonValue | null> {
     validateKey(key);
-    return this.enqueue(async () => {
-      const entries = await this.load();
-      const raw = entries.get(key);
+    return this.queue.run(async () => {
+      const raw = (await this.load()).get(key);
       return raw === undefined ? null : (JSON.parse(raw) as JsonValue);
     });
   }
 
+  keys(): Promise<string[]> {
+    return this.queue.run(async () => [...(await this.load()).keys()].sort());
+  }
+
   set(key: unknown, value: unknown): Promise<void> {
     validateKey(key);
-    if (!isJsonValue(value)) throw new StorageError("INVALID_PARAMS", "value must be plain JSON data");
-    const serialized = JSON.stringify(value);
-    return this.enqueue(async () => {
+    const serialized = serializeJson(value, "value");
+    return this.queue.run(async () => {
       const entries = await this.load();
       const previous = entries.get(key);
       const next = this.bytes - (previous === undefined ? 0 : entrySize(key, previous)) + entrySize(key, serialized);
       if (next > this.maxBytes) {
-        throw new StorageError("QUOTA_EXCEEDED", `storage is limited to ${this.maxBytes} bytes per module and game`);
+        throw new HostError("QUOTA_EXCEEDED", `settings are limited to ${this.maxBytes} bytes per module and game`);
       }
       entries.set(key, serialized);
       this.bytes = next;
@@ -77,7 +60,7 @@ export class ModuleStore {
 
   delete(key: unknown): Promise<void> {
     validateKey(key);
-    return this.enqueue(async () => {
+    return this.queue.run(async () => {
       const entries = await this.load();
       const previous = entries.get(key);
       if (previous === undefined) return;
@@ -87,45 +70,23 @@ export class ModuleStore {
     });
   }
 
-  private enqueue<T>(task: () => Promise<T>): Promise<T> {
-    const run = this.queue.then(task, task);
-    this.queue = run.catch(() => undefined);
-    return run;
-  }
-
   private async load(): Promise<Map<string, string>> {
     if (this.entries) return this.entries;
     const entries = new Map<string, string>();
-    let text: string | undefined;
-    try {
-      text = await readFile(this.file, "utf8");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-    if (text !== undefined) {
-      try {
-        const parsed = JSON.parse(text) as { version: number; entries: Record<string, JsonValue> };
-        for (const [key, value] of Object.entries(parsed.entries)) entries.set(key, JSON.stringify(value));
-      } catch {
-        // Keep the unreadable file for recovery instead of overwriting it.
-        await rename(this.file, `${this.file}.corrupt-${Date.now()}`);
-        console.error(`[tavora] storage file was unreadable and has been set aside: ${this.file}`);
-        entries.clear();
-      }
+    const parsed = await readJsonOrSetAside<{ entries: Record<string, JsonValue> }>(this.file);
+    if (parsed && typeof parsed.entries === "object" && parsed.entries !== null) {
+      for (const [key, value] of Object.entries(parsed.entries)) entries.set(key, JSON.stringify(value));
     }
     this.bytes = [...entries].reduce((sum, [key, value]) => sum + entrySize(key, value), 0);
     this.entries = entries;
     return entries;
   }
 
-  private async persist(entries: Map<string, string>): Promise<void> {
+  private persist(entries: Map<string, string>): Promise<void> {
     const body = `{"version":1,"entries":{${[...entries]
       .map(([key, value]) => `${JSON.stringify(key)}:${value}`)
       .join(",")}}}`;
-    await mkdir(path.dirname(this.file), { recursive: true });
-    const temp = `${this.file}.tmp`;
-    await writeFile(temp, body, "utf8");
-    await rename(temp, this.file);
+    return writeFileAtomic(this.file, body);
   }
 }
 
@@ -133,19 +94,77 @@ function entrySize(key: string, serialized: string): number {
   return Buffer.byteLength(key) + Buffer.byteLength(serialized);
 }
 
-/** One store per (module, game), shared by all panel instances of that module. */
-export class StoreRegistry {
-  private readonly stores = new Map<string, ModuleStore>();
+/** UI state for one panel instance. Removed when the panel is closed. */
+export class PanelStateStore {
+  private readonly queue = new SerialQueue();
 
-  constructor(private readonly dataDir: string) {}
+  constructor(private readonly dir: string) {}
 
-  get(moduleId: string, gameId: string): ModuleStore {
+  private file(instanceId: string): string {
+    if (!INSTANCE_ID.test(instanceId)) throw new Error("invalid instance id");
+    return path.join(this.dir, `${instanceId}.json`);
+  }
+
+  get(instanceId: string): Promise<JsonValue | null> {
+    const file = this.file(instanceId);
+    return this.queue.run(async () => (await readJsonOrSetAside<{ value: JsonValue }>(file))?.value ?? null);
+  }
+
+  set(instanceId: string, value: unknown): Promise<void> {
+    const file = this.file(instanceId);
+    if (value === null) return this.remove(instanceId);
+    const serialized = serializeJson(value, "value");
+    if (Buffer.byteLength(serialized) > LIMITS.maxPanelStateBytes) {
+      throw new HostError("QUOTA_EXCEEDED", `panel state is limited to ${LIMITS.maxPanelStateBytes} bytes`);
+    }
+    return this.queue.run(() => writeFileAtomic(file, `{"version":1,"value":${serialized}}`));
+  }
+
+  remove(instanceId: string): Promise<void> {
+    const file = this.file(instanceId);
+    return this.queue.run(() => rm(file, { force: true }));
+  }
+
+  /** Deletes state files for panels that no longer exist in any workspace. */
+  async prune(keep: Set<string>): Promise<void> {
+    let names: string[];
+    try {
+      names = await readdir(this.dir);
+    } catch {
+      return;
+    }
+    await Promise.all(
+      names
+        .filter((name) => name.endsWith(".json") && !keep.has(name.slice(0, -".json".length)))
+        .map((name) => this.queue.run(() => rm(path.join(this.dir, name), { force: true }))),
+    );
+  }
+}
+
+export interface ModuleData {
+  settings: ModuleStore;
+  documents: DocumentStore;
+}
+
+/** One settings store and one document store per (module, game), shared by all its panels. */
+export class DataRegistry {
+  private readonly data = new Map<string, ModuleData>();
+  readonly panelState: PanelStateStore;
+
+  constructor(private readonly dataDir: string) {
+    this.panelState = new PanelStateStore(path.join(dataDir, "panel-state"));
+  }
+
+  get(moduleId: string, gameId: string): ModuleData {
     // Ids were validated when the module and game were registered; checking
     // again here keeps them from ever forming a path outside dataDir.
     if (!isModuleId(moduleId) || !isGameId(gameId)) throw new Error("invalid module or game id");
-    const file = path.join(this.dataDir, "module-data", moduleId, gameId, "storage.json");
-    let store = this.stores.get(file);
-    if (!store) this.stores.set(file, (store = new ModuleStore(file)));
-    return store;
+    const dir = path.join(this.dataDir, "module-data", moduleId, gameId);
+    let data = this.data.get(dir);
+    if (!data) {
+      data = { settings: new ModuleStore(path.join(dir, "storage.json")), documents: new DocumentStore(path.join(dir, "documents")) };
+      this.data.set(dir, data);
+    }
+    return data;
   }
 }

@@ -1,14 +1,18 @@
 import {
   LIMITS,
   PROTOCOL_VERSION,
-  type ErrorCode,
+  RESERVED_METHODS,
+  type Capability,
+  type DocumentChange,
   type EventName,
   type Events,
+  type HandshakeResult,
   type TavoraGame,
   type TavoraTheme,
   type TavoraViewport,
 } from "@tavora/sdk/protocol";
-import { StorageError, type ModuleStore } from "./storage";
+import { HostError } from "./errors";
+import type { ModuleData, PanelStateStore } from "./storage";
 
 /** The parts of Electron's MessagePortMain the bridge uses. */
 export interface BridgePort {
@@ -24,68 +28,93 @@ export interface BridgePort {
  * view that owns the port, never from anything the module sends.
  */
 export interface BridgeContext {
+  hostVersion: string;
   moduleId: string;
+  moduleVersion: string;
+  instanceId: string;
   game: TavoraGame;
-  store: ModuleStore;
+  data: ModuleData;
+  panelState: PanelStateStore;
+  capabilities: ReadonlySet<Capability>;
   getViewport(): TavoraViewport;
   getTheme(): TavoraTheme;
+  /** Whether the panel is hidden right now. */
+  isSuspended(): boolean;
 }
 
-export const MAX_IN_FLIGHT = 64;
+type Handler = (session: BridgeSession, params: unknown) => Promise<unknown> | unknown;
 
-class BridgeError extends Error {
-  constructor(
-    readonly code: ErrorCode,
-    message: string,
-  ) {
-    super(message);
+function object(params: unknown): Record<string, unknown> {
+  if (typeof params !== "object" || params === null || Array.isArray(params)) {
+    throw new HostError("INVALID_PARAMS", "params must be an object");
   }
-}
-
-type Handler = (context: BridgeContext, params: unknown) => Promise<unknown> | unknown;
-
-function keyParam(params: unknown): string {
-  if (typeof params !== "object" || params === null || typeof (params as { key?: unknown }).key !== "string") {
-    throw new BridgeError("INVALID_PARAMS", "params.key must be a string");
-  }
-  return (params as { key: string }).key;
+  return params as Record<string, unknown>;
 }
 
 function noParams(params: unknown): void {
-  if (params !== undefined) throw new BridgeError("INVALID_PARAMS", "this method takes no params");
+  if (params !== undefined) throw new HostError("INVALID_PARAMS", "this method takes no params");
+}
+
+function required(params: Record<string, unknown>, name: string): unknown {
+  if (!(name in params)) throw new HostError("INVALID_PARAMS", `params.${name} is required`);
+  return params[name];
 }
 
 const handlers = new Map<string, Handler>([
-  ["game.getCurrent", (context, params) => (noParams(params), { ...context.game })],
-  ["storage.get", (context, params) => context.store.get(keyParam(params))],
+  ["game.getCurrent", (s, params) => (noParams(params), { ...s.context.game })],
+
+  ["storage.get", (s, params) => s.context.data.settings.get(object(params).key)],
+  ["storage.keys", (s, params) => (noParams(params), s.context.data.settings.keys())],
   [
     "storage.set",
-    async (context, params) => {
-      const key = keyParam(params);
-      if (!("value" in (params as object))) throw new BridgeError("INVALID_PARAMS", "params.value is required");
-      await context.store.set(key, (params as { value: unknown }).value);
+    async (s, params) => {
+      const p = object(params);
+      await s.context.data.settings.set(p.key, required(p, "value"));
       return null;
     },
   ],
   [
     "storage.delete",
-    async (context, params) => {
-      await context.store.delete(keyParam(params));
+    async (s, params) => {
+      await s.context.data.settings.delete(object(params).key);
       return null;
     },
   ],
-  ["workspace.getViewport", (context, params) => (noParams(params), context.getViewport())],
-  ["ui.getTheme", (context, params) => (noParams(params), context.getTheme())],
+
+  ["documents.list", (s, params) => (noParams(params), s.context.data.documents.list())],
+  ["documents.get", (s, params) => s.context.data.documents.get(object(params).id)],
+  ["documents.put", (s, params) => s.context.data.documents.put(object(params), s)],
+  [
+    "documents.delete",
+    async (s, params) => {
+      const p = object(params);
+      await s.context.data.documents.delete(p.id, p.ifRevision, s);
+      return null;
+    },
+  ],
+
+  ["panel.getState", (s, params) => (noParams(params), s.context.panelState.get(s.context.instanceId))],
+  [
+    "panel.setState",
+    async (s, params) => {
+      await s.context.panelState.set(s.context.instanceId, required(object(params), "value"));
+      return null;
+    },
+  ],
+
+  ["workspace.getViewport", (s, params) => (noParams(params), s.context.getViewport())],
+  ["ui.getTheme", (s, params) => (noParams(params), s.context.getTheme())],
 ]);
 
-/** Serves one module instance over one port. */
+/** Serves one module panel over one port. */
 export class BridgeSession {
   private inFlight = 0;
   private closed = false;
+  private handshakeDone = false;
 
   constructor(
     private readonly port: BridgePort,
-    private readonly context: BridgeContext,
+    readonly context: BridgeContext,
     private readonly onClosed: () => void = () => {},
   ) {
     port.on("message", (event) => {
@@ -94,11 +123,12 @@ export class BridgeSession {
       void this.handle(event.data);
     });
     port.on("close", () => this.markClosed());
+    context.data.documents.on("change", this.onDocumentChange);
     port.start();
   }
 
   emit<E extends EventName>(event: E, data: Events[E]): void {
-    if (!this.closed) this.port.postMessage({ v: PROTOCOL_VERSION, event, data });
+    if (!this.closed && this.handshakeDone) this.port.postMessage({ v: PROTOCOL_VERSION, event, data });
   }
 
   close(): void {
@@ -107,10 +137,31 @@ export class BridgeSession {
     this.markClosed();
   }
 
+  private readonly onDocumentChange = (change: DocumentChange, origin: unknown) => {
+    if (origin !== this) this.emit("documents.changed", change);
+  };
+
   private markClosed(): void {
     if (this.closed) return;
     this.closed = true;
+    this.context.data.documents.off("change", this.onDocumentChange);
     this.onClosed();
+  }
+
+  private handshake(params: unknown): HandshakeResult {
+    const p = object(params);
+    if (p.protocol !== PROTOCOL_VERSION) {
+      throw new HostError("INCOMPATIBLE", `this host speaks protocol ${PROTOCOL_VERSION}, not ${String(p.protocol)}`, {
+        supported: [PROTOCOL_VERSION],
+      });
+    }
+    this.handshakeDone = true;
+    return {
+      protocol: PROTOCOL_VERSION,
+      host: { name: "tavora-desktop", version: this.context.hostVersion },
+      module: { id: this.context.moduleId, version: this.context.moduleVersion },
+      capabilities: [...this.context.capabilities],
+    };
   }
 
   private async handle(raw: unknown): Promise<void> {
@@ -120,8 +171,8 @@ export class BridgeSession {
     if (!Number.isSafeInteger(id) || (id as number) < 1) return;
     const requestId = id as number;
 
-    if (this.inFlight >= MAX_IN_FLIGHT) {
-      return this.fail(requestId, "BAD_REQUEST", "too many concurrent requests");
+    if (this.inFlight >= LIMITS.maxInFlight) {
+      return this.fail(requestId, new HostError("BAD_REQUEST", "too many concurrent requests"));
     }
     this.inFlight++;
     try {
@@ -129,30 +180,50 @@ export class BridgeSession {
       try {
         size = JSON.stringify(raw)?.length ?? 0;
       } catch {
-        throw new BridgeError("BAD_REQUEST", "message must be plain JSON data");
+        throw new HostError("BAD_REQUEST", "message must be plain JSON data");
       }
-      if (size > LIMITS.maxMessageBytes) throw new BridgeError("BAD_REQUEST", "message is too large");
+      if (size > LIMITS.maxMessageBytes) throw new HostError("BAD_REQUEST", "message is too large");
 
       const { v, method, params } = raw as { v?: unknown; method?: unknown; params?: unknown };
-      if (v !== PROTOCOL_VERSION) throw new BridgeError("BAD_REQUEST", `unsupported protocol version ${String(v)}`);
-      const handler = typeof method === "string" ? handlers.get(method) : undefined;
-      if (!handler) throw new BridgeError("UNKNOWN_METHOD", `unknown method ${String(method)}`);
+      if (v !== PROTOCOL_VERSION) {
+        throw new HostError("BAD_REQUEST", `unsupported protocol version ${String(v)}`, { supported: [PROTOCOL_VERSION] });
+      }
+      if (typeof method !== "string") throw new HostError("UNKNOWN_METHOD", "method must be a string");
 
-      const result = await handler(this.context, params);
+      let result: unknown;
+      if (method === "bridge.handshake") {
+        result = this.handshake(params);
+      } else if (!this.handshakeDone) {
+        throw new HostError("BAD_REQUEST", "call bridge.handshake first");
+      } else if (Object.hasOwn(RESERVED_METHODS, method)) {
+        const capability = RESERVED_METHODS[method]!;
+        // Nothing can grant these yet; the check is here so the error shape
+        // stays the same once something can.
+        if (!this.context.capabilities.has(capability)) {
+          throw new HostError("PERMISSION_DENIED", `${method} needs the "${capability}" permission`, { capability });
+        }
+        throw new HostError("UNKNOWN_METHOD", `${method} is not available in this host version`);
+      } else {
+        const handler = handlers.get(method);
+        if (!handler) throw new HostError("UNKNOWN_METHOD", `unknown method ${method}`);
+        result = await handler(this, params);
+      }
       if (!this.closed) this.port.postMessage({ v: PROTOCOL_VERSION, id: requestId, ok: true, result });
+      // A panel that connects while hidden learns so right after connecting.
+      if (method === "bridge.handshake" && this.context.isSuspended()) this.emit("lifecycle.suspend", null);
     } catch (error) {
-      if (error instanceof BridgeError || error instanceof StorageError) {
-        this.fail(requestId, error.code, error.message);
+      if (error instanceof HostError) {
+        this.fail(requestId, error);
       } else {
         console.error(`[tavora] bridge error in ${this.context.moduleId}`, error);
-        this.fail(requestId, "INTERNAL", "internal error");
+        this.fail(requestId, new HostError("INTERNAL", "internal error"));
       }
     } finally {
       this.inFlight--;
     }
   }
 
-  private fail(id: number, code: ErrorCode, message: string): void {
-    if (!this.closed) this.port.postMessage({ v: PROTOCOL_VERSION, id, ok: false, error: { code, message } });
+  private fail(id: number, error: HostError): void {
+    if (!this.closed) this.port.postMessage({ v: PROTOCOL_VERSION, id, ok: false, error: error.toPayload() });
   }
 }

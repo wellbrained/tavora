@@ -61,5 +61,9 @@ async function loadModule(dir: string): Promise<InstalledModule | undefined> {
     console.warn(`[tavora] module ${result.manifest.id} has no entry file ${result.manifest.entry}; is it built?`);
     return undefined;
   }
+  if (result.manifest.icon !== undefined && !(await resolveAsset(root, `/${result.manifest.icon}`))) {
+    console.warn(`[tavora] module ${result.manifest.id} has no icon file ${result.manifest.icon}`);
+    return undefined;
+  }
   return { manifest: result.manifest, root };
 }

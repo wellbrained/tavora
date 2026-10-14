@@ -65,7 +65,9 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); o
 }
 .header .name { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .header .status { color: var(--muted); }
-.header .status.crashed { color: var(--danger); }
+.header .status.crashed,
+.header .status.failed,
+.header .status.unresponsive { color: var(--danger); }
 .header button { padding: 0 6px; line-height: 20px; }
 .empty { display: grid; place-content: center; height: calc(100% - 76px); text-align: center; }
 .empty[hidden] { display: none; }
