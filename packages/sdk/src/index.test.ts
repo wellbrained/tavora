@@ -69,6 +69,22 @@ afterEach(() => {
 });
 
 describe("connect", () => {
+  it("reports current suspension to late listeners without replaying it after resume", async () => {
+    const host = fakeHost(standard);
+    hosts.push(host);
+    const tavora = await sdk.connect();
+    host.emit("lifecycle.suspend", null);
+    await tavora.storage.get("count"); // ordered port barrier
+    const suspended = vi.fn();
+    tavora.lifecycle.onSuspend(suspended);
+    expect(suspended).toHaveBeenCalledOnce();
+    host.emit("lifecycle.resume", null);
+    await tavora.storage.get("count");
+    const late = vi.fn();
+    tavora.lifecycle.onSuspend(late);
+    expect(late).not.toHaveBeenCalled();
+  });
+
   it("performs the handshake first and reports what the host sent", async () => {
     const host = fakeHost(standard);
     hosts.push(host);

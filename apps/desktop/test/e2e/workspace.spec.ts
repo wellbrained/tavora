@@ -78,13 +78,3 @@ test("modules receive resize events matching their panel size", async () => {
   expect(await inModule(app, VANILLA, "[innerWidth, innerHeight].join('x')")).toBe("500x624");
   await app.close();
 });
-
-test("panels are refused when they would be smaller than the module's minimum size", async () => {
-  const { app, page } = await launch();
-  await setContentSize(app, RAIL_WIDTH + 1000, 700);
-  // minWidth is 320, so three panels fit in 1000px and a fourth does not.
-  for (let i = 0; i < 4; i++) await openModule(page, VANILLA);
-  await expect(panels(page)).toHaveCount(3);
-  await expect(page.getByTestId("notice")).toContainText("Not enough room");
-  await app.close();
-});

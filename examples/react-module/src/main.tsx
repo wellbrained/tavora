@@ -1,5 +1,6 @@
 import { StrictMode, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+import "./style.css";
 import {
   connect,
   TavoraError,
@@ -42,10 +43,8 @@ async function load(): Promise<Initial> {
   return { tavora, game, viewport, theme, count: count ?? 0, note, view: panel?.view ?? "list" };
 }
 
-const h2: CSSProperties = { fontSize: 14, margin: "16px 0 4px" };
-const dd: CSSProperties = { margin: "0 0 8px" };
 
-function Counter({ tavora, initial, button }: { tavora: TavoraSDK; initial: number; button: CSSProperties }) {
+function Counter({ tavora, initial, primary }: { tavora: TavoraSDK; initial: number; primary: CSSProperties }) {
   const [count, setCount] = useState(initial);
   const increment = async () => {
     const next = count + 1;
@@ -54,9 +53,9 @@ function Counter({ tavora, initial, button }: { tavora: TavoraSDK; initial: numb
   };
   return (
     <section>
-      <h2 style={h2}>Clicks saved for this game</h2>
+      <h2>Clicks saved for this game</h2>
       <p data-testid="count">{count}</p>
-      <button type="button" data-testid="increment" onClick={() => void increment()} style={button}>
+      <button type="button" data-testid="increment" onClick={() => void increment()} style={primary}>
         Add a click
       </button>
     </section>
@@ -64,7 +63,7 @@ function Counter({ tavora, initial, button }: { tavora: TavoraSDK; initial: numb
 }
 
 /** A document shared by every panel of this module, saved with a revision check. */
-function SharedNote({ tavora, initial, button }: { tavora: TavoraSDK; initial: Initial["note"]; button: CSSProperties }) {
+function SharedNote({ tavora, initial }: { tavora: TavoraSDK; initial: Initial["note"] }) {
   // Uncontrolled, so a reload from another panel replaces the text in one place.
   const textarea = useRef<HTMLTextAreaElement>(null);
   const [revision, setRevision] = useState(initial?.revision ?? 0);
@@ -105,7 +104,7 @@ function SharedNote({ tavora, initial, button }: { tavora: TavoraSDK; initial: I
 
   return (
     <section>
-      <h2 style={h2}>
+      <h2>
         Shared note{" "}
         <small>
           revision <span data-testid="note-revision">{revision}</span>
@@ -116,10 +115,9 @@ function SharedNote({ tavora, initial, button }: { tavora: TavoraSDK; initial: I
         rows={3}
         ref={textarea}
         defaultValue={initial?.data.text ?? ""}
-        style={{ boxSizing: "border-box", width: "100%", font: "inherit" }}
       />
       <p>
-        <button type="button" data-testid="save-note" onClick={() => void save()} style={button}>
+        <button type="button" data-testid="save-note" onClick={() => void save()}>
           Save note
         </button>{" "}
         <span data-testid="note-status">{status}</span>
@@ -129,7 +127,7 @@ function SharedNote({ tavora, initial, button }: { tavora: TavoraSDK; initial: I
 }
 
 /** Panel state: which view this one panel shows. Gone once the panel is closed. */
-function PanelView({ tavora, initial, button }: { tavora: TavoraSDK; initial: View; button: CSSProperties }) {
+function PanelView({ tavora, initial }: { tavora: TavoraSDK; initial: View }) {
   const [view, setView] = useState(initial);
   const choose = async (next: View) => {
     setView(next);
@@ -137,7 +135,7 @@ function PanelView({ tavora, initial, button }: { tavora: TavoraSDK; initial: Vi
   };
   return (
     <section>
-      <h2 style={h2}>
+      <h2>
         This panel's view: <span data-testid="view">{view}</span>
       </h2>
       {(["list", "grid"] as const).map((option) => (
@@ -146,7 +144,6 @@ function PanelView({ tavora, initial, button }: { tavora: TavoraSDK; initial: Vi
           type="button"
           data-testid={`view-${option}`}
           onClick={() => void choose(option)}
-          style={{ ...button, marginRight: 4 }}
         >
           {option === "list" ? "List" : "Grid"}
         </button>
@@ -172,7 +169,8 @@ function Module({ initial }: { initial: Initial }) {
   }, [tavora]);
 
   const { colors } = theme;
-  const button: CSSProperties = { background: colors.accent, border: 0, borderRadius: 6, padding: "6px 12px" };
+  // Tavora styles buttons and fields already; the one main action gets the accent.
+  const primary: CSSProperties = { background: colors.accent, color: colors.background };
   const muted = { color: colors.textMuted };
 
   return (
@@ -180,25 +178,25 @@ function Module({ initial }: { initial: Initial }) {
       <p data-testid="status">Connected</p>
       <dl>
         <dt style={muted}>Game</dt>
-        <dd data-testid="game" data-game-id={game.id} style={dd}>
+        <dd data-testid="game" data-game-id={game.id}>
           {game.displayName}
         </dd>
         <dt style={muted}>Viewport</dt>
-        <dd data-testid="viewport" style={dd}>
+        <dd data-testid="viewport">
           {`${viewport.width} × ${viewport.height}`}
         </dd>
         <dt style={muted}>Theme</dt>
-        <dd data-testid="theme" style={dd}>
+        <dd data-testid="theme">
           {theme.mode}
         </dd>
         <dt style={muted}>Panel</dt>
-        <dd data-testid="lifecycle" style={dd}>
+        <dd data-testid="lifecycle">
           {lifecycle}
         </dd>
       </dl>
-      <Counter tavora={tavora} initial={initial.count} button={button} />
-      <SharedNote tavora={tavora} initial={initial.note} button={button} />
-      <PanelView tavora={tavora} initial={initial.view} button={button} />
+      <Counter tavora={tavora} initial={initial.count} primary={primary} />
+      <SharedNote tavora={tavora} initial={initial.note} />
+      <PanelView tavora={tavora} initial={initial.view} />
     </Page>
   );
 }
@@ -207,15 +205,11 @@ function Page({ background, text, children }: { background: string; text: string
   return (
     <main
       style={{
-        padding: 16,
-        minHeight: "100vh",
-        boxSizing: "border-box",
         background,
         color: text,
-        font: "14px/1.5 system-ui, sans-serif",
       }}
     >
-      <h1 style={{ fontSize: 16, margin: "0 0 8px" }}>React Test Module</h1>
+      <h1>React Test Module</h1>
       {children}
     </main>
   );
@@ -237,7 +231,7 @@ function App() {
 
   if (initial) return <Module initial={initial} />;
   return (
-    <Page background="#18181b" text="#f2ece0">
+    <Page background="#171412" text="#f2ece0">
       <p data-testid="status">{error ? `Could not connect: ${error}` : "Connecting…"}</p>
     </Page>
   );

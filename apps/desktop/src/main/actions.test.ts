@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { parseAction } from "./actions";
 
 const FOLDER = "123e4567-e89b-42d3-a456-426614174000";
+const LAYOUT = {
+  width: 800,
+  height: 600,
+  direction: "row",
+  root: { kind: "split", size: 600, children: [{ kind: "group", size: 800, panels: [FOLDER], active: FOLDER }] },
+};
 
 describe("parseAction", () => {
   it.each([
@@ -23,6 +29,10 @@ describe("parseAction", () => {
     [{ type: "set-rail", width: 300 }],
     [{ type: "open-module", moduleId: "local.example.vue-module" }],
     [{ type: "close-panel", instanceId: FOLDER }],
+    [{ type: "save-layout", layout: LAYOUT }],
+    [{ type: "save-snapshot", name: "Mapping" }],
+    [{ type: "apply-snapshot", snapshotId: FOLDER }],
+    [{ type: "rename-snapshot", snapshotId: FOLDER, name: "Bossing" }],
   ])("accepts %j", (action) => {
     expect(parseAction(action)).toEqual(action);
   });
@@ -48,6 +58,10 @@ describe("parseAction", () => {
     [{ type: "set-rail", expanded: "yes" }],
     [{ type: "open-module", moduleId: "Bad Id" }],
     [{ type: "close-panel", instanceId: "../x" }],
+    [{ type: "save-layout", layout: { ...LAYOUT, direction: "diagonal" } }],
+    [{ type: "save-layout" }],
+    [{ type: "save-snapshot", name: "x".repeat(81) }],
+    [{ type: "delete-snapshot", snapshotId: "1" }],
   ])("rejects %j", (action) => {
     expect(parseAction(action)).toBeNull();
   });
