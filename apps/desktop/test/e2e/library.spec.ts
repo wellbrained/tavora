@@ -11,6 +11,7 @@ import {
   openGame,
   openModule,
   panels,
+  setContentSize,
   saveNote,
   VANILLA,
 } from "./harness";
@@ -227,6 +228,29 @@ test("the rail remembers whether it is expanded and how wide it is", async () =>
   await expect(again.page.getByTestId("rail")).toHaveAttribute("data-expanded", "true");
   expect((await again.page.getByTestId("rail").boundingBox())!.width).toBe(288);
   await again.app.close();
+});
+
+test("an expanded rail turns compact in a narrow window and comes back when it widens", async () => {
+  const { app, page, userData } = await launch();
+  const rail = page.getByTestId("rail");
+  await page.getByTestId("rail-toggle").click();
+  await expect(rail).toHaveAttribute("data-expanded", "true");
+
+  await setContentSize(app, 960, 600);
+  await expect(rail).toHaveAttribute("data-expanded", "false");
+  await expect(page.getByTestId("rail-toggle")).toBeInViewport();
+
+  // Expanding in a narrow window is only for now; the saved setting stays.
+  await page.getByTestId("rail-toggle").click();
+  await expect(rail).toHaveAttribute("data-expanded", "true");
+  await page.getByTestId("rail-toggle").click();
+  await expect(rail).toHaveAttribute("data-expanded", "false");
+
+  await setContentSize(app, 1400, 900);
+  await expect(rail).toHaveAttribute("data-expanded", "true");
+  await app.close();
+  const saved = JSON.parse(await readFile(path.join(userData, "library.json"), "utf8"));
+  expect(saved.rail.expanded).toBe(true);
 });
 
 test("Tavora starts on Home or on the last game, as chosen in Settings", async () => {

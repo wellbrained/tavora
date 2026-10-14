@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AddGameDialog from "./components/AddGameDialog.vue";
+import AddModuleDialog from "./components/AddModuleDialog.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import GameRail from "./components/GameRail.vue";
 import PromptDialog from "./components/PromptDialog.vue";
@@ -25,6 +26,7 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <SettingsDialog />
     <SearchDialog />
     <AddGameDialog v-if="dialog?.kind === 'add-game'" />
+    <AddModuleDialog v-else-if="dialog?.kind === 'add-module'" />
     <PromptDialog v-else-if="dialog?.kind === 'prompt'" :key="dialog.title" :request="dialog" />
     <ConfirmDialog v-else-if="dialog?.kind === 'confirm'" :key="dialog.title" :request="dialog" />
 

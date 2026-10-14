@@ -14,7 +14,7 @@ import {
 import { computed, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds } from "../../shared/host-api";
 import { Button } from "@/components/ui/button";
-import { act, api as host, dragging, state } from "../host";
+import { act, api as host, dialog, dragging, state } from "../host";
 import { fromDockview, groupMinimum, guardDrop, placePanel, toDockview, type PanelInfo } from "../dock";
 import GroupActions from "../components/workspace/GroupActions.vue";
 import LayoutsMenu from "../components/workspace/LayoutsMenu.vue";
@@ -25,9 +25,6 @@ import { DOCK } from "../components/workspace/dock-context";
 const THEME = { name: "tavora", className: "dockview-theme-tavora", colorScheme: "dark" as const, gap: 0 };
 /** How long the layout must be still before it is saved. */
 const SAVE_DELAY_MS = 300;
-
-/** Who publishes a module: Tavora itself, or a package found on this computer. */
-const PROVENANCE_LABEL = { official: "Official", local: "Local" } as const;
 
 const view = computed(() => state.value!);
 const game = computed(() => (view.value.currentGameId ? view.value.library.games[view.value.currentGameId] : undefined));
@@ -233,25 +230,10 @@ const groupActions = GroupActions as unknown as VueComponent;
   <main class="flex h-full min-w-0 flex-col" data-testid="workspace">
     <header class="app-drag flex h-12 flex-none items-center gap-4 border-b pr-[calc(100vw-env(titlebar-area-x,0px)-env(titlebar-area-width,100vw)+1rem)] pl-4">
       <h1 class="max-w-60 flex-none truncate text-lg font-semibold">{{ game?.name }}</h1>
-      <div class="app-no-drag flex min-w-0 gap-2 overflow-x-auto" role="group" aria-label="Open a module">
-        <Button
-          v-for="module in view.modules"
-          :key="module.id"
-          size="sm"
-          variant="secondary"
-          :data-testid="`open-${module.id}`"
-          :disabled="!module.available"
-          :title="module.available ? (module.description ?? `Open ${module.name}`) : `${module.name} does not support this game`"
-          @click="act({ type: 'open-module', moduleId: module.id })"
-        >
-          <Plus :stroke-width="1.5" /> {{ module.name }}
-          <span
-            class="text-muted-foreground bg-background rounded-sm px-1 text-xs"
-            :data-testid="`provenance-${module.id}`"
-          >{{ PROVENANCE_LABEL[module.provenance] }}</span>
-        </Button>
-      </div>
-      <span class="text-info ml-auto text-sm" role="status" data-testid="notice">{{ view.notice ?? "" }}</span>
+      <Button size="sm" variant="secondary" class="app-no-drag" data-testid="add-module" @click="dialog = { kind: 'add-module' }">
+        <Plus :stroke-width="1.5" /> Add module
+      </Button>
+      <span class="text-info ml-auto min-w-0 truncate text-sm" role="status" data-testid="notice">{{ view.notice ?? "" }}</span>
       <div class="app-no-drag"><LayoutsMenu /></div>
     </header>
 
@@ -272,7 +254,10 @@ const groupActions = GroupActions as unknown as VueComponent;
         data-testid="empty-workspace"
       >
         <p>No modules open yet.</p>
-        <p class="text-muted-foreground">Open one from the bar above. Your layout is saved for this game.</p>
+        <p class="text-muted-foreground">Add one to start. Your layout is saved for this game.</p>
+        <Button size="sm" class="mt-3" data-testid="empty-add-module" @click="dialog = { kind: 'add-module' }">
+          <Plus :stroke-width="1.5" /> Add module
+        </Button>
       </div>
     </div>
   </main>
