@@ -1,5 +1,9 @@
 # Decision log
 
+2026-10-14 merge validation: startup removes expired-game browser partitions before opening Chromium sessions, avoiding Windows file locks. The SDK remembers current suspension and informs late suspend subscribers, so a panel hidden while connecting still pauses its work. Existing expiry and docking gate tests cover both behaviors; the SDK has a late-subscription regression test.
+
+2026-10-14 integration: standalone test packages use electron-builder (Windows portable exe/zip and Linux AppImage), include official and example modules in separate resource folders, and remain unsigned. Native title bars and menus are replaced by system window controls over Tavora's draggable header; interactive header controls opt out of dragging. The game rail uses the pill and hover treatment requested in PR #4; this is a specific exception to the original general hover rules.
+
 | Date | Decision | Reason |
 | --- | --- | --- |
 | 2026-10-14 | pnpm monorepo, TypeScript, Node 22 | Matches the planned code layout; one repo while the team is small |

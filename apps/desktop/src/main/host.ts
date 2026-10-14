@@ -84,6 +84,9 @@ interface Rect {
 /** How long to wait for a still image of a panel before hiding it anyway. */
 const FREEZE_TIMEOUT_MS = 250;
 
+/** Leaves the workspace header's bottom border visible below the window controls. */
+const TITLE_BAR_HEIGHT = 47;
+
 export interface HostOptions {
   userData: string;
   moduleDirs: string[];
@@ -141,6 +144,9 @@ export class Host {
       title: "Tavora",
       icon: options.icon,
       backgroundColor: THEME.colors.background,
+      titleBarStyle: "hidden",
+      titleBarOverlay: { color: THEME.colors.background, symbolColor: THEME.colors.text, height: TITLE_BAR_HEIGHT },
+      autoHideMenuBar: true,
       show: false,
       webPreferences: {
         preload: options.hostPreload,
@@ -152,6 +158,7 @@ export class Host {
         devTools: options.devTools,
       },
     });
+    this.window.removeMenu();
     if (windowState.maximized) this.window.maximize();
     this.window.once("ready-to-show", () => this.window.show());
   }
@@ -177,11 +184,11 @@ export class Host {
     // Dark only for now: native menus, dialogs and scrollbars match the UI.
     nativeTheme.themeSource = "dark";
     const host = new Host(options, modules, library, workspace, windowState);
-    for (const game of expired) await host.deleteGameData(game);
     // Browser storage of games that are gone, removed before any session opens it.
     for (const dir of await orphanedPartitions(userData, new Set(Object.keys(library.games)))) {
       await rm(dir, { recursive: true, force: true });
     }
+    for (const game of expired) await host.deleteGameData(game);
     const livePanels = new Set(Object.values(workspace.games).flatMap((game) => game.instances.map((i) => i.instanceId)));
     await host.data.panelState.prune(livePanels);
     if (expired.length) host.saveLibrary();

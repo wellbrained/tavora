@@ -35,7 +35,7 @@ const repoRoot = path.resolve(__dirname, "../../../..");
 const dirList = (value: string) => value.split(path.delimiter).filter(Boolean);
 const moduleDirs = process.env.TAVORA_MODULE_DIRS
   ? dirList(process.env.TAVORA_MODULE_DIRS)
-  : [path.join(repoRoot, "examples")];
+  : [app.isPackaged ? path.join(process.resourcesPath, "modules") : path.join(repoRoot, "examples")];
 // Official modules (Notes, To-Dos) ship inside a packaged build and are
 // loaded from the repo's modules/ folder in a dev run.
 const officialModuleDirs = process.env.TAVORA_OFFICIAL_MODULE_DIRS

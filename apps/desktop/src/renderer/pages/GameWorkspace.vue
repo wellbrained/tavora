@@ -231,9 +231,9 @@ const groupActions = GroupActions as unknown as VueComponent;
 
 <template>
   <main class="flex h-full min-w-0 flex-col" data-testid="workspace">
-    <header class="flex h-12 flex-none items-center gap-4 border-b px-4">
+    <header class="app-drag flex h-12 flex-none items-center gap-4 border-b pr-[calc(100vw-env(titlebar-area-x,0px)-env(titlebar-area-width,100vw)+1rem)] pl-4">
       <h1 class="max-w-60 flex-none truncate text-lg font-semibold">{{ game?.name }}</h1>
-      <div class="flex min-w-0 gap-2 overflow-x-auto" role="group" aria-label="Open a module">
+      <div class="app-no-drag flex min-w-0 gap-2 overflow-x-auto" role="group" aria-label="Open a module">
         <Button
           v-for="module in view.modules"
           :key="module.id"
@@ -252,7 +252,7 @@ const groupActions = GroupActions as unknown as VueComponent;
         </Button>
       </div>
       <span class="text-info ml-auto text-sm" role="status" data-testid="notice">{{ view.notice ?? "" }}</span>
-      <LayoutsMenu />
+      <div class="app-no-drag"><LayoutsMenu /></div>
     </header>
 
     <div ref="root" class="relative min-h-0 flex-1" @pointerdown.capture="onPointerDown">

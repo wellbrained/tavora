@@ -24,6 +24,8 @@ modules get the same tokens and may follow it.
 
 ## Principles
 
+2026-10-14 rail exception (PR #4): game and Home entries use a gold pill, short on hover and full height when active. Game, Home, folder and Add game icons may tilt, scale and glow on hover; reduced motion disables transforms. Game icon wrappers and Add game tiles use a 12 px radius; Add game uses a 24 px / 1.75 px plus icon. Other controls retain the sizing and hover rules below. This records the explicitly requested rail treatment while keeping the general theme rules.
+
 Tavora should feel like a quiet campfire next to the game: warm, calm and out
 of the way.
 

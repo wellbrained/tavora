@@ -33,6 +33,15 @@ pnpm build                              # SDK, host, official and example module
 pnpm --filter @tavora/desktop start     # opens Tavora with Notes, To-Dos and the example modules
 ```
 
+To package a standalone test build after `pnpm build`:
+
+```sh
+pnpm --filter @tavora/desktop package --win    # portable exe and zip
+pnpm --filter @tavora/desktop package --linux  # AppImage
+```
+
+Output lives in `apps/desktop/release/`. Builds include Notes, To-Dos and the example modules, keep data in the normal per-user folder, and are unsigned. Installers and automatic updates are planned separately.
+
 ### Development mode
 
 ```sh
