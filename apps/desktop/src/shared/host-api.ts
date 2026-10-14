@@ -183,4 +183,8 @@ export interface TavoraHostApi {
   setOverlay(open: boolean): void;
   onState(listener: (state: HostViewState) => void): void;
   onFrozen(listener: (images: Record<string, string>) => void): void;
+  /** Tavora-wide keyboard shortcuts, also when a module panel has focus. */
+  onShortcut(listener: (shortcut: HostShortcut) => void): void;
 }
+
+export type HostShortcut = "search";
