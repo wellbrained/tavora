@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, Plus, Setting
 import { computed, reactive, ref } from "vue";
 import type { FolderView, GameView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
-import { act, dialog, prompt, settingsOpen, state, submitAction } from "../host";
+import { act, dialog, openSettings, prompt, state, submitAction } from "../host";
 import { folderMenu, gameMenu } from "../rail-actions";
 import GameIcon from "./GameIcon.vue";
 import MenuArea from "./menus/MenuArea.vue";
@@ -397,7 +397,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         aria-label="Settings"
         aria-haspopup="dialog"
         title="Settings"
-        @click="settingsOpen = true"
+        @click="openSettings()"
       >
         <!-- A 48 px slot keeps the icon on the same centre line as the tiles. -->
         <span class="flex w-12 flex-none justify-center">

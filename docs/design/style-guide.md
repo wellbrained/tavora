@@ -171,13 +171,12 @@ Tavora targets WCAG 2.2 level AA for the host and official modules.
   3:1. New colours need a contrast check before use.
 - **Keyboard:** everything works without a mouse. Tab order follows the screen,
   arrow keys move inside the rail and menus, Enter opens, Escape closes, the
-  menu key or Shift+F10 opens an item's menu, Ctrl+K opens search
-  (Milestone C4).
+  menu key or Shift+F10 opens an item's menu, Ctrl+K opens search.
 - **Screen readers:** every icon-only button has a label, the rail is a
   navigation landmark, dialogs are announced as dialogs, and panel status
   changes are announced.
-- **Scaling:** the UI stays usable at 200% system zoom and with Tavora's own
-  zoom (Ctrl + plus and minus, saved per player), without text being cut off.
+- **Scaling:** the UI stays usable at 200% system zoom without text being cut
+  off. Tavora's own zoom is in the [backlog](../backlog.md).
 - **Motion and colour:** reduced-motion is respected, and no state is shown by
   colour alone.
 

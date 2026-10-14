@@ -12,6 +12,7 @@ import {
   session,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
+  type WebContents,
 } from "electron";
 import type { TavoraGame } from "@tavora/sdk/protocol";
 import type { ActionResult, GameView, HostAction, HostViewState, Screen } from "../shared/host-api";
@@ -21,6 +22,7 @@ import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, orphanedPartitions } from "./gamedata";
 import { THEME } from "./games";
+import { shortcutFor } from "./shortcuts";
 import { IconError, importIcon, removeIcon } from "./icons";
 import { readJsonOrSetAside } from "./json";
 import {
@@ -161,6 +163,7 @@ export class Host {
     this.window.removeMenu();
     if (windowState.maximized) this.window.maximize();
     this.window.once("ready-to-show", () => this.window.show());
+    this.watchShortcuts(this.window.webContents);
   }
 
   static async create(options: HostOptions): Promise<Host> {
@@ -599,10 +602,22 @@ export class Host {
     this.views.set(record.instanceId, view);
     this.viewsByContents.set(contentsId, view);
     view.view.webContents.once("destroyed", () => this.viewsByContents.delete(contentsId));
+    this.watchShortcuts(view.view.webContents);
     // Hidden and paused until the host UI says where the panel goes.
     view.view.setVisible(false);
     view.suspend();
     this.window.contentView.addChildView(view.view);
+  }
+
+  /** Sends Tavora's own shortcuts to the host UI, from the host page and from module panels. */
+  private watchShortcuts(contents: WebContents): void {
+    contents.on("before-input-event", (event, input) => {
+      const shortcut = shortcutFor(input);
+      if (!shortcut) return;
+      event.preventDefault();
+      if (contents !== this.window.webContents) this.window.webContents.focus();
+      this.window.webContents.send("host:shortcut", shortcut);
+    });
   }
 
   private destroyView(instanceId: string): void {
