@@ -9,7 +9,7 @@ import { createServer } from "vite";
 import { rendererConfig, root, targets } from "./targets.mjs";
 
 // `pnpm dev --port <n>` picks the port, so a tool like CoreHub can decide it.
-const { values } = parseArgs({ options: { port: { type: "string", default: "5173" } }, strict: false });
+const { values } = parseArgs({ options: { port: { type: "string", default: "4001" } }, strict: false });
 const port = Number(values.port);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   console.error(`[dev] --port must be a port number, got "${values.port}"`);
