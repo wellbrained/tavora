@@ -36,7 +36,7 @@ tavora.lifecycle.onResume(() => {});
 
 `connect()` can be called any number of times and always returns the same connection. It rejects with a `TavoraError` when the page runs outside Tavora (`HOST_UNAVAILABLE`) or the host speaks another protocol version (`INCOMPATIBLE`).
 
-Every failed call rejects with a `TavoraError`. Check `error.code`, not the message. The codes, limits and the wire format are in [docs/sdk/protocol.md](../../docs/sdk/protocol.md); the manifest every module needs is in [docs/sdk/manifest.md](../../docs/sdk/manifest.md).
+Every failed call rejects with a `TavoraError`. Check `error.code`, not the message. The codes, limits and the wire format are in the [bridge protocol reference](../../apps/docs/reference/protocol.md); the manifest every module needs is in the [manifest reference](../../apps/docs/reference/manifest.md).
 
 Values you store must be JSON. Type parameters such as `get<number>()` are not checked at runtime.
 

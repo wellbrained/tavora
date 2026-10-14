@@ -7,6 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "dev": "pnpm --filter @tavora/desktop dev",
     "typecheck": "pnpm -r typecheck",
     "build": "pnpm -r build",
     "test": "vitest run",
@@ -21,7 +22,11 @@
     "onlyBuiltDependencies": [
       "electron",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "dockview": "8.3.1",
+      "dockview-core": "8.3.1"
+    }
   },
   "license": "MIT"
 }

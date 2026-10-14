@@ -46,7 +46,7 @@ function run(item: MenuItem) {
 
 <template>
   <template v-for="(item, index) in items" :key="item.label">
-    <component :is="parts.Separator" v-if="item.danger && index > 0" />
+    <component :is="parts.Separator" v-if="(item.danger || item.separator) && index > 0" />
     <component :is="parts.Sub" v-if="item.submenu">
       <component :is="parts.SubTrigger" :data-testid="item.testid" :disabled="item.disabled">{{ item.label }}</component>
       <component :is="parts.SubContent" class="max-w-72 min-w-48">

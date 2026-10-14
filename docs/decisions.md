@@ -1,5 +1,13 @@
 # Decision log
 
+The installer, updater, feed, release-channel and signing decisions below describe the planned release process. Current test packaging remains portable exe/zip and AppImage; automatic updates, NSIS installers and the feed are not implemented yet. The existing `pnpm dev` Vite hot reload workflow supersedes the earlier rebuild-only proposal from PR #6.
+
+2026-10-14 developer docs live in this repo as `apps/docs` (VitePress); the marketing site stays in `tavora-website`. Manifest, protocol and SDK docs change alongside code; TypeDoc generates the API reference and the manifest schema is published with the built site. Hosting remains separate and unimplemented.
+
+2026-10-14 merge validation: startup removes expired-game browser partitions before opening Chromium sessions, avoiding Windows file locks. The SDK remembers current suspension and informs late suspend subscribers, so a panel hidden while connecting still pauses its work. Existing expiry and docking gate tests cover both behaviors; the SDK has a late-subscription regression test.
+
+2026-10-14 integration: standalone test packages use electron-builder (Windows portable exe/zip and Linux AppImage), include official and example modules in separate resource folders, and remain unsigned. Native title bars and menus are replaced by system window controls over Tavora's draggable header; interactive header controls opt out of dragging. The game rail uses the pill and hover treatment requested in PR #4; this is a specific exception to the original general hover rules.
+
 | Date | Decision | Reason |
 | --- | --- | --- |
 | 2026-10-14 | pnpm monorepo, TypeScript, Node 22 | Matches the planned code layout; one repo while the team is small |
@@ -29,10 +37,21 @@
 | 2026-10-14 | Module panels are hidden while a host menu or dialog is open | Native views draw above the host page and would cover them |
 | 2026-10-14 | No news on Home for now; it shows recently played games | News sourcing and licensing are still open |
 | 2026-10-14 | Core modules in Milestone C are Notes and To-Dos; Browser gets its own milestone, Boards come later | Browser needs its own security design |
+| 2026-10-14 | Docking uses dockview (`dockview-vue` 8.3.1, MIT), pinned with an override for `dockview-core` | Nested splits, tab groups and drag and drop in Vue without writing a docking engine; pinned because the host draws native views over its layout |
+| 2026-10-14 | The host UI owns the dock; the main process stores and validates layouts (`src/main/layout.ts`) and places module views at the bounds the UI reports | Module views are native and must follow the dock exactly; a malformed or oversized layout from the UI is refused, not saved |
+| 2026-10-14 | Panels in background tabs or behind a maximized group are hidden and suspended | They cost nothing while out of sight, like a minimized window |
+| 2026-10-14 | Layouts autosave per game; named layouts (up to 50 per game) store the arrangement and which module each panel shows, not module data | Applying a layout reuses open panels of the same module, so notes and state survive switching |
+| 2026-10-14 | A new panel goes beside the focused group when its row fits every minimum width, and the row is then shared out evenly | Three panels on a wide screen should become three equal columns, not halves of halves |
+| 2026-10-14 | Every module page gets Tavora's default look as a user stylesheet, with the tokens as `--tavora-*` properties and Inter embedded | A module that styles nothing (or forgets the page margin) looked foreign inside Tavora; a user stylesheet only replaces browser defaults, so modules with their own design are unaffected |
+| 2026-10-14 | Notes and To-Dos live in `modules/`, use only the public `@tavora/sdk` and share `@tavora/official-ui` (theme, shadcn-vue components, save helpers) bundled into each | Official modules prove the SDK is enough; each still ships as one self-contained bundle |
+| 2026-10-14 | Provenance comes from where a module was found: the official folder means Official, anything else Local. The `tavora.` id prefix is reserved for official modules | A manifest cannot claim to be official; Community arrives with the catalog |
+| 2026-10-14 | `ui.getTheme` also sends every semantic token and the corner radius | Modules can match the host exactly, and a later theme reaches them without a rebuild |
+| 2026-10-14 | Notes: one document per note plus a fixed `scratchpad`; title is the first line; rich text with Tiptap (MIT) and Markdown shortcuts; autosave after 400 ms | Familiar notebook behaviour, and a note's text can be searched without opening it |
+| 2026-10-14 | To-Dos: one document per game holding groups, tasks and steps; every change is a pure function re-applied on `CONFLICT` | Two panels editing at once both keep their changes, and order is kept in one place |
+| 2026-10-14 | Not in C3: Create To-Do from note text (waits for cross-module grants, Milestone F), images, tables and folders in Notes, opening links from a module | Recommended to Dominik; links need a host-mediated open that cannot leak data, the rest needs its own design |
 | 2026-10-14 | Windows builds stay unsigned until the first public release, which is signed; SignPath Foundation (free for open source) is the first choice, a Certum open-source certificate the fallback | Unsigned is fine for a few testers; strangers need a publisher name, and the updater only verifies update signatures when the installed version was signed |
 | 2026-10-14 | Public Windows builds use a per-user NSIS installer; test builds use the same installer and updater, unsigned, until signing starts; the zip stays as a manual-update option; Linux stays AppImage | A portable exe cannot update itself, and testers should get updates the same way users will; NSIS needs no admin rights and supports differential updates |
 | 2026-10-14 | App updates use `electron-updater`: download in the background, a marker on the rail, install on quit or "Restart now", never mid-session; an off switch for automatic download in Settings | Updates arrive without interrupting a game |
 | 2026-10-14 | The update feed lives at `updates.mytavora.app` on Cloudflare R2, uploaded by the `v*` tag workflow as a draft and promoted by hand | The feed URL is compiled into every build, so it should not depend on where the repo lives; our own host allows pulling a release and staged rollouts |
 | 2026-10-14 | Release channels: `stable` for everyone, `beta` (semver prereleases) as an opt-in in Settings; no downgrade when leaving beta | Testers get changes early without exposing everyone |
 | 2026-10-14 | Core modules ship inside the app and update with it; community modules update from the catalog without an app restart, and new permissions need consent before an update applies | One version to test for what we ship; module updates stay independent of app releases. |
-| 2026-10-14 | `pnpm dev` rebuilds on save: UI changes reload the window, main-process changes restart the app; no Vite dev server | Hot module replacement would mean loading the trusted host UI from `http://localhost` with a looser CSP and network rule; a reload keeps dev and packaged builds identical |

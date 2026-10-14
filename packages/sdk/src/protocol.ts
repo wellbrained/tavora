@@ -1,5 +1,5 @@
 // Wire protocol v1 between a module and the Tavora host, carried over a
-// MessagePort. Specified in docs/sdk/protocol.md.
+// MessagePort. Specified in apps/docs/reference/protocol.md.
 //
 // Identity (which module, which game, which panel) is never part of a
 // message. The host binds it to the port when it creates the channel.
@@ -24,6 +24,7 @@ export interface TavoraViewport {
 
 export interface TavoraTheme {
   mode: "dark" | "light";
+  /** A short summary of the palette, for modules that only need a few colours. */
   colors: {
     background: string;
     surface: string;
@@ -31,7 +32,44 @@ export interface TavoraTheme {
     textMuted: string;
     accent: string;
   };
+  /**
+   * The full semantic palette as CSS colours, named like the CSS variables
+   * of shadcn-vue plus Tavora's extras (see THEME_TOKENS). Set each one as
+   * `--<name>` to match the host UI.
+   */
+  tokens: Record<ThemeToken, string>;
+  /** Corner radius for buttons, inputs and cards, in CSS pixels. */
+  radius: number;
 }
+
+/** Names of the semantic colour tokens in TavoraTheme.tokens. */
+export const THEME_TOKENS = [
+  "background",
+  "foreground",
+  "card",
+  "card-foreground",
+  "popover",
+  "popover-foreground",
+  "primary",
+  "primary-hover",
+  "primary-foreground",
+  "secondary",
+  "secondary-foreground",
+  "muted",
+  "muted-foreground",
+  "accent",
+  "accent-foreground",
+  "destructive",
+  "border",
+  "input",
+  "ring",
+  "rail",
+  "success",
+  "warning",
+  "info",
+] as const;
+
+export type ThemeToken = (typeof THEME_TOKENS)[number];
 
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
