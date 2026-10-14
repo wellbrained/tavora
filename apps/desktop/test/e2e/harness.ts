@@ -183,3 +183,29 @@ export async function noteText(app: ElectronApplication, moduleId: string, index
 export async function onWindow(app: ElectronApplication, action: "hide" | "show" | "minimize" | "restore") {
   await app.evaluate(({ BrowserWindow }, action) => BrowserWindow.getAllWindows()[0]![action](), action);
 }
+
+export const NOTES = "tavora.notes";
+export const TODOS = "tavora.todos";
+
+/** Types text into whatever has focus in the nth panel of a module, as a player would. */
+export async function typeInModule(app: ElectronApplication, moduleId: string, text: string, index = 0): Promise<void> {
+  await app.evaluate(
+    async ({ webContents }, { moduleId, text, index }) => {
+      const target = webContents
+        .getAllWebContents()
+        .filter((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`))
+        .sort((a, b) => a.id - b.id)[index];
+      if (!target) throw new Error(`no panel ${index} for ${moduleId}`);
+      target.focus();
+      for (const [i, line] of text.split("\n").entries()) {
+        if (i > 0) {
+          target.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
+          target.sendInputEvent({ type: "char", keyCode: "\r" });
+          target.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
+        }
+        if (line) await target.insertText(line);
+      }
+    },
+    { moduleId, text, index },
+  );
+}

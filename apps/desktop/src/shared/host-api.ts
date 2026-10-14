@@ -61,7 +61,14 @@ export interface HostViewState {
     startup: Startup;
     rail: { expanded: boolean; width: number };
   };
-  modules: { id: string; name: string; description: string | null; available: boolean }[];
+  modules: {
+    id: string;
+    name: string;
+    description: string | null;
+    available: boolean;
+    /** Official modules ship with Tavora; local ones were found on disk. */
+    provenance: "official" | "local";
+  }[];
   panels: PanelView[];
   notice: string | null;
   panelHeaderHeight: number;

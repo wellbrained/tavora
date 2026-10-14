@@ -14,6 +14,9 @@ const STATUS_LABEL: Record<InstanceStatus, string> = {
   crashed: "Stopped working",
 };
 
+/** Who publishes a module: Tavora itself, or a package found on this computer. */
+const PROVENANCE_LABEL = { official: "Official", local: "Local" } as const;
+
 const view = computed(() => state.value!);
 const game = computed(() => (view.value.currentGameId ? view.value.library.games[view.value.currentGameId] : undefined));
 
@@ -57,6 +60,10 @@ onBeforeUnmount(() => {
           @click="act({ type: 'open-module', moduleId: module.id })"
         >
           <Plus :stroke-width="1.5" /> {{ module.name }}
+          <span
+            class="text-muted-foreground bg-background rounded-sm px-1 text-xs"
+            :data-testid="`provenance-${module.id}`"
+          >{{ PROVENANCE_LABEL[module.provenance] }}</span>
         </Button>
       </div>
       <span class="text-info ml-auto text-sm" role="status" data-testid="notice">{{ view.notice ?? "" }}</span>

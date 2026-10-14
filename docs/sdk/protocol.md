@@ -61,7 +61,7 @@ Methods without params must be sent with `params` left out.
 | `panel.getState` | none | this panel's state, or `null` |
 | `panel.setState` | `{ value }` | `null`; `value: null` removes the state |
 | `workspace.getViewport` | none | `{ width, height }` of the panel in CSS pixels |
-| `ui.getTheme` | none | `{ mode, colors: { background, surface, text, textMuted, accent } }` |
+| `ui.getTheme` | none | `{ mode, colors: { background, surface, text, textMuted, accent }, tokens, radius }`: `tokens` holds every semantic colour by its shadcn-vue name (`THEME_TOKENS`), `radius` is in CSS pixels |
 
 ### Where data lives
 
