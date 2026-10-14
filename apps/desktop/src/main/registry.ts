@@ -3,26 +3,53 @@ import path from "node:path";
 import { validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { resolveAsset } from "./assets";
 
+/**
+ * Who publishes a module, shown to players next to its name. Official
+ * modules ship with Tavora; every other module found on disk is local.
+ * Community modules arrive with the catalog (Milestone E).
+ */
+export type Provenance = "official" | "local";
+
 export interface InstalledModule {
   manifest: ModuleManifest;
   /** Real path of the package root; nothing outside it is ever served. */
   root: string;
+  provenance: Provenance;
 }
 
 const MANIFEST = "tavora.module.json";
 
+/** Module ids starting with this publisher are reserved for official modules. */
+export const OFFICIAL_PREFIX = "tavora.";
+
+export interface ModuleSources {
+  /** Modules that ship with Tavora. Searched first, so they win over a local copy. */
+  official?: string[];
+  local?: string[];
+}
+
 /**
  * Finds module packages in each directory: the directory itself if it has a
  * manifest, otherwise its direct children. Invalid packages are skipped with
- * a warning so one broken module never blocks startup.
+ * a warning so one broken module never blocks startup. Provenance comes from
+ * where a module was found, never from its manifest, so a local module
+ * cannot pass itself off as official.
  */
-export async function discoverModules(dirs: string[]): Promise<Map<string, InstalledModule>> {
+export async function discoverModules({ official = [], local = [] }: ModuleSources): Promise<Map<string, InstalledModule>> {
   const modules = new Map<string, InstalledModule>();
-  for (const dir of dirs) {
+  const dirs = [
+    ...official.map((dir) => ({ dir, provenance: "official" as const })),
+    ...local.map((dir) => ({ dir, provenance: "local" as const })),
+  ];
+  for (const { dir, provenance } of dirs) {
     for (const candidate of await candidates(dir)) {
-      const installed = await loadModule(candidate);
+      const installed = await loadModule(candidate, provenance);
       if (!installed) continue;
       const { id } = installed.manifest;
+      if (provenance !== "official" && id.startsWith(OFFICIAL_PREFIX)) {
+        console.warn(`[tavora] module id ${id} in ${candidate} is reserved for official Tavora modules; skipping it`);
+        continue;
+      }
       if (modules.has(id)) {
         console.warn(`[tavora] duplicate module id ${id} in ${candidate}; keeping the first one`);
         continue;
@@ -43,7 +70,7 @@ async function candidates(dir: string): Promise<string[]> {
   }
 }
 
-async function loadModule(dir: string): Promise<InstalledModule | undefined> {
+async function loadModule(dir: string, provenance: Provenance): Promise<InstalledModule | undefined> {
   let raw: unknown;
   try {
     raw = JSON.parse(await readFile(path.join(dir, MANIFEST), "utf8"));
@@ -65,5 +92,5 @@ async function loadModule(dir: string): Promise<InstalledModule | undefined> {
     console.warn(`[tavora] module ${result.manifest.id} has no icon file ${result.manifest.icon}`);
     return undefined;
   }
-  return { manifest: result.manifest, root };
+  return { manifest: result.manifest, root, provenance };
 }

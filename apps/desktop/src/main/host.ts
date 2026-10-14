@@ -64,6 +64,8 @@ export const PANEL_HEADER_HEIGHT = 28;
 export interface HostOptions {
   userData: string;
   moduleDirs: string[];
+  /** Modules that ship with Tavora, shown as Official. */
+  officialModuleDirs: string[];
   rendererDir: string;
   modulePreload: string;
   hostPreload: string;
@@ -119,7 +121,7 @@ export class Host {
 
   static async create(options: HostOptions): Promise<Host> {
     const { userData } = options;
-    const modules = await discoverModules(options.moduleDirs);
+    const modules = await discoverModules({ official: options.officialModuleDirs, local: options.moduleDirs });
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
     const expired = purgeExpired(library, new Date());
     const workspace = await loadWorkspace(
@@ -552,6 +554,7 @@ export class Host {
         name: module.manifest.name,
         description: module.manifest.description ?? null,
         available: game !== null && this.supportsGame(module, game.id),
+        provenance: module.provenance,
       })),
       panels: records.map((record, index) => ({
         instanceId: record.instanceId,

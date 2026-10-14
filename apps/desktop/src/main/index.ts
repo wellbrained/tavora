@@ -22,9 +22,15 @@ app.on("web-contents-created", (_event, contents) => {
 });
 
 const repoRoot = path.resolve(__dirname, "../../../..");
+const dirList = (value: string) => value.split(path.delimiter).filter(Boolean);
 const moduleDirs = process.env.TAVORA_MODULE_DIRS
-  ? process.env.TAVORA_MODULE_DIRS.split(path.delimiter).filter(Boolean)
+  ? dirList(process.env.TAVORA_MODULE_DIRS)
   : [path.join(repoRoot, "examples")];
+// Official modules (Notes, To-Dos) ship inside a packaged build and are
+// loaded from the repo's modules/ folder in a dev run.
+const officialModuleDirs = process.env.TAVORA_OFFICIAL_MODULE_DIRS
+  ? dirList(process.env.TAVORA_OFFICIAL_MODULE_DIRS)
+  : [app.isPackaged ? path.join(process.resourcesPath, "official-modules") : path.join(repoRoot, "modules")];
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -46,6 +52,7 @@ if (!app.requestSingleInstanceLock()) {
       host = await Host.create({
         userData: app.getPath("userData"),
         moduleDirs,
+        officialModuleDirs,
         rendererDir: path.join(__dirname, "../renderer"),
         modulePreload: path.join(__dirname, "../preload/module.cjs"),
         hostPreload: path.join(__dirname, "../preload/host.cjs"),
