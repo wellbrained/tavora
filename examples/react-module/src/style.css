@@ -1,0 +1,19 @@
+/* Tavora gives the page its font, colours and control styles; this only
+   adds layout. */
+main {
+  padding: 16px;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+dd {
+  margin: 0 0 8px;
+}
+p {
+  margin: 4px 0;
+}
+textarea {
+  width: 100%;
+}
+section button {
+  margin-right: 4px;
+}

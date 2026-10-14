@@ -6,7 +6,7 @@ import { DocumentStore } from "./documents";
 import { HostError } from "./errors";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside, serializeJson } from "./json";
-import { INSTANCE_ID } from "./workspace";
+import { INSTANCE_ID } from "./ids";
 
 export { isJsonValue } from "./json";
 

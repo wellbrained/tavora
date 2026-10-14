@@ -37,17 +37,19 @@ describe("deleteModuleData", () => {
 describe("orphanedPartitions", () => {
   it("finds module partitions of games that are gone", async () => {
     const userData = await tempDir();
+    // Windows forbids colons in directory names; Electron escapes them there.
+    const rawPartition = process.platform === "win32" ? [] : ["module:local.example.b@gone-game"];
     const names = [
       "module%3Alocal.example.a%40poe2",
       "module%3alocal.example.a%40gone-game",
-      "module:local.example.b@gone-game",
+      ...rawPartition,
       "something-else",
     ];
     for (const name of names) await mkdir(path.join(userData, "Partitions", name), { recursive: true });
     const found = await orphanedPartitions(userData, new Set(["poe2"]));
     expect(found.map((dir) => path.basename(dir)).sort()).toEqual([
       "module%3alocal.example.a%40gone-game",
-      "module:local.example.b@gone-game",
+      ...rawPartition,
     ]);
     expect(await orphanedPartitions(await tempDir(), new Set())).toEqual([]);
   });

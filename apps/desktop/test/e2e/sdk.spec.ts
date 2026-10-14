@@ -118,3 +118,30 @@ test("each module's documents are private to it and to the current game", async 
   await expectModuleText(app, vanilla.id, "note-revision", "0");
   await app.close();
 });
+
+test("every module page starts from Tavora's look, and its own styles win", async () => {
+  const { app, page } = await launch();
+  for (const { id } of EXAMPLES) await openModule(page, id);
+  for (const { id } of EXAMPLES) {
+    await expectModuleText(app, id, "status", "Connected");
+    const style = await inModule<string[]>(
+      app,
+      id,
+      `(() => {
+        const css = (selector, property) => getComputedStyle(document.querySelector(selector)).getPropertyValue(property).trim();
+        return [
+          css("body", "margin"),
+          css(":root", "--tavora-primary"),
+          css('[data-testid="save-note"]', "background-color"),
+          css('[data-testid="note"]', "background-color"),
+          css('[data-testid="increment"]', "background-color"),
+          String(document.documentElement.scrollHeight <= innerHeight),
+        ];
+      })()`,
+    );
+    // No page margin or scrollbar, Tavora's tokens, dark controls, and the
+    // module's own gold on its main button.
+    expect(style).toEqual(["0px", "#e0a243", "rgb(42, 37, 33)", "rgb(32, 28, 25)", "rgb(224, 162, 67)", "true"]);
+  }
+  await app.close();
+});

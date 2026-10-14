@@ -102,17 +102,12 @@ async function choose(next: View) {
 }
 
 const colors = computed(() => theme.value?.colors);
-const button = computed(() => ({
-  background: colors.value?.accent ?? "#e0a243",
-  border: "0",
-  borderRadius: "6px",
-  padding: "6px 12px",
-  marginRight: "4px",
-}));
+// Tavora styles buttons and fields already; the one main action gets the accent.
+const primary = computed(() => ({ background: colors.value?.accent, color: colors.value?.background }));
 </script>
 
 <template>
-  <main :style="{ background: colors?.background ?? '#18181b', color: colors?.text ?? '#f2ece0' }">
+  <main :style="{ background: colors?.background ?? '#171412', color: colors?.text ?? '#f2ece0' }">
     <h1>Vue Test Module</h1>
     <p v-if="!tavora" data-testid="status">{{ error ? `Could not connect: ${error}` : "Connecting…" }}</p>
     <template v-else>
@@ -131,7 +126,7 @@ const button = computed(() => ({
       <section>
         <h2>Clicks saved for this game</h2>
         <p data-testid="count">{{ count }}</p>
-        <button type="button" data-testid="increment" :style="button" @click="increment">Add a click</button>
+        <button type="button" data-testid="increment" :style="primary" @click="increment">Add a click</button>
       </section>
 
       <section>
@@ -140,44 +135,38 @@ const button = computed(() => ({
         </h2>
         <textarea ref="note" data-testid="note" rows="3"></textarea>
         <p>
-          <button type="button" data-testid="save-note" :style="button" @click="saveNote">Save note</button>
+          <button type="button" data-testid="save-note" @click="saveNote">Save note</button>
           <span data-testid="note-status">{{ noteStatus }}</span>
         </p>
       </section>
 
       <section>
         <h2>This panel's view: <span data-testid="view">{{ view }}</span></h2>
-        <button type="button" data-testid="view-list" :style="button" @click="choose('list')">List</button>
-        <button type="button" data-testid="view-grid" :style="button" @click="choose('grid')">Grid</button>
+        <button type="button" data-testid="view-list" @click="choose('list')">List</button>
+        <button type="button" data-testid="view-grid" @click="choose('grid')">Grid</button>
       </section>
     </template>
   </main>
 </template>
 
 <style>
-body {
-  margin: 0;
-}
+/* Tavora gives the page its font, colours and control styles; this only
+   adds layout. */
 main {
   padding: 16px;
   min-height: 100vh;
   box-sizing: border-box;
-  font: 14px/1.5 system-ui, sans-serif;
-}
-h1 {
-  font-size: 16px;
-  margin: 0 0 8px;
-}
-h2 {
-  font-size: 14px;
-  margin: 16px 0 4px;
 }
 dd {
   margin: 0 0 8px;
 }
+p {
+  margin: 4px 0;
+}
 textarea {
-  box-sizing: border-box;
   width: 100%;
-  font: inherit;
+}
+section button {
+  margin-right: 4px;
 }
 </style>

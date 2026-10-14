@@ -1,0 +1,31 @@
+{
+  "name": "@tavora/module-notes",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Official Tavora Notes module.",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "vue-tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@lucide/vue": "1.57.0",
+    "@tavora/official-ui": "workspace:*",
+    "@tavora/sdk": "workspace:*",
+    "@tiptap/core": "3.31.4",
+    "@tiptap/extension-list": "3.31.4",
+    "@tiptap/extensions": "3.31.4",
+    "@tiptap/pm": "3.31.4",
+    "@tiptap/starter-kit": "3.31.4",
+    "@tiptap/vue-3": "3.31.4",
+    "vue": "3.5.43"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@vitejs/plugin-vue": "6.0.9",
+    "tailwindcss": "4.3.3",
+    "vite": "8.3.4",
+    "vue-tsc": "3.3.11"
+  },
+  "license": "MIT"
+}
