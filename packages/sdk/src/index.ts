@@ -103,7 +103,7 @@ export interface TavoraSDK {
     onThemeChange(fn: (theme: TavoraTheme) => void): Unsubscribe;
   };
   lifecycle: {
-    /** The panel is hidden; pause timers and animations. */
+    /** The panel is hidden; pause timers and animations. Called immediately if already suspended. */
     onSuspend(fn: () => void): Unsubscribe;
     onResume(fn: () => void): Unsubscribe;
     /** Best effort only: autosave must not depend on this firing. */
@@ -166,12 +166,15 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
     { resolve(value: unknown): void; reject(error: TavoraError): void; timer: ReturnType<typeof setTimeout> }
   >();
   const listeners = new Map<EventName, Set<(data: unknown) => void>>();
+  let suspended = false;
 
   port.onmessage = (event: MessageEvent<HostMessage>) => {
     const message = event.data;
     if (typeof message !== "object" || message === null || message.v !== PROTOCOL_VERSION) return;
 
     if ("event" in message) {
+      if (message.event === "lifecycle.suspend") suspended = true;
+      if (message.event === "lifecycle.resume") suspended = false;
       for (const fn of listeners.get(message.event) ?? []) {
         try {
           fn(message.data);
@@ -208,6 +211,14 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
     if (!set) listeners.set(event, (set = new Set()));
     const listener = fn as (data: unknown) => void;
     set.add(listener);
+    // Initial suspension can arrive before connect() callers register listeners.
+    if (event === "lifecycle.suspend" && suspended) {
+      try {
+        listener(null);
+      } catch (error) {
+        console.error(`[tavora] ${event} listener failed`, error);
+      }
+    }
     return () => set.delete(listener);
   }
 

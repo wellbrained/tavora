@@ -23,17 +23,19 @@ defineOptions({ inheritAttrs: false });
 <template>
   <MenuArea :items="menu" :title="game.name">
     <div
-      :class="cn('group relative flex items-center px-2', hint && `drop-${hint}`)"
+      :class="cn('group rail-entry relative flex items-center px-2', hint && `drop-${hint}`)"
+      :data-active="active"
       draggable="true"
       v-bind="$attrs"
     >
-      <span v-if="active" class="bg-primary absolute inset-y-3 left-0 w-[3px] rounded-r-sm" aria-hidden="true" />
+      <span class="rail-pill" aria-hidden="true" />
       <button
         type="button"
         :class="
           cn(
-            'hover:bg-accent flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left',
-            active && 'bg-accent',
+            'flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left',
+            expanded && 'hover:bg-accent',
+            expanded && active && 'bg-accent',
             hint === 'into' && 'ring-primary ring-2 ring-inset',
           )
         "
@@ -44,7 +46,7 @@ defineOptions({ inheritAttrs: false });
         :title="expanded ? undefined : game.name"
         @click="emit('open')"
       >
-        <GameIcon :game="game" :size="48" />
+        <span class="rail-icon flex-none rounded-[12px]"><GameIcon :game="game" :size="48" /></span>
         <span v-if="expanded" class="truncate text-sm font-medium">{{ game.name }}</span>
       </button>
       <div

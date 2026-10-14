@@ -12,9 +12,13 @@ import WelcomePage from "./pages/WelcomePage.vue";
 <template>
   <div v-if="state" class="flex h-full">
     <GameRail />
-    <div class="h-full min-w-0 flex-1">
+    <div class="relative h-full min-w-0 flex-1">
       <GameWorkspace v-if="state.screen === 'game' && state.currentGameId" :key="state.currentGameId" />
-      <WelcomePage v-else />
+      <template v-else>
+        <WelcomePage />
+        <!-- Lets the window be moved from the empty top edge of Home. -->
+        <div class="app-drag absolute inset-x-0 top-0 h-12" aria-hidden="true" />
+      </template>
     </div>
 
     <SettingsDialog />
