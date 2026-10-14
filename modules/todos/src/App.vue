@@ -209,11 +209,12 @@ function dropTask() {
         />
       </div>
 
+      <!-- Always at the end of the list once there is a group; New group above focuses it. -->
       <AddInput
-        v-if="naming"
+        v-if="naming || list.groups.length"
         ref="newGroupInput"
-        class="mt-2"
-        placeholder="Name the group, e.g. Bosses"
+        class="mt-2 rounded-lg border border-dashed"
+        placeholder="Add new group"
         label="New group name"
         :maxlength="MAX.groupName"
         data-testid="group-name-new"

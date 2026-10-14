@@ -4,7 +4,15 @@ import { Plus } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import { ref } from "vue";
 
-const props = defineProps<{ placeholder: string; label?: string; class?: string; maxlength?: number; outlined?: boolean }>();
+const props = defineProps<{
+  placeholder: string;
+  label?: string;
+  class?: string;
+  maxlength?: number;
+  outlined?: boolean;
+  /** Lines the + up with task checkboxes and the text with task titles (TaskRow). */
+  alignToTasks?: boolean;
+}>();
 const emit = defineEmits<{ add: [text: string] }>();
 const value = ref("");
 const input = ref<HTMLInputElement | null>(null);
@@ -28,7 +36,7 @@ defineExpose({ focus: () => input.value?.focus() });
 
 <template>
   <form :class="cn('relative flex items-center', props.class)" @submit.prevent="submit">
-    <Plus class="text-muted-foreground pointer-events-none absolute left-2 size-4" :stroke-width="1.5" aria-hidden="true" />
+    <Plus :class="cn('text-muted-foreground pointer-events-none absolute size-4', alignToTasks ? 'left-7' : 'left-2')" :stroke-width="1.5" aria-hidden="true" />
     <input
       ref="input"
       v-model="value"
@@ -37,7 +45,8 @@ defineExpose({ focus: () => input.value?.focus() });
       :maxlength="maxlength"
       :class="
         cn(
-          'placeholder:text-muted-foreground focus-visible:border-ring h-8 w-full min-w-0 rounded-md border bg-transparent pr-2 pl-8 text-sm outline-none',
+          'placeholder:text-muted-foreground focus-visible:border-ring h-8 w-full min-w-0 rounded-md border bg-transparent pr-2 text-sm outline-none',
+          alignToTasks ? 'pl-[52px]' : 'pl-8',
           outlined ? 'border-input bg-card' : 'hover:bg-accent/60 focus-visible:bg-background border-transparent',
         )
       "
