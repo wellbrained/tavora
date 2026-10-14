@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "vite build",
     "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@tavora/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "8.3.4"
   }
 }
