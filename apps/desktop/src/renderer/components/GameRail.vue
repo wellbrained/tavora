@@ -391,7 +391,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       </div>
       <button
         type="button"
-        :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-3.5 transition-colors', expanded && 'hover:bg-accent')"
+        :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors', expanded && 'hover:bg-accent')"
         data-rail-item
         data-testid="rail-settings"
         aria-label="Settings"
@@ -399,12 +399,15 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         title="Settings"
         @click="settingsOpen = true"
       >
-        <Settings class="size-5 flex-none transition-transform duration-300 group-hover:rotate-45 motion-reduce:group-hover:rotate-0" :stroke-width="1.5" />
+        <!-- A 48 px slot keeps the icon on the same centre line as the tiles. -->
+        <span class="flex w-12 flex-none justify-center">
+          <Settings class="size-5 transition-transform duration-300 group-hover:rotate-45 motion-reduce:group-hover:rotate-0" :stroke-width="1.5" />
+        </span>
         <span v-if="expanded" class="text-sm font-medium">Settings</span>
       </button>
       <button
         type="button"
-        :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-3.5 transition-colors', expanded && 'hover:bg-accent')"
+        :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors', expanded && 'hover:bg-accent')"
         data-rail-item
         data-testid="rail-toggle"
         :aria-label="expanded ? 'Collapse game list' : 'Expand game list'"
@@ -412,7 +415,9 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         :aria-expanded="expanded"
         @click="act({ type: 'set-rail', expanded: !expanded })"
       >
-        <component :is="expanded ? PanelLeftClose : PanelLeftOpen" class="size-5 flex-none" :stroke-width="1.5" />
+        <span class="flex w-12 flex-none justify-center">
+          <component :is="expanded ? PanelLeftClose : PanelLeftOpen" class="size-5" :stroke-width="1.5" />
+        </span>
         <span v-if="expanded" class="text-sm font-medium">Collapse</span>
       </button>
     </div>
