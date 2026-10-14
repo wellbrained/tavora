@@ -58,7 +58,7 @@ Modules run from their built files, so run `pnpm build` once first; after changi
 
 ## Checks
 
-Tests run locally. GitHub Actions only runs them for release tags (`v*`) or when started by hand. The docs site at docs.mytavora.app is served by Caddy on the Hetzner server; publish it from a clean checkout with `pnpm --filter @tavora/docs deploy:server` (builds on this PC, uploads the static files, keeps the previous release for rollback).
+Tests run locally. GitHub Actions only runs them for release tags (`v*`) or when started by hand. The docs site at docs.mytavora.app is served by Caddy on the Hetzner server; publish it with `pnpm --filter @tavora/docs deploy:server` once `apps/docs` has no uncommitted changes (builds on this PC, uploads the static files, keeps the previous release for rollback). The docs are their own project: the root `pnpm build`, `pnpm typecheck` and `pnpm check` skip `@tavora/docs`, and changes elsewhere in the repo never block a docs deploy.
 
 ```sh
 pnpm check       # everything below, in order
