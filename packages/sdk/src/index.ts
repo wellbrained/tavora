@@ -1,6 +1,6 @@
 // @tavora/sdk: thin typed client for modules running inside Tavora Desktop.
 // The host enforces every check; this package only marshals typed calls.
-// Protocol reference: docs/sdk/protocol.md.
+// Protocol reference: apps/docs/reference/protocol.md.
 
 import {
   HELLO_MESSAGE,
