@@ -2,13 +2,13 @@
 
 Local-first, second-monitor gaming companion for Windows and Linux. Each game gets its own dockable workspace; community modules are self-contained web bundles that run inside a permission-checked host.
 
-**Status:** Milestone B, the SDK vertical slice: manifest v1, bridge protocol v1, `@tavora/sdk` 0.1.0 and example modules in vanilla TypeScript, React and Vue. Nothing here is a released or stable API yet. See [docs/threat-model.md](docs/threat-model.md) for what the host guarantees and how it is tested.
+**Status:** Milestone C, the local player MVP, in progress. Done so far: the game library (built-in list and custom games, favorites, folders, Trash) on a collapsible game rail, plus everything from Milestone B (manifest v1, bridge protocol v1, `@tavora/sdk` 0.1.0, example modules in vanilla TypeScript, React and Vue). Nothing here is a released or stable API yet. See [docs/threat-model.md](docs/threat-model.md) for what the host guarantees and how it is tested.
 
 ## Layout
 
 | Path | Purpose |
 | --- | --- |
-| `apps/desktop` | Tavora Desktop host (Electron): module views, bridge, storage, host UI |
+| `apps/desktop` | Tavora Desktop host (Electron): module views, bridge, storage, game library and the host UI (Vue, shadcn-vue, Tailwind) |
 | `packages/sdk` | `@tavora/sdk`, the typed client modules use to talk to the host, plus the wire protocol types ([README](packages/sdk/README.md)) |
 | `packages/module-schema` | `tavora.module.json` types, validation, JSON Schema, module and game id rules |
 | `examples/vanilla-module` | Example module with no framework |
@@ -16,6 +16,7 @@ Local-first, second-monitor gaming companion for Windows and Linux. Each game ge
 | `examples/vue-module` | The same example built with Vue |
 | `apps/desktop/test/fixtures/hostile-module` | Deliberately hostile module used by the gate tests |
 | `docs/sdk/` | [Manifest](docs/sdk/manifest.md) and [bridge protocol](docs/sdk/protocol.md) reference |
+| `docs/design/` | [Style guide](docs/design/style-guide.md): tokens, type, components, accessibility and theme rules |
 | `docs/` | Threat model and decision log |
 
 Planned later, not created yet: `apps/{api,website,portal,docs}`, `packages/{cli,module-runtime,shared-types}`, `services/review-worker`, `infra/`.

@@ -2,10 +2,10 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /** Writes to a temp file and renames it over the target, so readers never see half a file. */
-export async function writeFileAtomic(file: string, body: string): Promise<void> {
+export async function writeFileAtomic(file: string, body: string | Uint8Array): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.tmp`;
-  await writeFile(temp, body, "utf8");
+  await writeFile(temp, body);
   await rename(temp, file);
 }
 

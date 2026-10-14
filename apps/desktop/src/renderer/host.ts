@@ -1,98 +1,97 @@
-// Trusted host UI: game switcher, module buttons and panel headers. Module
-// content itself is drawn by separate views the main process places below.
-import type { HostViewState } from "../main/host";
-import type { TavoraHostApi } from "../preload/host";
+// Host UI state: the latest view state from the main process, plus the
+// dialog, menu and toast that are shown over it.
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
+import type { ActionResult, HostAction, HostViewState } from "../shared/host-api";
 
-declare global {
-  interface Window {
-    tavoraHost: TavoraHostApi;
-  }
+export const api = window.tavoraHost;
+export const state = shallowRef<HostViewState | null>(null);
+
+api.onState((next) => (state.value = next));
+void api.getState().then((initial) => {
+  if (initial && !state.value) state.value = initial;
+});
+
+export const toast = ref<string | null>(null);
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+export function showToast(message: string): void {
+  toast.value = message;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (toast.value = null), 5000);
 }
 
-const host = window.tavoraHost;
-const gameSelect = document.querySelector<HTMLSelectElement>("#game")!;
-const modulesEl = document.querySelector<HTMLDivElement>("#modules")!;
-const headersEl = document.querySelector<HTMLDivElement>("#headers")!;
-const noticeEl = document.querySelector<HTMLSpanElement>("#notice")!;
-const emptyEl = document.querySelector<HTMLElement>("#empty")!;
-
-const STATUS_LABEL: Record<HostViewState["panels"][number]["status"], string> = {
-  loading: "Loading",
-  ready: "",
-  failed: "Could not load",
-  unresponsive: "Not responding",
-  crashed: "Stopped working",
-};
-
-function button(label: string, onClick: () => void, attrs: Record<string, string> = {}): HTMLButtonElement {
-  const el = document.createElement("button");
-  el.type = "button";
-  el.textContent = label;
-  el.addEventListener("click", onClick);
-  for (const [name, value] of Object.entries(attrs)) el.setAttribute(name, value);
-  return el;
+/** Runs an action. Errors are shown as a toast unless the caller handles them. */
+export async function act(action: HostAction, { quiet = false } = {}): Promise<ActionResult> {
+  const result = await api.act(action);
+  if (!result.ok && !quiet) showToast(result.error);
+  return result;
 }
 
-function render(state: HostViewState): void {
-  gameSelect.replaceChildren(
-    ...state.games.map((game) => {
-      const option = document.createElement("option");
-      option.value = game.id;
-      option.textContent = game.displayName;
-      option.selected = game.id === state.currentGameId;
-      return option;
-    }),
-  );
+// ── Menus and dialogs ──────────────────────────────────────────────────
 
-  modulesEl.replaceChildren(
-    ...state.modules.map((module) => {
-      const el = button(`+ ${module.name}`, () => void host.openModule(module.id), {
-        "data-testid": `open-${module.id}`,
-        title: module.available ? `Open ${module.name}` : `${module.name} does not support this game`,
-      });
-      el.disabled = !module.available;
-      return el;
-    }),
-  );
-
-  headersEl.replaceChildren(
-    ...state.panels.map((panel) => {
-      const header = document.createElement("div");
-      header.className = "header";
-      header.style.left = `${panel.x}px`;
-      header.style.width = `${panel.width}px`;
-      header.dataset.testid = `panel-${panel.instanceId}`;
-      header.dataset.moduleId = panel.moduleId;
-      header.dataset.status = panel.status;
-
-      const name = document.createElement("span");
-      name.className = "name";
-      name.textContent = panel.name;
-      const status = document.createElement("span");
-      status.className = `status ${panel.status}`;
-      status.textContent = STATUS_LABEL[panel.status];
-      header.append(name, status);
-
-      if (panel.status === "crashed" || panel.status === "failed") {
-        header.append(button("Reload", () => void host.reloadPanel(panel.instanceId), { "data-testid": "reload" }));
-      }
-      if (panel.status === "unresponsive") {
-        header.append(button("Stop", () => void host.stopPanel(panel.instanceId), { "data-testid": "stop" }));
-      }
-      header.append(
-        button("×", () => void host.closePanel(panel.instanceId), {
-          "aria-label": `Close ${panel.name}`,
-          "data-testid": "close",
-        }),
-      );
-      return header;
-    }),
-  );
-
-  noticeEl.textContent = state.notice ?? "";
-  emptyEl.hidden = state.panels.length > 0;
+export interface MenuItem {
+  label: string;
+  testid?: string;
+  danger?: boolean;
+  disabled?: boolean;
+  /** Opens a nested list. */
+  submenu?: () => MenuItem[];
+  run?: () => unknown;
 }
 
-gameSelect.addEventListener("change", () => void host.selectGame(gameSelect.value));
-host.onState(render);
-void host.getState().then((state) => state && render(state));
+export interface PromptRequest {
+  kind: "prompt";
+  title: string;
+  label: string;
+  value: string;
+  confirm: string;
+  maxLength: number;
+  /** Returns an error to show, or null when done. */
+  submit(value: string): Promise<string | null>;
+}
+
+export interface ConfirmRequest {
+  kind: "confirm";
+  title: string;
+  message: string;
+  confirm: string;
+  danger: boolean;
+  run(): Promise<string | null>;
+}
+
+export type DialogRequest = PromptRequest | ConfirmRequest | { kind: "add-game" };
+
+export const dialog = shallowRef<DialogRequest | null>(null);
+
+export function prompt(request: Omit<PromptRequest, "kind" | "value" | "maxLength"> & { value?: string; maxLength?: number }) {
+  dialog.value = { kind: "prompt", value: "", maxLength: 80, ...request };
+}
+
+export function confirmAction(request: Omit<ConfirmRequest, "kind" | "danger"> & { danger?: boolean }) {
+  dialog.value = { kind: "confirm", danger: false, ...request };
+}
+
+/** Prompt submit helper: runs the action and reports its error inline. */
+export async function submitAction(action: HostAction): Promise<string | null> {
+  const result = await act(action, { quiet: true });
+  return result.ok ? null : result.error;
+}
+
+// Module panels are separate native views drawn above this page, so they
+// are hidden while a menu or dialog floats over the workspace.
+const openMenus = ref(0);
+
+/** For a menu component: reports its open state, also when it unmounts open. */
+export function useFloating(): (open: boolean) => void {
+  let isOpen = false;
+  const set = (open: boolean) => {
+    if (open === isOpen) return;
+    isOpen = open;
+    openMenus.value += open ? 1 : -1;
+  };
+  onBeforeUnmount(() => set(false));
+  return set;
+}
+
+const overlayOpen = computed(() => openMenus.value > 0 || dialog.value !== null);
+watch(overlayOpen, (open) => api.setOverlay(open));

@@ -167,4 +167,11 @@ export class DataRegistry {
     }
     return data;
   }
+
+  /** Drops cached stores for a game whose data is being deleted. */
+  forgetGame(gameId: string): void {
+    for (const key of [...this.data.keys()]) {
+      if (path.basename(key) === gameId) this.data.delete(key);
+    }
+  }
 }

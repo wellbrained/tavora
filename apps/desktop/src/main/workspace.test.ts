@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { fitsMinimums, layoutColumns, loadWorkspace, saveWorkspace } from "./workspace";
+import { emptyWorkspace, fitsMinimums, layoutColumns, loadWorkspace, saveWorkspace } from "./workspace";
 
 const area = { x: 0, y: 76, width: 1001, height: 600 };
 const ID = "123e4567-e89b-42d3-a456-426614174000";
@@ -30,7 +30,6 @@ describe("loadWorkspace", () => {
     const file = path.join(await mkdtemp(path.join(tmpdir(), "tavora-ws-")), "workspace.json");
     expect(await loadWorkspace(file, ["poe2", "satisfactory"], () => true)).toEqual({
       version: 1,
-      currentGameId: "poe2",
       games: { poe2: { instances: [] }, satisfactory: { instances: [] } },
     });
   });
@@ -39,7 +38,6 @@ describe("loadWorkspace", () => {
     const file = path.join(await mkdtemp(path.join(tmpdir(), "tavora-ws-")), "workspace.json");
     await saveWorkspace(file, {
       version: 1,
-      currentGameId: "satisfactory",
       games: {
         poe2: { instances: [{ instanceId: ID, moduleId: "local.example.a" }] },
         satisfactory: {
@@ -52,18 +50,15 @@ describe("loadWorkspace", () => {
       },
     });
     const state = await loadWorkspace(file, ["poe2", "satisfactory"], (id) => id === "local.example.a");
-    expect(state.currentGameId).toBe("satisfactory");
     expect(state.games).toEqual({
       poe2: { instances: [{ instanceId: ID, moduleId: "local.example.a" }] },
       satisfactory: { instances: [] },
     });
   });
 
-  it("ignores an unreadable file and an unknown current game", async () => {
+  it("ignores an unreadable file", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "tavora-ws-"));
     await writeFile(path.join(dir, "a.json"), "{oops");
-    expect((await loadWorkspace(path.join(dir, "a.json"), ["poe2"], () => true)).currentGameId).toBe("poe2");
-    await writeFile(path.join(dir, "b.json"), JSON.stringify({ currentGameId: "elden-ring", games: {} }));
-    expect((await loadWorkspace(path.join(dir, "b.json"), ["poe2"], () => true)).currentGameId).toBe("poe2");
+    expect(await loadWorkspace(path.join(dir, "a.json"), ["poe2"], () => true)).toEqual(emptyWorkspace(["poe2"]));
   });
 });

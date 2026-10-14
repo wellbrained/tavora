@@ -1,7 +1,17 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src", "test", "scripts", "playwright.config.ts"]
+  "include": [
+    "src",
+    "test",
+    "scripts",
+    "playwright.config.ts"
+  ],
+  "exclude": [
+    "src/renderer"
+  ]
 }

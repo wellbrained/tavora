@@ -13,6 +13,7 @@ import {
   launch,
   noteText,
   onWindow,
+  openGame,
   openModule,
   panels,
   saveNote,
@@ -108,7 +109,7 @@ test("each module's documents are private to it and to the current game", async 
   expect(await noteText(app, react.id)).toBe("");
 
   // The same module in another game starts empty.
-  await page.selectOption('[data-testid="game-select"]', "satisfactory");
+  await openGame(page, "satisfactory");
   await openModule(page, vanilla.id);
   await expectModuleText(app, vanilla.id, "status", "Connected");
   await expect
