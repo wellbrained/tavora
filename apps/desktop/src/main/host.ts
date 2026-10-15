@@ -753,6 +753,7 @@ export class Host {
         break;
       case "set-language":
         library.language = action.language;
+        for (const view of this.views.values()) view.applyLanguage(this.language);
         break;
       case "set-steam-profile":
         library.steamProfile = action.profile;
@@ -1352,6 +1353,7 @@ export class Host {
       preload: this.options.modulePreload,
       devTools: this.options.devTools,
       getTheme: () => this.currentTheme,
+      getLanguage: () => this.language,
       baseCss: (moduleCss ??= moduleBaseCss(MODULE_FONTS)),
       onStatus: (status) => {
         if (!measured && status === "ready") {

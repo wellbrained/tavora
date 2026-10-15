@@ -38,6 +38,7 @@ export interface BridgeContext {
   capabilities: ReadonlySet<Capability>;
   getViewport(): TavoraViewport;
   getTheme(): TavoraTheme;
+  getLanguage(): string;
   /** Whether the panel is hidden right now. */
   isSuspended(): boolean;
 }
@@ -104,6 +105,7 @@ const handlers = new Map<string, Handler>([
 
   ["workspace.getViewport", (s, params) => (noParams(params), s.context.getViewport())],
   ["ui.getTheme", (s, params) => (noParams(params), s.context.getTheme())],
+  ["ui.getLanguage", (s, params) => (noParams(params), s.context.getLanguage())],
 ]);
 
 /** Serves one module panel over one port. */

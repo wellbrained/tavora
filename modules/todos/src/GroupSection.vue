@@ -12,6 +12,7 @@ import {
 } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 import AddInput from "./AddInput.vue";
+import { plural, t } from "./i18n";
 import type { TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
 import { addTask, clearDone, MAX, moveGroup, openCount, renameGroup, type Group } from "./todos";
@@ -136,7 +137,7 @@ function dropMark(index: number): "before" | "after" | null {
         type="button"
         class="text-muted-foreground hover:text-foreground flex size-6 flex-none items-center justify-center rounded-md"
         :aria-expanded="!collapsed"
-        :aria-label="collapsed ? `Show ${group.name}` : `Hide ${group.name}`"
+        :aria-label="collapsed ? t('group.show', { name: group.name }) : t('group.hide', { name: group.name })"
         data-testid="group-collapse"
         @click="emit('toggleCollapsed')"
       >
@@ -147,7 +148,7 @@ function dropMark(index: number): "before" | "after" | null {
         ref="nameInput"
         :value="group.name"
         :maxlength="MAX.groupName"
-        aria-label="Group name"
+        :aria-label="t('group.name')"
         data-testid="group-name-input"
         class="focus-visible:border-ring h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-semibold outline-none"
         @blur="finishRename"
@@ -155,7 +156,7 @@ function dropMark(index: number): "before" | "after" | null {
         @keydown.escape="renaming = false"
       />
       <div v-else class="min-w-0 flex-1">
-        <h2 class="max-w-full truncate px-1 text-sm font-semibold" style="width: fit-content" title="Double-click to rename" data-testid="group-name" @dblclick="onNameDoubleClick">
+        <h2 class="max-w-full truncate px-1 text-sm font-semibold" style="width: fit-content" :title="t('group.renameHint')" data-testid="group-name" @dblclick="onNameDoubleClick">
           {{ group.name }}
         </h2>
       </div>
@@ -164,7 +165,7 @@ function dropMark(index: number): "before" | "after" | null {
         :class="cn('flex-none rounded-full px-2 py-0.5 text-xs tabular-nums', remaining ? 'bg-background text-muted-foreground' : 'bg-primary/15 text-primary')"
         data-testid="group-count"
       >
-        {{ remaining ? `${remaining} left` : "All done" }}
+        {{ remaining ? t("group.left", { count: remaining }) : t("group.allDone") }}
       </span>
       <!-- How much of the group is done, as a thin line along the header's bottom edge. -->
       <span
@@ -176,26 +177,26 @@ function dropMark(index: number): "before" | "after" | null {
       <DropdownMenu>
         <DropdownMenuTrigger
           class="text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md opacity-0 group-hover/header:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
-          :aria-label="`More for ${group.name}`"
-          title="More"
+          :aria-label="t('moreFor', { name: group.name })"
+          :title="t('more')"
           data-testid="group-menu"
         >
           <Ellipsis class="size-4" :stroke-width="1.5" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem data-testid="menu-rename" @select="startRename"><Pencil :stroke-width="1.5" /> Rename group</DropdownMenuItem>
+          <DropdownMenuItem data-testid="menu-rename" @select="startRename"><Pencil :stroke-width="1.5" /> {{ t("group.rename") }}</DropdownMenuItem>
           <DropdownMenuItem :disabled="position === 0" @select="change((data) => moveGroup(data, group.id, -1))">
-            <ArrowUp :stroke-width="1.5" /> Move group up
+            <ArrowUp :stroke-width="1.5" /> {{ t("group.moveUp") }}
           </DropdownMenuItem>
           <DropdownMenuItem :disabled="position === groups.length - 1" @select="change((data) => moveGroup(data, group.id, 1))">
-            <ArrowDown :stroke-width="1.5" /> Move group down
+            <ArrowDown :stroke-width="1.5" /> {{ t("group.moveDown") }}
           </DropdownMenuItem>
           <DropdownMenuItem :disabled="!doneCount" data-testid="menu-clear-done" @select="change((data) => clearDone(data, group.id))">
-            <ListX :stroke-width="1.5" /> Delete finished to-dos
+            <ListX :stroke-width="1.5" /> {{ t("group.deleteFinished") }}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" data-testid="menu-delete-group" @select="emit('remove')">
-            <Trash2 :stroke-width="1.5" /> Delete group…
+            <Trash2 :stroke-width="1.5" /> {{ t("group.delete") }}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -219,11 +220,11 @@ function dropMark(index: number): "before" | "after" | null {
         </li>
       </ul>
       <p v-if="hideDone && doneCount && !visible.length" class="text-muted-foreground px-3 py-1 text-xs">
-        {{ doneCount }} finished {{ doneCount === 1 ? "to-do" : "to-dos" }} hidden.
+        {{ plural("group.hidden", doneCount) }}
       </p>
       <AddInput
         align-to-tasks
-        :placeholder="`Add to ${group.name}`"
+        :placeholder="t('group.addTo', { name: group.name })"
         :maxlength="MAX.title"
         :data-testid="`add-task-${group.id}`"
         @add="add"

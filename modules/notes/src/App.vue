@@ -7,7 +7,8 @@ import type { TavoraSDK } from "@tavora/sdk";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import NoteEditor from "./NoteEditor.vue";
 import NoteList from "./NoteList.vue";
-import { emptyContent, SCRATCHPAD_ID, type NoteEntry } from "./notes";
+import { setLanguage, t } from "./i18n";
+import { emptyContent, SCRATCHPAD_ID, UNTITLED, type NoteEntry } from "./notes";
 import { createNotesStore, type NotesStore } from "./store";
 
 /** Below this width the list and the editor take turns. */
@@ -39,7 +40,7 @@ onMounted(async () => {
   addEventListener("pagehide", flushNow);
   cleanup.push(() => removeEventListener("resize", onResize), () => removeEventListener("pagehide", flushNow));
   try {
-    const connected = await connectModule();
+    const connected = await connectModule(setLanguage);
     const notes = createNotesStore(connected);
     const [state] = await Promise.all([connected.panel.getState<{ selected?: string }>(), notes.load()]);
     const saved = state?.selected;
@@ -119,7 +120,7 @@ async function confirmRemove() {
 
 <template>
   <p v-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">
-    {{ error ? `Could not connect: ${error}` : "Loading notes…" }}
+    {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
   <div v-else class="flex h-full min-h-0" data-testid="notes-app" :data-narrow="narrow">
     <aside
@@ -150,13 +151,14 @@ async function confirmRemove() {
     </main>
     <ConfirmDialog
       v-if="pendingRemove"
-      :title="pendingRemove.id === SCRATCHPAD_ID ? 'Clear the scratchpad?' : `Delete “${pendingRemove.title}”?`"
+      :title="pendingRemove.id === SCRATCHPAD_ID ? t('remove.clearTitle') : t('remove.deleteTitle', { title: pendingRemove.title === UNTITLED ? t('untitled') : pendingRemove.title })"
       :description="
         pendingRemove.id === SCRATCHPAD_ID
-          ? 'Everything in the scratchpad is removed for good.'
-          : 'The note is removed for good from this game. This cannot be undone.'
+          ? t('remove.clearMessage')
+          : t('remove.deleteMessage')
       "
-      :confirm="pendingRemove.id === SCRATCHPAD_ID ? 'Clear scratchpad' : 'Delete note'"
+      :confirm="pendingRemove.id === SCRATCHPAD_ID ? t('remove.clearConfirm') : t('remove.deleteConfirm')"
+      :cancel="t('cancel')"
       @confirm="confirmRemove"
       @cancel="pendingRemove = null"
     />

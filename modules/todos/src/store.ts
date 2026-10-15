@@ -5,6 +5,7 @@
 import { errorMessage, readDocument, serial, updateDocument, type Versioned } from "@tavora/official-ui";
 import type { TavoraSDK } from "@tavora/sdk";
 import { ref, shallowRef } from "vue";
+import { t } from "./i18n";
 import { LIST_ID, LIST_TITLE, parseList, type TodoList } from "./todos";
 
 export type TodoStore = ReturnType<typeof createTodoStore>;
@@ -33,7 +34,7 @@ export function createTodoStore(sdk: TavoraSDK) {
         stored = await updateDocument(sdk, LIST_ID, { parse: parseList, change, title: () => LIST_TITLE, known: stored });
         error.value = null;
       } catch (reason) {
-        error.value = `Could not save: ${errorMessage(reason)}`;
+        error.value = t("store.saveError", { error: errorMessage(reason) });
         // Show what is really stored rather than a change that was lost.
         stored = await readDocument(sdk, LIST_ID, parseList).catch(() => stored);
       } finally {

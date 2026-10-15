@@ -11,9 +11,9 @@ export type Language = "en" | "de";
 export type LanguageSetting = "system" | Language;
 
 /** Shown in each language's own name, so a player can find theirs whatever Tavora currently says. */
-export const LANGUAGES: readonly { id: Language; name: string }[] = [
-  { id: "en", name: "English" },
-  { id: "de", name: "Deutsch" },
+export const LANGUAGES: readonly { id: Language; name: string; /** Other names the language search finds it by. */ search: string }[] = [
+  { id: "en", name: "English", search: "english englisch" },
+  { id: "de", name: "Deutsch", search: "german deutsch" },
 ];
 
 export function isLanguageSetting(value: unknown): value is LanguageSetting {

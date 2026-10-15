@@ -130,6 +130,8 @@ export interface Methods {
   "panel.setState": { params: { value: JsonValue | null }; result: null };
   "workspace.getViewport": { params: undefined; result: TavoraViewport };
   "ui.getTheme": { params: undefined; result: TavoraTheme };
+  /** The language of Tavora's own texts, as a code such as "en" or "de". */
+  "ui.getLanguage": { params: undefined; result: string };
 }
 
 export type MethodName = keyof Methods;
@@ -150,6 +152,7 @@ export const RESERVED_METHODS: Readonly<Record<string, Capability>> = {
 export interface Events {
   "workspace.resize": TavoraViewport;
   "ui.theme": TavoraTheme;
+  "ui.language": string;
   "documents.changed": DocumentChange;
   "lifecycle.suspend": null;
   "lifecycle.resume": null;

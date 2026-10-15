@@ -61,6 +61,7 @@ Methods without params must be sent with `params` left out.
 | `panel.getState` | none | this panel's state, or `null` |
 | `panel.setState` | `{ value }` | `null`; `value: null` removes the state |
 | `workspace.getViewport` | none | `{ width, height }` of the panel in CSS pixels |
+| `ui.getLanguage` | none | the language of Tavora's own texts as a code, `"en"` or `"de"` for now; show your module in it, or in English when you have no translation |
 | `ui.getTheme` | none | `{ mode, colors: { background, surface, text, textMuted, accent }, tokens, radius }`: `tokens` holds every semantic colour by its shadcn-vue name (`THEME_TOKENS`), `radius` is in CSS pixels |
 
 ### Where data lives
@@ -90,6 +91,7 @@ Writes are atomic: a crash leaves either the old or the new document, never a mi
 | --- | --- | --- |
 | `workspace.resize` | `{ width, height }` | the panel's size changed |
 | `ui.theme` | theme, as `ui.getTheme` | the host theme changed |
+| `ui.language` | language code, as `ui.getLanguage` | the player changed the language |
 | `documents.changed` | `{ id, revision, deleted }` | another panel of this module changed a document |
 | `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden, its tab is in the background, or another group is maximized); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
 | `lifecycle.resume` | `null` | the panel is visible again |
