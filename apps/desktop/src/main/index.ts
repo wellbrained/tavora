@@ -125,6 +125,11 @@ if (!app.requestSingleInstanceLock()) {
         apiUrl: !app.isPackaged ? process.env.TAVORA_API_URL : undefined,
         // Likewise, a packaged app only ever uses Steam's own icon address.
         steamIcons: !app.isPackaged ? process.env.TAVORA_STEAM_ICONS_URL : undefined,
+        // And only ever the real Discord app and discord.com.
+        discord:
+          !app.isPackaged && process.env.TAVORA_DISCORD_IPC && process.env.TAVORA_DISCORD_TOKEN_URL
+            ? { ipcPath: process.env.TAVORA_DISCORD_IPC, tokenUrl: process.env.TAVORA_DISCORD_TOKEN_URL }
+            : undefined,
       });
     })
     .catch((error: unknown) => {

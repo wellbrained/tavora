@@ -11,6 +11,7 @@ import {
   ipcMain,
   nativeTheme,
   protocol,
+  safeStorage,
   screen,
   session,
   shell,
@@ -82,8 +83,11 @@ import { ModuleView } from "./module-view";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { siteOfUrl } from "./browser-url";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { BROWSER_MODULE_ID, browserModule, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, discordModule, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
+import { DiscordConnection, DISCORD_CLIENT_ID } from "./discord";
+import { RpcClient } from "./discord-rpc";
+import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
 import {
   DEFAULT_THEME,
   discoverThemes,
@@ -156,6 +160,12 @@ export interface HostOptions {
    * launchers or the Steam client on the machine they run on). A packaged app only uses Steam.
    */
   steamIcons?: string | undefined;
+  /**
+   * Tests only: a pretend Discord app to connect to and a token address to
+   * use instead of discord.com. Also accepts Linux's plain-text secret
+   * storage, which test machines have. A packaged app never sets this.
+   */
+  discord?: { ipcPath: string; tokenUrl: string } | undefined;
   /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
   hidden?: boolean;
   /** Tests only: pretend the system is in this mode, so a test does not depend on the PC it runs on. */
@@ -184,6 +194,9 @@ export class Host {
   private readonly browsersByContents = new Map<number, BrowserPanel>();
   /** What every browser session is made safe with; built when the first Browser panel opens. */
   private browserHooks: BrowserSessionHooks | undefined;
+  /** Open Discord panels. They have no view of their own: the host UI draws them. */
+  private readonly discordPanels = new Set<string>();
+  private readonly discord: DiscordConnection;
   private screen: Screen = "welcome";
   private notice: string | null = null;
   /** Where the host UI shows each visible panel, in window content coordinates. */
@@ -220,6 +233,9 @@ export class Host {
     this.currentTheme = moduleTheme(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation);
     this.data = new DataRegistry(options.userData);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
+    this.discord = Host.discordConnection(options, (view) => {
+      if (!this.window.isDestroyed()) this.window.webContents.send("host:discord", view);
+    });
     this.window = new BrowserWindow({
       ...windowState.bounds,
       minWidth: MIN_SIZE.width,
@@ -265,6 +281,7 @@ export class Host {
     const moduleProblems: ModuleProblem[] = [];
     const modules = await discoverModules(Host.moduleSources(options), moduleProblems);
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
+    modules.set(DISCORD_MODULE_ID, discordModule(app.getVersion()));
     const moduleInfo = await describeModules(userModulesDir(options), modules);
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
@@ -363,6 +380,7 @@ export class Host {
     const problems: ModuleProblem[] = [];
     const modules = await discoverModules(Host.moduleSources(this.options), problems);
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
+    modules.set(DISCORD_MODULE_ID, discordModule(app.getVersion()));
     this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
     this.moduleProblems = problems;
     this.modules = modules;
@@ -567,6 +585,7 @@ export class Host {
         this.pushState();
       }
     });
+    ipcMain.handle("host:get-discord", (event) => (fromHost(event) ? this.discord.view() : null));
     ipcMain.handle("host:search-catalog", (event, query: unknown) =>
       fromHost(event) && typeof query === "string" && query.length <= 100
         ? searchCatalog(this.library, query).map(({ id, name }) => ({ id, name }))
@@ -610,6 +629,8 @@ export class Host {
       this.views.clear();
       this.viewsByContents.clear();
       this.browsersByContents.clear();
+      this.discordPanels.clear();
+      this.discord.dispose();
     });
   }
 
@@ -820,6 +841,12 @@ export class Host {
         break;
       case "clear-browser-data":
         return this.clearBrowserData(action.scope);
+      case "discord-set-secret":
+        return this.discord.setSecret(action.secret);
+      case "discord-connect":
+        return this.discord.connectNow();
+      case "discord-sign-out":
+        return this.discord.signOut();
       case "save-layout":
         return this.saveLayout(action.layout);
       case "apply-layout-template":
@@ -1133,6 +1160,34 @@ export class Host {
     });
   }
 
+  // ── Discord ──────────────────────────────────────────────────────────
+
+  private static discordConnection(options: HostOptions, onChange: (view: ReturnType<DiscordConnection["view"]>) => void): DiscordConnection {
+    const file = path.join(options.userData, "discord.json");
+    const test = options.discord;
+    // Test machines have no keyring; Linux's plain-text fallback stands in there (and only there).
+    if (test && process.platform === "linux") safeStorage.setUsePlainTextEncryption(true);
+    const encryptor: Encryptor = {
+      // Linux without a keyring falls back to a fixed key, which protects nothing; Tavora then saves no secret.
+      isAvailable: () =>
+        safeStorage.isEncryptionAvailable() && (process.platform !== "linux" || test !== undefined || safeStorage.getSelectedStorageBackend() !== "basic_text"),
+      encrypt: (text) => safeStorage.encryptString(text),
+      decrypt: (data) => safeStorage.decryptString(data),
+    };
+    return new DiscordConnection({
+      clientId: DISCORD_CLIENT_ID,
+      connect: (events) => RpcClient.connect(DISCORD_CLIENT_ID, events, test ? [test.ipcPath] : undefined),
+      ...(test ? { tokenUrl: test.tokenUrl } : {}),
+      fetch: (input, init) => fetch(input, init),
+      load: () => loadDiscordSecrets(file, encryptor),
+      save: (secrets) => saveDiscordSecrets(file, encryptor, secrets),
+      get canSaveSecret() {
+        return encryptor.isAvailable();
+      },
+      onChange,
+    });
+  }
+
   /** The filter engine compiled at build time (scripts/filters.mjs). */
   private static adBlocker(): AdBlocker | null {
     return loadAdBlocker(path.join(__dirname, "../filters/engine.bin"));
@@ -1266,6 +1321,11 @@ export class Host {
   /** openedAt is when the player asked for the panel; its time to a loaded page is measured from there. */
   private createView(record: InstanceRecord, game: TavoraGame, openedAt?: number): void {
     if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, game);
+    if (record.moduleId === DISCORD_MODULE_ID) {
+      this.discordPanels.add(record.instanceId);
+      void this.discord.setWanted(true);
+      return;
+    }
     let measured = openedAt === undefined;
     const module = this.modules.get(record.moduleId)!;
     const view = new ModuleView({
@@ -1350,6 +1410,10 @@ export class Host {
   }
 
   private destroyView(instanceId: string): void {
+    if (this.discordPanels.delete(instanceId)) {
+      if (this.discordPanels.size === 0) void this.discord.setWanted(false);
+      return;
+    }
     const view = this.views.get(instanceId);
     if (!view) return;
     this.views.delete(instanceId);
@@ -1360,7 +1424,7 @@ export class Host {
   }
 
   private closeAllViews(): void {
-    for (const instanceId of [...this.views.keys()]) this.destroyView(instanceId);
+    for (const instanceId of [...this.views.keys(), ...this.discordPanels]) this.destroyView(instanceId);
     this.panelBounds.clear();
   }
 
@@ -1500,6 +1564,8 @@ export class Host {
       panels: workspace.instances.map((record) => {
         const view = this.views.get(record.instanceId);
         const name = this.modules.get(record.moduleId)!.manifest.name;
+        // A Discord panel is drawn by the host UI itself, so it is ready at once.
+        if (this.discordPanels.has(record.instanceId)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: "ready" as const };
         if (!(view instanceof BrowserPanel)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: view?.status ?? "loading" };
         const browser = view.state;
         // A Browser tab is named after its page, like a browser tab.

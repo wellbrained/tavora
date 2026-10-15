@@ -89,6 +89,20 @@ Ad blocking runs in the main process on every browser request with a filter engi
 
 Also changed in C: Ctrl+K is caught by the host before any page, so a module cannot take it over, and panels in background tabs are hidden and suspended through the same lifecycle events as before.
 
+## Discord panel guarantees (0.5.7)
+
+The Discord panel shows who is in the player's voice channel. The main process reads it from the Discord desktop app on this PC over Discord's local connection (RPC: a named pipe or Unix socket), and the host UI draws it; there is no page, view or module code. What Discord says (names, channel names, ids) is untrusted text. The Client Secret of Tavora's Discord application is the player's to paste while Discord limits RPC to the application's testers.
+
+| # | Guarantee | Mechanism | Test |
+| --- | --- | --- | --- |
+| D1 | The Client Secret and the sign-in only ever go to Discord | the secret is sent only in the token request to `https://discord.com/api/oauth2/token` (no redirects); the access token only to the local Discord app; neither is ever sent to the host UI, a module or Tavora's service (the host UI only learns whether a secret is saved) | unit: `discord.test.ts` (the secret reaches only the token address); e2e: `discord.spec.ts` |
+| D2 | Tavora can only read voice | the scopes asked for are `rpc`, `rpc.voice.read` and `identify`; Tavora sends no command that changes anything in Discord | unit and e2e: the AUTHORIZE scopes |
+| D3 | Secrets are kept encrypted on this PC | `discord.json` holds only safeStorage-encrypted data (DPAPI, Keychain, secret service); where only Linux's plain-text fallback exists nothing is saved; a file from another user or PC is ignored | unit: `discord-store.test.ts`; e2e: the file does not contain the secret |
+| D4 | Nothing Discord sends can run or reorder the page | every value is checked (ids are Discord ids, names lose control and direction characters and are cut to 64 characters, lists are capped) and shown as text; frames over 1 MB close the connection | unit: `discord-voice.test.ts`, `discord-rpc.test.ts` |
+| D5 | Pictures come only from Discord's image server and only as small PNGs | avatar and server icon addresses are rebuilt from checked ids and hashes on `https://cdn.discordapp.com/`; no cookies, referrer or redirects; at most 256 KB with a PNG signature, passed on as a data address | unit: `discord-voice.test.ts` |
+| D6 | Nothing happens until the player asks | the connection only runs while a Discord panel is open, and Discord's approval is only asked for when the player presses Connect; closing the last panel disconnects | unit: `discord.test.ts`; e2e: no command before Connect |
+| D7 | Only the main process and the host window talk about Discord | `host:get-discord` and the `discord-*` actions answer only the host window's main frame, like every `host:*` call; the actions are checked by `parseAction` | unit: `actions.test.ts` |
+
 ## Known limits and open risks
 
 - **Webview isolation is not proven safe by this spike.** It relies on Chromium site isolation and the OS sandbox. A Chromium renderer exploit would break G1–G4. Mitigation: keep Electron current, enable the OS sandbox everywhere, set Electron fuses at packaging time (no `RunAsNode`, no `NODE_OPTIONS`, ASAR integrity, cookie encryption).
@@ -99,4 +113,5 @@ Also changed in C: Ctrl+K is caught by the host before any page, so a module can
 - **Same module, several panels** share a renderer process. A crash in one instance can take down its siblings of the same module, not other modules.
 - **Data a module already received cannot be recalled** after a grant is revoked (relevant from Milestone F).
 - **Browser: no Safe Browsing.** A phishing page still renders; downloads, permissions and external protocols are refused. **DNS rebinding** can still point a public name at a local address, because B7 looks at the name, not the resolved address. **Sign-in popups** that need `window.opener` do not work, because new windows open in the same panel. Ad blocking is network-only, so empty ad boxes can remain and in-video ads are not reliably blocked.
+- **Discord: the local pipe is trusted.** Whatever listens at `discord-ipc-0` gets the Discord access token, and anything already running as the player could listen there. Such a program can read the player's files anyway, so this is accepted. While Discord limits RPC to an application's testers, each tester pastes the Client Secret on their PC; once Tavora is approved for RPC, the token exchange should move to Tavora's service so no player handles a secret.
 - **Tauri was not evaluated.** Electron was spiked first for a single Chromium engine on Windows and Linux. Revisit only if memory overhead is unacceptable.

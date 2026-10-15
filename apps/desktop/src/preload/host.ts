@@ -1,7 +1,7 @@
 // Preload for the trusted host UI. Exposes a small, fixed API; the main
 // process still checks that every call comes from the host window.
 import { contextBridge, ipcRenderer } from "electron";
-import type { HostShortcut, HostViewState, TavoraHostApi } from "../shared/host-api";
+import type { DiscordView, HostShortcut, HostViewState, TavoraHostApi } from "../shared/host-api";
 
 const api: TavoraHostApi = {
   getState: () => ipcRenderer.invoke("host:get-state"),
@@ -19,6 +19,10 @@ const api: TavoraHostApi = {
   },
   onShortcut: (listener) => {
     ipcRenderer.on("host:shortcut", (_event, shortcut: HostShortcut) => listener(shortcut));
+  },
+  getDiscord: () => ipcRenderer.invoke("host:get-discord"),
+  onDiscord: (listener) => {
+    ipcRenderer.on("host:discord", (_event, view: DiscordView) => listener(view));
   },
 };
 

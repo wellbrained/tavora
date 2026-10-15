@@ -19,6 +19,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.9",
+    date: "2026-10-15",
+    title: "Who's in your Discord voice channel",
+    notes: [
+      "New Discord module: see who is in your voice channel, who is talking and who is muted, without leaving your game. Find it under Add module.",
+      "It follows you when you switch channels, works on any server and in calls, and lists the server's other voice channels too.",
+      "You keep talking in the Discord app as usual. Tavora only reads your voice channel: it can't hear, talk, read messages or change anything.",
+      "Connect it under Settings, then Discord. For now this needs the Client Secret of Tavora's Discord application.",
+    ],
+  },
+  {
     version: "0.5.8",
     date: "2026-10-15",
     title: "Tavora speaks German (second part)",
