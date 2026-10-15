@@ -7,6 +7,7 @@ const api: TavoraHostApi = {
   getState: () => ipcRenderer.invoke("host:get-state"),
   act: (action) => ipcRenderer.invoke("host:action", action),
   searchCatalog: (query) => ipcRenderer.invoke("host:search-catalog", query),
+  searchOnline: (query) => ipcRenderer.invoke("host:search-online", query),
   setPanelBounds: (bounds) => ipcRenderer.send("host:panel-bounds", bounds),
   setOverlay: (open) => ipcRenderer.send("host:overlay", open),
   onState: (listener) => {

@@ -15,7 +15,7 @@ import {
   type WebContents,
 } from "electron";
 import type { TavoraGame } from "@tavora/sdk/protocol";
-import type { ActionResult, GameView, HostAction, HostViewState, Screen } from "../shared/host-api";
+import type { ActionResult, GameView, HostAction, HostViewState, OnlineSearchResult, Screen } from "../shared/host-api";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS, layoutPanels, pruneLayout, type SavedLayout } from "./layout";
 import { parseAction } from "./actions";
@@ -59,6 +59,7 @@ import {
 } from "./library";
 import { MODULE_FONTS } from "./module-fonts";
 import { moduleBaseCss } from "./module-style";
+import { OnlineSearch } from "./online";
 import { ModuleView } from "./module-view";
 import { discoverModules, type InstalledModule } from "./registry";
 import { DataRegistry } from "./storage";
@@ -104,6 +105,8 @@ export interface HostOptions {
   grayscaleText: boolean;
   /** Quits and starts Tavora again, so settings that apply on start take effect. */
   restart: () => void;
+  /** Development and tests only: another Tavora service than api.mytavora.app. */
+  apiUrl?: string | undefined;
   /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
   hidden?: boolean;
   /**
@@ -135,6 +138,7 @@ export class Host {
   private windowHidden = false;
   /** Bumped whenever the main process replaces the current layout. */
   private layoutEpoch = 0;
+  private readonly onlineSearch: OnlineSearch;
   private saving: Promise<void> = Promise.resolve();
   private windowSaveTimer: ReturnType<typeof setTimeout> | undefined;
   readonly window: BrowserWindow;
@@ -148,6 +152,7 @@ export class Host {
     windowState: WindowState,
   ) {
     this.data = new DataRegistry(options.userData);
+    this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.window = new BrowserWindow({
       ...windowState.bounds,
       minWidth: MIN_SIZE.width,
@@ -290,6 +295,13 @@ export class Host {
         ? searchCatalog(this.library, query).map(({ id, name }) => ({ id, name }))
         : [],
     );
+    ipcMain.handle("host:search-online", async (event, query: unknown): Promise<OnlineSearchResult> => {
+      if (!fromHost(event) || typeof query !== "string" || query.length > 100) return { status: "ok", games: [] };
+      if (!this.library.onlineSearch) return { status: "off", games: [] };
+      const result = await this.onlineSearch.search(query);
+      // Games the player already has (Trash included) are not offered again.
+      return { ...result, games: result.games.filter((game) => !this.library.games[game.id]) };
+    });
     ipcMain.on("host:panel-bounds", (event, bounds: unknown) => {
       if (fromHost(event)) this.setPanelBounds(bounds);
     });
@@ -395,6 +407,9 @@ export class Host {
         break;
       case "set-grayscale-text":
         library.grayscaleText = action.enabled;
+        break;
+      case "set-online-search":
+        library.onlineSearch = action.enabled;
         break;
       case "set-onboarded":
         library.onboarded = action.done;
@@ -795,6 +810,7 @@ export class Host {
         sort: library.sort,
         startup: library.startup,
         grayscaleText: library.grayscaleText,
+        onlineSearch: library.onlineSearch,
         onboarded: library.onboarded,
         rail: { ...library.rail },
       },

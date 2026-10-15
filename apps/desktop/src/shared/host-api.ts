@@ -104,6 +104,8 @@ export interface HostViewState {
     sort: RootSort;
     startup: Startup;
     grayscaleText: boolean;
+    /** Whether search and icons may ask the Tavora service online. */
+    onlineSearch: boolean;
     /** False until the player finished or skipped the first-run welcome. */
     onboarded: boolean;
     rail: { expanded: boolean; width: number };
@@ -140,10 +142,11 @@ export type HostAction =
   | { type: "open-game"; gameId: string }
   | { type: "add-game"; catalogId: string }
   | { type: "add-game"; name: string }
+  /** A game found by the online search. */
+  | { type: "add-game"; online: OnlineGame }
   | { type: "rename-game"; gameId: string; name: string }
   | { type: "set-game-label"; gameId: string; label: string | null }
-  | { type: "choose-game-image"; gameId: string }
-  | { type: "trash-game"; gameId: string }
+  | { type: "choose-game-image"; gameId: string }  | { type: "trash-game"; gameId: string }
   | { type: "restore-game"; gameId: string }
   | { type: "delete-game"; gameId: string }
   | { type: "favorite"; gameId: string; index?: number }
@@ -157,6 +160,7 @@ export type HostAction =
   | { type: "set-sort"; sort: RootSort }
   | { type: "set-startup"; startup: Startup }
   | { type: "set-grayscale-text"; enabled: boolean }
+  | { type: "set-online-search"; enabled: boolean }
   /** Done ends the first-run welcome; false shows it again. */
   | { type: "set-onboarded"; done: boolean }
   | { type: "save-profile"; name: string; initials: string }
@@ -183,11 +187,28 @@ export interface CatalogMatch {
   name: string;
 }
 
+/** A game from the Tavora service. `id` is its canonical id. */
+export interface OnlineGame {
+  id: string;
+  name: string;
+}
+
+/**
+ * `unreachable` means the service did not answer in time, so the list falls
+ * back to the built-in games; `off` means the player turned online search off.
+ */
+export interface OnlineSearchResult {
+  status: "ok" | "unreachable" | "off";
+  games: OnlineGame[];
+}
+
 /** Exposed to the host UI as `window.tavoraHost` by the host preload. */
 export interface TavoraHostApi {
   getState(): Promise<HostViewState | null>;
   act(action: HostAction): Promise<ActionResult>;
   searchCatalog(query: string): Promise<CatalogMatch[]>;
+  /** Asks the Tavora service; a newer call cancels an older one. Never rejects. */
+  searchOnline(query: string): Promise<OnlineSearchResult>;
   /** Where the visible panels are. Panels not listed are hidden. */
   setPanelBounds(bounds: PanelBounds[]): void;
   /**

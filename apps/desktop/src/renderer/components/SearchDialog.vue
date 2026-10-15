@@ -7,8 +7,8 @@ import { computed, nextTick, ref, watch, type Component } from "vue";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
-import type { GameView } from "../../shared/host-api";
-import { act, dialog, openSettings, searchOpen, shortcutsOpen, state } from "../host";
+import type { CatalogMatch, GameView, OnlineGame } from "../../shared/host-api";
+import { act, api, dialog, openSettings, searchOpen, shortcutsOpen, state } from "../host";
 import GameIcon from "./GameIcon.vue";
 import { SECTION_LABEL, SETTINGS } from "./settings/settings-index";
 
@@ -38,6 +38,53 @@ watch(searchOpen, (open) => {
     query.value = "";
     active.value = 0;
   }
+});
+
+// Games Tavora knows but the player has not added yet: the built-in list at
+// once, the Tavora service a moment after typing stops.
+const ONLINE_DELAY_MS = 250;
+const MAX_ADD_ITEMS = 5;
+const known = ref<CatalogMatch[]>([]);
+const online = ref<OnlineGame[]>([]);
+let knownId = 0;
+let onlineId = 0;
+let onlineTimer: ReturnType<typeof setTimeout> | undefined;
+watch(query, (text) => {
+  clearTimeout(onlineTimer);
+  const thisKnown = ++knownId;
+  const thisOnline = ++onlineId;
+  if ([...text.trim()].length < 2) {
+    known.value = [];
+    online.value = [];
+    return;
+  }
+  void api.searchCatalog(text).then((found) => {
+    if (thisKnown === knownId) known.value = found;
+  });
+  onlineTimer = setTimeout(async () => {
+    const result = await api.searchOnline(text);
+    if (thisOnline === onlineId) online.value = result.games;
+  }, ONLINE_DELAY_MS);
+});
+
+type NewGame = { catalogId: string } | { online: OnlineGame };
+async function addAndOpen(input: NewGame) {
+  const added = await act({ type: "add-game", ...input });
+  if (added.ok && added.id) await act({ type: "open-game", gameId: added.id });
+}
+
+const addItems = computed<Item[]>(() => {
+  const rows: { id: string; name: string; input: NewGame }[] = [
+    ...known.value.map((game) => ({ id: game.id, name: game.name, input: { catalogId: game.id } })),
+    ...online.value.filter((game) => !known.value.some((match) => match.id === game.id)).map((game) => ({ id: game.id, name: game.name, input: { online: game } })),
+  ];
+  return rows.slice(0, MAX_ADD_ITEMS).map((row) => ({
+    id: `add-game-${row.id}`,
+    label: `Add ${row.name}`,
+    hint: "New game",
+    icon: Plus,
+    run: close(() => addAndOpen(row.input)),
+  }));
 });
 
 const view = computed(() => state.value!);
@@ -142,9 +189,12 @@ const groups = computed<Group[]>(() => {
 const shown = computed<Group[]>(() => {
   const text = query.value.trim();
   if (!text) return groups.value.filter((group) => group.label !== "Settings");
-  return groups.value
+  const ranked = groups.value
     .map((group) => ({ ...group, items: rank(group.items, text, (item) => ({ name: item.label, extra: item.keywords })) }))
     .filter((group) => group.items.length > 0);
+  // Already ranked by the search itself, and placed after the player's own games.
+  if (addItems.value.length) ranked.splice(ranked[0]?.label === "Games" ? 1 : 0, 0, { label: "Add a game", items: addItems.value });
+  return ranked;
 });
 
 const flat = computed(() => shown.value.flatMap((group) => group.items));
