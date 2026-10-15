@@ -1,6 +1,7 @@
 import type { Language, LanguageSetting, MessageKey } from "./i18n";
 // Contract between the trusted host UI (renderer) and the main process.
 // Types only: imported by both sides, so it must not import Electron or Node.
+import type { IconTone } from "./icon-tone";
 import type { LayoutTemplateId } from "./layout-templates";
 
 /**
@@ -27,6 +28,8 @@ export interface GameView {
    * an image and the setting is on; the host UI sets it on a tile.
    */
   steamIcon: string | null;
+  /** How that icon sits in its tile: filling it, or on a light or dark backdrop (see shared/icon-tone.ts). Null without an icon. */
+  steamIconTone: IconTone | null;
   /** What the player chose: the game's own icon, their letters, or their own image. */
   iconChoice: "original" | "letters" | "image";
   /**

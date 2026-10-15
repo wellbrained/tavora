@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.30",
+    date: "2026-10-16",
+    title: "Game icons: the fill and the backdrop, for real",
+    notes: [
+      "A game's own icon fills its whole tile again, and an icon with see-through parts (Diablo IV, Battlefield 6) sits on a light or dark backdrop that contrasts with it. The choice is made when the icon is saved, so it no longer depends on the screen.",
+      "A replaced icon file shows at once instead of the old picture.",
+    ],
+  },
+  {
     version: "0.5.29",
     date: "2026-10-16",
     title: "A new game's empty workspace",
