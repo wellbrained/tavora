@@ -12,7 +12,7 @@ defineProps<{ text: string; disabled?: boolean }>();
     <TooltipPortal>
       <TooltipContent
         side="right"
-        :side-offset="14"
+        :side-offset="9"
         class="bg-popover text-popover-foreground data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 z-50 max-w-80 rounded-lg border px-3.5 py-2 text-base leading-snug font-semibold tracking-normal break-words antialiased shadow-xl shadow-black/50 duration-100"
         data-testid="rail-tooltip"
       >
