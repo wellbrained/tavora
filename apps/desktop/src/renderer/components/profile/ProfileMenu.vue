@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Camera } from "@lucide/vue";
+import { Camera, Check } from "@lucide/vue";
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui";
 import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";
@@ -7,20 +7,29 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { act, showToast, state, useFloating } from "../../host";
 import ImageCropDialog from "../ImageCropDialog.vue";
+import { autoInitials } from "./initials";
 import ProfileAvatar from "./ProfileAvatar.vue";
 
 // The player's avatar in the rail footer. A click opens a small card above
-// it to change the name and picture; there is no account behind it yet.
+// it to change the name, initials and picture; there is no account behind it
+// yet. Name and initials are kept with Save (closing the card drops unsaved
+// edits); a picture is kept as soon as its crop is saved.
 defineProps<{ expanded: boolean }>();
 
 const MAX_NAME = 32;
+const MAX_INITIALS = 3;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const TYPES = ["image/png", "image/jpeg", "image/webp"];
 
 const profile = computed(() => state.value!.profile);
 const open = ref(false);
-/** The name as typed; the saved one can lag behind while typing. */
-const draft = ref("");
+/** Name and initials as typed, until saved. */
+const draft = ref({ name: "", initials: "" });
+const dirty = computed(() => draft.value.name !== profile.value.name || draft.value.initials !== profile.value.initials);
+const saving = ref(false);
+/** Shows "Saved" on the button for a moment after a save. */
+const saved = ref(false);
+let savedTimer: ReturnType<typeof setTimeout> | undefined;
 const fileInput = ref<HTMLInputElement | null>(null);
 /** The picked image waiting in the crop dialog. */
 const cropping = ref<string | null>(null);
@@ -29,14 +38,23 @@ const track = useFloating();
 function onOpenChange(value: boolean) {
   open.value = value;
   track(value);
-  if (value) draft.value = profile.value.name;
+  if (value) {
+    draft.value = { name: profile.value.name, initials: profile.value.initials };
+    saved.value = false;
+  }
 }
 
-let nameTimer: ReturnType<typeof setTimeout> | undefined;
-function onName(value: string) {
-  draft.value = value;
-  clearTimeout(nameTimer);
-  nameTimer = setTimeout(() => void act({ type: "set-profile-name", name: value }), 250);
+async function save() {
+  if (!dirty.value || saving.value) return;
+  saving.value = true;
+  const result = await act({ type: "save-profile", name: draft.value.name, initials: draft.value.initials });
+  saving.value = false;
+  if (!result.ok) return;
+  // Main may have tidied the values (spaces in initials, length).
+  draft.value = { name: profile.value.name, initials: profile.value.initials };
+  saved.value = true;
+  clearTimeout(savedTimer);
+  savedTimer = setTimeout(() => (saved.value = false), 2000);
 }
 
 function pickPicture() {
@@ -62,7 +80,14 @@ function onFile(event: Event) {
 
 async function savePicture(png: string) {
   const result = await act({ type: "set-profile-picture", png });
-  if (result.ok) cropping.value = null;
+  if (result.ok) closeCrop();
+}
+
+/** Back to the card, keeping any unsaved name or initials. */
+function closeCrop() {
+  cropping.value = null;
+  open.value = true;
+  track(true);
 }
 </script>
 
@@ -84,7 +109,7 @@ async function savePicture(png: string) {
       >
         <!-- A 48 px slot keeps the avatar on the same centre line as the tiles. -->
         <span class="flex w-12 flex-none justify-center">
-          <ProfileAvatar :name="profile.name" :picture-url="profile.pictureUrl" :size="32" />
+          <ProfileAvatar :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="32" />
         </span>
         <span v-if="expanded" class="truncate text-sm font-medium">{{ profile.name.trim() || "Profile" }}</span>
       </button>
@@ -106,7 +131,7 @@ async function savePicture(png: string) {
           title="Change picture"
           @click="pickPicture"
         >
-          <ProfileAvatar :name="draft" :picture-url="profile.pictureUrl" :size="88" />
+          <ProfileAvatar :name="draft.name" :initials="draft.initials" :picture-url="profile.pictureUrl" :size="88" />
           <span
             class="absolute inset-0 grid place-items-center rounded-full bg-black/55 opacity-0 transition-opacity group-hover/avatar:opacity-100 group-focus-visible/avatar:opacity-100"
           >
@@ -115,31 +140,55 @@ async function savePicture(png: string) {
         </button>
         <input ref="fileInput" type="file" class="hidden" accept="image/png,image/jpeg,image/webp" data-testid="profile-file" @change="onFile" />
 
-        <Input
-          :model-value="draft"
-          class="text-center"
-          placeholder="Add your name"
-          aria-label="Your name"
-          autocomplete="off"
-          spellcheck="false"
-          :maxlength="MAX_NAME"
-          data-testid="profile-name"
-          @update:model-value="onName(String($event))"
-        />
+        <form class="flex w-full flex-col gap-4" @submit.prevent="save">
+          <div class="flex gap-2">
+            <label class="flex min-w-0 flex-1 flex-col gap-1.5">
+              <span class="text-muted-foreground text-xs">Name</span>
+              <Input
+                v-model="draft.name"
+                placeholder="Add your name"
+                autocomplete="off"
+                spellcheck="false"
+                :maxlength="MAX_NAME"
+                data-testid="profile-name"
+              />
+            </label>
+            <label class="flex w-20 flex-none flex-col gap-1.5">
+              <span class="text-muted-foreground text-xs">Initials</span>
+              <Input
+                v-model="draft.initials"
+                class="text-center"
+                :placeholder="autoInitials(draft.name) || 'Auto'"
+                autocomplete="off"
+                spellcheck="false"
+                :maxlength="MAX_INITIALS"
+                title="Optional. Leave empty to use the initials of your name."
+                data-testid="profile-initials"
+              />
+            </label>
+          </div>
 
-        <Button
-          v-if="profile.pictureUrl"
-          variant="ghost"
-          size="sm"
-          class="text-muted-foreground"
-          data-testid="profile-remove-picture"
-          @click="act({ type: 'remove-profile-picture' })"
-        >
-          Remove picture
-        </Button>
+          <div class="flex items-center gap-2">
+            <Button
+              v-if="profile.pictureUrl"
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="text-muted-foreground -ml-2"
+              data-testid="profile-remove-picture"
+              @click="act({ type: 'remove-profile-picture' })"
+            >
+              Remove picture
+            </Button>
+            <Button type="submit" class="ml-auto min-w-20" :disabled="!dirty || saving" data-testid="profile-save">
+              <template v-if="saved && !dirty"><Check :stroke-width="2" /> Saved</template>
+              <template v-else>{{ saving ? "Saving…" : "Save" }}</template>
+            </Button>
+          </div>
+        </form>
       </PopoverContent>
     </PopoverPortal>
   </PopoverRoot>
 
-  <ImageCropDialog :src="cropping" title="Crop your picture" round @save="savePicture" @cancel="cropping = null" />
+  <ImageCropDialog :src="cropping" title="Crop your picture" round @save="savePicture" @cancel="closeCrop" />
 </template>

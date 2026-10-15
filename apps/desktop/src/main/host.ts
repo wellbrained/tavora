@@ -25,7 +25,7 @@ import { THEME } from "./games";
 import { shortcutFor } from "./shortcuts";
 import { IconError, importIcon, removeIcon } from "./icons";
 import { readJsonOrSetAside } from "./json";
-import { clipName, type Profile, removePicture, sanitizeProfile, savePicture } from "./profile";
+import { clipInitials, clipName, type Profile, removePicture, sanitizeProfile, savePicture } from "./profile";
 import {
   addGame,
   createFolder,
@@ -212,7 +212,7 @@ export class Host {
     nativeTheme.themeSource = "dark";
     const host = new Host(options, modules, library, workspace, profile, windowState);
     // The id is made once and kept, so a new profile is written straight away.
-    if (savedProfile === null) host.saveProfile();
+    if (savedProfile === null) host.saveProfile().catch(() => undefined); // logged by saveProfile
     // Browser storage of games that are gone, removed before any session opens it.
     for (const dir of await orphanedPartitions(userData, new Set(Object.keys(library.games)))) {
       await rm(dir, { recursive: true, force: true });
@@ -396,8 +396,10 @@ export class Host {
       case "set-grayscale-text":
         library.grayscaleText = action.enabled;
         break;
-      case "set-profile-name":
+      case "save-profile":
         this.profile.name = clipName(action.name);
+        this.profile.initials = clipInitials(action.initials);
+        // Resolves once it is on disk, so the host UI can say "Saved".
         return this.saveProfile();
       case "set-profile-picture":
         return this.setProfilePicture(await savePicture(this.profileDir, action.png));
@@ -467,7 +469,7 @@ export class Host {
   private async setProfilePicture(file: string | null): Promise<void> {
     const previous = this.profile.picture;
     this.profile.picture = file;
-    this.saveProfile();
+    await this.saveProfile();
     await removePicture(this.profileDir, previous);
   }
 
@@ -813,6 +815,7 @@ export class Host {
       notice: this.notice,
       profile: {
         name: this.profile.name,
+        initials: this.profile.initials,
         pictureUrl: this.profile.picture ? PROFILE_URL + this.profile.picture : null,
       },
       restartPending: library.grayscaleText !== this.options.grayscaleText,
@@ -832,9 +835,12 @@ export class Host {
     this.enqueue(() => writeFileAtomic(path.join(this.options.userData, "library.json"), body), "library");
   }
 
-  private saveProfile(): void {
+  /** Queues the write like the others, and also tells the caller whether it landed. */
+  private saveProfile(): Promise<void> {
     const body = JSON.stringify(this.profile, null, 2);
-    this.enqueue(() => writeFileAtomic(path.join(this.options.userData, "profile.json"), body), "profile");
+    const write = this.saving.then(() => writeFileAtomic(path.join(this.options.userData, "profile.json"), body));
+    this.saving = write.catch((error: unknown) => console.error("[tavora] could not save profile", error));
+    return write;
   }
 
   private saveWorkspace(): void {

@@ -2,7 +2,7 @@ import { isGameId, isModuleId } from "@tavora/module-schema";
 import type { HostAction } from "../shared/host-api";
 import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
-import { MAX_PICTURE_BYTES, MAX_PROFILE_NAME } from "./profile";
+import { MAX_INITIALS, MAX_PICTURE_BYTES, MAX_PROFILE_NAME } from "./profile";
 import { MAX_SNAPSHOT_NAME } from "./workspace";
 
 export type { ActionResult, HostAction } from "../shared/host-api";
@@ -88,9 +88,11 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("startup") && (a.startup === "welcome" || a.startup === "last-game")
         ? { type: a.type, startup: a.startup }
         : null;
-    case "set-profile-name":
-      // Code units, so a long emoji name still fits; it is clipped by character when stored.
-      return only("name") && text(a.name, MAX_PROFILE_NAME * 2) ? { type: a.type, name: a.name } : null;
+    case "save-profile":
+      // Code units, so emoji still fit; both are clipped by character when stored.
+      return only("name", "initials") && text(a.name, MAX_PROFILE_NAME * 2) && text(a.initials, MAX_INITIALS * 2)
+        ? { type: a.type, name: a.name, initials: a.initials }
+        : null;
     case "set-profile-picture":
       return only("png") && text(a.png, Math.ceil(MAX_PICTURE_BYTES / 3) * 4) && BASE64.test(a.png)
         ? { type: a.type, png: a.png }

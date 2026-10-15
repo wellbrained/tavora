@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { IconError } from "./icons";
-import { clipName, MAX_PROFILE_NAME, pngSize, removePicture, sanitizeProfile, savePicture } from "./profile";
+import { clipInitials, clipName, MAX_PROFILE_NAME, pngSize, removePicture, sanitizeProfile, savePicture } from "./profile";
 
 /** A PNG signature and IHDR header for the given size; enough for the checks. */
 function png(width: number, height: number): Buffer {
@@ -20,20 +20,21 @@ describe("sanitizeProfile", () => {
   it("starts a new profile with a fresh id, no name and no picture", () => {
     const profile = sanitizeProfile(null);
     expect(profile.id).toMatch(/^[0-9a-f-]{36}$/);
-    expect(profile).toMatchObject({ version: 1, name: "", picture: null });
+    expect(profile).toMatchObject({ version: 1, name: "", initials: "", picture: null });
   });
 
   it("keeps a saved profile and drops what it does not recognise", () => {
     const id = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b";
-    expect(sanitizeProfile({ id, name: "Brain", picture: "avatar-0a1b2c3d.png", email: "x" })).toEqual({
+    expect(sanitizeProfile({ id, name: "Brain", initials: "BR", picture: "avatar-0a1b2c3d.png", email: "x" })).toEqual({
       version: 1,
       id,
       name: "Brain",
+      initials: "BR",
       picture: "avatar-0a1b2c3d.png",
     });
-    const broken = sanitizeProfile({ id: "nope", name: 3, picture: "../secret.png" });
+    const broken = sanitizeProfile({ id: "nope", name: 3, initials: 4, picture: "../secret.png" });
     expect(broken.id).not.toBe("nope");
-    expect(broken).toMatchObject({ name: "", picture: null });
+    expect(broken).toMatchObject({ name: "", initials: "", picture: null });
   });
 });
 
@@ -41,6 +42,14 @@ describe("clipName", () => {
   it("keeps names to the limit, counting emoji as one character", () => {
     expect([...clipName("🐉".repeat(40))]).toHaveLength(MAX_PROFILE_NAME);
     expect(clipName("Line\none")).toBe("Line one");
+  });
+});
+
+describe("clipInitials", () => {
+  it("keeps up to three characters and drops spaces", () => {
+    expect(clipInitials("N K X Y")).toBe("NKX");
+    expect(clipInitials("🐉🐉🐉🐉")).toBe("🐉🐉🐉");
+    expect(clipInitials("  ")).toBe("");
   });
 });
 

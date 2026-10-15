@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { User } from "@lucide/vue";
 import { computed } from "vue";
+import { autoInitials } from "./initials";
 
-// The player's round avatar: their picture, else their initials in gold,
-// else a person icon until they set a name.
-const props = withDefaults(defineProps<{ name: string; pictureUrl: string | null; size?: number }>(), { size: 36 });
+// The player's round avatar: their picture, else their initials in gold
+// (their own or taken from the name), else a person icon.
+const props = withDefaults(
+  defineProps<{ name: string; pictureUrl: string | null; size?: number; initials?: string }>(),
+  { size: 36, initials: "" },
+);
 
-const initials = computed(() => {
-  const words = props.name.trim().split(/\s+/).filter(Boolean);
-  const picked = words.length > 1 ? [words[0]!, words[words.length - 1]!] : words;
-  return picked.map((word) => [...word][0]!.toLocaleUpperCase()).join("");
-});
+const initials = computed(() => props.initials.trim() || autoInitials(props.name));
 </script>
 
 <template>
