@@ -1,0 +1,12 @@
+{
+  "$schema": "../../packages/module-schema/schema/tavora.module.schema.json",
+  "id": "tavora.playground",
+  "name": "UI Playground",
+  "description": "Every control a module can use, side by side, to try out the look and feel.",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "entry": "dist/index.html",
+  "games": [],
+  "viewport": { "minWidth": 300, "minHeight": 240, "preferredWidth": 480, "preferredHeight": 720 },
+  "permissions": { "network": [] }
+}
