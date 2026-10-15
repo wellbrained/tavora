@@ -5,11 +5,13 @@ import { findInstalledGames, matchInstalled, type InstalledGame } from "./launch
 import { DEFAULT_API_URL } from "./online";
 import { icoFramesAgree, readIcoFromFile } from "./pe-icon";
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
+import { readShortcutIcons, saveShortcutIcon, shortcutFolders } from "./steam-shortcuts";
 import { gamesNeedingIcon, liveGames, recordIcon, type GameEntry, type Library } from "./library";
 import {
   fetchPublicIconHash,
   loadAppInfo,
   needsIcon,
+  publicIconFileName,
   removeSteamIcon,
   saveLibraryCacheIcon,
   saveExeIcon,
@@ -23,6 +25,8 @@ export interface IconSyncOptions {
   iconDir: string;
   /** The Steam client's folder on this PC, or null when Steam is not installed. */
   steamDir: string | null;
+  /** The folders that hold Steam's shortcuts (Start menu, desktops); the usual ones unless told otherwise. */
+  shortcutDirs?: string[];
   /** Where icons come from when Steam does not have the file; Steam's public address unless told otherwise. */
   baseUrl?: string | undefined;
   /** Where Steam's public store API is; its public address unless told otherwise. */
@@ -51,7 +55,7 @@ export interface IconSyncOptions {
  * Finds the icon of every live game that has none yet, from the best place
  * that has one, one game at a time:
  *  1. the installed game itself (Battle.net first, then Epic, GOG and the rest),
- *  2. the icon Steam's client keeps on this PC (or the same file from Steam's public address),
+ *  2. the icon Steam's client keeps on this PC, as its appinfo or the game's Steam shortcut names it (or the same file from Steam's public address),
  *  3. the Tavora service's hosted icon, when online features are on (the app takes its list and
  *     asks for a file only when a game is in it),
  *  4. the small icon Steam keeps in its library cache on this PC,
@@ -106,6 +110,19 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
     return hash === undefined ? { status: "none" } : saveSteamIcon(iconDir, steamDir, appid, hash, network);
   };
 
+  // Steam's shortcuts name the icon Windows shows for each installed game: a file Steam keeps on this PC.
+  let shortcuts: Map<number, string[]> | undefined;
+  const fromShortcut = async (appid: number): Promise<IconResult> => {
+    if (steamDir === null) return { status: "none" };
+    shortcuts ??= await readShortcutIcons(options.shortcutDirs ?? shortcutFolders());
+    // The first icon that is on this PC wins: a newer shortcut can name one Steam never got.
+    for (const hash of shortcuts.get(appid) ?? []) {
+      const saved = await saveShortcutIcon(iconDir, steamDir, appid, hash);
+      if (saved.status === "saved") return saved;
+    }
+    return { status: "none" };
+  };
+
   // The service's list is asked for once per run, and only when a game gets this far.
   const serviceOptions = {
     baseUrl: options.serviceUrl ?? DEFAULT_API_URL,
@@ -147,16 +164,20 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
     }
   }
 
-  // A Steam game that only has the icon of its program (the last resort) takes Steam's own small icon once it is on this PC.
+  // A Steam game that only has the icon of its program (the last resort) or Steam's small public icon takes
+  // the icon Steam itself shows once that is on this PC: the one its shortcut names, else the small one in its library cache.
   if (steamDir !== null && library.steamIcons) {
     for (const game of liveGames(library)) {
-      if (!game.iconFile?.startsWith("exe-") || game.steamAppId === null) continue;
+      const appid = game.steamAppId;
+      if (!game.iconFile || appid === null) continue;
+      const ofProgram = game.iconFile.startsWith("exe-");
+      if (!ofProgram && game.iconFile !== publicIconFileName(appid)) continue;
       // An icon from a launcher's own game (Battle.net, Epic, GOG) is the better one, and stays.
-      const launcher = (await installedGames()).filter((item) => item.source !== "steam");
-      if (matchInstalled(game.name, launcher)) continue;
-      const better = await saveLibraryCacheIcon(iconDir, steamDir, game.steamAppId);
+      if (ofProgram && matchInstalled(game.name, (await installedGames()).filter((item) => item.source !== "steam"))) continue;
+      let better = await fromShortcut(appid);
+      if (better.status !== "saved" && ofProgram) better = await saveLibraryCacheIcon(iconDir, steamDir, appid);
       if (better.status !== "saved") continue;
-      await removeSteamIcon(iconDir, game.iconFile);
+      if (better.file !== game.iconFile) await removeSteamIcon(iconDir, game.iconFile);
       recordIcon(library, game.id, { file: better.file });
       onChange();
     }
@@ -182,6 +203,7 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
     let result = await fromInstalledGame(game);
     const asksNetwork = result.status !== "saved";
     if (result.status === "none" && game.steamAppId !== null) result = await fromSteamClient(game.steamAppId);
+    if (result.status === "none" && game.steamAppId !== null) result = await fromShortcut(game.steamAppId);
     if (result.status === "none") result = await fromHosted(game);
     if (result.status === "none" && game.steamAppId !== null) result = await fromLibraryCache(game.steamAppId);
     if (result.status === "none" && game.steamAppId !== null) result = await fromSteamPublic(game.steamAppId);
