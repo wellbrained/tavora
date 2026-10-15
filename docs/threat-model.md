@@ -1,6 +1,6 @@
 # Module isolation threat model
 
-**Status:** updated for Milestone B (2026-10-14). Covers the local desktop host only; the catalog, publishing pipeline and update channel get their own model in Milestone E.
+**Status:** updated for Milestone C (2026-10-15); G1–G9 date from Milestones A and B, H1–H5 were added for the host UI in C. Covers the local desktop host only; the catalog, publishing pipeline and update channel get their own model in Milestone E.
 
 ## What we protect
 
@@ -50,6 +50,20 @@ Out of scope for Milestone A: a malicious host build, local malware already runn
 | G7 | Modules can't open windows, navigate away, download or request device permissions | `setWindowOpenHandler` deny, `will-navigate` same-origin only, downloads cancelled, permission handlers deny | e2e: `window.open`, cross-origin navigation |
 | G8 | A module can't exhaust host resources through the bridge | message size cap, in-flight cap, JSON validation, quotas for settings, documents and panel state | unit + e2e: oversized and over-quota writes are refused |
 | G9 | A module can't use a capability it was not granted | reserved methods checked against the granted set (always empty in v1) before anything else runs | unit + e2e: `network.fetch`, `files.open`, `clipboard.readText`, `sharedData.read` fail with `PERMISSION_DENIED` |
+
+## Host UI guarantees (Milestone C)
+
+Milestone C added a library, docking, saved layouts, Trash, search and a default look injected into modules. These are the new ways a module or a bad file on disk could reach the host.
+
+| # | Guarantee | Mechanism | Test |
+| --- | --- | --- | --- |
+| H1 | Only the host window can drive the host | every `host:*` IPC handler checks the sender is the host window's main frame; a module view has no host preload and cannot reach them | no module-side test; the check is one shared `fromHost` function in `host.ts` |
+| H2 | The host UI can only ask for actions the host understands | one `host:action` channel; every request is strictly parsed, anything else is refused with a generic message | unit: `parseAction` accepts and rejects cases (`actions.test.ts`) |
+| H3 | A malformed or oversized layout is refused, never saved or applied | layouts are validated and size-limited in the main process before they are stored or used to place views | unit: valid, too deep, and pruning cases (`layout.test.ts`) |
+| H4 | Removing a game removes its data after the Trash period | Trash keeps a game for 30 days, then startup deletes its module data and browser storage | unit: library Trash rules (`library.test.ts`); deletion of the data on disk is not covered by an e2e test |
+| H5 | The injected default look cannot give a module more power | host-written CSS is added as a *user* stylesheet; a module's own rules win and it carries no script | none; reviewed by hand |
+
+Also changed in C: Ctrl+K is caught by the host before any page, so a module cannot take it over, and panels in background tabs are hidden and suspended through the same lifecycle events as before.
 
 ## Known limits and open risks
 
