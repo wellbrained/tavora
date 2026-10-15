@@ -136,6 +136,48 @@ test("games are renamed, favorited and put in folders from their menu", async ()
   await again.app.close();
 });
 
+test("dropping a game on a folder leaves the folder open or closed as it was", async () => {
+  const { app, page } = await launch();
+  await fromMenu(page, "satisfactory", "menu-move-to-folder", "menu-new-folder");
+  await answerPrompt(page, "Builders");
+  const folder = page.locator('[data-testid^="rail-folder-"][data-testid$="-toggle"]');
+  await expect(folder).toHaveAttribute("aria-expanded", "false");
+
+  // Playwright's mouse drag does not drive HTML drag and drop in Electron, so the events are sent directly.
+  const drop = async (gameId: string) => {
+    const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+    // The folder's draggable row takes the drops, not the button inside it.
+    const row = folder.locator("xpath=ancestor::div[@draggable='true'][1]");
+    await page.getByTestId(`rail-game-${gameId}`).dispatchEvent("dragstart", { dataTransfer });
+    // The rail shifts once a drag starts, so the folder is measured after that.
+    await page.waitForTimeout(100);
+    const box = (await row.boundingBox())!;
+    const at = (fraction: number) => ({ dataTransfer, clientX: box.x + box.width / 2, clientY: box.y + box.height * fraction });
+    // Pointing at the middle of the folder means "into": aim until the row shows that.
+    let into = at(0.5);
+    for (const fraction of [0.5, 0.4, 0.6, 0.3, 0.7]) {
+      into = at(fraction);
+      await row.dispatchEvent("dragover", into);
+      await page.waitForTimeout(50);
+      if (await row.evaluate((element) => element.classList.contains("drop-into"))) break;
+    }
+    await row.dispatchEvent("drop", into);
+  };
+
+  // Closed stays closed, with no games listed under it.
+  await drop("poe2");
+  await expect(folder).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("group", { name: "Builders" })).toHaveCount(0);
+
+  // Opened by the player, the folder holds both games.
+  await folder.click();
+  await expect(folder).toHaveAttribute("aria-expanded", "true");
+  const inside = page.getByRole("group", { name: "Builders" });
+  await expect(inside.getByTestId("rail-game-poe2")).toBeVisible();
+  await expect(inside.getByTestId("rail-game-satisfactory")).toBeVisible();
+  await app.close();
+});
+
 test("games can be reordered by dragging them on the rail", async () => {
   const { app, page } = await launch();
   const order = () =>
