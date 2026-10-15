@@ -189,6 +189,8 @@ export type HostAction =
   | { type: "set-auto-update"; enabled: boolean }
   /** Starts the download of a version that was found while automatic download is off. */
   | { type: "download-update" }
+  /** Opens the folder with the daily copies of the player's data. */
+  | { type: "open-backups" }
   /** Asks the update server now, without waiting for the next scheduled check. */
   | { type: "check-for-updates" }
   /** Quits, installs the downloaded version and starts Tavora again. */
