@@ -1,0 +1,24 @@
+{
+  "icons": [
+    {
+      "id": "diablo-iv",
+      "names": [
+        "Diablo IV",
+        "Diablo 4"
+      ],
+      "sha256": "e9d8bd6886602cb8cd4b89f2be5912966d50889460411adea6e33eb8d755aac2",
+      "source": "Icon of the installed game's own program (Diablo IV.exe), 2026-10-15",
+      "addedAt": "2026-10-15T14:23:14.032Z"
+    },
+    {
+      "id": "starcraft-2",
+      "names": [
+        "StarCraft II",
+        "StarCraft 2"
+      ],
+      "sha256": "4f3371db3c49c7cc10dc5657097aff16c22176a21caa16c29f386bd77b59391c",
+      "source": "Icon of the installed game's own program (SC2Switcher.exe), lossless PNG of its 256 px bitmap frame, 2026-10-15",
+      "addedAt": "2026-10-15T14:23:14.658Z"
+    }
+  ]
+}

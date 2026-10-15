@@ -11,6 +11,7 @@
     "start": "node src/server.ts",
     "dev": "node --watch src/server.ts",
     "dataset": "node scripts/build-dataset.ts",
+    "icon": "node scripts/icon.ts",
     "typecheck": "tsc --noEmit -p .",
     "build": "esbuild src/server.ts --bundle --platform=node --format=esm --target=node22 --external:node:sqlite --outfile=dist/server.mjs"
   },

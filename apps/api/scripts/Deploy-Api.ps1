@@ -30,10 +30,13 @@ New-Item -ItemType Directory -Path $staging | Out-Null
 try {
   Copy-Item $bundle (Join-Path $staging 'server.mjs')
   Copy-Item $dataset (Join-Path $staging 'games.sqlite')
+  # The hosted game icons travel with the release. They are only served once TAKEDOWN_CONTACT is set in shared/production.env.
+  $icons = Join-Path $api 'data\icons'
+  if (Test-Path (Join-Path $icons 'index.json')) { Copy-Item $icons (Join-Path $staging 'icons') -Recurse }
   & tar.exe -czf $archive -C $staging .
   if ($LASTEXITCODE -ne 0) { throw 'Archive failed.' }
   $deploy = Join-Path $api 'deploy'
-  & scp.exe -i $key -o BatchMode=yes -o StrictHostKeyChecking=yes $archive (Join-Path $deploy 'tavora-api.service') (Join-Path $deploy 'tavora-api.caddy') (Join-Path $deploy 'tavora-api-activate.sh') "${remote}:/tmp/"
+  & scp.exe -i $key -o BatchMode=yes -o StrictHostKeyChecking=yes $archive (Join-Path $deploy 'tavora-api.service') (Join-Path $deploy 'tavora-api.caddy') (Join-Path $deploy 'tavora-api-activate.sh') (Join-Path $deploy 'tavora-api-set-steam-key.sh') (Join-Path $deploy 'tavora-api-set-setting.sh') "${remote}:/tmp/"
   if ($LASTEXITCODE -ne 0) { throw 'Upload failed.' }
   & ssh.exe -i $key -o BatchMode=yes -o StrictHostKeyChecking=yes $remote "bash /tmp/tavora-api-activate.sh $release"
   if ($LASTEXITCODE -ne 0) { throw 'Deployment failed; inspect the server output. The previous release is kept.' }

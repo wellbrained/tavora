@@ -278,7 +278,7 @@ function deleteNow(gameId: string, name: string) {
             </SettingRow>
             <SettingRow
               label="Online game search"
-              description="Finds more games than the built-in list on the Tavora service. It sees the text you type and nothing that identifies you. Turn it off to use the built-in games only."
+              description="Finds more games than the built-in list on the Tavora service, and lets Tavora ask it for the icons of your games. It sees the text you type and which icons are asked for, keeps no log and knows nothing that identifies you. Turn it off to use the built-in games and your own icons only."
               setting="online-search"
               :highlighted="highlight === 'online-search'"
             >
@@ -310,12 +310,15 @@ function deleteNow(gameId: string, name: string) {
             </SettingRow>
             <SettingRow
               label="Game icons from this PC and Steam"
-              description="Uses each game's own icon. Tavora reads it from the installed game on this PC (Battle.net, Epic, GOG, EA and other launchers), then from the Steam folder, and last downloads Steam's small icon for the game from Steam. Icons are kept on this PC and the Tavora service is not involved. Games without an icon, and any image you pick yourself, are not affected. Turn it off to use the plain badges."
+              description="Uses each game's own icon. Tavora reads it from the installed game on this PC (Battle.net, Epic, GOG, EA and other launchers), then from the Steam folder, then from the icons the Tavora service hosts (only while Online game search is on), and last downloads Steam's small icon for the game from Steam. Icons are kept on this PC. Games without an icon, and any image you pick yourself, are not affected. Turn it off to use the plain badges."
               setting="steam-icons"
               :highlighted="highlight === 'steam-icons'"
             >
               <Switch v-model="steamIcons" aria-label="Game icons from this PC and Steam" data-testid="steam-icons" />
             </SettingRow>
+            <p class="text-muted-foreground -mt-2 mb-4 max-w-prose text-xs leading-relaxed" data-testid="icon-notice">
+              Game names and icons belong to their publishers and are trademarks of their owners. Tavora is not affiliated with, endorsed by or sponsored by them. Icons are used only to identify the games, shown unchanged and never sold. A publisher can ask for a hosted icon to be removed, and it is removed: see the privacy page at mytavora.app.
+            </p>
             <SettingRow
 
               label="Welcome tour"

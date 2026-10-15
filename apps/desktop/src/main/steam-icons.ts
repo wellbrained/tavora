@@ -48,14 +48,19 @@ export function exeIconFileName(gameId: string): string {
   return `exe-${gameId}.ico`;
 }
 
+/** The file name of an icon downloaded from the Tavora service's hosted set. */
+export function hostedIconFileName(gameId: string): string {
+  return `hosted-${gameId}.png`;
+}
+
 export function isIconFileName(value: unknown): value is string {
-  return typeof value === "string" && /^(\d{1,10}\.(ico|jpg)|exe-[a-z0-9][a-z0-9-]{0,63}\.ico)$/.test(value);
+  return typeof value === "string" && /^(\d{1,10}\.(ico|jpg)|(exe-[a-z0-9][a-z0-9-]{0,63}\.ico)|(hosted-[a-z0-9][a-z0-9-]{0,63}\.png))$/.test(value);
 }
 
 /** The only icon file names a game may have, so a changed or forged name in the saved library is dropped. */
 export function iconFileAllowed(game: { id: string; steamAppId: number | null }, file: unknown): file is string {
   if (!isIconFileName(file)) return false;
-  if (file === exeIconFileName(game.id)) return true;
+  if (file === exeIconFileName(game.id) || file === hostedIconFileName(game.id)) return true;
   return game.steamAppId !== null && (file === iconFileName(game.steamAppId) || file === publicIconFileName(game.steamAppId));
 }
 
@@ -117,25 +122,27 @@ export async function findSteamDir(options: SteamDirOptions = {}): Promise<strin
       }
     });
 
+  // Paths follow the platform being asked about, so tests can stand in for another OS.
+  const p = platform === "win32" ? path.win32 : path.posix;
   const candidates: string[] = [];
   if (platform === "win32") {
     const fromRegistry = await (options.registry ?? windowsRegistryPath)();
     if (fromRegistry) candidates.push(fromRegistry);
     for (const base of [env["ProgramFiles(x86)"], env.ProgramFiles, "C:\\Program Files (x86)"]) {
-      if (base) candidates.push(path.join(base, "Steam"));
+      if (base) candidates.push(p.join(base, "Steam"));
     }
   } else if (platform === "linux") {
     candidates.push(
-      path.join(home, ".steam", "steam"),
-      path.join(home, ".local", "share", "Steam"),
-      path.join(home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),
+      p.join(home, ".steam", "steam"),
+      p.join(home, ".local", "share", "Steam"),
+      p.join(home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),
     );
   } else if (platform === "darwin") {
-    candidates.push(path.join(home, "Library", "Application Support", "Steam"));
+    candidates.push(p.join(home, "Library", "Application Support", "Steam"));
   }
   for (const candidate of candidates) {
-    const dir = path.normalize(candidate);
-    if (await exists(path.join(dir, "appcache", "appinfo.vdf"))) return dir;
+    const dir = p.normalize(candidate);
+    if (await exists(p.join(dir, "appcache", "appinfo.vdf"))) return dir;
   }
   return null;
 }

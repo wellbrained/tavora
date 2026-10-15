@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -45,6 +46,15 @@ const cache = () =>
     { appid: 1145350, common: { name: "Hades II" } },
   ]);
 
+/** A small valid-looking PNG: the signature, an IHDR for a 256 px picture and filler. */
+function pngOf(seed: number): Uint8Array {
+  const bytes = new Uint8Array(80);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 1, 0, 0, 0, 1, 0]);
+  bytes.fill(seed, 30);
+  return bytes;
+}
+const sha = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
+
 interface Net {
   /** Client icon files (`<hash>.ico`) by hash: a status, or "network" for no answer. */
   ico?: Record<string, number | "network">;
@@ -52,12 +62,33 @@ interface Net {
   api?: Record<number, string | null | "network">;
   /** Small icons (`<hash>.jpg`) by hash. */
   jpg?: Record<string, number | "network">;
+  /** The Tavora service's hosted icons by id: the names they are known by and the file. */
+  hosted?: Record<string, { names: string[]; bytes: Uint8Array; listedHash?: string }>;
+  /** The service does not answer. */
+  serviceDown?: boolean;
 }
 
-/** A fake Steam: answers by address and remembers what it was asked, in order. */
+/** A fake Steam and Tavora service: answers by address and remembers what it was asked, in order. */
 function fakeSteam(net: Net = {}) {
   const asked: string[] = [];
   const fetchImpl = (async (url: string) => {
+    if (/\/v1\/icons$/.test(url)) {
+      asked.push("service:list");
+      if (net.serviceDown) throw new Error("offline");
+      const icons = Object.entries(net.hosted ?? {}).map(([id, icon]) => ({
+        id,
+        names: icon.names,
+        sha256: icon.listedHash ?? sha(icon.bytes),
+        size: icon.bytes.byteLength,
+      }));
+      return new Response(JSON.stringify({ notice: "Not affiliated.", takedown: "legal@example.test", icons }));
+    }
+    const hostedFile = /\/v1\/icons\/([a-z0-9-]+)\.png$/.exec(url);
+    if (hostedFile) {
+      asked.push(`service:${hostedFile[1]}`);
+      const icon = net.hosted?.[hostedFile[1]!];
+      return icon ? new Response(icon.bytes as BodyInit) : new Response("", { status: 404 });
+    }
     const api = /GetApps\/v1\?appids%5B0%5D=(\d+)$/.exec(url);
     if (api) {
       const appid = Number(api[1]);
@@ -76,8 +107,10 @@ function fakeSteam(net: Net = {}) {
   return { fetchImpl, asked };
 }
 
+/** A library of built-in games. Online features are off, so the tests of one source are not about another; see the hosted tests. */
 function libraryWith(...catalogIds: string[]): Library {
   const library = emptyLibrary();
+  library.onlineSearch = false;
   catalogIds.forEach((catalogId, index) => addGame(library, { catalogId }, day(1 + index)));
   return library;
 }
@@ -297,5 +330,103 @@ describe("syncIcons: housekeeping", () => {
       readIcon: async () => (delete library.games["local-diablo-iv"], ICON),
     }).done;
     expect(await readdir(icons)).toEqual([]);
+  });
+});
+
+
+describe("syncIcons: the Tavora service's hosted icons", () => {
+  const diablo = { names: ["Diablo IV", "Diablo 4"], bytes: pngOf(3) };
+
+  /** A custom game by name, online features on. */
+  const withGame = (name: string) => {
+    const library = emptyLibrary();
+    library.onlineSearch = true;
+    addGame(library, { name }, day(1));
+    return library;
+  };
+
+  it("gives a game its hosted icon by name, downloading only that file, unchanged", async () => {
+    const library = withGame("Diablo 4");
+    const net = fakeSteam({ hosted: { "diablo-iv": diablo, "other-game": { names: ["Other"], bytes: pngOf(9) } } });
+    expect(await run(library, net).done).toBe(1);
+    expect(net.asked).toEqual(["service:list", "service:diablo-iv"]);
+    expect(library.games["local-diablo-4"]!.iconFile).toBe("hosted-local-diablo-4.png");
+    expect(new Uint8Array(await readFile(path.join(icons, "hosted-local-diablo-4.png")))).toEqual(diablo.bytes);
+  });
+
+  it("gives a built-in game its icon by its id", async () => {
+    const library = libraryWith("elden-ring");
+    library.onlineSearch = true;
+    const net = fakeSteam({ hosted: { "elden-ring": { names: ["Something else entirely"], bytes: pngOf(4) } } });
+    await run(library, net, { loadAppInfoImpl: async () => null }).done;
+    expect(library.games["elden-ring"]!.iconFile).toBe("hosted-elden-ring.png");
+    expect(net.asked).toEqual(["service:list", "service:elden-ring"]);
+  });
+
+  it("asks for the list once per run, however many games need an icon", async () => {
+    const library = withGame("Diablo IV");
+    addGame(library, { name: "Nothing Hosted" }, day(2));
+    addGame(library, { name: "Nor This" }, day(3));
+    const net = fakeSteam({ hosted: { "diablo-iv": diablo } });
+    await run(library, net).done;
+    expect(net.asked.filter((entry) => entry === "service:list")).toHaveLength(1);
+    expect(library.games["local-nothing-hosted"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
+  });
+
+  it("prefers the installed game and Steam's client icon, and prefers itself to Steam's small icon", async () => {
+    const hosted = { hosted: { "elden-ring": { names: ["Elden Ring"], bytes: pngOf(5) } } };
+    const installed = libraryWith("elden-ring");
+    installed.onlineSearch = true;
+    const a = fakeSteam(hosted);
+    await run(installed, a, { installedGames: async () => [{ source: "windows", name: "Elden Ring", file: "C:\\er.exe", index: 0 }], readIcon: async () => ICON }).done;
+    expect(installed.games["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
+    expect(a.asked).toEqual([]);
+
+    const client = libraryWith("elden-ring");
+    client.onlineSearch = true;
+    const b = fakeSteam({ ...hosted, ico: { [hashOf("a")]: 200 } });
+    await run(client, b).done;
+    expect(client.games["elden-ring"]!.iconFile).toBe("1245620.ico");
+    expect(b.asked).toEqual([`ico:${hashOf("a")}`]);
+
+    const small = libraryWith("elden-ring");
+    small.onlineSearch = true;
+    const c = fakeSteam({ ...hosted, api: { 1245620: hashOf("d") }, jpg: { [hashOf("d")]: 200 } });
+    await run(small, c).done;
+    expect(small.games["elden-ring"]!.iconFile).toBe("hosted-elden-ring.png");
+    expect(c.asked.some((entry) => entry.startsWith("api:") || entry.startsWith("jpg:"))).toBe(false);
+  });
+
+  it("goes on to Steam's small icon when the service has none for the game", async () => {
+    const library = libraryWith("hades-2");
+    library.onlineSearch = true;
+    const net = fakeSteam({ hosted: { "diablo-iv": diablo }, api: { 1145350: hashOf("c") }, jpg: { [hashOf("c")]: 200 } });
+    await run(library, net).done;
+    expect(library.games["hades-2"]!.iconFile).toBe("1145350.jpg");
+    expect(net.asked).toEqual(["service:list", "api:1145350", `jpg:${hashOf("c")}`]);
+  });
+
+  it("never contacts the service while online features are off", async () => {
+    const library = withGame("Diablo IV");
+    library.onlineSearch = false;
+    const net = fakeSteam({ hosted: { "diablo-iv": diablo } });
+    expect(await run(library, net).done).toBe(0);
+    expect(net.asked).toEqual([]);
+    expect(library.games["local-diablo-iv"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
+  });
+
+  it("stops without marking anything when the service cannot be reached, and finds the icon next time", async () => {
+    const library = withGame("Diablo IV");
+    expect(await run(library, fakeSteam({ serviceDown: true })).done).toBe(0);
+    expect(library.games["local-diablo-iv"]).toMatchObject({ iconFile: null, iconCheckedAt: null });
+    expect(await run(library, fakeSteam({ hosted: { "diablo-iv": diablo } })).done).toBe(1);
+  });
+
+  it("refuses a file that is not the one the list promised", async () => {
+    const library = withGame("Diablo IV");
+    const net = fakeSteam({ hosted: { "diablo-iv": { ...diablo, listedHash: "0".repeat(64) } } });
+    expect(await run(library, net).done).toBe(0);
+    expect(library.games["local-diablo-iv"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
+    expect(await readdir(icons).catch(() => [])).toEqual([]);
   });
 });
