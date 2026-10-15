@@ -56,6 +56,15 @@ export function parseNote(raw: JsonValue | null, now = new Date().toISOString())
   };
 }
 
+/** The note's plain text as paragraphs, shown when its stored formatting cannot be read. */
+export function contentFromText(text: string): RichText {
+  const lines = text.split(/\r?\n/).slice(0, 5000);
+  return {
+    type: "doc",
+    content: lines.map((line): JsonValue => (line ? { type: "paragraph", content: [{ type: "text", text: line }] } : { type: "paragraph" })),
+  };
+}
+
 /** A note's title is its first line, like a paper notebook. */
 export function titleFor(id: string, text: string): string {
   if (id === SCRATCHPAD_ID) return SCRATCHPAD_TITLE;

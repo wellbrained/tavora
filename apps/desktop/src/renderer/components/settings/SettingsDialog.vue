@@ -12,6 +12,7 @@ import { act, confirmAction, dialog, settingsOpen, settingsTarget, state, submit
 import { SHORTCUT_GROUPS } from "../../shortcuts";
 import GameIcon from "../GameIcon.vue";
 import AppearanceSection from "./AppearanceSection.vue";
+import ModulesSection from "./ModulesSection.vue";
 import SegmentedControl from "./SegmentedControl.vue";
 import { GROUPS, SECTION_LABEL, SETTINGS, type SettingsSection } from "./settings-index";
 import SettingRow from "./SettingRow.vue";
@@ -112,6 +113,14 @@ const updateRow = computed(() => {
       : "Tavora checks for new versions by itself.";
   return { text, button: "Check now", busy: false, run: "check-for-updates" as const };
 });
+const copied = ref(false);
+async function copyDiagnostics() {
+  const result = await act({ type: "copy-diagnostics" });
+  if (!result.ok) return;
+  copied.value = true;
+  setTimeout(() => (copied.value = false), 2500);
+}
+
 function pressUpdateButton() {
   const run = updateRow.value.run;
   if (run) void act({ type: run });
@@ -310,6 +319,14 @@ function deleteNow(gameId: string, name: string) {
               <Button variant="secondary" data-testid="open-backups" @click="submitAction({ type: 'open-backups' })">Open folder</Button>
             </SettingRow>
             <SettingRow
+              label="Diagnostic info"
+              description="Copies Tavora's version, your system, how long things took, the update log and the last errors, to paste to whoever is helping you. It holds no game names, notes or folders, and nothing is sent anywhere."
+              setting="diagnostics"
+              :highlighted="highlight === 'diagnostics'"
+            >
+              <Button variant="secondary" data-testid="copy-diagnostics" @click="copyDiagnostics">{{ copied ? 'Copied' : 'Copy' }}</Button>
+            </SettingRow>
+            <SettingRow
               label="Game icons from this PC and Steam"
               description="Uses each game's own icon. Tavora reads it from the installed game on this PC (Battle.net, Epic, GOG, EA and other launchers), then from the Steam folder, then from the icons the Tavora service hosts (only while Online game search is on), and last downloads Steam's small icon for the game from Steam. Icons are kept on this PC. Games without an icon, and any image you pick yourself, are not affected. Turn it off to use the plain badges."
               setting="steam-icons"
@@ -336,6 +353,16 @@ function deleteNow(gameId: string, name: string) {
               </Button>
             </SettingRow>
             <SettingRow
+              label="Import from Steam"
+              description="Add the games you own on Steam, by pasting your profile link. You see the list first and choose which to add. Tavora does not start games. Needs Online game search."
+              setting="steam-import"
+              :highlighted="highlight === 'steam-import'"
+            >
+              <Button variant="secondary" data-testid="open-steam-import-settings" :disabled="!library.onlineSearch" @click="dialog = { kind: 'steam-import' }">
+                Import…
+              </Button>
+            </SettingRow>
+            <SettingRow
 
               label="Welcome tour"
               description="The short introduction Tavora shows on its first start: your profile, your first games and a few tips."
@@ -348,6 +375,10 @@ function deleteNow(gameId: string, name: string) {
 
           <template v-else-if="section === 'appearance'">
             <AppearanceSection :highlight="highlight" />
+          </template>
+
+          <template v-else-if="section === 'modules'">
+            <ModulesSection :highlight="highlight" />
           </template>
 
           <template v-else-if="section === 'shortcuts'">

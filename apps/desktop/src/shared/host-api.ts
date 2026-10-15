@@ -169,6 +169,8 @@ export interface HostViewState {
     autoUpdate: boolean;
     /** Whether game icons may be taken from Steam on this PC. */
     steamIcons: boolean;
+    /** The Steam profile the player asked Tavora to remember for the import, or null. */
+    steamProfile: string | null;
     /** False until the player finished or skipped the first-run welcome. */
     onboarded: boolean;
     rail: { expanded: boolean; width: number };
@@ -185,7 +187,14 @@ export interface HostViewState {
     provenance: "official" | "local";
     /** A playground or example for module authors, listed under Development. */
     development: boolean;
+    version: string;
+    /** Where it was found, in words, without a full path: Tavora itself, the modules folder, or a development folder. */
+    origin: string;
+    /** Only a module in the player's own modules folder can be removed from Settings. */
+    removable: boolean;
   }[];
+  /** Folders in the modules folder that could not be loaded, and why, for module authors. */
+  moduleProblems: { folder: string; message: string }[];
   /** Panels of the current game, in the order they were opened. */
   panels: PanelView[];
   /** The current game's saved layout; panels missing from it are placed by the host UI. */
@@ -218,7 +227,10 @@ export type HostAction =
   | { type: "set-game-label"; gameId: string; label: string | null }
   | { type: "choose-game-image"; gameId: string }
   | { type: "use-original-icon"; gameId: string }
-  | { type: "share-icons"; gameIds: string[] }  | { type: "trash-game"; gameId: string }
+  | { type: "share-icons"; gameIds: string[] }
+  /** Adds the chosen games of a Steam library that the player does not have yet. */
+  | { type: "import-steam-games"; games: SteamImportGame[] }
+  | { type: "trash-game"; gameId: string }
   | { type: "restore-game"; gameId: string }
   | { type: "delete-game"; gameId: string }
   | { type: "favorite"; gameId: string; index?: number }
@@ -236,6 +248,10 @@ export type HostAction =
   | { type: "set-auto-update"; enabled: boolean }
   /** Starts the download of a version that was found while automatic download is off. */
   | { type: "download-update" }
+  /** How long the screen took to show something the player asked for, measured where it is drawn. */
+  | { type: "record-timing"; name: "game-switch"; ms: number }
+  /** Puts the version, system, timings, update log and last errors on the clipboard, to paste to whoever is helping. */
+  | { type: "copy-diagnostics" }
   /** Opens the folder with the daily copies of the player's data. */
   | { type: "open-backups" }
   /** Asks the update server now, without waiting for the next scheduled check. */
@@ -243,6 +259,8 @@ export type HostAction =
   /** Quits, installs the downloaded version and starts Tavora again. */
   | { type: "restart-to-update" }
   | { type: "set-steam-icons"; enabled: boolean }
+  /** Remembers the Steam profile for the import on this PC; null forgets it. */
+  | { type: "set-steam-profile"; profile: string | null }
   /** ixed turns Follow System off; without it the pick keeps following the system. */
   | { type: "set-theme"; themeId: string; variationId: string; fixed?: boolean }
   /** Follow the system's light or dark setting, or stay in one mode. */
@@ -253,6 +271,12 @@ export type HostAction =
   | { type: "reload-themes" }
   /** Opens the player's themes folder in the file manager, creating it first. */
   | { type: "open-themes-folder" }
+  /** Opens the player's modules folder in the file manager, creating it first. */
+  | { type: "open-modules-folder" }
+  /** Looks for modules again, after the player changed their modules folder. */
+  | { type: "reload-modules" }
+  /** Moves a module from the player's modules folder to the recycle bin; its data stays. */
+  | { type: "remove-module"; moduleId: string }
   /** Copies the Tavora theme into the themes folder as a new theme to change; answers with its id. */
   | { type: "create-starter-theme" }
   /** Done ends the first-run welcome; false shows it again. */
@@ -279,7 +303,7 @@ export type HostAction =
   | { type: "delete-snapshot"; snapshotId: string };
 
 /** `id` is set when the action created something (a game, a folder). */
-export type ActionResult = { ok: true; id?: string; shared?: number } | { ok: false; error: string };
+export type ActionResult = { ok: true; id?: string; shared?: number; added?: number } | { ok: false; error: string };
 
 export interface CatalogMatch {
   id: string;
@@ -303,6 +327,20 @@ export interface OnlineSearchResult {
   games: OnlineGame[];
 }
 
+/** A game in a Steam library, with Tavora's id for it when the service knows one. */
+export interface SteamImportGame {
+  appid: number;
+  name: string;
+  id: string | null;
+}
+
+/** `status` says whether the player already has the game (`trash`: removed, not deleted yet). */
+export interface SteamGameView extends SteamImportGame {
+  status: "new" | "owned" | "trash";
+}
+
+export type SteamLibraryResult = { status: "ok"; games: SteamGameView[] } | { status: "error"; error: string };
+
 /** Exposed to the host UI as `window.tavoraHost` by the host preload. */
 export interface TavoraHostApi {
   getState(): Promise<HostViewState | null>;
@@ -310,6 +348,8 @@ export interface TavoraHostApi {
   searchCatalog(query: string): Promise<CatalogMatch[]>;
   /** Asks the Tavora service; a newer call cancels an older one. Never rejects. */
   searchOnline(query: string): Promise<OnlineSearchResult>;
+  /** The games a Steam profile (link or SteamID64) owns, through the Tavora service. Never rejects. */
+  steamLibrary(profile: string): Promise<SteamLibraryResult>;
   /** Where the visible panels are. Panels not listed are hidden. */
   setPanelBounds(bounds: PanelBounds[]): void;
   /**

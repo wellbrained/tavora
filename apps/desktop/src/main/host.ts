@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
+import os from "node:os";
 import { appendFile, mkdir, readFile, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   nativeTheme,
@@ -17,7 +19,8 @@ import {
   type WebContents,
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
-import type { ActionResult, AppearanceView, GameView, HostAction, HostViewState, OnlineSearchResult, Screen } from "../shared/host-api";
+import type { ActionResult, AppearanceView, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
+import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, type SavedLayout } from "./layout";
 import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
@@ -69,10 +72,11 @@ import { DEFAULT_API_URL, OnlineSearch } from "./online";
 import { UpdateManager, type UpdaterLike } from "./updates";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
 import { syncIcons } from "./icon-sync";
+import { fetchSteamLibrary, importSteamGames, steamLibraryView } from "./steam-import";
 import { isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, submitIcon } from "./share-icons";
 import { findSteamDir, removeSteamIcon } from "./steam-icons";
 import { ModuleView } from "./module-view";
-import { discoverModules, isDevelopmentModule, type InstalledModule } from "./registry";
+import { describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import {
   DEFAULT_THEME,
@@ -111,6 +115,11 @@ interface Rect {
 
 /** How long to wait for a still image of a panel before hiding it anyway. */
 const FREEZE_TIMEOUT_MS = 250;
+
+/** The player's own modules, next to the themes folder in their data folder. */
+function userModulesDir(options: HostOptions): string {
+  return path.join(options.userData, "modules");
+}
 
 /** Leaves the workspace header's bottom border visible below the window controls. */
 const TITLE_BAR_HEIGHT = 47;
@@ -186,7 +195,9 @@ export class Host {
 
   private constructor(
     private readonly options: HostOptions,
-    private readonly modules: Map<string, InstalledModule>,
+    private modules: Map<string, InstalledModule>,
+    private moduleInfo: Map<string, ModuleInfo>,
+    private moduleProblems: ModuleProblem[],
     private readonly library: Library,
     private readonly workspace: WorkspaceState,
     private readonly profile: Profile,
@@ -239,7 +250,9 @@ export class Host {
     for (const [name, version] of Object.entries(SUPPORTED_VERSIONS)) {
       await keepNewerFile(path.join(userData, name), version).catch(() => null);
     }
-    const modules = await discoverModules({ official: options.officialModuleDirs, local: options.moduleDirs });
+    const moduleProblems: ModuleProblem[] = [];
+    const modules = await discoverModules(Host.moduleSources(options), moduleProblems);
+    const moduleInfo = await describeModules(userModulesDir(options), modules);
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
     const expired = purgeExpired(library, new Date());
@@ -266,7 +279,7 @@ export class Host {
       options.devServer,
     );
 
-    const host = new Host(options, modules, library, workspace, profile, windowState, themes, themeProblems);
+    const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
     // Native menus, dialogs and scrollbars follow the theme's mode.
     host.syncNativeTheme();
     // The system's light or dark setting changed (or Tavora's own native theme did, which applyTheme ignores).
@@ -289,6 +302,7 @@ export class Host {
     host.screen = library.startup === "last-game" && library.lastGameId ? "game" : "welcome";
     host.registerIpc();
     host.registerWindowEvents();
+    host.window.once("ready-to-show", () => timings.record("startup", process.uptime() * 1000));
     await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
     if (host.screen === "game") host.openCurrentGame();
     // Icons of games that have none yet are looked for quietly in the background.
@@ -324,6 +338,61 @@ export class Host {
     } catch (error) {
       this.logUpdate(`updates are not available: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /** Modules that ship with Tavora, any development folders, and the player's own modules folder. */
+  private static moduleSources(options: HostOptions) {
+    return { official: options.officialModuleDirs, local: [...options.moduleDirs, userModulesDir(options)] };
+  }
+
+  /** Looks for modules again; panels of modules that are gone are closed. */
+  private async reloadModules(): Promise<void> {
+    const problems: ModuleProblem[] = [];
+    const modules = await discoverModules(Host.moduleSources(this.options), problems);
+    this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
+    this.moduleProblems = problems;
+    this.modules = modules;
+    this.dropPanelsOfMissingModules();
+  }
+
+  /** Closes and forgets every panel whose module is not installed any more, in every game. Module data stays. */
+  private dropPanelsOfMissingModules(): void {
+    let changed = false;
+    for (const workspace of Object.values(this.workspace.games)) {
+      const gone = new Set(workspace.instances.filter((record) => !this.modules.has(record.moduleId)).map((record) => record.instanceId));
+      if (gone.size === 0) continue;
+      changed = true;
+      workspace.instances = workspace.instances.filter((record) => !gone.has(record.instanceId));
+      workspace.layout = pruneLayout(workspace.layout, (id) => !gone.has(id));
+      for (const instanceId of gone) this.closeView(instanceId);
+    }
+    if (changed) {
+      this.layoutEpoch++;
+      this.saveWorkspace();
+    }
+  }
+
+  private async openModulesFolder(): Promise<void> {
+    const dir = userModulesDir(this.options);
+    await mkdir(dir, { recursive: true });
+    const error = await shell.openPath(dir);
+    if (error) throw new LibraryError(`Couldn't open the modules folder: ${error}`);
+  }
+
+  /** Moves a module out of the player's modules folder (to the recycle bin) and forgets it. */
+  private async removeModule(moduleId: string): Promise<void> {
+    const module = this.modules.get(moduleId);
+    if (!module || !this.moduleInfo.get(moduleId)?.removable) {
+      throw new LibraryError("Only modules in your own modules folder can be removed here.");
+    }
+    try {
+      // Test runs keep the window hidden and have no recycle bin to rely on.
+      if (this.options.hidden) await rm(module.root, { recursive: true, force: true });
+      else await shell.trashItem(module.root);
+    } catch {
+      throw new LibraryError("Couldn't move the module to the recycle bin. Close anything using its folder and try again.");
+    }
+    await this.reloadModules();
   }
 
   private static themeSources(options: HostOptions) {
@@ -402,6 +471,25 @@ export class Host {
     if (error) throw new LibraryError(`Couldn't open the themes folder: ${error}`);
   }
 
+  /** The text of Settings > Copy diagnostic info. */
+  private async diagnosticReport(): Promise<string> {
+    const log = await readFile(path.join(this.options.userData, "updates.log"), "utf8").catch(() => "");
+    return buildReport({
+      version: app.getVersion(),
+      packaged: app.isPackaged,
+      electron: process.versions.electron ?? "?",
+      chrome: process.versions.chrome ?? "?",
+      locale: app.getLocale(),
+      games: Object.keys(this.library.games).length,
+      panels: this.views.size,
+      updateLog: log.split("\n").filter(Boolean).slice(-30),
+      errors: errorLog.recent(),
+      timings: timings.summary(),
+      uptimeSeconds: process.uptime(),
+      folders: { home: os.homedir(), userData: this.options.userData },
+    });
+  }
+
   /** One line per update event in the app's data folder, to see what the updater did. */
   private logUpdate(line: string): void {
     console.log(`[tavora] ${line}`);
@@ -452,6 +540,7 @@ export class Host {
       if (!action) return { ok: false, error: "Tavora did not understand that request." };
       try {
         if (action.type === "share-icons") return await this.shareIcons(action.gameIds);
+        if (action.type === "import-steam-games") return this.importSteam(action.games);
         const id = await this.perform(action);
         return id === undefined ? { ok: true } : { ok: true, id };
       } catch (error) {
@@ -475,6 +564,12 @@ export class Host {
       const result = await this.onlineSearch.search(query);
       // Games the player already has (Trash included) are not offered again.
       return { ...result, games: result.games.filter((game) => !this.library.games[game.id]) };
+    });
+    ipcMain.handle("host:steam-library", async (event, profile: unknown): Promise<SteamLibraryResult> => {
+      if (!fromHost(event) || typeof profile !== "string") return { status: "error", error: "Tavora did not understand that request." };
+      if (!this.library.onlineSearch) return { status: "error", error: "Turn on Online game search in Settings to import from Steam." };
+      const result = await fetchSteamLibrary({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL }, profile);
+      return result.status === "ok" ? steamLibraryView(this.library, result.games) : result;
     });
     ipcMain.on("host:panel-bounds", (event, bounds: unknown) => {
       if (fromHost(event)) this.setPanelBounds(bounds);
@@ -595,6 +690,12 @@ export class Host {
         library.autoUpdate = action.enabled;
         this.updates?.setAutoDownload(action.enabled);
         break;
+      case "record-timing":
+        timings.record(action.name, action.ms);
+        return;
+      case "copy-diagnostics":
+        clipboard.writeText(await this.diagnosticReport());
+        return;
       case "open-backups": {
         const dir = backupsDir(this.options.userData);
         await mkdir(dir, { recursive: true });
@@ -613,6 +714,9 @@ export class Host {
         library.onlineSearch = action.enabled;
         // Turned on: games without an icon may find one on the service, and the share list can be built.
         if (action.enabled) this.fetchIconsSoon();
+        break;
+      case "set-steam-profile":
+        library.steamProfile = action.profile;
         break;
       case "set-steam-icons":
         library.steamIcons = action.enabled;
@@ -644,6 +748,12 @@ export class Host {
         library.followSystem = true;
         this.applyTheme();
         break;
+      case "reload-modules":
+        return this.reloadModules();
+      case "open-modules-folder":
+        return this.openModulesFolder();
+      case "remove-module":
+        return this.removeModule(action.moduleId);
       case "reload-themes":
         return this.reloadThemes();
       case "open-themes-folder":
@@ -827,6 +937,18 @@ export class Host {
     return Object.values(library.games).filter(isShareCandidate);
   }
 
+  /** Adds the games of a Steam import that are not in the library yet. Answers with how many. */
+  private importSteam(games: SteamImportGame[]): ActionResult {
+    const added = importSteamGames(this.library, games, new Date());
+    for (const id of added) this.workspace.games[id] = emptyGameWorkspace();
+    if (added.length > 0) {
+      this.saveLibrary();
+      this.saveWorkspace();
+      this.fetchIconsSoon();
+    }
+    return { ok: true, added: added.length };
+  }
+
   /** Offers these games' icons to the service, one at a time. Returns how many it took. */
   private async shareIcons(gameIds: string[]): Promise<ActionResult> {
     let tried = 0;
@@ -897,7 +1019,7 @@ export class Host {
     const record = { instanceId: randomUUID(), moduleId };
     records.push(record);
     this.saveWorkspace();
-    this.createView(record, game);
+    this.createView(record, game, performance.now());
     return record.instanceId;
   }
 
@@ -1030,7 +1152,9 @@ export class Host {
     this.layoutEpoch++;
   }
 
-  private createView(record: InstanceRecord, game: TavoraGame): void {
+  /** openedAt is when the player asked for the panel; its time to a loaded page is measured from there. */
+  private createView(record: InstanceRecord, game: TavoraGame, openedAt?: number): void {
+    let measured = openedAt === undefined;
     const module = this.modules.get(record.moduleId)!;
     const view = new ModuleView({
       instanceId: record.instanceId,
@@ -1043,7 +1167,13 @@ export class Host {
       devTools: this.options.devTools,
       getTheme: () => this.currentTheme,
       baseCss: (moduleCss ??= moduleBaseCss(MODULE_FONTS)),
-      onStatus: () => this.pushState(),
+      onStatus: (status) => {
+        if (!measured && status === "ready") {
+          measured = true;
+          timings.record("panel-open", performance.now() - openedAt!);
+        }
+        this.pushState();
+      },
     });
     const contentsId = view.webContentsId;
     this.views.set(record.instanceId, view);
@@ -1194,6 +1324,7 @@ export class Host {
         onlineSearch: library.onlineSearch,
         autoUpdate: library.autoUpdate,
         steamIcons: library.steamIcons,
+        steamProfile: library.steamProfile,
         onboarded: library.onboarded,
         rail: { ...library.rail },
       },
@@ -1206,7 +1337,11 @@ export class Host {
         minHeight: module.manifest.viewport.minHeight,
         provenance: module.provenance,
         development: isDevelopmentModule(module.manifest.id),
+        version: module.manifest.version,
+        origin: this.moduleInfo.get(module.manifest.id)?.origin ?? "",
+        removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
       })),
+      moduleProblems: this.moduleProblems.map((problem) => ({ ...problem })),
       panels: workspace.instances.map((record) => ({
         instanceId: record.instanceId,
         moduleId: record.moduleId,

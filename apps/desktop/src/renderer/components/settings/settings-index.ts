@@ -1,4 +1,4 @@
-import { Keyboard, Palette, SlidersHorizontal, Trash2 } from "@lucide/vue";
+import { Blocks, Keyboard, Palette, SlidersHorizontal, Trash2 } from "@lucide/vue";
 
 // The section menu, in groups. New settings get a row in a section, or a
 // new section here, rather than a longer page.
@@ -8,6 +8,7 @@ export const GROUPS = [
     sections: [
       { id: "general", label: "General", icon: SlidersHorizontal },
       { id: "appearance", label: "Appearance", icon: Palette },
+      { id: "modules", label: "Modules", icon: Blocks },
       { id: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard },
     ],
   },
@@ -97,6 +98,13 @@ export const SETTINGS: SettingEntry[] = [
     keywords: ["backup", "restore", "copy", "recover", "undo", "data", "safety", "export"],
   },
   {
+    id: "diagnostics",
+    section: "general",
+    label: "Diagnostic info",
+    description: "Copy version, system, timings, update log and last errors to share when something goes wrong.",
+    keywords: ["diagnostic", "debug", "bug", "problem", "error", "log", "report", "support", "help", "copy", "version", "slow", "performance"],
+  },
+  {
     id: "steam-icons",
     section: "general",
     label: "Game icons from this PC and Steam",
@@ -146,6 +154,29 @@ export const SETTINGS: SettingEntry[] = [
     description:
       "Offer the icons your PC has for games Tavora does not have an icon for yet. You choose which, and see exactly what is sent. A person at Tavora checks each one before anyone else sees it. Needs Online game search.",
     keywords: ["icon", "share", "upload", "send", "contribute", "offer", "missing", "logo", "help"],
+  },
+  {
+    id: "steam-import",
+    section: "general",
+    label: "Import from Steam",
+    description:
+      "Add the games you own on Steam, by pasting your profile link. You see the list first and choose which to add. Tavora does not start games. Needs Online game search.",
+    keywords: ["steam", "import", "library", "games", "profile", "add", "valve"],
+  },
+  {
+    id: "own-modules",
+    section: "modules",
+    label: "Your own modules",
+    description:
+      "Put a module's folder into your modules folder, then press Reload. Only add modules from people you trust: a module runs on your PC and can see the game it is opened in.",
+    keywords: ["module", "modules", "folder", "reload", "install", "add", "plugin", "extension"],
+  },
+  {
+    id: "installed-modules",
+    section: "modules",
+    label: "Installed modules",
+    description: "Every module Tavora found, where it came from, and a way to remove the ones in your own folder.",
+    keywords: ["module", "modules", "installed", "remove", "uninstall", "delete", "notes", "to-dos", "list"],
   },
   {
     id: "shortcuts",

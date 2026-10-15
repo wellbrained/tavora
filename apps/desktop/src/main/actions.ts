@@ -1,10 +1,11 @@
 import { isGameId, isModuleId } from "@tavora/module-schema";
-import type { HostAction } from "../shared/host-api";
+import type { HostAction, SteamImportGame } from "../shared/host-api";
 import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
 import { isGridSize, layoutTemplate } from "../shared/layout-templates";
 import { MAX_INITIALS, MAX_PICTURE_BYTES, MAX_PROFILE_NAME } from "./profile";
 import { isSteamAppId } from "./steam-icons";
+import { MAX_IMPORT_GAMES, parseSteamGame } from "./steam-import";
 import { isVariationId } from "./themes";
 import { MAX_SNAPSHOT_NAME } from "./workspace";
 
@@ -34,13 +35,22 @@ export function parseAction(raw: unknown): HostAction | null {
     case "restart":
     case "download-update":
     case "open-backups":
+    case "copy-diagnostics":
     case "check-for-updates":
     case "restart-to-update":
     case "reset-theme":
     case "reload-themes":
     case "open-themes-folder":
     case "create-starter-theme":
+    case "open-modules-folder":
+    case "reload-modules":
       return only() ? { type: a.type } : null;
+    case "remove-module":
+      return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
+    case "record-timing":
+      return only("name", "ms") && a.name === "game-switch" && typeof a.ms === "number" && Number.isFinite(a.ms) && a.ms >= 0 && a.ms < 600_000
+        ? { type: a.type, name: a.name, ms: a.ms }
+        : null;
     case "set-theme":
       return only("themeId", "variationId", "fixed") && isModuleId(a.themeId) && isVariationId(a.variationId) && (a.fixed === undefined || typeof a.fixed === "boolean")
         ? { type: a.type, themeId: a.themeId, variationId: a.variationId, ...(a.fixed === undefined ? {} : { fixed: a.fixed }) }
@@ -64,6 +74,17 @@ export function parseAction(raw: unknown): HostAction | null {
         new Set(a.gameIds).size === a.gameIds.length
         ? { type: a.type, gameIds: a.gameIds as string[] }
         : null;
+    case "import-steam-games": {
+      if (!only("games") || !Array.isArray(a.games) || a.games.length < 1 || a.games.length > MAX_IMPORT_GAMES) return null;
+      const games: SteamImportGame[] = [];
+      for (const raw of a.games) {
+        const game = parseSteamGame(raw);
+        // Exactly the fields the dialog got from the service, nothing more.
+        if (!game || Object.keys(raw as object).some((key) => key !== "appid" && key !== "name" && key !== "id")) return null;
+        games.push(game);
+      }
+      return { type: a.type, games };
+    }
     case "add-game":
       if (only("catalogId") && isGameId(a.catalogId)) return { type: a.type, catalogId: a.catalogId };
       if (only("name") && text(a.name)) return { type: a.type, name: a.name };
@@ -147,6 +168,10 @@ export function parseAction(raw: unknown): HostAction | null {
     case "set-auto-update":
     case "set-steam-icons":
       return only("enabled") && typeof a.enabled === "boolean" ? { type: a.type, enabled: a.enabled } : null;
+    case "set-steam-profile":
+      return only("profile") && (a.profile === null || (text(a.profile, 200) && a.profile.trim() !== ""))
+        ? { type: a.type, profile: a.profile === null ? null : a.profile.trim() }
+        : null;
     case "set-onboarded":
       return only("done") && typeof a.done === "boolean" ? { type: a.type, done: a.done } : null;
     case "set-rail": {

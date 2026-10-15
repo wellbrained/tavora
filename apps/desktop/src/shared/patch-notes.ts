@@ -19,6 +19,40 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.5",
+    date: "2026-10-15",
+    title: "Remember my Steam profile",
+    notes: [
+      "The Steam import can now remember your profile link. Tick Remember this profile on this PC and it is filled in next time. It stays on your PC only; untick it and look up again to forget it.",
+    ],
+  },
+  {
+    version: "0.5.4",
+    date: "2026-10-15",
+    title: "Your modules, in one place",
+    notes: [
+      "Settings has a new Modules page. It lists every module Tavora found and where it came from. Open folder shows your own modules folder, and Reload picks up a module you just put there. Modules in your folder can be removed again; they go to the recycle bin and their notes and data stay, so adding one back finds everything.",
+      "If a folder in your modules folder cannot be loaded, the page says which one and why.",
+      "Notes and To-Dos cope better with damaged or hand-edited data: a note whose formatting cannot be read shows its plain text, and a to-do list only keeps web links and a sensible amount of items.",
+    ],
+  },
+  {
+    version: "0.5.3",
+    date: "2026-10-15",
+    title: "Bring your Steam games",
+    notes: [
+      "You can now add the games you own on Steam in one go. Open Add a game and choose Import your games from Steam (or use Settings, then General, then Import from Steam), paste your profile link, look at the list and tick the games you want. Games you already have are marked and left alone. Tavora only lists them: it does not start games.",
+    ],
+  },
+  {
+    version: "0.5.2",
+    date: "2026-10-15",
+    title: "Help when something goes wrong",
+    notes: [
+      "Settings, then General, has a new Diagnostic info button. It copies Tavora's version, your system, how long things took, the update log and the last errors, so you can paste it to whoever is helping you. It leaves out game names, notes and folders, and nothing is sent anywhere.",
+    ],
+  },
+  {
     version: "0.5.1",
     date: "2026-10-15",
     title: "Light or dark, like your system",
