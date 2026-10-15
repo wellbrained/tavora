@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { layoutPanels, parseLayout, pruneLayout, type LayoutNode, type SavedLayout } from "./layout";
+import { layoutTemplate } from "../shared/layout-templates";
+import { layoutPanels, parseLayout, pruneLayout, templateLayout, type LayoutNode, type SavedLayout } from "./layout";
 
 const A = "00000000-0000-4000-8000-00000000000a";
 const B = "00000000-0000-4000-8000-00000000000b";
@@ -31,7 +32,7 @@ describe("parseLayout", () => {
     ["a group at the root", { ...sample, root: group(600, A) }],
     ["a panel twice", layout(group(500, A), group(500, A))],
     ["a bad panel id", layout(group(500, "../x"))],
-    ["an empty group", layout({ kind: "group", size: 1, panels: [], active: A })],
+    ["an empty slot with an active panel", layout({ kind: "group", size: 1, panels: [], active: A })],
     ["an active panel that is not in the group", layout({ kind: "group", size: 1, panels: [A], active: B })],
     ["a negative size", layout(group(-1, A))],
     ["an endless size", { ...sample, width: Number.POSITIVE_INFINITY }],
@@ -44,6 +45,51 @@ describe("parseLayout", () => {
     let node: LayoutNode = group(1, A);
     for (let i = 0; i < 20; i++) node = split(1, node, group(1, `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`));
     expect(parseLayout(layout(node))).toBeNull();
+  });
+});
+
+describe("empty slots", () => {
+  const slot = (size: number): LayoutNode => ({ kind: "group", size, panels: [], active: null });
+
+  it("are accepted", () => {
+    const raw = layout(group(500, A), slot(500));
+    expect(parseLayout(JSON.parse(JSON.stringify(raw)))).toEqual(raw);
+  });
+
+  it("stay when panels are pruned, while groups emptied by pruning go", () => {
+    const pruned = pruneLayout(layout(group(400, A), slot(300), group(300, B)), (id) => id !== B);
+    expect(pruned).toEqual(layout(group(400, A), slot(300)));
+    expect(pruneLayout(layout(slot(500), slot(500)), () => false)).toEqual(layout(slot(500), slot(500)));
+  });
+});
+
+describe("templateLayout", () => {
+  it("builds empty slots in the template's shape", () => {
+    const built = templateLayout(layoutTemplate("main-stacked")!, []);
+    expect(built.direction).toBe("row");
+    expect(built.root.children).toEqual([
+      { kind: "group", size: 720, panels: [], active: null },
+      {
+        kind: "split",
+        size: 480,
+        children: [
+          { kind: "group", size: 400, panels: [], active: null },
+          { kind: "group", size: 400, panels: [], active: null },
+        ],
+      },
+    ]);
+    expect(parseLayout(built)).toEqual(built);
+  });
+
+  it("fills slots in order with the open panels, extras as tabs in the last", () => {
+    const built = templateLayout(layoutTemplate("two-columns")!, [A, B, C]);
+    expect(built.root.children).toEqual([
+      { kind: "group", size: 600, panels: [A], active: A },
+      { kind: "group", size: 600, panels: [B, C], active: B },
+    ]);
+    const grid = templateLayout(layoutTemplate("grid")!, [A]);
+    expect(layoutPanels(grid)).toEqual([A]);
+    expect(parseLayout(grid)).toEqual(grid);
   });
 });
 

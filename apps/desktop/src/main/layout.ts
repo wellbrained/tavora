@@ -1,7 +1,8 @@
 // Docking layouts as the main process stores them. The host UI owns the
 // docking itself; the main process only checks what it is asked to save
 // and keeps layouts in step with the panels that exist.
-import type { LayoutNode, SavedLayout } from "../shared/host-api";
+import type { LayoutGroup, LayoutNode, SavedLayout } from "../shared/host-api";
+import type { LayoutTemplate, TemplatePart } from "../shared/layout-templates";
 import { INSTANCE_ID } from "./ids";
 
 export type { LayoutGroup, LayoutNode, LayoutSplit, SavedLayout } from "../shared/host-api";
@@ -19,7 +20,8 @@ const only = (value: Fields, ...keys: string[]) => Object.keys(value).every((key
 
 /**
  * Checks a layout sent by the host UI and returns a clean copy, or null if
- * anything about it is malformed. Every panel may appear only once.
+ * anything about it is malformed. Every panel may appear only once; a
+ * group without panels is an empty slot.
  */
 export function parseLayout(raw: unknown): SavedLayout | null {
   if (!isObject(raw) || !only(raw, "width", "height", "direction", "root")) return null;
@@ -41,7 +43,8 @@ export function parseLayout(raw: unknown): SavedLayout | null {
       return { kind: "split", size: value.size, children };
     }
     if (value.kind === "group") {
-      if (!only(value, "kind", "size", "panels", "active") || !Array.isArray(value.panels) || value.panels.length === 0) return null;
+      if (!only(value, "kind", "size", "panels", "active") || !Array.isArray(value.panels)) return null;
+      if (value.panels.length === 0) return value.active === null ? { kind: "group", size: value.size, panels: [], active: null } : null;
       for (const id of value.panels) {
         if (typeof id !== "string" || !INSTANCE_ID.test(id) || seen.has(id)) return null;
         seen.add(id);
@@ -71,9 +74,9 @@ export function layoutPanels(layout: SavedLayout | null): string[] {
 
 /**
  * Keeps only panels for which `keep` is true, renaming them through
- * `rename` if given. Empty groups and splits go, and a split left with one
- * child is merged into its parent so directions still alternate. Returns
- * null when no panel is left.
+ * `rename` if given. Groups emptied by this go (empty slots stay), as do
+ * splits left with nothing, and a split left with one child is merged into
+ * its parent so directions still alternate. Returns null when nothing is left.
  */
 export function pruneLayout(
   layout: SavedLayout | null,
@@ -85,9 +88,10 @@ export function pruneLayout(
   // Returns the nodes that take this node's place in its parent.
   const prune = (node: LayoutNode): LayoutNode[] => {
     if (node.kind === "group") {
+      if (node.panels.length === 0) return [{ ...node }];
       const panels = node.panels.filter(keep);
       if (panels.length === 0) return [];
-      const active = panels.includes(node.active) ? node.active : panels[0]!;
+      const active = node.active !== null && panels.includes(node.active) ? node.active : panels[0]!;
       return [{ kind: "group", size: node.size, panels: panels.map(rename), active: rename(active) }];
     }
     const children = node.children.flatMap(prune);
@@ -120,4 +124,37 @@ function scale(nodes: LayoutNode[], total: number): LayoutNode[] {
   const sum = nodes.reduce((acc, node) => acc + node.size, 0);
   if (sum <= 0) return nodes.map((node) => ({ ...node, size: total / nodes.length }));
   return nodes.map((node) => ({ ...node, size: (node.size / sum) * total }));
+}
+
+/** The size a template layout is built at; restoring scales it to the area there is. */
+const TEMPLATE_AREA = { width: 1200, height: 800 } as const;
+
+/**
+ * Builds a template's layout. `panels` fill its slots in order, one each;
+ * any left over join the last slot as tabs. The other slots stay empty.
+ */
+export function templateLayout(template: LayoutTemplate, panels: readonly string[]): SavedLayout {
+  const row = template.direction === "row";
+  const along = row ? TEMPLATE_AREA.width : TEMPLATE_AREA.height;
+  const across = row ? TEMPLATE_AREA.height : TEMPLATE_AREA.width;
+  const weight = (part: TemplatePart): number => (typeof part === "number" ? part : part.reduce<number>((sum, value) => sum + value, 0));
+  const total = template.parts.reduce<number>((sum, part) => sum + weight(part), 0);
+  const slots: LayoutGroup[] = [];
+  const slot = (size: number): LayoutGroup => {
+    const group: LayoutGroup = { kind: "group", size, panels: [], active: null };
+    slots.push(group);
+    return group;
+  };
+  const children = template.parts.map((part): LayoutNode => {
+    const size = (weight(part) / total) * along;
+    if (typeof part === "number") return slot(size);
+    const sum = weight(part);
+    return { kind: "split", size, children: part.map((value) => slot((value / sum) * across)) };
+  });
+  panels.forEach((id, index) => {
+    const group = slots[Math.min(index, slots.length - 1)]!;
+    group.panels.push(id);
+    group.active ??= id;
+  });
+  return { ...TEMPLATE_AREA, direction: template.direction, root: { kind: "split", size: across, children } };
 }

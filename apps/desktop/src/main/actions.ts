@@ -2,6 +2,7 @@ import { isGameId, isModuleId } from "@tavora/module-schema";
 import type { HostAction } from "../shared/host-api";
 import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
+import { layoutTemplate } from "../shared/layout-templates";
 import { MAX_INITIALS, MAX_PICTURE_BYTES, MAX_PROFILE_NAME } from "./profile";
 import { isSteamAppId } from "./steam-icons";
 import { isVariationId } from "./themes";
@@ -167,8 +168,14 @@ export function parseAction(raw: unknown): HostAction | null {
         ? { type: a.type, instanceId: a.instanceId }
         : null;
     case "save-layout": {
-      const layout = only("layout") ? parseLayout(a.layout) : null;
+      if (!only("layout")) return null;
+      if (a.layout === null) return { type: a.type, layout: null };
+      const layout = parseLayout(a.layout);
       return layout ? { type: a.type, layout } : null;
+    }
+    case "apply-layout-template": {
+      const template = only("templateId") && typeof a.templateId === "string" ? layoutTemplate(a.templateId) : undefined;
+      return template ? { type: a.type, templateId: template.id } : null;
     }
     case "save-snapshot":
       return only("name") && text(a.name, MAX_SNAPSHOT_NAME) ? { type: a.type, name: a.name } : null;

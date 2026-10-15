@@ -14,9 +14,10 @@ import {
 import { computed, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds } from "../../shared/host-api";
 import { Button } from "@/components/ui/button";
-import { act, api as host, dialog, dragging, state } from "../host";
+import { act, api as host, dialog, dragging, nextPanelSlot, state } from "../host";
 import { fromDockview, groupMinimum, guardDrop, placePanel, toDockview, type PanelInfo } from "../dock";
 import GameIcon from "../components/GameIcon.vue";
+import EmptySlot from "../components/workspace/EmptySlot.vue";
 import GroupActions from "../components/workspace/GroupActions.vue";
 import LayoutsMenu from "../components/workspace/LayoutsMenu.vue";
 import PanelContent from "../components/workspace/PanelContent.vue";
@@ -127,7 +128,8 @@ function reconcile(api: DockviewApi) {
   }
   for (const id of open) {
     if (!api.getPanel(id)) {
-      placePanel(api, id, info);
+      placePanel(api, id, info, nextPanelSlot.value);
+      nextPanelSlot.value = null;
       changed = true;
     }
   }
@@ -148,8 +150,7 @@ function updateConstraints(api: DockviewApi) {
 function saveSoon() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    const layout = dock && fromDockview(dock.toJSON());
-    if (layout) void act({ type: "save-layout", layout }, { quiet: true });
+    if (dock) void act({ type: "save-layout", layout: fromDockview(dock.toJSON()) }, { quiet: true });
   }, SAVE_DELAY_MS);
 }
 
@@ -232,6 +233,7 @@ onBeforeUnmount(() => {
 const components = { panel: PanelContent as unknown as VueComponent };
 const tab = PanelTab as unknown as VueComponent;
 const groupActions = GroupActions as unknown as VueComponent;
+const emptySlot = EmptySlot as unknown as VueComponent;
 </script>
 
 <template>
@@ -255,12 +257,13 @@ const groupActions = GroupActions as unknown as VueComponent;
         :components="components"
         :default-tab-component="tab"
         :right-header-actions-component="groupActions"
+        :watermark-component="emptySlot"
         :disable-floating-groups="true"
         dnd-strategy="html5"
         @ready="onReady"
       />
       <div
-        v-if="!view.panels.length"
+        v-if="!view.panels.length && !view.layout"
         class="bg-background absolute inset-x-2 top-0 bottom-2 flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed text-center"
         data-testid="empty-workspace"
       >

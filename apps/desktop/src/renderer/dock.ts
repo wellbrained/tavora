@@ -29,7 +29,7 @@ export function toDockview(layout: SavedLayout, info: (id: string) => PanelInfo 
   const node = (value: LayoutNode): GridNode => {
     if (value.kind === "split") return { type: "branch", size: value.size, data: value.children.map(node) };
     for (const id of value.panels) panels[id] = { id, contentComponent: PANEL_COMPONENT, title: info(id)?.title ?? "" };
-    return { type: "leaf", size: value.size, data: { id: `group-${++groups}`, views: value.panels, activeView: value.active } };
+    return { type: "leaf", size: value.size, data: { id: `group-${++groups}`, views: value.panels, activeView: value.active ?? undefined } };
   };
   const row = layout.direction === "row";
   return {
@@ -43,7 +43,7 @@ export function toDockview(layout: SavedLayout, info: (id: string) => PanelInfo 
   };
 }
 
-/** Reads the docked part of a layout; null when nothing is docked. */
+/** Reads the docked part of a layout, empty slots included; null when nothing is docked. */
 export function fromDockview(json: SerializedDockview): SavedLayout | null {
   const node = (value: GridNode): LayoutNode | null => {
     if (value.type === "branch") {
@@ -51,7 +51,7 @@ export function fromDockview(json: SerializedDockview): SavedLayout | null {
       return children.length ? { kind: "split", size: value.size ?? 0, children } : null;
     }
     const group = value.data as GroupState;
-    if (!group.views.length) return null;
+    if (!group.views.length) return { kind: "group", size: value.size ?? 0, panels: [], active: null };
     const active = group.activeView && group.views.includes(group.activeView) ? group.activeView : group.views[0]!;
     return { kind: "group", size: value.size ?? 0, panels: [...group.views], active };
   };
@@ -161,17 +161,23 @@ export function shareOut(total: number, mins: number[]): number[] {
 }
 
 /**
- * Docks a new panel: beside the active group if its row has room for
- * everyone's minimum width, else below it, else beside or below the
- * roomiest other group, else as a tab in the active group. The row or
- * column it joins is then shared out evenly.
+ * Docks a new panel: into an empty slot if there is one (`slot` if it is
+ * still empty, else the active group's, else the first), else beside the
+ * active group if its row has room for everyone's minimum width, else below
+ * it, else beside or below the roomiest other group, else as a tab in the
+ * active group. The row or column it joins is then shared out evenly.
  */
-export function placePanel(api: DockviewApi, id: string, info: Info): void {
+export function placePanel(api: DockviewApi, id: string, info: Info, slot?: string | null): void {
   const panel = info(id)!;
   const base = { id, component: PANEL_COMPONENT, title: panel.title };
   const active = api.activeGroup ?? api.groups[0];
   if (!active) {
     api.addPanel(base);
+    return;
+  }
+  const empty = [slot ? api.getGroup(slot) : undefined, active, ...api.groups].find((group) => group && group.panels.length === 0);
+  if (empty) {
+    api.addPanel({ ...base, position: { referenceGroup: empty.id, direction: "within" } });
     return;
   }
   const others = api.groups.filter((group) => group !== active).sort((a, b) => b.width * b.height - a.width * a.height);

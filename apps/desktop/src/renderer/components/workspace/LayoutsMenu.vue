@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // Saved layouts of the current game: apply one, or save the current layout.
+// Below them, templates: common arrangements of empty slots to fill with modules.
 import { ChevronDown, LayoutPanelLeft } from "@lucide/vue";
 import type { SnapshotView } from "../../../shared/host-api";
+import { LAYOUT_TEMPLATES } from "../../../shared/layout-templates";
 import { act, confirmAction, prompt, state, submitAction, type MenuItem } from "../../host";
 import MenuButton from "../menus/MenuButton.vue";
 
@@ -65,6 +67,12 @@ function items(): MenuItem[] {
       disabled: view.panels.length === 0,
       run: saveAs,
     },
+    ...LAYOUT_TEMPLATES.map((template, index) => ({
+      label: template.name,
+      testid: `layout-template-${template.id}`,
+      heading: index === 0 ? "Templates" : undefined,
+      run: () => act({ type: "apply-layout-template", templateId: template.id }),
+    })),
   ];
 }
 </script>

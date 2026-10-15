@@ -5,6 +5,7 @@ import { Check } from "@lucide/vue";
 import { computed } from "vue";
 import {
   ContextMenuItem,
+  ContextMenuLabel,
   ContextMenuSeparator,
   ContextMenuSub,
   ContextMenuSubContent,
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/context-menu";
 import {
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -25,6 +27,7 @@ const parts = computed(() =>
   props.kind === "dropdown"
     ? {
         Item: DropdownMenuItem,
+        Label: DropdownMenuLabel,
         Separator: DropdownMenuSeparator,
         Sub: DropdownMenuSub,
         SubTrigger: DropdownMenuSubTrigger,
@@ -32,6 +35,7 @@ const parts = computed(() =>
       }
     : {
         Item: ContextMenuItem,
+        Label: ContextMenuLabel,
         Separator: ContextMenuSeparator,
         Sub: ContextMenuSub,
         SubTrigger: ContextMenuSubTrigger,
@@ -50,7 +54,8 @@ function run(item: MenuItem) {
 
 <template>
   <template v-for="(item, index) in items" :key="item.label">
-    <component :is="parts.Separator" v-if="(item.danger || item.separator) && index > 0" />
+    <component :is="parts.Separator" v-if="(item.danger || item.separator || item.heading) && index > 0" />
+    <component :is="parts.Label" v-if="item.heading" class="text-muted-foreground truncate text-xs font-normal">{{ item.heading }}</component>
     <component :is="parts.Sub" v-if="item.submenu">
       <component :is="parts.SubTrigger" :data-testid="item.testid" :disabled="item.disabled">{{ item.label }}</component>
       <component :is="parts.SubContent" class="max-w-72 min-w-48">
