@@ -19,6 +19,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.12",
+    date: "2026-10-15",
+    title: "Discord for each game, and leave and mute",
+    notes: [
+      "The Discord panel can remember a server for each game. Tick Remember the server on this game, and switching to that game shows the server's voice channels and who is in them, even when you are not in a call. Choose any server you are on from the list.",
+      "The channel list is read again every 5 minutes. The round arrow reads it now.",
+      "New buttons while you are in a call: Mute, Deafen and Leave. Discord asks once to let Tavora mute you; the panel shows Allow muting until you do.",
+      "Settings has Integrations now, with Discord and Steam as its first parts.",
+    ],
+  },
+  {
     version: "0.5.11",
     date: "2026-10-15",
     title: "German for Notes and To-Dos, and a language list",

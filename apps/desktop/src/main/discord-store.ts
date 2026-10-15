@@ -1,5 +1,6 @@
 import { readFile, rm } from "node:fs/promises";
-import type { DiscordLast, DiscordSecrets, DiscordToken } from "./discord";
+import { isGameId } from "@tavora/module-schema";
+import type { DiscordGame, DiscordLast, DiscordSecrets, DiscordToken } from "./discord";
 import { isSnowflake } from "./discord-voice";
 import { writeFileAtomic } from "./fsutil";
 
@@ -14,7 +15,7 @@ export interface Encryptor {
   decrypt(data: Buffer): string;
 }
 
-const EMPTY: DiscordSecrets = { secret: null, token: null, last: null };
+const EMPTY: DiscordSecrets = { secret: null, token: null, last: null, games: {} };
 const MAX_SECRET = 200;
 
 export const isClientSecret = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{8,200}$/.test(value);
@@ -35,6 +36,25 @@ function last(value: unknown): DiscordLast | null {
   return { channelId: raw.channelId, guildId: raw.guildId, name: channelName, serverName: name(raw.serverName) };
 }
 
+const MAX_GAMES = 200;
+
+function games(value: unknown): Record<string, DiscordGame> {
+  const raw = (typeof value === "object" && value !== null && !Array.isArray(value) ? value : {}) as Record<string, unknown>;
+  const name = (text: unknown) => (typeof text === "string" && text.length > 0 && text.length <= 64 ? text : null);
+  const result: Record<string, DiscordGame> = {};
+  for (const [gameId, entry] of Object.entries(raw).slice(0, MAX_GAMES)) {
+    const item = (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>;
+    if (!isGameId(gameId)) continue;
+    result[gameId] = {
+      guildId: isSnowflake(item.guildId) ? item.guildId : null,
+      serverName: name(item.serverName),
+      channelId: isSnowflake(item.channelId) ? item.channelId : null,
+      channelName: name(item.channelName),
+    };
+  }
+  return result;
+}
+
 export async function loadDiscordSecrets(file: string, encryptor: Encryptor): Promise<DiscordSecrets> {
   if (!encryptor.isAvailable()) return EMPTY;
   try {
@@ -42,7 +62,7 @@ export async function loadDiscordSecrets(file: string, encryptor: Encryptor): Pr
     if (saved.v !== 1 || typeof saved.data !== "string") return EMPTY;
     const raw = JSON.parse(encryptor.decrypt(Buffer.from(saved.data, "base64"))) as Record<string, unknown>;
     const secret = isClientSecret(raw.secret) && raw.secret.length <= MAX_SECRET ? raw.secret : null;
-    return { secret, token: secret ? token(raw.token) : null, last: secret ? last(raw.last) : null };
+    return { secret, token: secret ? token(raw.token) : null, last: secret ? last(raw.last) : null, games: secret ? games(raw.games) : {} };
   } catch {
     // Missing, damaged, or encrypted by another user or PC: start without.
     return EMPTY;
@@ -50,7 +70,7 @@ export async function loadDiscordSecrets(file: string, encryptor: Encryptor): Pr
 }
 
 export async function saveDiscordSecrets(file: string, encryptor: Encryptor, secrets: DiscordSecrets): Promise<void> {
-  if (!secrets.secret && !secrets.token && !secrets.last) {
+  if (!secrets.secret && !secrets.token && !secrets.last && Object.keys(secrets.games ?? {}).length === 0) {
     await rm(file, { force: true });
     return;
   }

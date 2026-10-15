@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { DiscordConnection, DiscordError, SCOPES, type DiscordSecrets } from "./discord";
+import { DiscordConnection, DiscordError, OTHERS_MS, SCOPES, type DiscordSecrets } from "./discord";
 import { RpcClient } from "./discord-rpc";
 import { fakeDiscord, until, type FakeDiscord } from "./discord-fake.test-helper";
 
@@ -93,7 +93,7 @@ describe("DiscordConnection", () => {
 
     await connection.connectNow();
     await until(() => connection.view().status === "connected" && connection.view().others.length === 1);
-    expect(fake.commands.find((c) => c.cmd === "AUTHORIZE")?.args).toEqual({ client_id: "99", scopes: ["rpc", "rpc.voice.read", "identify"] });
+    expect(fake.commands.find((c) => c.cmd === "AUTHORIZE")?.args).toEqual({ client_id: "99", scopes: ["rpc", "rpc.voice.read", "rpc.voice.write", "identify"] });
     // The secret goes to Discord's token address and nowhere else.
     const tokenRequests = requests.filter((r) => r.body.includes("s3cret_value"));
     expect(tokenRequests.map((r) => r.url)).toEqual(["https://discord.com/api/oauth2/token"]);
@@ -196,6 +196,81 @@ describe("DiscordConnection", () => {
     expect(connection.view().last).toBeNull();
   });
 
+  it("remembers a server for each game, browses it without a call, and reads it every 5 minutes", async () => {
+    const { connection, fake, saved, timers } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    fake.answers.set("GET_GUILD", (args) => ({ data: { id: args.guild_id, name: args.guild_id === "21" ? "Other Crew" : "Wellbrained Crew", icon_url: null } }));
+    fake.answers.set("GET_GUILDS", () => ({ data: { guilds: [{ id: "20", name: "Wellbrained Crew" }, { id: "21", name: "Other Crew" }] } }));
+    connection.setGame("poe2");
+    await connection.setWanted(true);
+    await until(() => connection.view().status === "connected" && connection.view().call !== null && connection.view().others.length === 1);
+    expect(connection.view().servers.map((s) => s.name)).toEqual(["Wellbrained Crew", "Other Crew"]);
+    expect(connection.view().game).toEqual({ remember: false, serverId: null });
+
+    // Ticking the box in a call takes the call's server and channel.
+    await connection.rememberGame("poe2", true);
+    expect(saved.at(-1)?.games?.poe2).toEqual({ guildId: "20", serverName: "Wellbrained Crew", channelId: "10", channelName: "Factory Floor" });
+    expect(connection.view().game).toEqual({ remember: true, serverId: "20" });
+
+    // Without a call the game's server is still listed, and Rejoin offers the game's channel.
+    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: null }));
+    fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: null });
+    await until(() => connection.view().call === null && connection.view().others.length === 2);
+    expect(connection.view()).toMatchObject({ browseServer: { id: "20", name: "Wellbrained Crew" }, last: { channelId: "10", name: "Factory Floor", serverName: "Wellbrained Crew" } });
+
+    // Another game without a server shows nothing and offers the last channel anywhere.
+    connection.setGame("satisfactory");
+    await until(() => connection.view().others.length === 0);
+    expect(connection.view()).toMatchObject({ browseServer: null, game: { remember: false }, last: { channelId: "10" } });
+
+    // Choosing a server from the list; only a server the player is on is accepted.
+    await connection.rememberGame("satisfactory", true);
+    await connection.setGameServer("satisfactory", "21");
+    expect(connection.view()).toMatchObject({ browseServer: { id: "21", name: "Other Crew" }, game: { remember: true, serverId: "21" }, last: null });
+    await expect(connection.setGameServer("satisfactory", "99")).rejects.toMatchObject({ key: "discord.error.serverUnknown" });
+
+    // A call on another server does not replace the game's server.
+    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain")] } }));
+    fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: "10" });
+    await until(() => connection.view().call?.id === "10");
+    expect(connection.view()).toMatchObject({ server: { id: "20" }, browseServer: { id: "21" } });
+    expect(saved.at(-1)?.games?.satisfactory?.guildId).toBe("21");
+
+    // Unticking forgets the server; the browsed list is read again by a timer (5 minutes), not every 10 seconds.
+    await connection.rememberGame("satisfactory", false);
+    expect(saved.at(-1)?.games?.satisfactory).toBeUndefined();
+    expect(OTHERS_MS).toBe(300_000);
+    expect(timers.length).toBeGreaterThan(0);
+  });
+
+  it("leaves, mutes and deafens, and asks for the new permission first when the sign-in lacks it", async () => {
+    const { connection, fake } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    await connection.setWanted(true);
+    await until(() => connection.view().status === "connected" && connection.view().call !== null);
+    expect(connection.view()).toMatchObject({ canControl: true, self: { mute: false, deaf: false } });
+    await connection.setVoice({ mute: true });
+    await connection.setVoice({ deaf: false });
+    expect(fake.commands.filter((c) => c.cmd === "SET_VOICE_SETTINGS").map((c) => c.args)).toEqual([{ mute: true }, { deaf: false }]);
+    fake.dispatch("VOICE_STATE_UPDATE", person("1", "Brain", { self_mute: true }));
+    await until(() => connection.view().self?.mute === true);
+    await connection.leave();
+    expect(fake.commands.find((c) => c.cmd === "SELECT_VOICE_CHANNEL")?.args).toEqual({ channel_id: null });
+    fake.answers.set("SET_VOICE_SETTINGS", () => ({ error: { code: 4000, message: "No" } }));
+    await expect(connection.setVoice({ mute: false })).rejects.toMatchObject({ key: "discord.error.voiceFailed" });
+
+    // A sign-in made before the write scope existed can read, but must be approved again to mute.
+    const old = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    old.fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "brain", global_name: "Brain" }, scopes: ["rpc", "rpc.voice.read", "identify"] } }));
+    await old.connection.setWanted(true);
+    await until(() => old.connection.view().status === "connected");
+    expect(old.connection.view().canControl).toBe(false);
+    await expect(old.connection.setVoice({ mute: true })).rejects.toMatchObject({ key: "discord.error.needsControl" });
+    expect(old.fake.commands.some((c) => c.cmd === "SET_VOICE_SETTINGS")).toBe(false);
+    old.fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "brain", global_name: "Brain" }, scopes: SCOPES } }));
+    await old.connection.allowControl();
+    await until(() => old.connection.view().canControl);
+    expect(old.fake.commands.some((c) => c.cmd === "AUTHORIZE")).toBe(true);
+  });
+
   it("does not join while not connected", async () => {
     const { connection } = await setup();
     await expect(connection.join("10")).rejects.toMatchObject({ key: "discord.error.joinNotConnected" });
@@ -245,8 +320,8 @@ describe("DiscordConnection", () => {
     await connection.setWanted(false);
     expect(connection.view()).toMatchObject({ status: "off", call: null });
     await connection.signOut();
-    expect(saved.at(-1)).toEqual({ secret: "s3cret_value", token: null, last: null });
+    expect(saved.at(-1)).toEqual({ secret: "s3cret_value", token: null, last: null, games: {} });
     await connection.setSecret(null);
-    expect(saved.at(-1)).toEqual({ secret: null, token: null, last: null });
+    expect(saved.at(-1)).toEqual({ secret: null, token: null, last: null, games: {} });
   });
 });

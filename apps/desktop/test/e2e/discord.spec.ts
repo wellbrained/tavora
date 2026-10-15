@@ -27,7 +27,7 @@ const person = (id: string, name: string, voice: Record<string, boolean> = {}) =
 test.beforeAll(async () => {
   fake = await fakeDiscord();
   fake.answers.set("AUTHORIZE", () => ({ data: { code: "code123" } }));
-  fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "nik", global_name: "Nik" }, scopes: ["rpc", "rpc.voice.read", "identify"] } }));
+  fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "nik", global_name: "Nik" }, scopes: ["rpc", "rpc.voice.read", "rpc.voice.write", "identify"] } }));
   fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({
     data: {
       id: "10",
@@ -84,7 +84,7 @@ test("the Discord panel connects once approved and shows who is in the voice cha
     await expect(panel.locator("[data-testid^=discord-member-]")).toHaveCount(7);
     await expect(panel).toContainText("Lobby");
     // D2: only voice is read.
-    expect(fake.commands.find((c) => c.cmd === "AUTHORIZE")?.args.scopes).toEqual(["rpc", "rpc.voice.read", "identify"]);
+    expect(fake.commands.find((c) => c.cmd === "AUTHORIZE")?.args.scopes).toEqual(["rpc", "rpc.voice.read", "rpc.voice.write", "identify"]);
     // D1: the secret only goes to the token address.
     expect(tokenBodies.every((body) => body.includes(`client_secret=${SECRET}`))).toBe(true);
 

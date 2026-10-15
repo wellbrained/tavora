@@ -17,7 +17,7 @@ import AppearanceSection from "./AppearanceSection.vue";
 import LanguagePicker from "./LanguagePicker.vue";
 import ModulesSection from "./ModulesSection.vue";
 import BrowserSection from "./BrowserSection.vue";
-import DiscordSection from "./DiscordSection.vue";
+import IntegrationsSection from "./IntegrationsSection.vue";
 import SegmentedControl from "./SegmentedControl.vue";
 import { GROUPS, groupLabel, sectionLabel, settingEntries, type SettingsSection } from "./settings-index";
 import SettingRow from "./SettingRow.vue";
@@ -378,16 +378,6 @@ function deleteNow(gameId: string, name: string) {
               </Button>
             </SettingRow>
             <SettingRow
-              :label="t('settings.steam-import.label')"
-              :description="t('settings.steam-import.description')"
-              setting="steam-import"
-              :highlighted="highlight === 'steam-import'"
-            >
-              <Button variant="secondary" data-testid="open-steam-import-settings" :disabled="!library.onlineSearch" @click="dialog = { kind: 'steam-import' }">
-                {{ t("settings.steamImport.button") }}
-              </Button>
-            </SettingRow>
-            <SettingRow
               :label="t('settings.welcome-tour.label')"
               :description="t('settings.welcome-tour.description')"
               setting="welcome-tour"
@@ -409,8 +399,8 @@ function deleteNow(gameId: string, name: string) {
             <BrowserSection :highlight="highlight" />
           </template>
 
-          <template v-else-if="section === 'discord'">
-            <DiscordSection :highlight="highlight" />
+          <template v-else-if="section === 'integrations'">
+            <IntegrationsSection :highlight="highlight" />
           </template>
 
           <template v-else-if="section === 'shortcuts'">
