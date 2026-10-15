@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { access, readFile, rm, stat } from "node:fs/promises";
+import { access, readdir, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { writeFileAtomic } from "./fsutil";
@@ -270,6 +270,39 @@ export async function fetchPublicIconHash(appid: number, options: { fetchImpl?: 
 /** True for a JPEG file, whatever it is called. */
 export function isJpeg(bytes: Uint8Array): boolean {
   return bytes.byteLength >= 128 && bytes.byteLength <= MAX_STEAM_ICON_BYTES && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
+/** The small icon Steam keeps in its library cache for an app: a picture named by a 40-digit hash, straight in the app's folder. */
+export async function readLibraryCacheIcon(steamDir: string, appid: number): Promise<Uint8Array | null> {
+  if (!isSteamAppId(appid)) return null;
+  const dir = path.join(steamDir, "appcache", "librarycache", String(appid));
+  try {
+    const names = (await readdir(dir)).filter((name) => /^[0-9a-f]{40}\.jpg$/.test(name)).slice(0, 20);
+    let best: Uint8Array | null = null;
+    for (const name of names) {
+      const info = await stat(path.join(dir, name));
+      if (!info.isFile() || info.size > MAX_STEAM_ICON_BYTES) continue;
+      const bytes = new Uint8Array(await readFile(path.join(dir, name)));
+      // Other pictures of the app can sit here too; the icon is the smallest picture.
+      if (isJpeg(bytes) && (best === null || bytes.byteLength < best.byteLength)) best = bytes;
+    }
+    return best;
+  } catch {
+    return null;
+  }
+}
+
+/** Saves the icon from Steam's library cache on this PC, with nothing asked of the network. */
+export async function saveLibraryCacheIcon(iconDir: string, steamDir: string, appid: number): Promise<IconResult> {
+  const bytes = await readLibraryCacheIcon(steamDir, appid);
+  if (!bytes) return { status: "none" };
+  const file = publicIconFileName(appid);
+  try {
+    await writeFileAtomic(path.join(iconDir, file), bytes);
+    return { status: "saved", file };
+  } catch {
+    return { status: "failed" };
+  }
 }
 
 /** Downloads the small community icon (a 32 px JPEG) from Steam's public address, unchanged. */
