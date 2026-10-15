@@ -27,6 +27,15 @@ export const SHORTCUT_GROUPS: { title: string; rows: ShortcutRow[] }[] = [
     rows: [{ action: "Open game 1 to 9 in the game list", keys: [MOD, "1–9"] }],
   },
   {
+    title: "Browser panel",
+    rows: [
+      { action: "Go to the address bar", keys: [MOD, "L"] },
+      { action: "Back", keys: ["Alt", "←"] },
+      { action: "Forward", keys: ["Alt", "→"] },
+      { action: "Leave full screen", keys: ["Esc"] },
+    ],
+  },
+  {
     title: "Lists and dialogs",
     rows: [
       { action: "Move through the game list", keys: ["↑", "↓"] },

@@ -8,6 +8,7 @@ import { parseArgs } from "node:util";
 import electron from "electron";
 import { context } from "esbuild";
 import { build, createServer } from "vite";
+import { buildFilterEngine } from "./filters.mjs";
 import { rendererConfig, root, targets } from "./targets.mjs";
 
 // `pnpm dev --port <n>` picks the port, so a tool like CoreHub can decide it.
@@ -115,6 +116,9 @@ const watchers = await Promise.all(
     return watcher;
   }),
 );
+
+// The Browser panel's ad blocker loads a compiled engine; the lists only change by hand.
+await buildFilterEngine();
 
 const contexts = await Promise.all(targets.map((options) => context({ ...options, plugins: [reload] })));
 await Promise.all(contexts.map((ctx) => ctx.watch()));
