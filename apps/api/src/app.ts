@@ -45,7 +45,7 @@ export function createApp({ db, clientKey, rateLimiter }: AppOptions) {
     if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
       return context.json({ error: `limit must be a whole number from 1 to ${MAX_LIMIT}.` }, 400);
     }
-    return context.json(searchGames(db, q, limit));
+    return context.json({ results: searchGames(db, q, limit) });
   });
 
   app.notFound((context) => context.json({ error: "Not found." }, 404));
