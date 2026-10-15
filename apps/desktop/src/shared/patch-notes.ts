@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.20",
+    date: "2026-10-16",
+    title: "Discord panel: a steady channel order and a smaller header",
+    notes: [
+      "The voice channels stay in the same order as on the Discord server. The channel you are in is highlighted where it is, and no longer moves to the top.",
+      "Mute, Deafen, Leave and Rejoin sit in the header next to the server name, so the panel has more room for the channels.",
+      "The hint that you are not in a voice channel is a note at the bottom of the panel, above the server setting.",
+    ],
+  },
+  {
     version: "0.5.19",
     date: "2026-10-16",
     title: "Icons switch explained",
