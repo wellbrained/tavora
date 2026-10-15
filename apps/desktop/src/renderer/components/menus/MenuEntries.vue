@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Renders a list of MenuItem as dropdown or context menu entries. The same
 // lists (rail-actions.ts) back the ⋯ button and right-click.
+import { Check } from "@lucide/vue";
 import { computed } from "vue";
 import {
   ContextMenuItem,
@@ -38,6 +39,9 @@ const parts = computed(() =>
       },
 );
 
+/** A list of choices keeps a column for the check mark, so labels line up whether or not one is current. */
+const hasChecks = computed(() => props.items.some((item) => item.checked !== undefined));
+
 /** Runs after the menu has closed, so a dialog it opens keeps focus. */
 function run(item: MenuItem) {
   if (item.run) setTimeout(() => void item.run!(), 0);
@@ -59,8 +63,14 @@ function run(item: MenuItem) {
       :data-testid="item.testid"
       :disabled="item.disabled"
       :variant="item.danger ? 'destructive' : 'default'"
+      :aria-checked="item.checked === undefined ? undefined : item.checked"
+      :role="item.checked === undefined ? undefined : 'menuitemradio'"
+      :data-checked="item.checked || undefined"
       @select="run(item)"
     >
+      <span v-if="hasChecks" class="inline-flex size-4 flex-none items-center justify-center" aria-hidden="true">
+        <Check v-if="item.checked" class="size-4" />
+      </span>
       {{ item.label }}
     </component>
   </template>

@@ -133,6 +133,14 @@ export const SETTINGS: SettingEntry[] = [
     keywords: ["reset", "default", "restore", "undo", "original"],
   },
   {
+    id: "share-icons",
+    section: "general",
+    label: "Share game icons",
+    description:
+      "Offer the icons your PC has for games Tavora does not have an icon for yet. You choose which, and see exactly what is sent. A person at Tavora checks each one before anyone else sees it. Needs Online game search.",
+    keywords: ["icon", "share", "upload", "send", "contribute", "offer", "missing", "logo", "help"],
+  },
+  {
     id: "shortcuts",
     section: "shortcuts",
     label: "Keyboard shortcuts",

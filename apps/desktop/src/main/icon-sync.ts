@@ -25,6 +25,8 @@ export interface IconSyncOptions {
   apiUrl?: string | undefined;
   /** The Tavora service, for its hosted icons; its public address unless told otherwise. */
   serviceUrl?: string | undefined;
+  /** The service's list of hosted icons, or null when it cannot be had. The host shares one list with the share check. */
+  loadHostedList?: () => Promise<HostedList | null>;
   fetchImpl?: typeof fetch | undefined;
   /** Steam's appinfo.vdf as bytes, or null when it cannot be read. */
   loadAppInfoImpl?: (steamDir: string) => Promise<Uint8Array | null>;
@@ -104,7 +106,7 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
   const fromHosted = async (game: GameEntry): Promise<IconResult> => {
     // Online features off: the service is never contacted.
     if (!library.onlineSearch) return { status: "none" };
-    hostedList ??= await fetchHostedList(serviceOptions);
+    hostedList ??= await (options.loadHostedList ?? (() => fetchHostedList(serviceOptions)))();
     // The list could not be had: say nothing about this game, so it is asked again next time.
     if (hostedList === null) return { status: "failed" };
     const icon = matchHosted(game, hostedList);

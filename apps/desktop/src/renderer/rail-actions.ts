@@ -1,7 +1,7 @@
 // Menus for games and folders on the rail. Every drag-and-drop move has a
 // menu equivalent here, so the rail works from the keyboard too.
 import type { FolderView, GameView } from "../shared/host-api";
-import { act, confirmAction, prompt, state, submitAction, type MenuItem } from "./host";
+import { act, confirmAction, dialog, prompt, state, submitAction, type MenuItem } from "./host";
 
 function lib() {
   return state.value!.library;
@@ -114,10 +114,18 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
     {
       label: "Change icon",
       testid: "menu-icon",
+      // Three choices, one current: choosing any replaces the others, so there is nothing to "remove".
       submenu: () => [
+        {
+          label: "Original icon",
+          testid: "menu-icon-original",
+          checked: game.iconChoice === "original",
+          run: () => act({ type: "use-original-icon", gameId: game.id }),
+        },
         {
           label: "Set letters…",
           testid: "menu-icon-label",
+          checked: game.iconChoice === "letters",
           run: () =>
             prompt({
               title: "Icon letters",
@@ -128,10 +136,18 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
               submit: (label) => submitAction({ type: "set-game-label", gameId: game.id, label }),
             }),
         },
-        { label: "Choose image…", testid: "menu-icon-image", run: () => act({ type: "choose-game-image", gameId: game.id }) },
-        { label: "Reset", testid: "menu-icon-reset", run: () => act({ type: "set-game-label", gameId: game.id, label: null }) },
+        {
+          label: "Select own icon…",
+          testid: "menu-icon-image",
+          checked: game.iconChoice === "image",
+          run: () => act({ type: "choose-game-image", gameId: game.id }),
+        },
       ],
     },
+    // Only for a game whose own icon Tavora does not have yet: the whole item is the offer.
+    ...(game.shareIcon
+      ? [{ label: "Share icon", testid: "menu-share-icon", run: () => (dialog.value = { kind: "share-icons", gameIds: [game.id] }) } satisfies MenuItem]
+      : []),
     {
       label: "Remove game…",
       testid: "menu-remove",
