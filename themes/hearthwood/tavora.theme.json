@@ -35,6 +35,37 @@
         "warning": "#e5c463",
         "info": "#7fb0d6"
       }
+    },
+    {
+      "id": "light",
+      "name": "Light",
+      "mode": "light",
+      "radius": 10,
+      "colors": {
+        "background": "#f1f4ec",
+        "foreground": "#1b2219",
+        "card": "#fbfdf7",
+        "card-foreground": "#1b2219",
+        "popover": "#fbfdf7",
+        "popover-foreground": "#1b2219",
+        "primary": "#4f6b1f",
+        "primary-hover": "#3f5718",
+        "primary-foreground": "#ffffff",
+        "secondary": "#e2e8da",
+        "secondary-foreground": "#1b2219",
+        "muted": "#e2e8da",
+        "muted-foreground": "#5b6555",
+        "accent": "#e2e8da",
+        "accent-foreground": "#1b2219",
+        "destructive": "#a93a2c",
+        "border": "#d1d9c6",
+        "input": "#7d8875",
+        "ring": "#4f6b1f",
+        "rail": "#e6ebdf",
+        "success": "#2c6b37",
+        "warning": "#7a5c00",
+        "info": "#2a6396"
+      }
     }
   ]
 }

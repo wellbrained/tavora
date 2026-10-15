@@ -108,6 +108,8 @@ describe("the official themes", () => {
     expect(problems).toEqual([]);
     expect([...themes.keys()].sort()).toEqual(["tavora.default", "tavora.hearthwood", "tavora.nightfall"]);
     expect([...themes.values()].every((entry) => entry.provenance === "official")).toBe(true);
+    // Every official theme comes in Dark and Light, nothing else.
+    for (const { theme } of themes.values()) expect(theme.variations.map((item) => [item.id, item.mode])).toEqual([["dark", "dark"], ["light", "light"]]);
     const dark = themes.get(DEFAULT_THEME.id)!.theme.variations.find((item) => item.id === DEFAULT_THEME.variation)!;
     expect(dark).toEqual(FALLBACK_THEME.variations[0]);
     expect(moduleTheme(dark)).toEqual(THEME);
@@ -157,8 +159,8 @@ describe("discoverThemes", () => {
 describe("resolveTheme", () => {
   it("falls back to the first variation, then to the default theme", async () => {
     const { themes } = await discoverThemes({ official: [officialDir] });
-    expect(resolveTheme(themes, { id: "tavora.nightfall", variation: "midnight" }).variation.id).toBe("midnight");
-    expect(resolveTheme(themes, { id: "tavora.nightfall", variation: "oled" }).variation.id).toBe("dusk");
+    expect(resolveTheme(themes, { id: "tavora.nightfall", variation: "light" }).variation.id).toBe("light");
+    expect(resolveTheme(themes, { id: "tavora.nightfall", variation: "oled" }).variation.id).toBe("dark");
     const gone = resolveTheme(themes, { id: "community.gone", variation: "dark" });
     expect([gone.theme.id, gone.variation.id]).toEqual([DEFAULT_THEME.id, DEFAULT_THEME.variation]);
   });

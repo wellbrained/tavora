@@ -26,19 +26,19 @@ test("picking a theme recolours Tavora and its modules, and is kept after a rest
   await page.getByTestId("theme-tavora.nightfall").click();
   await expect(page.getByTestId("theme-tavora.nightfall")).toHaveAttribute("aria-pressed", "true");
   await expect.poll(() => rootToken(page, "background")).toBe("#12161c");
-  await page.getByTestId("variation-midnight").click();
-  await expect.poll(() => rootToken(page, "background")).toBe("#0a0d12");
+  await page.getByTestId("variation-light").click();
+  await expect.poll(() => rootToken(page, "background")).toBe("#eef2f7");
   // The module page's user stylesheet follows too.
   await expect
     .poll(() => inModule<string>(app, VANILLA, `getComputedStyle(document.documentElement).getPropertyValue("--tavora-background").trim()`))
-    .toBe("#0a0d12");
+    .toBe("#eef2f7");
   await app.close();
 
   const saved = JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as { theme: unknown };
-  expect(saved.theme).toEqual({ id: "tavora.nightfall", variation: "midnight" });
+  expect(saved.theme).toEqual({ id: "tavora.nightfall", variation: "light" });
 
   const again = await launch(userData);
-  await expect.poll(() => rootToken(again.page, "background")).toBe("#0a0d12");
+  await expect.poll(() => rootToken(again.page, "background")).toBe("#eef2f7");
   await openAppearance(again.page);
   await again.page.getByTestId("reset-theme").click();
   await expect.poll(() => rootToken(again.page, "background")).toBe("#171412");

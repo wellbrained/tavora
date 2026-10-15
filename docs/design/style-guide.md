@@ -188,7 +188,7 @@ but Tavora's usability rules always win.
 
 | Area | Milestone C | Later |
 | --- | --- | --- |
-| Theme | Tavora default only (this guide, dark). Since 0.5.0: installed theme packages, each with up to four variations; Tavora ships Tavora (Dark, OLED, High contrast, Light), Nightfall (Dusk, Midnight) and Hearthwood (Dark) | Published themes from the catalog |
+| Theme | Tavora default only (this guide, dark). Since 0.5.0: installed theme packages, each with up to four variations; Tavora ships Tavora, Nightfall and Hearthwood, each in Dark and Light | Published themes from the catalog |
 | Personal overrides | None | Accent colour, density, corner radius (4 to 12 px), base text size (13 to 16 px), clamped |
 | Fonts | Inter and JetBrains Mono | Themes may bundle any font under OFL, Apache 2.0 or MIT, packaged locally |
 | Rail | Collapse or expand, width 180 to 420 px | Same |

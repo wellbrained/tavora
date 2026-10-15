@@ -115,8 +115,8 @@ export const SETTINGS: SettingEntry[] = [
     id: "theme-variation",
     section: "appearance",
     label: "Variation",
-    description: "The versions the theme comes in, such as OLED or High contrast.",
-    keywords: ["variation", "variant", "oled", "black", "high contrast", "accessibility", "contrast"],
+    description: "Dark or Light, in the versions the theme comes in.",
+    keywords: ["variation", "variant", "dark", "light", "dark mode", "light mode", "bright"],
   },
   {
     id: "own-themes",

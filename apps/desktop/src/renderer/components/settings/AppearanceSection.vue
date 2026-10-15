@@ -17,14 +17,14 @@ defineProps<{ highlight: string | null }>();
 const appearance = computed(() => state.value!.appearance);
 const active = computed(() => appearance.value.themes.find((theme) => theme.id === appearance.value.themeId));
 
-/** The variation a card previews: the active one on the active theme, otherwise the theme's first. */
+/** The variation a card previews: the one with the active variation's id (so Light shows Light), otherwise the theme's first. */
 function previewOf(theme: ThemeView): ThemeVariationView {
-  return (theme.id === appearance.value.themeId && theme.variations.find((item) => item.id === appearance.value.variationId)) || theme.variations[0]!;
+  return theme.variations.find((item) => item.id === appearance.value.variationId) ?? theme.variations[0]!;
 }
 
 function pick(theme: ThemeView) {
   if (theme.id === appearance.value.themeId) return;
-  // Keep the same kind of variation (say OLED) when the new theme has one.
+  // Keep the same kind of variation (say Light) when the new theme has one.
   const variation = theme.variations.find((item) => item.id === appearance.value.variationId) ?? theme.variations[0]!;
   void act({ type: "set-theme", themeId: theme.id, variationId: variation.id });
 }

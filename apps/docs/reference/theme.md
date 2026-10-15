@@ -53,7 +53,7 @@ Each variation:
 
 | Field | Required | Rules |
 | --- | --- | --- |
-| `id` | yes | Lowercase letters, digits and `-`, at most 32 characters, unique in the theme. When a player switches themes, a variation with the same id (say `oled`) is kept. |
+| `id` | yes | Lowercase letters, digits and `-`, at most 32 characters, unique in the theme. When a player switches themes, a variation with the same id (say `light`) is kept. |
 | `name` | yes | 1 to 24 characters, shown in a segmented control. |
 | `mode` | yes | `"dark"` or `"light"`. Native menus, scrollbars and form controls follow it. |
 | `contrast` | no | `"normal"` (default) or `"high"`. High-contrast variations need 7:1 for text instead of 4.5:1. |
