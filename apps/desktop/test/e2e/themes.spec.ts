@@ -75,3 +75,16 @@ test("the player's own themes load from the themes folder, and broken ones say w
   await expect.poll(() => rootToken(page, "background")).toBe(colors.background);
   await app.close();
 });
+
+test("New theme copies the Tavora theme into the themes folder as a theme to change", async () => {
+  const userData = await newUserData();
+  const { app, page } = await launch(userData);
+  await openAppearance(page);
+  await page.getByTestId("create-starter-theme").click();
+  await expect(page.getByTestId("theme-local.my-theme")).toContainText("My theme");
+  const manifest = JSON.parse(await readFile(path.join(userData, "themes", "my-theme", "tavora.theme.json"), "utf8")) as { id: string };
+  expect(manifest.id).toBe("local.my-theme");
+  await page.getByTestId("create-starter-theme").click();
+  await expect(page.getByTestId("theme-local.my-theme-2")).toContainText("My theme 2");
+  await app.close();
+});

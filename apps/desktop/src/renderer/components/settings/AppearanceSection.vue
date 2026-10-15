@@ -3,7 +3,7 @@
 // card is a small preview of the theme drawn with its own colours, so a
 // theme can be judged before it is picked; picking applies it at once, and
 // Reset always goes back to the Tavora default.
-import { Check, FolderOpen, RefreshCw } from "@lucide/vue";
+import { Check, CopyPlus, FolderOpen, RefreshCw } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -112,11 +112,14 @@ const variationOptions = computed(() => (active.value?.variations ?? []).map((it
   </SettingRow>
   <SettingRow
     label="Your own themes"
-    description="Put a theme folder with a tavora.theme.json in Tavora's themes folder, then press Reload. A theme is colours only, and it needs enough contrast to be used."
+    description="Start from a copy of the Tavora theme, change its colours in tavora.theme.json, then press Reload. A theme is colours only, and it needs enough contrast to be used."
     setting="own-themes"
     :highlighted="highlight === 'own-themes'"
   >
-    <span class="flex flex-none gap-2">
+    <span class="flex flex-none flex-wrap justify-end gap-2">
+      <Button variant="secondary" data-testid="create-starter-theme" @click="act({ type: 'create-starter-theme' })">
+        <CopyPlus :stroke-width="1.5" /> New theme
+      </Button>
       <Button variant="secondary" data-testid="open-themes-folder" @click="act({ type: 'open-themes-folder' })">
         <FolderOpen :stroke-width="1.5" /> Open folder
       </Button>

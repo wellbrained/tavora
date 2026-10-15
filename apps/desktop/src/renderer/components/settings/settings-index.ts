@@ -122,8 +122,8 @@ export const SETTINGS: SettingEntry[] = [
     id: "own-themes",
     section: "appearance",
     label: "Your own themes",
-    description: "Put a theme folder with a tavora.theme.json in Tavora's themes folder, then press Reload.",
-    keywords: ["custom theme", "make a theme", "create theme", "folder", "tavora.theme.json", "reload", "developer"],
+    description: "Start from a copy of the Tavora theme, change its colours in tavora.theme.json, then press Reload.",
+    keywords: ["custom theme", "make a theme", "create theme", "new theme", "example", "starter", "template", "folder", "tavora.theme.json", "reload", "developer"],
   },
   {
     id: "reset-theme",

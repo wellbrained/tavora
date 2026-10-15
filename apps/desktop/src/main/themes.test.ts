@@ -11,7 +11,9 @@ import {
   FALLBACK_THEME,
   moduleTheme,
   resolveTheme,
+  starterTheme,
   THEME_MANIFEST,
+  themeManifest,
   validateTheme,
 } from "./themes";
 
@@ -163,5 +165,24 @@ describe("resolveTheme", () => {
     expect(resolveTheme(themes, { id: "tavora.nightfall", variation: "oled" }).variation.id).toBe("dark");
     const gone = resolveTheme(themes, { id: "community.gone", variation: "dark" });
     expect([gone.theme.id, gone.variation.id]).toEqual([DEFAULT_THEME.id, DEFAULT_THEME.variation]);
+  });
+});
+
+describe("the starter theme", () => {
+  it("is the Tavora theme under a new local id, and passes validation as written", async () => {
+    const { themes } = await discoverThemes({ official: [officialDir] });
+    const first = starterTheme(themes, 1);
+    expect([first.id, first.name]).toEqual(["local.my-theme", "My theme"]);
+    expect([starterTheme(themes, 3).id, starterTheme(themes, 3).name]).toEqual(["local.my-theme-3", "My theme 3"]);
+    expect(first.variations).toEqual(themes.get(DEFAULT_THEME.id)!.theme.variations);
+    expect(validateTheme(JSON.parse(themeManifest(first)))).toEqual({ ok: true, theme: first });
+  });
+
+  it("ships in examples/ for people to copy, and is valid there too", async () => {
+    const raw = JSON.parse(await readFile(path.join(repo, "examples/theme-starter", THEME_MANIFEST), "utf8"));
+    const result = validateTheme(raw);
+    expect(result.ok).toBe(true);
+    const { themes } = await discoverThemes({ official: [officialDir] });
+    if (result.ok) expect(result.theme.variations).toEqual(themes.get(DEFAULT_THEME.id)!.theme.variations);
   });
 });

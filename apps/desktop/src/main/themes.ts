@@ -333,3 +333,44 @@ export function moduleTheme(variation: ThemeVariation): TavoraTheme {
     radius: variation.radius,
   };
 }
+
+// ── A starter for the player's own theme ─────────────────────────────────
+
+export const STARTER_README = `Your own Tavora theme
+=====================
+
+This folder is a theme. Tavora reads only tavora.theme.json in it.
+
+1. Change the colours in tavora.theme.json. Every colour is #rrggbb.
+   "dark" and "light" are the two variations players switch between.
+2. In Tavora, open Settings > Appearance and press Reload.
+3. Pick your theme. If something is wrong, Appearance says what,
+   for example a colour pair without enough contrast.
+
+Give it your own "id" and "name" before you share it. Ids starting with
+"tavora." are reserved. The full format is at
+https://docs.mytavora.app/reference/theme
+`;
+
+/**
+ * A theme to copy and change: the Tavora default's variations under a new id
+ * and name. Built from the installed default, so it always passes validation.
+ */
+export function starterTheme(themes: Map<string, InstalledTheme>, suffix: number): ThemePackage {
+  const base = themes.get(DEFAULT_THEME.id)?.theme ?? FALLBACK_THEME;
+  const tag = suffix > 1 ? ` ${suffix}` : "";
+  return {
+    id: `local.my-theme${suffix > 1 ? `-${suffix}` : ""}`,
+    name: `My theme${tag}`,
+    description: "A copy of the Tavora theme to make your own.",
+    author: "You",
+    version: "1.0.0",
+    variations: base.variations.map((variation) => ({ ...variation, colors: { ...variation.colors } })),
+  };
+}
+
+/** The manifest as written to disk: defaults that a player would not need are left out. */
+export function themeManifest(theme: ThemePackage): string {
+  const variations = theme.variations.map(({ contrast, ...rest }) => (contrast === "high" ? { ...rest, contrast } : rest));
+  return `${JSON.stringify({ id: theme.id, name: theme.name, description: theme.description, author: theme.author, version: theme.version, variations }, null, 2)}\n`;
+}

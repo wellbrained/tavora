@@ -237,6 +237,8 @@ export type HostAction =
   | { type: "reload-themes" }
   /** Opens the player's themes folder in the file manager, creating it first. */
   | { type: "open-themes-folder" }
+  /** Copies the Tavora theme into the themes folder as a new theme to change; answers with its id. */
+  | { type: "create-starter-theme" }
   /** Done ends the first-run welcome; false shows it again. */
   | { type: "set-onboarded"; done: boolean }
   | { type: "save-profile"; name: string; initials: string }

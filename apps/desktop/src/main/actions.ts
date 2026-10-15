@@ -38,6 +38,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "reset-theme":
     case "reload-themes":
     case "open-themes-folder":
+    case "create-starter-theme":
       return only() ? { type: a.type } : null;
     case "set-theme":
       return only("themeId", "variationId") && isModuleId(a.themeId) && isVariationId(a.variationId)

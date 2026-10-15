@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { appendFile, mkdir, readFile, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -73,6 +74,10 @@ import {
   discoverThemes,
   moduleTheme,
   resolveTheme,
+  STARTER_README,
+  starterTheme,
+  THEME_MANIFEST,
+  themeManifest,
   type InstalledTheme,
   type ThemeProblem,
 } from "./themes";
@@ -339,6 +344,24 @@ export class Host {
     this.applyTheme();
   }
 
+  /** Writes a copy of the Tavora theme into the themes folder, loads it and shows the folder. */
+  private async createStarterTheme(): Promise<string> {
+    const root = path.join(this.options.userData, "themes");
+    await mkdir(root, { recursive: true });
+    let suffix = 1;
+    const folder = (n: number) => path.join(root, n > 1 ? `my-theme-${n}` : "my-theme");
+    const taken = (n: number) => this.themes.has(starterTheme(this.themes, n).id) || existsSync(folder(n));
+    while (taken(suffix)) suffix++;
+    const theme = starterTheme(this.themes, suffix);
+    await mkdir(folder(suffix));
+    await writeFileAtomic(path.join(folder(suffix), THEME_MANIFEST), themeManifest(theme));
+    await writeFileAtomic(path.join(folder(suffix), "README.txt"), STARTER_README);
+    await this.reloadThemes();
+    // Test runs keep the window hidden and open no file manager.
+    if (!this.options.hidden) void shell.openPath(folder(suffix));
+    return theme.id;
+  }
+
   private async openThemesFolder(): Promise<void> {
     const dir = path.join(this.options.userData, "themes");
     await mkdir(dir, { recursive: true });
@@ -566,6 +589,8 @@ export class Host {
         return this.reloadThemes();
       case "open-themes-folder":
         return this.openThemesFolder();
+      case "create-starter-theme":
+        return this.createStarterTheme();
       case "set-onboarded":
         library.onboarded = action.done;
         break;
