@@ -390,7 +390,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           />
           <div
             v-else
-            :class="cn(openFolders.has(entry.id) && 'bg-card mx-1 rounded-lg pb-1')"
+            :class="cn(openFolders.has(entry.id) && 'bg-primary/10 ring-primary/40 mx-1 rounded-xl pb-1 ring-1 ring-inset')"
             :data-testid="`rail-folder-${entry.id}`"
           >
             <MenuArea :items="folderMenuFor(entry.id)" :title="folder(entry.id).name">
@@ -440,10 +440,10 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 </div>
               </div>
             </MenuArea>
-            <!-- The games of an open folder are a little smaller and hang off a line in the accent colour. -->
+            <!-- An open folder and its games sit in one tinted panel. The games keep the size and the place of the rest of the rail. -->
             <div
               v-if="openFolders.has(entry.id)"
-              class="border-primary/40 mt-1 ml-2 flex flex-col gap-1 border-l-2 py-0.5 [&>div]:px-1"
+              class="mt-1 flex flex-col gap-1 [&>div]:px-1"
               role="group"
               :aria-label="folder(entry.id).name"
               data-testid="folder-games"
@@ -451,7 +451,6 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               <RailGame
                 v-for="id in folderGames(entry.id)"
                 :key="id"
-                compact
                 :game="game(id)"
                 :testid="`rail-game-${id}`"
                 :active="isActive(id)"

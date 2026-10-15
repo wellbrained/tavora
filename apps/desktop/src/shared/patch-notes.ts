@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.41",
+    date: "2026-10-16",
+    title: "An open folder is one panel",
+    notes: [
+      "An open folder and its games sit in one softly tinted panel with an accent border. The games keep their size and their place in line with the rest of the sidebar.",
+      "The game count on a folder stays while it is open.",
+    ],
+  },
+  {
     version: "0.5.40",
     date: "2026-10-16",
     title: "Folders look like folders",
