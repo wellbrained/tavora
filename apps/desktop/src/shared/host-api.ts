@@ -293,6 +293,8 @@ export interface HostViewState {
     origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
     /** Only a module in the player's own modules folder can be removed from Settings. */
     removable: boolean;
+    /** The icon from the module's manifest as a data address (PNG or WebP), or null. */
+    icon: string | null;
   }[];
   /** Folders in the modules folder that could not be loaded, and why, for module authors. */
   moduleProblems: { folder: string; message: string }[];

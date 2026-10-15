@@ -25,8 +25,3 @@ export const BRAND_LOGOS: Readonly<Record<string, { path: string; color: string 
   },
 };
 
-/** Plain line icons for the other built-in modules live in ModuleIcon.vue. */
-const LINE_ICON_IDS = ["tavora.browser", "tavora.notes", "tavora.todos"];
-
-/** The modules that have an icon (see ModuleIcon.vue); the others show a letter or just the name. */
-export const hasModuleIcon = (moduleId: string | undefined): boolean => !!moduleId && (moduleId in BRAND_LOGOS || LINE_ICON_IDS.includes(moduleId));

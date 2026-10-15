@@ -50,6 +50,7 @@ Out of scope for Milestone A: a malicious host build, local malware already runn
 | G7 | Modules can't open windows, navigate away, download or request device permissions | `setWindowOpenHandler` deny, `will-navigate` same-origin only, downloads cancelled, permission handlers deny | e2e: `window.open`, cross-origin navigation |
 | G8 | A module can't exhaust host resources through the bridge | message size cap, in-flight cap, JSON validation, quotas for settings, documents and panel state | unit + e2e: oversized and over-quota writes are refused |
 | G9 | A module can't use a capability it was not granted | reserved methods checked against the granted set (always empty in v1) before anything else runs | unit + e2e: `network.fetch`, `files.open`, `clipboard.readText`, `sharedData.read` fail with `PERMISSION_DENIED` |
+| G10 | A module's icon cannot run anything or read outside its package | the manifest names a .png or .webp inside the package; the host resolves it like any asset (no traversal, no links out), reads at most 256 KB, accepts it only with a PNG or WebP signature and hands the host UI a data address shown as a plain picture, so an SVG or script renamed to .png is dropped | unit: `module-icon.test.ts`, `registry.test.ts`, `module-schema` (no svg, no remote icon) |
 
 ## Host UI guarantees (Milestone C)
 

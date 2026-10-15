@@ -2,6 +2,7 @@ import { readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { resolveAsset } from "./assets";
+import { moduleIconUrl } from "./module-icon";
 
 /**
  * Who publishes a module, shown to players next to its name. Official
@@ -143,6 +144,8 @@ export interface ModuleInfo {
   origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
   /** Only a direct child of the player's own modules folder can be removed from Settings. */
   removable: boolean;
+  /** The manifest icon as a data address, or null (see module-icon.ts). */
+  icon: string | null;
 }
 
 /** Where each module was found, and whether Settings may remove it. */
@@ -153,7 +156,7 @@ export async function describeModules(userModules: string, modules: Map<string, 
     const own = module.provenance === "local" && path.dirname(module.root) === userRoot;
     const kind = module.provenance === "official" ? "official" : isDevelopmentModule(id) ? "example" : own ? "own" : "dev";
     const origin = { kind, folder: path.basename(module.root) } as const;
-    info.set(id, { origin, removable: own });
+    info.set(id, { origin, removable: own, icon: await moduleIconUrl(module.root, module.manifest.icon) });
   }
   return info;
 }
