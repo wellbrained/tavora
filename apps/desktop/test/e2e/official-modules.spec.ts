@@ -1,7 +1,7 @@
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { expectModuleText, inModule, launch, NOTES, openGame, openModule, panels, TODOS, typeInModule, VUE } from "./harness";
+import { expectModuleText, inModule, launch, NOTES, openGame, openModule, panels, PLAYGROUND, TODOS, typeInModule, VUE } from "./harness";
 
-// The official Notes and To-Dos modules, driven through their own pages.
+// The official Notes, To-Dos and UI Playground modules, driven through their own pages.
 
 const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
 
@@ -93,6 +93,7 @@ test("official modules are marked Official, other installed modules Local", asyn
   await page.getByTestId("add-module").click();
   await expect(page.getByTestId(`provenance-${NOTES}`)).toHaveText("Official");
   await expect(page.getByTestId(`provenance-${TODOS}`)).toHaveText("Official");
+  await expect(page.getByTestId(`provenance-${PLAYGROUND}`)).toHaveText("Official");
   await expect(page.getByTestId(`provenance-${VUE}`)).toHaveText("Local");
   await app.close();
 });
@@ -277,5 +278,27 @@ test("to-dos: two panels share one list and both keep their changes", async () =
       .poll(async () => (await taskTitles(app, "", index)).sort())
       .toEqual(["From the first panel", "Second from panel one", "Second from panel two"]);
   }
+  await app.close();
+});
+
+test("ui playground: shows every section, filters them and disables the controls", async () => {
+  const { app, page } = await launch();
+  await openModule(page, PLAYGROUND);
+  await ready(app, PLAYGROUND, "section-empty");
+  const sections = () => inModule<string[]>(app, PLAYGROUND, `[...document.querySelectorAll('[data-testid^="section-"]')].map((el) => el.id)`);
+  await expect.poll(sections).toEqual(["colours", "type", "buttons", "fields", "choices", "tabs", "status", "progress", "menus", "dialogs", "lists", "notices", "empty"]);
+
+  // The swatches show the host's theme, not only the built-in default.
+  await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
+
+  await inModule(
+    app,
+    PLAYGROUND,
+    `(() => { const input = ${q("filter")}; input.value = "slider"; input.dispatchEvent(new Event("input", { bubbles: true })); })()`,
+  );
+  await expect.poll(sections).toEqual(["choices"]);
+
+  await click(app, PLAYGROUND, `[data-testid="disable-all"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `[...${q("section-choices")}.querySelectorAll("button")].every((el) => el.disabled)`)).toBe(true);
   await app.close();
 });
