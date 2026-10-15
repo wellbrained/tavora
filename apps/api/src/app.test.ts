@@ -17,7 +17,7 @@ describe("search endpoint", () => {
   it("returns matching games as id and name", async () => {
     const response = await get(app, "/v1/games/search?q=elden");
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual([{ id: "elden-ring", name: "Elden Ring" }]);
+    expect(await response.json()).toEqual({ results: [{ id: "elden-ring", name: "Elden Ring" }] });
   });
 
   it("is never cached and sets safe headers", async () => {
@@ -28,7 +28,7 @@ describe("search endpoint", () => {
   });
 
   it("answers an empty query with an empty list", async () => {
-    expect(await (await get(app, "/v1/games/search")).json()).toEqual([]);
+    expect(await (await get(app, "/v1/games/search")).json()).toEqual({ results: [] });
   });
 
   it.each(["0", "21", "-1", "1.5", "abc"])("refuses limit=%s", async (limit) => {
