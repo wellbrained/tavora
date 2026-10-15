@@ -9,6 +9,7 @@ import {
   clipboard,
   dialog,
   ipcMain,
+  nativeImage,
   nativeTheme,
   protocol,
   safeStorage,
@@ -20,6 +21,7 @@ import {
   type WebContents,
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
+import type { IconTone } from "../shared/icon-tone";
 import type { ActionResult, AppearanceView, BrowserCommand, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
 import { resolveLanguage, translate, type Language } from "../shared/i18n";
 import { PlayerError } from "./messages";
@@ -75,6 +77,7 @@ import { backupData, backupsDir, keepNewerFile, SUPPORTED_VERSIONS } from "./bac
 import { DEFAULT_API_URL, OnlineSearch } from "./online";
 import { UpdateManager, type UpdaterLike } from "./updates";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
+import { createToneReader, iconVersion } from "./icon-tone";
 import { syncIcons } from "./icon-sync";
 import { fetchSteamLibrary, importSteamGames, steamLibraryView } from "./steam-import";
 import { isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, submitIcon } from "./share-icons";
@@ -183,6 +186,12 @@ export interface HostOptions {
 let moduleCss: string | undefined;
 
 const ICON_URL = `${HOST_SCHEME}://app/game-icons/`;
+/** A saved icon as a 32 px bitmap (blue, green, red, alpha), or null when it cannot be read. */
+function loadSmallBitmap(file: string): Uint8Array | null {
+  const image = nativeImage.createFromPath(file);
+  return image.isEmpty() ? null : image.resize({ width: 32, height: 32, quality: "good" }).toBitmap();
+}
+
 const STEAM_ICON_URL = `${HOST_SCHEME}://app/steam-icons/`;
 const PROFILE_URL = `${HOST_SCHEME}://app/profile/`;
 
@@ -1550,12 +1559,24 @@ export class Host {
     return games.length === 0 || games.includes(gameId) || (catalogId != null && games.includes(catalogId));
   }
 
+  /** The game's own icon as an address, with the version of its file so a replaced file shows at once, and how it sits in its tile. */
+  private ownIcon(game: GameEntry): { steamIcon: string | null; steamIconTone: IconTone | null } {
+    if (!(this.library.steamIcons && game.useOriginalIcon && game.iconFile)) return { steamIcon: null, steamIconTone: null };
+    const dir = this.steamIconDir;
+    return {
+      steamIcon: `${STEAM_ICON_URL}${game.iconFile}?v=${iconVersion(dir, game.iconFile)}`,
+      steamIconTone: (this.toneReader ??= createToneReader(dir, loadSmallBitmap))(game.iconFile),
+    };
+  }
+
+  private toneReader: ((file: string) => IconTone) | undefined;
+
   private gameView(game: GameEntry): GameView {
     return {
       id: game.id,
       name: game.name,
       icon: game.icon.kind === "image" ? { kind: "image", url: ICON_URL + game.icon.file } : game.icon,
-      steamIcon: this.library.steamIcons && game.useOriginalIcon && game.iconFile ? STEAM_ICON_URL + game.iconFile : null,
+      ...this.ownIcon(game),
       iconChoice: game.icon.kind === "image" ? "image" : game.useOriginalIcon ? "original" : "letters",
       shareIcon: ((file) => (file ? STEAM_ICON_URL + file : null))(this.shareableFile(game)),
       builtIn: game.catalogId !== null,

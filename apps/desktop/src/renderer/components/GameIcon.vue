@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import type { GameView } from "../../shared/host-api";
 import { gameBadgeLook } from "../game-badge";
-import { backdropOf, iconTone, toneOf, type IconTone } from "../icon-tone";
+import { backdropOf } from "../icon-tone";
 
 const props = withDefaults(defineProps<{ game: GameView; size?: number }>(), { size: 48 });
 
@@ -13,19 +13,8 @@ const steamIcon = computed(() => (props.game.icon.kind === "monogram" ? props.ga
 // An icon that cannot be shown falls back to the badge instead of a broken image.
 const iconFailed = ref(false);
 watch(steamIcon, () => (iconFailed.value = false));
-// How the game's own icon sits in the tile depends on the picture, see icon-tone.ts.
-const tone = ref<IconTone>("onDark");
-watch(
-  steamIcon,
-  (url) => {
-    tone.value = url ? (toneOf(url) ?? "onDark") : "onDark";
-  },
-  { immediate: true },
-);
-function onIconLoad(event: Event) {
-  const url = steamIcon.value;
-  if (url) tone.value = iconTone(url, event.target as HTMLImageElement);
-}
+// How the game's own icon sits in the tile depends on the picture; the host works it out (shared/icon-tone.ts).
+const tone = computed(() => props.game.steamIconTone ?? "onDark");
 // Small icons (folder collages) show only the first letter.
 const text = computed(() => {
   const full = props.game.icon.kind === "monogram" ? props.game.icon.text : "";
@@ -50,11 +39,10 @@ const fontSize = computed(() => Math.max(12, Math.round(props.size * ([...text.v
         :src="steamIcon"
         alt=""
         draggable="false"
-        @load="onIconLoad"
         @error="iconFailed = true"
       />
       <span v-else class="flex size-full items-center justify-center" :style="{ backgroundImage: backdropOf(tone) }">
-        <img class="object-contain" style="width: 84%; height: 84%" :src="steamIcon" alt="" draggable="false" @load="onIconLoad" @error="iconFailed = true" />
+        <img class="object-contain" style="width: 84%; height: 84%" :src="steamIcon" alt="" draggable="false" @error="iconFailed = true" />
       </span>
     </template>
     <span
