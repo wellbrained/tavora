@@ -20,7 +20,7 @@ describe("Discord secrets on disk", () => {
     await saveDiscordSecrets(where, encryptor(), { secret: "s3cret_value", token: TOKEN });
     const text = await readFile(where, "utf8");
     expect(text).not.toContain("s3cret_value");
-    expect(await loadDiscordSecrets(where, encryptor())).toEqual({ secret: "s3cret_value", token: TOKEN });
+    expect(await loadDiscordSecrets(where, encryptor())).toEqual({ secret: "s3cret_value", token: TOKEN, last: null });
   });
 
   it("deletes the file when nothing is left to keep", async () => {
@@ -32,11 +32,20 @@ describe("Discord secrets on disk", () => {
 
   it("starts empty when the file is missing, damaged or can't be decrypted here", async () => {
     const where = await file();
-    expect(await loadDiscordSecrets(where, encryptor())).toEqual({ secret: null, token: null });
+    expect(await loadDiscordSecrets(where, encryptor())).toEqual({ secret: null, token: null, last: null });
     await saveDiscordSecrets(where, encryptor(), { secret: "s3cret_value", token: TOKEN });
-    expect(await loadDiscordSecrets(where, encryptor(false))).toEqual({ secret: null, token: null });
+    expect(await loadDiscordSecrets(where, encryptor(false))).toEqual({ secret: null, token: null, last: null });
     const broken: Encryptor = { ...encryptor(), decrypt: () => "not json" };
-    expect(await loadDiscordSecrets(where, broken)).toEqual({ secret: null, token: null });
+    expect(await loadDiscordSecrets(where, broken)).toEqual({ secret: null, token: null, last: null });
+  });
+
+  it("keeps the channel to rejoin, and drops one that is damaged", async () => {
+    const where = await file();
+    const last = { channelId: "10", guildId: "20", name: "Factory Floor", serverName: "Wellbrained Crew" };
+    await saveDiscordSecrets(where, encryptor(), { secret: "s3cret_value", token: null, last });
+    expect((await loadDiscordSecrets(where, encryptor())).last).toEqual(last);
+    await saveDiscordSecrets(where, encryptor(), { secret: "s3cret_value", token: null, last: { ...last, channelId: "not an id" } });
+    expect((await loadDiscordSecrets(where, encryptor())).last).toBeNull();
   });
 
   it("refuses to save without secure storage", async () => {
