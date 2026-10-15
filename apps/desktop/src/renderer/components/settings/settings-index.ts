@@ -89,6 +89,13 @@ export const SETTINGS: SettingEntry[] = [
     keywords: ["update", "updates", "upgrade", "new version", "check now", "latest"],
   },
   {
+    id: "backups",
+    section: "general",
+    label: "Backups",
+    description: "Tavora keeps a copy of your games, layouts, notes and settings from the last 7 days, made when it first starts each day. Open the folder to go back.",
+    keywords: ["backup", "restore", "copy", "recover", "undo", "data", "safety", "export"],
+  },
+  {
     id: "steam-icons",
     section: "general",
     label: "Game icons from this PC and Steam",
