@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { SteamGameView } from "../../shared/host-api";
 import { act, api, dialog, showToast, state } from "../host";
+import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
 const profile = ref(state.value?.library.steamProfile ?? "");
@@ -69,22 +70,22 @@ async function runImport() {
   }
   dialog.value = null;
   const added = result.added ?? 0;
-  showToast(added === 0 ? "Those games were already in your library." : added === 1 ? "Added 1 game from Steam." : `Added ${added} games from Steam.`);
+  showToast(added === 0 ? t("steamImport.added.zero") : t("steamImport.added", { count: added }));
 }
 
-const status = (game: SteamGameView) => (game.status === "trash" ? "In Trash" : "Already in your library");
+const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImport.trash") : t("steamImport.owned"));
 </script>
 
 <template>
   <ModalDialog
-    title="Import from Steam"
-    description="Add the games you own on Steam. Tavora only lists them: it does not start games or collect anything else about them."
+    :title="t('steamImport.title')"
+    :description="t('steamImport.description')"
     testid="steam-import-dialog"
     class="sm:max-w-[500px]"
     @close="dialog = null"
   >
     <form v-if="!games" class="flex flex-col gap-3" @submit.prevent="lookUp">
-      <label class="text-sm" for="steam-profile">Your Steam profile link or SteamID64</label>
+      <label class="text-sm" for="steam-profile">{{ t("steamImport.profile") }}</label>
       <Input
         id="steam-profile"
         v-model="profile"
@@ -95,33 +96,32 @@ const status = (game: SteamGameView) => (game.status === "trash" ? "In Trash" : 
         autofocus
       />
       <p class="text-muted-foreground text-xs leading-relaxed">
-        On Steam, your profile's Game details must be set to Public while you import; you can set them back afterwards. The link
-        goes to the Tavora service, which asks Steam for your game list and sends it straight back; the service keeps nothing. Tick the box below to keep the link on this PC for next time.
+        {{ t("steamImport.profileHelp") }}
       </p>
       <label class="flex items-center gap-2 text-sm">
         <input v-model="remember" type="checkbox" class="accent-primary size-4" data-testid="steam-remember" />
-        Remember this profile on this PC
+        {{ t("steamImport.remember") }}
       </label>
       <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="steam-import-error">{{ error }}</p>
       <div class="flex justify-end gap-2">
-        <Button type="button" variant="secondary" @click="dialog = null">Cancel</Button>
+        <Button type="button" variant="secondary" @click="dialog = null">{{ t("common.cancel") }}</Button>
         <Button type="submit" data-testid="steam-lookup" :disabled="looking || !profile.trim()">
-          {{ looking ? "Looking…" : "Look up games" }}
+          {{ looking ? t("steamImport.looking") : t("steamImport.lookUp") }}
         </Button>
       </div>
     </form>
 
     <template v-else>
       <p v-if="games.length === 0" class="text-muted-foreground text-sm" data-testid="steam-import-empty">
-        Steam did not list any games for that profile.
+        {{ t("steamImport.empty") }}
       </p>
       <template v-else>
         <div class="flex items-center gap-2">
-          <Input v-model="filter" placeholder="Filter" aria-label="Filter games" autocomplete="off" maxlength="80" data-testid="steam-filter" />
-          <Button type="button" variant="secondary" :disabled="busy || fresh.length === 0" @click="tickAll(true)">All</Button>
-          <Button type="button" variant="secondary" :disabled="busy || fresh.length === 0" @click="tickAll(false)">None</Button>
+          <Input v-model="filter" :placeholder="t('steamImport.filter')" :aria-label="t('steamImport.filterLabel')" autocomplete="off" maxlength="80" data-testid="steam-filter" />
+          <Button type="button" variant="secondary" :disabled="busy || fresh.length === 0" @click="tickAll(true)">{{ t("steamImport.all") }}</Button>
+          <Button type="button" variant="secondary" :disabled="busy || fresh.length === 0" @click="tickAll(false)">{{ t("steamImport.none") }}</Button>
         </div>
-        <ul class="-mx-2 max-h-[300px] overflow-y-auto" aria-label="Steam games" data-testid="steam-list">
+        <ul class="-mx-2 max-h-[300px] overflow-y-auto" :aria-label="t('steamImport.list')" data-testid="steam-list">
           <li v-for="game in shown" :key="game.appid">
             <label
               class="flex items-center gap-3 rounded-md px-2 py-2"
@@ -139,24 +139,23 @@ const status = (game: SteamGameView) => (game.status === "trash" ? "In Trash" : 
               <span v-if="game.status !== 'new'" class="flex-none text-xs">{{ status(game) }}</span>
             </label>
           </li>
-          <li v-if="shown.length === 0" class="text-muted-foreground px-2 py-2 text-sm">No game matches.</li>
+          <li v-if="shown.length === 0" class="text-muted-foreground px-2 py-2 text-sm">{{ t("steamImport.noMatch") }}</li>
         </ul>
         <p class="text-muted-foreground text-xs" data-testid="steam-summary">
-          {{ fresh.length }} new{{ owned ? `, ${owned} already here` : "" }}. {{ count }} selected.
+          {{ t("steamImport.summary", { fresh: fresh.length, owned: owned ? t("steamImport.summaryOwned", { owned }) : "", count }) }}
         </p>
       </template>
       <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="steam-import-error">{{ error }}</p>
       <div class="flex justify-end gap-2">
-        <Button type="button" variant="secondary" :disabled="busy" @click="back">Back</Button>
+        <Button type="button" variant="secondary" :disabled="busy" @click="back">{{ t("common.back") }}</Button>
         <Button type="button" data-testid="steam-import-submit" :disabled="busy || count === 0" @click="runImport">
-          {{ count === 1 ? "Import 1 game" : `Import ${count} games` }}
+          {{ t("steamImport.import", { count }) }}
         </Button>
       </div>
     </template>
 
     <p class="text-muted-foreground text-xs leading-relaxed">
-      Game lists come from Steam. Steam and the Steam logo are trademarks of Valve Corporation; Tavora is not affiliated with,
-      endorsed by or sponsored by Valve. Game names belong to their publishers.
+      {{ t("steamImport.trademark") }}
     </p>
   </ModalDialog>
 </template>

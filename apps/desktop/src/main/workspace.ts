@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { INSTANCE_ID } from "./ids";
+import { PlayerError } from "./messages";
 import { layoutPanels, parseLayout, pruneLayout, type SavedLayout } from "./layout";
 
 export { INSTANCE_ID } from "./ids";
@@ -37,7 +38,7 @@ export interface WorkspaceState {
 }
 
 /** A problem with the workspace that the player can fix; its message is shown as-is. */
-export class WorkspaceError extends Error {}
+export class WorkspaceError extends PlayerError {}
 
 export const MAX_SNAPSHOTS = 50;
 export const MAX_SNAPSHOT_NAME = 80;

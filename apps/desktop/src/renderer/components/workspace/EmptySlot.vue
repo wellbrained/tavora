@@ -6,6 +6,7 @@ import { Plus, X } from "@lucide/vue";
 import type { IWatermarkPanelProps } from "dockview-vue";
 import { Button } from "@/components/ui/button";
 import { dialog } from "../../host";
+import { t } from "../../i18n";
 
 const props = defineProps<{ params: IWatermarkPanelProps }>();
 
@@ -28,10 +29,10 @@ function remove() {
       data-testid="slot-add-module"
       @click="dialog = { kind: 'add-module', slot: params.group.id }"
     >
-      <Plus :stroke-width="1.5" /> Add module
+      <Plus :stroke-width="1.5" /> {{ t("workspace.addModule") }}
     </Button>
     <Button variant="ghost" size="sm" class="text-muted-foreground" data-testid="slot-remove" @click="remove">
-      <X :stroke-width="1.5" /> Remove slot
+      <X :stroke-width="1.5" /> {{ t("workspace.removeSlot") }}
     </Button>
   </div>
 </template>
