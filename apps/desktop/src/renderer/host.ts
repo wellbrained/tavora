@@ -80,14 +80,12 @@ export function openSettings(target: { section: SettingsSection; setting?: strin
 
 /** The search box behind Ctrl+K. */
 export const searchOpen = ref(false);
-/** The shortcut overview behind Ctrl+/. */
-export const shortcutsOpen = ref(false);
 /** Bumped by Ctrl+\; the rail toggles itself when it changes. */
 export const railToggles = ref(0);
 
 api.onShortcut((shortcut) => {
   if (shortcut === "search") searchOpen.value = !searchOpen.value;
-  else if (shortcut === "shortcuts") shortcutsOpen.value = !shortcutsOpen.value;
+  else if (shortcut === "shortcuts") openSettings({ section: "shortcuts" });
   else if (shortcut === "settings") openSettings();
   else if (shortcut === "toggle-rail") railToggles.value++;
   else if (shortcut === "home") void act({ type: "show-welcome" });
@@ -149,7 +147,6 @@ export const overlayOpen = computed(
     dialog.value !== null ||
     settingsOpen.value ||
     searchOpen.value ||
-    shortcutsOpen.value ||
     dragging.value,
 );
 watch(overlayOpen, (open) => {

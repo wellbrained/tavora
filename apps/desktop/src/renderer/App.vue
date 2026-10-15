@@ -6,7 +6,6 @@ import GameRail from "./components/GameRail.vue";
 import PromptDialog from "./components/PromptDialog.vue";
 import SearchDialog from "./components/SearchDialog.vue";
 import SettingsDialog from "./components/settings/SettingsDialog.vue";
-import ShortcutsDialog from "./components/ShortcutsDialog.vue";
 import { dialog, state, toast } from "./host";
 import GameWorkspace from "./pages/GameWorkspace.vue";
 import OnboardingPage from "./pages/OnboardingPage.vue";
@@ -28,7 +27,6 @@ import WelcomePage from "./pages/WelcomePage.vue";
 
     <SettingsDialog />
     <SearchDialog />
-    <ShortcutsDialog />
     <AddGameDialog v-if="dialog?.kind === 'add-game'" />
     <AddModuleDialog v-else-if="dialog?.kind === 'add-module'" />
     <PromptDialog v-else-if="dialog?.kind === 'prompt'" :key="dialog.title" :request="dialog" />

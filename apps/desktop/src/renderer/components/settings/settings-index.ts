@@ -1,9 +1,15 @@
-import { SlidersHorizontal, Trash2 } from "@lucide/vue";
+import { Keyboard, SlidersHorizontal, Trash2 } from "@lucide/vue";
 
 // The section menu, in groups. New settings get a row in a section, or a
 // new section here, rather than a longer page.
 export const GROUPS = [
-  { label: "Tavora", sections: [{ id: "general", label: "General", icon: SlidersHorizontal }] },
+  {
+    label: "Tavora",
+    sections: [
+      { id: "general", label: "General", icon: SlidersHorizontal },
+      { id: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard },
+    ],
+  },
   { label: "Library", sections: [{ id: "trash", label: "Trash", icon: Trash2 }] },
 ] as const;
 
@@ -59,10 +65,10 @@ export const SETTINGS: SettingEntry[] = [
   },
   {
     id: "shortcuts",
-    section: "general",
+    section: "shortcuts",
     label: "Keyboard shortcuts",
-    description: "Every shortcut Tavora has. Press Ctrl+/ anywhere to see them.",
-    keywords: ["keys", "hotkeys", "keyboard", "ctrl"],
+    description: "Every shortcut Tavora has. Ctrl+/ opens this list from anywhere.",
+    keywords: ["keys", "hotkeys", "keyboard", "ctrl", "keybindings"],
   },
   {
     id: "welcome-tour",

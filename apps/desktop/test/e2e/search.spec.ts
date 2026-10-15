@@ -5,7 +5,8 @@ import { inModule, launch, openGame, openModule, panels, VANILLA } from "./harne
 test("Tavora's shortcuts open the overview, Settings, Home and numbered games", async () => {
   const { app, page } = await launch();
   await page.keyboard.press("Control+/");
-  await expect(page.getByTestId("shortcuts")).toBeVisible();
+  // The list is its own Settings section, not a dialog of its own.
+  await expect(page.getByTestId("settings").getByTestId("shortcuts")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.keyboard.press("Control+,");
   await expect(page.getByTestId("settings")).toBeVisible();
