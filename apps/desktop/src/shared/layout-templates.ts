@@ -23,13 +23,17 @@ export const LAYOUT_TEMPLATES = [
   { id: "four-columns", name: "4 columns", direction: "row", parts: [1, 1, 1, 1] },
   { id: "two-rows", name: "2 rows", direction: "column", parts: [1, 1] },
   { id: "three-rows", name: "3 rows", direction: "column", parts: [1, 1, 1] },
-  { id: "grid", name: "2 × 2 grid", direction: "row", parts: [[1, 1], [1, 1]] },
   { id: "main-sidebar", name: "Main + side", direction: "row", parts: [2, 1] },
   { id: "sidebar-main", name: "Side + main", direction: "row", parts: [1, 2] },
   { id: "main-stacked", name: "Main + 2 stacked", direction: "row", parts: [3, [1, 1]] },
-  { id: "top-two", name: "Top + 2 below", direction: "column", parts: [1, [1, 1]] },
+  { id: "stacked-main", name: "2 stacked + main", direction: "row", parts: [[1, 1], 3] },
+  { id: "top-two", name: "Top + 2 below", direction: "column", parts: [2, [1, 1]] },
+  { id: "two-bottom", name: "2 on top + bottom", direction: "column", parts: [[1, 1], 2] },
+  { id: "grid", name: "2 × 2 grid", direction: "row", parts: [[1, 1], [1, 1]] },
   { id: "grid-three-two", name: "3 × 2 grid", direction: "row", parts: [[1, 1], [1, 1], [1, 1]] },
   { id: "grid-two-three", name: "2 × 3 grid", direction: "row", parts: [[1, 1, 1], [1, 1, 1]] },
+  { id: "grid-four-two", name: "4 × 2 grid", direction: "row", parts: [[1, 1], [1, 1], [1, 1], [1, 1]] },
+  { id: "grid-three-three", name: "3 × 3 grid", direction: "row", parts: [[1, 1, 1], [1, 1, 1], [1, 1, 1]] },
 ] as const satisfies readonly LayoutTemplate[];
 
 export type LayoutTemplateId = (typeof LAYOUT_TEMPLATES)[number]["id"];

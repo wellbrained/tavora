@@ -86,14 +86,14 @@ function items(): MenuItem[] {
     label="Saved layouts"
     side="bottom"
     align="end"
-    menu-class="w-80 max-w-80"
+    menu-class="w-[26rem] max-w-[26rem]"
     class="flex h-8 w-auto gap-1.5 rounded-lg px-2.5 text-sm font-medium"
   >
     <LayoutPanelLeft class="size-4" :stroke-width="1.5" /> Layouts <ChevronDown class="size-3.5" :stroke-width="1.5" />
     <template #after>
       <DropdownMenuSeparator />
       <DropdownMenuLabel class="text-muted-foreground text-xs font-normal">Templates</DropdownMenuLabel>
-      <div class="grid grid-cols-3 gap-1 p-1 pt-0" role="group" aria-label="Templates">
+      <div class="grid grid-cols-4 gap-1 p-1 pt-0" role="group" aria-label="Templates">
         <DropdownMenuItem
           v-for="template in LAYOUT_TEMPLATES"
           :key="template.id"
