@@ -2,11 +2,11 @@
 // To-Dos: current objectives on top, then the player's own groups. Every
 // To-Dos panel of a game shows the same list; what is open, folded or
 // hidden is each panel's own state.
-import { Eye, EyeOff, FolderPlus } from "@lucide/vue";
+import { Eye, EyeOff } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import type { TavoraSDK } from "@tavora/sdk";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import AddInput from "./AddInput.vue";
 import GroupSection, { type DropTarget } from "./GroupSection.vue";
 import { createTodoStore, type TodoStore } from "./store";
@@ -25,8 +25,6 @@ const sdk = shallowRef<TavoraSDK | null>(null);
 const store = shallowRef<TodoStore | null>(null);
 const error = ref<string | null>(null);
 const panel = ref<PanelState>({ expanded: null, hideDone: false, collapsed: [] });
-const naming = ref(false);
-const newGroupInput = ref<InstanceType<typeof AddInput> | null>(null);
 const pendingGroup = shallowRef<Group | null>(null);
 const dragging = ref<string | null>(null);
 const drop = ref<DropTarget | null>(null);
@@ -75,15 +73,8 @@ function toggleCollapsed(groupId: string) {
   setPanel({ collapsed });
 }
 
-async function startGroup() {
-  naming.value = true;
-  await nextTick();
-  newGroupInput.value?.focus();
-}
-
 function createGroup(name: string) {
   const id = crypto.randomUUID();
-  naming.value = false;
   void store.value!.apply((data) => addGroup(data, id, name));
 }
 
@@ -140,7 +131,7 @@ function dropTask() {
     {{ error ? `Could not connect: ${error}` : "Loading to-dos…" }}
   </p>
   <div v-else class="flex h-full min-h-0 flex-col" data-testid="todos-app">
-    <header class="flex h-10 flex-none items-center gap-1 border-b px-2">
+    <header v-if="store.error.value || panel.hideDone || hasDone" class="flex h-10 flex-none items-center gap-1 border-b px-2">
       <p class="text-muted-foreground min-w-0 flex-1 truncate px-1 text-xs" role="status" data-testid="todos-status">
         <span v-if="store.error.value" class="text-destructive">{{ store.error.value }}</span>
       </p>
@@ -156,13 +147,10 @@ function dropTask() {
         <Eye v-else :stroke-width="1.5" />
         {{ panel.hideDone ? "Show finished" : "Hide finished" }}
       </Button>
-      <Button variant="ghost" size="sm" data-testid="new-group" @click="startGroup">
-        <FolderPlus :stroke-width="1.5" /> New group
-      </Button>
     </header>
 
     <div class="min-h-0 flex-1 overflow-y-auto p-2" @dragend="dragEnd">
-      <div v-if="!list.groups.length && !naming" class="flex flex-col items-center gap-3 px-4 py-10 text-center" data-testid="empty">
+      <div v-if="!list.groups.length" class="flex flex-col items-center gap-3 px-4 py-10 text-center" data-testid="empty">
         <p class="text-muted-foreground text-sm">Keep track of what you want to do in this game.</p>
         <AddInput class="w-full max-w-80" outlined placeholder="Add a to-do" :maxlength="MAX.title" data-testid="first-task" @add="firstTask" />
       </div>
@@ -209,17 +197,15 @@ function dropTask() {
         />
       </div>
 
-      <!-- Always at the end of the list once there is a group; New group above focuses it. -->
+      <!-- Always at the end of the list once there is a group. -->
       <AddInput
-        v-if="naming || list.groups.length"
-        ref="newGroupInput"
+        v-if="list.groups.length"
         class="mt-2 rounded-lg border border-dashed"
         placeholder="Add new group"
         label="New group name"
         :maxlength="MAX.groupName"
         data-testid="group-name-new"
         @add="createGroup"
-        @focusout="naming = false"
       />
     </div>
 
