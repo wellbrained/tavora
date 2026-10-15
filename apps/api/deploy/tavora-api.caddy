@@ -1,0 +1,11 @@
+api.mytavora.app {
+    bind 167.233.235.154 2a01:4f8:c013:d350::1
+    encode zstd gzip
+    header X-Content-Type-Options nosniff
+    # The service rate-limits per client from the first X-Forwarded-For address,
+    # so the proxy sets it and never passes on what a client sent.
+    # No access log is configured on purpose: requests hold what players typed.
+    reverse_proxy 127.0.0.1:4010 {
+        header_up X-Forwarded-For {remote_host}
+    }
+}

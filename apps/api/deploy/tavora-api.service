@@ -1,0 +1,28 @@
+[Unit]
+Description=Tavora game search service
+After=network.target
+
+[Service]
+User=tavora-api
+Group=tavora-api
+WorkingDirectory=/srv/tavora-api/current
+Environment=NODE_ENV=production
+Environment=PORT=4010
+Environment=TRUST_PROXY=1
+Environment=TAVORA_GAMES_DB=/srv/tavora-api/current/games.sqlite
+ExecStart=/usr/local/bin/node /srv/tavora-api/current/server.mjs
+Restart=on-failure
+RestartSec=5
+MemoryMax=256M
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target
