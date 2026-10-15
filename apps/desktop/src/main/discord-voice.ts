@@ -44,6 +44,9 @@ export function parseVoiceState(raw: unknown): VoicePerson | null {
     selfDeaf: flag(state.self_deaf),
     serverMute: flag(state.mute) || flag(state.suppress),
     serverDeaf: flag(state.deaf),
+    // Discord's own per-person settings of the player: volume 0 to 200, and the player's local "mute for me".
+    volume: typeof entry.volume === "number" && Number.isFinite(entry.volume) ? Math.min(200, Math.max(0, Math.round(entry.volume))) : 100,
+    mutedForMe: flag(entry.mute),
   };
 }
 

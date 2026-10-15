@@ -9,9 +9,11 @@ import { Check, ChevronDown, Headphones, HeadphoneOff, Info, Mic, MicOff, Phone,
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { DiscordChannel, DiscordMember } from "../../../shared/host-api";
+import type { DiscordChannel } from "../../../shared/host-api";
 import { act, discord, openSettings, state } from "../../host";
 import { t } from "../../i18n";
+import DiscordMemberRow from "./DiscordMemberRow.vue";
+import { initials } from "./discord-ui";
 
 const view = computed(() => discord.value);
 const gameId = computed(() => (state.value?.screen === "game" ? state.value.currentGameId : null));
@@ -64,24 +66,6 @@ const entries = computed<Entry[]>(() => {
   return result;
 });
 const self = computed(() => view.value?.self ?? null);
-
-const COLOURS = ["#5865f2", "#3ba55d", "#faa61a", "#ed4245", "#eb459e", "#7289da"];
-/** Discord's default pictures differ by colour; people without a picture get one of these with their initials. */
-function colourOf(member: DiscordMember): string {
-  return COLOURS[Number(BigInt(member.id) % BigInt(COLOURS.length))]!;
-}
-function initials(name: string): string {
-  return [...name.trim()].slice(0, 2).join("").toUpperCase();
-}
-const label = (member: DiscordMember) =>
-  [
-    member.name,
-    member.speaking && t("discord.member.talking"),
-    (member.selfMute || member.serverMute) && t("discord.member.muted"),
-    (member.selfDeaf || member.serverDeaf) && t("discord.member.deafened"),
-  ]
-    .filter(Boolean)
-    .join(", ");
 
 function remember(on: boolean) {
   if (gameId.value) void act({ type: "discord-game-remember", gameId: gameId.value, remember: on });
@@ -225,40 +209,13 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", closeOutside))
                 <span class="min-w-0 truncate">{{ entry.channel.name }}</span>
               </button>
               <ul class="mt-0.5">
-                <li
+                <DiscordMemberRow
                   v-for="member in entry.channel.members"
                   :key="member.id"
-                  class="flex h-8 items-center gap-2 rounded-md pr-2 pl-8"
-                  :aria-label="label(member)"
-                  :data-testid="`discord-member-${member.id}`"
-                  :data-speaking="member.speaking || undefined"
-                >
-                  <span
-                    :class="
-                      cn(
-                        'relative grid size-6 flex-none place-items-center rounded-full text-[9px] font-semibold text-white',
-                        member.speaking && 'ring-success ring-offset-background ring-2 ring-offset-2',
-                      )
-                    "
-                    :style="member.avatar ? undefined : { background: colourOf(member) }"
-                  >
-                    <img v-if="member.avatar" :src="member.avatar" alt="" class="size-6 rounded-full" draggable="false" />
-                    <template v-else>{{ initials(member.name) }}</template>
-                  </span>
-                  <span :class="cn('min-w-0 flex-1 truncate', entry.current || member.speaking ? 'text-foreground' : 'text-muted-foreground')">{{ member.name }}</span>
-                  <MicOff
-                    v-if="member.selfMute || member.serverMute"
-                    :class="cn('size-4 flex-none', member.serverMute ? 'text-destructive' : 'text-muted-foreground')"
-                    :stroke-width="1.75"
-                    :aria-label="member.serverMute ? t('discord.member.mutedByMod') : t('discord.member.muted')"
-                  />
-                  <HeadphoneOff
-                    v-if="member.selfDeaf || member.serverDeaf"
-                    :class="cn('size-4 flex-none', member.serverDeaf ? 'text-destructive' : 'text-muted-foreground')"
-                    :stroke-width="1.75"
-                    :aria-label="member.serverDeaf ? t('discord.member.deafenedByMod') : t('discord.member.deafened')"
-                  />
-                </li>
+                  :member="member"
+                  :current="entry.current"
+                  :menu="entry.current && member.id !== view?.user?.id"
+                />
               </ul>
             </li>
           </template>

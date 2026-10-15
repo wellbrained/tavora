@@ -620,4 +620,12 @@ export const de: Record<keyof typeof en, string> = {
   "discord.error.serverUnknown": "Dieser Server ist nicht mehr verfügbar.",
   "discord.game.search": "Server suchen …",
   "discord.game.noMatch": "Kein Server gefunden.",
+  "discord.menu.open": "Optionen für {name}",
+  "discord.menu.volume": "Lautstärke",
+  "discord.menu.mute": "Nur für mich stummschalten",
+  "discord.menu.unmute": "Stummschaltung aufheben",
+  "discord.menu.reset": "Lautstärke zurücksetzen",
+  "discord.member.mutedForYou": "Für dich stummgeschaltet",
+  "discord.member.volume": "Lautstärke {percent} %",
+  "discord.error.personGone": "Diese Person ist nicht mehr in deinem Kanal.",
 };

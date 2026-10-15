@@ -618,4 +618,12 @@ export const en = {
   "discord.error.serverUnknown": "That server is not available any more.",
   "discord.game.search": "Search servers…",
   "discord.game.noMatch": "No server found.",
+  "discord.menu.open": "Options for {name}",
+  "discord.menu.volume": "Volume",
+  "discord.menu.mute": "Mute for me",
+  "discord.menu.unmute": "Unmute for me",
+  "discord.menu.reset": "Reset volume",
+  "discord.member.mutedForYou": "Muted for you",
+  "discord.member.volume": "Volume {percent}%",
+  "discord.error.personGone": "That person is not in your channel any more.",
 } as const;
