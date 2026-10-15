@@ -53,3 +53,28 @@ export function checkRelease(version, state, options = {}) {
   }
   return problems;
 }
+
+/**
+ * What the GitHub "Checks" runs say about `sha`. Empty means the newest one finished green.
+ * runs: [{ status, conclusion, headSha, createdAt }] as `gh run list --json` gives them.
+ */
+export function checkCi(runs, sha) {
+  const mine = runs.filter((run) => run.headSha === sha).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  if (mine.length === 0) return [`GitHub has no Checks run for ${sha.slice(0, 7)} yet; wait for it to start.`];
+  const latest = mine[0];
+  if (latest.status !== "completed") return [`The Checks run for ${sha.slice(0, 7)} is still ${latest.status}; wait for it to finish.`];
+  if (latest.conclusion !== "success") return [`The Checks run for ${sha.slice(0, 7)} ended with "${latest.conclusion}"; fix main first.`];
+  return [];
+}
+
+/** The by-hand checks before an installer goes out, asked one by one. */
+export const CHECKLIST = [
+  "The installed build starts (run the new installer from the release folder).",
+  "A game can be added and removed.",
+  "A module opens in a game.",
+  "Settings opens.",
+];
+
+/** Said after the upload: it can only be checked once the new version is public. */
+export const AFTER_RELEASE =
+  "Last check, now that it is public: on an installed previous version, wait for or trigger the update and see that it installs this version.";

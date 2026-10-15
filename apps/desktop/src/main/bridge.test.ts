@@ -54,8 +54,12 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
 async function call(target: FakePort, method: string, params?: unknown, v = 1) {
   const id = nextId++;
   target.receive({ v, id, method, params });
+  const find = () => target.sent.find((m) => (m as { id?: number }).id === id) as Record<string, any>;
+  // Handlers touch the disk, so how long a reply takes depends on the load: wait for it
+  // rather than for a fixed time.
+  for (let waited = 0; !find() && waited < 3000; waited += 10) await new Promise((resolve) => setTimeout(resolve, 10));
   await flush();
-  return target.sent.find((m) => (m as { id?: number }).id === id) as Record<string, any>;
+  return find();
 }
 
 async function connected(ctx = makeContext()) {
