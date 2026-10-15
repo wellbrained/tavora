@@ -78,7 +78,8 @@ describe("searchGames", () => {
     expect(ids("'; drop table games; --")).toEqual([]);
   });
 
-  it("returns only id and name", () => {
-    expect(searchGames(db, "elden ring")[0]).toEqual({ id: "elden-ring", name: "Elden Ring" });
+  it("returns the id, the name and the Steam appid, and nothing else", () => {
+    expect(searchGames(db, "elden ring")[0]).toEqual({ id: "elden-ring", name: "Elden Ring", steamAppId: null });
+    expect(searchGames(db, "hades")[0]).toEqual({ id: "hades", name: "Hades", steamAppId: 1145360 });
   });
 });

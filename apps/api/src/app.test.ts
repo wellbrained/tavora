@@ -18,7 +18,7 @@ describe("search endpoint", () => {
   it("returns matching games as id and name", async () => {
     const response = await get(app, "/v1/games/search?q=elden");
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ results: [{ id: "elden-ring", name: "Elden Ring" }] });
+    expect(await response.json()).toEqual({ results: [{ id: "elden-ring", name: "Elden Ring", steamAppId: null }] });
   });
 
   it("is never cached and sets safe headers", async () => {
