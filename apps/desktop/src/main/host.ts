@@ -464,6 +464,9 @@ export class Host {
         break;
       case "download-update":
         return this.updates?.download();
+      case "check-for-updates":
+        if (!this.updates) throw new LibraryError("Updates only work in the installed Tavora, not in a development run.");
+        return this.updates.check();
       case "restart-to-update":
         return this.updates?.restartNow();
       case "set-online-search":
@@ -956,7 +959,7 @@ export class Host {
       },
       restartPending: library.grayscaleText !== this.options.grayscaleText,
       appVersion: app.getVersion(),
-      update: this.updates?.state ?? { status: "idle" },
+      update: this.updates?.state ?? { status: "idle", checkedAt: null, failed: false },
     };
   }
 

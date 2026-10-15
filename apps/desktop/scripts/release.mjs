@@ -4,6 +4,7 @@
 //   pnpm release              checks, builds, uploads, tags and pushes the tag
 //   pnpm release --dry-run    checks and builds, then stops before the upload
 //   pnpm release --skip-e2e   leaves out the e2e suite (only for a retry after it passed)
+//   pnpm release --allow-patch  a one-off release of a patch version (x.y.z), e.g. to try an update
 //
 // Order on the server: the installer and its blockmap first, latest.yml last, so a
 // manifest never points at a file that is not there yet (deploy/tavora-updates-publish.sh).
@@ -19,6 +20,7 @@ const repo = path.dirname(path.dirname(desktop));
 const releaseDir = path.join(desktop, "release");
 const dryRun = process.argv.includes("--dry-run");
 const skipE2e = process.argv.includes("--skip-e2e");
+const allowPatch = process.argv.includes("--allow-patch");
 
 // Same server and key as the docs and the service use.
 const key = "D:\\Server\\vpn ssh-key-2026-10-05.key";
@@ -52,7 +54,7 @@ const problems = checkRelease(version, {
   behind: Number(git("rev-list", "--count", "HEAD..origin/main")),
   tags: git("tag", "--list", "v*").split(/\r?\n/).filter(Boolean),
   noteVersions,
-});
+}, { allowPatch });
 if (problems.length) {
   console.error(`\nNot releasing ${version}:`);
   for (const problem of problems) console.error(`  - ${problem}`);
@@ -95,7 +97,7 @@ const ssh = (command) => run("ssh.exe", [...sshOptions, remote, command]);
 ssh(`rm -rf ${incoming} && mkdir -p ${incoming}`);
 run("scp.exe", [...sshOptions, ...files, `${remote}:${incoming}/`]);
 run("scp.exe", [...sshOptions, script, `${remote}:/tmp/`]);
-ssh(`bash /tmp/tavora-updates-publish.sh ${version}`);
+ssh(`bash /tmp/tavora-updates-publish.sh ${version}${allowPatch ? " allow-patch" : ""}`);
 
 step("Tagging");
 git("tag", "-a", `v${version}`, "-m", `Tavora ${version}`);

@@ -46,6 +46,7 @@ async function show(target: SettingsSection, setting?: string) {
 
 const library = computed(() => state.value!.library);
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+const dateTimeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 const formatDate = (iso: string) => dateFormat.format(new Date(iso));
 const version = computed(() => state.value!.appVersion);
 
@@ -96,6 +97,25 @@ const grayscaleText = computed({
   get: () => library.value.grayscaleText,
   set: (enabled: boolean) => void act({ type: "set-grayscale-text", enabled }),
 });
+/** What the Updates row says, and what its button does. */
+const updateRow = computed(() => {
+  const u = state.value!.update;
+  if (u.status === "checking") return { text: "Checking for a new version…", button: "Checking…", busy: true, run: null };
+  if (u.status === "downloading") return { text: `Downloading ${u.version} in the background…`, button: "Downloading…", busy: true, run: null };
+  if (u.status === "ready") return { text: `Version ${u.version} is ready. It installs when you close Tavora.`, button: "Restart now", busy: false, run: "restart-to-update" as const };
+  if (u.status === "available") return { text: `Version ${u.version} is available.`, button: "Download", busy: false, run: "download-update" as const };
+  const text = u.failed
+    ? "Couldn't reach the update server. Try again in a moment."
+    : u.checkedAt
+      ? `You're up to date. Last checked ${dateTimeFormat.format(new Date(u.checkedAt))}.`
+      : "Tavora checks for new versions by itself.";
+  return { text, button: "Check now", busy: false, run: "check-for-updates" as const };
+});
+function pressUpdateButton() {
+  const run = updateRow.value.run;
+  if (run) void act({ type: run });
+}
+
 const autoUpdate = computed({
   get: () => library.value.autoUpdate,
   set: (enabled: boolean) => void act({ type: "set-auto-update", enabled }),
@@ -271,6 +291,14 @@ function deleteNow(gameId: string, name: string) {
               :highlighted="highlight === 'auto-update'"
             >
               <Switch v-model="autoUpdate" aria-label="Download updates automatically" data-testid="auto-update" />
+            </SettingRow>
+            <SettingRow
+              label="Check for updates"
+              :description="updateRow.text"
+              setting="check-updates"
+              :highlighted="highlight === 'check-updates'"
+            >
+              <Button variant="secondary" :disabled="updateRow.busy" data-testid="check-updates" @click="pressUpdateButton">{{ updateRow.button }}</Button>
             </SettingRow>
             <SettingRow
               label="Game icons from Steam"
