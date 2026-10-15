@@ -1,7 +1,7 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import type { ActionResult, HostAction, HostShortcut, HostViewState } from "../shared/host-api";
+import type { ActionResult, DiscordView, HostAction, HostShortcut, HostViewState } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
 import type { SettingsSection } from "./components/settings/settings-index";
 import { numberedGames } from "./shortcuts";
@@ -19,6 +19,13 @@ watch(state, (next) => {
   if (!next) return;
   applyTheme(next.appearance);
   setLanguage(next.language.resolved);
+});
+
+/** The Discord panel's connection and voice channel; it has its own channel because speaking changes often. */
+export const discord = shallowRef<DiscordView | null>(null);
+api.onDiscord((next) => (discord.value = next));
+void api.getDiscord().then((initial) => {
+  if (initial && !discord.value) discord.value = initial;
 });
 
 export const toast = ref<string | null>(null);

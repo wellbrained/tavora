@@ -61,6 +61,7 @@ const showVariation = computed(() => {
 });
 </script>
 
+<template>
 
   <div
     :class="cn('-mx-3 rounded-lg border-b px-3 pt-2 pb-5 transition-colors duration-500', highlight === 'theme' && 'bg-primary/10')"
