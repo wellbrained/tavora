@@ -16,8 +16,6 @@ defineProps<{
   menu: () => MenuItem[];
   /** Where a dragged item would land relative to this one. */
   hint?: "before" | "after" | "into" | null;
-  /** A game inside an open folder: a little smaller. */
-  compact?: boolean;
   /** The number Ctrl+1 to 9 opens it with, shown while Ctrl is held. */
   shortcut?: number | undefined;
 }>();
@@ -40,8 +38,7 @@ defineOptions({ inheritAttrs: false });
         type="button"
         :class="
           cn(
-            'flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left',
-            compact ? 'p-0.5' : 'p-1',
+            'flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left',
             expanded && 'hover:bg-accent',
             expanded && active && 'bg-accent',
             hint === 'into' && 'ring-primary ring-2 ring-inset',
@@ -53,7 +50,7 @@ defineOptions({ inheritAttrs: false });
         :aria-label="game.name"
         @click="emit('open')"
       >
-        <span :class="cn('rail-icon flex-none', compact ? 'rounded-[10px]' : 'rounded-[12px]')"><GameIcon :game="game" :size="compact ? 40 : 48" /></span>
+        <span class="rail-icon flex-none rounded-[12px]"><GameIcon :game="game" :size="48" /></span>
         <span v-if="expanded" class="truncate text-sm font-medium">{{ game.name }}</span>
         <kbd
           v-if="shortcut"

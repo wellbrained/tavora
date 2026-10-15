@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // A folder in the rail: a folder shape (with its tab), so it cannot be taken for a game, with up to four of its
 // games inside. The four places stay put and fill from the top left to the bottom right, so one game sits in
-// the first place and the rest stay empty. A closed folder shows how many games it holds; an open one has an
-// outlined shape in the accent colour.
+// the first place and the rest stay empty. The folder shows how many games it holds, open or closed; an open one has
+// an outlined shape in the accent colour.
 import { computed } from "vue";
 import type { GameView } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
@@ -40,7 +40,7 @@ const badge = computed(() => (props.count > 99 ? "99+" : String(props.count)));
       </template>
     </span>
     <span
-      v-if="count > 0 && !open"
+      v-if="count > 0"
       class="bg-primary text-primary-foreground absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] leading-none font-bold tabular-nums shadow-sm shadow-black/40"
       data-testid="folder-count"
     >
