@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.18",
+    date: "2026-10-16",
+    title: "More module icons",
+    notes: [
+      "UI Playground shows the shadcn/ui logo, and the React, Vue and Vanilla example modules show the React, Vue and JavaScript logos.",
+    ],
+  },
+  {
     version: "0.5.17",
     date: "2026-10-16",
     title: "Module icons in the library",
