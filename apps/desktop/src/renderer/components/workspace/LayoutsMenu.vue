@@ -88,30 +88,37 @@ function items(): MenuItem[] {
     label="Saved layouts"
     side="bottom"
     align="end"
-    menu-class="w-80 max-w-80"
+    menu-class="w-[39rem] max-w-[calc(100vw-2rem)]"
     class="flex h-8 w-auto gap-1.5 rounded-lg px-2.5 text-sm font-medium"
   >
     <LayoutPanelLeft class="size-4" :stroke-width="1.5" /> Layouts <ChevronDown class="size-3.5" :stroke-width="1.5" />
     <template #after>
       <DropdownMenuSeparator />
-      <DropdownMenuLabel class="text-muted-foreground text-xs font-normal">Templates</DropdownMenuLabel>
-      <div class="grid grid-cols-3 gap-1 p-1 pt-0" role="group" aria-label="Templates">
-        <DropdownMenuItem
-          v-for="template in LAYOUT_TEMPLATES"
-          :key="template.id"
-          class="group justify-center p-2"
-          :data-testid="`layout-template-${template.id}`"
-          :aria-label="template.name"
-          :title="template.name"
-          @select="apply(template.id)"
-        >
-          <!-- size-auto keeps the menu item's default 16 px icon size off the preview. -->
-          <TemplatePreview :template="template" class="text-muted-foreground group-data-[highlighted]:text-primary size-auto h-14 w-[84px]" />
-        </DropdownMenuItem>
+      <!-- Templates and the grid picker side by side, so either is one click away. -->
+      <div class="flex gap-1">
+        <div class="min-w-0 flex-1">
+          <DropdownMenuLabel class="text-muted-foreground text-xs font-normal">Templates</DropdownMenuLabel>
+          <div class="grid grid-cols-3 gap-1 p-1 pt-0" role="group" aria-label="Templates">
+            <DropdownMenuItem
+              v-for="template in LAYOUT_TEMPLATES"
+              :key="template.id"
+              class="group justify-center p-2"
+              :data-testid="`layout-template-${template.id}`"
+              :aria-label="template.name"
+              :title="template.name"
+              @select="apply(template.id)"
+            >
+              <!-- size-auto keeps the menu item's default 16 px icon size off the preview. -->
+              <TemplatePreview :template="template" class="text-muted-foreground group-data-[highlighted]:text-primary size-auto h-14 w-[84px]" />
+            </DropdownMenuItem>
+          </div>
+        </div>
+        <div class="bg-border my-1 w-px flex-none" aria-hidden="true" />
+        <div class="flex-none">
+          <DropdownMenuLabel class="text-muted-foreground text-xs font-normal">Grid</DropdownMenuLabel>
+          <GridPicker />
+        </div>
       </div>
-      <DropdownMenuSeparator />
-      <DropdownMenuLabel class="text-muted-foreground text-xs font-normal">Grid</DropdownMenuLabel>
-      <GridPicker />
     </template>
   </MenuButton>
 </template>
