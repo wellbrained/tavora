@@ -16,6 +16,11 @@ describe("app version", () => {
   it("has patch notes for the version the app is on, newest first", () => {
     expect(PATCH_NOTES[0]!.version).toBe(version);
   });
+
+  it("is also the repository's version (CoreHub shows the root package.json), so a bump changes both", () => {
+    const root = JSON.parse(readFileSync(new URL("../../../../package.json", import.meta.url), "utf8")) as { version?: string };
+    expect(root.version).toBe(version);
+  });
 });
 
 describe("patch notes", () => {
