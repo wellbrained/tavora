@@ -16,6 +16,7 @@ import {
   parseList,
   pinnedTasks,
   renameGroup,
+  setGroupColor,
   setDone,
   shiftTask,
   updateStep,
@@ -55,6 +56,34 @@ describe("parseList", () => {
     expect(data.groups[0]!.tasks).toEqual([
       { id: "t", title: "", done: true, details: "", link: "", pinned: false, steps: [{ id: "s", title: "S", done: false }], createdAt: "", doneAt: "X" },
     ]);
+  });
+});
+
+describe("group colors", () => {
+  it("start without one, can be set and cleared, and refuse unknown names", () => {
+    const data = list();
+    expect(data.groups.map((group) => group.color)).toEqual(["", ""]);
+    setGroupColor(data, "g1", "blue");
+    setGroupColor(data, "g2", "pink");
+    expect(data.groups.map((group) => group.color)).toEqual(["blue", "pink"]);
+    setGroupColor(data, "g2", "chartreuse");
+    setGroupColor(data, "g1", "");
+    setGroupColor(data, "missing", "red");
+    expect(data.groups.map((group) => group.color)).toEqual(["", ""]);
+  });
+
+  it("are read back, and an old list, a wrong type or an unknown name means none", () => {
+    const stored = {
+      version: 1,
+      groups: [
+        { id: "a", name: "A", color: "violet", tasks: [] },
+        { id: "b", name: "B", tasks: [] },
+        { id: "c", name: "C", color: 5, tasks: [] },
+        { id: "d", name: "D", color: "Blue", tasks: [] },
+        { id: "e", name: "E", color: "url(x)", tasks: [] },
+      ],
+    };
+    expect(parseList(stored as never).groups.map((group) => group.color)).toEqual(["violet", "", "", "", ""]);
   });
 });
 
