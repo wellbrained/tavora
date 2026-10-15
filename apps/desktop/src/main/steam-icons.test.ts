@@ -123,7 +123,7 @@ describe("isIco", () => {
 });
 
 describe("findSteamDir", () => {
-  const present = (...files: string[]) => async (file: string) => files.map((f) => path.normalize(f)).includes(path.normalize(file));
+  const present = (...files: string[]) => async (file: string) => files.map((f) => path.win32.normalize(f)).includes(path.win32.normalize(file));
 
   it("takes the folder the Windows registry names, when Steam's cache is there", async () => {
     const found = await findSteamDir({
@@ -132,26 +132,26 @@ describe("findSteamDir", () => {
       registry: async () => "c:/program files (x86)/steam",
       exists: present("c:/program files (x86)/steam/appcache/appinfo.vdf"),
     });
-    expect(found).toBe(path.normalize("c:/program files (x86)/steam"));
+    expect(found).toBe(path.win32.normalize("c:/program files (x86)/steam"));
   });
 
   it("falls back to the usual folders, and to nothing", async () => {
     const options = { platform: "win32" as const, env: { "ProgramFiles(x86)": "D:\\Programs (x86)" }, registry: async () => null };
-    expect(await findSteamDir({ ...options, exists: present("D:\\Programs (x86)\\Steam\\appcache\\appinfo.vdf") })).toBe(path.normalize("D:\\Programs (x86)\\Steam"));
+    expect(await findSteamDir({ ...options, exists: present("D:\\Programs (x86)\\Steam\\appcache\\appinfo.vdf") })).toBe(path.win32.normalize("D:\\Programs (x86)\\Steam"));
     expect(await findSteamDir({ ...options, exists: present() })).toBeNull();
   });
 
   it("ignores a registry folder that has no cache", async () => {
     const found = await findSteamDir({ platform: "win32", env: {}, registry: async () => "E:/gone", exists: present("C:\\Program Files (x86)\\Steam\\appcache\\appinfo.vdf") });
-    expect(found).toBe(path.normalize("C:\\Program Files (x86)\\Steam"));
+    expect(found).toBe(path.win32.normalize("C:\\Program Files (x86)\\Steam"));
   });
 
   it("looks in the usual places on Linux and macOS", async () => {
     expect(await findSteamDir({ platform: "linux", home: "/home/p", exists: present("/home/p/.local/share/Steam/appcache/appinfo.vdf") })).toBe(
-      path.normalize("/home/p/.local/share/Steam"),
+      path.posix.normalize("/home/p/.local/share/Steam"),
     );
     expect(await findSteamDir({ platform: "darwin", home: "/Users/p", exists: present("/Users/p/Library/Application Support/Steam/appcache/appinfo.vdf") })).toBe(
-      path.normalize("/Users/p/Library/Application Support/Steam"),
+      path.posix.normalize("/Users/p/Library/Application Support/Steam"),
     );
     expect(await findSteamDir({ platform: "freebsd" as NodeJS.Platform, home: "/h", exists: present() })).toBeNull();
   });
