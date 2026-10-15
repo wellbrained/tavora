@@ -222,7 +222,7 @@ function customGameId(library: Library, name: string): string {
 
 export type NewGame =
   | { catalogId: string }
-  | { name: string }
+  | { name: string; steamAppId?: number | null }
   | { online: { id: string; name: string; steamAppId?: number | null } };
 
 function checkNotInLibrary(library: Library, id: string): void {
@@ -261,6 +261,8 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
   } else {
     name = cleanName(input.name);
     id = customGameId(library, name);
+    // A Steam import knows the game's appid even when the service has no id for it.
+    steamAppId = isSteamAppId(input.steamAppId) ? input.steamAppId : null;
   }
   if (!isGameId(id)) throw new LibraryError("That name can't be used for a game.");
   library.games[id] = {

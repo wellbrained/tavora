@@ -1,10 +1,11 @@
 import { isGameId, isModuleId } from "@tavora/module-schema";
-import type { HostAction } from "../shared/host-api";
+import type { HostAction, SteamImportGame } from "../shared/host-api";
 import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
 import { layoutTemplate } from "../shared/layout-templates";
 import { MAX_INITIALS, MAX_PICTURE_BYTES, MAX_PROFILE_NAME } from "./profile";
 import { isSteamAppId } from "./steam-icons";
+import { MAX_IMPORT_GAMES, parseSteamGame } from "./steam-import";
 import { isVariationId } from "./themes";
 import { MAX_SNAPSHOT_NAME } from "./workspace";
 
@@ -69,6 +70,17 @@ export function parseAction(raw: unknown): HostAction | null {
         new Set(a.gameIds).size === a.gameIds.length
         ? { type: a.type, gameIds: a.gameIds as string[] }
         : null;
+    case "import-steam-games": {
+      if (!only("games") || !Array.isArray(a.games) || a.games.length < 1 || a.games.length > MAX_IMPORT_GAMES) return null;
+      const games: SteamImportGame[] = [];
+      for (const raw of a.games) {
+        const game = parseSteamGame(raw);
+        // Exactly the fields the dialog got from the service, nothing more.
+        if (!game || Object.keys(raw as object).some((key) => key !== "appid" && key !== "name" && key !== "id")) return null;
+        games.push(game);
+      }
+      return { type: a.type, games };
+    }
     case "add-game":
       if (only("catalogId") && isGameId(a.catalogId)) return { type: a.type, catalogId: a.catalogId };
       if (only("name") && text(a.name)) return { type: a.type, name: a.name };

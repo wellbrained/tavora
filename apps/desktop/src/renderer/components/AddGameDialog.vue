@@ -129,5 +129,13 @@ function submit() {
       Showing built-in games only.
     </p>
     <p class="text-muted-foreground text-xs">Can't find it? Type its name and add it as your own game.</p>
+    <button
+      type="button"
+      class="text-primary w-fit text-xs underline-offset-2 hover:underline"
+      data-testid="open-steam-import"
+      @click="dialog = { kind: 'steam-import' }"
+    >
+      Import your games from Steam…
+    </button>
   </ModalDialog>
 </template>

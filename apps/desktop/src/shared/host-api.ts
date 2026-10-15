@@ -218,7 +218,10 @@ export type HostAction =
   | { type: "set-game-label"; gameId: string; label: string | null }
   | { type: "choose-game-image"; gameId: string }
   | { type: "use-original-icon"; gameId: string }
-  | { type: "share-icons"; gameIds: string[] }  | { type: "trash-game"; gameId: string }
+  | { type: "share-icons"; gameIds: string[] }
+  /** Adds the chosen games of a Steam library that the player does not have yet. */
+  | { type: "import-steam-games"; games: SteamImportGame[] }
+  | { type: "trash-game"; gameId: string }
   | { type: "restore-game"; gameId: string }
   | { type: "delete-game"; gameId: string }
   | { type: "favorite"; gameId: string; index?: number }
@@ -281,7 +284,7 @@ export type HostAction =
   | { type: "delete-snapshot"; snapshotId: string };
 
 /** `id` is set when the action created something (a game, a folder). */
-export type ActionResult = { ok: true; id?: string; shared?: number } | { ok: false; error: string };
+export type ActionResult = { ok: true; id?: string; shared?: number; added?: number } | { ok: false; error: string };
 
 export interface CatalogMatch {
   id: string;
@@ -305,6 +308,20 @@ export interface OnlineSearchResult {
   games: OnlineGame[];
 }
 
+/** A game in a Steam library, with Tavora's id for it when the service knows one. */
+export interface SteamImportGame {
+  appid: number;
+  name: string;
+  id: string | null;
+}
+
+/** `status` says whether the player already has the game (`trash`: removed, not deleted yet). */
+export interface SteamGameView extends SteamImportGame {
+  status: "new" | "owned" | "trash";
+}
+
+export type SteamLibraryResult = { status: "ok"; games: SteamGameView[] } | { status: "error"; error: string };
+
 /** Exposed to the host UI as `window.tavoraHost` by the host preload. */
 export interface TavoraHostApi {
   getState(): Promise<HostViewState | null>;
@@ -312,6 +329,8 @@ export interface TavoraHostApi {
   searchCatalog(query: string): Promise<CatalogMatch[]>;
   /** Asks the Tavora service; a newer call cancels an older one. Never rejects. */
   searchOnline(query: string): Promise<OnlineSearchResult>;
+  /** The games a Steam profile (link or SteamID64) owns, through the Tavora service. Never rejects. */
+  steamLibrary(profile: string): Promise<SteamLibraryResult>;
   /** Where the visible panels are. Panels not listed are hidden. */
   setPanelBounds(bounds: PanelBounds[]): void;
   /**

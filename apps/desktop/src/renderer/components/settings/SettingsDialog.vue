@@ -352,6 +352,16 @@ function deleteNow(gameId: string, name: string) {
               </Button>
             </SettingRow>
             <SettingRow
+              label="Import from Steam"
+              description="Add the games you own on Steam, by pasting your profile link. You see the list first and choose which to add. Tavora does not start games. Needs Online game search."
+              setting="steam-import"
+              :highlighted="highlight === 'steam-import'"
+            >
+              <Button variant="secondary" data-testid="open-steam-import-settings" :disabled="!library.onlineSearch" @click="dialog = { kind: 'steam-import' }">
+                Import…
+              </Button>
+            </SettingRow>
+            <SettingRow
 
               label="Welcome tour"
               description="The short introduction Tavora shows on its first start: your profile, your first games and a few tips."

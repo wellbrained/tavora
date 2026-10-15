@@ -89,7 +89,7 @@ export interface AddModuleRequest {
   slot?: string;
 }
 
-export type DialogRequest = PromptRequest | ConfirmRequest | ShareIconsRequest | { kind: "add-game" } | AddModuleRequest;
+export type DialogRequest = PromptRequest | ConfirmRequest | ShareIconsRequest | { kind: "add-game" } | { kind: "steam-import" } | AddModuleRequest;
 
 export const dialog = shallowRef<DialogRequest | null>(null);
 
