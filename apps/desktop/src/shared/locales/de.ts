@@ -587,7 +587,6 @@ export const de: Record<keyof typeof en, string> = {
   "discord.error.noSignIn": "Discord hat Tavora nicht angemeldet. Drücke Verbinden, um es noch einmal zu versuchen.",
   "discord.error.generic": "Tavora konnte keine Verbindung zu Discord herstellen.",
   "discord.panel.rejoin": "{name} wieder beitreten",
-  "discord.panel.rejoinOn": "auf {server}",
   "discord.panel.join": "{name} beitreten",
   "discord.error.joinFailed": "Discord lässt dich diesem Kanal nicht beitreten. Prüfe, ob du das darfst.",
   "discord.error.joinNotConnected": "Verbinde dich zuerst mit Discord.",
@@ -610,4 +609,6 @@ export const de: Record<keyof typeof en, string> = {
   "discord.error.needsControl": "Drücke zuerst auf Stummschalten erlauben und bestätige es in Discord.",
   "discord.error.voiceFailed": "Discord hat das nicht geändert.",
   "discord.error.serverUnknown": "Dieser Server ist nicht mehr verfügbar.",
+  "discord.game.search": "Server suchen …",
+  "discord.game.noMatch": "Kein Server gefunden.",
 };

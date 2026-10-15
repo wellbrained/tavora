@@ -254,6 +254,8 @@ describe("DiscordConnection", () => {
     await until(() => connection.view().self?.mute === true);
     await connection.leave();
     expect(fake.commands.find((c) => c.cmd === "SELECT_VOICE_CHANNEL")?.args).toEqual({ channel_id: null });
+    // The panel shows at once that the player is out, without waiting for Discord's own event.
+    expect(connection.view().call).toBeNull();
     fake.answers.set("SET_VOICE_SETTINGS", () => ({ error: { code: 4000, message: "No" } }));
     await expect(connection.setVoice({ mute: false })).rejects.toMatchObject({ key: "discord.error.voiceFailed" });
 
