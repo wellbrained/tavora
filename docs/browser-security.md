@@ -1,6 +1,7 @@
 # Browser panel: security design
 
-**Status:** agreed with Nik on 2026-10-15 and built in 0.5.6. The guarantees
+**Status:** agreed with Nik on 2026-10-15 and built in 0.5.6; tabs added in
+0.5.7. The guarantees
 are B1–B10 in [threat-model.md](threat-model.md); the choices are in
 [decisions.md](decisions.md).
 
@@ -63,7 +64,8 @@ host, the toolbar, modules, or other games' browser data.
   bundles are not even addressable from a web page.
 - **Keyboard:** the host keeps its shortcuts (Ctrl+K and the rest) through
   `before-input-event`, as it does for modules. Ctrl+L focuses the address
-  bar, Alt+Left/Right go back/forward.
+  bar, Alt+Left/Right go back/forward, Ctrl+T opens a new tab and Ctrl+W
+  closes this one.
 
 ## Navigation
 
@@ -92,8 +94,14 @@ host, the toolbar, modules, or other games' browser data.
 ## Windows, popups and downloads
 
 - **No new windows.** `window.open` and `target=_blank` links that the player
-  clicked open in the **same panel** when they are `http(s)`; anything else is
-  dropped. Popups without a click are dropped.
+  clicked open as a **new Browser tab** in the same panel group, right after
+  the page's tab (a middle-click opens it in the background), when they are
+  `http(s)`; anything else is dropped. Popups without a click are dropped. A
+  new tab is an ordinary Browser panel: it gets no `window.opener` and shares
+  nothing with the page that opened it except the session the game already
+  uses.
+- **New tabs** also come from the toolbar's + button and Ctrl+T, which open an
+  empty tab with the address bar focused; Ctrl+W closes the tab.
 - The toolbar has **Open in your browser**, which hands the current
   `http(s)` address to the system browser. Pages cannot trigger it.
 - **Downloads are cancelled** with a notice in the panel that offers Open in
@@ -147,7 +155,7 @@ YouTube's in-video ads are not reliably blocked by network rules.
 | B1 | A page cannot reach Node, Electron, IPC or the host | e2e: page probes `require`, `process`, `ipcRenderer`, `electron`, `tavora` |
 | B2 | A page cannot read module bundles or another game's browser data | e2e: `tavora-module://` load fails; a cookie set for game A is absent in game B |
 | B3 | Only `http(s)` navigates; no external protocols | unit: URL parsing; e2e: `file:`, `javascript:`, `data:`, `steam://` and a redirect to `file:` all refused |
-| B4 | No new windows; clicked `_blank` opens in the same panel | e2e: `window.open` and `_blank` |
+| B4 | No new windows; clicked `_blank` opens as a new Browser tab | e2e: `window.open` and `_blank` |
 | B5 | Downloads never write a file | e2e: a download link leaves nothing on disk |
 | B6 | Permissions are denied except clipboard write; fullscreen never leaves the panel | e2e: geolocation, notifications, camera answer denied |
 | B7 | A public page cannot reach loopback or private addresses | unit: address classification; e2e with a host mapped to a "public" name |
@@ -161,7 +169,8 @@ YouTube's in-video ads are not reliably blocked by network rules.
   by no downloads, no permissions and no external protocols, but a phishing
   page still renders.
 - **Sign-in popups** ("Sign in with Google") that rely on `window.opener`
-  will not work in v1, because popups open in the same panel.
+  will not work in v1, because popups open as a separate tab with no
+  `window.opener`.
 - **DNS rebinding** can still let a public name resolve to a private address;
   the B7 check looks at the host name and IP literal, not the resolved IP.
 - A Chromium renderer exploit breaks B1–B2, as for modules. Same mitigation:

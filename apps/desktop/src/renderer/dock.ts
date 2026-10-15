@@ -210,6 +210,25 @@ export function placePanel(api: DockviewApi, id: string, info: Info, slot?: stri
   api.addPanel({ ...base, position: { referenceGroup: active, direction: "within" } });
 }
 
+/**
+ * Docks a new Browser tab right after the tab it was opened from, in the same
+ * group. A background tab (a middle-click) does not take focus. Returns false
+ * when the source panel is gone, so the caller places it as usual.
+ */
+export function placeTab(api: DockviewApi, id: string, info: Info, from: string, background: boolean): boolean {
+  const source = api.getPanel(from);
+  if (!source) return false;
+  const index = source.group.panels.indexOf(source) + 1;
+  api.addPanel({
+    id,
+    component: PANEL_COMPONENT,
+    title: info(id)?.title,
+    position: { referencePanel: source, direction: "within", index },
+    inactive: background,
+  });
+  return true;
+}
+
 /** Whether the row or column beside `group` has room for one more of size `min`. */
 function fits(
   api: DockviewApi,

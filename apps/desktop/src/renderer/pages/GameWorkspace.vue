@@ -26,6 +26,7 @@ import {
   guardDrop,
   guideFits,
   placePanel,
+  placeTab,
   resolveDropPosition,
   resolveOuterEdge,
   toDockview,
@@ -144,8 +145,11 @@ function reconcile(api: DockviewApi) {
   }
   for (const id of open) {
     if (!api.getPanel(id)) {
-      placePanel(api, id, info, nextPanelSlot.value);
-      nextPanelSlot.value = null;
+      const from = view.value.panels.find((panel) => panel.instanceId === id)?.openedFrom;
+      if (!from || !placeTab(api, id, info, from.instanceId, from.background)) {
+        placePanel(api, id, info, nextPanelSlot.value);
+        nextPanelSlot.value = null;
+      }
       changed = true;
     }
   }
