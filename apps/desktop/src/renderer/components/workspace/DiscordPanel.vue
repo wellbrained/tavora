@@ -5,7 +5,7 @@
 // channels of the server this game remembers (or of the call's server), with
 // who is in them. The player can join a channel, leave, and mute or deafen.
 // Everything comes from the Discord app on this PC through the main process.
-import { Check, ChevronDown, Headphones, HeadphoneOff, Mic, MicOff, Phone, PhoneOff, RefreshCw, Search, Volume2 } from "@lucide/vue";
+import { Check, ChevronDown, Headphones, HeadphoneOff, Info, Mic, MicOff, Phone, PhoneOff, RefreshCw, Search, Volume2 } from "@lucide/vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -202,10 +202,6 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", closeOutside))
       </header>
 
       <div class="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        <div v-if="!call" class="flex flex-col items-center gap-3 p-3 text-center">
-          <p class="text-muted-foreground" data-testid="discord-no-call">{{ t(channels.length ? "discord.panel.noCall" : "discord.panel.noCallEmpty") }}</p>
-        </div>
-
         <ul class="min-h-0" data-testid="discord-channels">
           <template v-for="entry in entries" :key="entry.key">
             <li v-if="entry.kind === 'heading'" class="text-muted-foreground mt-3 flex items-center gap-1.5 px-2 text-xs font-semibold" data-testid="discord-browse-server">
@@ -267,6 +263,13 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", closeOutside))
             </li>
           </template>
         </ul>
+      </div>
+
+      <div v-if="!call" class="flex-none px-2 pb-2">
+        <div role="status" class="bg-info/10 flex items-start gap-2 rounded-md p-3 text-sm" data-testid="discord-no-call">
+          <Info class="text-info mt-0.5 size-4 flex-none" :stroke-width="1.5" />
+          <span>{{ t(channels.length ? "discord.panel.noCall" : "discord.panel.noCallEmpty") }}</span>
+        </div>
       </div>
 
       <footer v-if="gameId" class="flex flex-none flex-col gap-1.5 border-t px-3 py-2" data-testid="discord-game">
