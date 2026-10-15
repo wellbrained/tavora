@@ -46,11 +46,18 @@ host, the toolbar, modules, or other games' browser data.
 - **No preload and no IPC at all.** The page has no port, no `ipcRenderer`
   and no host channel. Every `host:*` handler already refuses anything but the
   host window (H1).
-- **Per game storage.** Cookies, logins and caches are kept per game, matching
-  "no cross-game leakage through browser storage". Logging into a wiki for one
-  game does not log you in for another. When a game leaves Trash its browser
-  partition is deleted at startup with its module data (H4 extended to
-  `browser@<game>`). Settings gets "Clear browser data for this game".
+- **Per game storage, with shared sites.** By default cookies, logins and
+  caches are kept per game (`persist:browser@<gameId>`), matching "no
+  cross-game leakage through browser storage". The player can mark a site
+  (its registrable domain, so `google.com` covers `accounts.google.com`) as
+  **signed in for all games**; pages of those sites load in one shared session
+  (`persist:browser`). A view has one session, so the panel switches views
+  when the player opens a page of the other kind (address bar, link click);
+  redirects stay in the session they started in, so a sign-in that bounces
+  through another domain finishes where it began. When a game leaves Trash its
+  browser partition is deleted at startup with its module data (H4 extended to
+  `browser@<game>`); the shared session is untouched. Settings gets "Clear
+  browser data for this game" and "Clear shared browser data".
 - **Modules cannot reach the page and the page cannot reach modules.** The
   browser session does not register the `tavora-module://` protocol, so module
   bundles are not even addressable from a web page.
@@ -96,11 +103,23 @@ host, the toolbar, modules, or other games' browser data.
 
 Everything is denied (camera, microphone, location, notifications, MIDI,
 USB/HID/serial/Bluetooth, screen capture, pointer lock, idle detection,
-clipboard read, storage access, external protocols, persistent storage,
-fullscreen), except **clipboard write**, so "copy" buttons on wikis and build
-sites work. Fullscreen video is left out of v1, because Electron would take
-over the whole window; videos play inside the panel, and the panel can be
-maximised in the dock.
+clipboard read, storage access, external protocols, persistent storage),
+except:
+
+- **clipboard write**, so "copy" buttons on wikis and build sites work;
+- **fullscreen, kept inside the panel**: the host stops Electron from making
+  the window fullscreen and the video fills the page view; Esc or the
+  toolbar leaves it.
+
+## Ad blocking
+
+On by default, with a per-site off switch in the toolbar. Network-level
+blocking with `@ghostery/adblocker` (MPL-2.0) and EasyList/EasyPrivacy, run in
+the main process on the browser sessions' `webRequest`. The filter lists ship
+with the app and later update from Tavora's own service, never from a third
+party. No cosmetic filtering in v1: it needs a preload in every page, which
+would break "no preload, no IPC"; blocked ads may leave empty boxes, and
+YouTube's in-video ads are not reliably blocked by network rules.
 
 ## Identity and privacy
 
@@ -130,11 +149,11 @@ maximised in the dock.
 | B3 | Only `http(s)` navigates; no external protocols | unit: URL parsing; e2e: `file:`, `javascript:`, `data:`, `steam://` and a redirect to `file:` all refused |
 | B4 | No new windows; clicked `_blank` opens in the same panel | e2e: `window.open` and `_blank` |
 | B5 | Downloads never write a file | e2e: a download link leaves nothing on disk |
-| B6 | Permissions are denied except clipboard write | e2e: geolocation, notifications, camera answer denied |
+| B6 | Permissions are denied except clipboard write; fullscreen never leaves the panel | e2e: geolocation, notifications, camera answer denied |
 | B7 | A public page cannot reach loopback or private addresses | unit: address classification; e2e with a host mapped to a "public" name |
 | B8 | Bad certificates are refused | e2e: self-signed HTTPS server |
 | B9 | The toolbar shows the true address | unit: punycode and mixed-script cases |
-| B10 | Deleting a game deletes its browser data | unit: `orphanedPartitions` covers `browser@<game>` |
+| B10 | Deleting a game deletes its browser data, and only shared sites use the shared session | unit: `orphanedPartitions` covers `browser@<game>`; unit: domain matching; e2e: a cookie on a shared site is seen in two games, on another site it is not |
 
 ## Known limits
 
@@ -145,7 +164,5 @@ maximised in the dock.
   will not work in v1, because popups open in the same panel.
 - **DNS rebinding** can still let a public name resolve to a private address;
   the B7 check looks at the host name and IP literal, not the resolved IP.
-- **No ad blocker** in v1. Fandom-style wikis are heavy; a filter list is a
-  later item.
 - A Chromium renderer exploit breaks B1–B2, as for modules. Same mitigation:
   keep Electron current, OS sandbox on, fuses set.
