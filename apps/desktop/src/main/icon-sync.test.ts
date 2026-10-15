@@ -455,3 +455,31 @@ describe("syncIcons: a game that is waiting for its next look", () => {
     expect(library.games["factorio"]).toMatchObject({ iconFile: null, iconCheckedAt: day(9).toISOString() });
   });
 });
+
+describe("syncIcons: an icon saved with frames that disagree with their entries", () => {
+  it("removes it and reads the game's program again", async () => {
+    const library = libraryWith("elden-ring");
+    // An .ico whose only frame is a 512 px PNG although its entry says 256 px: a browser shows nothing.
+    const broken = new Uint8Array(6 + 16 + 30);
+    const view = new DataView(broken.buffer);
+    view.setUint16(2, 1, true);
+    view.setUint16(4, 1, true);
+    view.setUint32(6 + 8, 30, true);
+    view.setUint32(6 + 12, 22, true);
+    broken.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52], 22);
+    view.setUint32(22 + 16, 512);
+    view.setUint32(22 + 20, 512);
+    await mkdir(icons, { recursive: true });
+    await writeFile(path.join(icons, "exe-elden-ring.ico"), broken);
+    recordIcon(library, "elden-ring", { file: "exe-elden-ring.ico" });
+
+    const read: string[] = [];
+    const job = run(library, fakeSteam({}), {
+      installedGames: async () => [{ source: "windows", name: "Elden Ring", file: "C:/Games/er.exe", index: 0 }],
+      readIcon: async (file) => (read.push(file), ICON),
+    });
+    expect(await job.done).toBe(1);
+    expect(read).toEqual(["C:/Games/er.exe"]);
+    expect(new Uint8Array(await readFile(path.join(icons, "exe-elden-ring.ico")))).toEqual(ICON);
+  });
+});

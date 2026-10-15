@@ -40,6 +40,34 @@ export async function readIcoFromPe(readAt: ReadAt, index = 0): Promise<Uint8Arr
   }
 }
 
+/**
+ * False when a PNG frame of an .ico is not the size its entry says. A browser shows such a file as nothing; an earlier
+ * version of Tavora saved some (Battlefield 6's), and they are read again.
+ */
+export function icoFramesAgree(ico: Uint8Array): boolean {
+  if (ico.byteLength < 6) return false;
+  const v = view(ico);
+  const count = v.getUint16(4, true);
+  for (let i = 0; i < count; i += 1) {
+    const at = 6 + i * 16;
+    if (at + 16 > ico.byteLength) return false;
+    const size = v.getUint32(at + 8, true);
+    const offset = v.getUint32(at + 12, true);
+    if (offset + size > ico.byteLength) return false;
+    const png = pngSize(ico.subarray(offset, offset + size));
+    if (png && (png.width !== (ico[at] || 256) || png.height !== (ico[at + 1] || 256))) return false;
+  }
+  return true;
+}
+
+/** The size a PNG frame states in its header, or null when the frame is not a PNG. */
+function pngSize(bytes: Uint8Array): { width: number; height: number } | null {
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (bytes.byteLength < 24 || !signature.every((byte, i) => bytes[i] === byte)) return null;
+  const v = view(bytes);
+  return { width: v.getUint32(16), height: v.getUint32(20) };
+}
+
 async function read(readAt: ReadAt, index: number): Promise<Uint8Array | null> {
   const head = await readAt(0, 4096);
   if (head.byteLength < 0x40 || head[0] !== 0x4d || head[1] !== 0x5a) return null;
@@ -147,11 +175,32 @@ async function read(readAt: ReadAt, index: number): Promise<Uint8Array | null> {
     if (!frameEntry) continue;
     const bytes = await readResource(frameEntry);
     if (!bytes) continue;
-    const width = groupData[at] || 256;
-    const height = groupData[at + 1] || 256;
-    found.push({ entry: groupData.slice(at, at + 12), bytes, pixels: width * height });
+    let width = groupData[at] || 256;
+    let height = groupData[at + 1] || 256;
+    const entry = groupData.slice(at, at + 12);
+    // A PNG frame says its own size. Some programs label a bigger picture as 256 px, and a browser refuses an .ico whose
+    // entries disagree with the pictures, so the entry takes the picture's size and a picture over 256 px is left out.
+    const png = pngSize(bytes);
+    if (png) {
+      if (png.width > 256 || png.height > 256) continue;
+      width = png.width;
+      height = png.height;
+      entry[0] = width === 256 ? 0 : width;
+      entry[1] = height === 256 ? 0 : height;
+    }
+    found.push({ entry, bytes, pixels: width * height });
   }
   if (found.length === 0) return null;
+
+  // A program often carries a size in several colour depths (a 16-colour copy beside the full-colour one). A browser may
+  // pick the poorer copy, so only the deepest copy of each size is kept.
+  const depth = (frame: Frame) => frame.entry[6]! | (frame.entry[7]! << 8);
+  const best = new Map<number, Frame>();
+  for (const frame of found) {
+    const kept = best.get(frame.pixels);
+    if (!kept || depth(frame) > depth(kept)) best.set(frame.pixels, frame);
+  }
+  found.splice(0, found.length, ...best.values());
 
   // Biggest frames go first, and the biggest are dropped if the file would be too large.
   found.sort((a, b) => b.pixels - a.pixels);

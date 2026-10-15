@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.28",
+    date: "2026-10-16",
+    title: "Game icons fill their tile",
+    notes: [
+      "A game's own icon now fills its whole tile, with no coloured border around it.",
+      "An icon with see-through parts (a logo with no background, like Diablo IV) sits on a light or dark backdrop that contrasts with it, instead of the game's colour.",
+      "Battlefield 6's icon, which showed as an empty square, is read again and shows.",
+    ],
+  },
+  {
     version: "0.5.27",
     date: "2026-10-16",
     title: "More game icons",

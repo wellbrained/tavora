@@ -1,7 +1,9 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { fetchHostedList, matchHosted, saveHostedIcon, type HostedList } from "./hosted-icons";
 import { findInstalledGames, matchInstalled, type InstalledGame } from "./launcher-games";
 import { DEFAULT_API_URL } from "./online";
-import { readIcoFromFile } from "./pe-icon";
+import { icoFramesAgree, readIcoFromFile } from "./pe-icon";
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
 import { gamesNeedingIcon, liveGames, recordIcon, type GameEntry, type Library } from "./library";
 import {
@@ -127,6 +129,18 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
     if (hash.status !== "found") return hash;
     return savePublicSteamIcon(iconDir, appid, hash.hash, network);
   };
+
+  // An icon an earlier version saved from a program can have frames that disagree with their entries, which shows as
+  // nothing. Such a file is removed and the game looked up again.
+  for (const game of liveGames(library)) {
+    if (!game.iconFile?.startsWith("exe-")) continue;
+    const bytes = await readFile(path.join(iconDir, game.iconFile)).catch(() => null);
+    if (bytes && !icoFramesAgree(bytes)) {
+      await removeSteamIcon(iconDir, game.iconFile);
+      game.iconFile = null;
+      game.iconCheckedAt = null;
+    }
+  }
 
   // A game that found no icon waits a week before it is looked up again. When the service has an icon
   // for it by now, or it is installed on this PC, it need not wait.
