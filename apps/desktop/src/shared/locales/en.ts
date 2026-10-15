@@ -374,6 +374,7 @@ export const en = {
   "rail.dropHere": "Drop a game here",
   "rail.emptyFolder": "Empty folder",
   "rail.folder": "Folder {name}",
+  "rail.folderMore": "+{count} more",
   "rail.moreFolder": "More actions for folder {name}",
   "rail.moreGame": "More actions for {name}",
   "rail.newFolder.title": "New folder",

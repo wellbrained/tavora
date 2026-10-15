@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.40",
+    date: "2026-10-16",
+    title: "Folders look like folders",
+    notes: [
+      "A folder in the sidebar is drawn as a folder, with its tab, and shows up to four of its games inside, which fill the four places from the top left to the bottom right.",
+      "A closed folder shows how many games it holds. An open folder has an accent outline, and its games are a little smaller and hang off a line in the accent colour.",
+      "Hovering a folder shows its name with the games inside underneath.",
+    ],
+  },
+  {
     version: "0.5.39",
     date: "2026-10-16",
     title: "Folders stay as you left them",

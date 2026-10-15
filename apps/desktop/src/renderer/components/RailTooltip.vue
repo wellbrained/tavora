@@ -4,11 +4,21 @@
 //
 // Module panels are views drawn above the host page, so a label over the workspace would be hidden behind them.
 // While a tooltip is open it counts as an open menu: the host freezes and hides the panels, as it does for menus.
+import { Folder } from "@lucide/vue";
 import { onBeforeUnmount } from "vue";
+import { t } from "../i18n";
 import { useFloating } from "../host";
 import { TooltipArrow, TooltipContent, TooltipPortal, TooltipRoot, TooltipTrigger } from "reka-ui";
 
-defineProps<{ text: string; disabled?: boolean }>();
+defineProps<{
+  text: string;
+  disabled?: boolean;
+  /** A folder: marked with a folder glyph, and `lines` are the games inside it. */
+  folder?: boolean;
+  lines?: string[];
+  /** How many more games the folder holds than `lines` lists. */
+  more?: number;
+}>();
 
 const setFloating = useFloating();
 let release: ReturnType<typeof setTimeout> | undefined;
@@ -31,7 +41,15 @@ onBeforeUnmount(() => clearTimeout(release));
         class="bg-popover text-popover-foreground data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 z-50 max-w-80 rounded-lg border px-3.5 py-2 text-base leading-snug font-semibold tracking-normal break-words antialiased shadow-xl shadow-black/50 duration-100"
         data-testid="rail-tooltip"
       >
-        {{ text }}
+        <span class="flex items-center gap-2">
+          <Folder v-if="folder" class="text-muted-foreground size-4 flex-none" :stroke-width="1.75" aria-hidden="true" />
+          {{ text }}
+        </span>
+        <ul v-if="folder" class="text-muted-foreground mt-1.5 flex flex-col gap-0.5 text-sm font-normal" data-testid="rail-tooltip-games">
+          <li v-for="line in lines" :key="line" class="truncate">{{ line }}</li>
+          <li v-if="more" class="text-xs">{{ t("rail.folderMore", { count: more }) }}</li>
+          <li v-if="!lines?.length" class="text-xs">{{ t("rail.emptyFolder") }}</li>
+        </ul>
         <!-- A pointer from the label to its icon; its two slanted sides carry the label's border. -->
         <TooltipArrow as-child>
           <svg width="20" height="10" viewBox="0 0 20 10" aria-hidden="true" style="margin-top: -1px">
