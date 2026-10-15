@@ -8,6 +8,8 @@ export const MAX_LIMIT = 20;
 export interface SearchResult {
   id: string;
   name: string;
+  /** The game's Steam application id, or null when it has none (not on Steam, or not known). */
+  steamAppId: number | null;
 }
 
 // How well an entry matches, best first.
@@ -56,8 +58,10 @@ export function searchGames(db: DatabaseSync, query: string, limit = DEFAULT_LIM
   if (best.size === 0) return [];
   const ids = [...best.keys()];
   const rows = db
-    .prepare(`select id, name, built_in as builtIn from games where id in (${ids.map(() => "?").join(",")})`)
-    .all(...ids) as unknown as { id: string; name: string; builtIn: number }[];
+    .prepare(
+      `select id, name, steam_appid as steamAppId, built_in as builtIn from games where id in (${ids.map(() => "?").join(",")})`,
+    )
+    .all(...ids) as unknown as { id: string; name: string; steamAppId: number | null; builtIn: number }[];
 
   return rows
     .sort(
@@ -68,5 +72,5 @@ export function searchGames(db: DatabaseSync, query: string, limit = DEFAULT_LIM
         a.name.localeCompare(b.name),
     )
     .slice(0, cap)
-    .map(({ id, name }) => ({ id, name }));
+    .map(({ id, name, steamAppId }) => ({ id, name, steamAppId }));
 }
