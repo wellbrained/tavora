@@ -206,7 +206,7 @@ test("a page cannot reach Tavora, modules, other schemes or the local network (B
   await app.close();
 });
 
-test("new windows open in the panel only after a click, and downloads are refused (B4, B5)", async () => {
+test("new windows open as a Browser tab only after a click, and downloads are refused (B4, B5)", async () => {
   const { app, page } = await launch(undefined, [], { args: ARGS() });
   await openModule(page, BROWSER);
   await go(page, publicUrl("/opener"));
@@ -216,9 +216,10 @@ test("new windows open in the panel only after a click, and downloads are refuse
   expect(await inPage(app, publicUrl("/"), "window.openNow()")).toBe(true);
   await page.waitForTimeout(500);
   expect(hits).not.toContain("public.test/popup");
-  // A clicked target=_blank link opens in the same panel.
+  // A clicked target=_blank link opens as a new Browser tab, not a window.
   await clickPage(app, publicUrl("/opener"));
   await waitForPage(app, publicUrl("/page"));
+  await expect(page.locator('[data-testid^="browser-toolbar-"]')).toHaveCount(2);
   expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
 
   // B5: a download is refused and the player is told.

@@ -102,6 +102,10 @@ export interface BrowserPanelOptions {
   swap(previous: WebContentsView | null, next: WebContentsView): void;
   /** Ctrl+L in the page: the toolbar's address bar takes the focus. */
   onFocusAddress(): void;
+  /** A new Browser tab beside this one: a link the player opened in a new tab (in the background when asked), or an empty one (Ctrl+T). */
+  onOpenTab(url: string | null, background: boolean): void;
+  /** Ctrl+W in the page closes this tab. */
+  onCloseTab(): void;
   /** The page went somewhere new; the address is kept so the panel reopens there. */
   onAddress(url: string): void;
   onChange(): void;
@@ -189,12 +193,17 @@ export class BrowserPanel {
     contents.setWebRTCIPHandlingPolicy("default_public_interface_only");
     contents.on("will-attach-webview", (event) => event.preventDefault());
     // A page may open a link in a "new window" only right after the player
-    // clicked or typed; it then opens in this panel instead.
+    // clicked or typed; it then opens as a new Browser tab instead.
     contents.on("input-event", (_event, input) => {
       if (input.type === "mouseDown" || input.type === "keyDown" || input.type === "gestureTap") this.lastGesture = Date.now();
     });
-    contents.setWindowOpenHandler(({ url }) => {
-      if (Date.now() - this.lastGesture < GESTURE_MS) setImmediate(() => current() && this.follow(url));
+    // A link the player opened in a new tab or window (target=_blank,
+    // Ctrl+click, middle click) becomes a new Browser tab beside this one.
+    // Without a click or key press just before, nothing opens.
+    contents.setWindowOpenHandler(({ url, disposition }) => {
+      if (Date.now() - this.lastGesture < GESTURE_MS && this.mayFollow(url)) {
+        setImmediate(() => current() && this.options.onOpenTab(url, disposition === "background-tab"));
+      }
       return { action: "deny" };
     });
     contents.on("will-navigate", (event) => {
@@ -261,6 +270,8 @@ export class BrowserPanel {
       const mod = process.platform === "darwin" ? input.meta : input.control;
       if (this.fullscreen && input.key === "Escape") this.exitFullscreen();
       else if (mod && !input.alt && !input.shift && input.key.toLowerCase() === "l") this.options.onFocusAddress();
+      else if (mod && !input.alt && !input.shift && input.key.toLowerCase() === "t") this.options.onOpenTab(null, false);
+      else if (mod && !input.alt && !input.shift && input.key.toLowerCase() === "w") this.options.onCloseTab();
       else if (input.alt && !mod && input.key === "ArrowLeft") this.back();
       else if (input.alt && !mod && input.key === "ArrowRight") this.forward();
       else return;
@@ -288,11 +299,6 @@ export class BrowserPanel {
   /** Whether the page may take the panel to an address: web only, and not from a public page to a local one. */
   private mayFollow(url: string): boolean {
     return isWebUrl(url) && !(isPrivateUrl(url) && !isPrivateUrl(this.committedUrl ?? ""));
-  }
-
-  /** A link the page opened in a new window. */
-  private follow(url: string): void {
-    if (this.mayFollow(url)) this.open(url, this.kindFor(url));
   }
 
   /** Goes to what the player typed in the address bar. */

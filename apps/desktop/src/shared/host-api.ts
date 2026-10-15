@@ -55,6 +55,8 @@ export interface PanelView {
   status: InstanceStatus;
   /** Set for Browser panels: what their toolbar shows. */
   browser?: BrowserState;
+  /** A Browser tab opened from another one: docked beside it, and left in the background when asked. */
+  openedFrom?: { instanceId: string; background: boolean };
 }
 
 /** A Browser panel's page, as its toolbar shows it. Nothing here comes from the page but its title. */
@@ -393,6 +395,8 @@ export type HostAction =
   | { type: "close-panel"; instanceId: string }
   | { type: "reload-panel"; instanceId: string }
   | { type: "stop-panel"; instanceId: string }
+  /** An empty Browser tab beside this one. */
+  | { type: "browser-new-tab"; instanceId: string }
   /** What the player typed in a Browser panel's address bar. */
   | { type: "browser-navigate"; instanceId: string; address: string }
   | { type: "browser-command"; instanceId: string; command: BrowserCommand }
