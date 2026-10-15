@@ -219,7 +219,8 @@ test("new windows open as a Browser tab only after a click, and downloads are re
   // A clicked target=_blank link opens as a new Browser tab, not a window.
   await clickPage(app, publicUrl("/opener"));
   await waitForPage(app, publicUrl("/page"));
-  await expect(page.locator('[data-testid^="browser-toolbar-"]')).toHaveCount(2);
+  // Both are tabs of one group; only the shown tab draws its toolbar.
+  await expect(page.locator('[data-panel-tab][data-module-id="tavora.browser"]')).toHaveCount(2);
   expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
 
   // B5: a download is refused and the player is told.

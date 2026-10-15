@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.25",
+    date: "2026-10-16",
+    title: "Behind the scenes",
+    notes: ["Nothing changes for players. A test of Browser tabs now counts the tabs correctly."],
+  },
+  {
     version: "0.5.24",
     date: "2026-10-16",
     title: "A calmer game list",
