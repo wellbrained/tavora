@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import type { GameView } from "../../shared/host-api";
 import { gameBadgeLook } from "../game-badge";
+import { backdropOf, iconTone, toneOf, type IconTone } from "../icon-tone";
 
 const props = withDefaults(defineProps<{ game: GameView; size?: number }>(), { size: 48 });
 
@@ -12,6 +13,19 @@ const steamIcon = computed(() => (props.game.icon.kind === "monogram" ? props.ga
 // An icon that cannot be shown falls back to the badge instead of a broken image.
 const iconFailed = ref(false);
 watch(steamIcon, () => (iconFailed.value = false));
+// How the game's own icon sits in the tile depends on the picture, see icon-tone.ts.
+const tone = ref<IconTone>("onDark");
+watch(
+  steamIcon,
+  (url) => {
+    tone.value = url ? (toneOf(url) ?? "onDark") : "onDark";
+  },
+  { immediate: true },
+);
+function onIconLoad(event: Event) {
+  const url = steamIcon.value;
+  if (url) tone.value = iconTone(url, event.target as HTMLImageElement);
+}
 // Small icons (folder collages) show only the first letter.
 const text = computed(() => {
   const full = props.game.icon.kind === "monogram" ? props.game.icon.text : "";
@@ -28,22 +42,20 @@ const fontSize = computed(() => Math.max(12, Math.round(props.size * ([...text.v
   >
     <img v-if="game.icon.kind === 'image'" class="size-full object-cover" :src="game.icon.url" alt="" draggable="false" />
     <template v-else-if="steamIcon && !iconFailed">
-      <!-- Steam's own icon, unchanged, on a tile in the game's tone: it is small and often transparent. -->
-      <span
-        class="flex size-full items-center justify-center"
-        :style="{ backgroundColor: look.color, backgroundImage: 'linear-gradient(160deg, rgb(255 255 255 / 0.10), rgb(0 0 0 / 0.18))' }"
-      >
-        <img
-          class="object-contain"
-          :style="{ width: '88%', height: '88%', filter: 'saturate(0.95) contrast(1.02) drop-shadow(0 1px 1px rgb(0 0 0 / 0.35))' }"
-          :src="steamIcon"
-          alt=""
-          draggable="false"
-          @error="iconFailed = true"
-        />
+      <!-- The game's own icon, unchanged. A picture with no see-through parts fills the tile, so no tile colour or ring shows around it;
+           one with see-through parts sits on a plain light or dark backdrop that contrasts with it. -->
+      <img
+        v-if="tone === 'opaque'"
+        class="size-full object-cover"
+        :src="steamIcon"
+        alt=""
+        draggable="false"
+        @load="onIconLoad"
+        @error="iconFailed = true"
+      />
+      <span v-else class="flex size-full items-center justify-center" :style="{ backgroundImage: backdropOf(tone) }">
+        <img class="object-contain" style="width: 84%; height: 84%" :src="steamIcon" alt="" draggable="false" @load="onIconLoad" @error="iconFailed = true" />
       </span>
-      <!-- Tavora's border ring on top. -->
-      <span class="pointer-events-none absolute inset-0 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]" :style="{ borderRadius: 'inherit' }" />
     </template>
     <span
       v-else

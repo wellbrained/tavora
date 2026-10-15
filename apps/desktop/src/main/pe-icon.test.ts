@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { readIcoFromFile, readIcoFromPe, type ReadAt } from "./pe-icon";
+import { icoFramesAgree, readIcoFromFile, readIcoFromPe, type ReadAt } from "./pe-icon";
 import { isIco, MAX_STEAM_ICON_BYTES } from "./steam-icons";
 
 const RSRC_RVA = 0x3000;
@@ -23,7 +23,7 @@ const frame = (size: number, length: number, seed: number): Frame => ({
 /** One RT_GROUP_ICON: its frames refer to RT_ICON resources by id. */
 interface Group {
   id: number;
-  frames: Array<{ iconId: number; size: number; length: number }>;
+  frames: Array<{ iconId: number; size: number; length: number; bits?: number }>;
 }
 
 /** The group directory bytes (GRPICONDIR) for a group. */
@@ -37,7 +37,7 @@ function groupBytes(group: Group): Uint8Array {
     bytes[at] = f.size >= 256 ? 0 : f.size;
     bytes[at + 1] = f.size >= 256 ? 0 : f.size;
     view.setUint16(at + 4, 1, true);
-    view.setUint16(at + 6, 32, true);
+    view.setUint16(at + 6, f.bits ?? 32, true);
     view.setUint32(at + 8, f.length, true);
     view.setUint16(at + 12, f.iconId, true);
   });
@@ -160,6 +160,45 @@ describe("readIcoFromPe", () => {
     ]);
   });
 
+  it("gives a PNG frame the size its picture has, and leaves out a picture over 256 px", async () => {
+    /** A PNG header and filler: the signature, IHDR and a picture of the given size. */
+    const png = (side: number, length: number): Frame => {
+      const bytes = new Uint8Array(length);
+      bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+      new DataView(bytes.buffer).setUint32(16, side);
+      new DataView(bytes.buffer).setUint32(20, side);
+      return { size: 256, bytes };
+    };
+    // The group calls all three 256 px, as a real program does; one picture is 512 px and one is 128 px.
+    const group: Group = {
+      id: 1,
+      frames: [
+        { iconId: 1, size: 256, length: 100 },
+        { iconId: 2, size: 256, length: 90 },
+        { iconId: 3, size: 256, length: 80 },
+      ],
+    };
+    const ico = await readIcoFromPe(readerOf(buildPe({ 1: png(256, 100), 2: png(512, 90), 3: png(128, 80) }, [group])));
+    expect(framesOf(ico!).map(([size]) => size)).toEqual([256, 128]);
+  });
+
+  it("keeps only the deepest colour copy of a size", async () => {
+    const group: Group = {
+      id: 1,
+      frames: [
+        { iconId: 1, size: 48, length: 100, bits: 4 },
+        { iconId: 2, size: 48, length: 200, bits: 32 },
+        { iconId: 3, size: 16, length: 50, bits: 8 },
+      ],
+    };
+    const deep = frame(48, 200, 5);
+    const ico = await readIcoFromPe(readerOf(buildPe({ 1: frame(48, 100, 4), 2: deep, 3: frame(16, 50, 6) }, [group])));
+    expect(framesOf(ico!).map(([size, bytes]) => [size, bytes.byteLength])).toEqual([
+      [48, 200],
+      [16, 50],
+    ]);
+  });
+
   it("picks a group by its place, or by its number when the index is negative", async () => {
     const pe = readerOf(buildPe(icons, [first, second]));
     expect(framesOf((await readIcoFromPe(pe, 1))!)).toEqual([[32, icons[4].bytes]]);
@@ -237,5 +276,30 @@ describe("readIcoFromFile", () => {
     expect(await readIcoFromFile(dir)).toBeNull();
     await writeFile(path.join(dir, "notes.exe"), "just text");
     expect(await readIcoFromFile(path.join(dir, "notes.exe"))).toBeNull();
+  });
+});
+
+describe("icoFramesAgree", () => {
+  /** An .ico with one PNG frame whose entry says `entrySize` px and whose picture is `pictureSize` px. */
+  const ico = (entrySize: number, pictureSize: number): Uint8Array => {
+    const bytes = new Uint8Array(6 + 16 + 30);
+    const v = new DataView(bytes.buffer);
+    v.setUint16(2, 1, true);
+    v.setUint16(4, 1, true);
+    bytes[6] = entrySize === 256 ? 0 : entrySize;
+    bytes[7] = entrySize === 256 ? 0 : entrySize;
+    v.setUint32(6 + 8, 30, true);
+    v.setUint32(6 + 12, 22, true);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52], 22);
+    v.setUint32(22 + 16, pictureSize);
+    v.setUint32(22 + 20, pictureSize);
+    return bytes;
+  };
+
+  it("is true when each PNG frame is the size its entry says, and false when one is not", () => {
+    expect(icoFramesAgree(ico(256, 256))).toBe(true);
+    expect(icoFramesAgree(ico(48, 48))).toBe(true);
+    expect(icoFramesAgree(ico(256, 512))).toBe(false);
+    expect(icoFramesAgree(new Uint8Array(3))).toBe(false);
   });
 });
