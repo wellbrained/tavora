@@ -1,4 +1,4 @@
-import { Keyboard, SlidersHorizontal, Trash2 } from "@lucide/vue";
+import { Keyboard, ScrollText, SlidersHorizontal, Trash2 } from "@lucide/vue";
 
 // The section menu, in groups. New settings get a row in a section, or a
 // new section here, rather than a longer page.
@@ -8,6 +8,7 @@ export const GROUPS = [
     sections: [
       { id: "general", label: "General", icon: SlidersHorizontal },
       { id: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard },
+      { id: "patch-notes", label: "Patch notes", icon: ScrollText },
     ],
   },
   { label: "Library", sections: [{ id: "trash", label: "Trash", icon: Trash2 }] },
@@ -69,6 +70,13 @@ export const SETTINGS: SettingEntry[] = [
     label: "Keyboard shortcuts",
     description: "Every shortcut Tavora has. Ctrl+/ opens this list from anywhere.",
     keywords: ["keys", "hotkeys", "keyboard", "ctrl", "keybindings"],
+  },
+  {
+    id: "patch-notes",
+    section: "patch-notes",
+    label: "Patch notes",
+    description: "What changed in each version of Tavora, newest first.",
+    keywords: ["changelog", "changes", "version", "release notes", "what's new", "update"],
   },
   {
     id: "welcome-tour",
