@@ -18,7 +18,8 @@ import { computed, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds } from "../../shared/host-api";
 import { Button } from "@/components/ui/button";
 import { act, api as host, dialog, dragging, nextPanelSlot, state } from "../host";
-import { t } from "../i18n";
+import { t, templateName } from "../i18n";
+import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import {
   dropAllowed,
   fromDockview,
@@ -37,6 +38,8 @@ import GameIcon from "../components/GameIcon.vue";
 import EmptySlot from "../components/workspace/EmptySlot.vue";
 import GroupActions from "../components/workspace/GroupActions.vue";
 import LayoutsMenu from "../components/workspace/LayoutsMenu.vue";
+import GridPicker from "../components/workspace/GridPicker.vue";
+import TemplatePreview from "../components/workspace/TemplatePreview.vue";
 import PanelContent from "../components/workspace/PanelContent.vue";
 import PanelTab from "../components/workspace/PanelTab.vue";
 import { DOCK } from "../components/workspace/dock-context";
@@ -339,9 +342,22 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         <LayoutGrid class="text-muted-foreground mb-2 size-12" :stroke-width="1" />
         <p class="text-lg font-semibold">{{ t("workspace.startTitle") }}</p>
         <p class="text-muted-foreground max-w-sm text-sm">{{ t("workspace.startText", { name: game?.name ?? "" }) }}</p>
-        <Button variant="outline" class="border-primary/60 text-primary hover:bg-primary/10 hover:text-primary mt-3" data-testid="empty-add-module" @click="dialog = { kind: 'add-module' }">
-          <Plus :stroke-width="1.5" /> {{ t("workspace.addModule") }}
-        </Button>
+        <div class="mt-3 flex flex-wrap justify-center gap-2" role="group" :aria-label="t('layouts.templates')" data-testid="empty-templates">
+          <button
+            v-for="template in LAYOUT_TEMPLATES"
+            :key="template.id"
+            type="button"
+            class="text-muted-foreground hover:border-primary hover:text-primary focus-visible:ring-ring rounded-lg border p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            :title="templateName(template)"
+            :aria-label="templateName(template)"
+            :data-testid="`empty-template-${template.id}`"
+            @click="act({ type: 'apply-layout-template', templateId: template.id })"
+          >
+            <TemplatePreview :template="template" class="size-auto h-14 w-[84px]" />
+          </button>
+        </div>
+        <p class="text-muted-foreground mt-2 text-xs">{{ t("layouts.grid") }}</p>
+        <GridPicker plain />
       </div>
     </div>
   </main>
