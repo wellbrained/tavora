@@ -58,7 +58,9 @@ const rows = computed<Row[]>(() => {
 });
 
 function addRow(row: Row) {
-  return add(matches.value.some((match) => match.id === row.id) ? { catalogId: row.id } : { online: { id: row.id, name: row.name } });
+  if (matches.value.some((match) => match.id === row.id)) return add({ catalogId: row.id });
+  // The online result carries the game's Steam id, which the host needs for its icon.
+  return add({ online: online.value.find((game) => game.id === row.id) ?? { id: row.id, name: row.name, steamAppId: null } });
 }
 
 async function add(input: { catalogId: string } | { name: string } | { online: OnlineGame }) {

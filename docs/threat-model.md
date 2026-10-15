@@ -62,6 +62,7 @@ Milestone C added a library, docking, saved layouts, Trash, search and a default
 | H3 | A malformed or oversized layout is refused, never saved or applied | layouts are validated and size-limited in the main process before they are stored or used to place views | unit: valid, too deep, and pruning cases (`layout.test.ts`) |
 | H4 | Removing a game removes its data after the Trash period | Trash keeps a game for 30 days, then startup deletes its module data and browser storage | unit: library Trash rules (`library.test.ts`); deletion of the data on disk is not covered by an e2e test |
 | H5 | The injected default look cannot give a module more power | host-written CSS is added as a *user* stylesheet; a module's own rules win and it carries no script | none; reviewed by hand |
+| H6 | Fetching a game's Steam cover cannot be used to reach anywhere else or to write anywhere else | only the main process fetches, only for a numeric Steam id (1 to 2^31-1), from one fixed address, with no cookies, no referrer and no redirects; the body must be a JPEG of at most 2 MB; it is stored under `<digits>.jpg` and a saved or forged file name that is not that is dropped on load; modules never see it | unit: `steam-art.test.ts` (address, headers, size, type, ids, file names), `art-sync.test.ts`, `library.test.ts` (loading) |
 
 Also changed in C: Ctrl+K is caught by the host before any page, so a module cannot take it over, and panels in background tabs are hidden and suspended through the same lifecycle events as before.
 

@@ -8,7 +8,15 @@ describe("parseOnlineGame", () => {
     expect(parseOnlineGame({ id: "hollow-knight", name: " Hollow Knight ", extra: 1 })).toEqual({
       id: "hollow-knight",
       name: "Hollow Knight",
+      steamAppId: null,
     });
+  });
+
+  it("keeps a valid Steam appid and treats a bad one as none", () => {
+    expect(parseOnlineGame({ id: "elden-ring", name: "Elden Ring", steamAppId: 1245620 })).toMatchObject({ steamAppId: 1245620 });
+    for (const bad of [0, -3, 1.5, "1245620", null, 3_000_000_000]) {
+      expect(parseOnlineGame({ id: "elden-ring", name: "Elden Ring", steamAppId: bad })).toMatchObject({ steamAppId: null });
+    }
   });
 
   it.each([
@@ -33,7 +41,7 @@ describe("OnlineSearch", () => {
       requests.push({ url, init });
       return answer({
         results: [
-          { id: "hollow-knight", name: "Hollow Knight" },
+          { id: "hollow-knight", name: "Hollow Knight", steamAppId: 1145360 },
           { id: "../bad", name: "Bad" },
         ],
       });
@@ -42,7 +50,7 @@ describe("OnlineSearch", () => {
 
     expect(await search.search("  hollow   kn ")).toEqual({
       status: "ok",
-      games: [{ id: "hollow-knight", name: "Hollow Knight" }],
+      games: [{ id: "hollow-knight", name: "Hollow Knight", steamAppId: 1145360 }],
     });
     expect(requests).toHaveLength(1);
     expect(requests[0]!.url).toBe("https://service.test/v1/games/search?q=hollow%20kn&limit=20");
@@ -52,7 +60,7 @@ describe("OnlineSearch", () => {
 
   it("also reads the service's older reply, a bare list", async () => {
     const fetchImpl = (async () => answer([{ id: "hollow", name: "Hollow" }])) as unknown as typeof fetch;
-    expect(await new OnlineSearch({ fetchImpl }).search("hollow")).toEqual({ status: "ok", games: [{ id: "hollow", name: "Hollow" }] });
+    expect(await new OnlineSearch({ fetchImpl }).search("hollow")).toEqual({ status: "ok", games: [{ id: "hollow", name: "Hollow", steamAppId: null }] });
   });
 
   it("treats an answer of an unexpected shape as no games", async () => {
