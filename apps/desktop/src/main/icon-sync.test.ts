@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { syncIcons } from "./icon-sync";
 import type { InstalledGame } from "./launcher-games";
-import { addGame, emptyLibrary, trashGame, type Library } from "./library";
+import { addGame, emptyLibrary, recordIcon, trashGame, type Library } from "./library";
 import { appInfo } from "./steam-appinfo.fixture";
 
 const day = (n: number) => new Date(Date.UTC(2026, 9, n, 12));
@@ -428,5 +428,30 @@ describe("syncIcons: the Tavora service's hosted icons", () => {
     expect(await run(library, net).done).toBe(0);
     expect(library.games["local-diablo-iv"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
     expect(await readdir(icons).catch(() => [])).toEqual([]);
+  });
+});
+describe("syncIcons: a game that is waiting for its next look", () => {
+  it("looks again at once when the service has its icon by now", async () => {
+    const library = emptyLibrary();
+    library.onlineSearch = true;
+    addGame(library, { name: "Diablo IV" }, day(1));
+    // Looked at yesterday and found nothing: it would wait a week.
+    recordIcon(library, "local-diablo-iv", { none: day(9) });
+    const net = fakeSteam({ hosted: { "diablo-iv": { names: ["Diablo IV"], bytes: pngOf(3) } } });
+    expect(await run(library, net).done).toBe(1);
+    expect(library.games["local-diablo-iv"]!.iconFile).toBe("hosted-local-diablo-iv.png");
+  });
+
+  it("looks again at once when the game is installed on this PC, and keeps waiting when it is not", async () => {
+    const library = libraryWith("elden-ring", "factorio");
+    recordIcon(library, "elden-ring", { none: day(9) });
+    recordIcon(library, "factorio", { none: day(9) });
+    const job = run(library, fakeSteam({}), {
+      installedGames: async () => [{ source: "steam", name: "ELDEN RING", file: "G:/Steam/er/eldenring.exe", index: 0, steamAppId: 1245620 }],
+      readIcon: async () => ICON,
+    });
+    expect(await job.done).toBe(1);
+    expect(library.games["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
+    expect(library.games["factorio"]).toMatchObject({ iconFile: null, iconCheckedAt: day(9).toISOString() });
   });
 });

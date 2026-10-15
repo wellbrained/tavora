@@ -157,6 +157,14 @@ describe("Steam icons", () => {
     expect(sanitizeLibrary({ theme: "ash" }).theme).toEqual({ id: "tavora.default", variation: "dark" });
   });
 
+  it("corrects the Steam id Diablo IV was once saved with, and looks for its icon again", () => {
+    const saved = (steamAppId: number) => ({
+      games: { "diablo-4": { id: "diablo-4", catalogId: "diablo-4", name: "Diablo IV", addedAt: "2026-10-14T23:17:34.035Z", steamAppId, iconFile: null, iconCheckedAt: "2026-10-15T12:14:18.118Z" } },
+    });
+    expect(sanitizeLibrary(saved(358090)).games["diablo-4"]).toMatchObject({ steamAppId: 2344520, iconCheckedAt: null });
+    expect(sanitizeLibrary(saved(2344520)).games["diablo-4"]).toMatchObject({ steamAppId: 2344520, iconCheckedAt: "2026-10-15T12:14:18.118Z" });
+  });
+
   it("has fetching on by default and keeps only a real setting", () => {
     expect(emptyLibrary().steamIcons).toBe(true);
     expect(sanitizeLibrary({ steamIcons: false }).steamIcons).toBe(false);

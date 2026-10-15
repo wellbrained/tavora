@@ -505,6 +505,9 @@ export function setRail(library: Library, rail: { expanded?: unknown; width?: un
 
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 
+/** The Steam id the built-in list once had for Diablo IV (it is "D4: Dark Dreams Don't Die"). */
+const WRONG_DIABLO_ID = 358090;
+
 /**
  * Turns whatever was saved into a consistent library: unknown or broken
  * entries are dropped, and every live game ends up placed exactly once.
@@ -520,7 +523,9 @@ export function sanitizeLibrary(raw: unknown): Library {
     const name = typeof game.name === "string" && game.name.trim() ? game.name.trim().slice(0, MAX_NAME) : null;
     if (!name || typeof game.addedAt !== "string" || !ISO.test(game.addedAt)) continue;
     // A game saved before Steam icons existed gets its Steam id from the built-in list, if it is there.
-    const steamAppId = isSteamAppId(game.steamAppId) ? game.steamAppId : (catalogGame(game.id)?.steamAppId ?? null);
+    // Diablo IV was saved with the Steam id of another game; it gets the right one and its icon is looked for again.
+    const wrongDiabloId = game.steamAppId === WRONG_DIABLO_ID && (game.id === "diablo-4" || game.catalogId === "diablo-4");
+    const steamAppId = wrongDiabloId ? (catalogGame("diablo-4")?.steamAppId ?? null) : isSteamAppId(game.steamAppId) ? game.steamAppId : (catalogGame(game.id)?.steamAppId ?? null);
     library.games[game.id] = {
       id: game.id,
       catalogId: typeof game.catalogId === "string" && catalogGame(game.catalogId) ? game.catalogId : null,
@@ -530,7 +535,7 @@ export function sanitizeLibrary(raw: unknown): Library {
       steamAppId,
       // The icon file is named after the Steam id or the game id, so a changed or forged name is dropped.
       iconFile: iconFileAllowed({ id: game.id, steamAppId }, game.iconFile) ? game.iconFile : null,
-      iconCheckedAt: typeof game.iconCheckedAt === "string" && ISO.test(game.iconCheckedAt) ? game.iconCheckedAt : null,
+      iconCheckedAt: !wrongDiabloId && typeof game.iconCheckedAt === "string" && ISO.test(game.iconCheckedAt) ? game.iconCheckedAt : null,
       iconSharedAt: typeof game.iconSharedAt === "string" && ISO.test(game.iconSharedAt) ? game.iconSharedAt : null,
       showNews: game.showNews !== false,
       addedAt: game.addedAt,

@@ -1,13 +1,20 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   findInstalledGames,
+  findSteamGames,
   gamesFromEpic,
   gamesFromGog,
   gamesFromUninstall,
   matchInstalled,
   normalizeName,
+  parseAppManifest,
   parseDisplayIcon,
+  parseLibraryFolders,
   parseRegistry,
+  pickProgram,
   type InstalledGame,
 } from "./launcher-games";
 
@@ -181,5 +188,84 @@ describe("findInstalledGames", () => {
   it("finds nothing off Windows, and nothing when no launcher has left anything", async () => {
     expect(await findInstalledGames({ platform: "linux", queryRegistry })).toEqual([]);
     expect(await findInstalledGames({ platform: "win32", queryRegistry: async () => null, readManifests: async () => [] })).toEqual([]);
+  });
+});
+
+describe("Steam games", () => {
+  it("ignores trademark signs in names, and finds a Steam game by its id first", () => {
+    expect(normalizeName("Battlefield\u2122 6")).toBe(normalizeName("Battlefield 6"));
+    const installed: InstalledGame[] = [
+      { source: "windows", name: "Another Name", file: "C:/a.exe", index: 0 },
+      { source: "steam", name: "Battlefield\u2122 6", file: "G:/bf6.exe", index: 0, steamAppId: 2807960 },
+    ];
+    expect(matchInstalled("Battlefield 6", installed)?.file).toBe("G:/bf6.exe");
+    expect(matchInstalled("Something else", installed, 2807960)?.file).toBe("G:/bf6.exe");
+    expect(matchInstalled("Something else", installed, 1)).toBeNull();
+  });
+
+  it("reads the library folders and an app manifest, and refuses an install folder that is a path", () => {
+    // The file doubles each backslash.
+    const vdf = String.raw`"libraryfolders"
+{
+	"0"
+	{
+		"path"		"C:\\Program Files (x86)\\Steam"
+	}
+	"1"
+	{
+		"path"		"G:\\Steam"
+	}
+}`;
+    expect(parseLibraryFolders(vdf)).toEqual([String.raw`C:\Program Files (x86)\Steam`, String.raw`G:\Steam`]);
+    const acf = (installdir: string) => `"AppState"\n{\n\t"appid"\t\t"2807960"\n\t"name"\t\t"Battlefield\u2122 6"\n\t"installdir"\t\t"${installdir}"\n}`;
+    expect(parseAppManifest(acf("Battlefield 6"))).toEqual({ appid: 2807960, name: "Battlefield\u2122 6", installdir: "Battlefield 6" });
+    expect(parseAppManifest(acf("..\\Windows"))).toBeNull();
+    expect(parseAppManifest(acf(".."))).toBeNull();
+    expect(parseAppManifest("{}")).toBeNull();
+  });
+
+  it("picks the largest program that is not an installer, a helper or a launcher", () => {
+    expect(
+      pickProgram([
+        { name: "EAAntiCheat.Installer.exe", size: 278 },
+        { name: "EAAntiCheat.GameServiceLauncher.exe", size: 19 },
+        { name: "bf6.exe", size: 198 },
+        { name: "readme.txt", size: 500 },
+        { name: "small.exe", size: 5 },
+      ]),
+    ).toBe("bf6.exe");
+    expect(pickProgram([{ name: "unins000.exe", size: 5 }])).toBeNull();
+  });
+
+  it("finds installed Steam games across the libraries, and skips a game whose folder is gone", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "tavora-steam-"));
+    const other = await mkdtemp(path.join(tmpdir(), "tavora-steam2-"));
+    try {
+      await mkdir(path.join(root, "steamapps"), { recursive: true });
+      await mkdir(path.join(other, "steamapps", "common", "Battlefield 6"), { recursive: true });
+      await writeFile(path.join(root, "steamapps", "libraryfolders.vdf"), `"libraryfolders"\n{\n\t"1"\n\t{\n\t\t"path"\t\t"${other.replaceAll("\\", "\\\\")}"\n\t}\n}`);
+      await writeFile(path.join(other, "steamapps", "appmanifest_2807960.acf"), '"AppState"\n{\n\t"appid"\t\t"2807960"\n\t"name"\t\t"Battlefield\u2122 6"\n\t"installdir"\t\t"Battlefield 6"\n}');
+      await writeFile(path.join(other, "steamapps", "common", "Battlefield 6", "bf6.exe"), "x".repeat(50));
+      await writeFile(path.join(other, "steamapps", "common", "Battlefield 6", "EAAntiCheat.Installer.exe"), "x".repeat(500));
+      await writeFile(path.join(root, "steamapps", "appmanifest_1.acf"), '"AppState"\n{\n\t"appid"\t\t"1"\n\t"name"\t\t"Gone"\n\t"installdir"\t\t"Gone"\n}');
+      const games = await findSteamGames(root);
+      expect(games.map((game) => [game.name, game.steamAppId, path.basename(game.file)])).toEqual([["Battlefield\u2122 6", 2807960, "bf6.exe"]]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(other, { recursive: true, force: true });
+    }
+  });
+
+  it("adds Steam's games to the installed games when a Steam folder is given", async () => {
+    const steam: InstalledGame = { source: "steam", name: "Hades II", file: "G:/h2.exe", index: 0, steamAppId: 1145350 };
+    const games = await findInstalledGames({
+      platform: "win32",
+      queryRegistry: async () => null,
+      readManifests: async () => [],
+      steamDir: "G:/Steam",
+      readSteamGames: async (dir) => (dir === "G:/Steam" ? [steam] : []),
+    });
+    expect(games).toEqual([steam]);
+    expect(await findInstalledGames({ platform: "win32", queryRegistry: async () => null, readManifests: async () => [], readSteamGames: async () => [steam] })).toEqual([]);
   });
 });
