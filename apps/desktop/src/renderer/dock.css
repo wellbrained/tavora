@@ -90,3 +90,42 @@
 .dockview-theme-tavora .dv-sash {
   border-radius: 2px;
 }
+
+/* Where a dragged panel will land: a clear, rounded area with a short label.
+   The drop guide (DropGuide.vue) sits on top at the group's centre. */
+.dockview-theme-tavora .dv-content-container .dv-drop-target-selection:not(.dv-drop-target-selection-line) {
+  --dv-drag-over-background-color: color-mix(in srgb, var(--primary) 22%, transparent);
+  border: 2px solid var(--primary);
+  border-radius: 8px;
+}
+
+.dockview-theme-tavora
+  .dv-content-container
+  .dv-drop-target-selection:not(.dv-drop-target-selection-line, .dv-drop-target-small-vertical, .dv-drop-target-small-horizontal)::after {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.dockview-theme-tavora .dv-content-container .dv-drop-target-selection.dv-drop-target-left::after {
+  content: "Place left";
+}
+.dockview-theme-tavora .dv-content-container .dv-drop-target-selection.dv-drop-target-right::after {
+  content: "Place right";
+}
+.dockview-theme-tavora .dv-content-container .dv-drop-target-selection.dv-drop-target-top::after {
+  content: "Place above";
+}
+.dockview-theme-tavora .dv-content-container .dv-drop-target-selection.dv-drop-target-bottom::after {
+  content: "Place below";
+}
+.dockview-theme-tavora .dv-content-container .dv-drop-target-selection.dv-drop-target-center::after {
+  content: "Add as a tab";
+}

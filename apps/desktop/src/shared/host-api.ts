@@ -1,5 +1,6 @@
 // Contract between the trusted host UI (renderer) and the main process.
 // Types only: imported by both sides, so it must not import Electron or Node.
+import type { LayoutTemplateId } from "./layout-templates";
 
 /**
  * loading: the page is loading. ready: loaded and running. failed: the page
@@ -55,6 +56,7 @@ export interface PanelView {
 
 /**
  * A docking layout: a tree of splits whose leaves are tab groups of panels.
+ * A group without panels is an empty slot, waiting for a module.
  * Splits alternate direction level by level, starting with `direction` at
  * the root. Sizes are in pixels of the `width` by `height` area the layout
  * was saved at; restoring scales them to the area there is.
@@ -76,10 +78,10 @@ export interface LayoutSplit {
 export interface LayoutGroup {
   kind: "group";
   size: number;
-  /** Panel instance ids, in tab order. */
+  /** Panel instance ids, in tab order; none in an empty slot. */
   panels: string[];
-  /** The panel whose tab is selected. */
-  active: string;
+  /** The panel whose tab is selected; null in an empty slot. */
+  active: string | null;
 }
 
 export type LayoutNode = LayoutSplit | LayoutGroup;
@@ -264,7 +266,10 @@ export type HostAction =
   | { type: "close-panel"; instanceId: string }
   | { type: "reload-panel"; instanceId: string }
   | { type: "stop-panel"; instanceId: string }
-  | { type: "save-layout"; layout: SavedLayout }
+  /** Null when nothing is docked any more. */
+  | { type: "save-layout"; layout: SavedLayout | null }
+  /** Rearranges the workspace into empty slots of a layout template; open panels fill the first ones. */
+  | { type: "apply-layout-template"; templateId: LayoutTemplateId }
   | { type: "save-snapshot"; name: string }
   | { type: "update-snapshot"; snapshotId: string }
   | { type: "apply-snapshot"; snapshotId: string }

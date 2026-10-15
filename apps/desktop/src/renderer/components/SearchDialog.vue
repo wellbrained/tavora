@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { CatalogMatch, GameView, OnlineGame } from "../../shared/host-api";
+import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import { act, api, dialog, openSettings, searchOpen, state } from "../host";
 
 import GameIcon from "./GameIcon.vue";
@@ -144,6 +145,14 @@ const groups = computed<Group[]>(() => {
           keywords: ["snapshot", "saved layout"],
           icon: LayoutPanelLeft,
           run: close(() => act({ type: "apply-snapshot", snapshotId: snapshot.id })),
+        })),
+        ...LAYOUT_TEMPLATES.map((template) => ({
+          id: `layout-template-${template.id}`,
+          label: `Use template ${template.name}`,
+          hint: "Layout",
+          keywords: ["layout", "template", "empty", "split"],
+          icon: LayoutPanelLeft,
+          run: close(() => act({ type: "apply-layout-template", templateId: template.id })),
         })),
       ],
     });
