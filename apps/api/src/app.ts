@@ -2,17 +2,34 @@ import type { DatabaseSync } from "node:sqlite";
 import { Hono } from "hono";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { DEFAULT_LIMIT, MAX_LIMIT, MAX_QUERY_LENGTH, searchGames } from "./search.ts";
+import { MAX_PROFILE_LENGTH, SteamError, type SteamClient } from "./steam.ts";
 
 export interface AppOptions {
   db: DatabaseSync;
   /** Which client a request is from; the server derives it from the connection. */
   clientKey?: (request: Request) => string;
   rateLimiter?: RateLimiter;
+  /** Absent when the service has no Steam key: the import answers 503. */
+  steam?: SteamClient;
+  steamRateLimiter?: RateLimiter;
 }
 
-export function createApp({ db, clientKey, rateLimiter }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
+  const steamLimiter = steamRateLimiter ?? createRateLimiter({ limit: 6, windowMs: 60_000 });
   const app = new Hono();
+
+  // Steam appid -> canonical id, loaded the first time an import asks.
+  let idByAppid: Map<number, string> | undefined;
+  const canonicalIds = () => {
+    idByAppid ??= new Map(
+      (db.prepare("select steam_appid as appid, id from games where steam_appid is not null").all() as unknown as {
+        appid: number;
+        id: string;
+      }[]).map(({ appid, id }) => [appid, id]),
+    );
+    return idByAppid;
+  };
 
   // The query is what a player typed: never cached, never logged here.
   app.use("*", async (context, next) => {
@@ -46,6 +63,38 @@ export function createApp({ db, clientKey, rateLimiter }: AppOptions) {
       return context.json({ error: `limit must be a whole number from 1 to ${MAX_LIMIT}.` }, 400);
     }
     return context.json({ results: searchGames(db, q, limit) });
+  });
+
+  // Steam import. POST, so the profile is in no URL; JSON only, which a web
+  // page on another site cannot send without a preflight this service refuses.
+  app.post("/v1/steam/library", async (context) => {
+    const wait = steamLimiter.check(clientKey ? clientKey(context.req.raw) : "local");
+    if (wait > 0) {
+      context.header("Retry-After", String(wait));
+      return context.json({ error: "Too many requests." }, 429);
+    }
+    if (!steam) return context.json({ error: "Steam import is not available right now." }, 503);
+    if (!(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) {
+      return context.json({ error: "Send JSON." }, 415);
+    }
+    const text = await context.req.text();
+    let profile: unknown;
+    try {
+      profile = text.length <= 1000 ? (JSON.parse(text) as { profile?: unknown }).profile : undefined;
+    } catch {
+      profile = undefined;
+    }
+    if (typeof profile !== "string" || profile.length === 0 || profile.length > MAX_PROFILE_LENGTH) {
+      return context.json({ error: "Send { \"profile\": a Steam profile link or SteamID64 }." }, 400);
+    }
+    try {
+      const ids = canonicalIds();
+      const owned = await steam.ownedGames(profile);
+      return context.json({ games: owned.map((game) => ({ appid: game.appid, name: game.name, id: ids.get(game.appid) ?? null })) });
+    } catch (error) {
+      if (error instanceof SteamError) return context.json({ error: error.message }, error.status);
+      throw error;
+    }
   });
 
   app.notFound((context) => context.json({ error: "Not found." }, 404));
