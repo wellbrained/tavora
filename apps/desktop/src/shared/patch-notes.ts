@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.4.3",
+    date: "2026-10-15",
+    title: "A safety copy of your data",
+    notes: [
+      "Tavora now keeps a copy of your games, layouts, notes and settings from the last 7 days, made when it first starts each day. If something ever goes wrong, open Settings, then Backups, and press Open folder to find them.",
+      "If you go back to an older version of Tavora, it no longer overwrites what a newer version saved: it keeps a copy of that file next to it first.",
+    ],
+  },
+  {
     version: "0.4.2",
     date: "2026-10-15",
     title: "Game icons from your launchers",
