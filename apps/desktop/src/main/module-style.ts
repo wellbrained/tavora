@@ -6,6 +6,13 @@
 // that styles nothing still looks like part of Tavora, and one with its own
 // design keeps it. The colours sit in a second, small stylesheet of their
 // own, so a theme change replaces only that one.
+//
+// A module's stylesheet only wins for the properties it sets, so nothing here
+// may set a property that a CSS reset such as Tailwind's leaves alone: no
+// min-height on controls (it stretched shadcn checkboxes, radios and switches
+// to 32px) and no font size on the root (it made every rem 14px instead of
+// 16px). Controls get their height from padding and line height, which
+// resets do clear, and the 14px text sits on body.
 import type { TavoraTheme } from "@tavora/sdk/protocol";
 
 /** A theme's tokens as modules see them: the colour tokens plus the radius. */
@@ -49,11 +56,10 @@ ${face(fonts.latinExt, LATIN_EXT)}
   --tavora-font-mono: ui-monospace, monospace;
   background: var(--tavora-background);
   color: var(--tavora-foreground);
-  font: 14px/1.5 var(--tavora-font-sans);
   scrollbar-color: var(--tavora-input) transparent;
   accent-color: var(--tavora-primary);
 }
-body { margin: 0; }
+body { margin: 0; font: 14px/1.5 var(--tavora-font-sans); }
 h1 { font-size: 16px; font-weight: 600; margin: 0 0 8px; }
 h2 { font-size: 14px; font-weight: 600; margin: 16px 0 4px; }
 a { color: var(--tavora-primary); }
@@ -65,14 +71,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
    page's own styles set a background; ours come from a user stylesheet. */
 button {
   appearance: none;
-  min-height: 32px; padding: 0 12px; border: 0; border-radius: var(--tavora-radius);
+  line-height: 20px; padding: 6px 12px; border: 0; border-radius: var(--tavora-radius);
   background: var(--tavora-secondary); color: var(--tavora-foreground); cursor: pointer;
 }
 button:hover:not(:disabled) { background: color-mix(in srgb, var(--tavora-foreground) 10%, var(--tavora-secondary)); }
 button:disabled { opacity: 0.5; cursor: default; }
 input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), select, textarea {
   appearance: none;
-  box-sizing: border-box; min-height: 32px; padding: 6px 8px;
+  box-sizing: border-box; line-height: 20px; padding: 5px 8px;
   border: 1px solid var(--tavora-input); border-radius: var(--tavora-radius);
   background: var(--tavora-card); color: var(--tavora-foreground);
 }

@@ -37,7 +37,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       v-for="(_, key) in modelValue"
       :key="key"
       data-slot="slider-thumb"
-      class="border-primary bg-foreground block size-4 shrink-0 rounded-full border-2 transition-colors outline-none hover:border-[var(--primary-hover)] disabled:pointer-events-none disabled:opacity-50"
+      class="border-primary bg-background dark:bg-foreground block size-4 shrink-0 rounded-full border-2 transition-colors outline-none hover:border-[var(--primary-hover)] disabled:pointer-events-none disabled:opacity-50"
     />
   </SliderRoot>
 </template>

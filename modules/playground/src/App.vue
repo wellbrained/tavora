@@ -389,7 +389,7 @@ function bump(by: number) {
       </DemoSection>
 
       <!-- Tabs -->
-      <DemoSection v-if="visible.has('tabs')" id="tabs" :title="title('tabs')" description="Switch between views of the same thing. The selected tab carries a gold line, like panel tabs.">
+      <DemoSection v-if="visible.has('tabs')" id="tabs" :title="title('tabs')" description="Switch between views of the same thing. The selected tab carries an accent line, like panel tabs.">
         <Tabs default-value="overview">
           <TabsList>
             <TabsTrigger value="overview" :disabled="off">Overview</TabsTrigger>
