@@ -155,6 +155,14 @@ export const SETTINGS: SettingEntry[] = [
     keywords: ["icon", "share", "upload", "send", "contribute", "offer", "missing", "logo", "help"],
   },
   {
+    id: "steam-import",
+    section: "general",
+    label: "Import from Steam",
+    description:
+      "Add the games you own on Steam, by pasting your profile link. You see the list first and choose which to add. Tavora does not start games. Needs Online game search.",
+    keywords: ["steam", "import", "library", "games", "profile", "add", "valve"],
+  },
+  {
     id: "shortcuts",
     section: "shortcuts",
     label: "Keyboard shortcuts",

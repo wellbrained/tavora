@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.3",
+    date: "2026-10-15",
+    title: "Bring your Steam games",
+    notes: [
+      "You can now add the games you own on Steam in one go. Open Add a game and choose Import your games from Steam (or use Settings, then General, then Import from Steam), paste your profile link, look at the list and tick the games you want. Games you already have are marked and left alone. Tavora only lists them: it does not start games.",
+    ],
+  },
+  {
     version: "0.5.2",
     date: "2026-10-15",
     title: "Help when something goes wrong",

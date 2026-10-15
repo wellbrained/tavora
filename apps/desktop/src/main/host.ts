@@ -19,7 +19,7 @@ import {
   type WebContents,
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
-import type { ActionResult, AppearanceView, GameView, HostAction, HostViewState, OnlineSearchResult, Screen } from "../shared/host-api";
+import type { ActionResult, AppearanceView, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, type SavedLayout } from "./layout";
@@ -72,6 +72,7 @@ import { DEFAULT_API_URL, OnlineSearch } from "./online";
 import { UpdateManager, type UpdaterLike } from "./updates";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
 import { syncIcons } from "./icon-sync";
+import { fetchSteamLibrary, importSteamGames, steamLibraryView } from "./steam-import";
 import { isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, submitIcon } from "./share-icons";
 import { findSteamDir, removeSteamIcon } from "./steam-icons";
 import { ModuleView } from "./module-view";
@@ -475,6 +476,7 @@ export class Host {
       if (!action) return { ok: false, error: "Tavora did not understand that request." };
       try {
         if (action.type === "share-icons") return await this.shareIcons(action.gameIds);
+        if (action.type === "import-steam-games") return this.importSteam(action.games);
         const id = await this.perform(action);
         return id === undefined ? { ok: true } : { ok: true, id };
       } catch (error) {
@@ -498,6 +500,12 @@ export class Host {
       const result = await this.onlineSearch.search(query);
       // Games the player already has (Trash included) are not offered again.
       return { ...result, games: result.games.filter((game) => !this.library.games[game.id]) };
+    });
+    ipcMain.handle("host:steam-library", async (event, profile: unknown): Promise<SteamLibraryResult> => {
+      if (!fromHost(event) || typeof profile !== "string") return { status: "error", error: "Tavora did not understand that request." };
+      if (!this.library.onlineSearch) return { status: "error", error: "Turn on Online game search in Settings to import from Steam." };
+      const result = await fetchSteamLibrary({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL }, profile);
+      return result.status === "ok" ? steamLibraryView(this.library, result.games) : result;
     });
     ipcMain.on("host:panel-bounds", (event, bounds: unknown) => {
       if (fromHost(event)) this.setPanelBounds(bounds);
@@ -852,6 +860,18 @@ export class Host {
     const library = this.library;
     if (!library.steamIcons || !library.onlineSearch) return [];
     return Object.values(library.games).filter(isShareCandidate);
+  }
+
+  /** Adds the games of a Steam import that are not in the library yet. Answers with how many. */
+  private importSteam(games: SteamImportGame[]): ActionResult {
+    const added = importSteamGames(this.library, games, new Date());
+    for (const id of added) this.workspace.games[id] = emptyGameWorkspace();
+    if (added.length > 0) {
+      this.saveLibrary();
+      this.saveWorkspace();
+      this.fetchIconsSoon();
+    }
+    return { ok: true, added: added.length };
   }
 
   /** Offers these games' icons to the service, one at a time. Returns how many it took. */
