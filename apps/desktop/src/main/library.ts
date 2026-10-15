@@ -23,12 +23,19 @@ export interface GameEntry {
   /** Display name. Renaming never changes the id. */
   name: string;
   icon: GameIcon;
+  /**
+   * Whether the game shows its own icon (the one found on this PC or from Steam) while it has one. False means
+   * the player chose their own letters. A picked image wins over both, so this only matters without one.
+   */
+  useOriginalIcon: boolean;
   /** The game's Steam application id, a hidden key used to find its icon; null when it has none. */
   steamAppId: number | null;
   /** The game's own icon in the player's data folder, kept unchanged (from the installed game or from Steam); null until found. */
   iconFile: string | null;
   /** When no icon was found for this game, so it is not looked up again for a while. */
   iconCheckedAt: string | null;
+  /** When the player offered the game's icon to the Tavora service, so it is not offered again. */
+  iconSharedAt: string | null;
   showNews: boolean;
   addedAt: string;
   lastPlayedAt: string | null;
@@ -258,9 +265,11 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
     catalogId,
     name,
     icon: { kind: "monogram", text: monogram(name) },
+    useOriginalIcon: true,
     steamAppId,
     iconFile: null,
     iconCheckedAt: null,
+    iconSharedAt: null,
     showNews: true,
     addedAt: now.toISOString(),
     lastPlayedAt: null,
@@ -289,6 +298,12 @@ export function recordIcon(library: Library, id: string, outcome: { file: string
   }
 }
 
+/** Notes that the player offered this game's icon to the Tavora service. */
+export function markIconShared(library: Library, id: string, now: Date): void {
+  const game = library.games[id];
+  if (game) game.iconSharedAt = now.toISOString();
+}
+
 /** True when another game in the library uses this icon file. */
 export function iconFileShared(library: Library, file: string, exceptId: string): boolean {
   return Object.values(library.games).some((game) => game.id !== exceptId && game.iconFile === file);
@@ -304,11 +319,24 @@ export function renameGame(library: Library, id: string, name: unknown): void {
   liveGame(library, id).name = cleanName(name);
 }
 
-/** Sets the monogram text; null resets it to the one derived from the name. */
+/**
+ * Chooses letters for the icon (null: the ones derived from the name). The game stops showing its own icon,
+ * which is what the player asked for by choosing letters. Returns the previous icon so a picked image's file can go.
+ */
 export function setGameLabel(library: Library, id: string, label: unknown): GameIcon | null {
   const game = liveGame(library, id);
   const previous = game.icon;
   game.icon = { kind: "monogram", text: label === null ? monogram(game.name) : cleanLabel(label) };
+  game.useOriginalIcon = false;
+  return previous;
+}
+
+/** Goes back to the game's own icon (the badge when none was found); a picked image or letters are dropped. */
+export function useOriginalGameIcon(library: Library, id: string): GameIcon {
+  const game = liveGame(library, id);
+  const previous = game.icon;
+  game.icon = { kind: "monogram", text: monogram(game.name) };
+  game.useOriginalIcon = true;
   return previous;
 }
 
@@ -480,10 +508,12 @@ export function sanitizeLibrary(raw: unknown): Library {
       catalogId: typeof game.catalogId === "string" && catalogGame(game.catalogId) ? game.catalogId : null,
       name,
       icon: sanitizeIcon(game.icon, name),
+      useOriginalIcon: game.useOriginalIcon !== false,
       steamAppId,
       // The icon file is named after the Steam id or the game id, so a changed or forged name is dropped.
       iconFile: iconFileAllowed({ id: game.id, steamAppId }, game.iconFile) ? game.iconFile : null,
       iconCheckedAt: typeof game.iconCheckedAt === "string" && ISO.test(game.iconCheckedAt) ? game.iconCheckedAt : null,
+      iconSharedAt: typeof game.iconSharedAt === "string" && ISO.test(game.iconSharedAt) ? game.iconSharedAt : null,
       showNews: game.showNews !== false,
       addedAt: game.addedAt,
       lastPlayedAt: typeof game.lastPlayedAt === "string" && ISO.test(game.lastPlayedAt) ? game.lastPlayedAt : null,

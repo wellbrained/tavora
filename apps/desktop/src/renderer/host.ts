@@ -41,6 +41,8 @@ export interface MenuItem {
   /** Starts a new section of the menu. */
   separator?: boolean;
   disabled?: boolean;
+  /** Marks the current choice in a list of choices; a list where any item sets this shows a check column. */
+  checked?: boolean;
   /** Opens a nested list. */
   submenu?: () => MenuItem[];
   run?: () => unknown;
@@ -66,7 +68,13 @@ export interface ConfirmRequest {
   run(): Promise<string | null>;
 }
 
-export type DialogRequest = PromptRequest | ConfirmRequest | { kind: "add-game" } | { kind: "add-module" };
+/** Offering icons to Tavora: the games ticked at first, or none. */
+export interface ShareIconsRequest {
+  kind: "share-icons";
+  gameIds: string[];
+}
+
+export type DialogRequest = PromptRequest | ConfirmRequest | ShareIconsRequest | { kind: "add-game" } | { kind: "add-module" };
 
 export const dialog = shallowRef<DialogRequest | null>(null);
 
