@@ -376,6 +376,7 @@ export const de: Record<keyof typeof en, string> = {
   "rail.dropHere": "Spiel hier ablegen",
   "rail.emptyFolder": "Leerer Ordner",
   "rail.folder": "Ordner {name}",
+  "rail.folderMore": "+{count} weitere",
   "rail.moreFolder": "Weitere Aktionen für den Ordner {name}",
   "rail.moreGame": "Weitere Aktionen für {name}",
   "rail.newFolder.title": "Neuer Ordner",

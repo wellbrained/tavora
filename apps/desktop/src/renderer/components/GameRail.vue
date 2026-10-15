@@ -7,12 +7,12 @@ import { act, dialog, openSettings, prompt, railToggles, state, submitAction } f
 import { t } from "../i18n";
 import { numberedGames } from "../shortcuts";
 import { folderMenu, gameMenu } from "../rail-actions";
-import GameIcon from "./GameIcon.vue";
 import MenuArea from "./menus/MenuArea.vue";
 import MenuButton from "./menus/MenuButton.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
 import UpdateMarker from "./UpdateMarker.vue";
 import RailGame from "./RailGame.vue";
+import FolderTile from "./FolderTile.vue";
 import RailTooltip from "./RailTooltip.vue";
 
 const COMPACT = 72;
@@ -62,6 +62,8 @@ const favorites = computed(() => library.value.favorites.map((id) => library.val
 // A game lives in one place: favorited games leave the main list (and its folders) until unfavorited.
 const favoriteIds = computed(() => new Set<string>(library.value.favorites));
 const rootEntries = computed(() => library.value.root.filter((entry) => entry.kind === "folder" || !favoriteIds.value.has(entry.id)));
+/** How many game names the tooltip of a folder lists. */
+const FOLDER_TIP_GAMES = 8;
 const folderGames = (id: string) => folder(id).games.filter((gameId) => !favoriteIds.value.has(gameId));
 const openFolders = reactive(new Set<string>());
 
@@ -397,7 +399,13 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 draggable="true"
                 v-on="dnd({ kind: 'folder', id: entry.id, place: { list: 'root' } })"
               >
-                <RailTooltip :text="folder(entry.id).name" :disabled="expanded">
+                <RailTooltip
+                  :text="folder(entry.id).name"
+                  :disabled="expanded"
+                  folder
+                  :lines="folderGames(entry.id).slice(0, FOLDER_TIP_GAMES).map((id) => game(id).name)"
+                  :more="Math.max(0, folderGames(entry.id).length - FOLDER_TIP_GAMES)"
+                >
                 <button
                   type="button"
                   :class="cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent', folderHint(entry.id) === 'into' && 'ring-primary ring-2 ring-inset')"
@@ -407,14 +415,12 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                   :aria-label="t('rail.folder', { name: folder(entry.id).name })"
                   @click="toggleFolder(entry.id)"
                 >
-                  <span class="rail-icon bg-card flex size-12 flex-none flex-wrap content-center items-center justify-center gap-1 overflow-hidden rounded-lg p-0.5" aria-hidden="true">
-                    <span v-if="folder(entry.id).label" class="font-semibold">
-                      {{ folder(entry.id).label }}
-                    </span>
-                    <template v-else>
-                      <GameIcon v-for="id in folderGames(entry.id).slice(0, 4)" :key="id" :game="game(id)" :size="20" />
-                    </template>
-                  </span>
+                  <FolderTile
+                    :games="folderGames(entry.id).slice(0, 4).map(game)"
+                    :count="folderGames(entry.id).length"
+                    :label="folder(entry.id).label"
+                    :open="openFolders.has(entry.id)"
+                  />
                   <template v-if="expanded">
                     <span class="flex-1 truncate text-sm font-medium">{{ folder(entry.id).name }}</span>
                     <component :is="openFolders.has(entry.id) ? ChevronDown : ChevronRight" class="text-muted-foreground mr-8 size-4 flex-none" />
@@ -434,10 +440,18 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 </div>
               </div>
             </MenuArea>
-            <div v-if="openFolders.has(entry.id)" class="flex flex-col gap-1 [&>div]:px-1" role="group" :aria-label="folder(entry.id).name">
+            <!-- The games of an open folder are a little smaller and hang off a line in the accent colour. -->
+            <div
+              v-if="openFolders.has(entry.id)"
+              class="border-primary/40 mt-1 ml-2 flex flex-col gap-1 border-l-2 py-0.5 [&>div]:px-1"
+              role="group"
+              :aria-label="folder(entry.id).name"
+              data-testid="folder-games"
+            >
               <RailGame
                 v-for="id in folderGames(entry.id)"
                 :key="id"
+                compact
                 :game="game(id)"
                 :testid="`rail-game-${id}`"
                 :active="isActive(id)"
