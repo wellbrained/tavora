@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TooltipProvider } from "reka-ui";
 import AddGameDialog from "./components/AddGameDialog.vue";
 import AddModuleDialog from "./components/AddModuleDialog.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
@@ -16,7 +17,9 @@ import WelcomePage from "./pages/WelcomePage.vue";
 
 <template>
   <div v-if="state" class="flex h-full">
-    <GameRail />
+    <TooltipProvider :delay-duration="150" :skip-delay-duration="500">
+      <GameRail />
+    </TooltipProvider>
     <div class="relative h-full min-w-0 flex-1">
       <GameWorkspace v-if="state.screen === 'game' && state.currentGameId" :key="state.currentGameId" />
       <template v-else>
