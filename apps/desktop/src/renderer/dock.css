@@ -73,6 +73,29 @@
   outline-offset: -2px;
 }
 
+/* Dragging a tab over another tab: instead of tinting half of it, a bar at
+   the edge where it would land (the start of the tab to land before it, the
+   end of the tab to land after it). Dropping at the empty end of the tab strip
+   shows the bar at the end of the last tab. Dockview sets the box's position
+   and size itself, hence !important. */
+.dockview-theme-tavora .dv-tab > .dv-drop-target-dropzone > .dv-drop-target-selection,
+.dockview-theme-tavora .dv-void-container > .dv-drop-target-dropzone > .dv-drop-target-selection {
+  top: 0 !important;
+  height: 100% !important;
+  width: 3px !important;
+  border: 0 !important;
+  border-radius: 2px;
+  background: var(--primary) !important;
+  transition: none !important;
+}
+.dockview-theme-tavora .dv-tab > .dv-drop-target-dropzone > .dv-drop-target-selection.dv-drop-target-left,
+.dockview-theme-tavora .dv-void-container > .dv-drop-target-dropzone > .dv-drop-target-selection {
+  left: 0 !important;
+}
+.dockview-theme-tavora .dv-tab > .dv-drop-target-dropzone > .dv-drop-target-selection.dv-drop-target-right {
+  left: calc(100% - 3px) !important;
+}
+
 /* Each group is a card: rounded, outlined and set apart from its
    neighbours by the dock's gap. The corner radius matches PANEL_RADIUS in
    src/main/module-view.ts, which rounds the module's native view to fit. */
