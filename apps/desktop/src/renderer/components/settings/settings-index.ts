@@ -1,4 +1,4 @@
-import { Keyboard, ScrollText, SlidersHorizontal, Trash2 } from "@lucide/vue";
+import { Keyboard, SlidersHorizontal, Trash2 } from "@lucide/vue";
 
 // The section menu, in groups. New settings get a row in a section, or a
 // new section here, rather than a longer page.
@@ -8,17 +8,27 @@ export const GROUPS = [
     sections: [
       { id: "general", label: "General", icon: SlidersHorizontal },
       { id: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard },
-      { id: "patch-notes", label: "Patch notes", icon: ScrollText },
     ],
   },
   { label: "Library", sections: [{ id: "trash", label: "Trash", icon: Trash2 }] },
 ] as const;
 
-export type SettingsSection = (typeof GROUPS)[number]["sections"][number]["id"];
+/**
+ * The patch notes are a page of their own, opened only by pressing the version
+ * at the bottom of the sections list. They are not in the menu and not found by
+ * the Settings search or Ctrl+K.
+ */
+export const PATCH_NOTES_SECTION = "patch-notes";
 
-export const SECTION_LABEL: Record<SettingsSection, string> = Object.fromEntries(
-  GROUPS.flatMap((group) => group.sections.map((section) => [section.id, section.label])),
-) as Record<SettingsSection, string>;
+export type SettingsSection = (typeof GROUPS)[number]["sections"][number]["id"] | typeof PATCH_NOTES_SECTION;
+
+export const SECTION_LABEL: Record<SettingsSection, string> = {
+  ...(Object.fromEntries(GROUPS.flatMap((group) => group.sections.map((section) => [section.id, section.label]))) as Record<
+    Exclude<SettingsSection, typeof PATCH_NOTES_SECTION>,
+    string
+  >),
+  [PATCH_NOTES_SECTION]: "Patch notes",
+};
 
 /**
  * Every setting the Settings search and Ctrl+K can find. A row in
@@ -70,13 +80,6 @@ export const SETTINGS: SettingEntry[] = [
     label: "Keyboard shortcuts",
     description: "Every shortcut Tavora has. Ctrl+/ opens this list from anywhere.",
     keywords: ["keys", "hotkeys", "keyboard", "ctrl", "keybindings"],
-  },
-  {
-    id: "patch-notes",
-    section: "patch-notes",
-    label: "Patch notes",
-    description: "What changed in each version of Tavora, newest first.",
-    keywords: ["changelog", "changes", "version", "release notes", "what's new", "update"],
   },
   {
     id: "welcome-tour",

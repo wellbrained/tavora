@@ -1,5 +1,6 @@
 /**
- * What changed in each version, newest first. Shown in Settings > Patch notes.
+ * What changed in each version, newest first. Shown when the version at the bottom
+ * of the Settings sections list is pressed (it is not a menu item).
  * Every version bump of apps/desktop/package.json adds an entry here; a test
  * keeps the two in step. Write for players, in plain friendly words. At 1.0 these
  * entries are replaced by a "1.0 release catalog" of all features, and a fresh
@@ -17,6 +18,12 @@ export interface PatchNote {
 }
 
 export const PATCH_NOTES: readonly PatchNote[] = [
+  {
+    version: "0.1.1",
+    date: "2026-10-15",
+    title: "Tidier Settings",
+    notes: ["The patch notes now open only when you press the version number at the bottom of Settings. They no longer show up as a menu entry or in search."],
+  },
   {
     version: "0.1.0",
     date: "2026-10-15",
