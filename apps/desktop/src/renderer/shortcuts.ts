@@ -1,6 +1,6 @@
 import type { HostViewState } from "../shared/host-api";
 
-// What the shortcut overview (Ctrl+/) lists. The Tavora-wide ones are
+// What Settings > Keyboard shortcuts (Ctrl+/) lists. The Tavora-wide ones are
 // caught in main/shortcuts.ts; keep both in step.
 
 const MOD = navigator.platform.startsWith("Mac") ? "Cmd" : "Ctrl";

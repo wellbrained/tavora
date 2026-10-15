@@ -7,7 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { RootSort, Startup } from "../../../shared/host-api";
-import { act, confirmAction, settingsOpen, settingsTarget, shortcutsOpen, state, submitAction } from "../../host";
+import { act, confirmAction, settingsOpen, settingsTarget, state, submitAction } from "../../host";
+import { SHORTCUT_GROUPS } from "../../shortcuts";
 import GameIcon from "../GameIcon.vue";
 import SegmentedControl from "./SegmentedControl.vue";
 import { GROUPS, SECTION_LABEL, SETTINGS, type SettingsSection } from "./settings-index";
@@ -25,6 +26,10 @@ watch(settingsOpen, (open) => {
   if (!open) return;
   query.value = "";
   void show(settingsTarget.value.section, settingsTarget.value.setting);
+});
+// Asked again while open (e.g. Ctrl+/ over Settings): go there.
+watch(settingsTarget, (target) => {
+  if (settingsOpen.value) void show(target.section, target.setting);
 });
 
 async function show(target: SettingsSection, setting?: string) {
@@ -228,6 +233,7 @@ function deleteNow(gameId: string, name: string) {
               <Switch v-model="grayscaleText" aria-label="Grayscale text" data-testid="grayscale-text" />
             </SettingRow>
             <SettingRow
+<<<<<<< origin/main
               label="Online game search"
               description="Finds more games than the built-in list on the Tavora service. It sees the text you type and nothing that identifies you. Turn it off to use the built-in games only."
               setting="online-search"
@@ -244,6 +250,8 @@ function deleteNow(gameId: string, name: string) {
               <Button variant="secondary" data-testid="show-shortcuts" @click="shortcutsOpen = true">Show shortcuts</Button>
             </SettingRow>
             <SettingRow
+=======
+>>>>>>> HEAD
               label="Welcome tour"
               description="The short introduction Tavora shows on its first start: your profile, your first games and a few tips."
               setting="welcome-tour"
@@ -251,6 +259,34 @@ function deleteNow(gameId: string, name: string) {
             >
               <Button variant="secondary" data-testid="show-welcome-again" @click="showWelcomeAgain">Show again</Button>
             </SettingRow>
+          </template>
+
+          <template v-else-if="section === 'shortcuts'">
+            <h2
+              :class="cn('-mx-3 rounded-lg px-3 text-xl font-semibold transition-colors duration-500', highlight === 'shortcuts' && 'bg-primary/10')"
+              data-setting="shortcuts"
+            >
+              Keyboard shortcuts
+            </h2>
+            <p class="text-muted-foreground mt-2 mb-6">They work everywhere in Tavora, also while a module panel has focus. Ctrl+/ opens this list.</p>
+            <div class="flex flex-col gap-6" data-testid="shortcuts">
+              <section v-for="group in SHORTCUT_GROUPS" :key="group.title">
+                <h3 class="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">{{ group.title }}</h3>
+                <ul>
+                  <li v-for="row in group.rows" :key="row.action" class="flex min-h-11 items-center gap-6 border-b py-2 last:border-b-0">
+                    <span class="min-w-0 flex-1">{{ row.action }}</span>
+                    <span class="flex flex-none items-center gap-1">
+                      <kbd
+                        v-for="key in row.keys"
+                        :key="key"
+                        class="bg-secondary text-foreground min-w-7 rounded-sm border border-b-2 px-1.5 py-0.5 text-center font-mono text-xs"
+                        >{{ key }}</kbd
+                      >
+                    </span>
+                  </li>
+                </ul>
+              </section>
+            </div>
           </template>
 
           <template v-else-if="section === 'trash'">
