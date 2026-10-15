@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Camera, Check } from "@lucide/vue";
+import { Camera, Check, X } from "@lucide/vue";
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui";
 import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";
@@ -120,30 +120,66 @@ function closeCrop() {
         align="start"
         :side-offset="8"
         :collision-padding="8"
-        class="bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=top]:slide-in-from-bottom-2 z-50 flex w-72 flex-col items-center gap-4 rounded-lg border p-4 shadow-md"
+        class="profile-card bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90 data-[side=top]:slide-in-from-bottom-3 border-primary/30 z-50 w-[300px] origin-(--reka-popover-content-transform-origin) overflow-hidden rounded-xl border shadow-xl shadow-black/40 duration-200"
         data-testid="profile-card"
       >
-        <button
-          type="button"
-          class="group/avatar focus-visible:ring-ring relative rounded-full focus-visible:ring-2 focus-visible:outline-none"
-          data-testid="profile-picture"
-          aria-label="Change picture"
-          title="Change picture"
-          @click="pickPicture"
-        >
-          <ProfileAvatar :name="draft.name" :initials="draft.initials" :picture-url="profile.pictureUrl" :size="88" />
-          <span
-            class="absolute inset-0 grid place-items-center rounded-full bg-black/55 opacity-0 transition-opacity group-hover/avatar:opacity-100 group-focus-visible/avatar:opacity-100"
-          >
-            <Camera class="size-6 text-white" :stroke-width="1.5" />
-          </span>
-        </button>
-        <input ref="fileInput" type="file" class="hidden" accept="image/png,image/jpeg,image/webp" data-testid="profile-file" @change="onFile" />
+        <!-- Banner: a blurred copy of the picture, or a warm pattern without one. -->
+        <div class="profile-banner relative h-[72px] overflow-hidden" aria-hidden="true">
+          <img v-if="profile.pictureUrl" :src="profile.pictureUrl" alt="" class="absolute inset-0 size-full scale-150 object-cover blur-xl brightness-[0.55] saturate-150" />
+        </div>
 
-        <form class="flex w-full flex-col gap-4" @submit.prevent="save">
-          <div class="flex gap-2">
+        <div class="flex flex-col gap-4 px-4 pb-4">
+          <div class="flex items-end gap-3">
+            <!-- The avatar overlaps the banner; removing the picture sits on it. -->
+            <div class="profile-pop relative -mt-10 flex-none">
+              <button
+                type="button"
+                class="group/avatar ring-popover focus-visible:outline-ring relative block rounded-full ring-4 focus-visible:outline-2 focus-visible:outline-offset-4"
+                data-testid="profile-picture"
+                aria-label="Change picture"
+                title="Change picture"
+                @click="pickPicture"
+              >
+                <ProfileAvatar :name="draft.name" :initials="draft.initials" :picture-url="profile.pictureUrl" :size="80" />
+                <span
+                  class="absolute inset-0 grid place-items-center rounded-full bg-black/55 opacity-0 transition-opacity group-hover/avatar:opacity-100 group-focus-visible/avatar:opacity-100"
+                >
+                  <Camera class="size-6 text-white" :stroke-width="1.5" />
+                </span>
+              </button>
+              <button
+                v-if="profile.pictureUrl"
+                type="button"
+                class="bg-secondary text-muted-foreground hover:bg-destructive ring-popover focus-visible:outline-ring absolute top-0 right-0 grid size-6 place-items-center rounded-full ring-2 transition-colors hover:text-white focus-visible:outline-2"
+                data-testid="profile-remove-picture"
+                aria-label="Remove picture"
+                title="Remove picture"
+                @click="act({ type: 'remove-profile-picture' })"
+              >
+                <X class="size-3.5" :stroke-width="2" />
+              </button>
+            </div>
+            <div class="flex min-w-0 flex-1 items-center gap-2 pb-1">
+              <span :class="cn('truncate text-lg font-semibold', !draft.name.trim() && 'text-muted-foreground')">
+                {{ draft.name.trim() || "Your profile" }}
+              </span>
+              <span
+                v-if="draft.initials.trim() || autoInitials(draft.name)"
+                class="bg-secondary text-primary flex-none rounded-sm px-1.5 py-0.5 text-xs font-semibold"
+                title="Initials"
+              >
+                {{ draft.initials.trim() || autoInitials(draft.name) }}
+              </span>
+            </div>
+          </div>
+          <input ref="fileInput" type="file" class="hidden" accept="image/png,image/jpeg,image/webp" data-testid="profile-file" @change="onFile" />
+
+        </div>
+
+        <form class="flex w-full flex-col" @submit.prevent="save">
+          <div class="flex gap-2 px-4 pb-4">
             <label class="flex min-w-0 flex-1 flex-col gap-1.5">
-              <span class="text-muted-foreground text-xs">Name</span>
+              <span class="text-muted-foreground text-xs font-medium tracking-wide uppercase">Name</span>
               <Input
                 v-model="draft.name"
                 placeholder="Add your name"
@@ -154,7 +190,7 @@ function closeCrop() {
               />
             </label>
             <label class="flex w-20 flex-none flex-col gap-1.5">
-              <span class="text-muted-foreground text-xs">Initials</span>
+              <span class="text-muted-foreground text-xs font-medium tracking-wide uppercase">Initials</span>
               <Input
                 v-model="draft.initials"
                 class="text-center"
@@ -168,19 +204,18 @@ function closeCrop() {
             </label>
           </div>
 
-          <div class="flex items-center gap-2">
+          <!-- Footer bar, apart from the fields. -->
+          <div class="bg-background/50 flex min-h-13 items-center gap-3 border-t px-4 py-2.5">
+            <span class="text-muted-foreground text-xs" role="status">
+              {{ dirty ? "Unsaved changes" : saved ? "All changes saved" : "" }}
+            </span>
             <Button
-              v-if="profile.pictureUrl"
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="text-muted-foreground -ml-2"
-              data-testid="profile-remove-picture"
-              @click="act({ type: 'remove-profile-picture' })"
+              type="submit"
+              :variant="dirty || saving ? 'default' : 'secondary'"
+              class="ml-auto min-w-20"
+              :disabled="!dirty || saving"
+              data-testid="profile-save"
             >
-              Remove picture
-            </Button>
-            <Button type="submit" class="ml-auto min-w-20" :disabled="!dirty || saving" data-testid="profile-save">
               <template v-if="saved && !dirty"><Check :stroke-width="2" /> Saved</template>
               <template v-else>{{ saving ? "Saving…" : "Save" }}</template>
             </Button>
