@@ -23,7 +23,7 @@ import type { ActionResult, AppearanceView, GameView, HostAction, HostViewState,
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, type SavedLayout } from "./layout";
-import { layoutTemplate } from "../shared/layout-templates";
+import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, orphanedPartitions } from "./gamedata";
@@ -786,7 +786,9 @@ export class Host {
       case "save-layout":
         return this.saveLayout(action.layout);
       case "apply-layout-template":
-        return this.applyLayoutTemplate(action.templateId);
+        return this.applyLayoutTemplate(layoutTemplate(action.templateId));
+      case "apply-layout-grid":
+        return this.applyLayoutTemplate(gridTemplate(action.columns, action.rows));
       case "save-snapshot":
         return this.saveSnapshot(action.name);
       case "update-snapshot":
@@ -1056,8 +1058,7 @@ export class Host {
   }
 
   /** Rearranges the open panels into a template's slots, in the order they are laid out now. */
-  private applyLayoutTemplate(templateId: string): void {
-    const template = layoutTemplate(templateId);
+  private applyLayoutTemplate(template: LayoutTemplate | undefined): void {
     if (!template) throw new WorkspaceError("That layout template no longer exists.");
     const workspace = this.currentWorkspace();
     const laidOut = layoutPanels(workspace.layout);

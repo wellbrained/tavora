@@ -1,8 +1,10 @@
 name: Checks
 
-# Typecheck, unit tests, build and the e2e suite run for every pull request to main,
-# for every push to main and for release tags, or when started by hand from the
-# Actions tab. A new push to the same pull request cancels the run before it.
+# Typecheck, unit tests and build run for every pull request to main, for every
+# push to main and for release tags. The e2e suite takes about 14 minutes, so it
+# runs only for release tags or when started by hand from the Actions tab (Run
+# workflow, pick the branch). A new push to the same pull request cancels the run
+# before it.
 on:
   pull_request:
     branches: [main]
@@ -10,6 +12,11 @@ on:
     branches: [main]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      e2e:
+        description: Run the e2e suite
+        type: boolean
+        default: true
 
 concurrency:
   group: checks-${{ github.ref }}
@@ -22,6 +29,8 @@ jobs:
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    env:
+      E2E: ${{ (github.event_name == 'workflow_dispatch' && inputs.e2e) || startsWith(github.ref, 'refs/tags/') }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -36,10 +45,12 @@ jobs:
       # Ubuntu 24.04 blocks the unprivileged user namespaces Chromium's sandbox
       # uses. Re-enable them rather than running Electron with --no-sandbox, so
       # the e2e gate tests run with the real OS sandbox.
-      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - if: env.E2E == 'true'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       # xvfb-run's default screen is 640x480, which squeezes docked panels into tabs.
-      - run: xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm test:e2e
-      - if: failure()
+      - if: env.E2E == 'true'
+        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm test:e2e
+      - if: failure() && env.E2E == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: e2e-results

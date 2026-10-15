@@ -193,7 +193,7 @@ test("a template lays out empty slots that modules fill, and is kept", async () 
   const { app, page, userData } = await launch();
   const slots = page.locator("[data-testid^='empty-slot-']");
   await page.getByTestId("layouts").click();
-  await page.locator('[role="menu"][data-state="open"] [data-testid="layout-template-three-columns"]').click();
+  await page.locator('[role="menu"][data-state="open"] [data-testid="layout-grid-3x1"]').click();
   await expect(groups(page)).toHaveCount(3);
   await expect(slots).toHaveCount(3);
   await expect(page.getByTestId("empty-workspace")).toHaveCount(0);
@@ -219,7 +219,7 @@ test("a template lays out empty slots that modules fill, and is kept", async () 
   const again = await launch(userData);
   await expect(groups(again.page)).toHaveCount(2);
   await again.page.getByTestId("layouts").click();
-  await again.page.locator('[role="menu"][data-state="open"] [data-testid="layout-template-grid"]').click();
+  await again.page.locator('[role="menu"][data-state="open"] [data-testid="layout-grid-2x2"]').click();
   await expect(groups(again.page)).toHaveCount(4);
   await expect(panels(again.page)).toHaveCount(2);
   await expect(again.page.locator("[data-testid^='empty-slot-']")).toHaveCount(2);
@@ -230,4 +230,32 @@ test("a template lays out empty slots that modules fill, and is kept", async () 
   await expect(groups(third.page)).toHaveCount(4);
   await expect(third.page.locator("[data-testid^='empty-slot-']")).toHaveCount(2);
   await third.app.close();
+});
+
+test("the templates submenu opens level with its entry and stays open on the way to it", async () => {
+  const { app, page } = await launch();
+  await page.getByTestId("layouts").click();
+  const entry = page.getByTestId("layout-templates");
+  await entry.hover();
+  const target = page.getByTestId("layout-template-two-bottom");
+  await expect(target).toBeVisible();
+  const from = (await entry.boundingBox())!;
+  const submenu = (await page.locator('[role="group"][aria-label="Templates"]').boundingBox())!;
+  expect(Math.abs(submenu.y - from.y)).toBeLessThanOrEqual(2);
+
+  // An unhurried diagonal move from the entry to the farthest template, across the grid picker below the
+  // entry, keeps the submenu open.
+  const to = (await target.boundingBox())!;
+  const start = { x: from.x + from.width * 0.8, y: from.y + from.height / 2 };
+  const end = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
+  await page.mouse.move(start.x, start.y);
+  for (let step = 1; step <= 20; step++) {
+    await page.mouse.move(start.x + ((end.x - start.x) * step) / 20, start.y + ((end.y - start.y) * step) / 20);
+    await page.waitForTimeout(50);
+  }
+  await expect(target).toBeVisible();
+  await target.click();
+  await expect(groups(page)).toHaveCount(3);
+  await expect(page.locator("[data-testid^='empty-slot-']")).toHaveCount(3);
+  await app.close();
 });

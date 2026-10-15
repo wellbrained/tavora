@@ -17,22 +17,43 @@ export interface LayoutTemplate {
   parts: readonly TemplatePart[];
 }
 
+/** Uneven arrangements; even grids come from the grid picker (gridTemplate). */
 export const LAYOUT_TEMPLATES = [
-  { id: "two-columns", name: "2 columns", direction: "row", parts: [1, 1] },
-  { id: "three-columns", name: "3 columns", direction: "row", parts: [1, 1, 1] },
-  { id: "four-columns", name: "4 columns", direction: "row", parts: [1, 1, 1, 1] },
-  { id: "two-rows", name: "2 rows", direction: "column", parts: [1, 1] },
-  { id: "three-rows", name: "3 rows", direction: "column", parts: [1, 1, 1] },
-  { id: "grid", name: "2 × 2 grid", direction: "row", parts: [[1, 1], [1, 1]] },
   { id: "main-sidebar", name: "Main + side", direction: "row", parts: [2, 1] },
   { id: "sidebar-main", name: "Side + main", direction: "row", parts: [1, 2] },
   { id: "main-stacked", name: "Main + 2 stacked", direction: "row", parts: [3, [1, 1]] },
-  { id: "top-two", name: "Top + 2 below", direction: "column", parts: [1, [1, 1]] },
-  { id: "grid-three-two", name: "3 × 2 grid", direction: "row", parts: [[1, 1], [1, 1], [1, 1]] },
-  { id: "grid-two-three", name: "2 × 3 grid", direction: "row", parts: [[1, 1, 1], [1, 1, 1]] },
+  { id: "stacked-main", name: "2 stacked + main", direction: "row", parts: [[1, 1], 3] },
+  { id: "top-two", name: "Top + 2 below", direction: "column", parts: [2, [1, 1]] },
+  { id: "two-bottom", name: "2 on top + bottom", direction: "column", parts: [[1, 1], 2] },
 ] as const satisfies readonly LayoutTemplate[];
 
 export type LayoutTemplateId = (typeof LAYOUT_TEMPLATES)[number]["id"];
+
+/**
+ * The most columns and rows a grid can have. Beyond this, panels get too
+ * small for most modules even on a large screen.
+ */
+export const GRID_LIMITS = { columns: 5, rows: 4 } as const;
+
+export function isGridSize(columns: unknown, rows: unknown): boolean {
+  const within = (value: unknown, max: number) => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= max;
+  return within(columns, GRID_LIMITS.columns) && within(rows, GRID_LIMITS.rows);
+}
+
+/** "3 × 2 grid", or "3 columns" and "2 rows" when there is only one of the other. */
+export function gridName(columns: number, rows: number): string {
+  if (rows === 1) return columns === 1 ? "1 slot" : `${columns} columns`;
+  if (columns === 1) return `${rows} rows`;
+  return `${columns} × ${rows} grid`;
+}
+
+/** An even grid of `columns` by `rows` slots. */
+export function gridTemplate(columns: number, rows: number): LayoutTemplate {
+  const base = { id: `grid-${columns}x${rows}`, name: gridName(columns, rows) };
+  if (rows === 1) return { ...base, direction: "row", parts: Array<number>(columns).fill(1) };
+  if (columns === 1) return { ...base, direction: "column", parts: Array<number>(rows).fill(1) };
+  return { ...base, direction: "row", parts: Array.from({ length: columns }, () => Array<number>(rows).fill(1)) };
+}
 
 export function layoutTemplate(id: string) {
   return LAYOUT_TEMPLATES.find((template) => template.id === id);
