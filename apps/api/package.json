@@ -1,0 +1,25 @@
+{
+  "name": "@tavora/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Tavora's online game database: search over its own dataset.",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/server.ts",
+    "dev": "node --watch src/server.ts",
+    "dataset": "node scripts/build-dataset.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "@tavora/module-schema": "workspace:*",
+    "@types/node": "^22.20.5"
+  }
+}
