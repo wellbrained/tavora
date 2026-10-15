@@ -243,10 +243,16 @@ test("the templates submenu opens level with its entry and stays open on the way
   const submenu = (await page.locator('[role="group"][aria-label="Templates"]').boundingBox())!;
   expect(Math.abs(submenu.y - from.y)).toBeLessThanOrEqual(2);
 
-  // Moving diagonally from the entry to the last template, across the menu below it, keeps the submenu open.
+  // An unhurried diagonal move from the entry to the farthest template, across the grid picker below the
+  // entry, keeps the submenu open.
   const to = (await target.boundingBox())!;
-  await page.mouse.move(from.x + from.width * 0.8, from.y + from.height / 2);
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
+  const start = { x: from.x + from.width * 0.8, y: from.y + from.height / 2 };
+  const end = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
+  await page.mouse.move(start.x, start.y);
+  for (let step = 1; step <= 20; step++) {
+    await page.mouse.move(start.x + ((end.x - start.x) * step) / 20, start.y + ((end.y - start.y) * step) / 20);
+    await page.waitForTimeout(50);
+  }
   await expect(target).toBeVisible();
   await target.click();
   await expect(groups(page)).toHaveCount(3);

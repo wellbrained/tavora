@@ -103,7 +103,9 @@ function items(): MenuItem[] {
       <DropdownMenuSeparator />
       <!-- Templates sit one level down, so the grid picker stays in the main menu. -->
       <DropdownMenuSub>
-        <DropdownMenuSubTrigger data-testid="layout-templates">
+        <!-- The safe zone toward the submenu lasts 1.5 s instead of 0.3 s: the way to it crosses the grid
+             picker, and an unhurried mouse must not highlight a grid cell and close the submenu. -->
+        <DropdownMenuSubTrigger data-testid="layout-templates" :grace-duration="1500">
           <LayoutTemplate class="size-4" :stroke-width="1.5" /> Templates
         </DropdownMenuSubTrigger>
         <!-- Opens level with the Templates entry: -5 offsets the panel's border and padding. -->
