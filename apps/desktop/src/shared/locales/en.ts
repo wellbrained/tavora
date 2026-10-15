@@ -363,6 +363,7 @@ export const en = {
   "picture.read": "That image could not be read.",
   "common.save": "Save",
   "rail.games": "Games",
+  "rail.scrollDown": "More games below",
   "rail.home": "Home",
   "rail.favorites": "Favorites",
   "rail.all": "All games",

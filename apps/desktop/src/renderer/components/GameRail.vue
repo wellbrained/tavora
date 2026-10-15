@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronDown, ChevronLeft, ChevronRight, Plus, Settings } from "@lucide/vue";
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import type { FolderView, GameView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
 import { act, dialog, openSettings, prompt, railToggles, state, submitAction } from "../host";
@@ -122,6 +122,32 @@ function resizeByKey(event: KeyboardEvent) {
 // ── Keyboard: arrows move between rail items ───────────────────────────
 
 const nav = ref<HTMLElement | null>(null);
+
+// The list of games scrolls without a scrollbar; a fade and an arrow at the
+// edge say that there is more, and go away at the end of the list.
+const scroller = ref<HTMLElement | null>(null);
+const listContent = ref<HTMLElement | null>(null);
+const moreAbove = ref(false);
+const moreBelow = ref(false);
+function updateScrollHints() {
+  const list = scroller.value;
+  if (!list) return;
+  moreAbove.value = list.scrollTop > 1;
+  moreBelow.value = list.scrollTop + list.clientHeight < list.scrollHeight - 1;
+}
+let sizeWatcher: ResizeObserver | undefined;
+onMounted(() => {
+  // The list grows and shrinks with the games and folders, and with the window.
+  sizeWatcher = new ResizeObserver(updateScrollHints);
+  if (scroller.value) sizeWatcher.observe(scroller.value);
+  if (listContent.value) sizeWatcher.observe(listContent.value);
+  updateScrollHints();
+});
+onBeforeUnmount(() => sizeWatcher?.disconnect());
+function scrollMore() {
+  const list = scroller.value;
+  if (list) list.scrollBy({ top: list.clientHeight * 0.8, behavior: "smooth" });
+}
 
 function onNavKey(event: KeyboardEvent) {
   if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -314,7 +340,9 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       </button>
     </div>
 
-    <div class="flex-1 overflow-x-hidden overflow-y-auto py-2 [scrollbar-width:thin]">
+    <div class="relative min-h-0 flex-1">
+    <div ref="scroller" class="size-full overflow-x-hidden overflow-y-auto py-2 [scrollbar-width:none]" @scroll.passive="updateScrollHints">
+    <div ref="listContent">
       <section
         v-if="favorites.length || dragged?.kind === 'game'"
         :class="cn('mb-2 flex flex-col gap-1 border-b pb-2', favoriteZoneActive && 'bg-primary/15')"
@@ -442,6 +470,22 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           </button>
         </div>
       </section>
+    </div>
+    </div>
+    <div v-if="moreAbove" class="from-rail pointer-events-none absolute inset-x-0 top-0 h-8 bg-linear-to-b to-transparent" aria-hidden="true" data-testid="rail-fade-top" />
+    <div v-if="moreBelow" class="from-rail pointer-events-none absolute inset-x-0 bottom-0 flex h-14 items-end justify-center bg-linear-to-t to-transparent" data-testid="rail-fade-bottom">
+      <button
+        type="button"
+        tabindex="-1"
+        class="rail-more text-muted-foreground hover:text-foreground pointer-events-auto mb-0.5 flex h-6 w-10 items-center justify-center rounded-full"
+        :aria-label="t('rail.scrollDown')"
+        :title="t('rail.scrollDown')"
+        data-testid="rail-scroll-down"
+        @click="scrollMore"
+      >
+        <ChevronDown class="size-5" :stroke-width="2" />
+      </button>
+    </div>
     </div>
 
     <!-- Player things live at the bottom on their own: the profile, then Settings. -->

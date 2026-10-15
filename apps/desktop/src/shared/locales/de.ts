@@ -365,6 +365,7 @@ export const de: Record<keyof typeof en, string> = {
   "picture.read": "Dieses Bild konnte nicht gelesen werden.",
   "common.save": "Speichern",
   "rail.games": "Spiele",
+  "rail.scrollDown": "Weitere Spiele unten",
   "rail.home": "Startseite",
   "rail.favorites": "Favoriten",
   "rail.all": "Alle Spiele",

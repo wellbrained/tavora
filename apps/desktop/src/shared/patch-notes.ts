@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.24",
+    date: "2026-10-16",
+    title: "A calmer game list",
+    notes: [
+      "With many games the sidebar no longer shows a scrollbar. The list fades out at the edge and a small arrow shows that there are more games; press it to scroll down.",
+    ],
+  },
+  {
     version: "0.5.23",
     date: "2026-10-16",
     title: "Behind the scenes",
