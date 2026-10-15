@@ -4,11 +4,25 @@
 // below every rule a module writes: it only replaces the browser's own
 // defaults (white margins, light form controls, serif text), so a module
 // that styles nothing still looks like part of Tavora, and one with its own
-// design keeps it.
-import { THEME } from "./games";
+// design keeps it. The colours sit in a second, small stylesheet of their
+// own, so a theme change replaces only that one.
+import type { TavoraTheme } from "@tavora/sdk/protocol";
 
-/** The theme's tokens, as modules see them (games.ts, kept equal to the host UI's). */
-export const MODULE_TOKENS: Readonly<Record<string, string>> = { ...THEME.tokens, radius: `${THEME.radius}px` };
+/** A theme's tokens as modules see them: the colour tokens plus the radius. */
+export function moduleTokens(theme: TavoraTheme): Record<string, string> {
+  return { ...theme.tokens, radius: `${theme.radius}px` };
+}
+
+/** The active theme as --tavora-* properties, with the parts of the base look that need a literal colour. */
+export function moduleThemeCss(theme: TavoraTheme): string {
+  const tokens = Object.entries(moduleTokens(theme))
+    .map(([name, value]) => `--tavora-${name}: ${value};`)
+    .join(" ");
+  const chevron = encodeURIComponent(theme.tokens["muted-foreground"]);
+  return `:root { ${tokens} color-scheme: ${theme.mode}; }
+select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='${chevron}' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
+`;
+}
 
 export interface ModuleFonts {
   /** Inter's Latin subset as a woff2 data URL. */
@@ -27,17 +41,12 @@ export function moduleBaseCss(fonts: ModuleFonts): string {
   const face = (src: string, range: string) =>
     `@font-face { font-family: "Inter Variable"; font-style: normal; font-display: swap; font-weight: 100 900; ` +
     `src: url(${src}) format("woff2-variations"); unicode-range: ${range}; }`;
-  const tokens = Object.entries(MODULE_TOKENS)
-    .map(([name, value]) => `--tavora-${name}: ${value};`)
-    .join(" ");
   return `
 ${face(fonts.latin, LATIN)}
 ${face(fonts.latinExt, LATIN_EXT)}
 :root {
-  ${tokens}
   --tavora-font-sans: "Inter Variable", system-ui, sans-serif;
   --tavora-font-mono: ui-monospace, monospace;
-  color-scheme: dark;
   background: var(--tavora-background);
   color: var(--tavora-foreground);
   font: 14px/1.5 var(--tavora-font-sans);
@@ -69,8 +78,8 @@ input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [ty
 }
 select {
   padding-right: 28px;
-  background: var(--tavora-card) no-repeat right 8px center / 12px
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a958c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-color: var(--tavora-card);
+  background-repeat: no-repeat; background-position: right 8px center; background-size: 12px;
 }
 input::placeholder, textarea::placeholder { color: var(--tavora-muted-foreground); }
 hr { border: 0; border-top: 1px solid var(--tavora-border); }

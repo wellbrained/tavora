@@ -76,6 +76,13 @@ const officialModuleDirs = process.env.TAVORA_OFFICIAL_MODULE_DIRS
   ? dirList(process.env.TAVORA_OFFICIAL_MODULE_DIRS)
   : [app.isPackaged ? path.join(process.resourcesPath, "official-modules") : path.join(repoRoot, "modules")];
 
+// Themes work the same way: Tavora's own ship inside the app, and the
+// player's own live in the themes folder of their data folder.
+const officialThemeDirs = process.env.TAVORA_OFFICIAL_THEME_DIRS
+  ? dirList(process.env.TAVORA_OFFICIAL_THEME_DIRS)
+  : [app.isPackaged ? path.join(process.resourcesPath, "official-themes") : path.join(repoRoot, "themes")];
+const themeDirs = !app.isPackaged && process.env.TAVORA_THEME_DIRS ? dirList(process.env.TAVORA_THEME_DIRS) : [];
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -97,6 +104,8 @@ if (!app.requestSingleInstanceLock()) {
         userData: app.getPath("userData"),
         moduleDirs,
         officialModuleDirs,
+        officialThemeDirs,
+        themeDirs,
         rendererDir: path.join(__dirname, "../renderer"),
         modulePreload: path.join(__dirname, "../preload/module.cjs"),
         hostPreload: path.join(__dirname, "../preload/host.cjs"),

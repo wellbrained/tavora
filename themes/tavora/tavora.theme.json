@@ -1,0 +1,71 @@
+{
+  "id": "tavora.default",
+  "name": "Tavora",
+  "description": "Warm charcoal and firelight gold, the look Tavora starts with.",
+  "author": "Tavora",
+  "version": "1.0.0",
+  "variations": [
+    {
+      "id": "dark",
+      "name": "Dark",
+      "mode": "dark",
+      "radius": 8,
+      "colors": {
+        "background": "#171412",
+        "foreground": "#f2ece0",
+        "card": "#201c19",
+        "card-foreground": "#f2ece0",
+        "popover": "#201c19",
+        "popover-foreground": "#f2ece0",
+        "primary": "#e0a243",
+        "primary-hover": "#f0b85c",
+        "primary-foreground": "#171412",
+        "secondary": "#2a2521",
+        "secondary-foreground": "#f2ece0",
+        "muted": "#2a2521",
+        "muted-foreground": "#9a958c",
+        "accent": "#2a2521",
+        "accent-foreground": "#f2ece0",
+        "destructive": "#e5675a",
+        "border": "#35302b",
+        "input": "#6b665c",
+        "ring": "#e0a243",
+        "rail": "#100e0d",
+        "success": "#8cbf7f",
+        "warning": "#e3c75f",
+        "info": "#6fa8dc"
+      }
+    },
+    {
+      "id": "light",
+      "name": "Light",
+      "mode": "light",
+      "radius": 8,
+      "colors": {
+        "background": "#f6f2ea",
+        "foreground": "#231d17",
+        "card": "#fffcf6",
+        "card-foreground": "#231d17",
+        "popover": "#fffcf6",
+        "popover-foreground": "#231d17",
+        "primary": "#97590a",
+        "primary-hover": "#7d4906",
+        "primary-foreground": "#ffffff",
+        "secondary": "#ece6db",
+        "secondary-foreground": "#231d17",
+        "muted": "#ece6db",
+        "muted-foreground": "#675f54",
+        "accent": "#ece6db",
+        "accent-foreground": "#231d17",
+        "destructive": "#b0322a",
+        "border": "#ddd5c7",
+        "input": "#8c8478",
+        "ring": "#97590a",
+        "rail": "#ebe4d6",
+        "success": "#2d7136",
+        "warning": "#7f6100",
+        "info": "#25619c"
+      }
+    }
+  ]
+}

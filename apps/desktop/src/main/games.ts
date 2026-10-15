@@ -1,9 +1,10 @@
 import type { TavoraTheme } from "@tavora/sdk/protocol";
 
 /**
- * The theme every module gets through ui.getTheme. Tavora is dark only for
- * now (docs/decisions.md); the tokens match the host UI tokens in
- * src/renderer/styles.css, and a test keeps the two in agreement.
+ * The Tavora default theme (Tavora, Dark), as modules get it through
+ * ui.getTheme. Other installed themes replace it (themes.ts). The tokens
+ * match the host UI's first-paint tokens in src/renderer/styles.css and
+ * themes/tavora/tavora.theme.json; tests keep all three in agreement.
  */
 export const THEME: TavoraTheme = {
   mode: "dark",

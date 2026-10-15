@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { appendFile, mkdir, readFile, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -15,14 +16,13 @@ import {
   type IpcMainInvokeEvent,
   type WebContents,
 } from "electron";
-import type { TavoraGame } from "@tavora/sdk/protocol";
-import type { ActionResult, GameView, HostAction, HostViewState, OnlineSearchResult, Screen } from "../shared/host-api";
+import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
+import type { ActionResult, AppearanceView, GameView, HostAction, HostViewState, OnlineSearchResult, Screen } from "../shared/host-api";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS, layoutPanels, pruneLayout, type SavedLayout } from "./layout";
 import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, orphanedPartitions } from "./gamedata";
-import { THEME } from "./games";
 import { shortcutFor } from "./shortcuts";
 import { IconError, importIcon, removeIcon } from "./icons";
 import { readJsonOrSetAside } from "./json";
@@ -67,8 +67,20 @@ import { UpdateManager, type UpdaterLike } from "./updates";
 import { syncIcons } from "./icon-sync";
 import { findSteamDir, removeSteamIcon } from "./steam-icons";
 import { ModuleView } from "./module-view";
-import { discoverModules, type InstalledModule } from "./registry";
+import { discoverModules, isDevelopmentModule, type InstalledModule } from "./registry";
 import { DataRegistry } from "./storage";
+import {
+  DEFAULT_THEME,
+  discoverThemes,
+  moduleTheme,
+  resolveTheme,
+  STARTER_README,
+  starterTheme,
+  THEME_MANIFEST,
+  themeManifest,
+  type InstalledTheme,
+  type ThemeProblem,
+} from "./themes";
 import { writeFileAtomic } from "./fsutil";
 import {
   emptyGameWorkspace,
@@ -102,6 +114,10 @@ export interface HostOptions {
   moduleDirs: string[];
   /** Modules that ship with Tavora, shown as Official. */
   officialModuleDirs: string[];
+  /** Themes that ship with Tavora, shown as Official. */
+  officialThemeDirs: string[];
+  /** Development only: more folders of local themes besides the player's own themes folder. */
+  themeDirs?: string[];
   rendererDir: string;
   modulePreload: string;
   hostPreload: string;
@@ -155,6 +171,8 @@ export class Host {
   /** Looks for new versions; only in an installed (packaged) app. */
   private updates: UpdateManager | null = null;
   private saving: Promise<void> = Promise.resolve();
+  /** The active theme as modules get it; rebuilt when the theme changes. */
+  private currentTheme: TavoraTheme;
   private windowSaveTimer: ReturnType<typeof setTimeout> | undefined;
   readonly window: BrowserWindow;
 
@@ -165,7 +183,10 @@ export class Host {
     private readonly workspace: WorkspaceState,
     private readonly profile: Profile,
     windowState: WindowState,
+    private themes: Map<string, InstalledTheme>,
+    private themeProblems: ThemeProblem[],
   ) {
+    this.currentTheme = moduleTheme(resolveTheme(themes, library.theme).variation);
     this.data = new DataRegistry(options.userData);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.window = new BrowserWindow({
@@ -174,9 +195,9 @@ export class Host {
       minHeight: MIN_SIZE.height,
       title: "Tavora",
       icon: options.icon,
-      backgroundColor: THEME.colors.background,
+      backgroundColor: this.currentTheme.colors.background,
       titleBarStyle: "hidden",
-      titleBarOverlay: { color: THEME.colors.background, symbolColor: THEME.colors.text, height: TITLE_BAR_HEIGHT },
+      titleBarOverlay: this.titleBarOverlay(),
       autoHideMenuBar: true,
       show: false,
       webPreferences: {
@@ -211,6 +232,7 @@ export class Host {
       await keepNewerFile(path.join(userData, name), version).catch(() => null);
     }
     const modules = await discoverModules({ official: options.officialModuleDirs, local: options.moduleDirs });
+    const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
     const expired = purgeExpired(library, new Date());
     const workspace = await loadWorkspace(
@@ -236,9 +258,9 @@ export class Host {
       options.devServer,
     );
 
-    // Dark only for now: native menus, dialogs and scrollbars match the UI.
-    nativeTheme.themeSource = "dark";
-    const host = new Host(options, modules, library, workspace, profile, windowState);
+    const host = new Host(options, modules, library, workspace, profile, windowState, themes, themeProblems);
+    // Native menus, dialogs and scrollbars follow the theme's mode.
+    nativeTheme.themeSource = host.currentTheme.mode;
     // The id is made once and kept, so a new profile is written straight away.
     if (savedProfile === null) host.saveProfile().catch(() => undefined); // logged by saveProfile
     // Browser storage of games that are gone, removed before any session opens it.
@@ -290,6 +312,61 @@ export class Host {
     } catch (error) {
       this.logUpdate(`updates are not available: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  private static themeSources(options: HostOptions) {
+    return { official: options.officialThemeDirs, local: [path.join(options.userData, "themes"), ...(options.themeDirs ?? [])] };
+  }
+
+  private titleBarOverlay() {
+    return { color: this.currentTheme.colors.background, symbolColor: this.currentTheme.colors.text, height: TITLE_BAR_HEIGHT };
+  }
+
+  /** Shows the theme the library names, in the host window, native controls and every open module. */
+  private applyTheme(): void {
+    const next = moduleTheme(resolveTheme(this.themes, this.library.theme).variation);
+    if (JSON.stringify(next) === JSON.stringify(this.currentTheme)) return;
+    this.currentTheme = next;
+    nativeTheme.themeSource = next.mode;
+    this.window.setBackgroundColor(next.colors.background);
+    try {
+      this.window.setTitleBarOverlay(this.titleBarOverlay());
+    } catch {
+      // Platforms without a window controls overlay have nothing to recolour.
+    }
+    for (const view of this.views.values()) view.applyTheme(next);
+  }
+
+  private async reloadThemes(): Promise<void> {
+    const { themes, problems } = await discoverThemes(Host.themeSources(this.options));
+    this.themes = themes;
+    this.themeProblems = problems;
+    this.applyTheme();
+  }
+
+  /** Writes a copy of the Tavora theme into the themes folder, loads it and shows the folder. */
+  private async createStarterTheme(): Promise<string> {
+    const root = path.join(this.options.userData, "themes");
+    await mkdir(root, { recursive: true });
+    let suffix = 1;
+    const folder = (n: number) => path.join(root, n > 1 ? `my-theme-${n}` : "my-theme");
+    const taken = (n: number) => this.themes.has(starterTheme(this.themes, n).id) || existsSync(folder(n));
+    while (taken(suffix)) suffix++;
+    const theme = starterTheme(this.themes, suffix);
+    await mkdir(folder(suffix));
+    await writeFileAtomic(path.join(folder(suffix), THEME_MANIFEST), themeManifest(theme));
+    await writeFileAtomic(path.join(folder(suffix), "README.txt"), STARTER_README);
+    await this.reloadThemes();
+    // Test runs keep the window hidden and open no file manager.
+    if (!this.options.hidden) void shell.openPath(folder(suffix));
+    return theme.id;
+  }
+
+  private async openThemesFolder(): Promise<void> {
+    const dir = path.join(this.options.userData, "themes");
+    await mkdir(dir, { recursive: true });
+    const error = await shell.openPath(dir);
+    if (error) throw new LibraryError(`Couldn't open the themes folder: ${error}`);
   }
 
   /** One line per update event in the app's data folder, to see what the updater did. */
@@ -497,6 +574,23 @@ export class Host {
         library.steamIcons = action.enabled;
         if (action.enabled) this.fetchIconsSoon();
         break;
+      case "set-theme":
+        if (!this.themes.get(action.themeId)?.theme.variations.some((variation) => variation.id === action.variationId)) {
+          throw new LibraryError("That theme is not installed any more.");
+        }
+        library.theme = { id: action.themeId, variation: action.variationId };
+        this.applyTheme();
+        break;
+      case "reset-theme":
+        library.theme = { ...DEFAULT_THEME };
+        this.applyTheme();
+        break;
+      case "reload-themes":
+        return this.reloadThemes();
+      case "open-themes-folder":
+        return this.openThemesFolder();
+      case "create-starter-theme":
+        return this.createStarterTheme();
       case "set-onboarded":
         library.onboarded = action.done;
         break;
@@ -801,7 +895,7 @@ export class Host {
       hostVersion: app.getVersion(),
       preload: this.options.modulePreload,
       devTools: this.options.devTools,
-      getTheme: () => THEME,
+      getTheme: () => this.currentTheme,
       baseCss: (moduleCss ??= moduleBaseCss(MODULE_FONTS)),
       onStatus: () => this.pushState(),
     });
@@ -963,6 +1057,7 @@ export class Host {
         minWidth: module.manifest.viewport.minWidth,
         minHeight: module.manifest.viewport.minHeight,
         provenance: module.provenance,
+        development: isDevelopmentModule(module.manifest.id),
       })),
       panels: workspace.instances.map((record) => ({
         instanceId: record.instanceId,
@@ -980,8 +1075,30 @@ export class Host {
         pictureUrl: this.profile.picture ? PROFILE_URL + this.profile.picture : null,
       },
       restartPending: library.grayscaleText !== this.options.grayscaleText,
+      appearance: this.appearanceView(),
       appVersion: app.getVersion(),
       update: this.updates?.state ?? { status: "idle", checkedAt: null, failed: false },
+    };
+  }
+
+  private appearanceView(): AppearanceView {
+    const { theme, variation } = resolveTheme(this.themes, this.library.theme);
+    // Official themes first, the default leading, then the player's own by name.
+    const order = (entry: InstalledTheme) => (entry.theme.id === DEFAULT_THEME.id ? 0 : entry.provenance === "official" ? 1 : 2);
+    const themes = [...this.themes.values()].sort((a, b) => order(a) - order(b) || a.theme.name.localeCompare(b.theme.name));
+    return {
+      themeId: theme.id,
+      variationId: variation.id,
+      isDefault: theme.id === DEFAULT_THEME.id && variation.id === DEFAULT_THEME.variation,
+      themes: themes.map(({ theme: item, provenance }) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        author: item.author,
+        provenance,
+        variations: item.variations.map(({ id, name, mode, radius, colors }) => ({ id, name, mode, radius, colors: { ...colors } })),
+      })),
+      problems: this.themeProblems.map((problem) => ({ ...problem })),
     };
   }
 

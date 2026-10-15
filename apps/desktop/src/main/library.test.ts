@@ -145,6 +145,13 @@ describe("Steam icons", () => {
     expect(library.games["odd-game"]!.steamAppId).toBeNull();
   });
 
+  it("starts on the default theme and keeps a saved theme even if it is not installed", () => {
+    expect(emptyLibrary().theme).toEqual({ id: "tavora.default", variation: "dark" });
+    expect(sanitizeLibrary({ theme: { id: "community.ash", variation: "dusk" } }).theme).toEqual({ id: "community.ash", variation: "dusk" });
+    expect(sanitizeLibrary({ theme: { id: "../ash", variation: "dusk" } }).theme).toEqual({ id: "tavora.default", variation: "dark" });
+    expect(sanitizeLibrary({ theme: "ash" }).theme).toEqual({ id: "tavora.default", variation: "dark" });
+  });
+
   it("has fetching on by default and keeps only a real setting", () => {
     expect(emptyLibrary().steamIcons).toBe(true);
     expect(sanitizeLibrary({ steamIcons: false }).steamIcons).toBe(false);

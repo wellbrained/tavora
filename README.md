@@ -12,10 +12,12 @@ Local-first, second-monitor gaming companion for Windows and Linux. Each game ge
 | `packages/sdk` | `@tavora/sdk`, the typed client modules use to talk to the host, plus the wire protocol types ([README](packages/sdk/README.md)) |
 | `packages/module-schema` | `tavora.module.json` types, validation, JSON Schema, module and game id rules |
 | `modules/notes`, `modules/todos`, `modules/playground` | Official Notes, To-Dos and UI Playground modules (Vue), built on `@tavora/sdk` like any other module ([README](modules/README.md)) |
+| `themes/` | Official theme packages (Tavora, Nightfall, Hearthwood), data only ([format](apps/docs/reference/theme.md)) |
 | `modules/shared` | `@tavora/official-ui`: theme, shadcn-vue components and save helpers bundled into the official modules |
 | `examples/vanilla-module` | Example module with no framework |
 | `examples/react-module` | The same example built with React |
 | `examples/vue-module` | The same example built with Vue |
+| `examples/theme-starter` | A theme to copy and change: the Tavora theme, Dark and Light, under its own id |
 | `apps/desktop/test/fixtures/hostile-module` | Deliberately hostile module used by the gate tests |
 | `apps/docs` | Developer docs for [docs.mytavora.app](https://docs.mytavora.app/) (VitePress): guide, [manifest](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md), and generated SDK API |
 | `brand/logo` | Vector logo SVGs: master, lockup, emblem, wordmark and flame ([README](brand/logo/README.md)) |

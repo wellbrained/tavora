@@ -1,4 +1,4 @@
-import { Keyboard, SlidersHorizontal, Trash2 } from "@lucide/vue";
+import { Keyboard, Palette, SlidersHorizontal, Trash2 } from "@lucide/vue";
 
 // The section menu, in groups. New settings get a row in a section, or a
 // new section here, rather than a longer page.
@@ -7,6 +7,7 @@ export const GROUPS = [
     label: "Tavora",
     sections: [
       { id: "general", label: "General", icon: SlidersHorizontal },
+      { id: "appearance", label: "Appearance", icon: Palette },
       { id: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard },
     ],
   },
@@ -102,6 +103,34 @@ export const SETTINGS: SettingEntry[] = [
     description:
       "Uses each game's own icon. Tavora reads it from the installed game on this PC (Battle.net, Epic, GOG, EA and other launchers), then from the Steam folder, then from the icons the Tavora service hosts (only while Online game search is on), and last downloads Steam's small icon for the game from Steam. Icons are kept on this PC. Games without an icon, and any image you pick yourself, are not affected. Turn it off to use the plain badges.",
     keywords: ["icon", "ico", "image", "picture", "download", "internet", "network", "privacy", "offline", "badge", "steam", "battle.net", "epic", "gog", "launcher", "installed"],
+  },
+  {
+    id: "theme",
+    section: "appearance",
+    label: "Theme",
+    description: "How Tavora looks: its colours and corners. Modules get the same colours.",
+    keywords: ["theme", "colour", "color", "look", "style", "dark", "palette", "skin", "appearance"],
+  },
+  {
+    id: "theme-variation",
+    section: "appearance",
+    label: "Variation",
+    description: "Dark or Light, in the versions the theme comes in.",
+    keywords: ["variation", "variant", "dark", "light", "dark mode", "light mode", "bright"],
+  },
+  {
+    id: "own-themes",
+    section: "appearance",
+    label: "Your own themes",
+    description: "Start from a copy of the Tavora theme, change its colours in tavora.theme.json, then press Reload.",
+    keywords: ["custom theme", "make a theme", "create theme", "new theme", "example", "starter", "template", "folder", "tavora.theme.json", "reload", "developer"],
+  },
+  {
+    id: "reset-theme",
+    section: "appearance",
+    label: "Reset to Tavora Default",
+    description: "Go back to Tavora's own look, whatever theme is active.",
+    keywords: ["reset", "default", "restore", "undo", "original"],
   },
   {
     id: "shortcuts",
