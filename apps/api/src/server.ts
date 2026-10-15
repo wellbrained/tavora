@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.ts";
+import { createSteamClient } from "./steam.ts";
 
 const port = Number(process.env.PORT ?? 4010);
 const path = process.env.TAVORA_GAMES_DB ?? "data/games.sqlite";
@@ -15,8 +16,12 @@ if (!existsSync(path)) {
 }
 
 const db = new DatabaseSync(path, { readOnly: true });
+// Without a key the Steam import answers 503; search never needs one.
+const steamKey = process.env.STEAM_WEB_API_KEY?.trim();
+if (!steamKey) console.log("[tavora-api] No STEAM_WEB_API_KEY: Steam import is off.");
 const app = createApp({
   db,
+  ...(steamKey ? { steam: createSteamClient({ key: steamKey }) } : {}),
   clientKey: (request) =>
     (behindProxy ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() : undefined) || "shared",
 });

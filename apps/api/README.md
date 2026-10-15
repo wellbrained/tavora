@@ -15,12 +15,14 @@ pnpm --filter @tavora/api dev          # http://127.0.0.1:4010, restarts on chan
 | --- | --- | --- |
 | `PORT` | `4010` | Port, always bound to 127.0.0.1 |
 | `TAVORA_GAMES_DB` | `data/games.sqlite` | Dataset to load, opened read-only |
+| `STEAM_WEB_API_KEY` | unset | Enables the Steam import. On the server it lives in `/srv/tavora-api/shared/production.env` (set with `deploy/tavora-api-set-steam-key.sh`, never committed). Without it search works and the import answers 503 |
 | `TRUST_PROXY` | unset | `1` behind Caddy: the client is the first `X-Forwarded-For` address, for the rate limit |
 
 ## API
 
 - `GET /v1/games/search?q=<text>&limit=<1-20>` returns `{ "results": [{ "id": "elden-ring", "name": "Elden Ring" }] }`, best match first: exact name, exact alias, name prefix, alias prefix, then every word as a word start. Case, accents and apostrophes are ignored. `q` is at most 100 characters, `limit` defaults to 8.
 - `GET /v1/health` returns `{ ok, games, builtAt }`.
+- `POST /v1/steam/library` with JSON `{ "profile": "<steamcommunity.com profile link or SteamID64>" }` returns `{ "games": [{ "appid": 1245620, "name": "ELDEN RING", "id": "elden-ring" }] }`, sorted by name; `id` is the canonical id when the dataset knows that Steam appid, otherwise `null`. The service asks Steam's Web API with its own key, passes the list straight back and stores nothing. 400 for a profile it cannot read, 404 for an unknown custom name, 502 when Steam fails or the profile's Game details are private, 503 without a key, 415 unless the body is JSON. 6 requests a minute per client. It is a POST so the profile is in no URL.
 - 60 requests a minute per client, then `429` with `Retry-After`. No CORS: the app calls it from its main process.
 - Answers are never cached. The service never logs a request, so what a player typed is not kept.
 
