@@ -7,7 +7,7 @@ const props = defineProps<{ template: LayoutTemplate }>();
 
 const WIDTH = 48;
 const HEIGHT = 32;
-const GAP = 2;
+const GAP = 3;
 const rects = computed(() =>
   templateRects(props.template).map((rect) => ({
     x: rect.x * (WIDTH + GAP),
