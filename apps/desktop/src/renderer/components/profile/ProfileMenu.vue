@@ -5,9 +5,10 @@ import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { act, showToast, state, useFloating } from "../../host";
+import { act, state, useFloating } from "../../host";
 import ImageCropDialog from "../ImageCropDialog.vue";
 import { autoInitials } from "./initials";
+import { readPicture } from "./picture";
 import ProfileAvatar from "./ProfileAvatar.vue";
 
 // The player's avatar in the rail footer. A click opens a small card above
@@ -18,8 +19,6 @@ defineProps<{ expanded: boolean }>();
 
 const MAX_NAME = 32;
 const MAX_INITIALS = 3;
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const TYPES = ["image/png", "image/jpeg", "image/webp"];
 
 const profile = computed(() => state.value!.profile);
 const open = ref(false);
@@ -61,21 +60,15 @@ function pickPicture() {
   fileInput.value?.click();
 }
 
-function onFile(event: Event) {
+async function onFile(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   input.value = "";
-  if (!file) return;
-  if (!TYPES.includes(file.type)) return showToast("Pick a PNG, JPEG or WebP image.");
-  if (file.size > MAX_FILE_BYTES) return showToast("Pick an image of at most 10 MB.");
-  const reader = new FileReader();
-  reader.onload = () => {
-    open.value = false;
-    track(false);
-    cropping.value = reader.result as string;
-  };
-  reader.onerror = () => showToast("That image could not be read.");
-  reader.readAsDataURL(file);
+  const picture = file ? await readPicture(file) : null;
+  if (!picture) return;
+  open.value = false;
+  track(false);
+  cropping.value = picture;
 }
 
 async function savePicture(png: string) {

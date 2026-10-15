@@ -280,3 +280,11 @@ describe("sanitizeLibrary", () => {
     expect(sanitizeLibrary("x")).toEqual(emptyLibrary());
   });
 });
+
+describe("onboarded", () => {
+  it("shows the welcome to new players only", () => {
+    expect(sanitizeLibrary(null).onboarded).toBe(false);
+    expect(sanitizeLibrary({ games: {} }).onboarded).toBe(true);
+    expect(sanitizeLibrary({ onboarded: false }).onboarded).toBe(false);
+  });
+});

@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { RootSort, Startup } from "../../../shared/host-api";
-import { act, confirmAction, settingsOpen, settingsTarget, state, submitAction } from "../../host";
+import { act, confirmAction, settingsOpen, settingsTarget, shortcutsOpen, state, submitAction } from "../../host";
 import GameIcon from "../GameIcon.vue";
 import SegmentedControl from "./SegmentedControl.vue";
 import { GROUPS, SECTION_LABEL, SETTINGS, type SettingsSection } from "./settings-index";
@@ -89,6 +89,14 @@ const grayscaleText = computed({
   get: () => library.value.grayscaleText,
   set: (enabled: boolean) => void act({ type: "set-grayscale-text", enabled }),
 });
+
+/** Leaves Settings and Home shows the first-run welcome again. */
+async function showWelcomeAgain() {
+  const result = await act({ type: "set-onboarded", done: false });
+  if (!result.ok) return;
+  settingsOpen.value = false;
+  await act({ type: "show-welcome" });
+}
 
 function deleteNow(gameId: string, name: string) {
   confirmAction({
@@ -214,6 +222,22 @@ function deleteNow(gameId: string, name: string) {
               :highlighted="highlight === 'grayscale-text'"
             >
               <Switch v-model="grayscaleText" aria-label="Grayscale text" data-testid="grayscale-text" />
+            </SettingRow>
+            <SettingRow
+              label="Keyboard shortcuts"
+              description="Every shortcut Tavora has. Press Ctrl+/ anywhere to see them."
+              setting="shortcuts"
+              :highlighted="highlight === 'shortcuts'"
+            >
+              <Button variant="secondary" data-testid="show-shortcuts" @click="shortcutsOpen = true">Show shortcuts</Button>
+            </SettingRow>
+            <SettingRow
+              label="Welcome tour"
+              description="The short introduction Tavora shows on its first start: your profile, your first games and a few tips."
+              setting="welcome-tour"
+              :highlighted="highlight === 'welcome-tour'"
+            >
+              <Button variant="secondary" data-testid="show-welcome-again" @click="showWelcomeAgain">Show again</Button>
             </SettingRow>
           </template>
 

@@ -3,6 +3,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import type { ActionResult, HostAction, HostViewState } from "../shared/host-api";
 import type { SettingsSection } from "./components/settings/settings-index";
+import { numberedGames } from "./shortcuts";
 
 export const api = window.tavoraHost;
 export const state = shallowRef<HostViewState | null>(null);
@@ -79,8 +80,22 @@ export function openSettings(target: { section: SettingsSection; setting?: strin
 
 /** The search box behind Ctrl+K. */
 export const searchOpen = ref(false);
+/** The shortcut overview behind Ctrl+/. */
+export const shortcutsOpen = ref(false);
+/** Bumped by Ctrl+\; the rail toggles itself when it changes. */
+export const railToggles = ref(0);
+
 api.onShortcut((shortcut) => {
   if (shortcut === "search") searchOpen.value = !searchOpen.value;
+  else if (shortcut === "shortcuts") shortcutsOpen.value = !shortcutsOpen.value;
+  else if (shortcut === "settings") openSettings();
+  else if (shortcut === "toggle-rail") railToggles.value++;
+  else if (shortcut === "home") void act({ type: "show-welcome" });
+  else {
+    const library = state.value?.library;
+    const gameId = library ? numberedGames(library)[Number(shortcut.slice("game-".length)) - 1] : undefined;
+    if (gameId) void act({ type: "open-game", gameId });
+  }
 });
 // Main catches Ctrl+K before any page sees it; this covers key events that
 // reach the page without passing through main, such as synthetic ones.
@@ -129,7 +144,13 @@ export function useFloating(): (open: boolean) => void {
 }
 
 export const overlayOpen = computed(
-  () => openMenus.value > 0 || dialog.value !== null || settingsOpen.value || searchOpen.value || dragging.value,
+  () =>
+    openMenus.value > 0 ||
+    dialog.value !== null ||
+    settingsOpen.value ||
+    searchOpen.value ||
+    shortcutsOpen.value ||
+    dragging.value,
 );
 watch(overlayOpen, (open) => {
   if (!open) frozen.value = {};

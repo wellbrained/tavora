@@ -396,6 +396,9 @@ export class Host {
       case "set-grayscale-text":
         library.grayscaleText = action.enabled;
         break;
+      case "set-onboarded":
+        library.onboarded = action.done;
+        break;
       case "save-profile":
         this.profile.name = clipName(action.name);
         this.profile.initials = clipInitials(action.initials);
@@ -792,6 +795,7 @@ export class Host {
         sort: library.sort,
         startup: library.startup,
         grayscaleText: library.grayscaleText,
+        onboarded: library.onboarded,
         rail: { ...library.rail },
       },
       modules: [...this.modules.values()].map((module) => ({

@@ -101,6 +101,8 @@ export function parseAction(raw: unknown): HostAction | null {
       return only() ? { type: a.type } : null;
     case "set-grayscale-text":
       return only("enabled") && typeof a.enabled === "boolean" ? { type: a.type, enabled: a.enabled } : null;
+    case "set-onboarded":
+      return only("done") && typeof a.done === "boolean" ? { type: a.type, done: a.done } : null;
     case "set-rail": {
       if (!only("expanded", "width")) return null;
       if (a.expanded !== undefined && typeof a.expanded !== "boolean") return null;

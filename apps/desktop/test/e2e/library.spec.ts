@@ -44,9 +44,34 @@ async function noteIn(running: Awaited<ReturnType<typeof launch>>, gameId: strin
   await expectModuleText(app, VANILLA, "note-revision", "1");
 }
 
+test("the first-run welcome takes a name and games, and can be shown again", async () => {
+  const { app, page, userData } = await launch(undefined, [], { seed: false });
+  await page.getByTestId("onboarding-name").fill("Brain");
+  await page.getByTestId("onboarding-next").click();
+  await page.getByTestId("onboarding-add-game").click();
+  await page.getByTestId("game-search").fill("elden");
+  await page.getByTestId("catalog-elden-ring").click();
+  // Adding a game here keeps the welcome open and lists the game.
+  await expect(page.getByTestId("onboarding-games")).toContainText("Elden Ring");
+  await page.getByTestId("onboarding-next").click();
+  await page.getByTestId("onboarding-done").click();
+  await expect(page.getByTestId("welcome")).toContainText("Welcome back");
+  await expect(page.getByTestId("rail-profile")).toHaveAttribute("aria-label", "Profile: Brain");
+  await app.close();
+
+  const again = await launch(userData);
+  await expect(again.page.getByTestId("onboarding")).toHaveCount(0);
+  await again.page.getByTestId("rail-settings").click();
+  await again.page.getByTestId("show-welcome-again").click();
+  await expect(again.page.getByTestId("onboarding")).toBeVisible();
+  await again.app.close();
+});
+
 test("players add games from the built-in list or by name", async () => {
   const running = await launch(undefined, [], { seed: false });
   const { page, userData } = running;
+  // A new install starts with the first-run welcome; skipping it leads Home.
+  await page.getByTestId("onboarding-skip").click();
   await expect(page.getByTestId("welcome")).toContainText("Welcome to Tavora");
 
   await page.getByTestId("welcome-add-game").click();

@@ -2,13 +2,13 @@
 // Ctrl+K: one box to jump to a game, open a module, use a saved layout,
 // run an action or find a setting. Arrow keys move, Enter runs, Escape
 // closes.
-import { Blocks, Home, LayoutPanelLeft, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, SlidersHorizontal } from "@lucide/vue";
+import { Blocks, Home, Keyboard, LayoutPanelLeft, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, SlidersHorizontal } from "@lucide/vue";
 import { computed, nextTick, ref, watch, type Component } from "vue";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { GameView } from "../../shared/host-api";
-import { act, dialog, openSettings, searchOpen, state } from "../host";
+import { act, dialog, openSettings, searchOpen, shortcutsOpen, state } from "../host";
 import GameIcon from "./GameIcon.vue";
 import { SECTION_LABEL, SETTINGS } from "./settings/settings-index";
 
@@ -112,6 +112,14 @@ const groups = computed<Group[]>(() => {
         keywords: ["rail", "sidebar"],
         icon: expanded ? PanelLeftClose : PanelLeftOpen,
         run: close(() => act({ type: "set-rail", expanded: !expanded })),
+      },
+      {
+        id: "shortcuts",
+        label: "Keyboard shortcuts",
+        hint: "Ctrl+/",
+        keywords: ["keys", "hotkeys", "keyboard", "help"],
+        icon: Keyboard,
+        run: close(() => (shortcutsOpen.value = true)),
       },
     ],
   });
