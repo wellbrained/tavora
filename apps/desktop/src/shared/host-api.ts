@@ -133,6 +133,8 @@ export interface HostViewState {
   profile: { name: string; initials: string; pictureUrl: string | null };
   /** A setting that only applies on start was changed since Tavora started. */
   restartPending: boolean;
+  /** The app's version as major.minor.patch, from apps/desktop/package.json. */
+  appVersion: string;
 }
 
 /** Everything the host UI can ask the main process to do. Parsed strictly in main. */

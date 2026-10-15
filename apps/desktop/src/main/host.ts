@@ -839,6 +839,7 @@ export class Host {
         pictureUrl: this.profile.picture ? PROFILE_URL + this.profile.picture : null,
       },
       restartPending: library.grayscaleText !== this.options.grayscaleText,
+      appVersion: app.getVersion(),
     };
   }
 

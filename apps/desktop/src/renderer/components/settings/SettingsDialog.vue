@@ -163,6 +163,7 @@ function deleteNow(gameId: string, name: string) {
             <span v-if="item.id === 'trash' && library.trash.length" class="text-muted-foreground text-xs tabular-nums">{{ library.trash.length }}</span>
           </button>
         </div>
+        <p class="text-muted-foreground mt-auto px-3 text-xs tabular-nums" data-testid="settings-version">Tavora {{ state!.appVersion }}</p>
       </nav>
 
       <div class="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
