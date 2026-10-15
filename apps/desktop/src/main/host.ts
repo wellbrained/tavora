@@ -30,6 +30,7 @@ import {
   addGame,
   createFolder,
   deleteFolder,
+  artFileShared,
   deleteTrashedGame,
   isLive,
   LibraryError,
@@ -60,6 +61,8 @@ import {
 import { MODULE_FONTS } from "./module-fonts";
 import { moduleBaseCss } from "./module-style";
 import { OnlineSearch } from "./online";
+import { syncArt } from "./art-sync";
+import { removeSteamArt } from "./steam-art";
 import { ModuleView } from "./module-view";
 import { discoverModules, type InstalledModule } from "./registry";
 import { DataRegistry } from "./storage";
@@ -107,6 +110,11 @@ export interface HostOptions {
   restart: () => void;
   /** Development and tests only: another Tavora service than api.mytavora.app. */
   apiUrl?: string | undefined;
+  /**
+   * Development and tests only: another place to fetch Steam covers from than
+   * Steam itself, or "off" to fetch none. A packaged app only asks Steam.
+   */
+  steamArt?: string | undefined;
   /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
   hidden?: boolean;
   /**
@@ -120,6 +128,7 @@ export interface HostOptions {
 let moduleCss: string | undefined;
 
 const ICON_URL = `${HOST_SCHEME}://app/game-icons/`;
+const ART_URL = `${HOST_SCHEME}://app/steam-art/`;
 const PROFILE_URL = `${HOST_SCHEME}://app/profile/`;
 
 export class Host {
@@ -209,7 +218,11 @@ export class Host {
     );
     await registerHostProtocol(
       options.rendererDir,
-      { "game-icons": path.join(userData, "game-icons"), profile: path.join(userData, "profile") },
+      {
+        "game-icons": path.join(userData, "game-icons"),
+        "steam-art": path.join(userData, "steam-art"),
+        profile: path.join(userData, "profile"),
+      },
       options.devServer,
     );
 
@@ -232,6 +245,8 @@ export class Host {
     host.registerWindowEvents();
     await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
     if (host.screen === "game") host.openCurrentGame();
+    // Covers of games that have none yet are fetched quietly in the background.
+    host.fetchArtSoon();
     return host;
   }
 
@@ -345,6 +360,7 @@ export class Host {
         this.workspace.games[id] = emptyGameWorkspace();
         this.saveLibrary();
         this.saveWorkspace();
+        this.fetchArtSoon();
         return id;
       }
       case "rename-game":
@@ -410,6 +426,10 @@ export class Host {
         break;
       case "set-online-search":
         library.onlineSearch = action.enabled;
+        break;
+      case "set-steam-icons":
+        library.steamIcons = action.enabled;
+        if (action.enabled) this.fetchArtSoon();
         break;
       case "set-onboarded":
         library.onboarded = action.done;
@@ -495,6 +515,44 @@ export class Host {
     return path.join(this.options.userData, "game-icons");
   }
 
+  private get artDir(): string {
+    return path.join(this.options.userData, "steam-art");
+  }
+
+  private artRunning = false;
+
+  /** Starts fetching covers unless that is already going on, off, or switched off for this run. */
+  private fetchArtSoon(): void {
+    if (this.artRunning || !this.library.steamIcons || this.options.steamArt === "off") return;
+    this.artRunning = true;
+    void this.fetchArt().finally(() => {
+      this.artRunning = false;
+    });
+  }
+
+  /**
+   * Asks Steam, one game at a time, for the cover of every game that has a
+   * Steam id and none yet. This app does it itself on this PC: Tavora's
+   * service is never involved. Quiet on purpose: a failure is tried again at
+   * the next start or the next added game, and nothing is shown to the player.
+   */
+  private async fetchArt(): Promise<void> {
+    try {
+      await syncArt({
+        library: this.library,
+        artDir: this.artDir,
+        baseUrl: this.options.steamArt,
+        shouldRun: () => !this.window.isDestroyed(),
+        onChange: () => {
+          this.saveLibrary();
+          this.pushState();
+        },
+      });
+    } catch (error) {
+      console.error("[tavora] fetching game icons failed", error);
+    }
+  }
+
   private async dropIconFile(icon: GameIcon | null): Promise<void> {
     if (icon?.kind === "image") await removeIcon(this.iconDir, icon.file);
   }
@@ -508,6 +566,7 @@ export class Host {
     this.data.forgetGame(game.id);
     await deleteModuleData(this.options.userData, game.id);
     await this.dropIconFile(game.icon);
+    if (game.artFile && !artFileShared(this.library, game.artFile, game.id)) await removeSteamArt(this.artDir, game.artFile);
     // Sessions may already be open in this run, so clear them; their
     // directories are removed at the next start.
     const keep = new Set(Object.keys(this.library.games));
@@ -779,6 +838,7 @@ export class Host {
       id: game.id,
       name: game.name,
       icon: game.icon.kind === "image" ? { kind: "image", url: ICON_URL + game.icon.file } : game.icon,
+      art: this.library.steamIcons && game.artFile ? ART_URL + game.artFile : null,
       builtIn: game.catalogId !== null,
       addedAt: game.addedAt,
       lastPlayedAt: game.lastPlayedAt,
@@ -811,6 +871,7 @@ export class Host {
         startup: library.startup,
         grayscaleText: library.grayscaleText,
         onlineSearch: library.onlineSearch,
+        steamIcons: library.steamIcons,
         onboarded: library.onboarded,
         rail: { ...library.rail },
       },

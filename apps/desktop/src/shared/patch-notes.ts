@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.2.0",
+    date: "2026-10-15",
+    title: "Real game icons",
+    notes: [
+      "Games now show their official Steam cover as their icon, with Tavora's rounded border and a slightly warmer tone. Tavora downloads each cover from Steam to your PC; nothing is hosted or sent through Tavora's service.",
+      "Games without a Steam cover keep their colourful badge, and an image you pick yourself always comes first.",
+      "You can switch the covers off under Settings, Game icons from Steam.",
+    ],
+  },
+  {
     version: "0.1.1",
     date: "2026-10-15",
     title: "Tidier Settings",

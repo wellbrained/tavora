@@ -19,6 +19,12 @@ export interface GameView {
   id: string;
   name: string;
   icon: IconView;
+  /**
+   * The game's Steam cover, fetched on this PC (an address in the host's own
+   * protocol), or null. Shown only while the player has not picked an image
+   * and fetching is on; the host UI crops and styles it.
+   */
+  art: string | null;
   /** Picked from the built-in list rather than added by name. */
   builtIn: boolean;
   addedAt: string;
@@ -104,8 +110,10 @@ export interface HostViewState {
     sort: RootSort;
     startup: Startup;
     grayscaleText: boolean;
-    /** Whether search and icons may ask the Tavora service online. */
+    /** Whether search may ask the Tavora service online. */
     onlineSearch: boolean;
+    /** Whether game covers may be fetched from Steam on this PC. */
+    steamIcons: boolean;
     /** False until the player finished or skipped the first-run welcome. */
     onboarded: boolean;
     rail: { expanded: boolean; width: number };
@@ -163,6 +171,7 @@ export type HostAction =
   | { type: "set-startup"; startup: Startup }
   | { type: "set-grayscale-text"; enabled: boolean }
   | { type: "set-online-search"; enabled: boolean }
+  | { type: "set-steam-icons"; enabled: boolean }
   /** Done ends the first-run welcome; false shows it again. */
   | { type: "set-onboarded"; done: boolean }
   | { type: "save-profile"; name: string; initials: string }
@@ -193,6 +202,8 @@ export interface CatalogMatch {
 export interface OnlineGame {
   id: string;
   name: string;
+  /** The game's Steam application id, or null; used to fetch its icon on this PC. */
+  steamAppId: number | null;
 }
 
 /**

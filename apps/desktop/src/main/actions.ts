@@ -3,6 +3,7 @@ import type { HostAction } from "../shared/host-api";
 import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
 import { MAX_INITIALS, MAX_PICTURE_BYTES, MAX_PROFILE_NAME } from "./profile";
+import { isSteamAppId } from "./steam-art";
 import { MAX_SNAPSHOT_NAME } from "./workspace";
 
 export type { ActionResult, HostAction } from "../shared/host-api";
@@ -45,11 +46,15 @@ export function parseAction(raw: unknown): HostAction | null {
         if (
           typeof game === "object" &&
           game !== null &&
-          Object.keys(game).every((key) => key === "id" || key === "name") &&
+          Object.keys(game).every((key) => key === "id" || key === "name" || key === "steamAppId") &&
           isGameId(game.id) &&
-          text(game.name)
+          text(game.name) &&
+          (game.steamAppId === undefined || game.steamAppId === null || isSteamAppId(game.steamAppId))
         ) {
-          return { type: a.type, online: { id: game.id, name: game.name } };
+          return {
+            type: a.type,
+            online: { id: game.id, name: game.name, steamAppId: isSteamAppId(game.steamAppId) ? game.steamAppId : null },
+          };
         }
       }
       return null;
@@ -113,6 +118,7 @@ export function parseAction(raw: unknown): HostAction | null {
       return only() ? { type: a.type } : null;
     case "set-grayscale-text":
     case "set-online-search":
+    case "set-steam-icons":
       return only("enabled") && typeof a.enabled === "boolean" ? { type: a.type, enabled: a.enabled } : null;
     case "set-onboarded":
       return only("done") && typeof a.done === "boolean" ? { type: a.type, done: a.done } : null;

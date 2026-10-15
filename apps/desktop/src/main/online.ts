@@ -1,5 +1,6 @@
 import { isGameId } from "@tavora/module-schema";
 import type { OnlineGame, OnlineSearchResult } from "../shared/host-api";
+import { isSteamAppId } from "./steam-art";
 
 /** The Tavora service. The app talks to no one else; the desktop never holds keys. */
 export const DEFAULT_API_URL = "https://api.mytavora.app";
@@ -10,10 +11,11 @@ const MAX_RESULTS = 20;
 /** Keeps a result only if it has the shape the app relies on. */
 export function parseOnlineGame(raw: unknown): OnlineGame | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const { id, name } = raw as Record<string, unknown>;
+  const { id, name, steamAppId } = raw as Record<string, unknown>;
   if (!isGameId(id)) return null;
   if (typeof name !== "string" || !name.trim() || name.length > 200) return null;
-  return { id, name: name.trim() };
+  // A result from an older service has no appid; a bad one is treated as none.
+  return { id, name: name.trim(), steamAppId: isSteamAppId(steamAppId) ? steamAppId : null };
 }
 
 /** The service answers `{ results: [...] }`; an older reply was the bare list. */

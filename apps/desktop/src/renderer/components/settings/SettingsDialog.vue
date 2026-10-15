@@ -100,6 +100,10 @@ const onlineSearch = computed({
   get: () => library.value.onlineSearch,
   set: (enabled: boolean) => void act({ type: "set-online-search", enabled }),
 });
+const steamIcons = computed({
+  get: () => library.value.steamIcons,
+  set: (enabled: boolean) => void act({ type: "set-steam-icons", enabled }),
+});
 
 /** Leaves Settings and Home shows the first-run welcome again. */
 async function showWelcomeAgain() {
@@ -255,6 +259,14 @@ function deleteNow(gameId: string, name: string) {
               :highlighted="highlight === 'online-search'"
             >
               <Switch v-model="onlineSearch" aria-label="Online game search" data-testid="online-search" />
+            </SettingRow>
+            <SettingRow
+              label="Game icons from Steam"
+              description="Shows each game's official Steam cover as its icon. Tavora downloads it from Steam straight to this PC; the Tavora service is not involved. Games without a Steam cover, and any image you pick yourself, are not affected. Turn it off to use the plain badges."
+              setting="steam-icons"
+              :highlighted="highlight === 'steam-icons'"
+            >
+              <Switch v-model="steamIcons" aria-label="Game icons from Steam" data-testid="steam-icons" />
             </SettingRow>
             <SettingRow
 
