@@ -25,6 +25,7 @@ import { THEME } from "./games";
 import { shortcutFor } from "./shortcuts";
 import { IconError, importIcon, removeIcon } from "./icons";
 import { readJsonOrSetAside } from "./json";
+import { clipName, type Profile, removePicture, sanitizeProfile, savePicture } from "./profile";
 import {
   addGame,
   createFolder,
@@ -116,6 +117,7 @@ export interface HostOptions {
 let moduleCss: string | undefined;
 
 const ICON_URL = `${HOST_SCHEME}://app/game-icons/`;
+const PROFILE_URL = `${HOST_SCHEME}://app/profile/`;
 
 export class Host {
   private readonly data: DataRegistry;
@@ -142,6 +144,7 @@ export class Host {
     private readonly modules: Map<string, InstalledModule>,
     private readonly library: Library,
     private readonly workspace: WorkspaceState,
+    private readonly profile: Profile,
     windowState: WindowState,
   ) {
     this.data = new DataRegistry(options.userData);
@@ -191,17 +194,25 @@ export class Host {
       Object.keys(library.games),
       (id) => modules.has(id),
     );
+    const savedProfile = await readJsonOrSetAside(path.join(userData, "profile.json"));
+    const profile = sanitizeProfile(savedProfile);
     const savedWindow = await readJsonOrSetAside<WindowState>(path.join(userData, "window.json"));
     const windowState = initialBounds(
       savedWindow,
       screen.getAllDisplays().map((display) => display.workArea),
       screen.getPrimaryDisplay().workArea,
     );
-    await registerHostProtocol(options.rendererDir, path.join(userData, "game-icons"), options.devServer);
+    await registerHostProtocol(
+      options.rendererDir,
+      { "game-icons": path.join(userData, "game-icons"), profile: path.join(userData, "profile") },
+      options.devServer,
+    );
 
     // Dark only for now: native menus, dialogs and scrollbars match the UI.
     nativeTheme.themeSource = "dark";
-    const host = new Host(options, modules, library, workspace, windowState);
+    const host = new Host(options, modules, library, workspace, profile, windowState);
+    // The id is made once and kept, so a new profile is written straight away.
+    if (savedProfile === null) host.saveProfile();
     // Browser storage of games that are gone, removed before any session opens it.
     for (const dir of await orphanedPartitions(userData, new Set(Object.keys(library.games)))) {
       await rm(dir, { recursive: true, force: true });
@@ -385,6 +396,13 @@ export class Host {
       case "set-grayscale-text":
         library.grayscaleText = action.enabled;
         break;
+      case "set-profile-name":
+        this.profile.name = clipName(action.name);
+        return this.saveProfile();
+      case "set-profile-picture":
+        return this.setProfilePicture(await savePicture(this.profileDir, action.png));
+      case "remove-profile-picture":
+        return this.setProfilePicture(null);
       case "set-rail":
         setRail(library, action);
         break;
@@ -440,6 +458,17 @@ export class Host {
     const file = await importIcon(this.iconDir, gameId, source);
     const previous = setGameImage(this.library, gameId, file);
     await this.dropIconFile(previous);
+  }
+
+  private get profileDir(): string {
+    return path.join(this.options.userData, "profile");
+  }
+
+  private async setProfilePicture(file: string | null): Promise<void> {
+    const previous = this.profile.picture;
+    this.profile.picture = file;
+    this.saveProfile();
+    await removePicture(this.profileDir, previous);
   }
 
   private get iconDir(): string {
@@ -782,6 +811,10 @@ export class Host {
       layoutEpoch: this.layoutEpoch,
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
       notice: this.notice,
+      profile: {
+        name: this.profile.name,
+        pictureUrl: this.profile.picture ? PROFILE_URL + this.profile.picture : null,
+      },
       restartPending: library.grayscaleText !== this.options.grayscaleText,
     };
   }
@@ -797,6 +830,11 @@ export class Host {
   private saveLibrary(): void {
     const body = JSON.stringify(this.library, null, 2);
     this.enqueue(() => writeFileAtomic(path.join(this.options.userData, "library.json"), body), "library");
+  }
+
+  private saveProfile(): void {
+    const body = JSON.stringify(this.profile, null, 2);
+    this.enqueue(() => writeFileAtomic(path.join(this.options.userData, "profile.json"), body), "profile");
   }
 
   private saveWorkspace(): void {
@@ -823,21 +861,26 @@ export class Host {
 }
 
 /**
- * Serves the trusted host UI, plus game icons the player picked, and blocks
+ * Serves the trusted host UI, plus game icons and the profile picture the player picked, and blocks
  * all network for the host renderer. With a dev server, the host UI comes
  * from there instead, and only that server is reachable.
  */
-async function registerHostProtocol(rendererDir: string, iconDir: string, devServer?: string): Promise<void> {
+async function registerHostProtocol(rendererDir: string, imageDirs: Record<string, string>, devServer?: string): Promise<void> {
   const root = devServer ? null : await realpath(rendererDir);
-  await mkdir(iconDir, { recursive: true });
-  const icons = await realpath(iconDir);
+  // Pictures the player picked, each folder under its own URL prefix.
+  const images = new Map<string, string>();
+  for (const [prefix, dir] of Object.entries(imageDirs)) {
+    await mkdir(dir, { recursive: true });
+    images.set(`/${prefix}/`, await realpath(dir));
+  }
   const origin = `${HOST_SCHEME}://app`;
   protocol.handle(HOST_SCHEME, async (request) => {
     // URL.origin is "null" for custom schemes in Node, so compare the host.
     const url = new URL(request.url);
     let file: string | null = null;
     if (url.host === "app") {
-      if (url.pathname.startsWith("/game-icons/")) file = await resolveAsset(icons, url.pathname.slice("/game-icons".length));
+      const prefix = [...images.keys()].find((start) => url.pathname.startsWith(start));
+      if (prefix) file = await resolveAsset(images.get(prefix)!, url.pathname.slice(prefix.length - 1));
       else if (root) file = await resolveAsset(root, url.pathname);
     }
     if (!file) return new Response("Not found", { status: 404 });

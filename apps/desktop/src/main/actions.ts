@@ -2,6 +2,7 @@ import { isGameId, isModuleId } from "@tavora/module-schema";
 import type { HostAction } from "../shared/host-api";
 import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
+import { MAX_PICTURE_BYTES, MAX_PROFILE_NAME } from "./profile";
 import { MAX_SNAPSHOT_NAME } from "./workspace";
 
 export type { ActionResult, HostAction } from "../shared/host-api";
@@ -13,6 +14,7 @@ const label = (value: unknown): value is string | null => value === null || text
 const index = (value: unknown): value is number | undefined =>
   value === undefined || (Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 10_000);
 const uuid = (value: unknown): value is string => typeof value === "string" && INSTANCE_ID.test(value);
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
 /**
  * Checks a message from the host UI. The host UI is trusted code, but its
@@ -86,6 +88,15 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("startup") && (a.startup === "welcome" || a.startup === "last-game")
         ? { type: a.type, startup: a.startup }
         : null;
+    case "set-profile-name":
+      // Code units, so a long emoji name still fits; it is clipped by character when stored.
+      return only("name") && text(a.name, MAX_PROFILE_NAME * 2) ? { type: a.type, name: a.name } : null;
+    case "set-profile-picture":
+      return only("png") && text(a.png, Math.ceil(MAX_PICTURE_BYTES / 3) * 4) && BASE64.test(a.png)
+        ? { type: a.type, png: a.png }
+        : null;
+    case "remove-profile-picture":
+      return only() ? { type: a.type } : null;
     case "set-grayscale-text":
       return only("enabled") && typeof a.enabled === "boolean" ? { type: a.type, enabled: a.enabled } : null;
     case "set-rail": {
