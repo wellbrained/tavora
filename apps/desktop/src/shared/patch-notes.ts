@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.3.2",
+    date: "2026-10-15",
+    title: "Behind the scenes",
+    notes: ["Tavora's keyboard shortcuts are now covered by the automatic tests, so they are less likely to break in future versions."],
+  },
+  {
     version: "0.3.1",
     date: "2026-10-15",
     title: "Tavora can update itself",
