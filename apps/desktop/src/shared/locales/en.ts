@@ -294,6 +294,8 @@ export const en = {
   "steamImport.added.one": "Added 1 game from Steam.",
   "steamImport.added.other": "Added {count} games from Steam.",
   "steamImport.trademark": "Game lists come from Steam. Steam and the Steam logo are trademarks of Valve Corporation; Tavora is not affiliated with, endorsed by or sponsored by Valve. Game names belong to their publishers.",
+  "settings.language.searchPlaceholder": "Search languages",
+  "settings.language.none": "No language matches.",
   "error.generic": "Something went wrong. Please try again.",
   "error.notAllowed": "Not allowed.",
   "error.notUnderstood": "Tavora did not understand that request.",

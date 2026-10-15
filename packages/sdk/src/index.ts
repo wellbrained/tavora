@@ -101,6 +101,10 @@ export interface TavoraSDK {
   ui: {
     getTheme(): Promise<TavoraTheme>;
     onThemeChange(fn: (theme: TavoraTheme) => void): Unsubscribe;
+    /** The language Tavora shows its own texts in, as a code such as "en" or "de". Show yours in it, or in English when you have no translation. */
+    getLanguage(): Promise<string>;
+    /** Fires when the player changes the language. */
+    onLanguageChange(fn: (language: string) => void): Unsubscribe;
   };
   lifecycle: {
     /** The panel is hidden; pause timers and animations. Called immediately if already suspended. */
@@ -262,6 +266,8 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
     ui: {
       getTheme: () => call("ui.getTheme"),
       onThemeChange: (fn) => on("ui.theme", fn),
+      getLanguage: () => call("ui.getLanguage"),
+      onLanguageChange: (fn) => on("ui.language", fn),
     },
     lifecycle: {
       onSuspend: (fn) => on("lifecycle.suspend", fn),

@@ -10,7 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { computed, ref } from "vue";
-import { previewFor, relativeTime, SCRATCHPAD_ID, type NoteEntry } from "./notes";
+import { locale, plural, t } from "./i18n";
+import { previewFor, relativeTime, SCRATCHPAD_ID, UNTITLED, type NoteEntry } from "./notes";
 
 const props = defineProps<{ entry: NoteEntry; selected: boolean }>();
 const emit = defineEmits<{ select: []; togglePin: []; remove: [] }>();
@@ -18,7 +19,16 @@ const emit = defineEmits<{ select: []; togglePin: []; remove: [] }>();
 const menuOpen = ref(false);
 const scratchpad = computed(() => props.entry.id === SCRATCHPAD_ID);
 const preview = computed(() => previewFor(props.entry));
-const when = computed(() => relativeTime(props.entry.updatedAt));
+const when = computed(() =>
+  relativeTime(props.entry.updatedAt, Date.now(), {
+    justNow: t("time.justNow"),
+    minutes: (count) => plural("time.minutes", count),
+    yesterday: t("time.yesterday"),
+    locale: locale(),
+  }),
+);
+/** The stored title of the scratchpad and of a note without text are English; show them in the player's language. */
+const title = computed(() => (scratchpad.value ? t("scratchpad") : props.entry.title === UNTITLED ? t("untitled") : props.entry.title));
 </script>
 
 <template>
@@ -41,12 +51,12 @@ const when = computed(() => relativeTime(props.entry.updatedAt));
     >
       <span class="flex w-full min-w-0 items-center gap-1.5 text-sm font-medium">
         <NotebookPen v-if="scratchpad" class="text-muted-foreground size-3.5 flex-none" :stroke-width="1.5" aria-hidden="true" />
-        <Pin v-else-if="entry.pinned" class="text-muted-foreground size-3.5 flex-none" :stroke-width="1.5" aria-label="Pinned" />
-        <span class="truncate" data-testid="note-title">{{ entry.title }}</span>
+        <Pin v-else-if="entry.pinned" class="text-muted-foreground size-3.5 flex-none" :stroke-width="1.5" :aria-label="t('row.pinned')" />
+        <span class="truncate" data-testid="note-title">{{ title }}</span>
       </span>
       <span class="text-muted-foreground flex w-full min-w-0 gap-2 text-xs">
         <span v-if="when" class="flex-none tabular-nums">{{ when }}</span>
-        <span class="truncate">{{ preview || (scratchpad ? "Always here for quick notes" : "No more text") }}</span>
+        <span class="truncate">{{ preview || (scratchpad ? t("row.previewScratchpad") : t("row.previewNone")) }}</span>
       </span>
     </button>
     <DropdownMenu v-model:open="menuOpen">
@@ -57,8 +67,8 @@ const when = computed(() => relativeTime(props.entry.updatedAt));
             (selected || menuOpen) && 'opacity-100',
           )
         "
-        :aria-label="`More for ${entry.title}`"
-        title="More"
+        :aria-label="t('row.moreFor', { title })"
+        :title="t('row.more')"
         data-testid="note-menu"
       >
         <Ellipsis class="size-4" :stroke-width="1.5" />
@@ -67,12 +77,12 @@ const when = computed(() => relativeTime(props.entry.updatedAt));
         <DropdownMenuItem v-if="!scratchpad" data-testid="menu-pin" @select="emit('togglePin')">
           <PinOff v-if="entry.pinned" :stroke-width="1.5" />
           <Pin v-else :stroke-width="1.5" />
-          {{ entry.pinned ? "Unpin" : "Pin to top" }}
+          {{ entry.pinned ? t("row.unpin") : t("row.pin") }}
         </DropdownMenuItem>
         <DropdownMenuSeparator v-if="!scratchpad" />
         <DropdownMenuItem variant="destructive" data-testid="menu-delete" @select="emit('remove')">
           <Trash2 :stroke-width="1.5" />
-          {{ scratchpad ? "Clear scratchpad…" : "Delete note…" }}
+          {{ scratchpad ? t("row.clearScratchpad") : t("row.delete") }}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -123,19 +123,29 @@ export function sections(entries: Iterable<NoteEntry>): NoteSections {
   return { scratchpad, pinned: pinned.sort(newestFirst), others: others.sort(newestFirst) };
 }
 
+/** The words relativeTime uses, and the locale for dates and times. */
+export interface TimeWords {
+  justNow: string;
+  minutes(count: number): string;
+  yesterday: string;
+  locale: string | undefined;
+}
+
+const ENGLISH: TimeWords = { justNow: "Just now", minutes: (count) => `${count} min ago`, yesterday: "Yesterday", locale: undefined };
+
 /** "Just now", "5 min ago", "Yesterday", or a date, for the list. */
-export function relativeTime(iso: string, now = Date.now()): string {
+export function relativeTime(iso: string, now = Date.now(), words: TimeWords = ENGLISH): string {
   const then = Date.parse(iso);
   if (Number.isNaN(then)) return "";
   const minutes = Math.round((now - then) / 60_000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 1) return words.justNow;
+  if (minutes < 60) return words.minutes(minutes);
   const date = new Date(then);
   const today = new Date(now);
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  if (then >= startOfToday) return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  if (then >= startOfToday - 86_400_000) return "Yesterday";
-  return date.toLocaleDateString(undefined, {
+  if (then >= startOfToday) return date.toLocaleTimeString(words.locale, { hour: "2-digit", minute: "2-digit" });
+  if (then >= startOfToday - 86_400_000) return words.yesterday;
+  return date.toLocaleDateString(words.locale, {
     day: "numeric",
     month: "short",
     ...(date.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }),

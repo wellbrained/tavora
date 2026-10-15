@@ -4,7 +4,7 @@
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 
-defineProps<{ title: string; description: string; confirm: string }>();
+defineProps<{ title: string; description: string; confirm: string; cancel?: string }>();
 const emit = defineEmits<{ confirm: []; cancel: [] }>();
 </script>
 
@@ -16,7 +16,7 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>();
         <DialogDescription>{{ description }}</DialogDescription>
       </DialogHeader>
       <div class="flex justify-end gap-2">
-        <Button type="button" variant="secondary" autofocus @click="emit('cancel')">Cancel</Button>
+        <Button type="button" variant="secondary" autofocus @click="emit('cancel')">{{ cancel ?? "Cancel" }}</Button>
         <Button type="button" variant="destructive" data-testid="confirm-submit" @click="emit('confirm')">{{ confirm }}</Button>
       </div>
     </DialogContent>
