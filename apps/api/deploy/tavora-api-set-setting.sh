@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Interactive, for wellbrained to run on the server (ssh -t): sets one of the service's
+# settings in /srv/tavora-api/shared/production.env without touching the others,
+# and restarts the service.
+#
+#   tavora-api-set-setting.sh takedown       where publishers ask for an icon to be removed
+#                                            (an email address or a link); hosted icons are
+#                                            only served while it is set
+#   tavora-api-set-setting.sh admin-token    makes a new token for the review page and prints
+#                                            it once; it is stored nowhere else, so save it
+#
+# Nothing here passes through an assistant.
+set -euo pipefail
+file=/srv/tavora-api/shared/production.env
+[[ -d /srv/tavora-api/shared ]] || { echo 'Deploy the service first (the shared folder is missing).'; exit 1; }
+
+set_var() {
+  local name="$1" value="$2" tmp
+  umask 077
+  tmp="$(mktemp /srv/tavora-api/shared/.env.XXXXXX)"
+  { [[ -f "$file" ]] && grep -v "^${name}=" "$file" || true; printf '%s=%s\n' "$name" "$value"; } > "$tmp"
+  chown root:tavora-api "$tmp"
+  chmod 640 "$tmp"
+  mv -f "$tmp" "$file"
+}
+
+case "${1:-}" in
+  takedown)
+    read -rp 'Takedown contact (an email address or a link): ' contact
+    contact="$(printf '%s' "$contact" | tr -d '[:space:]')"
+    # Letters, digits and . _ - @ : / ? = & % + ~ # only, so nothing can end up in the shell or the env file as code.
+    case "$contact" in *[!A-Za-z0-9._@:/?=\&%+~#-]*) contact="" ;; esac
+    (( ${#contact} >= 3 && ${#contact} <= 200 )) || { echo 'That does not look like an address or a link (letters, digits and . _ - @ : / ? = & % + ~ # only). Nothing was saved.'; exit 1; }
+    set_var TAKEDOWN_CONTACT "$contact"
+    shown="$contact"
+    ;;
+  admin-token)
+    token="$(openssl rand -hex 24)"
+    set_var ADMIN_TOKEN "$token"
+    shown='a new admin token'
+    ;;
+  *)
+    echo 'Usage: tavora-api-set-setting.sh takedown | admin-token'
+    exit 2
+    ;;
+esac
+
+systemctl restart tavora-api
+sleep 2
+systemctl is-active --quiet tavora-api && echo "Saved ($shown). Service restarted and running." || { echo 'Service is not running; check: journalctl -u tavora-api'; exit 1; }
+if [[ "${1:-}" == admin-token ]]; then
+  echo
+  echo "Admin token (shown once, save it now):"
+  echo "$token"
+fi
+journalctl -u tavora-api -n 8 --no-pager | grep -E 'TAKEDOWN_CONTACT|ADMIN_TOKEN|review page' || true

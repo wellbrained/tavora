@@ -1,6 +1,6 @@
 import { crc32 } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { decodeRgbaPng, encodePng, icoToPng, inspectPng, MAX_ICON_BYTES } from "./png.ts";
+import { decodeRgbaPng, encodePng, icoToPng, inspectPng, MAX_ICON_BYTES, stripPng } from "./png.ts";
 
 /** A w×h picture with a different colour per pixel, as RGBA. */
 const picture = (w: number, h: number, alpha = 255) =>
@@ -198,5 +198,53 @@ describe("icoToPng", () => {
     const lying = ico({ size: 4, data: frame });
     view(lying).setUint32(6 + 12, 99999, true);
     expect(icoToPng(lying)).toBeNull();
+  });
+});
+
+
+describe("stripPng", () => {
+  const pixels = picture(8, 4);
+  const clean = encodePng(8, 4, pixels);
+
+  /** The same picture with an extra chunk of this type slipped in before IEND. */
+  function withChunk(type: string, data: Uint8Array): Uint8Array {
+    const extra = new Uint8Array(12 + data.byteLength);
+    view(extra).setUint32(0, data.byteLength);
+    for (let i = 0; i < 4; i += 1) extra[4 + i] = type.charCodeAt(i);
+    extra.set(data, 8);
+    view(extra).setUint32(8 + data.byteLength, crc32(extra.subarray(4, 8 + data.byteLength)));
+    const out = new Uint8Array(clean.byteLength + extra.byteLength);
+    out.set(clean.subarray(0, clean.byteLength - 12));
+    out.set(extra, clean.byteLength - 12);
+    out.set(clean.subarray(clean.byteLength - 12), clean.byteLength - 12 + extra.byteLength);
+    return out;
+  }
+
+  it("leaves a clean PNG exactly as it is", () => {
+    expect(stripPng(clean)).toEqual(clean);
+  });
+
+  it("removes text, metadata and unknown chunks without changing a pixel", () => {
+    const dirty = withChunk("tEXt", new TextEncoder().encode("Comment\0a secret message"));
+    const moreDirty = withChunk("zzZz", new Uint8Array(500).fill(7));
+    for (const file of [dirty, moreDirty]) {
+      expect(inspectPng(file)).not.toBeNull();
+      const stripped = stripPng(file)!;
+      expect(stripped).toEqual(clean);
+      expect(decodeRgbaPng(stripped)!.rgba).toEqual(pixels);
+    }
+  });
+
+  it("keeps palette and transparency chunks, which the picture needs", () => {
+    const withTrns = withChunk("tRNS", Uint8Array.from([1, 2, 3]));
+    expect(stripPng(withTrns)).toEqual(withTrns);
+  });
+
+  it("gives null for anything that is not a well-formed small PNG", () => {
+    const damaged = clean.slice();
+    damaged[30] = damaged[30]! ^ 0xff;
+    for (const bad of [new Uint8Array(0), new Uint8Array(100), clean.slice(0, 40), damaged, encodePng(300, 4, new Uint8Array(300 * 4 * 4))]) {
+      expect(stripPng(bad)).toBeNull();
+    }
   });
 });
