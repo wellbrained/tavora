@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { RootSort, Startup } from "../../../shared/host-api";
+import { PATCH_NOTES } from "../../../shared/patch-notes";
 import { act, confirmAction, settingsOpen, settingsTarget, state, submitAction } from "../../host";
 import { SHORTCUT_GROUPS } from "../../shortcuts";
 import GameIcon from "../GameIcon.vue";
@@ -46,6 +47,7 @@ async function show(target: SettingsSection, setting?: string) {
 const library = computed(() => state.value!.library);
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 const formatDate = (iso: string) => dateFormat.format(new Date(iso));
+const version = computed(() => state.value!.appVersion);
 
 interface Result {
   id: string;
@@ -163,7 +165,20 @@ function deleteNow(gameId: string, name: string) {
             <span v-if="item.id === 'trash' && library.trash.length" class="text-muted-foreground text-xs tabular-nums">{{ library.trash.length }}</span>
           </button>
         </div>
-        <p class="text-muted-foreground mt-auto px-3 text-xs tabular-nums" data-testid="settings-version">Tavora {{ state!.appVersion }}</p>
+        <button
+          type="button"
+          :class="
+            cn(
+              'text-muted-foreground hover:bg-accent hover:text-foreground mt-auto rounded-lg px-3 py-2 text-left text-xs tabular-nums',
+              !query && section === 'patch-notes' && 'bg-accent text-foreground',
+            )
+          "
+          title="See what changed in this version"
+          data-testid="settings-version"
+          @click="show('patch-notes')"
+        >
+          Tavora {{ version }}
+        </button>
       </nav>
 
       <div class="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
@@ -277,6 +292,29 @@ function deleteNow(gameId: string, name: string) {
                   </li>
                 </ul>
               </section>
+            </div>
+          </template>
+
+          <template v-else-if="section === 'patch-notes'">
+            <h2
+              :class="cn('-mx-3 rounded-lg px-3 text-xl font-semibold transition-colors duration-500', highlight === 'patch-notes' && 'bg-primary/10')"
+              data-setting="patch-notes"
+            >
+              Patch notes
+            </h2>
+            <p class="text-muted-foreground mt-2 mb-6">What changed in each version of Tavora, newest first.</p>
+            <div class="flex flex-col gap-8" data-testid="patch-notes">
+              <article v-for="entry in PATCH_NOTES" :key="entry.version" :data-testid="`patch-notes-${entry.version}`">
+                <header class="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h3 class="text-lg font-semibold tabular-nums">{{ entry.version }}</h3>
+                  <span v-if="entry.version === version" class="bg-secondary text-foreground rounded-sm px-1.5 py-0.5 text-xs">Installed</span>
+                  <span class="text-muted-foreground text-sm">{{ formatDate(entry.date) }}</span>
+                </header>
+                <p class="mb-2 font-medium">{{ entry.title }}</p>
+                <ul class="text-muted-foreground flex list-disc flex-col gap-1.5 pl-5">
+                  <li v-for="note in entry.notes" :key="note">{{ note }}</li>
+                </ul>
+              </article>
             </div>
           </template>
 
