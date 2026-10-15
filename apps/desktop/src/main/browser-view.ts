@@ -428,6 +428,8 @@ export class BrowserPanel {
     return this.showsPage;
   }
 
+  applyLanguage(_language?: unknown): void {}
+
   applyTheme(_theme?: unknown): void {
     this.view.setBackgroundColor(this.options.background());
   }
