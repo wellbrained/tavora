@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.38",
+    date: "2026-10-16",
+    title: "The game name tooltip stays on top",
+    notes: ["The game name tooltip in the sidebar is no longer hidden behind module panels such as To-Dos."],
+  },
+  {
     version: "0.5.37",
     date: "2026-10-16",
     title: "The game name tooltip sits closer",
