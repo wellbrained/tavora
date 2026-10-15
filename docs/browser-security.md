@@ -1,8 +1,8 @@
 # Browser panel: security design
 
-**Status:** proposal, 2026-10-15. Waiting for Nik's yes before any code. Once
-agreed, the guarantees below move into [threat-model.md](threat-model.md) as
-B1–B10 and the choices into [decisions.md](decisions.md).
+**Status:** agreed with Nik on 2026-10-15 and built in 0.5.6. The guarantees
+are B1–B10 in [threat-model.md](threat-model.md); the choices are in
+[decisions.md](decisions.md).
 
 ## What it is
 
@@ -138,7 +138,7 @@ YouTube's in-video ads are not reliably blocked by network rules.
   and throttled in a background tab, a crash shows "This page crashed" with
   Reload and never affects the host or other panels (G5).
 - Audio keeps playing in a background tab, like a normal browser, and the tab
-  shows a speaker icon with mute.
+  toolbar shows a speaker button to mute it.
 
 ## Guarantees and tests (gates for the PR)
 
