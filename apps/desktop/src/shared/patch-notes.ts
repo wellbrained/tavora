@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.3.0",
+    date: "2026-10-15",
+    title: "Games show their own Steam icon",
+    notes: [
+      "If Steam is installed on your PC, each game now shows the same icon Steam uses for it, on a tile in Tavora's colours. Tavora copies it from your Steam folder, or downloads the same file from Steam if it is missing. The Tavora service is never involved.",
+      "This replaces the Steam covers from the last version, which did not fit well.",
+      "Games without a Steam icon keep their badge, and an image you pick yourself always comes first. You can switch the Steam icons off under Settings, Game icons from Steam.",
+    ],
+  },
+  {
     version: "0.2.0",
     date: "2026-10-15",
     title: "Real game icons",

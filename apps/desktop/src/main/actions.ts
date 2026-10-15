@@ -3,7 +3,7 @@ import type { HostAction } from "../shared/host-api";
 import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
 import { MAX_INITIALS, MAX_PICTURE_BYTES, MAX_PROFILE_NAME } from "./profile";
-import { isSteamAppId } from "./steam-art";
+import { isSteamAppId } from "./steam-icons";
 import { MAX_SNAPSHOT_NAME } from "./workspace";
 
 export type { ActionResult, HostAction } from "../shared/host-api";

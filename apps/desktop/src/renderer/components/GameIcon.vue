@@ -7,11 +7,11 @@ const props = withDefaults(defineProps<{ game: GameView; size?: number }>(), { s
 
 // Tone and pattern come from the id, so a game keeps its look when renamed.
 const look = computed(() => gameBadgeLook(props.game.id));
-// An image the player picked always wins; then the game's Steam cover; then the badge.
-const art = computed(() => (props.game.icon.kind === "monogram" ? props.game.art : null));
-// A cover that cannot be shown falls back to the badge instead of a broken image.
-const artFailed = ref(false);
-watch(art, () => (artFailed.value = false));
+// An image the player picked always wins; then the game's own Steam icon; then the badge.
+const steamIcon = computed(() => (props.game.icon.kind === "monogram" ? props.game.steamIcon : null));
+// An icon that cannot be shown falls back to the badge instead of a broken image.
+const iconFailed = ref(false);
+watch(steamIcon, () => (iconFailed.value = false));
 // Small icons (folder collages) show only the first letter.
 const text = computed(() => {
   const full = props.game.icon.kind === "monogram" ? props.game.icon.text : "";
@@ -27,18 +27,22 @@ const fontSize = computed(() => Math.max(12, Math.round(props.size * ([...text.v
     aria-hidden="true"
   >
     <img v-if="game.icon.kind === 'image'" class="size-full object-cover" :src="game.icon.url" alt="" draggable="false" />
-    <template v-else-if="art && !artFailed">
-      <!-- The original cover, cropped square by the browser; the file itself is never changed. -->
-      <img
-        class="size-full object-cover"
-        :src="art"
-        alt=""
-        draggable="false"
-        style="filter: saturate(0.92) contrast(1.03) sepia(0.06)"
-        @error="artFailed = true"
-      />
-      <!-- Tavora's look: a faint tint in the game's own tone, and the border ring on top. -->
-      <span class="pointer-events-none absolute inset-0" :style="{ backgroundColor: look.color, mixBlendMode: 'soft-light', opacity: 0.4 }" />
+    <template v-else-if="steamIcon && !iconFailed">
+      <!-- Steam's own icon, unchanged, on a tile in the game's tone: it is small and often transparent. -->
+      <span
+        class="flex size-full items-center justify-center"
+        :style="{ backgroundColor: look.color, backgroundImage: 'linear-gradient(160deg, rgb(255 255 255 / 0.10), rgb(0 0 0 / 0.18))' }"
+      >
+        <img
+          class="object-contain"
+          :style="{ width: '88%', height: '88%', filter: 'saturate(0.95) contrast(1.02) drop-shadow(0 1px 1px rgb(0 0 0 / 0.35))' }"
+          :src="steamIcon"
+          alt=""
+          draggable="false"
+          @error="iconFailed = true"
+        />
+      </span>
+      <!-- Tavora's border ring on top. -->
       <span class="pointer-events-none absolute inset-0 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]" :style="{ borderRadius: 'inherit' }" />
     </template>
     <span

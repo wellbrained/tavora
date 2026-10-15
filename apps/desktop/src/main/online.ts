@@ -1,6 +1,6 @@
 import { isGameId } from "@tavora/module-schema";
 import type { OnlineGame, OnlineSearchResult } from "../shared/host-api";
-import { isSteamAppId } from "./steam-art";
+import { isSteamAppId } from "./steam-icons";
 
 /** The Tavora service. The app talks to no one else; the desktop never holds keys. */
 export const DEFAULT_API_URL = "https://api.mytavora.app";
