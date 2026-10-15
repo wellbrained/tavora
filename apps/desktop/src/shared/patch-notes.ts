@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.37",
+    date: "2026-10-16",
+    title: "The game name tooltip sits closer",
+    notes: ["The game name tooltip in the sidebar sits 5 pixels closer to its icon."],
+  },
+  {
     version: "0.5.36",
     date: "2026-10-16",
     title: "Start a new game's workspace with a layout",
