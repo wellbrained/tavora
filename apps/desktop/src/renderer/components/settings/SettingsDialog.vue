@@ -13,6 +13,7 @@ import { SHORTCUT_GROUPS } from "../../shortcuts";
 import GameIcon from "../GameIcon.vue";
 import AppearanceSection from "./AppearanceSection.vue";
 import ModulesSection from "./ModulesSection.vue";
+import BrowserSection from "./BrowserSection.vue";
 import SegmentedControl from "./SegmentedControl.vue";
 import { GROUPS, SECTION_LABEL, SETTINGS, type SettingsSection } from "./settings-index";
 import SettingRow from "./SettingRow.vue";
@@ -379,6 +380,10 @@ function deleteNow(gameId: string, name: string) {
 
           <template v-else-if="section === 'modules'">
             <ModulesSection :highlight="highlight" />
+          </template>
+
+          <template v-else-if="section === 'browser'">
+            <BrowserSection :highlight="highlight" />
           </template>
 
           <template v-else-if="section === 'shortcuts'">

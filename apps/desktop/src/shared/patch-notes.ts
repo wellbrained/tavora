@@ -19,6 +19,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.6",
+    date: "2026-10-15",
+    title: "A browser next to your game",
+    notes: [
+      "New Browser module: open wikis, maps, guides and videos in a panel beside your notes. Find it under Add module.",
+      "Ads and trackers are blocked. If a site breaks, press the shield in the toolbar to allow ads there.",
+      "Sign-ins are kept for each game on its own. Press the people button to stay signed in to a site for all your games.",
+      "Videos go full screen inside the panel, and Esc brings them back.",
+      "Files are never downloaded and pages can't use your camera, location or notifications. Open in your browser takes the page to your normal browser.",
+      "Settings, then Browser, lists your sites and can clear the browser data.",
+    ],
+  },
+  {
     version: "0.5.5",
     date: "2026-10-15",
     title: "Remember my Steam profile",

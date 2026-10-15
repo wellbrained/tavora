@@ -109,8 +109,12 @@ export const searchOpen = ref(false);
 /** Bumped by Ctrl+\; the rail toggles itself when it changes. */
 export const railToggles = ref(0);
 
+/** Asks a Browser panel's toolbar to focus its address bar; a new object each time. */
+export const addressFocus = shallowRef<{ instanceId: string } | null>(null);
+
 function runShortcut(shortcut: HostShortcut): void {
-  if (shortcut === "search") searchOpen.value = !searchOpen.value;
+  if (shortcut.startsWith("address:")) addressFocus.value = { instanceId: shortcut.slice("address:".length) };
+  else if (shortcut === "search") searchOpen.value = !searchOpen.value;
   else if (shortcut === "shortcuts") openSettings({ section: "shortcuts" });
   else if (shortcut === "settings") openSettings();
   else if (shortcut === "toggle-rail") railToggles.value++;

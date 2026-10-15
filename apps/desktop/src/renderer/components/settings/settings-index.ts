@@ -1,4 +1,4 @@
-import { Blocks, Keyboard, Palette, SlidersHorizontal, Trash2 } from "@lucide/vue";
+import { Blocks, Globe, Keyboard, Palette, SlidersHorizontal, Trash2 } from "@lucide/vue";
 
 // The section menu, in groups. New settings get a row in a section, or a
 // new section here, rather than a longer page.
@@ -9,6 +9,7 @@ export const GROUPS = [
       { id: "general", label: "General", icon: SlidersHorizontal },
       { id: "appearance", label: "Appearance", icon: Palette },
       { id: "modules", label: "Modules", icon: Blocks },
+      { id: "browser", label: "Browser", icon: Globe },
       { id: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard },
     ],
   },
@@ -177,6 +178,34 @@ export const SETTINGS: SettingEntry[] = [
     label: "Installed modules",
     description: "Every module Tavora found, where it came from, and a way to remove the ones in your own folder.",
     keywords: ["module", "modules", "installed", "remove", "uninstall", "delete", "notes", "to-dos", "list"],
+  },
+  {
+    id: "browser-shared-sites",
+    section: "browser",
+    label: "Signed in for all games",
+    description: "Sites that keep one sign-in for every game in Browser panels. Every other site keeps sign-ins for each game on its own.",
+    keywords: ["browser", "login", "sign in", "account", "cookies", "shared", "web", "website"],
+  },
+  {
+    id: "browser-adblock-off",
+    section: "browser",
+    label: "Ads allowed",
+    description: "Sites where the Browser panel does not block ads and trackers.",
+    keywords: ["browser", "ads", "adblock", "ad blocker", "tracker", "privacy", "web", "website"],
+  },
+  {
+    id: "browser-clear-game",
+    section: "browser",
+    label: "Clear browser data for this game",
+    description: "Signs you out of the sites in this game's Browser panels and deletes their cookies, site data and cache.",
+    keywords: ["browser", "cookies", "cache", "history", "sign out", "logout", "clear", "delete", "privacy"],
+  },
+  {
+    id: "browser-clear-shared",
+    section: "browser",
+    label: "Clear shared browser data",
+    description: "Signs you out of the sites signed in for all games and deletes their cookies, site data and cache.",
+    keywords: ["browser", "cookies", "cache", "sign out", "logout", "clear", "delete", "privacy", "shared"],
   },
   {
     id: "shortcuts",
