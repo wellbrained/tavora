@@ -192,7 +192,6 @@ test("to-dos: groups, steps, objectives and finished tasks, kept after a restart
   await expect.poll(() => taskTitles(app)).toEqual(["Find the Ancient Crypt"]);
   await expect.poll(() => inModule(app, TODOS, `${q("group-name")}.textContent.trim()`)).toBe("To-Dos");
 
-  await click(app, TODOS, `[data-testid="new-group"]`);
   await addInto(app, TODOS, $(`[data-testid="group-name-new"]`), "Bosses");
   await expect.poll(() => inModule(app, TODOS, `!!${groupNamed("Bosses")}`)).toBe(true);
   for (const title of ["Defeat Count Geonor", "Defeat the Executioner"]) {
