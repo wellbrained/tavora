@@ -1,6 +1,7 @@
 import { isGameId, isModuleId } from "@tavora/module-schema";
 import type { BrowserCommand, HostAction, SteamImportGame } from "../shared/host-api";
 import { isSite, MAX_ADDRESS } from "./browser-url";
+import { isClientSecret } from "./discord-store";
 import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
 import { isGridSize, layoutTemplate } from "../shared/layout-templates";
@@ -204,6 +205,11 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("list", "site") && (a.list === "shared" || a.list === "adblock-off") && isSite(a.site) ? { type: a.type, list: a.list, site: a.site } : null;
     case "clear-browser-data":
       return only("scope") && (a.scope === "game" || a.scope === "shared") ? { type: a.type, scope: a.scope } : null;
+    case "discord-set-secret":
+      return only("secret") && (a.secret === null || isClientSecret(a.secret)) ? { type: a.type, secret: a.secret } : null;
+    case "discord-connect":
+    case "discord-sign-out":
+      return only() ? { type: a.type } : null;
     case "open-module":
       return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
     case "close-panel":
