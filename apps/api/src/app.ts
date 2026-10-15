@@ -1,7 +1,9 @@
 import type { DatabaseSync } from "node:sqlite";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import { MAX_UPLOAD_BODY, type Submissions } from "./submissions.ts";
 import { DEFAULT_LIMIT, MAX_LIMIT, MAX_QUERY_LENGTH, searchGames } from "./search.ts";
 import { MAX_PROFILE_LENGTH, SteamError, type SteamClient } from "./steam.ts";
 
@@ -20,10 +22,14 @@ export interface AppOptions {
    * while this is set, so no icon is ever offered without a way to object.
    */
   takedownContact?: string;
+  /** Icons offered by players. Absent: the offer route answers 503. */
+  submissions?: Submissions;
+  submitRateLimiter?: RateLimiter;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
+  const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 10, windowMs: 3_600_000 });
   const steamLimiter = steamRateLimiter ?? createRateLimiter({ limit: 6, windowMs: 60_000 });
   const app = new Hono();
 
@@ -101,6 +107,35 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
       headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" },
     });
   });
+
+  // A player offers an icon their PC has and the service lacks. It is checked,
+  // cleaned and queued; nothing is served until a person approves it. JSON
+  // only, which a web page on another site cannot send without a preflight
+  // this service refuses. Who sent it is never recorded.
+  app.post(
+    "/v1/icons/submit",
+    bodyLimit({ maxSize: MAX_UPLOAD_BODY + 2000, onError: (context) => context.json({ error: "That icon is too big." }, 413) }),
+    async (context) => {
+      const wait = submitLimiter.check(clientKey ? clientKey(context.req.raw) : "local");
+      if (wait > 0) {
+        context.header("Retry-After", String(wait));
+        return context.json({ error: "Too many requests." }, 429);
+      }
+      if (!iconsAvailable || !submissions) return context.json({ error: "Sharing icons is not available right now." }, 503);
+      if (!(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) {
+        return context.json({ error: "Send JSON." }, 415);
+      }
+      let body: unknown;
+      try {
+        body = JSON.parse(await context.req.text());
+      } catch {
+        return context.json({ error: "Send { id, name, source, icon }." }, 400);
+      }
+      const result = submissions.submit(body);
+      if (result.status === 202) return context.json({ status: "received" }, 202);
+      return context.json({ error: result.error }, result.status);
+    },
+  );
 
   // Steam import. POST, so the profile is in no URL; JSON only, which a web
   // page on another site cannot send without a preflight this service refuses.

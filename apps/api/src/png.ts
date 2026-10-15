@@ -63,6 +63,33 @@ const chunk = (type: string, data: Uint8Array): Uint8Array => {
   return out;
 };
 
+const KEEP = new Set(["IHDR", "PLTE", "tRNS", "IDAT", "IEND"]);
+
+/**
+ * A PNG with only the chunks that make the picture (header, palette,
+ * transparency, image data, end), so text, metadata and anything hidden in
+ * other chunks is gone and not one pixel changes. Null when the file is not a
+ * well-formed small PNG.
+ */
+export function stripPng(bytes: Uint8Array): Uint8Array | null {
+  if (!inspectPng(bytes)) return null;
+  const v = view(bytes);
+  const kept: Uint8Array[] = [SIGNATURE];
+  for (let at = 8; at < bytes.byteLength; ) {
+    const length = v.getUint32(at);
+    const type = String.fromCharCode(bytes[at + 4]!, bytes[at + 5]!, bytes[at + 6]!, bytes[at + 7]!);
+    if (KEEP.has(type)) kept.push(bytes.subarray(at, at + 12 + length));
+    at += 12 + length;
+  }
+  const out = new Uint8Array(kept.reduce((sum, part) => sum + part.byteLength, 0));
+  let at = 0;
+  for (const part of kept) {
+    out.set(part, at);
+    at += part.byteLength;
+  }
+  return inspectPng(out) ? out : null;
+}
+
 /** An 8-bit RGBA PNG from top-down rows of pixels. */
 export function encodePng(width: number, height: number, rgba: Uint8Array): Uint8Array {
   const header = new Uint8Array(13);
