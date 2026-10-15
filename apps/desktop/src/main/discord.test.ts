@@ -92,7 +92,7 @@ describe("DiscordConnection", () => {
     expect(fake.commands).toEqual([]);
 
     await connection.connectNow();
-    await until(() => connection.view().status === "connected" && connection.view().others.length === 1);
+    await until(() => connection.view().status === "connected" && connection.view().channels.length === 2);
     expect(fake.commands.find((c) => c.cmd === "AUTHORIZE")?.args).toEqual({ client_id: "99", scopes: ["rpc", "rpc.voice.read", "rpc.voice.write", "identify"] });
     // The secret goes to Discord's token address and nowhere else.
     const tokenRequests = requests.filter((r) => r.body.includes("s3cret_value"));
@@ -107,7 +107,8 @@ describe("DiscordConnection", () => {
       ["Brain", false],
       ["Lena", true],
     ]);
-    expect(view.others).toEqual([{ id: "11", name: "Lobby", members: [expect.objectContaining({ name: "Tobi" })] }]);
+    expect(view.channels.map((c) => c.id)).toEqual(["10", "11"]);
+    expect(view.channels[1]).toEqual({ id: "11", name: "Lobby", members: [expect.objectContaining({ name: "Tobi" })] });
     for (const evt of ["VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_DELETE", "SPEAKING_START", "SPEAKING_STOP"]) {
       expect(fake.commands).toContainEqual({ cmd: "SUBSCRIBE", args: { channel_id: "10" }, evt });
     }
@@ -148,7 +149,7 @@ describe("DiscordConnection", () => {
     fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "30", name: null, voice_states: [person("1", "Brain"), person("5", "Kira")] } }));
     fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: "30" });
     await until(() => connection.view().call?.id === "30");
-    expect(connection.view()).toMatchObject({ server: null, others: [], call: { name: "Call" } });
+    expect(connection.view()).toMatchObject({ server: null, channels: [], call: { name: "Call" } });
     expect(fake.commands).toContainEqual({ cmd: "UNSUBSCRIBE", args: { channel_id: "10" }, evt: "SPEAKING_START" });
 
     fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: null }));
@@ -160,7 +161,7 @@ describe("DiscordConnection", () => {
   it("remembers the last server channel, and joins it or another listed one when asked", async () => {
     const { connection, fake, saved } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
     await connection.setWanted(true);
-    await until(() => connection.view().status === "connected" && connection.view().others.length === 1);
+    await until(() => connection.view().status === "connected" && connection.view().channels.length === 2);
     const last = { channelId: "10", guildId: "20", name: "Factory Floor", serverName: "Wellbrained Crew" };
     await until(() => saved.at(-1)?.last?.serverName === "Wellbrained Crew");
     expect(saved.at(-1)?.last).toEqual(last);
@@ -178,7 +179,7 @@ describe("DiscordConnection", () => {
     // A listed channel can be joined; one Tavora never showed cannot.
     fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain")] } }));
     fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: "10" });
-    await until(() => connection.view().others.length === 1);
+    await until(() => connection.view().channels.length === 2);
     await connection.join("11");
     expect(fake.commands.filter((c) => c.cmd === "SELECT_VOICE_CHANNEL").map((c) => c.args.channel_id)).toEqual(["10", "11"]);
     await expect(connection.join("99")).rejects.toMatchObject({ key: "discord.error.joinUnknown" });
@@ -202,7 +203,7 @@ describe("DiscordConnection", () => {
     fake.answers.set("GET_GUILDS", () => ({ data: { guilds: [{ id: "20", name: "Wellbrained Crew" }, { id: "21", name: "Other Crew" }] } }));
     connection.setGame("poe2");
     await connection.setWanted(true);
-    await until(() => connection.view().status === "connected" && connection.view().call !== null && connection.view().others.length === 1);
+    await until(() => connection.view().status === "connected" && connection.view().call !== null && connection.view().channels.length === 2);
     expect(connection.view().servers.map((s) => s.name)).toEqual(["Wellbrained Crew", "Other Crew"]);
     expect(connection.view().game).toEqual({ remember: false, serverId: null });
 
@@ -214,12 +215,12 @@ describe("DiscordConnection", () => {
     // Without a call the game's server is still listed, and Rejoin offers the game's channel.
     fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: null }));
     fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: null });
-    await until(() => connection.view().call === null && connection.view().others.length === 2);
+    await until(() => connection.view().call === null && connection.view().channels.length === 2);
     expect(connection.view()).toMatchObject({ browseServer: { id: "20", name: "Wellbrained Crew" }, last: { channelId: "10", name: "Factory Floor", serverName: "Wellbrained Crew" } });
 
     // Another game without a server shows nothing and offers the last channel anywhere.
     connection.setGame("satisfactory");
-    await until(() => connection.view().others.length === 0);
+    await until(() => connection.view().channels.length === 0);
     expect(connection.view()).toMatchObject({ browseServer: null, game: { remember: false }, last: { channelId: "10" } });
 
     // Choosing a server from the list; only a server the player is on is accepted.
