@@ -159,6 +159,9 @@ describe("Steam icons", () => {
     expect(emptyLibrary().steamIcons).toBe(true);
     expect(sanitizeLibrary({ steamIcons: false }).steamIcons).toBe(false);
     expect(sanitizeLibrary({ steamIcons: "no" }).steamIcons).toBe(true);
+    expect(emptyLibrary().steamProfile).toBeNull();
+    expect(sanitizeLibrary({ steamProfile: "  https://steamcommunity.com/id/me " }).steamProfile).toBe("https://steamcommunity.com/id/me");
+    for (const bad of ["", "   ", 5, "x".repeat(201)]) expect(sanitizeLibrary({ steamProfile: bad }).steamProfile).toBeNull();
   });
 
   it("asks for every game that has no icon, and not again soon after a miss", () => {

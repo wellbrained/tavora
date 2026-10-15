@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matches, normalizeLink, parseNote, previewFor, relativeTime, sections, titleFor, type NoteEntry } from "./notes";
+import { contentFromText, matches, normalizeLink, parseNote, previewFor, relativeTime, sections, titleFor, type NoteEntry } from "./notes";
 
 function entry(id: string, patch: Partial<NoteEntry> = {}): NoteEntry {
   return { id, title: id, text: "", pinned: false, updatedAt: "2026-10-14T10:00:00.000Z", revision: 1, ...patch };
@@ -21,6 +21,20 @@ describe("parseNote", () => {
   it("keeps valid fields", () => {
     const content = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Hi" }] }] };
     expect(parseNote({ content, text: "Hi", pinned: true, createdAt: "C" })).toMatchObject({ content, text: "Hi", pinned: true, createdAt: "C" });
+  });
+});
+
+describe("contentFromText", () => {
+  it("makes one paragraph per line, empty lines included", () => {
+    expect(contentFromText("a\n\nb")).toEqual({
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "a" }] },
+        { type: "paragraph" },
+        { type: "paragraph", content: [{ type: "text", text: "b" }] },
+      ],
+    });
+    expect(contentFromText("").content).toEqual([{ type: "paragraph" }]);
   });
 });
 
