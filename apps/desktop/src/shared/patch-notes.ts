@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.29",
+    date: "2026-10-16",
+    title: "A new game's empty workspace",
+    notes: [
+      "The Add module button and the text on a new game's empty workspace can be clicked again.",
+      "The text now says to choose a layout first (Layouts above), then add modules.",
+    ],
+  },
+  {
     version: "0.5.28",
     date: "2026-10-16",
     title: "Game icons fill their tile",

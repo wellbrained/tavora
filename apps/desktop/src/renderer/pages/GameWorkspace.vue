@@ -333,7 +333,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
       <DropGuide v-if="guide" :guide="guide" />
       <div
         v-if="!view.panels.length && !view.layout"
-        class="bg-background absolute inset-x-2 top-0 bottom-2 flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed text-center"
+        class="bg-background absolute inset-x-2 top-0 bottom-2 z-10 flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed text-center"
         data-testid="empty-workspace"
       >
         <LayoutGrid class="text-muted-foreground mb-2 size-12" :stroke-width="1" />
