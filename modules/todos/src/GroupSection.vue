@@ -1,13 +1,16 @@
 <script setup lang="ts">
 // One group of to-dos with its own add row. Tasks can be dragged inside and
 // between groups; the menus offer the same moves without a mouse.
-import { ArrowDown, ArrowUp, ChevronRight, Ellipsis, ListX, Pencil, Trash2 } from "@lucide/vue";
+import { ArrowDown, ArrowUp, Check, ChevronRight, Ellipsis, ListX, Palette, Pencil, Trash2 } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { computed, nextTick, onBeforeUnmount, ref } from "vue";
@@ -15,7 +18,7 @@ import AddInput from "./AddInput.vue";
 import { plural, t } from "./i18n";
 import type { TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
-import { addTask, clearDone, MAX, moveGroup, openCount, renameGroup, type Group } from "./todos";
+import { addTask, clearDone, GROUP_COLORS, MAX, moveGroup, openCount, renameGroup, setGroupColor, type Group, type GroupColor } from "./todos";
 
 export interface DropTarget {
   groupId: string;
@@ -43,6 +46,10 @@ const emit = defineEmits<{
   dragover: [target: DropTarget];
   drop: [];
 }>();
+
+/** "None" first, then each color. */
+const COLOR_OPTIONS: GroupColor[] = ["", ...GROUP_COLORS];
+const colorName = (color: GroupColor) => (color ? t(`color.${color}`) : t("group.color.none"));
 
 const renaming = ref(false);
 const nameInput = ref<HTMLInputElement | null>(null);
@@ -129,7 +136,14 @@ function dropMark(index: number): "before" | "after" | null {
     @drop.prevent="emit('drop')"
   >
     <header
-      :class="cn('group/header hover:bg-accent/40 relative flex h-10 cursor-pointer items-center gap-1 pr-1 pl-1.5 select-none', !collapsed && 'border-b')"
+      :class="
+        cn(
+          'group/header relative flex h-10 cursor-pointer items-center gap-1 pr-1 pl-1.5 select-none',
+          group.color ? 'tinted-header' : 'hover:bg-accent/40',
+          !collapsed && 'border-b',
+        )
+      "
+      :data-tint="group.color || undefined"
       data-testid="group-header"
       @click="onHeaderClick"
     >
@@ -170,7 +184,7 @@ function dropMark(index: number): "before" | "after" | null {
       <!-- How much of the group is done, as a thin line along the header's bottom edge. -->
       <span
         v-if="group.tasks.length && !collapsed"
-        class="bg-primary absolute bottom-[-1px] left-0 h-px transition-[width] duration-300 motion-reduce:transition-none"
+        class="absolute bottom-[-1px] left-0 h-px bg-[var(--tint,var(--primary))] transition-[width] duration-300 motion-reduce:transition-none"
         :style="{ width: `${(doneCount / group.tasks.length) * 100}%` }"
         aria-hidden="true"
       />
@@ -191,6 +205,21 @@ function dropMark(index: number): "before" | "after" | null {
           <DropdownMenuItem :disabled="position === groups.length - 1" @select="change((data) => moveGroup(data, group.id, 1))">
             <ArrowDown :stroke-width="1.5" /> {{ t("group.moveDown") }}
           </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger data-testid="menu-color"><Palette :stroke-width="1.5" /> {{ t("group.color") }}</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem
+                v-for="option in COLOR_OPTIONS"
+                :key="option || 'none'"
+                :data-testid="`menu-color-${option || 'none'}`"
+                @select="change((data) => setGroupColor(data, group.id, option))"
+              >
+                <span class="color-swatch" :data-tint="option || undefined" aria-hidden="true" />
+                {{ colorName(option) }}
+                <Check v-if="group.color === option" class="ml-auto" :stroke-width="1.5" />
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuItem :disabled="!doneCount" data-testid="menu-clear-done" @select="change((data) => clearDone(data, group.id))">
             <ListX :stroke-width="1.5" /> {{ t("group.deleteFinished") }}
           </DropdownMenuItem>

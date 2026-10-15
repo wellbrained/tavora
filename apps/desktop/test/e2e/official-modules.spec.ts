@@ -314,3 +314,34 @@ test("ui playground: shows every section, filters them and disables the controls
   await expect.poll(() => inModule(app, PLAYGROUND, `[...${q("section-choices")}.querySelectorAll("button")].every((el) => el.disabled)`)).toBe(true);
   await app.close();
 });
+
+test("to-dos: a group gets a color from its menu, and keeps it after a restart", async () => {
+  const { app, page, userData } = await launch();
+  await openModule(page, TODOS);
+  await ready(app, TODOS, "empty");
+  await addInto(app, TODOS, $(`[data-testid="first-task"]`), "Find the Ancient Crypt");
+  await expect.poll(() => taskTitles(app)).toEqual(["Find the Ancient Crypt"]);
+
+  const header = `${q("group-header")}`;
+  const tint = () => inModule<string | null>(app, TODOS, `${header}.getAttribute("data-tint")`);
+  expect(await tint()).toBeNull();
+
+  // Color is a submenu of the group's menu; the keyboard opens both levels.
+  const menu = `document.querySelector('[data-slot="dropdown-menu-content"][data-state="open"]')`;
+  await inModule(app, TODOS, `${q("group-menu")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  await expect.poll(() => inModule(app, TODOS, `!!${menu}?.querySelector('[data-testid="menu-color"]') && ${menu}.getAnimations().length === 0`)).toBe(true);
+  await inModule(app, TODOS, `(() => { const item = ${q("menu-color")}; item.focus(); item.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); })()`);
+  await expect.poll(() => inModule(app, TODOS, `!!${q("menu-color-blue")}`)).toBe(true);
+  await expect.poll(() => inModule(app, TODOS, `document.getAnimations().length === 0`)).toBe(true);
+  await inModule(app, TODOS, `${q("menu-color-blue")}.click()`);
+  await expect.poll(tint).toBe("blue");
+  expect(await inModule(app, TODOS, `getComputedStyle(${header}).backgroundColor !== getComputedStyle(${header}.closest("section")).backgroundColor`)).toBe(true);
+  await app.close();
+
+  // Saved with the group.
+  const again = await launch(userData);
+  await openModule(again.page, TODOS);
+  await ready(again.app, TODOS, "group-header");
+  await expect.poll(() => inModule<string | null>(again.app, TODOS, `${header}.getAttribute("data-tint")`)).toBe("blue");
+  await again.app.close();
+});

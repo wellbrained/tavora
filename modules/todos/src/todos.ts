@@ -38,10 +38,16 @@ export interface Task {
   doneAt: string | null;
 }
 
+/** The colors a group header can be tinted with. Empty means none. */
+export const GROUP_COLORS = ["red", "orange", "yellow", "green", "teal", "blue", "violet", "pink"] as const;
+export type GroupColor = (typeof GROUP_COLORS)[number] | "";
+
 export interface Group {
   [key: string]: JsonValue;
   id: string;
   name: string;
+  /** Tints the group's header; "" for none. */
+  color: GroupColor;
   tasks: Task[];
 }
 
@@ -82,10 +88,16 @@ export function parseList(raw: JsonValue | null): TodoList {
       groups.slice(0, LIMITS.groups).map((group) => ({
         id: text(group.id, 64),
         name: text(group.name, MAX.groupName) || DEFAULT_GROUP,
+        color: parseColor(group.color),
         tasks: unique(list(group.tasks).slice(0, LIMITS.tasksPerGroup).map(parseTask)),
       })),
     ),
   };
+}
+
+/** A known color name, or "" for none and for anything an older version or a hand edit left there. */
+function parseColor(value: JsonValue | undefined): GroupColor {
+  return GROUP_COLORS.find((color) => color === value) ?? "";
 }
 
 function parseTask(task: JsonObject): Task {
@@ -134,7 +146,13 @@ export function openCount(group: Group): number {
 export function addGroup(data: TodoList, id: string, name: string, index = data.groups.length): void {
   const clean = name.trim().slice(0, MAX.groupName);
   if (!clean || data.groups.some((group) => group.id === id)) return;
-  data.groups.splice(clamp(index, 0, data.groups.length), 0, { id, name: clean, tasks: [] });
+  data.groups.splice(clamp(index, 0, data.groups.length), 0, { id, name: clean, color: "", tasks: [] });
+}
+
+/** Tints a group's header; anything that is not one of GROUP_COLORS takes the tint away. */
+export function setGroupColor(data: TodoList, groupId: string, color: string): void {
+  const group = data.groups.find((item) => item.id === groupId);
+  if (group) group.color = GROUP_COLORS.find((known) => known === color) ?? "";
 }
 
 export function renameGroup(data: TodoList, groupId: string, name: string): void {
