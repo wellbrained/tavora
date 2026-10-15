@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.20",
+    date: "2026-10-16",
+    title: "Discord panel: a steady channel order and a smaller header",
+    notes: [
+      "The voice channels stay in the same order as on the Discord server. The channel you are in is highlighted where it is, and no longer moves to the top.",
+      "Mute, Deafen, Leave and Rejoin sit in the header next to the server name, so the panel has more room for the channels.",
+    ],
+  },
+  {
     version: "0.5.19",
     date: "2026-10-16",
     title: "Icons switch explained",
@@ -55,12 +64,8 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.5.15",
     date: "2026-10-16",
-    title: "Discord panel: clearer text and a steady channel order",
-    notes: [
-      "When you are not in a voice channel, the Discord panel now says what to do next: press a channel in the list, or choose a server for the game to see its channels.",
-      "The voice channels stay in the same order as on the Discord server. The channel you are in is highlighted where it is, and no longer moves to the top.",
-      "Mute, Deafen, Leave and Rejoin sit in the header next to the server name, so the panel has more room for the channels.",
-    ],
+    title: "Clearer Discord panel text",
+    notes: ["When you are not in a voice channel, the Discord panel now says what to do next: press a channel in the list, or choose a server for the game to see its channels."],
   },
   {
     version: "0.5.14",
