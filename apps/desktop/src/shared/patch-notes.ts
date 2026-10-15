@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.39",
+    date: "2026-10-16",
+    title: "Folders stay as you left them",
+    notes: ["When you drag a game into a folder, the folder no longer opens by itself. A closed folder stays closed and an open one stays open."],
+  },
+  {
     version: "0.5.38",
     date: "2026-10-16",
     title: "The game name tooltip stays on top",
