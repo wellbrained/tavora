@@ -44,7 +44,18 @@ pnpm --filter @tavora/desktop package --win    # installer (Tavora-Setup-x.y.z.e
 pnpm --filter @tavora/desktop package --linux  # AppImage
 ```
 
-Output lives in `apps/desktop/release/`. Builds include Notes, To-Dos and the example modules, keep data in the normal per-user folder, and are unsigned. Installers and automatic updates are planned separately.
+Output lives in `apps/desktop/release/`. Builds include Notes, To-Dos and the example modules, keep data in the normal per-user folder (`%APPDATA%\@tavora\desktop`), and are unsigned. The Windows installer updates itself from updates.mytavora.app (see Releasing).
+
+### Releasing
+
+Installed apps update only when a **minor** version (x.y.0) is released; ordinary PRs raise the patch number and publish nothing. To release, raise the minor number in `apps/desktop/package.json`, fold the patch-notes entries since the last release into one entry for it (`apps/desktop/src/shared/patch-notes.ts`), merge that through a PR, then on the maintainer's PC:
+
+```sh
+pnpm release --dry-run   # checks, tests, e2e and the installer build; stops before the upload
+pnpm release             # the same, then uploads to updates.mytavora.app and tags vX.Y.0
+```
+
+The script refuses unless it runs on a clean, up-to-date `main` with an `x.y.0` version that has its patch-notes entry. The server side lives in `apps/desktop/deploy` (Caddy site, one-time setup, publish script); the installer, update manifest and last three versions are kept at `/srv/tavora-updates`.
 
 ### Development mode
 
