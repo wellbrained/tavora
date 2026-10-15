@@ -264,6 +264,8 @@ export interface HostViewState {
     autoUpdate: boolean;
     /** Whether game icons may be taken from Steam on this PC. */
     steamIcons: boolean;
+    /** Whether panel tabs show an icon before the module name. */
+    moduleIcons: boolean;
     /** The Steam profile the player asked Tavora to remember for the import, or null. */
     steamProfile: string | null;
     /** False until the player finished or skipped the first-run welcome. */
@@ -358,6 +360,7 @@ export type HostAction =
   /** Quits, installs the downloaded version and starts Tavora again. */
   | { type: "restart-to-update" }
   | { type: "set-steam-icons"; enabled: boolean }
+  | { type: "set-module-icons"; enabled: boolean }
   | { type: "set-language"; language: LanguageSetting }
   /** Remembers the Steam profile for the import on this PC; null forgets it. */
   | { type: "set-steam-profile"; profile: string | null }

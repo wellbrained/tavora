@@ -18,6 +18,7 @@ describe("parseAction", () => {
     [{ type: "add-game", online: { id: "hollow-knight", name: "Hollow Knight", steamAppId: null } }],
     [{ type: "add-game", online: { id: "elden-ring", name: "Elden Ring", steamAppId: 1245620 } }],
     [{ type: "set-steam-icons", enabled: true }],
+    [{ type: "set-module-icons", enabled: false }],
     [{ type: "set-theme", themeId: "tavora.nightfall", variationId: "light" }],
     [{ type: "reset-theme" }],
     [{ type: "reload-themes" }],

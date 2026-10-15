@@ -74,6 +74,8 @@ export interface Library {
   autoUpdate: boolean;
   /** Game icons may be taken from Steam on this PC. Off means the generated badge. */
   steamIcons: boolean;
+  /** The panel tabs show an icon before the module name. */
+  moduleIcons: boolean;
   /** The Steam profile link or id the player chose to remember for the Steam import, or null. Kept only on this PC. */
   steamProfile: string | null;
   /** The language of Tavora's texts: one of them, or the system's. */
@@ -111,6 +113,7 @@ export function emptyLibrary(): Library {
     onlineSearch: true,
     autoUpdate: true,
     steamIcons: true,
+    moduleIcons: true,
     steamProfile: null,
     language: "system",
     theme: { ...DEFAULT_THEME },
@@ -576,6 +579,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.onlineSearch === "boolean") library.onlineSearch = saved.onlineSearch;
   if (typeof saved.autoUpdate === "boolean") library.autoUpdate = saved.autoUpdate;
   if (typeof saved.steamIcons === "boolean") library.steamIcons = saved.steamIcons;
+  if (typeof saved.moduleIcons === "boolean") library.moduleIcons = saved.moduleIcons;
   if (isLanguageSetting(saved.language)) library.language = saved.language;
   if (typeof saved.steamProfile === "string" && saved.steamProfile.trim() && saved.steamProfile.length <= 200) library.steamProfile = saved.steamProfile.trim();
   const theme = asRecord(saved.theme);

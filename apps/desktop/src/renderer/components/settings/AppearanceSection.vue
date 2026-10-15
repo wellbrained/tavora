@@ -6,6 +6,7 @@
 import { Check, CopyPlus, FolderOpen, RefreshCw } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { ThemeVariationView, ThemeView } from "../../../shared/host-api";
 import { act, state } from "../../host";
@@ -29,6 +30,11 @@ function pick(theme: ThemeView) {
   const variation = theme.variations.find((item) => item.id === appearance.value.variationId) ?? theme.variations[0]!;
   void act({ type: "set-theme", themeId: theme.id, variationId: variation.id });
 }
+
+const moduleIcons = computed({
+  get: () => state.value!.library.moduleIcons,
+  set: (enabled: boolean) => void act({ type: "set-module-icons", enabled }),
+});
 
 type Mode = "system" | "dark" | "light";
 
@@ -164,6 +170,14 @@ const showVariation = computed(() => {
       <span class="text-muted-foreground"> {{ t("settings.appearance.problem", { folder: "", message: problem.message }).trim() }}</span>
     </li>
   </ul>
+  <SettingRow
+    :label="t('settings.module-icons.label')"
+    :description="t('settings.module-icons.description')"
+    setting="module-icons"
+    :highlighted="highlight === 'module-icons'"
+  >
+    <Switch v-model="moduleIcons" :aria-label="t('settings.module-icons.label')" data-testid="module-icons" />
+  </SettingRow>
   <SettingRow
     :label="t('settings.reset-theme.label')"
     :description="t('settings.reset-theme.description')"
