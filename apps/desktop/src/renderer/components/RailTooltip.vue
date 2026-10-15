@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The name of a game or folder beside its icon in the compact rail. It replaces the system's small tooltip,
 // which is tiny and blurry: this one is large, high-contrast and appears at once.
-import { TooltipContent, TooltipPortal, TooltipRoot, TooltipTrigger } from "reka-ui";
+import { TooltipArrow, TooltipContent, TooltipPortal, TooltipRoot, TooltipTrigger } from "reka-ui";
 
 defineProps<{ text: string; disabled?: boolean }>();
 </script>
@@ -17,6 +17,13 @@ defineProps<{ text: string; disabled?: boolean }>();
         data-testid="rail-tooltip"
       >
         {{ text }}
+        <!-- A pointer from the label to its icon; its two slanted sides carry the label's border. -->
+        <TooltipArrow as-child>
+          <svg width="20" height="10" viewBox="0 0 20 10" aria-hidden="true" style="margin-top: -1px">
+            <path d="M0 0H20L10 10Z" class="fill-popover" />
+            <path d="M0 0L10 10L20 0" class="stroke-border fill-none" stroke-width="1.5" />
+          </svg>
+        </TooltipArrow>
       </TooltipContent>
     </TooltipPortal>
   </TooltipRoot>
