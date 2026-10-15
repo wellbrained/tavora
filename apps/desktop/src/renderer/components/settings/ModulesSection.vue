@@ -41,8 +41,6 @@ function remove(module: ModuleView) {
 </script>
 
 <template>
-  <h2 class="mb-4 text-xl font-semibold">{{ t("settings.section.modules") }}</h2>
-
   <SettingRow
     :label="t('settings.own-modules.label')"
     :description="t('settings.own-modules.description')"

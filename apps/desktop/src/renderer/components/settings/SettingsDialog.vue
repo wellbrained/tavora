@@ -227,15 +227,26 @@ function deleteNow(gameId: string, name: string) {
       </nav>
 
       <div class="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
-        <DialogClose as-child>
-          <Button variant="ghost" size="icon" class="absolute top-4 right-4" data-testid="settings-close" :aria-label="t('settings.close')" :title="t('common.close')">
-            <X :stroke-width="1.5" />
-          </Button>
-        </DialogClose>
+        <!-- The title and close button stay put while the section scrolls. -->
+        <header
+          :class="
+            cn(
+              'bg-card sticky top-0 z-10 flex h-16 flex-none items-center justify-between gap-4 border-b px-10 transition-colors duration-500',
+              highlight === section && 'bg-primary/10',
+            )
+          "
+          :data-setting="section"
+        >
+          <h2 class="truncate text-xl font-semibold" data-testid="settings-heading">{{ query.trim() ? t("settings.results.title") : sectionLabel(section) }}</h2>
+          <DialogClose as-child>
+            <Button variant="ghost" size="icon" class="flex-none" data-testid="settings-close" :aria-label="t('settings.close')" :title="t('common.close')">
+              <X :stroke-width="1.5" />
+            </Button>
+          </DialogClose>
+        </header>
 
-        <div class="max-w-[760px] px-10 py-10">
+        <div class="max-w-[760px] px-10 pt-6 pb-10">
           <template v-if="query.trim()">
-            <h2 class="mb-4 text-xl font-semibold">{{ t("settings.results.title") }}</h2>
             <p v-if="!results.length" class="text-muted-foreground" data-testid="settings-no-results">{{ t("settings.results.none", { query: query.trim() }) }}</p>
             <ul v-else class="-mx-3 flex flex-col gap-1" :aria-label="t('settings.results.title')" data-testid="settings-results">
               <li v-for="result in results" :key="result.id">
@@ -254,7 +265,6 @@ function deleteNow(gameId: string, name: string) {
           </template>
 
           <template v-else-if="section === 'general'">
-            <h2 class="mb-4 text-xl font-semibold">{{ t("settings.section.general") }}</h2>
             <SettingRow
               :label="t('settings.startup.label')"
               :description="t('settings.startup.description')"
@@ -411,13 +421,7 @@ function deleteNow(gameId: string, name: string) {
           </template>
 
           <template v-else-if="section === 'shortcuts'">
-            <h2
-              :class="cn('-mx-3 rounded-lg px-3 text-xl font-semibold transition-colors duration-500', highlight === 'shortcuts' && 'bg-primary/10')"
-              data-setting="shortcuts"
-            >
-              {{ t("settings.section.shortcuts") }}
-            </h2>
-            <p class="text-muted-foreground mt-2 mb-6">{{ t("settings.shortcuts.intro", { mod: MOD() }) }}</p>
+            <p class="text-muted-foreground mb-6">{{ t("settings.shortcuts.intro", { mod: MOD() }) }}</p>
             <div class="flex flex-col gap-6" data-testid="shortcuts">
               <section v-for="group in shortcutGroups()" :key="group.title">
                 <h3 class="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">{{ group.title }}</h3>
@@ -439,13 +443,7 @@ function deleteNow(gameId: string, name: string) {
           </template>
 
           <template v-else-if="section === 'patch-notes'">
-            <h2
-              :class="cn('-mx-3 rounded-lg px-3 text-xl font-semibold transition-colors duration-500', highlight === 'patch-notes' && 'bg-primary/10')"
-              data-setting="patch-notes"
-            >
-              {{ t("settings.section.patch-notes") }}
-            </h2>
-            <p class="text-muted-foreground mt-2 mb-6">{{ t("settings.patchNotes.intro") }}</p>
+            <p class="text-muted-foreground mb-6">{{ t("settings.patchNotes.intro") }}</p>
             <div class="flex flex-col gap-8" data-testid="patch-notes">
               <article v-for="entry in PATCH_NOTES" :key="entry.version" :data-testid="`patch-notes-${entry.version}`">
                 <header class="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -462,10 +460,7 @@ function deleteNow(gameId: string, name: string) {
           </template>
 
           <template v-else-if="section === 'trash'">
-            <h2 :class="cn('-mx-3 rounded-lg px-3 text-xl font-semibold transition-colors duration-500', highlight === 'trash' && 'bg-primary/10')" data-setting="trash">
-              {{ t("settings.section.trash") }}
-            </h2>
-            <p class="text-muted-foreground mt-2 mb-4">{{ t("settings.trash.description") }}</p>
+            <p class="text-muted-foreground mb-4">{{ t("settings.trash.description") }}</p>
             <div class="border-t" data-testid="trash">
               <p v-if="!library.trash.length" class="text-muted-foreground py-4" data-testid="trash-empty">{{ t("settings.trash.empty") }}</p>
               <ul v-else>
