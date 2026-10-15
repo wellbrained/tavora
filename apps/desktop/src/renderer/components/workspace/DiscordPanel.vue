@@ -5,8 +5,8 @@
 // channels of the server this game remembers (or of the call's server), with
 // who is in them. The player can join a channel, leave, and mute or deafen.
 // Everything comes from the Discord app on this PC through the main process.
-import { Headphones, HeadphoneOff, Mic, MicOff, Phone, PhoneOff, RefreshCw, Volume2 } from "@lucide/vue";
-import { computed } from "vue";
+import { Check, ChevronDown, Headphones, HeadphoneOff, Mic, MicOff, Phone, PhoneOff, RefreshCw, Search, Volume2 } from "@lucide/vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DiscordChannel, DiscordMember } from "../../../shared/host-api";
@@ -40,8 +40,8 @@ const server = computed(() => view.value?.server ?? null);
 const browseServer = computed(() => view.value?.browseServer ?? null);
 const call = computed(() => view.value?.call ?? null);
 const headerServer = computed(() => server.value ?? (call.value ? null : browseServer.value));
-/** The browsed server gets its own heading when it is not the server of the call. */
-const browseHeading = computed(() => (browseServer.value && browseServer.value.id !== server.value?.id ? browseServer.value : null));
+/** While in a call, the browsed server gets its own heading when it is not the call's server; with no call the header already names it. */
+const browseHeading = computed(() => (call.value && browseServer.value && browseServer.value.id !== server.value?.id ? browseServer.value : null));
 const others = computed<DiscordChannel[]>(() => view.value?.others ?? []);
 const self = computed(() => view.value?.self ?? null);
 
@@ -66,10 +66,35 @@ const label = (member: DiscordMember) =>
 function remember(on: boolean) {
   if (gameId.value) void act({ type: "discord-game-remember", gameId: gameId.value, remember: on });
 }
-function chooseServer(event: Event) {
-  const guildId = (event.target as HTMLSelectElement).value;
-  if (gameId.value && guildId) void act({ type: "discord-game-server", gameId: gameId.value, guildId });
+// The server picker: a button that opens a searchable list of the servers the player is on.
+const pickerOpen = ref(false);
+const query = ref("");
+const picker = ref<HTMLElement | null>(null);
+const search = ref<HTMLInputElement | null>(null);
+const servers = computed(() => view.value?.servers ?? []);
+const selectedId = computed(() => view.value?.game.serverId ?? null);
+const selectedName = computed(() => servers.value.find((option) => option.id === selectedId.value)?.name ?? (browseServer.value?.id === selectedId.value ? browseServer.value?.name : null) ?? null);
+const matches = computed(() => {
+  const needle = query.value.trim().toLowerCase();
+  return needle ? servers.value.filter((option) => option.name.toLowerCase().includes(needle)) : servers.value;
+});
+async function togglePicker() {
+  pickerOpen.value = !pickerOpen.value;
+  query.value = "";
+  if (pickerOpen.value) {
+    await nextTick();
+    search.value?.focus();
+  }
 }
+function pick(guildId: string) {
+  pickerOpen.value = false;
+  if (gameId.value) void act({ type: "discord-game-server", gameId: gameId.value, guildId });
+}
+const closeOutside = (event: PointerEvent) => {
+  if (pickerOpen.value && !picker.value?.contains(event.target as Node)) pickerOpen.value = false;
+};
+onMounted(() => document.addEventListener("pointerdown", closeOutside));
+onBeforeUnmount(() => document.removeEventListener("pointerdown", closeOutside));
 </script>
 
 <template>
@@ -97,51 +122,53 @@ function chooseServer(event: Event) {
         <span v-else class="text-muted-foreground font-medium">Discord</span>
       </header>
 
-      <div v-if="call" class="flex flex-none flex-wrap items-center gap-1 border-b px-2 py-1.5" data-testid="discord-controls">
-        <template v-if="view?.canControl">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            :class="cn(self?.mute && 'text-destructive')"
-            :title="self?.mute ? t('discord.panel.unmute') : t('discord.panel.mute')"
-            :aria-label="self?.mute ? t('discord.panel.unmute') : t('discord.panel.mute')"
-            :aria-pressed="self?.mute ?? false"
-            data-testid="discord-mute"
-            @click="act({ type: 'discord-voice', mute: !self?.mute })"
-          >
-            <MicOff v-if="self?.mute" class="size-4" :stroke-width="1.75" />
-            <Mic v-else class="size-4" :stroke-width="1.75" />
+      <div v-if="call || view?.last" class="flex flex-none flex-wrap items-center gap-1 border-b px-2 py-1.5" data-testid="discord-controls">
+        <template v-if="call">
+          <template v-if="view?.canControl">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              :class="cn(self?.mute && 'text-destructive')"
+              :title="self?.mute ? t('discord.panel.unmute') : t('discord.panel.mute')"
+              :aria-label="self?.mute ? t('discord.panel.unmute') : t('discord.panel.mute')"
+              :aria-pressed="self?.mute ?? false"
+              data-testid="discord-mute"
+              @click="act({ type: 'discord-voice', mute: !self?.mute })"
+            >
+              <MicOff v-if="self?.mute" class="size-4" :stroke-width="1.75" />
+              <Mic v-else class="size-4" :stroke-width="1.75" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              :class="cn(self?.deaf && 'text-destructive')"
+              :title="self?.deaf ? t('discord.panel.undeafen') : t('discord.panel.deafen')"
+              :aria-label="self?.deaf ? t('discord.panel.undeafen') : t('discord.panel.deafen')"
+              :aria-pressed="self?.deaf ?? false"
+              data-testid="discord-deafen"
+              @click="act({ type: 'discord-voice', deaf: !self?.deaf })"
+            >
+              <HeadphoneOff v-if="self?.deaf" class="size-4" :stroke-width="1.75" />
+              <Headphones v-else class="size-4" :stroke-width="1.75" />
+            </Button>
+          </template>
+          <Button v-else variant="ghost" size="sm" :title="t('discord.panel.allowControlHint')" data-testid="discord-allow-control" @click="act({ type: 'discord-allow-control' })">
+            {{ t("discord.panel.allowControl") }}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            :class="cn(self?.deaf && 'text-destructive')"
-            :title="self?.deaf ? t('discord.panel.undeafen') : t('discord.panel.deafen')"
-            :aria-label="self?.deaf ? t('discord.panel.undeafen') : t('discord.panel.deafen')"
-            :aria-pressed="self?.deaf ?? false"
-            data-testid="discord-deafen"
-            @click="act({ type: 'discord-voice', deaf: !self?.deaf })"
-          >
-            <HeadphoneOff v-if="self?.deaf" class="size-4" :stroke-width="1.75" />
-            <Headphones v-else class="size-4" :stroke-width="1.75" />
+          <Button variant="ghost" size="sm" class="text-destructive ml-auto" data-testid="discord-leave" @click="act({ type: 'discord-leave' })">
+            <PhoneOff class="size-4" :stroke-width="1.75" />
+            {{ t("discord.panel.leave") }}
           </Button>
         </template>
-        <Button v-else variant="ghost" size="sm" :title="t('discord.panel.allowControlHint')" data-testid="discord-allow-control" @click="act({ type: 'discord-allow-control' })">
-          {{ t("discord.panel.allowControl") }}
-        </Button>
-        <Button variant="ghost" size="sm" class="text-destructive ml-auto" data-testid="discord-leave" @click="act({ type: 'discord-leave' })">
-          <PhoneOff class="size-4" :stroke-width="1.75" />
-          {{ t("discord.panel.leave") }}
+        <Button v-else-if="view?.last" variant="ghost" size="sm" class="ml-auto min-w-0" data-testid="discord-rejoin" @click="act({ type: 'discord-join', channelId: view.last.channelId })">
+          <Phone class="size-4" :stroke-width="1.75" />
+          <span class="min-w-0 truncate">{{ t("discord.panel.rejoin", { name: view.last.name }) }}</span>
         </Button>
       </div>
 
       <div class="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <div v-if="!call" class="flex flex-col items-center gap-3 p-3 text-center">
           <p class="text-muted-foreground" data-testid="discord-no-call">{{ t("discord.panel.noCall") }}</p>
-          <Button v-if="view?.last" size="sm" class="h-auto flex-col gap-0 py-1.5" data-testid="discord-rejoin" @click="act({ type: 'discord-join', channelId: view.last.channelId })">
-            <span>{{ t("discord.panel.rejoin", { name: view.last.name }) }}</span>
-            <span v-if="view.last.serverName" class="text-xs font-normal opacity-80">{{ t("discord.panel.rejoinOn", { server: view.last.serverName }) }}</span>
-          </Button>
         </div>
 
         <ul class="min-h-0" data-testid="discord-channels">
@@ -236,17 +263,54 @@ function chooseServer(event: Event) {
             <RefreshCw :stroke-width="1.75" />
           </Button>
         </label>
-        <select
-          v-if="view?.game.remember"
-          class="border-input bg-background h-8 w-full rounded-md border px-2"
-          :value="view.game.serverId ?? ''"
-          :aria-label="t('discord.game.server')"
-          data-testid="discord-server-select"
-          @change="chooseServer"
-        >
-          <option value="" disabled>{{ t("discord.game.choose") }}</option>
-          <option v-for="option in view.servers" :key="option.id" :value="option.id">{{ option.name }}</option>
-        </select>
+        <div v-if="view?.game.remember" ref="picker" class="relative">
+          <button
+            type="button"
+            class="border-input hover:bg-secondary/60 focus-visible:border-ring focus-visible:ring-ring/50 flex h-8 w-full cursor-pointer items-center gap-2 rounded-md border px-2 text-left outline-none focus-visible:ring-3"
+            :aria-expanded="pickerOpen"
+            :aria-label="t('discord.game.server')"
+            data-testid="discord-server-select"
+            @click="togglePicker"
+          >
+            <span :class="cn('min-w-0 flex-1 truncate', !selectedName && 'text-muted-foreground')">{{ selectedName ?? t("discord.game.choose") }}</span>
+            <ChevronDown :class="cn('text-muted-foreground size-4 flex-none transition-transform', pickerOpen && 'rotate-180')" :stroke-width="1.75" />
+          </button>
+          <div
+            v-if="pickerOpen"
+            class="bg-popover text-popover-foreground absolute right-0 bottom-full left-0 z-10 mb-1 flex max-h-[min(16rem,60vh)] flex-col overflow-hidden rounded-md border shadow-md"
+            data-testid="discord-server-list"
+            @keydown.esc.stop="pickerOpen = false"
+          >
+            <div class="flex flex-none items-center gap-2 border-b px-2">
+              <Search class="text-muted-foreground size-4 flex-none" :stroke-width="1.75" />
+              <input
+                ref="search"
+                v-model="query"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                class="placeholder:text-muted-foreground h-9 min-w-0 flex-1 bg-transparent outline-none"
+                :placeholder="t('discord.game.search')"
+                :aria-label="t('discord.game.search')"
+                data-testid="discord-server-search"
+              />
+            </div>
+            <ul class="min-h-0 flex-1 overflow-y-auto p-1">
+              <li v-for="option in matches" :key="option.id">
+                <button
+                  type="button"
+                  :class="cn('hover:bg-secondary flex h-8 w-full cursor-pointer items-center gap-2 rounded-sm px-2 text-left', option.id === selectedId && 'bg-secondary/60')"
+                  :data-testid="`discord-server-${option.id}`"
+                  @click="pick(option.id)"
+                >
+                  <span class="min-w-0 flex-1 truncate">{{ option.name }}</span>
+                  <Check v-if="option.id === selectedId" class="text-primary size-4 flex-none" :stroke-width="1.75" />
+                </button>
+              </li>
+              <li v-if="!matches.length" class="text-muted-foreground px-2 py-3 text-center text-xs">{{ t("discord.game.noMatch") }}</li>
+            </ul>
+          </div>
+        </div>
       </footer>
     </template>
   </div>

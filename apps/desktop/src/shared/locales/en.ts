@@ -585,7 +585,6 @@ export const en = {
   "discord.error.noSignIn": "Discord did not sign Tavora in. Press Connect to try again.",
   "discord.error.generic": "Tavora could not connect to Discord.",
   "discord.panel.rejoin": "Rejoin {name}",
-  "discord.panel.rejoinOn": "on {server}",
   "discord.panel.join": "Join {name}",
   "discord.error.joinFailed": "Discord would not let you join that channel. Check that you are allowed to.",
   "discord.error.joinNotConnected": "Connect to Discord first.",
@@ -608,4 +607,6 @@ export const en = {
   "discord.error.needsControl": "Press Allow muting first, and approve it in Discord.",
   "discord.error.voiceFailed": "Discord would not change that.",
   "discord.error.serverUnknown": "That server is not available any more.",
+  "discord.game.search": "Search servers…",
+  "discord.game.noMatch": "No server found.",
 } as const;
