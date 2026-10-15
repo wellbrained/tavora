@@ -1,3 +1,4 @@
+import type { Language, LanguageSetting, MessageKey } from "./i18n";
 // Contract between the trusted host UI (renderer) and the main process.
 // Types only: imported by both sides, so it must not import Electron or Node.
 import type { LayoutTemplateId } from "./layout-templates";
@@ -76,8 +77,8 @@ export interface BrowserState {
   adblock: boolean;
   /** Ads and trackers blocked on this page. */
   blocked: number;
-  /** Why the page is not shown, or null. */
-  error: string | null;
+  /** Why the page is not shown, or null; the host UI words it. */
+  error: BrowserError | null;
   /** A video or other element fills the page view. */
   fullscreen: boolean;
   audible: boolean;
@@ -117,7 +118,8 @@ export type DiscordStatus = "off" | "no-secret" | "signed-out" | "connecting" | 
 /** The Discord panel and Settings > Discord. Sent on its own channel, because speaking changes often. */
 export interface DiscordView {
   status: DiscordStatus;
-  error: string | null;
+  /** The key of the text that says what went wrong; the host UI words it. */
+  error: MessageKey | null;
   /** A Client Secret is saved (it is never sent to the host UI). */
   secretSaved: boolean;
   /** False where this PC can't encrypt secrets, so none can be saved. */
@@ -271,8 +273,8 @@ export interface HostViewState {
     /** A playground or example for module authors, listed under Development. */
     development: boolean;
     version: string;
-    /** Where it was found, in words, without a full path: Tavora itself, the modules folder, or a development folder. */
-    origin: string;
+    /** Where it was found, without a full path: Tavora itself, an example, the player's modules folder or a development folder. */
+    origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
     /** Only a module in the player's own modules folder can be removed from Settings. */
     removable: boolean;
   }[];
@@ -295,6 +297,8 @@ export interface HostViewState {
   /** The app's version as major.minor.patch, from apps/desktop/package.json. */
   appVersion: string;
   appearance: AppearanceView;
+  /** The language setting, and the language it comes to now (the system's, when following it). */
+  language: { setting: LanguageSetting; resolved: Language };
 }
 
 /** Everything the host UI can ask the main process to do. Parsed strictly in main. */
@@ -342,6 +346,7 @@ export type HostAction =
   /** Quits, installs the downloaded version and starts Tavora again. */
   | { type: "restart-to-update" }
   | { type: "set-steam-icons"; enabled: boolean }
+  | { type: "set-language"; language: LanguageSetting }
   /** Remembers the Steam profile for the import on this PC; null forgets it. */
   | { type: "set-steam-profile"; profile: string | null }
   /** ixed turns Follow System off; without it the pick keeps following the system. */
@@ -407,6 +412,12 @@ export type ActionResult = { ok: true; id?: string; shared?: number; added?: num
 export interface CatalogMatch {
   id: string;
   name: string;
+}
+
+/** Why a Browser panel's page is not shown: `detail` is what the engine said, for the "unknown" kind. */
+export interface BrowserError {
+  kind: "cert" | "notFound" | "offline" | "noAnswer" | "badAddress" | "unknown" | "crashed";
+  detail: string;
 }
 
 /** A game from the Tavora service. `id` is its canonical id. */

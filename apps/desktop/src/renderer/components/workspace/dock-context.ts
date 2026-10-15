@@ -3,6 +3,7 @@
 import type { DockviewApi, DockviewGroupPanel, IDockviewPanel } from "dockview-vue";
 import type { InjectionKey } from "vue";
 import { act, type MenuItem } from "../../host";
+import { t } from "../../i18n";
 import { TAB_HEIGHT, type PanelInfo } from "../../dock";
 
 export interface DockContext {
@@ -43,40 +44,40 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
   const maximized = group.api.isMaximized();
   return [
     {
-      label: "Split right",
+      label: t("dock.splitRight"),
       testid: "panel-split-right",
       disabled: !canSplit(group, "right", info),
       run: split("right"),
     },
     {
-      label: "Split down",
+      label: t("dock.splitDown"),
       testid: "panel-split-down",
       disabled: !canSplit(group, "below", info),
       run: split("below"),
     },
     {
-      label: "Move to next group",
+      label: t("dock.moveNext"),
       testid: "panel-move-next",
       disabled: api.groups.length < 2,
       run: move(1),
     },
     {
-      label: "Move to previous group",
+      label: t("dock.movePrevious"),
       testid: "panel-move-previous",
       disabled: api.groups.length < 2,
       run: move(-1),
     },
     maximized
-      ? { label: "Restore", testid: "panel-restore", separator: true, run: () => group.api.exitMaximized() }
+      ? { label: t("dock.restore"), testid: "panel-restore", separator: true, run: () => group.api.exitMaximized() }
       : {
-          label: "Maximize",
+          label: t("dock.maximize"),
           testid: "panel-maximize",
           separator: true,
           disabled: api.groups.length < 2,
           run: () => group.api.maximize(),
         },
     {
-      label: "Close panel",
+      label: t("dock.closePanel"),
       testid: "panel-close",
       separator: true,
       run: () => act({ type: "close-panel", instanceId: panel.id }),

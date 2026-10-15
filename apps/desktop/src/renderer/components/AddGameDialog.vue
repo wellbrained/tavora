@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { CatalogMatch, OnlineGame, OnlineSearchResult } from "../../shared/host-api";
 import { act, api, dialog, state } from "../host";
 import { Input } from "@/components/ui/input";
+import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
 /** How long the player has to stop typing before the Tavora service is asked. */
@@ -87,13 +88,13 @@ function submit() {
 </script>
 
 <template>
-  <ModalDialog title="Add a game" testid="add-game-dialog" @close="dialog = null">
+  <ModalDialog :title="t('addGame.title')" testid="add-game-dialog" @close="dialog = null">
     <form @submit.prevent="submit">
-      <label class="sr-only" for="game-search">Search games or type a name</label>
+      <label class="sr-only" for="game-search">{{ t("addGame.search") }}</label>
       <Input
         id="game-search"
         v-model="query"
-        placeholder="Search games or type a name"
+        :placeholder="t('addGame.search')"
         autocomplete="off"
         maxlength="80"
         data-testid="game-search"
@@ -101,7 +102,7 @@ function submit() {
       />
     </form>
     <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="add-game-error">{{ error }}</p>
-    <ul class="-mx-2 max-h-[300px] overflow-y-auto" aria-label="Games">
+    <ul class="-mx-2 max-h-[300px] overflow-y-auto" :aria-label="t('common.games')">
       <li v-for="row in rows" :key="row.id">
         <button
           type="button"
@@ -121,21 +122,21 @@ function submit() {
           :disabled="busy"
           @click="add({ name })"
         >
-          Add “{{ name }}” as your own game
+          {{ t("addGame.custom", { name }) }}
         </button>
       </li>
     </ul>
     <p v-if="onlineStatus === 'unreachable' && name" class="text-muted-foreground text-xs" data-testid="online-unreachable">
-      Showing built-in games only.
+      {{ t("addGame.builtInOnly") }}
     </p>
-    <p class="text-muted-foreground text-xs">Can't find it? Type its name and add it as your own game.</p>
+    <p class="text-muted-foreground text-xs">{{ t("addGame.hint") }}</p>
     <button
       type="button"
       class="text-primary w-fit text-xs underline-offset-2 hover:underline"
       data-testid="open-steam-import"
       @click="dialog = { kind: 'steam-import' }"
     >
-      Import your games from Steam…
+      {{ t("addGame.steam") }}
     </button>
   </ModalDialog>
 </template>

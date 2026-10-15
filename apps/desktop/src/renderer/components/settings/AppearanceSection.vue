@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ThemeVariationView, ThemeView } from "../../../shared/host-api";
 import { act, state } from "../../host";
+import { t } from "../../i18n";
 import SegmentedControl from "./SegmentedControl.vue";
 import SettingRow from "./SettingRow.vue";
 
@@ -42,9 +43,9 @@ function activeVariationOf(id: string): ThemeVariationView | undefined {
 const modeOptions = computed(() => {
   const modes = new Set((active.value?.variations ?? []).map((item) => item.mode));
   return [
-    { value: "system" as const, label: "Follow System", testid: "mode-system" },
-    ...(modes.has("dark") ? [{ value: "dark" as const, label: "Dark", testid: "mode-dark" }] : []),
-    ...(modes.has("light") ? [{ value: "light" as const, label: "Light", testid: "mode-light" }] : []),
+    { value: "system" as const, label: t("common.followSystem"), testid: "mode-system" },
+    ...(modes.has("dark") ? [{ value: "dark" as const, label: t("common.dark"), testid: "mode-dark" }] : []),
+    ...(modes.has("light") ? [{ value: "light" as const, label: t("common.light"), testid: "mode-light" }] : []),
   ];
 });
 
@@ -61,15 +62,15 @@ const showVariation = computed(() => {
 </script>
 
 <template>
-  <h2 class="mb-4 text-xl font-semibold">Appearance</h2>
+  <h2 class="mb-4 text-xl font-semibold">{{ t("settings.section.appearance") }}</h2>
 
   <div
     :class="cn('-mx-3 rounded-lg border-b px-3 pt-2 pb-5 transition-colors duration-500', highlight === 'theme' && 'bg-primary/10')"
     data-setting="theme"
   >
-    <p class="font-medium">Theme</p>
-    <p class="text-muted-foreground mt-1 mb-4">How Tavora looks: its colours and corners. Modules get the same colours.</p>
-    <div class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3" role="group" aria-label="Theme" data-testid="themes">
+    <p class="font-medium">{{ t("settings.theme.label") }}</p>
+    <p class="text-muted-foreground mt-1 mb-4">{{ t("settings.theme.description") }}</p>
+    <div class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3" role="group" :aria-label="t('settings.theme.label')" data-testid="themes">
       <button
         v-for="theme in appearance.themes"
         :key="theme.id"
@@ -114,7 +115,7 @@ const showVariation = computed(() => {
             <span class="truncate font-medium">{{ theme.name }}</span>
             <span
               :class="cn('flex-none rounded-sm border px-1.5 text-xs', theme.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
-              >{{ theme.provenance === "official" ? "Official" : "Local" }}</span
+              >{{ theme.provenance === "official" ? t("common.official") : t("common.local") }}</span
             >
             <Check v-if="theme.id === appearance.themeId" class="text-primary ml-auto size-4 flex-none" :stroke-width="1.5" />
           </span>
@@ -126,50 +127,50 @@ const showVariation = computed(() => {
   </div>
 
   <SettingRow
-    label="Light or dark"
-    description="Follow System switches between the Light and Dark version of the theme when your system does."
+    :label="t('settings.appearance-mode.label')"
+    :description="t('settings.appearance-mode.description')"
     setting="appearance-mode"
     :highlighted="highlight === 'appearance-mode'"
   >
-    <SegmentedControl v-model="mode" label="Light or dark" :options="modeOptions" />
+    <SegmentedControl v-model="mode" :label="t('settings.appearance-mode.label')" :options="modeOptions" />
   </SettingRow>
   <SettingRow
     v-if="showVariation"
-    label="Variation"
-    :description="`The versions ${active?.name ?? 'this theme'} comes in.`"
+    :label="t('settings.theme-variation.label')"
+    :description="t('settings.theme-variation.description', { name: active?.name ?? '' })"
     setting="theme-variation"
     :highlighted="highlight === 'theme-variation'"
   >
-    <SegmentedControl v-model="variation" label="Variation" :options="variationOptions" />
+    <SegmentedControl v-model="variation" :label="t('settings.theme-variation.label')" :options="variationOptions" />
   </SettingRow>
   <SettingRow
-    label="Your own themes"
-    description="Start from a copy of the Tavora theme, change its colours in tavora.theme.json, then press Reload. A theme is colours only, and it needs enough contrast to be used."
+    :label="t('settings.own-themes.label')"
+    :description="t('settings.own-themes.description')"
     setting="own-themes"
     :highlighted="highlight === 'own-themes'"
   >
     <span class="flex flex-none flex-wrap justify-end gap-2">
       <Button variant="secondary" data-testid="create-starter-theme" @click="act({ type: 'create-starter-theme' })">
-        <CopyPlus :stroke-width="1.5" /> New theme
+        <CopyPlus :stroke-width="1.5" /> {{ t("settings.appearance.newTheme") }}
       </Button>
       <Button variant="secondary" data-testid="open-themes-folder" @click="act({ type: 'open-themes-folder' })">
-        <FolderOpen :stroke-width="1.5" /> Open folder
+        <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
       </Button>
-      <Button variant="secondary" data-testid="reload-themes" @click="act({ type: 'reload-themes' })"><RefreshCw :stroke-width="1.5" /> Reload</Button>
+      <Button variant="secondary" data-testid="reload-themes" @click="act({ type: 'reload-themes' })"><RefreshCw :stroke-width="1.5" /> {{ t("common.reload") }}</Button>
     </span>
   </SettingRow>
-  <ul v-if="appearance.problems.length" class="-mt-2 mb-2 flex flex-col gap-1.5 py-2" aria-label="Themes that could not be used" data-testid="theme-problems">
+  <ul v-if="appearance.problems.length" class="-mt-2 mb-2 flex flex-col gap-1.5 py-2" :aria-label="t('settings.appearance.problems')" data-testid="theme-problems">
     <li v-for="problem in appearance.problems" :key="problem.folder" class="text-sm">
       <span class="text-destructive font-medium">{{ problem.folder }}</span>
-      <span class="text-muted-foreground"> could not be used: {{ problem.message }}.</span>
+      <span class="text-muted-foreground"> {{ t("settings.appearance.problem", { folder: "", message: problem.message }).trim() }}</span>
     </li>
   </ul>
   <SettingRow
-    label="Reset to Tavora Default"
-    description="Go back to Tavora's own look, whatever theme is active."
+    :label="t('settings.reset-theme.label')"
+    :description="t('settings.reset-theme.description')"
     setting="reset-theme"
     :highlighted="highlight === 'reset-theme'"
   >
-    <Button variant="secondary" :disabled="appearance.isDefault" data-testid="reset-theme" @click="act({ type: 'reset-theme' })">Reset</Button>
+    <Button variant="secondary" :disabled="appearance.isDefault" data-testid="reset-theme" @click="act({ type: 'reset-theme' })">{{ t("settings.appearance.reset") }}</Button>
   </SettingRow>
 </template>

@@ -1,3 +1,5 @@
+import type { MessageKey } from "../shared/i18n";
+import { PlayerError } from "./messages";
 import type { DiscordChannel, DiscordMember, DiscordStatus, DiscordView } from "../shared/host-api";
 import { AUTHORIZE_TIMEOUT_MS, RpcClient, RpcError, type RpcEvents } from "./discord-rpc";
 import {
@@ -65,7 +67,7 @@ export interface DiscordDeps {
   clearTimer?: (timer: ReturnType<typeof setTimeout>) => void;
 }
 
-export class DiscordError extends Error {}
+export class DiscordError extends PlayerError {}
 
 export class DiscordConnection {
   private secrets: DiscordSecrets = { secret: null, token: null };
@@ -75,7 +77,7 @@ export class DiscordConnection {
   /** Bumped whenever a connection attempt should give up (stop, sign out, a newer attempt). */
   private attempt = 0;
   private status: DiscordStatus = "off";
-  private error: string | null = null;
+  private error: MessageKey | null = null;
   private user: { id: string; name: string } | null = null;
   private guild: Guild | null = null;
   private call: VoiceChannel | null = null;
@@ -140,13 +142,13 @@ export class DiscordConnection {
   /** The player pressed Connect: approval in Discord may be asked for. */
   async connectNow(): Promise<void> {
     await this.loaded;
-    if (!this.secrets.secret) throw new DiscordError("Add the Client Secret in Settings > Discord first.");
+    if (!this.secrets.secret) throw new DiscordError("discord.error.noSecret");
     void this.start(true);
   }
 
   async setSecret(secret: string | null): Promise<void> {
     await this.loaded;
-    if (secret !== null && !this.deps.canSaveSecret) throw new DiscordError("This PC can't keep secrets encrypted, so Tavora won't save the Client Secret.");
+    if (secret !== null && !this.deps.canSaveSecret) throw new DiscordError("discord.error.cantSave");
     this.secrets = { secret, token: secret === null ? null : this.secrets.token };
     await this.deps.save(this.secrets);
     if (secret === null) this.stop(this.wanted ? "no-secret" : "off");
@@ -185,7 +187,7 @@ export class DiscordConnection {
     this.set(status, null);
   }
 
-  private set(status: DiscordStatus, error: string | null): void {
+  private set(status: DiscordStatus, error: MessageKey | null): void {
     this.status = status;
     this.error = error;
     this.emit();
@@ -225,8 +227,7 @@ export class DiscordConnection {
       client.close();
       this.client = null;
       if (error instanceof SignedOut) return this.set("signed-out", null);
-      const message = error instanceof DiscordError || error instanceof RpcError ? error.message : "Tavora could not connect to Discord.";
-      this.set("error", message);
+      this.set("error", error instanceof DiscordError ? error.key : "discord.error.generic");
     }
   }
 
@@ -261,10 +262,10 @@ export class DiscordConnection {
     try {
       ({ code } = (await client.command("AUTHORIZE", { client_id: this.deps.clientId, scopes: SCOPES }, undefined, AUTHORIZE_TIMEOUT_MS)) as { code?: unknown });
     } catch (error) {
-      if (error instanceof RpcError && error.code !== 0) throw new DiscordError("Discord was not approved. Press Connect to try again.");
+      if (error instanceof RpcError && error.code !== 0) throw new DiscordError("discord.error.notApproved");
       throw error;
     }
-    if (typeof code !== "string" || !code || code.length > 200) throw new DiscordError("Discord did not approve Tavora.");
+    if (typeof code !== "string" || !code || code.length > 200) throw new DiscordError("discord.error.noCode");
     const fresh = await this.exchange({ grant_type: "authorization_code", code, redirect_uri: REDIRECT_URI });
     if (!live()) throw new SignedOut();
     return parseUser(await client.command("AUTHENTICATE", { access_token: fresh.accessToken }));
@@ -277,7 +278,7 @@ export class DiscordConnection {
   /** Asks Discord for a token with the Client Secret. Only discord.com is ever sent the secret. */
   private async exchange(grant: Record<string, string>): Promise<DiscordToken> {
     const secret = this.secrets.secret;
-    if (!secret) throw new DiscordError("Add the Client Secret in Settings > Discord first.");
+    if (!secret) throw new DiscordError("discord.error.noSecret");
     let response: Response;
     try {
       response = await this.deps.fetch(this.deps.tokenUrl ?? TOKEN_URL, {
@@ -288,13 +289,13 @@ export class DiscordConnection {
         signal: AbortSignal.timeout(15_000),
       });
     } catch {
-      throw new DiscordError("Discord could not be reached. Check your internet connection.");
+      throw new DiscordError("discord.error.offline");
     }
     const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-    if (response.status === 401 || body.error === "invalid_client") throw new DiscordError("Discord does not accept the Client Secret. Check it in Settings > Discord.");
+    if (response.status === 401 || body.error === "invalid_client") throw new DiscordError("discord.error.badSecret");
     const { access_token: access, refresh_token: refresh, expires_in: expires } = body;
     if (!response.ok || typeof access !== "string" || typeof refresh !== "string" || access.length > 500 || refresh.length > 500) {
-      throw new DiscordError("Discord did not sign Tavora in. Press Connect to try again.");
+      throw new DiscordError("discord.error.noSignIn");
     }
     const token = { accessToken: access, refreshToken: refresh, expiresAt: this.now() + (typeof expires === "number" && expires > 0 ? expires * 1000 : 3_600_000) };
     await this.saveToken(token);

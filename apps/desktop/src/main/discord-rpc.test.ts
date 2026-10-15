@@ -1,3 +1,4 @@
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { encodeFrame, FrameReader, ipcPaths, MAX_FRAME, RpcClient, RpcError } from "./discord-rpc";
 import { fakeDiscord, until, type FakeDiscord } from "./discord-fake.test-helper";
@@ -30,9 +31,9 @@ describe("Discord frames", () => {
     expect(ipcPaths("win32", {})[0]).toBe("\\\\?\\pipe\\discord-ipc-0");
     expect(ipcPaths("win32", {})).toHaveLength(10);
     const linux = ipcPaths("linux", { XDG_RUNTIME_DIR: "/run/user/1000" });
-    expect(linux).toContain("/run/user/1000/discord-ipc-0");
-    expect(linux).toContain("/run/user/1000/app/com.discordapp.Discord/discord-ipc-3");
-    expect(linux).toContain("/run/user/1000/snap.discord/discord-ipc-9");
+    expect(linux).toContain(path.join("/run/user/1000", "discord-ipc-0"));
+    expect(linux).toContain(path.join("/run/user/1000", "app", "com.discordapp.Discord", "discord-ipc-3"));
+    expect(linux).toContain(path.join("/run/user/1000", "snap.discord", "discord-ipc-9"));
   });
 });
 

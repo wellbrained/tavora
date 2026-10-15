@@ -6,6 +6,7 @@ import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
 import { isGridSize, layoutTemplate } from "../shared/layout-templates";
 import { MAX_INITIALS, MAX_PICTURE_BYTES, MAX_PROFILE_NAME } from "./profile";
+import { isLanguageSetting } from "../shared/i18n";
 import { isSteamAppId } from "./steam-icons";
 import { MAX_IMPORT_GAMES, parseSteamGame } from "./steam-import";
 import { isVariationId } from "./themes";
@@ -171,6 +172,8 @@ export function parseAction(raw: unknown): HostAction | null {
     case "set-auto-update":
     case "set-steam-icons":
       return only("enabled") && typeof a.enabled === "boolean" ? { type: a.type, enabled: a.enabled } : null;
+    case "set-language":
+      return only("language") && isLanguageSetting(a.language) ? { type: a.type, language: a.language } : null;
     case "set-steam-profile":
       return only("profile") && (a.profile === null || (text(a.profile, 200) && a.profile.trim() !== ""))
         ? { type: a.type, profile: a.profile === null ? null : a.profile.trim() }

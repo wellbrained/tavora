@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import type { FolderView, GameView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
 import { act, dialog, openSettings, prompt, railToggles, state, submitAction } from "../host";
+import { t } from "../i18n";
 import { numberedGames } from "../shortcuts";
 import { folderMenu, gameMenu } from "../rail-actions";
 import GameIcon from "./GameIcon.vue";
@@ -240,9 +241,9 @@ async function onDrop(event: DragEvent, target: Target) {
   } else if (target.place.list === "root" && zone === "into") {
     const gameIds = [target.id, item.id];
     prompt({
-      title: "New folder",
-      label: "Folder name",
-      confirm: "Create",
+      title: t("rail.newFolder.title"),
+      label: t("rail.folderName"),
+      confirm: t("rail.newFolder.confirm"),
       submit: (name) => submitAction({ type: "create-folder", name, gameIds }),
     });
   } else if (target.place.list === "folder") {
@@ -291,7 +292,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
     ref="nav"
     class="bg-rail relative flex h-full flex-none flex-col border-r"
     :style="{ width: `${width}px` }"
-    aria-label="Games"
+    :aria-label="t('rail.games')"
     data-testid="rail"
     :data-expanded="expanded"
     @keydown="onNavKey"
@@ -303,9 +304,9 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         :class="cn('flex h-12 items-center gap-3 rounded-lg px-3', expanded && 'hover:bg-accent', expanded && state!.screen === 'welcome' && 'bg-accent')"
         data-rail-item
         data-testid="rail-home"
-        aria-label="Home"
+        :aria-label="t('rail.home')"
         :aria-current="state!.screen === 'welcome' ? 'page' : undefined"
-        title="Home"
+        :title="t('rail.home')"
         @click="act({ type: 'show-welcome' })"
       >
         <img class="rail-icon rail-icon-bare" src="/brand/flame-96.png" alt="" width="32" height="32" draggable="false" />
@@ -317,13 +318,13 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       <section
         v-if="favorites.length || dragged?.kind === 'game'"
         :class="cn('mb-2 flex flex-col gap-1 border-b pb-2', favoriteZoneActive && 'bg-primary/15')"
-        aria-label="Favorites"
+        :aria-label="t('rail.favorites')"
         data-testid="rail-favorites"
         @dragover="onFavoritesOver"
         @dragleave="favoriteZoneActive = false"
         @drop="onFavoritesDrop"
       >
-        <h2 v-if="expanded" class="text-muted-foreground mx-4 my-1 text-xs font-medium">Favorites</h2>
+        <h2 v-if="expanded" class="text-muted-foreground mx-4 my-1 text-xs font-medium">{{ t("rail.favorites") }}</h2>
         <RailGame
           v-for="item in favorites"
           :key="item.id"
@@ -338,11 +339,11 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           @open="open(item.id)"
         />
         <p v-if="!favorites.length" class="text-muted-foreground border-input mx-2 rounded-lg border border-dashed p-2 text-center text-xs">
-          Drop a game here
+          {{ t("rail.dropHere") }}
         </p>
       </section>
 
-      <section class="flex flex-col gap-1" aria-label="All games">
+      <section class="flex flex-col gap-1" :aria-label="t('rail.all')">
         <template v-for="entry in rootEntries" :key="`${entry.kind}:${entry.id}`">
           <RailGame
             v-if="entry.kind === 'game'"
@@ -373,7 +374,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                   data-rail-item
                   :data-testid="`rail-folder-${entry.id}-toggle`"
                   :aria-expanded="openFolders.has(entry.id)"
-                  :aria-label="`Folder ${folder(entry.id).name}`"
+                  :aria-label="t('rail.folder', { name: folder(entry.id).name })"
                   :title="expanded ? undefined : folder(entry.id).name"
                   @click="toggleFolder(entry.id)"
                 >
@@ -398,7 +399,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                     :items="folderMenuFor(entry.id)"
                     :title="folder(entry.id).name"
                     :testid="`rail-folder-${entry.id}-menu`"
-                    :label="`More actions for folder ${folder(entry.id).name}`"
+                    :label="t('rail.moreFolder', { name: folder(entry.id).name })"
                   />
                 </div>
               </div>
@@ -417,7 +418,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 v-on="dnd({ kind: 'game', id, place: { list: 'folder', folderId: entry.id } })"
                 @open="open(id)"
               />
-              <p v-if="!folder(entry.id).games.length" class="text-muted-foreground p-2 text-center text-xs">Empty folder</p>
+              <p v-if="!folder(entry.id).games.length" class="text-muted-foreground p-2 text-center text-xs">{{ t("rail.emptyFolder") }}</p>
             </div>
           </div>
         </template>
@@ -428,8 +429,8 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
             :class="cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent')"
             data-rail-item
             data-testid="rail-add-game"
-            aria-label="Add game"
-            title="Add game"
+            :aria-label="t('common.addGame')"
+            :title="t('common.addGame')"
             @click="dialog = { kind: 'add-game' }"
           >
             <span
@@ -437,7 +438,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
             >
               <Plus class="size-6" :stroke-width="1.75" />
             </span>
-            <span v-if="expanded" class="text-sm font-medium">Add game</span>
+            <span v-if="expanded" class="text-sm font-medium">{{ t("common.addGame") }}</span>
           </button>
         </div>
       </section>
@@ -452,16 +453,16 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors', expanded && 'hover:bg-accent')"
         data-rail-item
         data-testid="rail-settings"
-        aria-label="Settings"
+        :aria-label="t('rail.settings')"
         aria-haspopup="dialog"
-        title="Settings"
+        :title="t('rail.settings')"
         @click="openSettings()"
       >
         <!-- A 48 px slot keeps the icon on the same centre line as the tiles. -->
         <span class="flex w-12 flex-none justify-center">
           <Settings class="size-5 transition-transform duration-300 group-hover:rotate-45 motion-reduce:group-hover:rotate-0" :stroke-width="1.5" />
         </span>
-        <span v-if="expanded" class="text-sm font-medium">Settings</span>
+        <span v-if="expanded" class="text-sm font-medium">{{ t("rail.settings") }}</span>
       </button>
     </div>
 
@@ -469,8 +470,8 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       type="button"
       class="app-no-drag bg-rail text-muted-foreground hover:text-foreground hover:border-primary/60 focus-visible:ring-ring absolute top-5 -right-3 z-20 grid size-6 place-items-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none"
       data-testid="rail-toggle"
-      :aria-label="expanded ? 'Collapse game list' : 'Expand game list'"
-      :title="expanded ? 'Collapse game list' : 'Expand game list'"
+      :aria-label="expanded ? t('rail.collapse') : t('rail.expand')"
+      :title="expanded ? t('rail.collapse') : t('rail.expand')"
       :aria-expanded="expanded"
       @click="toggleRail"
     >
@@ -482,7 +483,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       class="hover:bg-primary/15 focus-visible:bg-primary/15 absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize focus-visible:outline-none"
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize game list"
+      :aria-label="t('rail.resize')"
       :aria-valuenow="width"
       :aria-valuemin="MIN_WIDTH"
       :aria-valuemax="MAX_WIDTH"

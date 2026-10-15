@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { isGameId, isModuleId } from "@tavora/module-schema";
 import type { RootItem, RootSort, Startup } from "../shared/host-api";
 import { isSite } from "./browser-url";
+import { isLanguageSetting, type LanguageSetting } from "../shared/i18n";
+import { PlayerError } from "./messages";
 import { CATALOG, catalogGame } from "./catalog";
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
 import { DEFAULT_THEME, isVariationId } from "./themes";
@@ -74,6 +76,8 @@ export interface Library {
   steamIcons: boolean;
   /** The Steam profile link or id the player chose to remember for the Steam import, or null. Kept only on this PC. */
   steamProfile: string | null;
+  /** The language of Tavora's texts: one of them, or the system's. */
+  language: LanguageSetting;
   /** The picked theme and variation. Kept even while that theme is not installed, which shows the default. */
   theme: { id: string; variation: string };
   /** Show the variation that matches the system's light or dark setting, and change with it. */
@@ -91,7 +95,7 @@ export const MAX_NAME = 80;
 export const MAX_LABEL = 3;
 
 /** A problem the player caused and should read, e.g. a duplicate game. */
-export class LibraryError extends Error {}
+export class LibraryError extends PlayerError {}
 
 export function emptyLibrary(): Library {
   return {
@@ -108,6 +112,7 @@ export function emptyLibrary(): Library {
     autoUpdate: true,
     steamIcons: true,
     steamProfile: null,
+    language: "system",
     theme: { ...DEFAULT_THEME },
     followSystem: true,
     onboarded: false,
@@ -196,18 +201,18 @@ export function monogram(name: string): string {
   return letters.toUpperCase() || "?";
 }
 
-function cleanName(name: unknown, what = "Name"): string {
-  if (typeof name !== "string") throw new LibraryError(`${what} is missing.`);
+function cleanName(name: unknown, kind: "name" | "folderName" = "name"): string {
+  if (typeof name !== "string") throw new LibraryError(`error.${kind}.missing`);
   const trimmed = name.replace(/\s+/g, " ").trim();
-  if (!trimmed) throw new LibraryError(`${what} can't be empty.`);
-  if (trimmed.length > MAX_NAME) throw new LibraryError(`${what} can be at most ${MAX_NAME} characters.`);
+  if (!trimmed) throw new LibraryError(`error.${kind}.empty`);
+  if (trimmed.length > MAX_NAME) throw new LibraryError(`error.${kind}.long`, { max: MAX_NAME });
   return trimmed;
 }
 
 function cleanLabel(label: unknown): string {
-  if (typeof label !== "string") throw new LibraryError("Label is missing.");
+  if (typeof label !== "string") throw new LibraryError("error.label.missing");
   const trimmed = label.trim();
-  if (!trimmed || [...trimmed].length > MAX_LABEL) throw new LibraryError(`A label is 1 to ${MAX_LABEL} characters.`);
+  if (!trimmed || [...trimmed].length > MAX_LABEL) throw new LibraryError("error.label.length", { max: MAX_LABEL });
   return trimmed;
 }
 
@@ -235,9 +240,7 @@ export type NewGame =
 function checkNotInLibrary(library: Library, id: string): void {
   const existing = library.games[id];
   if (existing) {
-    throw new LibraryError(
-      existing.trashedAt ? `${existing.name} is in Trash. Restore it from Settings.` : `${existing.name} is already in your library.`,
-    );
+    throw new LibraryError(existing.trashedAt ? "error.game.inTrash" : "error.game.owned", { name: existing.name });
   }
 }
 
@@ -249,7 +252,7 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
   let steamAppId: number | null = null;
   if ("catalogId" in input) {
     const known = catalogGame(input.catalogId);
-    if (!known) throw new LibraryError("That game is not in the built-in list.");
+    if (!known) throw new LibraryError("error.game.notBuiltIn");
     checkNotInLibrary(library, known.id);
     ({ id, name } = known);
     catalogId = known.id;
@@ -259,7 +262,7 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
     // `local-` ids belong to games the player added by name.
     const known = catalogGame(input.online.id);
     id = input.online.id;
-    if (id.startsWith("local-")) throw new LibraryError("That game can't be added.");
+    if (id.startsWith("local-")) throw new LibraryError("error.game.cantAdd");
     name = known ? known.name : cleanName(input.online.name);
     catalogId = known ? known.id : null;
     // The service's appid, or the built-in list's when the service has none for it.
@@ -271,7 +274,7 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
     // A Steam import knows the game's appid even when the service has no id for it.
     steamAppId = isSteamAppId(input.steamAppId) ? input.steamAppId : null;
   }
-  if (!isGameId(id)) throw new LibraryError("That name can't be used for a game.");
+  if (!isGameId(id)) throw new LibraryError("error.game.badName");
   library.games[id] = {
     id,
     catalogId,
@@ -323,7 +326,7 @@ export function iconFileShared(library: Library, file: string, exceptId: string)
 
 function liveGame(library: Library, id: unknown): GameEntry {
   const game = typeof id === "string" ? library.games[id] : undefined;
-  if (!game || game.trashedAt !== null) throw new LibraryError("That game no longer exists.");
+  if (!game || game.trashedAt !== null) throw new LibraryError("error.gameGone");
   return game;
 }
 
@@ -386,7 +389,7 @@ export function trashGame(library: Library, id: string, now: Date): void {
 
 export function restoreGame(library: Library, id: string): void {
   const game = library.games[id];
-  if (!game || game.trashedAt === null) throw new LibraryError("That game is not in Trash.");
+  if (!game || game.trashedAt === null) throw new LibraryError("error.game.notInTrash");
   game.trashedAt = null;
   library.root.push({ kind: "game", id });
 }
@@ -394,7 +397,7 @@ export function restoreGame(library: Library, id: string): void {
 /** Forgets a trashed game. The caller deletes its data. */
 export function deleteTrashedGame(library: Library, id: string): GameEntry {
   const game = library.games[id];
-  if (!game || game.trashedAt === null) throw new LibraryError("That game is not in Trash.");
+  if (!game || game.trashedAt === null) throw new LibraryError("error.game.notInTrash");
   delete library.games[id];
   return game;
 }
@@ -429,7 +432,7 @@ function clampIndex(index: number | undefined, length: number): number {
 
 function folder(library: Library, id: unknown): Folder {
   const found = typeof id === "string" ? library.folders[id] : undefined;
-  if (!found) throw new LibraryError("That folder no longer exists.");
+  if (!found) throw new LibraryError("error.folder.gone");
   return found;
 }
 
@@ -460,7 +463,7 @@ export function moveFolder(library: Library, id: string, index: number): void {
 /** Creates a folder where the first game was, holding the given games. Returns its id. */
 export function createFolder(library: Library, name: unknown, gameIds: string[] = []): string {
   const id = randomUUID();
-  const cleaned = cleanName(name, "Folder name");
+  const cleaned = cleanName(name, "folderName");
   const firstIndex = gameIds.length
     ? library.root.findIndex((item) => item.kind === "game" && item.id === gameIds[0])
     : -1;
@@ -471,7 +474,7 @@ export function createFolder(library: Library, name: unknown, gameIds: string[] 
 }
 
 export function renameFolder(library: Library, id: string, name: unknown): void {
-  folder(library, id).name = cleanName(name, "Folder name");
+  folder(library, id).name = cleanName(name, "folderName");
 }
 
 export function setFolderLabel(library: Library, id: string, label: unknown): void {
@@ -573,6 +576,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.onlineSearch === "boolean") library.onlineSearch = saved.onlineSearch;
   if (typeof saved.autoUpdate === "boolean") library.autoUpdate = saved.autoUpdate;
   if (typeof saved.steamIcons === "boolean") library.steamIcons = saved.steamIcons;
+  if (isLanguageSetting(saved.language)) library.language = saved.language;
   if (typeof saved.steamProfile === "string" && saved.steamProfile.trim() && saved.steamProfile.length <= 200) library.steamProfile = saved.steamProfile.trim();
   const theme = asRecord(saved.theme);
   if (isModuleId(theme.id) && isVariationId(theme.variation)) library.theme = { id: theme.id, variation: theme.variation };
@@ -597,7 +601,7 @@ function siteList(value: unknown): string[] {
 export function setSiteListed(library: Library, list: "sharedSites" | "adblockOff", site: string, listed: boolean): void {
   const sites = library.browser[list].filter((item) => item !== site);
   if (listed) {
-    if (sites.length >= MAX_SITES) throw new LibraryError(`Tavora keeps up to ${MAX_SITES} sites in this list. Remove one in Settings > Browser first.`);
+    if (sites.length >= MAX_SITES) throw new LibraryError("error.browser.sitesLimit", { max: MAX_SITES });
     sites.push(site);
   }
   library.browser[list] = sites;

@@ -60,7 +60,7 @@ export async function savePicture(dir: string, base64: string): Promise<string> 
   const bytes = Buffer.from(base64, "base64");
   const size = pngSize(bytes);
   if (bytes.length > MAX_PICTURE_BYTES || size?.width !== PICTURE_SIZE || size.height !== PICTURE_SIZE) {
-    throw new IconError("That picture could not be saved. Please try another image.");
+    throw new IconError("error.pictureNotSaved");
   }
   const file = `avatar-${randomBytes(4).toString("hex")}.png`;
   await writeFileAtomic(path.join(dir, file), bytes);

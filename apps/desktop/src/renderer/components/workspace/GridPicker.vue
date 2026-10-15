@@ -4,8 +4,9 @@
 import { computed, ref } from "vue";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { GRID_LIMITS, gridName } from "../../../shared/layout-templates";
+import { GRID_LIMITS } from "../../../shared/layout-templates";
 import { act } from "../../host";
+import { gridLabel, t } from "../../i18n";
 
 const size = ref<{ columns: number; rows: number } | null>(null);
 const cells = computed(() =>
@@ -26,7 +27,7 @@ function apply(columns: number, rows: number) {
 
 <template>
   <div class="flex flex-col items-center gap-2 px-2 pb-2" @pointerleave="size = null">
-    <div class="grid gap-1" :style="{ gridTemplateColumns: `repeat(${GRID_LIMITS.columns}, auto)` }" role="group" aria-label="Grid">
+    <div class="grid gap-1" :style="{ gridTemplateColumns: `repeat(${GRID_LIMITS.columns}, auto)` }" role="group" :aria-label="t('layouts.grid')">
       <DropdownMenuItem
         v-for="cell in cells"
         :key="`${cell.columns}x${cell.rows}`"
@@ -36,7 +37,7 @@ function apply(columns: number, rows: number) {
             inside(cell) ? 'border-primary bg-primary/25 focus:bg-primary/25' : 'bg-card',
           )
         "
-        :aria-label="gridName(cell.columns, cell.rows)"
+        :aria-label="gridLabel(cell.columns, cell.rows)"
         :data-testid="`layout-grid-${cell.columns}x${cell.rows}`"
         @focus="size = cell"
         @pointerenter="size = cell"
@@ -44,7 +45,7 @@ function apply(columns: number, rows: number) {
       />
     </div>
     <span class="text-muted-foreground text-xs tabular-nums" aria-hidden="true" data-testid="layout-grid-size">{{
-      size ? `${size.columns} × ${size.rows}` : "Point at a size"
+      size ? `${size.columns} × ${size.rows}` : t("layouts.gridPoint")
     }}</span>
   </div>
 </template>

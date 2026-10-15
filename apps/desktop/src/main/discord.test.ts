@@ -177,7 +177,7 @@ describe("DiscordConnection", () => {
     await connection.setWanted(true);
     await connection.connectNow();
     await until(() => connection.view().status === "error");
-    expect(connection.view().error).toMatch(/Client Secret/);
+    expect(connection.view().error).toBe("discord.error.badSecret");
   });
 
   it("keeps looking while Discord isn't running, and notices when it quits", async () => {

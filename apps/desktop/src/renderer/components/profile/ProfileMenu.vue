@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { act, state, useFloating } from "../../host";
+import { t } from "../../i18n";
 import ImageCropDialog from "../ImageCropDialog.vue";
 import { autoInitials } from "./initials";
 import { readPicture } from "./picture";
@@ -97,14 +98,14 @@ function closeCrop() {
         "
         data-rail-item
         data-testid="rail-profile"
-        :aria-label="profile.name.trim() ? `Profile: ${profile.name.trim()}` : 'Profile'"
-        :title="expanded ? undefined : profile.name.trim() || 'Profile'"
+        :aria-label="profile.name.trim() ? t('profile.named', { name: profile.name.trim() }) : t('profile.label')"
+        :title="expanded ? undefined : profile.name.trim() || t('profile.label')"
       >
         <!-- A 48 px slot keeps the avatar on the same centre line as the tiles. -->
         <span class="flex w-12 flex-none justify-center">
           <ProfileAvatar :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="32" />
         </span>
-        <span v-if="expanded" class="truncate text-sm font-medium">{{ profile.name.trim() || "Profile" }}</span>
+        <span v-if="expanded" class="truncate text-sm font-medium">{{ profile.name.trim() || t("profile.label") }}</span>
       </button>
     </PopoverTrigger>
     <PopoverPortal>
@@ -129,8 +130,8 @@ function closeCrop() {
                 type="button"
                 class="group/avatar ring-popover focus-visible:outline-ring relative block rounded-full ring-4 focus-visible:outline-2 focus-visible:outline-offset-4"
                 data-testid="profile-picture"
-                aria-label="Change picture"
-                title="Change picture"
+                :aria-label="t('profile.changePicture')"
+                :title="t('profile.changePicture')"
                 @click="pickPicture"
               >
                 <ProfileAvatar :name="draft.name" :initials="draft.initials" :picture-url="profile.pictureUrl" :size="80" />
@@ -145,8 +146,8 @@ function closeCrop() {
                 type="button"
                 class="bg-secondary text-muted-foreground hover:bg-destructive ring-popover focus-visible:outline-ring absolute top-0 right-0 grid size-6 place-items-center rounded-full ring-2 transition-colors hover:text-white focus-visible:outline-2"
                 data-testid="profile-remove-picture"
-                aria-label="Remove picture"
-                title="Remove picture"
+                :aria-label="t('profile.removePicture')"
+                :title="t('profile.removePicture')"
                 @click="act({ type: 'remove-profile-picture' })"
               >
                 <X class="size-3.5" :stroke-width="2" />
@@ -154,12 +155,12 @@ function closeCrop() {
             </div>
             <div class="flex min-w-0 flex-1 items-center gap-2 pb-1">
               <span :class="cn('truncate text-lg font-semibold', !draft.name.trim() && 'text-muted-foreground')">
-                {{ draft.name.trim() || "Your profile" }}
+                {{ draft.name.trim() || t("profile.yours") }}
               </span>
               <span
                 v-if="draft.initials.trim() || autoInitials(draft.name)"
                 class="bg-secondary text-primary flex-none rounded-sm px-1.5 py-0.5 text-xs font-semibold"
-                title="Initials"
+                :title="t('profile.initials')"
               >
                 {{ draft.initials.trim() || autoInitials(draft.name) }}
               </span>
@@ -172,10 +173,10 @@ function closeCrop() {
         <form class="flex w-full flex-col" @submit.prevent="save">
           <div class="flex gap-2 px-4 pb-4">
             <label class="flex min-w-0 flex-1 flex-col gap-1.5">
-              <span class="text-muted-foreground text-xs font-medium tracking-wide uppercase">Name</span>
+              <span class="text-muted-foreground text-xs font-medium tracking-wide uppercase">{{ t("profile.name") }}</span>
               <Input
                 v-model="draft.name"
-                placeholder="Add your name"
+                :placeholder="t('profile.namePlaceholder')"
                 autocomplete="off"
                 spellcheck="false"
                 :maxlength="MAX_NAME"
@@ -183,15 +184,15 @@ function closeCrop() {
               />
             </label>
             <label class="flex w-20 flex-none flex-col gap-1.5">
-              <span class="text-muted-foreground text-xs font-medium tracking-wide uppercase">Initials</span>
+              <span class="text-muted-foreground text-xs font-medium tracking-wide uppercase">{{ t("profile.initials") }}</span>
               <Input
                 v-model="draft.initials"
                 class="text-center"
-                :placeholder="autoInitials(draft.name) || 'Auto'"
+                :placeholder="autoInitials(draft.name) || t('profile.initialsAuto')"
                 autocomplete="off"
                 spellcheck="false"
                 :maxlength="MAX_INITIALS"
-                title="Optional. Leave empty to use the initials of your name."
+                :title="t('profile.initialsHint')"
                 data-testid="profile-initials"
               />
             </label>
@@ -200,7 +201,7 @@ function closeCrop() {
           <!-- Footer bar, apart from the fields. -->
           <div class="bg-background/50 flex min-h-13 items-center gap-3 border-t px-4 py-2.5">
             <span class="text-muted-foreground text-xs" role="status">
-              {{ dirty ? "Unsaved changes" : saved ? "All changes saved" : "" }}
+              {{ dirty ? t("profile.unsaved") : saved ? t("profile.allSaved") : "" }}
             </span>
             <Button
               type="submit"
@@ -209,8 +210,8 @@ function closeCrop() {
               :disabled="!dirty || saving"
               data-testid="profile-save"
             >
-              <template v-if="saved && !dirty"><Check :stroke-width="2" /> Saved</template>
-              <template v-else>{{ saving ? "Saving…" : "Save" }}</template>
+              <template v-if="saved && !dirty"><Check :stroke-width="2" /> {{ t("profile.saved") }}</template>
+              <template v-else>{{ saving ? t("profile.saving") : t("common.save") }}</template>
             </Button>
           </div>
         </form>
@@ -218,5 +219,5 @@ function closeCrop() {
     </PopoverPortal>
   </PopoverRoot>
 
-  <ImageCropDialog :src="cropping" title="Crop your picture" round @save="savePicture" @cancel="closeCrop" />
+  <ImageCropDialog :src="cropping" :title="t('onboarding.crop')" round @save="savePicture" @cancel="closeCrop" />
 </template>

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DiscordChannel, DiscordMember } from "../../../shared/host-api";
 import { act, discord, openSettings } from "../../host";
+import { t } from "../../i18n";
 
 const view = computed(() => discord.value);
 
@@ -17,19 +18,19 @@ const view = computed(() => discord.value);
 const notice = computed(() => {
   switch (view.value?.status ?? "off") {
     case "no-secret":
-      return { title: "Connect Discord", text: "Add the Client Secret of Tavora's Discord application in Settings, then connect.", action: "settings" as const };
+      return { title: t("discord.panel.connectTitle"), text: t("discord.panel.connectText"), action: "settings" as const };
     case "signed-out":
-      return { title: "See who is in your voice channel", text: "Tavora asks the Discord app on this PC once. You keep talking in Discord as usual.", action: "connect" as const };
+      return { title: t("discord.panel.signedOutTitle"), text: t("discord.panel.signedOutText"), action: "connect" as const };
     case "approving":
-      return { title: "Approve Tavora in Discord", text: "Discord shows a window asking to let Tavora see your voice channels. Press Authorize there.", action: null };
+      return { title: t("discord.panel.approveTitle"), text: t("discord.panel.approveText"), action: null };
     case "not-running":
-      return { title: "Discord isn't running", text: "Start the Discord app on this PC. Tavora keeps looking for it.", action: null };
+      return { title: t("discord.panel.notRunningTitle"), text: t("discord.panel.notRunningText"), action: null };
     case "error":
-      return { title: "Not connected", text: view.value?.error ?? "Tavora could not connect to Discord.", action: "connect" as const };
+      return { title: t("discord.panel.errorTitle"), text: t(view.value?.error ?? "discord.error.generic"), action: "connect" as const };
     case "connected":
       return null;
     default:
-      return { title: "Connecting to Discord…", text: "", action: null };
+      return { title: t("discord.panel.connectingTitle"), text: "", action: null };
   }
 });
 
@@ -50,7 +51,14 @@ function initials(name: string): string {
   return [...name.trim()].slice(0, 2).join("").toUpperCase();
 }
 const label = (member: DiscordMember) =>
-  [member.name, member.speaking && "talking", (member.selfMute || member.serverMute) && "muted", (member.selfDeaf || member.serverDeaf) && "deafened"].filter(Boolean).join(", ");
+  [
+    member.name,
+    member.speaking && t("discord.member.talking"),
+    (member.selfMute || member.serverMute) && t("discord.member.muted"),
+    (member.selfDeaf || member.serverDeaf) && t("discord.member.deafened"),
+  ]
+    .filter(Boolean)
+    .join(", ");
 </script>
 
 <template>
@@ -58,9 +66,9 @@ const label = (member: DiscordMember) =>
     <div v-if="notice" class="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center">
       <p class="font-medium">{{ notice.title }}</p>
       <p v-if="notice.text" class="text-muted-foreground max-w-xs">{{ notice.text }}</p>
-      <Button v-if="notice.action === 'connect'" class="mt-2" size="sm" data-testid="discord-connect" @click="act({ type: 'discord-connect' })">Connect</Button>
+      <Button v-if="notice.action === 'connect'" class="mt-2" size="sm" data-testid="discord-connect" @click="act({ type: 'discord-connect' })">{{ t("discord.panel.connect") }}</Button>
       <Button v-else-if="notice.action === 'settings'" class="mt-2" size="sm" variant="secondary" @click="openSettings({ section: 'discord', setting: 'discord-secret' })">
-        Open Settings
+        {{ t("discord.panel.openSettings") }}
       </Button>
     </div>
 
@@ -73,13 +81,13 @@ const label = (member: DiscordMember) =>
         </template>
         <template v-else-if="call">
           <Phone class="text-muted-foreground size-4" :stroke-width="1.75" />
-          <span class="min-w-0 truncate">Call</span>
+          <span class="min-w-0 truncate">{{ t("discord.panel.call") }}</span>
         </template>
         <span v-else class="text-muted-foreground font-medium">Discord</span>
       </header>
 
       <p v-if="!call" class="text-muted-foreground flex flex-1 items-center justify-center p-4 text-center" data-testid="discord-no-call">
-        You're not in a voice channel. Join one in Discord and it shows up here.
+        {{ t("discord.panel.noCall") }}
       </p>
 
       <ul v-else class="min-h-0 flex-1 overflow-y-auto px-2 py-2" data-testid="discord-channels">
@@ -122,13 +130,13 @@ const label = (member: DiscordMember) =>
                 v-if="member.selfMute || member.serverMute"
                 :class="cn('size-4 flex-none', member.serverMute ? 'text-destructive' : 'text-muted-foreground')"
                 :stroke-width="1.75"
-                :aria-label="member.serverMute ? 'Muted by a moderator' : 'Muted'"
+                :aria-label="member.serverMute ? t('discord.member.mutedByMod') : t('discord.member.muted')"
               />
               <HeadphoneOff
                 v-if="member.selfDeaf || member.serverDeaf"
                 :class="cn('size-4 flex-none', member.serverDeaf ? 'text-destructive' : 'text-muted-foreground')"
                 :stroke-width="1.75"
-                :aria-label="member.serverDeaf ? 'Deafened by a moderator' : 'Deafened'"
+                :aria-label="member.serverDeaf ? t('discord.member.deafenedByMod') : t('discord.member.deafened')"
               />
             </li>
           </ul>
