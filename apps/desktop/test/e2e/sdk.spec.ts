@@ -136,7 +136,7 @@ test("every module page starts from Tavora's look, and its own styles win", asyn
           css('[data-testid="note"]', "background-color"),
           css('[data-testid="increment"]', "background-color"),
           // Page height against panel height, so a failure says by how much.
-          `<=${innerHeight}`,
+          document.documentElement.scrollHeight + "<=" + innerHeight,
         ];
       })()`,
     );
@@ -144,8 +144,8 @@ test("every module page starts from Tavora's look, and its own styles win", asyn
     // module's own gold on its main button.
     const [height] = style.splice(5, 1) as [string];
     expect(style, id).toEqual(["0px", "#e0a243", "rgb(42, 37, 33)", "rgb(32, 28, 25)", "rgb(224, 162, 67)"]);
-    const [page, panel] = height.split("<=").map(Number) as [number, number];
-    expect(page, `: page px in a panel px high`).toBeLessThanOrEqual(panel);
+    const [pageHeight, panelHeight] = height.split("<=").map(Number) as [number, number];
+    expect(pageHeight, `${id}: page ${pageHeight}px in a panel ${panelHeight}px high`).toBeLessThanOrEqual(panelHeight);
   }
   await app.close();
 });
