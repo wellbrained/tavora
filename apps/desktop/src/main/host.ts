@@ -76,7 +76,7 @@ import { fetchSteamLibrary, importSteamGames, steamLibraryView } from "./steam-i
 import { isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, submitIcon } from "./share-icons";
 import { findSteamDir, removeSteamIcon } from "./steam-icons";
 import { ModuleView } from "./module-view";
-import { discoverModules, isDevelopmentModule, type InstalledModule } from "./registry";
+import { describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import {
   DEFAULT_THEME,
@@ -115,6 +115,11 @@ interface Rect {
 
 /** How long to wait for a still image of a panel before hiding it anyway. */
 const FREEZE_TIMEOUT_MS = 250;
+
+/** The player's own modules, next to the themes folder in their data folder. */
+function userModulesDir(options: HostOptions): string {
+  return path.join(options.userData, "modules");
+}
 
 /** Leaves the workspace header's bottom border visible below the window controls. */
 const TITLE_BAR_HEIGHT = 47;
@@ -190,7 +195,9 @@ export class Host {
 
   private constructor(
     private readonly options: HostOptions,
-    private readonly modules: Map<string, InstalledModule>,
+    private modules: Map<string, InstalledModule>,
+    private moduleInfo: Map<string, ModuleInfo>,
+    private moduleProblems: ModuleProblem[],
     private readonly library: Library,
     private readonly workspace: WorkspaceState,
     private readonly profile: Profile,
@@ -243,7 +250,9 @@ export class Host {
     for (const [name, version] of Object.entries(SUPPORTED_VERSIONS)) {
       await keepNewerFile(path.join(userData, name), version).catch(() => null);
     }
-    const modules = await discoverModules({ official: options.officialModuleDirs, local: options.moduleDirs });
+    const moduleProblems: ModuleProblem[] = [];
+    const modules = await discoverModules(Host.moduleSources(options), moduleProblems);
+    const moduleInfo = await describeModules(userModulesDir(options), modules);
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
     const expired = purgeExpired(library, new Date());
@@ -270,7 +279,7 @@ export class Host {
       options.devServer,
     );
 
-    const host = new Host(options, modules, library, workspace, profile, windowState, themes, themeProblems);
+    const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
     // Native menus, dialogs and scrollbars follow the theme's mode.
     host.syncNativeTheme();
     // The system's light or dark setting changed (or Tavora's own native theme did, which applyTheme ignores).
@@ -329,6 +338,61 @@ export class Host {
     } catch (error) {
       this.logUpdate(`updates are not available: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /** Modules that ship with Tavora, any development folders, and the player's own modules folder. */
+  private static moduleSources(options: HostOptions) {
+    return { official: options.officialModuleDirs, local: [...options.moduleDirs, userModulesDir(options)] };
+  }
+
+  /** Looks for modules again; panels of modules that are gone are closed. */
+  private async reloadModules(): Promise<void> {
+    const problems: ModuleProblem[] = [];
+    const modules = await discoverModules(Host.moduleSources(this.options), problems);
+    this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
+    this.moduleProblems = problems;
+    this.modules = modules;
+    this.dropPanelsOfMissingModules();
+  }
+
+  /** Closes and forgets every panel whose module is not installed any more, in every game. Module data stays. */
+  private dropPanelsOfMissingModules(): void {
+    let changed = false;
+    for (const workspace of Object.values(this.workspace.games)) {
+      const gone = new Set(workspace.instances.filter((record) => !this.modules.has(record.moduleId)).map((record) => record.instanceId));
+      if (gone.size === 0) continue;
+      changed = true;
+      workspace.instances = workspace.instances.filter((record) => !gone.has(record.instanceId));
+      workspace.layout = pruneLayout(workspace.layout, (id) => !gone.has(id));
+      for (const instanceId of gone) this.closeView(instanceId);
+    }
+    if (changed) {
+      this.layoutEpoch++;
+      this.saveWorkspace();
+    }
+  }
+
+  private async openModulesFolder(): Promise<void> {
+    const dir = userModulesDir(this.options);
+    await mkdir(dir, { recursive: true });
+    const error = await shell.openPath(dir);
+    if (error) throw new LibraryError(`Couldn't open the modules folder: ${error}`);
+  }
+
+  /** Moves a module out of the player's modules folder (to the recycle bin) and forgets it. */
+  private async removeModule(moduleId: string): Promise<void> {
+    const module = this.modules.get(moduleId);
+    if (!module || !this.moduleInfo.get(moduleId)?.removable) {
+      throw new LibraryError("Only modules in your own modules folder can be removed here.");
+    }
+    try {
+      // Test runs keep the window hidden and have no recycle bin to rely on.
+      if (this.options.hidden) await rm(module.root, { recursive: true, force: true });
+      else await shell.trashItem(module.root);
+    } catch {
+      throw new LibraryError("Couldn't move the module to the recycle bin. Close anything using its folder and try again.");
+    }
+    await this.reloadModules();
   }
 
   private static themeSources(options: HostOptions) {
@@ -681,6 +745,12 @@ export class Host {
         library.followSystem = true;
         this.applyTheme();
         break;
+      case "reload-modules":
+        return this.reloadModules();
+      case "open-modules-folder":
+        return this.openModulesFolder();
+      case "remove-module":
+        return this.removeModule(action.moduleId);
       case "reload-themes":
         return this.reloadThemes();
       case "open-themes-folder":
@@ -1262,7 +1332,11 @@ export class Host {
         minHeight: module.manifest.viewport.minHeight,
         provenance: module.provenance,
         development: isDevelopmentModule(module.manifest.id),
+        version: module.manifest.version,
+        origin: this.moduleInfo.get(module.manifest.id)?.origin ?? "",
+        removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
       })),
+      moduleProblems: this.moduleProblems.map((problem) => ({ ...problem })),
       panels: workspace.instances.map((record) => ({
         instanceId: record.instanceId,
         moduleId: record.moduleId,

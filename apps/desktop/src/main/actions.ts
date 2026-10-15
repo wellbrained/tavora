@@ -42,7 +42,11 @@ export function parseAction(raw: unknown): HostAction | null {
     case "reload-themes":
     case "open-themes-folder":
     case "create-starter-theme":
+    case "open-modules-folder":
+    case "reload-modules":
       return only() ? { type: a.type } : null;
+    case "remove-module":
+      return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
     case "record-timing":
       return only("name", "ms") && a.name === "game-switch" && typeof a.ms === "number" && Number.isFinite(a.ms) && a.ms >= 0 && a.ms < 600_000
         ? { type: a.type, name: a.name, ms: a.ms }

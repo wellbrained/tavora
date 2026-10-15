@@ -34,7 +34,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import LinkDialog from "./LinkDialog.vue";
-import { SCRATCHPAD_ID, type NoteEntry, type RichText } from "./notes";
+import { contentFromText, SCRATCHPAD_ID, type NoteData, type NoteEntry, type RichText } from "./notes";
 import type { NotesStore } from "./store";
 
 const props = defineProps<{ store: NotesStore; noteId: string; entry: NoteEntry | undefined; narrow: boolean }>();
@@ -103,6 +103,15 @@ function flush(): Promise<void> {
   return saving;
 }
 
+/** Shows a note's formatting; a stored note the editor cannot read shows its plain text instead of breaking the panel. */
+function showContent(instance: NonNullable<typeof editor.value>, note: NoteData) {
+  try {
+    instance.commands.setContent(note.content as JSONContent, { emitUpdate: false, errorOnInvalidContent: true });
+  } catch {
+    instance.commands.setContent(contentFromText(note.text) as JSONContent, { emitUpdate: false });
+  }
+}
+
 async function load(id: string) {
   loadedId = null;
   loadedNote.value = null;
@@ -113,7 +122,7 @@ async function load(id: string) {
     const note = await props.store.open(id);
     // Another note was picked while this one loaded.
     if (props.noteId !== id || !editor.value) return;
-    editor.value.commands.setContent(note.data.content as JSONContent, { emitUpdate: false });
+    showContent(editor.value, note.data);
     loadedId = id;
     loadedNote.value = id;
   } finally {
@@ -144,7 +153,7 @@ async function reloadFromOtherPanel() {
   const note = await props.store.open(props.noteId);
   if (busy()) return;
   const { from, to } = instance.state.selection;
-  instance.commands.setContent(note.data.content as JSONContent, { emitUpdate: false });
+  showContent(instance, note.data);
   const end = instance.state.doc.content.size;
   instance.commands.setTextSelection({ from: Math.min(from, end), to: Math.min(to, end) });
 }
