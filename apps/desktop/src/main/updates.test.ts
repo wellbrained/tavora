@@ -42,7 +42,14 @@ function make(autoDownload = true) {
   const states: UpdateState[] = [];
   const logs: string[] = [];
   const { timers, pending } = fakeTimers();
-  const manager = new UpdateManager({ updater: updater as unknown as UpdaterLike, autoDownload, onChange: (s) => states.push(s), log: (l) => logs.push(l), timers });
+  const manager = new UpdateManager({
+    updater: updater as unknown as UpdaterLike,
+    autoDownload,
+    onChange: (s) => states.push(s),
+    log: (l) => logs.push(l),
+    timers,
+    now: () => new Date("2026-10-16T09:30:00.000Z"),
+  });
   return { updater, manager, states, logs, pending };
 }
 
@@ -54,7 +61,7 @@ describe("UpdateManager", () => {
     expect(make(false).updater.autoDownload).toBe(false);
   });
 
-  it("checks once shortly after start and then every six hours", () => {
+  it("checks once shortly after start and then every six hours", async () => {
     const { manager, pending, updater } = make();
     manager.start();
     expect(pending.map((t) => [t.ms, t.repeat])).toEqual([
@@ -62,7 +69,9 @@ describe("UpdateManager", () => {
       [CHECK_EVERY_MS, true],
     ]);
     pending[0]!.run();
+    await new Promise((resolve) => setTimeout(resolve, 0)); // the first check finishes
     pending[1]!.run();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(updater.checks).toBe(2);
     manager.stop();
     expect(pending).toHaveLength(0);
@@ -110,12 +119,12 @@ describe("UpdateManager", () => {
     const { manager, updater, logs } = make();
     updater.failCheck = true;
     await manager.check();
-    expect(manager.state).toEqual({ status: "idle" });
+    expect(manager.state).toMatchObject({ status: "idle" });
     expect(logs.some((l) => l.includes("offline"))).toBe(true);
 
     updater.emit("update-available", { version: "0.3.0" });
     updater.emit("error", new Error("connection lost"));
-    expect(manager.state).toEqual({ status: "idle" });
+    expect(manager.state).toMatchObject({ status: "idle" });
   });
 
   it("does not check again while a version is downloading or ready", async () => {
@@ -133,6 +142,45 @@ describe("UpdateManager", () => {
     updater.emit("update-available", { version: "0.3.0" });
     updater.failDownload = true;
     await manager.download();
-    expect(manager.state).toEqual({ status: "idle" });
+    expect(manager.state).toMatchObject({ status: "idle" });
+  });
+
+  it("shows checking while it asks, then idle with the time of the check", async () => {
+    const { manager, updater, states } = make();
+    updater.checkForUpdates = async () => {
+      expect(manager.state).toEqual({ status: "checking" });
+      updater.emit("update-not-available");
+    };
+    await manager.check();
+    expect(manager.state).toEqual({ status: "idle", checkedAt: "2026-10-16T09:30:00.000Z", failed: false });
+    expect(states.map((s) => s.status)).toEqual(["checking", "idle"]);
+  });
+
+  it("ends a check that answered without any event, so it never hangs on checking", async () => {
+    const { manager } = make();
+    await manager.check();
+    expect(manager.state).toEqual({ status: "idle", checkedAt: "2026-10-16T09:30:00.000Z", failed: false });
+  });
+
+  it("reports a failed check as idle with failed set, and tries again the next time", async () => {
+    const { manager, updater } = make();
+    updater.failCheck = true;
+    await manager.check();
+    expect(manager.state).toEqual({ status: "idle", checkedAt: "2026-10-16T09:30:00.000Z", failed: true });
+    updater.failCheck = false;
+    await manager.check();
+    expect(manager.state).toMatchObject({ status: "idle", failed: false });
+    expect(updater.checks).toBe(2);
+  });
+
+  it("does not start a second check while one is running", async () => {
+    const { manager, updater } = make();
+    let release!: () => void;
+    updater.checkForUpdates = () => new Promise<void>((resolve) => ((updater.checks += 1), (release = resolve)));
+    const first = manager.check();
+    await manager.check();
+    release();
+    await first;
+    expect(updater.checks).toBe(1);
   });
 });

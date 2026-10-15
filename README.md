@@ -53,6 +53,7 @@ Installed apps update only when a **minor** version (x.y.0) is released; ordinar
 ```sh
 pnpm release --dry-run   # checks, tests, e2e and the installer build; stops before the upload
 pnpm release             # the same, then uploads to updates.mytavora.app and tags vX.Y.0
+pnpm release --allow-patch   # a one-off release of a patch version (x.y.z), e.g. to try an update
 ```
 
 The script refuses unless it runs on a clean, up-to-date `main` with an `x.y.0` version that has its patch-notes entry. The server side lives in `apps/desktop/deploy` (Caddy site, one-time setup, publish script); the installer, update manifest and last three versions are kept at `/srv/tavora-updates`.

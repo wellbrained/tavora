@@ -5,7 +5,12 @@
 # file that is not there yet. Keeps the three newest versions for differential updates.
 set -euo pipefail
 version="${1:-}"
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.0$ ]] || { echo "Only minor versions (x.y.0) are published, not '$version'"; exit 1; }
+mode="${2:-}"
+if [[ "$mode" == allow-patch ]]; then
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Not a version: '$version'"; exit 1; }
+else
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.0$ ]] || { echo "Only minor versions (x.y.0) are published, not '$version' (use allow-patch for a one-off)"; exit 1; }
+fi
 incoming=/tmp/tavora-updates-incoming
 root=/srv/tavora-updates
 installer="Tavora-Setup-$version.exe"

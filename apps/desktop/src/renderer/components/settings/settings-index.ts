@@ -82,6 +82,13 @@ export const SETTINGS: SettingEntry[] = [
     keywords: ["update", "updates", "upgrade", "new version", "download", "install", "automatic"],
   },
   {
+    id: "check-updates",
+    section: "general",
+    label: "Check for updates",
+    description: "Ask the update server right now whether there is a newer version of Tavora, without waiting for the next automatic check.",
+    keywords: ["update", "updates", "upgrade", "new version", "check now", "latest"],
+  },
+  {
     id: "steam-icons",
     section: "general",
     label: "Game icons from Steam",

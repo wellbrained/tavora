@@ -31,6 +31,7 @@ export interface UpdateManagerOptions {
   timers?: Timers;
   firstCheckMs?: number;
   everyMs?: number;
+  now?: () => Date;
 }
 
 /**
@@ -40,13 +41,14 @@ export interface UpdateManagerOptions {
  * (offline, server down) are logged and ignored; the next check tries again.
  */
 export class UpdateManager {
-  private current: UpdateState = { status: "idle" };
+  private current: UpdateState = { status: "idle", checkedAt: null, failed: false };
   private readonly updater: UpdaterLike;
   private readonly onChange: (state: UpdateState) => void;
   private readonly log: (line: string) => void;
   private readonly timers: Timers;
   private readonly firstCheckMs: number;
   private readonly everyMs: number;
+  private readonly now: () => Date;
   private first: unknown;
   private every: unknown;
 
@@ -62,6 +64,7 @@ export class UpdateManager {
     };
     this.firstCheckMs = options.firstCheckMs ?? FIRST_CHECK_MS;
     this.everyMs = options.everyMs ?? CHECK_EVERY_MS;
+    this.now = options.now ?? (() => new Date());
 
     this.updater.autoDownload = options.autoDownload;
     // A downloaded update installs by itself when Tavora is closed.
@@ -74,11 +77,14 @@ export class UpdateManager {
       this.log(`update ${info.version} downloaded`);
       this.set({ status: "ready", version: info.version });
     });
-    this.updater.on("update-not-available", () => this.log("up to date"));
+    this.updater.on("update-not-available", () => {
+      this.log("up to date");
+      this.set(this.idle(false));
+    });
     this.updater.on("error", (error) => {
       this.log(`update error: ${error.message}`);
-      // A failed download goes back to "found it"; the next check starts it again.
-      if (this.current.status === "downloading") this.set({ status: "idle" });
+      // A failed check or download goes back to idle; the next check starts again.
+      if (this.current.status === "downloading" || this.current.status === "checking") this.set(this.idle(true));
     });
   }
 
@@ -100,12 +106,16 @@ export class UpdateManager {
 
   /** Asks the server whether there is a newer version. Does nothing while one is already on its way. */
   async check(): Promise<void> {
-    if (this.current.status !== "idle" && this.current.status !== "available") return;
+    if (this.current.status !== "idle") return;
+    this.set({ status: "checking" });
     try {
       await this.updater.checkForUpdates();
     } catch (error) {
       this.log(`update check failed: ${error instanceof Error ? error.message : String(error)}`);
+      if (this.is("checking")) this.set(this.idle(true));
     }
+    // An answer without any event (nothing to compare) still ends the check.
+    if (this.is("checking")) this.set(this.idle(false));
   }
 
   /** The Settings switch: whether found versions download by themselves. Turning it on starts a waiting one. */
@@ -122,7 +132,7 @@ export class UpdateManager {
       await this.updater.downloadUpdate();
     } catch (error) {
       this.log(`update download failed: ${error instanceof Error ? error.message : String(error)}`);
-      this.set({ status: "idle" });
+      this.set(this.idle(true));
     }
   }
 
@@ -130,6 +140,15 @@ export class UpdateManager {
   restartNow(): void {
     if (this.current.status !== "ready") return;
     this.updater.quitAndInstall(true, true);
+  }
+
+  /** Re-reads the state, which events may have changed while a call was awaited. */
+  private is(status: UpdateState["status"]): boolean {
+    return this.current.status === status;
+  }
+
+  private idle(failed: boolean): UpdateState {
+    return { status: "idle", checkedAt: this.now().toISOString(), failed };
   }
 
   private set(state: UpdateState): void {
