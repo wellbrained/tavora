@@ -15,12 +15,17 @@ export interface InstalledModule {
   /** Real path of the package root; nothing outside it is ever served. */
   root: string;
   provenance: Provenance;
+  /** Part of the host (the Browser), not a package on disk. */
+  builtIn?: true;
 }
 
 const MANIFEST = "tavora.module.json";
 
 /** Module ids starting with this publisher are reserved for official modules. */
 export const OFFICIAL_PREFIX = "tavora.";
+
+/** The id the Browser is listed under in the module library; reserved like every `tavora.` id. */
+export const BROWSER_MODULE_ID = "tavora.browser";
 
 /**
  * Modules that ship with Tavora as starting points for module authors: the
@@ -154,4 +159,30 @@ export async function describeModules(userModules: string, modules: Map<string, 
     info.set(id, { origin, removable: own });
   }
   return info;
+}
+
+/**
+ * The Browser is built into the host, not a module package
+ * (docs/browser-security.md), but it is listed, docked and saved in layouts
+ * like an official module. It has no files, so `root` is empty and nothing
+ * is ever served for it.
+ */
+export function browserModule(version: string): InstalledModule {
+  return {
+    manifest: {
+      id: BROWSER_MODULE_ID,
+      name: "Browser",
+      description: "Wikis, maps, guides and videos next to your game. Ads blocked, no downloads.",
+      version,
+      apiVersion: "1",
+      entry: "",
+      games: [],
+      // The minimum height includes the toolbar the host draws above the page.
+      viewport: { minWidth: 360, minHeight: 280, preferredWidth: 900, preferredHeight: 700 },
+      permissions: { network: [] },
+    },
+    root: "",
+    provenance: "official",
+    builtIn: true,
+  };
 }

@@ -1,5 +1,6 @@
 import { isGameId, isModuleId } from "@tavora/module-schema";
-import type { HostAction, SteamImportGame } from "../shared/host-api";
+import type { BrowserCommand, HostAction, SteamImportGame } from "../shared/host-api";
+import { isSite, MAX_ADDRESS } from "./browser-url";
 import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
 import { isGridSize, layoutTemplate } from "../shared/layout-templates";
@@ -19,6 +20,7 @@ const index = (value: unknown): value is number | undefined =>
   value === undefined || (Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 10_000);
 const uuid = (value: unknown): value is string => typeof value === "string" && INSTANCE_ID.test(value);
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+const BROWSER_COMMANDS: readonly BrowserCommand[] = ["back", "forward", "reload", "stop", "open-external", "mute", "unmute", "exit-fullscreen"];
 
 /**
  * Checks a message from the host UI. The host UI is trusted code, but its
@@ -184,6 +186,24 @@ export function parseAction(raw: unknown): HostAction | null {
         ...(a.width === undefined ? {} : { width: a.width as number }),
       };
     }
+    case "browser-navigate":
+      return only("instanceId", "address") && uuid(a.instanceId) && text(a.address, MAX_ADDRESS) && a.address.trim() !== ""
+        ? { type: a.type, instanceId: a.instanceId, address: a.address }
+        : null;
+    case "browser-command":
+      return only("instanceId", "command") && uuid(a.instanceId) && BROWSER_COMMANDS.includes(a.command as BrowserCommand)
+        ? { type: a.type, instanceId: a.instanceId, command: a.command as BrowserCommand }
+        : null;
+    case "browser-set-shared":
+      return only("instanceId", "shared") && uuid(a.instanceId) && typeof a.shared === "boolean" ? { type: a.type, instanceId: a.instanceId, shared: a.shared } : null;
+    case "browser-set-adblock":
+      return only("instanceId", "enabled") && uuid(a.instanceId) && typeof a.enabled === "boolean"
+        ? { type: a.type, instanceId: a.instanceId, enabled: a.enabled }
+        : null;
+    case "browser-forget-site":
+      return only("list", "site") && (a.list === "shared" || a.list === "adblock-off") && isSite(a.site) ? { type: a.type, list: a.list, site: a.site } : null;
+    case "clear-browser-data":
+      return only("scope") && (a.scope === "game" || a.scope === "shared") ? { type: a.type, scope: a.scope } : null;
     case "open-module":
       return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
     case "close-panel":

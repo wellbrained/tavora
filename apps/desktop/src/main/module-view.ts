@@ -242,6 +242,10 @@ export class ModuleView {
     this.bridge?.emit("workspace.resize", { ...this.viewport });
   }
 
+  setVisible(visible: boolean): void {
+    this.view.setVisible(visible);
+  }
+
   /** Recolours the page and tells the module, which may restyle itself through ui.onThemeChange. */
   applyTheme(theme: TavoraTheme): void {
     this.view.setBackgroundColor(theme.tokens.background);

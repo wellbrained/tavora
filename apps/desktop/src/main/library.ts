@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { isGameId, isModuleId } from "@tavora/module-schema";
 import type { RootItem, RootSort, Startup } from "../shared/host-api";
+import { isSite } from "./browser-url";
 import { CATALOG, catalogGame } from "./catalog";
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
 import { DEFAULT_THEME, isVariationId } from "./themes";
@@ -79,6 +80,8 @@ export interface Library {
   followSystem: boolean;
   /** False until the first-run welcome was finished or skipped. */
   onboarded: boolean;
+  /** Browser panel sites: signed in for all games instead of per game, and ad blocking turned off. */
+  browser: { sharedSites: string[]; adblockOff: string[] };
   lastGameId: string | null;
 }
 
@@ -108,6 +111,7 @@ export function emptyLibrary(): Library {
     theme: { ...DEFAULT_THEME },
     followSystem: true,
     onboarded: false,
+    browser: { sharedSites: [], adblockOff: [] },
     lastGameId: null,
   };
 }
@@ -576,8 +580,27 @@ export function sanitizeLibrary(raw: unknown): Library {
   // A library saved before the welcome existed belongs to someone who is past it.
   library.onboarded = typeof saved.onboarded === "boolean" ? saved.onboarded : true;
   setRail(library, asRecord(saved.rail));
+  const browser = asRecord(saved.browser);
+  library.browser = { sharedSites: siteList(browser.sharedSites), adblockOff: siteList(browser.adblockOff) };
   if (typeof saved.lastGameId === "string" && isLive(library, saved.lastGameId)) library.lastGameId = saved.lastGameId;
   return library;
+}
+
+/** Most sites a Browser list keeps. */
+export const MAX_SITES = 500;
+
+function siteList(value: unknown): string[] {
+  return [...new Set((Array.isArray(value) ? value : []).filter(isSite))].slice(0, MAX_SITES);
+}
+
+/** Adds a site to a Browser list (signed in for all games, or ad blocking off) or removes it. */
+export function setSiteListed(library: Library, list: "sharedSites" | "adblockOff", site: string, listed: boolean): void {
+  const sites = library.browser[list].filter((item) => item !== site);
+  if (listed) {
+    if (sites.length >= MAX_SITES) throw new LibraryError(`Tavora keeps up to ${MAX_SITES} sites in this list. Remove one in Settings > Browser first.`);
+    sites.push(site);
+  }
+  library.browser[list] = sites;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

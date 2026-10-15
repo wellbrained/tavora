@@ -52,7 +52,42 @@ export interface PanelView {
   moduleId: string;
   name: string;
   status: InstanceStatus;
+  /** Set for Browser panels: what their toolbar shows. */
+  browser?: BrowserState;
 }
+
+/** A Browser panel's page, as its toolbar shows it. Nothing here comes from the page but its title. */
+export interface BrowserState {
+  /** The page's address; empty before anything was opened. */
+  url: string;
+  /** The page's host as the toolbar shows it (punycode for lookalike scripts). */
+  host: string;
+  title: string;
+  /** https, so the toolbar shows no "Not secure". */
+  secure: boolean;
+  loading: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  /** The site the page belongs to (its registrable domain), or null. */
+  site: string | null;
+  /** The page uses the sign-in shared by all games, rather than this game's own. */
+  shared: boolean;
+  /** Ad blocking is on for this site. */
+  adblock: boolean;
+  /** Ads and trackers blocked on this page. */
+  blocked: number;
+  /** Why the page is not shown, or null. */
+  error: string | null;
+  /** A video or other element fills the page view. */
+  fullscreen: boolean;
+  audible: boolean;
+  muted: boolean;
+  /** Counts refused downloads, so the host UI can say so each time one is refused. */
+  downloadsRefused: number;
+}
+
+/** Toolbar buttons of a Browser panel. */
+export type BrowserCommand = "back" | "forward" | "reload" | "stop" | "open-external" | "mute" | "unmute" | "exit-fullscreen";
 
 /**
  * A docking layout: a tree of splits whose leaves are tab groups of panels.
@@ -174,6 +209,8 @@ export interface HostViewState {
     /** False until the player finished or skipped the first-run welcome. */
     onboarded: boolean;
     rail: { expanded: boolean; width: number };
+    /** Sites the player marked: signed in for all games, and ad blocking off. */
+    browser: { sharedSites: string[]; adblockOff: string[] };
   };
   modules: {
     id: string;
@@ -290,6 +327,16 @@ export type HostAction =
   | { type: "close-panel"; instanceId: string }
   | { type: "reload-panel"; instanceId: string }
   | { type: "stop-panel"; instanceId: string }
+  /** What the player typed in a Browser panel's address bar. */
+  | { type: "browser-navigate"; instanceId: string; address: string }
+  | { type: "browser-command"; instanceId: string; command: BrowserCommand }
+  /** Signs the page's site in for all games (true) or for each game on its own. */
+  | { type: "browser-set-shared"; instanceId: string; shared: boolean }
+  | { type: "browser-set-adblock"; instanceId: string; enabled: boolean }
+  /** Removes a site from one of the lists in Settings > Browser. */
+  | { type: "browser-forget-site"; list: "shared" | "adblock-off"; site: string }
+  /** Deletes cookies, logins and caches: the current game's, or the ones shared by all games. */
+  | { type: "clear-browser-data"; scope: "game" | "shared" }
   /** Null when nothing is docked any more. */
   | { type: "save-layout"; layout: SavedLayout | null }
   /** Rearranges the workspace into empty slots of a layout template; open panels fill the first ones. */
@@ -364,4 +411,5 @@ export interface TavoraHostApi {
   onShortcut(listener: (shortcut: HostShortcut) => void): void;
 }
 
-export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}`;
+/** `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). */
+export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}` | `address:${string}`;

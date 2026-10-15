@@ -19,7 +19,7 @@ import {
   type WebContents,
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
-import type { ActionResult, AppearanceView, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
+import type { ActionResult, AppearanceView, BrowserCommand, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, type SavedLayout } from "./layout";
@@ -47,6 +47,7 @@ import {
   purgeExpired,
   recentGames,
   removeFavorite,
+  setSiteListed,
   renameFolder,
   renameGame,
   restoreGame,
@@ -76,7 +77,10 @@ import { fetchSteamLibrary, importSteamGames, steamLibraryView } from "./steam-i
 import { isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, submitIcon } from "./share-icons";
 import { findSteamDir, removeSteamIcon } from "./steam-icons";
 import { ModuleView } from "./module-view";
-import { describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { loadAdBlocker, type AdBlocker } from "./browser-filter";
+import { siteOfUrl } from "./browser-url";
+import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
+import { BROWSER_MODULE_ID, browserModule, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import {
   DEFAULT_THEME,
@@ -170,8 +174,12 @@ const PROFILE_URL = `${HOST_SCHEME}://app/profile/`;
 
 export class Host {
   private readonly data: DataRegistry;
-  private readonly views = new Map<string, ModuleView>();
+  private readonly views = new Map<string, ModuleView | BrowserPanel>();
   private readonly viewsByContents = new Map<number, ModuleView>();
+  /** Browser panels by the contents of their page, for requests the page makes. */
+  private readonly browsersByContents = new Map<number, BrowserPanel>();
+  /** What every browser session is made safe with; built when the first Browser panel opens. */
+  private browserHooks: BrowserSessionHooks | undefined;
   private screen: Screen = "welcome";
   private notice: string | null = null;
   /** Where the host UI shows each visible panel, in window content coordinates. */
@@ -252,6 +260,7 @@ export class Host {
     }
     const moduleProblems: ModuleProblem[] = [];
     const modules = await discoverModules(Host.moduleSources(options), moduleProblems);
+    modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     const moduleInfo = await describeModules(userModulesDir(options), modules);
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
@@ -349,6 +358,7 @@ export class Host {
   private async reloadModules(): Promise<void> {
     const problems: ModuleProblem[] = [];
     const modules = await discoverModules(Host.moduleSources(this.options), problems);
+    modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
     this.moduleProblems = problems;
     this.modules = modules;
@@ -595,6 +605,7 @@ export class Host {
       for (const view of this.views.values()) view.dispose();
       this.views.clear();
       this.viewsByContents.clear();
+      this.browsersByContents.clear();
     });
   }
 
@@ -783,6 +794,25 @@ export class Host {
         return this.views.get(action.instanceId)?.reload();
       case "stop-panel":
         return this.views.get(action.instanceId)?.stop();
+      case "browser-navigate":
+        return this.browser(action.instanceId).navigate(action.address);
+      case "browser-command":
+        return this.browserCommand(this.browser(action.instanceId), action.command);
+      case "browser-set-shared":
+      case "browser-set-adblock": {
+        const site = siteOfUrl(this.browser(action.instanceId).state.url);
+        if (!site) throw new LibraryError("Open a page first.");
+        if (action.type === "browser-set-shared") setSiteListed(library, "sharedSites", site, action.shared);
+        else setSiteListed(library, "adblockOff", site, !action.enabled);
+        this.browserSitesChanged();
+        break;
+      }
+      case "browser-forget-site":
+        setSiteListed(library, action.list === "shared" ? "sharedSites" : "adblockOff", action.site, false);
+        this.browserSitesChanged();
+        break;
+      case "clear-browser-data":
+        return this.clearBrowserData(action.scope);
       case "save-layout":
         return this.saveLayout(action.layout);
       case "apply-layout-template":
@@ -1042,6 +1072,80 @@ export class Host {
     void this.data.panelState.remove(instanceId).catch((error: unknown) => console.error("[tavora]", error));
   }
 
+  // ── Browser ──────────────────────────────────────────────────────────
+
+  private browser(instanceId: string): BrowserPanel {
+    const view = this.views.get(instanceId);
+    if (!(view instanceof BrowserPanel)) throw new WorkspaceError("That panel is no longer open.");
+    return view;
+  }
+
+  private browserCommand(panel: BrowserPanel, command: BrowserCommand): void {
+    switch (command) {
+      case "back":
+        return panel.back();
+      case "forward":
+        return panel.forward();
+      case "reload":
+        return panel.reload();
+      case "stop":
+        return panel.stopLoading();
+      case "mute":
+      case "unmute":
+        return panel.setMuted(command === "mute");
+      case "exit-fullscreen":
+        return panel.exitFullscreen();
+      case "open-external": {
+        // Only the page's own http or https address, and only on the player's click.
+        const url = panel.externalUrl;
+        if (url && !this.options.hidden) void shell.openExternal(url);
+        return;
+      }
+    }
+  }
+
+  private isSiteListed(list: "sharedSites" | "adblockOff", url: string): boolean {
+    const site = siteOfUrl(url);
+    return site !== null && this.library.browser[list].includes(site);
+  }
+
+  /** A site moved between lists: open pages of it switch sessions and ad blocking applies from the next request. */
+  private browserSitesChanged(): void {
+    for (const view of this.views.values()) if (view instanceof BrowserPanel) view.siteSettingsChanged();
+  }
+
+  /** Built once: every browser session shares the ad blocker and the lookups. */
+  private sessionHooks(): BrowserSessionHooks {
+    return (this.browserHooks ??= {
+      userAgent: browserUserAgent(process.platform, process.versions.chrome ?? "0"),
+      ads: Host.adBlocker(),
+      topUrlOf: (id) => (id === undefined ? null : (this.browsersByContents.get(id)?.topUrl ?? null)),
+      adblockOn: (topUrl) => !this.isSiteListed("adblockOff", topUrl),
+      onAdBlocked: (id) => id !== undefined && this.browsersByContents.get(id)?.adBlocked(),
+      onDownloadRefused: (contents) => contents && this.browsersByContents.get(contents.id)?.downloadRefused(),
+    });
+  }
+
+  /** The filter engine compiled at build time (scripts/filters.mjs). */
+  private static adBlocker(): AdBlocker | null {
+    return loadAdBlocker(path.join(__dirname, "../filters/engine.bin"));
+  }
+
+  private browserSessionFor(kind: BrowserKind, gameId: string) {
+    return browserSession(browserPartition(kind, gameId), this.sessionHooks());
+  }
+
+  /** Deletes the Browser's cookies, logins, storage and caches: the current game's, or the ones shared by all games. */
+  private async clearBrowserData(scope: "game" | "shared"): Promise<void> {
+    const game = this.game;
+    if (scope === "game" && !game) throw new LibraryError("Open a game first.");
+    const ses = this.browserSessionFor(scope, game?.id ?? "");
+    await ses.clearStorageData();
+    await ses.clearCache();
+    await ses.clearAuthCache();
+    for (const view of this.views.values()) if (view instanceof BrowserPanel) view.reload();
+  }
+
   // ── Layouts and snapshots ────────────────────────────────────────────
 
   private currentWorkspace(): GameWorkspace {
@@ -1154,6 +1258,7 @@ export class Host {
 
   /** openedAt is when the player asked for the panel; its time to a loaded page is measured from there. */
   private createView(record: InstanceRecord, game: TavoraGame, openedAt?: number): void {
+    if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, game);
     let measured = openedAt === undefined;
     const module = this.modules.get(record.moduleId)!;
     const view = new ModuleView({
@@ -1186,6 +1291,46 @@ export class Host {
     this.window.contentView.addChildView(view.view);
   }
 
+  private createBrowser(record: InstanceRecord, game: TavoraGame): void {
+    const { instanceId } = record;
+    const panel: BrowserPanel = new BrowserPanel({
+      instanceId,
+      devTools: this.options.devTools,
+      background: () => this.currentTheme.tokens.background,
+      sessionFor: (kind) => this.browserSessionFor(kind, game.id),
+      isSharedSite: (url) => this.isSiteListed("sharedSites", url),
+      adblockOn: (url) => !this.isSiteListed("adblockOff", url),
+      swap: (previous, next) => {
+        if (previous) {
+          this.browsersByContents.delete(previous.webContents.id);
+          this.window.contentView.removeChildView(previous);
+        }
+        const id = next.webContents.id;
+        this.browsersByContents.set(id, panel);
+        next.webContents.once("destroyed", () => this.browsersByContents.get(id) === panel && this.browsersByContents.delete(id));
+        this.watchShortcuts(next.webContents);
+        this.window.contentView.addChildView(next);
+        if (previous) this.applyBounds();
+      },
+      onAddress: (url) => {
+        if (this.views.get(instanceId) !== panel) return;
+        void this.data.panelState.set(instanceId, { url }).catch((error: unknown) => console.error("[tavora]", error));
+      },
+      onFocusAddress: () => {
+        this.window.webContents.focus();
+        this.window.webContents.send("host:shortcut", `address:${instanceId}`);
+      },
+      onChange: () => this.pushState(),
+    });
+    this.views.set(instanceId, panel);
+    panel.attach();
+    // The page the panel showed last time opens again.
+    void this.data.panelState.get(instanceId).then(
+      (saved) => this.views.get(instanceId) === panel && panel.restore((saved as { url?: unknown } | null)?.url),
+      () => undefined,
+    );
+  }
+
   /** Sends Tavora's own shortcuts to the host UI, from the host page and from module panels. */
   private watchShortcuts(contents: WebContents): void {
     contents.on("before-input-event", (event, input) => {
@@ -1202,6 +1347,7 @@ export class Host {
     if (!view) return;
     this.views.delete(instanceId);
     this.viewsByContents.delete(view.webContentsId);
+    this.browsersByContents.delete(view.webContentsId);
     this.window.contentView.removeChildView(view.view);
     view.dispose();
   }
@@ -1211,7 +1357,7 @@ export class Host {
     this.panelBounds.clear();
   }
 
-  private forEachView(fn: (view: ModuleView) => void): void {
+  private forEachView(fn: (view: ModuleView | BrowserPanel) => void): void {
     for (const view of this.views.values()) fn(view);
   }
 
@@ -1242,7 +1388,7 @@ export class Host {
     for (const [instanceId, view] of this.views) {
       const rect = this.panelBounds.get(instanceId);
       if (rect) view.setBounds(rect);
-      view.view.setVisible(rect !== undefined && !this.overlay);
+      view.setVisible(rect !== undefined && !this.overlay);
       if (rect && !this.windowHidden) view.resume();
       else view.suspend();
     }
@@ -1262,6 +1408,7 @@ export class Host {
     await Promise.all(
       [...this.views].map(async ([instanceId, view]) => {
         if (!this.panelBounds.has(instanceId) || view.status !== "ready") return;
+        if (view instanceof BrowserPanel && !view.capturable) return;
         const image = await Promise.race([
           view.view.webContents.capturePage().catch(() => null),
           new Promise<null>((resolve) => setTimeout(() => resolve(null), FREEZE_TIMEOUT_MS)),
@@ -1271,7 +1418,7 @@ export class Host {
     );
     if (change !== this.overlayChanges || this.window.isDestroyed()) return;
     this.window.webContents.send("host:frozen", images);
-    this.forEachView((view) => view.view.setVisible(false));
+    this.forEachView((view) => view.setVisible(false));
   }
 
   // ── State ────────────────────────────────────────────────────────────
@@ -1327,6 +1474,7 @@ export class Host {
         steamProfile: library.steamProfile,
         onboarded: library.onboarded,
         rail: { ...library.rail },
+        browser: { sharedSites: [...library.browser.sharedSites], adblockOff: [...library.browser.adblockOff] },
       },
       modules: [...this.modules.values()].map((module) => ({
         id: module.manifest.id,
@@ -1342,12 +1490,15 @@ export class Host {
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
       })),
       moduleProblems: this.moduleProblems.map((problem) => ({ ...problem })),
-      panels: workspace.instances.map((record) => ({
-        instanceId: record.instanceId,
-        moduleId: record.moduleId,
-        name: this.modules.get(record.moduleId)!.manifest.name,
-        status: this.views.get(record.instanceId)?.status ?? "loading",
-      })),
+      panels: workspace.instances.map((record) => {
+        const view = this.views.get(record.instanceId);
+        const name = this.modules.get(record.moduleId)!.manifest.name;
+        if (!(view instanceof BrowserPanel)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: view?.status ?? "loading" };
+        const browser = view.state;
+        // A Browser tab is named after its page, like a browser tab.
+        const title = (browser.title || browser.host).trim().slice(0, 80);
+        return { instanceId: record.instanceId, moduleId: record.moduleId, name: title || name, status: view.status, browser };
+      }),
       layout: workspace.layout,
       layoutEpoch: this.layoutEpoch,
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),

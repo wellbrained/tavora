@@ -76,12 +76,14 @@ export interface LaunchOptions {
   seed?: boolean;
   /** What the system pretends to be (default dark), so the theme tests do not depend on the PC. */
   systemTheme?: "dark" | "light";
+  /** More command line switches for Chromium, e.g. host resolver rules. */
+  args?: string[];
 }
 
 export async function launch(
   userData?: string,
   extraModuleDirs: string[] = [],
-  { seed = true, systemTheme }: LaunchOptions = {},
+  { seed = true, systemTheme, args = [] }: LaunchOptions = {},
 ): Promise<Running> {
   const dir = userData ?? (await newUserData());
   const libraryFile = path.join(dir, "library.json");
@@ -91,7 +93,7 @@ export async function launch(
   );
   if (seed && !exists) await writeFile(libraryFile, JSON.stringify(seedLibrary()));
   const app = await electron.launch({
-    args: [desktopDir],
+    args: [desktopDir, ...args],
     env: {
       ...process.env,
       TAVORA_USER_DATA: dir,

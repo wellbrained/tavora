@@ -30,6 +30,8 @@ import {
   useOriginalGameIcon,
   setGameImage,
   type Library,
+  MAX_SITES,
+  setSiteListed,
 } from "./library";
 
 const day = (n: number) => new Date(Date.UTC(2026, 9, n, 12));
@@ -545,5 +547,25 @@ describe("which icon a game shows", () => {
     expect(game({ iconSharedAt: "2026-10-02T10:00:00.000Z" }).iconSharedAt).toBe("2026-10-02T10:00:00.000Z");
     expect(game({ iconSharedAt: "yesterday" }).iconSharedAt).toBeNull();
     expect(game({ iconSharedAt: 5 }).iconSharedAt).toBeNull();
+  });
+});
+describe("Browser sites", () => {
+  it("keeps only valid, unique sites when read back", () => {
+    const library = sanitizeLibrary({
+      browser: { sharedSites: ["google.com", "google.com", "accounts.google.com", "a b", 5, "localhost"], adblockOff: "fandom.com" },
+    });
+    expect(library.browser).toEqual({ sharedSites: ["google.com", "localhost"], adblockOff: [] });
+    expect(sanitizeLibrary({}).browser).toEqual({ sharedSites: [], adblockOff: [] });
+  });
+
+  it("adds and removes sites, up to the limit", () => {
+    const library = sanitizeLibrary({});
+    setSiteListed(library, "sharedSites", "google.com", true);
+    setSiteListed(library, "sharedSites", "google.com", true);
+    expect(library.browser.sharedSites).toEqual(["google.com"]);
+    setSiteListed(library, "sharedSites", "google.com", false);
+    expect(library.browser.sharedSites).toEqual([]);
+    library.browser.adblockOff = Array.from({ length: MAX_SITES }, (_, i) => `site${i}.com`);
+    expect(() => setSiteListed(library, "adblockOff", "one-more.com", true)).toThrow(LibraryError);
   });
 });

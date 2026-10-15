@@ -21,7 +21,8 @@ export async function deleteModuleData(userData: string, gameId: string): Promis
 
 /**
  * Electron keeps each module's browser storage in a partition directory
- * named after `persist:module:<module>@<game>`. Returns the partition
+ * named after `persist:module:<module>@<game>`, and each game's Browser
+ * storage in `persist:browser@<game>`. Returns the partition
  * directories whose game is not in `keep`, so they can be deleted at
  * startup before any session for them is opened.
  */
@@ -36,7 +37,7 @@ export async function orphanedPartitions(userData: string, keep: ReadonlySet<str
   return names
     .filter((name) => {
       const decoded = safeDecode(name);
-      const match = /^module:[a-z0-9.-]+@([a-z0-9-]+)$/.exec(decoded);
+      const match = /^(?:module:[a-z0-9.-]+|browser)@([a-z0-9-]+)$/.exec(decoded);
       return match !== null && !keep.has(match[1]!);
     })
     .map((name) => path.join(root, name));
