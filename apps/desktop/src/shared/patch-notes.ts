@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.19",
+    date: "2026-10-16",
+    title: "Icons switch explained",
+    notes: [
+      "The Icons on panel tabs switch now says that the module lists always show the icons.",
+    ],
+  },
+  {
     version: "0.5.18",
     date: "2026-10-16",
     title: "More module icons",
