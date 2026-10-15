@@ -40,7 +40,7 @@ pnpm --filter @tavora/docs dev          # developer docs at http://127.0.0.1:400
 To package a standalone test build after `pnpm build`:
 
 ```sh
-pnpm --filter @tavora/desktop package --win    # portable exe and zip
+pnpm --filter @tavora/desktop package --win    # installer (Tavora-Setup-x.y.z.exe), its update files and a zip
 pnpm --filter @tavora/desktop package --linux  # AppImage
 ```
 
