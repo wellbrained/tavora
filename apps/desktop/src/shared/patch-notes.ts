@@ -19,6 +19,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.13",
+    date: "2026-10-15",
+    title: "Discord panel fixes",
+    notes: [
+      "The server's name shows once, in the header.",
+      "Rejoin is in the bar at the top, where Leave is while you are in a channel.",
+      "After you press Leave, the panel shows right away that you are out of the channel.",
+      "Choosing a server for a game opens a list with a search field.",
+    ],
+  },
+  {
     version: "0.5.12",
     date: "2026-10-15",
     title: "Discord for each game, and leave and mute",
