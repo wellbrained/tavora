@@ -145,7 +145,9 @@ test("every module page starts from Tavora's look, and its own styles win", asyn
     const [height] = style.splice(5, 1) as [string];
     expect(style, id).toEqual(["0px", "#e0a243", "rgb(42, 37, 33)", "rgb(32, 28, 25)", "rgb(224, 162, 67)"]);
     const [pageHeight, panelHeight] = height.split("<=").map(Number) as [number, number];
-    expect(pageHeight, `${id}: page ${pageHeight}px in a panel ${panelHeight}px high`).toBeLessThanOrEqual(panelHeight);
+    // A panel that is a background tab has no height to compare with; how many panels fit side by side
+    // depends on the room and the text sizes of the machine.
+    if (panelHeight > 0) expect(pageHeight, `${id}: page ${pageHeight}px in a panel ${panelHeight}px high`).toBeLessThanOrEqual(panelHeight);
   }
   await app.close();
 });
