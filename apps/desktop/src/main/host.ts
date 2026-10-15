@@ -10,6 +10,7 @@ import {
   protocol,
   screen,
   session,
+  shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   type WebContents,
@@ -60,6 +61,7 @@ import {
 } from "./library";
 import { MODULE_FONTS } from "./module-fonts";
 import { moduleBaseCss } from "./module-style";
+import { backupData, backupsDir, keepNewerFile, SUPPORTED_VERSIONS } from "./backup";
 import { OnlineSearch } from "./online";
 import { UpdateManager, type UpdaterLike } from "./updates";
 import { syncIcons } from "./icon-sync";
@@ -204,6 +206,10 @@ export class Host {
 
   static async create(options: HostOptions): Promise<Host> {
     const { userData } = options;
+    // A file saved by a newer Tavora is copied aside before this one can overwrite it.
+    for (const [name, version] of Object.entries(SUPPORTED_VERSIONS)) {
+      await keepNewerFile(path.join(userData, name), version).catch(() => null);
+    }
     const modules = await discoverModules({ official: options.officialModuleDirs, local: options.moduleDirs });
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
     const expired = purgeExpired(library, new Date());
@@ -253,8 +259,16 @@ export class Host {
     if (host.screen === "game") host.openCurrentGame();
     // Icons of games that have none yet are looked for quietly in the background.
     host.fetchIconsSoon();
+    host.backupSoon();
     await host.startUpdates();
     return host;
+  }
+
+  /** The daily copy of the player's data, made a little after start so it never slows it. */
+  private backupSoon(): void {
+    setTimeout(() => {
+      backupData({ userData: this.options.userData, log: (line) => console.log(`[tavora] ${line}`) }).catch((error: unknown) => console.error("[tavora] backup failed", error));
+    }, 30_000).unref();
   }
 
   /**
@@ -462,6 +476,13 @@ export class Host {
         library.autoUpdate = action.enabled;
         this.updates?.setAutoDownload(action.enabled);
         break;
+      case "open-backups": {
+        const dir = backupsDir(this.options.userData);
+        await mkdir(dir, { recursive: true });
+        const problem = await shell.openPath(dir);
+        if (problem) throw new LibraryError(`Couldn't open the folder: ${problem}`);
+        return;
+      }
       case "download-update":
         return this.updates?.download();
       case "check-for-updates":

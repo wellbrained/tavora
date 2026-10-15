@@ -301,6 +301,14 @@ function deleteNow(gameId: string, name: string) {
               <Button variant="secondary" :disabled="updateRow.busy" data-testid="check-updates" @click="pressUpdateButton">{{ updateRow.button }}</Button>
             </SettingRow>
             <SettingRow
+              label="Backups"
+              description="Tavora keeps a copy of your games, layouts, notes and settings from the last 7 days, made when it first starts each day. To go back, close Tavora and copy the files from a day's folder over the originals."
+              setting="backups"
+              :highlighted="highlight === 'backups'"
+            >
+              <Button variant="secondary" data-testid="open-backups" @click="submitAction({ type: 'open-backups' })">Open folder</Button>
+            </SettingRow>
+            <SettingRow
               label="Game icons from this PC and Steam"
               description="Uses each game's own icon. Tavora reads it from the installed game on this PC (Battle.net, Epic, GOG, EA and other launchers), then from the Steam folder, and last downloads Steam's small icon for the game from Steam. Icons are kept on this PC and the Tavora service is not involved. Games without an icon, and any image you pick yourself, are not affected. Turn it off to use the plain badges."
               setting="steam-icons"
