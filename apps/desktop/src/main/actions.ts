@@ -211,6 +211,19 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("scope") && (a.scope === "game" || a.scope === "shared") ? { type: a.type, scope: a.scope } : null;
     case "discord-set-secret":
       return only("secret") && (a.secret === null || isClientSecret(a.secret)) ? { type: a.type, secret: a.secret } : null;
+    case "discord-leave":
+    case "discord-allow-control":
+    case "discord-refresh":
+      return only() ? { type: a.type } : null;
+    case "discord-voice": {
+      const ok = (value: unknown) => value === undefined || typeof value === "boolean";
+      if (!only("mute", "deaf") || !ok(a.mute) || !ok(a.deaf) || (a.mute === undefined && a.deaf === undefined)) return null;
+      return { type: a.type, ...(a.mute === undefined ? {} : { mute: a.mute as boolean }), ...(a.deaf === undefined ? {} : { deaf: a.deaf as boolean }) };
+    }
+    case "discord-game-remember":
+      return only("gameId", "remember") && isGameId(a.gameId) && typeof a.remember === "boolean" ? { type: a.type, gameId: a.gameId, remember: a.remember } : null;
+    case "discord-game-server":
+      return only("gameId", "guildId") && isGameId(a.gameId) && isSnowflake(a.guildId) ? { type: a.type, gameId: a.gameId, guildId: a.guildId } : null;
     case "discord-join":
       return only("channelId") && isSnowflake(a.channelId) ? { type: a.type, channelId: a.channelId } : null;
     case "discord-connect":

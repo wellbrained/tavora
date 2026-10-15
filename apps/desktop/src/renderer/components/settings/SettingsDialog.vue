@@ -17,7 +17,7 @@ import GameIcon from "../GameIcon.vue";
 import AppearanceSection from "./AppearanceSection.vue";
 import ModulesSection from "./ModulesSection.vue";
 import BrowserSection from "./BrowserSection.vue";
-import DiscordSection from "./DiscordSection.vue";
+import IntegrationsSection from "./IntegrationsSection.vue";
 import SegmentedControl from "./SegmentedControl.vue";
 import { GROUPS, groupLabel, sectionLabel, settingEntries, type SettingsSection } from "./settings-index";
 import SettingRow from "./SettingRow.vue";
@@ -416,8 +416,8 @@ function deleteNow(gameId: string, name: string) {
             <BrowserSection :highlight="highlight" />
           </template>
 
-          <template v-else-if="section === 'discord'">
-            <DiscordSection :highlight="highlight" />
+          <template v-else-if="section === 'integrations'">
+            <IntegrationsSection :highlight="highlight" />
           </template>
 
           <template v-else-if="section === 'shortcuts'">

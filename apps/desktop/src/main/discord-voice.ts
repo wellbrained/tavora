@@ -100,6 +100,23 @@ export function parseGuild(raw: unknown): Guild | null {
   return { id: guild.id, name: cleanName(guild.name, "Server"), iconUrl: imageUrl(guild.icon_url) };
 }
 
+/** The servers the player is on, from GET_GUILDS. */
+export function parseGuilds(raw: unknown): { id: string; name: string }[] {
+  const list = record(raw).guilds;
+  if (!Array.isArray(list)) return [];
+  return list
+    .slice(0, 200)
+    .map((item) => parseGuild(item))
+    .filter((guild): guild is Guild => guild !== null)
+    .map((guild) => ({ id: guild.id, name: guild.name }));
+}
+
+/** The scopes Discord says the sign-in has, from AUTHENTICATE. */
+export function parseScopes(raw: unknown): string[] {
+  const scopes = record(raw).scopes;
+  return Array.isArray(scopes) ? scopes.filter((scope): scope is string => typeof scope === "string").slice(0, 20) : [];
+}
+
 /** The `user_id` of a SPEAKING_START or SPEAKING_STOP event. */
 export function speakingUser(raw: unknown): string | null {
   const id = record(raw).user_id;

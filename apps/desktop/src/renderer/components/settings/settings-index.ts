@@ -1,4 +1,4 @@
-import { Blocks, Globe, Headphones, Keyboard, Palette, SlidersHorizontal, Trash2 } from "@lucide/vue";
+import { Blocks, Globe, Keyboard, Palette, Plug, SlidersHorizontal, Trash2 } from "@lucide/vue";
 import type { MessageKey } from "../../../shared/i18n";
 import { t } from "../../i18n";
 
@@ -13,7 +13,7 @@ export const GROUPS = [
       { id: "appearance", icon: Palette },
       { id: "modules", icon: Blocks },
       { id: "browser", icon: Globe },
-      { id: "discord", icon: Headphones },
+      { id: "integrations", icon: Plug },
       { id: "shortcuts", icon: Keyboard },
     ],
   },
@@ -63,8 +63,8 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["browser-adblock-off", "browser"],
   ["browser-clear-game", "browser"],
   ["browser-clear-shared", "browser"],
-  ["discord-connection", "discord"],
-  ["discord-secret", "discord"],
+  ["discord-connection", "integrations"],
+  ["discord-secret", "integrations"],
   ["shortcuts", "shortcuts"],
   ["welcome-tour", "general"],
   ["trash", "trash"],
