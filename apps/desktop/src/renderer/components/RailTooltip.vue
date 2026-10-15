@@ -1,13 +1,28 @@
 <script setup lang="ts">
 // The name of a game or folder beside its icon in the compact rail. It replaces the system's small tooltip,
 // which is tiny and blurry: this one is large, high-contrast and appears at once.
+//
+// Module panels are views drawn above the host page, so a label over the workspace would be hidden behind them.
+// While a tooltip is open it counts as an open menu: the host freezes and hides the panels, as it does for menus.
+import { onBeforeUnmount } from "vue";
+import { useFloating } from "../host";
 import { TooltipArrow, TooltipContent, TooltipPortal, TooltipRoot, TooltipTrigger } from "reka-ui";
 
 defineProps<{ text: string; disabled?: boolean }>();
+
+const setFloating = useFloating();
+let release: ReturnType<typeof setTimeout> | undefined;
+/** Closing waits a moment, so moving from one icon to the next does not show and hide the panels each time. */
+function onOpenChange(open: boolean) {
+  clearTimeout(release);
+  if (open) setFloating(true);
+  else release = setTimeout(() => setFloating(false), 400);
+}
+onBeforeUnmount(() => clearTimeout(release));
 </script>
 
 <template>
-  <TooltipRoot :disabled="disabled">
+  <TooltipRoot :disabled="disabled" @update:open="onOpenChange">
     <TooltipTrigger as-child><slot /></TooltipTrigger>
     <TooltipPortal>
       <TooltipContent
