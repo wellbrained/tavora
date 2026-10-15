@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.33",
+    date: "2026-10-16",
+    title: "The icon Steam shows for a game",
+    notes: [
+      "A Steam game takes the icon Steam itself shows for it in the Start menu and on the desktop (Battlefield 6's full picture, for example), when that file is on your PC.",
+      "A game that only had its program's icon or Steam's small icon switches to it on the next start.",
+    ],
+  },
+  {
     version: "0.5.32",
     date: "2026-10-16",
     title: "Steam's own icon for more games",

@@ -124,6 +124,7 @@ const run = (library: Library, net: ReturnType<typeof fakeSteam>, extra: Partial
     fetchImpl: net.fetchImpl,
     loadAppInfoImpl: async () => cache(),
     installedGames: async () => [],
+    shortcutDirs: [],
     onChange: () => (changes += 1),
     pauseMs: 0,
     now: () => day(10),
@@ -520,5 +521,64 @@ describe("syncIcons: the small icon in Steam's library cache", () => {
     expect(library.games["hades-2"]!.iconFile).toBe("1145350.jpg");
     expect(library.games["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
     expect((await readdir(icons)).sort()).toEqual(["1145350.jpg", "exe-elden-ring.ico"]);
+  });
+});
+
+describe("syncIcons: the icon a Steam shortcut names", () => {
+  const SHORTCUT_HASH = hashOf("5");
+  let shortcuts: string;
+  const shortcutFor = (appid: number) =>
+    `[InternetShortcut]\nURL=steam://rungameid/${appid}\nIconFile=C:/Steam/steam/games/${SHORTCUT_HASH}.ico\n`;
+  beforeEach(async () => {
+    shortcuts = path.join(dir, "shortcuts");
+    await mkdir(shortcuts, { recursive: true });
+    await writeFile(path.join(steam, "steam", "games", `${SHORTCUT_HASH}.ico`), ICON);
+  });
+
+  it("takes it for a game whose icon Steam's cache does not name, with nothing asked of the network", async () => {
+    await writeFile(path.join(shortcuts, "Hades II.url"), shortcutFor(1145350));
+    const library = libraryWith("hades-2");
+    const net = fakeSteam({});
+    expect(await run(library, net, { shortcutDirs: [shortcuts] }).done).toBe(1);
+    expect(net.asked).toEqual([]);
+    expect(library.games["hades-2"]!.iconFile).toBe("1145350.ico");
+  });
+
+  it("replaces a Steam game's program icon and its small public icon, but not a launcher's own icon", async () => {
+    await writeFile(path.join(shortcuts, "a.url"), shortcutFor(1145350));
+    await writeFile(path.join(shortcuts, "b.url"), shortcutFor(1245620));
+    await writeFile(path.join(shortcuts, "c.url"), shortcutFor(427520));
+    await mkdir(icons, { recursive: true });
+    await writeFile(path.join(icons, "exe-hades-2.ico"), ICON);
+    await writeFile(path.join(icons, "1245620.jpg"), JPEG);
+    await writeFile(path.join(icons, "exe-factorio.ico"), ICON);
+    const library = libraryWith("hades-2", "elden-ring", "factorio");
+    recordIcon(library, "hades-2", { file: "exe-hades-2.ico" });
+    recordIcon(library, "elden-ring", { file: "1245620.jpg" });
+    recordIcon(library, "factorio", { file: "exe-factorio.ico" });
+    await run(library, fakeSteam({}), {
+      shortcutDirs: [shortcuts],
+      installedGames: async () => [{ source: "battlenet", name: "Factorio", file: "G:/f.exe", index: 0 }],
+    }).done;
+    expect(library.games["hades-2"]!.iconFile).toBe("1145350.ico");
+    expect(library.games["elden-ring"]!.iconFile).toBe("1245620.ico");
+    expect(library.games["factorio"]!.iconFile).toBe("exe-factorio.ico");
+    expect((await readdir(icons)).sort()).toEqual(["1145350.ico", "1245620.ico", "exe-factorio.ico"]);
+  });
+});
+
+describe("syncIcons: two shortcuts name different icons", () => {
+  it("takes the one Steam has on this PC", async () => {
+    const shortcuts = path.join(dir, "shortcuts");
+    const desktop = path.join(dir, "desktop");
+    await mkdir(shortcuts, { recursive: true });
+    await mkdir(desktop, { recursive: true });
+    // The Start menu shortcut is old and its icon is on disk; the desktop one is new and names a file Steam never got.
+    await writeFile(path.join(shortcuts, "a.url"), `[InternetShortcut]\nURL=steam://rungameid/1145350\nIconFile=C:/S/${hashOf("6")}.ico\n`);
+    await writeFile(path.join(desktop, "a.url"), `[InternetShortcut]\nURL=steam://rungameid/1145350\nIconFile=C:/S/${hashOf("7")}.ico\n`);
+    await writeFile(path.join(steam, "steam", "games", `${hashOf("6")}.ico`), ICON);
+    const library = libraryWith("hades-2");
+    expect(await run(library, fakeSteam({}), { shortcutDirs: [desktop, shortcuts] }).done).toBe(1);
+    expect(library.games["hades-2"]!.iconFile).toBe("1145350.ico");
   });
 });
