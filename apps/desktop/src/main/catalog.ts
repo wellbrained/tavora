@@ -26,7 +26,7 @@ export const CATALOG: readonly CatalogGame[] = [
   { id: "dead-by-daylight", name: "Dead by Daylight", aliases: ["DbD"], steamAppId: 381210 },
   { id: "deep-rock-galactic", name: "Deep Rock Galactic", steamAppId: 548430 },
   { id: "destiny-2", name: "Destiny 2", steamAppId: 1085660 },
-  { id: "diablo-4", name: "Diablo IV", aliases: ["D4"], steamAppId: 358090 },
+  { id: "diablo-4", name: "Diablo IV", aliases: ["D4"], steamAppId: 2344520 },
   { id: "dota-2", name: "Dota 2", steamAppId: 570 },
   { id: "elden-ring", name: "Elden Ring", steamAppId: 1245620 },
   { id: "enshrouded", name: "Enshrouded", steamAppId: 1203620 },

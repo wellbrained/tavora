@@ -3,10 +3,11 @@ import { findInstalledGames, matchInstalled, type InstalledGame } from "./launch
 import { DEFAULT_API_URL } from "./online";
 import { readIcoFromFile } from "./pe-icon";
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
-import { gamesNeedingIcon, recordIcon, type GameEntry, type Library } from "./library";
+import { gamesNeedingIcon, liveGames, recordIcon, type GameEntry, type Library } from "./library";
 import {
   fetchPublicIconHash,
   loadAppInfo,
+  needsIcon,
   removeSteamIcon,
   saveExeIcon,
   savePublicSteamIcon,
@@ -50,7 +51,8 @@ export interface IconSyncOptions {
  *  2. the icon Steam's client keeps on this PC (or the same file from Steam's public address),
  *  3. the Tavora service's hosted icon, when online features are on (the app takes its list and
  *     asks for a file only when a game is in it),
- *  4. the small icon Steam's public store API knows for any Steam game.
+ *  4. the small icon Steam's public store API knows for any Steam game,
+ *  5. the program of a game Steam installed on this PC, when Steam has no icon for it.
  * Quiet on purpose. When the network fails it stops and leaves the rest for the
  * next start or the next added game. Returns how many icons were saved.
  */
@@ -68,14 +70,17 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
   // Loaded once per run, and only when a game needs them.
   let installed: InstalledGame[] | undefined;
   let appInfo: Uint8Array | null | undefined;
-  const installedGames = async () => (installed ??= await (options.installedGames ?? findInstalledGames)().catch(() => []));
+  const installedGames = async () => (installed ??= await (options.installedGames ?? (() => findInstalledGames({ steamDir })))().catch(() => []));
   const clientCache = async () => {
     if (appInfo === undefined) appInfo = steamDir === null ? null : await readClient(steamDir);
     return appInfo;
   };
 
-  const fromInstalledGame = async (game: GameEntry): Promise<IconResult> => {
-    const found = matchInstalled(game.name, await installedGames());
+  // The launchers' own games come first. A game Steam installed is only a last resort: its folder holds
+  // several programs, and Steam's own icon for the game is the better one when Steam has it.
+  const fromInstalledGame = async (game: GameEntry, viaSteam = false): Promise<IconResult> => {
+    const list = (await installedGames()).filter((item) => (item.source === "steam") === viaSteam);
+    const found = matchInstalled(game.name, list, game.steamAppId);
     const bytes = found ? await readIcon(found.file, found.index).catch(() => null) : null;
     return bytes ? saveExeIcon(iconDir, game.id, bytes) : { status: "none" };
   };
@@ -103,13 +108,14 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
   };
   let hostedList: HostedList | null | undefined;
+  const hosted = async () => (hostedList ??= await (options.loadHostedList ?? (() => fetchHostedList(serviceOptions)))());
   const fromHosted = async (game: GameEntry): Promise<IconResult> => {
     // Online features off: the service is never contacted.
     if (!library.onlineSearch) return { status: "none" };
-    hostedList ??= await (options.loadHostedList ?? (() => fetchHostedList(serviceOptions)))();
+    const list = await hosted();
     // The list could not be had: say nothing about this game, so it is asked again next time.
-    if (hostedList === null) return { status: "failed" };
-    const icon = matchHosted(game, hostedList);
+    if (list === null) return { status: "failed" };
+    const icon = matchHosted(game, list);
     return icon ? saveHostedIcon(iconDir, game.id, icon, serviceOptions) : { status: "none" };
   };
 
@@ -122,6 +128,17 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
     return savePublicSteamIcon(iconDir, appid, hash.hash, network);
   };
 
+  // A game that found no icon waits a week before it is looked up again. When the service has an icon
+  // for it by now, or it is installed on this PC, it need not wait.
+  const waiting = liveGames(library).filter((game) => game.iconFile === null && game.iconCheckedAt !== null && !needsIcon(game, now()));
+  if (waiting.length > 0 && library.steamIcons && shouldRun()) {
+    const list = library.onlineSearch ? await hosted() : null;
+    const onThisPc = await installedGames();
+    for (const game of waiting) {
+      if ((list && matchHosted(game, list)) || matchInstalled(game.name, onThisPc, game.steamAppId)) game.iconCheckedAt = null;
+    }
+  }
+
   let saved = 0;
   for (;;) {
     if (!shouldRun() || !library.steamIcons) return saved;
@@ -133,6 +150,7 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
     if (result.status === "none" && game.steamAppId !== null) result = await fromSteamClient(game.steamAppId);
     if (result.status === "none") result = await fromHosted(game);
     if (result.status === "none" && game.steamAppId !== null) result = await fromSteamPublic(game.steamAppId);
+    if (result.status === "none") result = await fromInstalledGame(game, true);
     if (result.status === "failed") return saved;
 
     if (result.status === "saved" && !library.games[game.id]) {

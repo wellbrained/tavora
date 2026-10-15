@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.27",
+    date: "2026-10-16",
+    title: "More game icons",
+    notes: [
+      "Games you installed with Steam now get their icon from the game itself when Steam has no public icon for it (Battlefield 6 had none).",
+      "Diablo IV had the wrong Steam id and now gets the right one. If you chose letters for it, pick Original icon in its menu.",
+      "A game that found no icon looks again at once when the Tavora service has its icon or the game is installed, instead of waiting a week.",
+    ],
+  },
+  {
     version: "0.5.26",
     date: "2026-10-16",
     title: "A clearer drop mark for tabs",
