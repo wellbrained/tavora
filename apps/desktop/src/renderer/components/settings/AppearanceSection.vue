@@ -29,11 +29,35 @@ function pick(theme: ThemeView) {
   void act({ type: "set-theme", themeId: theme.id, variationId: variation.id });
 }
 
+type Mode = "system" | "dark" | "light";
+
+// Light or dark: follow the system (the default), or stay in one. Only the modes the theme comes in are offered.
+const mode = computed<Mode>({
+  get: () => (appearance.value.followSystem ? "system" : (activeVariationOf(appearance.value.variationId)?.mode ?? "dark")),
+  set: (value: Mode) => void act({ type: "set-appearance-mode", mode: value }),
+});
+function activeVariationOf(id: string): ThemeVariationView | undefined {
+  return active.value?.variations.find((item) => item.id === id);
+}
+const modeOptions = computed(() => {
+  const modes = new Set((active.value?.variations ?? []).map((item) => item.mode));
+  return [
+    { value: "system" as const, label: "Follow System", testid: "mode-system" },
+    ...(modes.has("dark") ? [{ value: "dark" as const, label: "Dark", testid: "mode-dark" }] : []),
+    ...(modes.has("light") ? [{ value: "light" as const, label: "Light", testid: "mode-light" }] : []),
+  ];
+});
+
+// A theme with several versions of one mode (say two dark ones) also gets this choice; picking one stays in that version.
 const variation = computed({
   get: () => appearance.value.variationId,
-  set: (variationId: string) => void act({ type: "set-theme", themeId: appearance.value.themeId, variationId }),
+  set: (variationId: string) => void act({ type: "set-theme", themeId: appearance.value.themeId, variationId, fixed: true }),
 });
 const variationOptions = computed(() => (active.value?.variations ?? []).map((item) => ({ value: item.id, label: item.name, testid: `variation-${item.id}` })));
+const showVariation = computed(() => {
+  const all = active.value?.variations ?? [];
+  return all.length > new Set(all.map((item) => item.mode)).size;
+});
 </script>
 
 <template>
@@ -102,7 +126,15 @@ const variationOptions = computed(() => (active.value?.variations ?? []).map((it
   </div>
 
   <SettingRow
-    v-if="variationOptions.length > 1"
+    label="Light or dark"
+    description="Follow System switches between the Light and Dark version of the theme when your system does."
+    setting="appearance-mode"
+    :highlighted="highlight === 'appearance-mode'"
+  >
+    <SegmentedControl v-model="mode" label="Light or dark" :options="modeOptions" />
+  </SettingRow>
+  <SettingRow
+    v-if="showVariation"
     label="Variation"
     :description="`The versions ${active?.name ?? 'this theme'} comes in.`"
     setting="theme-variation"

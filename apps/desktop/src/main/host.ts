@@ -78,6 +78,7 @@ import {
   discoverThemes,
   moduleTheme,
   resolveTheme,
+  variationForMode,
   STARTER_README,
   starterTheme,
   THEME_MANIFEST,
@@ -141,6 +142,8 @@ export interface HostOptions {
   steamIcons?: string | undefined;
   /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
   hidden?: boolean;
+  /** Tests only: pretend the system is in this mode, so a test does not depend on the PC it runs on. */
+  systemTheme?: "dark" | "light" | undefined;
   /**
    * Development only: the Vite dev server that serves the host UI with hot
    * reload, instead of the built files in `rendererDir`.
@@ -190,7 +193,7 @@ export class Host {
     private themes: Map<string, InstalledTheme>,
     private themeProblems: ThemeProblem[],
   ) {
-    this.currentTheme = moduleTheme(resolveTheme(themes, library.theme).variation);
+    this.currentTheme = moduleTheme(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation);
     this.data = new DataRegistry(options.userData);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.window = new BrowserWindow({
@@ -264,7 +267,11 @@ export class Host {
 
     const host = new Host(options, modules, library, workspace, profile, windowState, themes, themeProblems);
     // Native menus, dialogs and scrollbars follow the theme's mode.
-    nativeTheme.themeSource = host.currentTheme.mode;
+    host.syncNativeTheme();
+    // The system's light or dark setting changed (or Tavora's own native theme did, which applyTheme ignores).
+    nativeTheme.on("updated", () => {
+      if (host.library.followSystem) host.applyTheme();
+    });
     // The id is made once and kept, so a new profile is written straight away.
     if (savedProfile === null) host.saveProfile().catch(() => undefined); // logged by saveProfile
     // Browser storage of games that are gone, removed before any session opens it.
@@ -326,12 +333,33 @@ export class Host {
     return { color: this.currentTheme.colors.background, symbolColor: this.currentTheme.colors.text, height: TITLE_BAR_HEIGHT };
   }
 
+  /** The system's light or dark setting. */
+  private static systemMode(options: HostOptions): "dark" | "light" {
+    if (options.systemTheme) return options.systemTheme;
+    // Only while the native theme follows the system does it say what the system says.
+    nativeTheme.themeSource = "system";
+    return nativeTheme.shouldUseDarkColors ? "dark" : "light";
+  }
+
+  /** The theme and variation in use now: the player's pick, in the mode of the system when following it. */
+  private currentChoice() {
+    return resolveTheme(this.themes, this.library.theme, this.library.followSystem ? Host.systemMode(this.options) : undefined);
+  }
+
+  /** Native menus, dialogs and scrollbars: left to the system while following it, else in the theme's mode. */
+  private syncNativeTheme(): void {
+    nativeTheme.themeSource = this.library.followSystem && !this.options.systemTheme ? "system" : this.currentTheme.mode;
+  }
+
   /** Shows the theme the library names, in the host window, native controls and every open module. */
   private applyTheme(): void {
-    const next = moduleTheme(resolveTheme(this.themes, this.library.theme).variation);
-    if (JSON.stringify(next) === JSON.stringify(this.currentTheme)) return;
+    const next = moduleTheme(this.currentChoice().variation);
+    if (JSON.stringify(next) === JSON.stringify(this.currentTheme)) {
+      this.syncNativeTheme();
+      return;
+    }
     this.currentTheme = next;
-    nativeTheme.themeSource = next.mode;
+    this.syncNativeTheme();
     this.window.setBackgroundColor(next.colors.background);
     try {
       this.window.setTitleBarOverlay(this.titleBarOverlay());
@@ -594,10 +622,25 @@ export class Host {
           throw new LibraryError("That theme is not installed any more.");
         }
         library.theme = { id: action.themeId, variation: action.variationId };
+        if (action.fixed) library.followSystem = false;
         this.applyTheme();
         break;
+      case "set-appearance-mode": {
+        if (action.mode === "system") {
+          library.followSystem = true;
+        } else {
+          const { theme } = resolveTheme(this.themes, library.theme);
+          const variation = variationForMode(theme, library.theme.variation, action.mode);
+          if (variation.mode !== action.mode) throw new LibraryError(` has no ${action.mode} version.`);
+          library.theme = { id: theme.id, variation: variation.id };
+          library.followSystem = false;
+        }
+        this.applyTheme();
+        break;
+      }
       case "reset-theme":
         library.theme = { ...DEFAULT_THEME };
+        library.followSystem = true;
         this.applyTheme();
         break;
       case "reload-themes":
@@ -1171,14 +1214,15 @@ export class Host {
   }
 
   private appearanceView(): AppearanceView {
-    const { theme, variation } = resolveTheme(this.themes, this.library.theme);
+    const { theme, variation } = this.currentChoice();
     // Official themes first, the default leading, then the player's own by name.
     const order = (entry: InstalledTheme) => (entry.theme.id === DEFAULT_THEME.id ? 0 : entry.provenance === "official" ? 1 : 2);
     const themes = [...this.themes.values()].sort((a, b) => order(a) - order(b) || a.theme.name.localeCompare(b.theme.name));
     return {
       themeId: theme.id,
       variationId: variation.id,
-      isDefault: theme.id === DEFAULT_THEME.id && variation.id === DEFAULT_THEME.variation,
+      isDefault: theme.id === DEFAULT_THEME.id && this.library.followSystem,
+      followSystem: this.library.followSystem,
       themes: themes.map(({ theme: item, provenance }) => ({
         id: item.id,
         name: item.name,

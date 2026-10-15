@@ -138,6 +138,8 @@ export interface AppearanceView {
   variationId: string;
   /** Whether the Tavora default is what is in use, so Reset has nothing to do. */
   isDefault: boolean;
+  /** The Dark or Light version follows the system's setting, and changes with it. */
+  followSystem: boolean;
   themes: ThemeView[];
   /** Theme folders that could not be used, and why, for theme authors. */
   problems: { folder: string; message: string }[];
@@ -239,7 +241,10 @@ export type HostAction =
   /** Quits, installs the downloaded version and starts Tavora again. */
   | { type: "restart-to-update" }
   | { type: "set-steam-icons"; enabled: boolean }
-  | { type: "set-theme"; themeId: string; variationId: string }
+  /** ixed turns Follow System off; without it the pick keeps following the system. */
+  | { type: "set-theme"; themeId: string; variationId: string; fixed?: boolean }
+  /** Follow the system's light or dark setting, or stay in one mode. */
+  | { type: "set-appearance-mode"; mode: "system" | "dark" | "light" }
   /** Back to the Tavora default theme, whatever is active. */
   | { type: "reset-theme" }
   /** Looks for themes again, after the player changed their themes folder. */
