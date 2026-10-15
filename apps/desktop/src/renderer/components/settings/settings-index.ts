@@ -91,10 +91,10 @@ export const SETTINGS: SettingEntry[] = [
   {
     id: "steam-icons",
     section: "general",
-    label: "Game icons from Steam",
+    label: "Game icons from this PC and Steam",
     description:
-      "Uses each game's own Steam icon, the one Steam itself shows for the game, when Steam is installed on this PC. Tavora copies it from the Steam folder, or downloads the same file from Steam if it is missing; the Tavora service is not involved. Games without a Steam icon, and any image you pick yourself, are not affected. Turn it off to use the plain badges.",
-    keywords: ["icon", "ico", "image", "picture", "download", "internet", "network", "privacy", "offline", "badge", "steam"],
+      "Uses each game's own icon. Tavora reads it from the installed game on this PC (Battle.net, Epic, GOG, EA and other launchers), then from the Steam folder, and last downloads Steam's small icon for the game from Steam. Icons are kept on this PC and the Tavora service is not involved. Games without an icon, and any image you pick yourself, are not affected. Turn it off to use the plain badges.",
+    keywords: ["icon", "ico", "image", "picture", "download", "internet", "network", "privacy", "offline", "badge", "steam", "battle.net", "epic", "gog", "launcher", "installed"],
   },
   {
     id: "shortcuts",

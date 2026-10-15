@@ -4,15 +4,22 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   MAX_STEAM_ICON_BYTES,
+  exeIconFileName,
+  fetchPublicIconHash,
   findSteamDir,
+  iconFileAllowed,
   iconFileName,
   isIco,
   isIconFileName,
   isIconHash,
+  isJpeg,
   isSteamAppId,
   loadAppInfo,
   needsIcon,
+  publicIconFileName,
   removeSteamIcon,
+  saveExeIcon,
+  savePublicSteamIcon,
   saveSteamIcon,
   steamIconUrl,
 } from "./steam-icons";
@@ -69,10 +76,22 @@ describe("names and addresses", () => {
     for (const bad of ["", "AB".repeat(20), "ab".repeat(19), "../".repeat(14), `${HASH}.ico`, 5, null]) expect(isIconHash(bad)).toBe(false);
   });
 
-  it("only names files that are digits and .ico", () => {
+  it("only names files that are digits with .ico or .jpg, or exe- and a game id with .ico", () => {
     expect(iconFileName(42)).toBe("42.ico");
-    expect(isIconFileName("42.ico")).toBe(true);
-    for (const bad of ["../42.ico", "42.jpg", "42", "a.ico", "42.ico/", "", 42, null]) expect(isIconFileName(bad)).toBe(false);
+    expect(publicIconFileName(42)).toBe("42.jpg");
+    expect(exeIconFileName("diablo-iv")).toBe("exe-diablo-iv.ico");
+    for (const good of ["42.ico", "42.jpg", "exe-diablo-iv.ico", "exe-7.ico"]) expect(isIconFileName(good)).toBe(true);
+    for (const bad of ["../42.ico", "42.png", "42", "a.ico", "42.ico/", "exe-.ico", "exe--a.ico", "exe-A.ico", "exe-a/b.ico", "exe-a.png", "", 42, null]) {
+      expect(isIconFileName(bad)).toBe(false);
+    }
+  });
+
+  it("allows a game only its Steam names and its own exe name", () => {
+    const game = { id: "elden-ring", steamAppId: 5 };
+    for (const file of ["5.ico", "5.jpg", "exe-elden-ring.ico"]) expect(iconFileAllowed(game, file)).toBe(true);
+    for (const file of ["6.ico", "6.jpg", "exe-other.ico", "../5.ico", 5, null]) expect(iconFileAllowed(game, file)).toBe(false);
+    expect(iconFileAllowed({ id: "mine", steamAppId: null }, "5.ico")).toBe(false);
+    expect(iconFileAllowed({ id: "mine", steamAppId: null }, "exe-mine.ico")).toBe(true);
   });
 });
 
@@ -217,14 +236,92 @@ describe("removeSteamIcon", () => {
   });
 });
 
+/** A JPEG-looking file: the signature followed by filler. */
+const JPEG = Uint8Array.from({ length: 700 }, (_, i) => (i === 0 ? 0xff : i === 1 ? 0xd8 : i === 2 ? 0xff : i % 251));
+
+describe("saveExeIcon", () => {
+  it("keeps an icon read from the game, unchanged, under the game's own name", async () => {
+    await mkdir(icons, { recursive: true });
+    expect(await saveExeIcon(icons, "diablo-iv", ICON)).toEqual({ status: "saved", file: "exe-diablo-iv.ico" });
+    expect(new Uint8Array(await readFile(path.join(icons, "exe-diablo-iv.ico")))).toEqual(ICON);
+  });
+
+  it("refuses bytes that are not an icon and a game id that cannot be a file name", async () => {
+    await mkdir(icons, { recursive: true });
+    expect(await saveExeIcon(icons, "diablo-iv", new Uint8Array(200))).toEqual({ status: "none" });
+    expect(await saveExeIcon(icons, "../escape", ICON)).toEqual({ status: "none" });
+    expect(await readdir(icons)).toEqual([]);
+  });
+});
+
+describe("fetchPublicIconHash", () => {
+  const reply = (body: unknown, init: ResponseInit = {}) => answer(JSON.stringify(body), init);
+
+  it("reads the icon hash of any app from Steam's public store API, with no key", async () => {
+    const asked: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      asked.push(url);
+      return new Response(JSON.stringify({ response: { apps: [{ appid: 2344520, icon: HASH }] } }));
+    }) as unknown as typeof fetch;
+    expect(await fetchPublicIconHash(2344520, { fetchImpl })).toEqual({ status: "found", hash: HASH });
+    expect(asked).toEqual(["https://api.steampowered.com/ICommunityService/GetApps/v1?appids%5B0%5D=2344520"]);
+  });
+
+  it("says none for an unknown app, an app without a usable hash or a different app", async () => {
+    expect(await fetchPublicIconHash(5, { fetchImpl: reply({ response: { apps: [] } }) })).toEqual({ status: "none" });
+    expect(await fetchPublicIconHash(5, { fetchImpl: reply({ response: { apps: [{ appid: 5, icon: "../x" }] } }) })).toEqual({ status: "none" });
+    expect(await fetchPublicIconHash(5, { fetchImpl: reply({ response: { apps: [{ appid: 6, icon: HASH }] } }) })).toEqual({ status: "none" });
+    expect(await fetchPublicIconHash(5, { fetchImpl: reply("nonsense") })).toEqual({ status: "none" });
+    expect(await fetchPublicIconHash(0)).toEqual({ status: "none" });
+    expect(await fetchPublicIconHash(5, { fetchImpl: reply({}, { status: 404 }) })).toEqual({ status: "none" });
+  });
+
+  it("says failed when Steam or the network does not answer", async () => {
+    expect(await fetchPublicIconHash(5, { fetchImpl: reply({}, { status: 503 }) })).toEqual({ status: "failed" });
+    const offline = (async () => {
+      throw new Error("offline");
+    }) as typeof fetch;
+    expect(await fetchPublicIconHash(5, { fetchImpl: offline })).toEqual({ status: "failed" });
+  });
+});
+
+describe("savePublicSteamIcon", () => {
+  it("downloads the small icon from Steam's address and keeps it unchanged", async () => {
+    await mkdir(icons, { recursive: true });
+    const asked: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      asked.push(url);
+      return new Response(JPEG as BodyInit);
+    }) as unknown as typeof fetch;
+    expect(await savePublicSteamIcon(icons, 42, HASH, { fetchImpl })).toEqual({ status: "saved", file: "42.jpg" });
+    expect(asked).toEqual([`https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/42/${HASH}.jpg`]);
+    expect(new Uint8Array(await readFile(path.join(icons, "42.jpg")))).toEqual(JPEG);
+  });
+
+  it("refuses what is not a JPEG, a missing file and a bad hash, and reports a failing network", async () => {
+    await mkdir(icons, { recursive: true });
+    expect(await savePublicSteamIcon(icons, 42, HASH, { fetchImpl: answer("<html>nope</html>".repeat(20)) })).toEqual({ status: "none" });
+    expect(await savePublicSteamIcon(icons, 42, HASH, { fetchImpl: answer("", { status: 404 }) })).toEqual({ status: "none" });
+    expect(await savePublicSteamIcon(icons, 42, "nothash")).toEqual({ status: "none" });
+    expect(await savePublicSteamIcon(icons, 42, HASH, { fetchImpl: answer("", { status: 500 }) })).toEqual({ status: "failed" });
+    expect(await readdir(icons)).toEqual([]);
+  });
+
+  it("recognises a JPEG by its signature and size", () => {
+    expect(isJpeg(JPEG)).toBe(true);
+    expect(isJpeg(new Uint8Array(700))).toBe(false);
+    expect(isJpeg(JPEG.slice(0, 50))).toBe(false);
+  });
+});
+
 describe("needsIcon", () => {
   const now = new Date("2026-10-15T12:00:00Z");
-  const game = (over: Partial<Parameters<typeof needsIcon>[0]> = {}) => ({ steamAppId: 5, iconFile: null, iconCheckedAt: null, ...over });
+  const game = (over: Partial<Parameters<typeof needsIcon>[0]> = {}) => ({ iconFile: null, iconCheckedAt: null, ...over });
 
-  it("asks for a game that has an appid and no icon yet", () => expect(needsIcon(game(), now)).toBe(true));
-  it("does not ask without an appid or when it has the icon", () => {
-    expect(needsIcon(game({ steamAppId: null }), now)).toBe(false);
+  it("asks for a game that has no icon yet", () => expect(needsIcon(game(), now)).toBe(true));
+  it("does not ask when it has the icon", () => {
     expect(needsIcon(game({ iconFile: "5.ico" }), now)).toBe(false);
+    expect(needsIcon(game({ iconFile: "exe-mine.ico" }), now)).toBe(false);
   });
   it("asks again for a missing icon only after a week", () => {
     expect(needsIcon(game({ iconCheckedAt: "2026-10-10T00:00:00Z" }), now)).toBe(false);

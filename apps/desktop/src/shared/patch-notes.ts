@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.4.2",
+    date: "2026-10-15",
+    title: "Game icons from your launchers",
+    notes: [
+      "Games installed through Battle.net, Epic, GOG, EA and other launchers now show their own icon, taken from the game on your PC. Games from Steam you don't have installed get Steam's small icon too, and the Steam setting in Settings now covers all of this.",
+    ],
+  },
+  {
     version: "0.4.1",
     date: "2026-10-15",
     title: "Check for updates",
