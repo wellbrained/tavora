@@ -8,16 +8,11 @@ import type { InstanceStatus } from "../../../shared/host-api";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { act, state } from "../../host";
+import { t } from "../../i18n";
 import MenuArea from "../menus/MenuArea.vue";
 import { DOCK, panelMenu } from "./dock-context";
 
-const STATUS_LABEL: Record<InstanceStatus, string> = {
-  loading: "Loading",
-  ready: "",
-  failed: "Could not load",
-  unresponsive: "Not responding",
-  crashed: "Stopped working",
-};
+const STATUS_LABEL = (status: InstanceStatus): string => (status === "ready" ? "" : t(`panel.status.${status}`));
 
 const props = defineProps<{ params: IDockviewPanelHeaderProps }>();
 const dock = inject(DOCK)!;
@@ -42,7 +37,7 @@ function items() {
     >
       <span class="truncate font-medium">{{ panel?.name }}</span>
       <span
-        v-if="STATUS_LABEL[status]"
+        v-if="STATUS_LABEL(status)"
         :class="
           cn(
             'text-muted-foreground inline-flex flex-none items-center gap-1.5 text-xs',
@@ -51,7 +46,7 @@ function items() {
           )
         "
       >
-        <span class="size-2 rounded-full bg-current" aria-hidden="true" />{{ STATUS_LABEL[status] }}
+        <span class="size-2 rounded-full bg-current" aria-hidden="true" />{{ STATUS_LABEL(status) }}
       </span>
       <span class="ml-auto flex flex-none" @pointerdown.stop @mousedown.stop>
         <Button
@@ -59,8 +54,8 @@ function items() {
           variant="ghost"
           size="icon-xs"
           data-testid="reload"
-          :aria-label="`Reload ${panel?.name}`"
-          title="Reload"
+          :aria-label="t('panel.reloadLabel', { name: panel?.name ?? '' })"
+          :title="t('panel.reload')"
           @click.stop="act({ type: 'reload-panel', instanceId: id })"
         >
           <RotateCw :stroke-width="1.5" />
@@ -70,8 +65,8 @@ function items() {
           variant="ghost"
           size="icon-xs"
           data-testid="stop"
-          :aria-label="`Stop ${panel?.name}`"
-          title="Stop"
+          :aria-label="t('panel.stopLabel', { name: panel?.name ?? '' })"
+          :title="t('panel.stop')"
           @click.stop="act({ type: 'stop-panel', instanceId: id })"
         >
           <Square :stroke-width="1.5" />
@@ -80,8 +75,8 @@ function items() {
           variant="ghost"
           size="icon-xs"
           data-testid="close"
-          :aria-label="`Close ${panel?.name}`"
-          title="Close"
+          :aria-label="t('panel.closeLabel', { name: panel?.name ?? '' })"
+          :title="t('panel.close')"
           @click.stop="act({ type: 'close-panel', instanceId: id })"
         >
           <X :stroke-width="1.5" />

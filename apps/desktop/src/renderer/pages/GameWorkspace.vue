@@ -18,6 +18,7 @@ import { computed, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds } from "../../shared/host-api";
 import { Button } from "@/components/ui/button";
 import { act, api as host, dialog, dragging, nextPanelSlot, state } from "../host";
+import { t } from "../i18n";
 import {
   dropAllowed,
   fromDockview,
@@ -307,7 +308,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
       <div class="app-no-drag flex flex-none items-center gap-2">
         <LayoutsMenu />
         <Button size="sm" variant="secondary" data-testid="add-module" @click="dialog = { kind: 'add-module' }">
-          <Plus :stroke-width="1.5" /> Add module
+          <Plus :stroke-width="1.5" /> {{ t("workspace.addModule") }}
         </Button>
       </div>
     </header>
@@ -332,10 +333,10 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         data-testid="empty-workspace"
       >
         <LayoutGrid class="text-muted-foreground mb-2 size-12" :stroke-width="1" />
-        <p class="text-lg font-semibold">Start building your workspace</p>
-        <p class="text-muted-foreground max-w-sm text-sm">Add modules for {{ game?.name }}. Arrange them however you like; the layout is saved for this game.</p>
+        <p class="text-lg font-semibold">{{ t("workspace.startTitle") }}</p>
+        <p class="text-muted-foreground max-w-sm text-sm">{{ t("workspace.startText", { name: game?.name ?? "" }) }}</p>
         <Button variant="outline" class="border-primary/60 text-primary hover:bg-primary/10 hover:text-primary mt-3" data-testid="empty-add-module" @click="dialog = { kind: 'add-module' }">
-          <Plus :stroke-width="1.5" /> Add module
+          <Plus :stroke-width="1.5" /> {{ t("workspace.addModule") }}
         </Button>
       </div>
     </div>

@@ -7,6 +7,7 @@ import type { IDockviewPanelProps } from "dockview-vue";
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { act, frozen, state } from "../../host";
+import { t } from "../../i18n";
 import BrowserToolbar from "./BrowserToolbar.vue";
 import { DOCK } from "./dock-context";
 
@@ -45,13 +46,13 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
       @load="onImageLoad"
     />
     <div v-else-if="panel?.browser?.error" class="flex size-full flex-col items-center justify-center gap-3 p-4 text-center" :data-testid="`browser-error-${id}`">
-      <p class="font-medium">{{ panel.browser.error }}</p>
+      <p class="font-medium">{{ t(`browser.error.${panel.browser.error.kind}`, { detail: panel.browser.error.detail }) }}</p>
       <p class="text-muted-foreground max-w-sm truncate text-sm">{{ panel.browser.host }}</p>
-      <Button variant="outline" size="sm" @click="act({ type: 'browser-command', instanceId: id, command: 'reload' })">Try again</Button>
+      <Button variant="outline" size="sm" @click="act({ type: 'browser-command', instanceId: id, command: 'reload' })">{{ t("browser.tryAgain") }}</Button>
     </div>
     <div v-else-if="panel?.browser && !panel.browser.url" class="text-muted-foreground flex size-full flex-col items-center justify-center gap-1 p-4 text-center text-sm">
-      <p class="text-foreground font-medium">Search or type an address above</p>
-      <p>Sign-ins stay with this game unless you share a site for all games. Ads are blocked and files are never downloaded.</p>
+      <p class="text-foreground font-medium">{{ t("browser.startTitle") }}</p>
+      <p>{{ t("browser.startText") }}</p>
     </div>
     <div v-else class="text-muted-foreground flex size-full items-center justify-center p-4 text-center">
       {{ panel?.name }}

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { dialog, type PromptRequest } from "../host";
+import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
 const props = defineProps<{ request: PromptRequest }>();
@@ -36,7 +37,7 @@ async function submit() {
         <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="prompt-error">{{ error }}</p>
       </div>
       <div class="flex justify-end gap-2">
-        <Button type="button" variant="secondary" @click="dialog = null">Cancel</Button>
+        <Button type="button" variant="secondary" @click="dialog = null">{{ t("common.cancel") }}</Button>
         <Button type="submit" data-testid="prompt-submit" :disabled="busy">{{ request.confirm }}</Button>
       </div>
     </form>
