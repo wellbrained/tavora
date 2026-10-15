@@ -37,7 +37,8 @@ jobs:
       # uses. Re-enable them rather than running Electron with --no-sandbox, so
       # the e2e gate tests run with the real OS sandbox.
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - run: xvfb-run -a pnpm test:e2e
+      # xvfb-run's default screen is 640x480, which squeezes docked panels into tabs.
+      - run: xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm test:e2e
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
