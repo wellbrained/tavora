@@ -134,8 +134,8 @@ export interface DiscordView {
   call: DiscordChannel | null;
   /** The server the panel lists channels of: the open game's remembered server, else the one of the call. */
   browseServer: { id: string; name: string; icon: string | null } | null;
-  /** That server's voice channels except the call, in Discord's order, read again every 5 minutes. */
-  others: DiscordChannel[];
+  /** All of that server's voice channels in the server's own order, read again every 5 minutes. The panel shows the call's channel live, in its place. */
+  channels: DiscordChannel[];
   /** The channel the panel offers to join again: the open game's last one, or the last one anywhere. */
   last: { channelId: string; name: string; serverName: string | null } | null;
   /** "Remember the server on this game" for the open game, and the server it remembers. */

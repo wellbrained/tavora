@@ -162,7 +162,7 @@ export class DiscordConnection {
       server: connected ? server(this.call?.guildId, null) : null,
       browseServer: connected ? server(this.browseGuildId, game?.guildId === this.browseGuildId ? game?.serverName ?? null : null) : null,
       call: connected && this.call ? channel(this.call) : null,
-      others: connected ? this.browse.filter((other) => other.id !== this.call?.id).map(channel) : [],
+      channels: connected ? this.browse.map(channel) : [],
       last,
       game: { remember: game !== undefined, serverId: game?.guildId ?? null },
       servers: connected ? this.servers : [],
