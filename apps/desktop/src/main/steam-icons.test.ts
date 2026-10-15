@@ -7,6 +7,7 @@ import {
   exeIconFileName,
   fetchPublicIconHash,
   findSteamDir,
+  hostedIconFileName,
   iconFileAllowed,
   iconFileName,
   isIco,
@@ -80,18 +81,20 @@ describe("names and addresses", () => {
     expect(iconFileName(42)).toBe("42.ico");
     expect(publicIconFileName(42)).toBe("42.jpg");
     expect(exeIconFileName("diablo-iv")).toBe("exe-diablo-iv.ico");
-    for (const good of ["42.ico", "42.jpg", "exe-diablo-iv.ico", "exe-7.ico"]) expect(isIconFileName(good)).toBe(true);
-    for (const bad of ["../42.ico", "42.png", "42", "a.ico", "42.ico/", "exe-.ico", "exe--a.ico", "exe-A.ico", "exe-a/b.ico", "exe-a.png", "", 42, null]) {
+    expect(hostedIconFileName("diablo-iv")).toBe("hosted-diablo-iv.png");
+    for (const good of ["42.ico", "42.jpg", "exe-diablo-iv.ico", "exe-7.ico", "hosted-diablo-iv.png", "hosted-local-x.png"]) expect(isIconFileName(good)).toBe(true);
+    for (const bad of ["../42.ico", "42.png", "42", "a.ico", "42.ico/", "exe-.ico", "exe--a.ico", "exe-A.ico", "exe-a/b.ico", "exe-a.png", "hosted-.png", "hosted-a.ico", "hosted-A.png", "hosted-../a.png", "", 42, null]) {
       expect(isIconFileName(bad)).toBe(false);
     }
   });
 
   it("allows a game only its Steam names and its own exe name", () => {
     const game = { id: "elden-ring", steamAppId: 5 };
-    for (const file of ["5.ico", "5.jpg", "exe-elden-ring.ico"]) expect(iconFileAllowed(game, file)).toBe(true);
-    for (const file of ["6.ico", "6.jpg", "exe-other.ico", "../5.ico", 5, null]) expect(iconFileAllowed(game, file)).toBe(false);
+    for (const file of ["5.ico", "5.jpg", "exe-elden-ring.ico", "hosted-elden-ring.png"]) expect(iconFileAllowed(game, file)).toBe(true);
+    for (const file of ["6.ico", "6.jpg", "exe-other.ico", "hosted-other.png", "../5.ico", 5, null]) expect(iconFileAllowed(game, file)).toBe(false);
     expect(iconFileAllowed({ id: "mine", steamAppId: null }, "5.ico")).toBe(false);
     expect(iconFileAllowed({ id: "mine", steamAppId: null }, "exe-mine.ico")).toBe(true);
+    expect(iconFileAllowed({ id: "mine", steamAppId: null }, "hosted-mine.png")).toBe(true);
   });
 });
 

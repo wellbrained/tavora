@@ -199,6 +199,10 @@ describe("Steam icons", () => {
     expect(library.games["elden-ring"]!.iconFile).toBe("1245620.jpg");
     recordIcon(library, "local-my-own-game", { file: "exe-local-my-own-game.ico" });
     expect(library.games["local-my-own-game"]).toMatchObject({ iconFile: "exe-local-my-own-game.ico", iconCheckedAt: null });
+    recordIcon(library, "local-my-own-game", { file: "hosted-elden-ring.png" });
+    expect(library.games["local-my-own-game"]!.iconFile).toBe("exe-local-my-own-game.ico");
+    recordIcon(library, "elden-ring", { file: "hosted-elden-ring.png" });
+    expect(library.games["elden-ring"]!.iconFile).toBe("hosted-elden-ring.png");
   });
 
   it("knows when another game shares an icon file", () => {
@@ -233,7 +237,8 @@ describe("Steam icons", () => {
     expect(sanitizeLibrary(saved({ steamAppId: 1245620, iconFile: "1245620.ico" })).games["elden-ring"]!.iconFile).toBe("1245620.ico");
     expect(sanitizeLibrary(saved({ steamAppId: 1245620, iconFile: "1245620.jpg" })).games["elden-ring"]!.iconFile).toBe("1245620.jpg");
     expect(sanitizeLibrary(saved({ iconFile: "exe-elden-ring.ico" })).games["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
-    for (const iconFile of ["../1245620.ico", "999.ico", "1245620.png", "exe-other.ico", "exe-../elden-ring.ico", 7, null]) {
+    expect(sanitizeLibrary(saved({ iconFile: "hosted-elden-ring.png" })).games["elden-ring"]!.iconFile).toBe("hosted-elden-ring.png");
+    for (const iconFile of ["../1245620.ico", "999.ico", "1245620.png", "exe-other.ico", "hosted-other.png", "hosted-../elden-ring.png", "exe-../elden-ring.ico", 7, null]) {
       expect(sanitizeLibrary(saved({ steamAppId: 1245620, iconFile })).games["elden-ring"]!.iconFile).toBeNull();
     }
     expect(sanitizeLibrary(saved({ steamAppId: "5" })).games["elden-ring"]!.steamAppId).toBe(1245620);

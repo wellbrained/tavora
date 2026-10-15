@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { Hono } from "hono";
+import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { DEFAULT_LIMIT, MAX_LIMIT, MAX_QUERY_LENGTH, searchGames } from "./search.ts";
 import { MAX_PROFILE_LENGTH, SteamError, type SteamClient } from "./steam.ts";
@@ -12,9 +13,16 @@ export interface AppOptions {
   /** Absent when the service has no Steam key: the import answers 503. */
   steam?: SteamClient;
   steamRateLimiter?: RateLimiter;
+  /** The hosted game icons. */
+  icons?: IconStore;
+  /**
+   * Where a publisher sends a request to remove an icon. Icons are only served
+   * while this is set, so no icon is ever offered without a way to object.
+   */
+  takedownContact?: string;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   const steamLimiter = steamRateLimiter ?? createRateLimiter({ limit: 6, windowMs: 60_000 });
   const app = new Hono();
@@ -31,10 +39,11 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter 
     return idByAppid;
   };
 
-  // The query is what a player typed: never cached, never logged here.
+  // The query is what a player typed: never cached, never logged here. Only the
+  // hosted icons, which are the same for everyone, say otherwise themselves.
   app.use("*", async (context, next) => {
     await next();
-    context.header("Cache-Control", "no-store");
+    if (!context.res.headers.has("Cache-Control")) context.header("Cache-Control", "no-store");
     context.header("X-Content-Type-Options", "nosniff");
     context.header("Referrer-Policy", "no-referrer");
   });
@@ -63,6 +72,34 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter 
       return context.json({ error: `limit must be a whole number from 1 to ${MAX_LIMIT}.` }, 400);
     }
     return context.json({ results: searchGames(db, q, limit) });
+  });
+
+  // Hosted game icons: a list of what exists, then the files. The app downloads
+  // only the ones it needs, so the service never learns a player's library.
+  const iconsAvailable = Boolean(takedownContact?.trim());
+  app.get("/v1/icons", (context) => {
+    const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
+    if (wait > 0) {
+      context.header("Retry-After", String(wait));
+      return context.json({ error: "Too many requests." }, 429);
+    }
+    if (!iconsAvailable) return context.json({ error: "Icons are not available right now." }, 503);
+    context.header("Cache-Control", "public, max-age=300");
+    return context.json({ notice: ICON_NOTICE, takedown: takedownContact!.trim(), icons: icons.list() });
+  });
+
+  app.get("/v1/icons/:file", (context) => {
+    const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
+    if (wait > 0) {
+      context.header("Retry-After", String(wait));
+      return context.json({ error: "Too many requests." }, 429);
+    }
+    const match = /^([a-z0-9-]+)\.png$/.exec(context.req.param("file"));
+    const bytes = iconsAvailable && match && isIconId(match[1]) ? icons.file(match[1]) : null;
+    if (!bytes) return context.json({ error: "Not found." }, 404);
+    return new Response(bytes, {
+      headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" },
+    });
   });
 
   // Steam import. POST, so the profile is in no URL; JSON only, which a web

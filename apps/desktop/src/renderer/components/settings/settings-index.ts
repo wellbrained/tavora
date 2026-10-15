@@ -71,7 +71,7 @@ export const SETTINGS: SettingEntry[] = [
     section: "general",
     label: "Online game search",
     description:
-      "Finds more games than the built-in list on the Tavora service. It sees the text you type and nothing that identifies you. Turn it off to use the built-in games only.",
+      "Finds more games than the built-in list on the Tavora service, and lets Tavora ask it for the icons of your games. It sees the text you type and which icons are asked for, keeps no log and knows nothing that identifies you. Turn it off to use the built-in games and your own icons only.",
     keywords: ["internet", "network", "privacy", "offline", "database", "service", "online"],
   },
   {
@@ -93,7 +93,7 @@ export const SETTINGS: SettingEntry[] = [
     section: "general",
     label: "Game icons from this PC and Steam",
     description:
-      "Uses each game's own icon. Tavora reads it from the installed game on this PC (Battle.net, Epic, GOG, EA and other launchers), then from the Steam folder, and last downloads Steam's small icon for the game from Steam. Icons are kept on this PC and the Tavora service is not involved. Games without an icon, and any image you pick yourself, are not affected. Turn it off to use the plain badges.",
+      "Uses each game's own icon. Tavora reads it from the installed game on this PC (Battle.net, Epic, GOG, EA and other launchers), then from the Steam folder, then from the icons the Tavora service hosts (only while Online game search is on), and last downloads Steam's small icon for the game from Steam. Icons are kept on this PC. Games without an icon, and any image you pick yourself, are not affected. Turn it off to use the plain badges.",
     keywords: ["icon", "ico", "image", "picture", "download", "internet", "network", "privacy", "offline", "badge", "steam", "battle.net", "epic", "gog", "launcher", "installed"],
   },
   {
