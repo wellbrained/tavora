@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.26",
+    date: "2026-10-16",
+    title: "A clearer drop mark for tabs",
+    notes: ["When you drag a tab onto another tab, a gold bar shows at the start or the end of that tab, where yours would land, instead of tinting half of it."],
+  },
+  {
     version: "0.5.25",
     date: "2026-10-16",
     title: "Behind the scenes",
