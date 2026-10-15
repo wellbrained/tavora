@@ -135,13 +135,17 @@ test("every module page starts from Tavora's look, and its own styles win", asyn
           css('[data-testid="save-note"]', "background-color"),
           css('[data-testid="note"]', "background-color"),
           css('[data-testid="increment"]', "background-color"),
-          String(document.documentElement.scrollHeight <= innerHeight),
+          // Page height against panel height, so a failure says by how much.
+          `<=${innerHeight}`,
         ];
       })()`,
     );
     // No page margin or scrollbar, Tavora's tokens, dark controls, and the
     // module's own gold on its main button.
-    expect(style).toEqual(["0px", "#e0a243", "rgb(42, 37, 33)", "rgb(32, 28, 25)", "rgb(224, 162, 67)", "true"]);
+    const [height] = style.splice(5, 1) as [string];
+    expect(style, id).toEqual(["0px", "#e0a243", "rgb(42, 37, 33)", "rgb(32, 28, 25)", "rgb(224, 162, 67)"]);
+    const [page, panel] = height.split("<=").map(Number) as [number, number];
+    expect(page, `: page px in a panel px high`).toBeLessThanOrEqual(panel);
   }
   await app.close();
 });
