@@ -96,6 +96,10 @@ const grayscaleText = computed({
   get: () => library.value.grayscaleText,
   set: (enabled: boolean) => void act({ type: "set-grayscale-text", enabled }),
 });
+const autoUpdate = computed({
+  get: () => library.value.autoUpdate,
+  set: (enabled: boolean) => void act({ type: "set-auto-update", enabled }),
+});
 const onlineSearch = computed({
   get: () => library.value.onlineSearch,
   set: (enabled: boolean) => void act({ type: "set-online-search", enabled }),
@@ -259,6 +263,14 @@ function deleteNow(gameId: string, name: string) {
               :highlighted="highlight === 'online-search'"
             >
               <Switch v-model="onlineSearch" aria-label="Online game search" data-testid="online-search" />
+            </SettingRow>
+            <SettingRow
+              label="Download updates automatically"
+              description="New versions of Tavora download in the background and install when you close the app. Turn it off to choose when to download."
+              setting="auto-update"
+              :highlighted="highlight === 'auto-update'"
+            >
+              <Switch v-model="autoUpdate" aria-label="Download updates automatically" data-testid="auto-update" />
             </SettingRow>
             <SettingRow
               label="Game icons from Steam"

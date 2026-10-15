@@ -106,6 +106,12 @@ describe("adding games", () => {
     expect(() => addGame(library, { online: { id: "local-doom", name: "Doom" } }, day(3))).toThrow(LibraryError);
   });
 
+  it("has automatic updates on by default and keeps only a real setting", () => {
+    expect(emptyLibrary().autoUpdate).toBe(true);
+    expect(sanitizeLibrary({ autoUpdate: false }).autoUpdate).toBe(false);
+    expect(sanitizeLibrary({ autoUpdate: "no" }).autoUpdate).toBe(true);
+  });
+
   it("has online search on by default and keeps only a real setting", () => {
     expect(emptyLibrary().onlineSearch).toBe(true);
     expect(sanitizeLibrary({ onlineSearch: false }).onlineSearch).toBe(false);

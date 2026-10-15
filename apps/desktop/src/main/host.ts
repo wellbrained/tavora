@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, realpath, rm } from "node:fs/promises";
+import { appendFile, mkdir, readFile, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   app,
@@ -61,6 +61,7 @@ import {
 import { MODULE_FONTS } from "./module-fonts";
 import { moduleBaseCss } from "./module-style";
 import { OnlineSearch } from "./online";
+import { UpdateManager, type UpdaterLike } from "./updates";
 import { syncIcons } from "./icon-sync";
 import { findSteamDir, removeSteamIcon } from "./steam-icons";
 import { ModuleView } from "./module-view";
@@ -149,6 +150,8 @@ export class Host {
   /** Bumped whenever the main process replaces the current layout. */
   private layoutEpoch = 0;
   private readonly onlineSearch: OnlineSearch;
+  /** Looks for new versions; only in an installed (packaged) app. */
+  private updates: UpdateManager | null = null;
   private saving: Promise<void> = Promise.resolve();
   private windowSaveTimer: ReturnType<typeof setTimeout> | undefined;
   readonly window: BrowserWindow;
@@ -250,7 +253,35 @@ export class Host {
     if (host.screen === "game") host.openCurrentGame();
     // Steam icons of games that have none yet are looked for quietly in the background.
     host.fetchIconsSoon();
+    await host.startUpdates();
     return host;
+  }
+
+  /**
+   * Starts looking for new versions of Tavora. Only an installed app does this:
+   * pnpm dev and other unpackaged runs never check. Updates come from the feed
+   * address built into the installer.
+   */
+  private async startUpdates(): Promise<void> {
+    if (!app.isPackaged) return;
+    try {
+      const { autoUpdater } = await import("electron-updater");
+      this.updates = new UpdateManager({
+        updater: autoUpdater as unknown as UpdaterLike,
+        autoDownload: this.library.autoUpdate,
+        onChange: () => this.pushState(),
+        log: (line) => this.logUpdate(line),
+      });
+      this.updates.start();
+    } catch (error) {
+      this.logUpdate(`updates are not available: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /** One line per update event in the app's data folder, to see what the updater did. */
+  private logUpdate(line: string): void {
+    console.log(`[tavora] ${line}`);
+    void appendFile(path.join(this.options.userData, "updates.log"), `${new Date().toISOString()} ${line}\n`).catch(() => undefined);
   }
 
   private get gameId(): string | null {
@@ -427,6 +458,14 @@ export class Host {
       case "set-grayscale-text":
         library.grayscaleText = action.enabled;
         break;
+      case "set-auto-update":
+        library.autoUpdate = action.enabled;
+        this.updates?.setAutoDownload(action.enabled);
+        break;
+      case "download-update":
+        return this.updates?.download();
+      case "restart-to-update":
+        return this.updates?.restartNow();
       case "set-online-search":
         library.onlineSearch = action.enabled;
         break;
@@ -886,6 +925,7 @@ export class Host {
         startup: library.startup,
         grayscaleText: library.grayscaleText,
         onlineSearch: library.onlineSearch,
+        autoUpdate: library.autoUpdate,
         steamIcons: library.steamIcons,
         onboarded: library.onboarded,
         rail: { ...library.rail },
@@ -916,6 +956,7 @@ export class Host {
       },
       restartPending: library.grayscaleText !== this.options.grayscaleText,
       appVersion: app.getVersion(),
+      update: this.updates?.state ?? { status: "idle" },
     };
   }
 

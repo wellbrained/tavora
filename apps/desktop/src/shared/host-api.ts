@@ -94,6 +94,13 @@ export interface PanelBounds {
 }
 
 /** What the host UI renders. Contains no module data. */
+/** Idle: nothing new. Available: found, waiting for the player (automatic download off). */
+export type UpdateState =
+  | { status: "idle" }
+  | { status: "available"; version: string }
+  | { status: "downloading"; version: string }
+  | { status: "ready"; version: string };
+
 export interface HostViewState {
   screen: Screen;
   currentGameId: string | null;
@@ -112,6 +119,8 @@ export interface HostViewState {
     grayscaleText: boolean;
     /** Whether search may ask the Tavora service online. */
     onlineSearch: boolean;
+    /** New versions of Tavora download by themselves (installed builds only). */
+    autoUpdate: boolean;
     /** Whether game icons may be taken from Steam on this PC. */
     steamIcons: boolean;
     /** False until the player finished or skipped the first-run welcome. */
@@ -141,6 +150,8 @@ export interface HostViewState {
   profile: { name: string; initials: string; pictureUrl: string | null };
   /** A setting that only applies on start was changed since Tavora started. */
   restartPending: boolean;
+  /** Where the app is with finding and installing a newer version. */
+  update: UpdateState;
   /** The app's version as major.minor.patch, from apps/desktop/package.json. */
   appVersion: string;
 }
@@ -171,6 +182,11 @@ export type HostAction =
   | { type: "set-startup"; startup: Startup }
   | { type: "set-grayscale-text"; enabled: boolean }
   | { type: "set-online-search"; enabled: boolean }
+  | { type: "set-auto-update"; enabled: boolean }
+  /** Starts the download of a version that was found while automatic download is off. */
+  | { type: "download-update" }
+  /** Quits, installs the downloaded version and starts Tavora again. */
+  | { type: "restart-to-update" }
   | { type: "set-steam-icons"; enabled: boolean }
   /** Done ends the first-run welcome; false shows it again. */
   | { type: "set-onboarded"; done: boolean }

@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.3.1",
+    date: "2026-10-15",
+    title: "Tavora can update itself",
+    notes: [
+      "Install Tavora with the new installer and it keeps itself up to date: new versions download quietly in the background and install when you close the app.",
+      "A small arrow appears at the bottom of the game list when an update is ready, so you can restart into it whenever you like.",
+      "Settings has a switch if you would rather choose when updates download.",
+    ],
+  },
+  {
     version: "0.3.0",
     date: "2026-10-15",
     title: "Games show their own Steam icon",
