@@ -50,11 +50,13 @@ import {
   searchCatalog,
   setFolderLabel,
   setGameImage,
+  markIconShared,
   setGameLabel,
   setRail,
   sortedRoot,
   trashedGames,
   trashGame,
+  useOriginalGameIcon,
   type GameEntry,
   type GameIcon,
   type Library,
@@ -62,9 +64,11 @@ import {
 import { MODULE_FONTS } from "./module-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir, keepNewerFile, SUPPORTED_VERSIONS } from "./backup";
-import { OnlineSearch } from "./online";
+import { DEFAULT_API_URL, OnlineSearch } from "./online";
 import { UpdateManager, type UpdaterLike } from "./updates";
+import { fetchHostedList, type HostedList } from "./hosted-icons";
 import { syncIcons } from "./icon-sync";
+import { isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, submitIcon } from "./share-icons";
 import { findSteamDir, removeSteamIcon } from "./steam-icons";
 import { ModuleView } from "./module-view";
 import { discoverModules, isDevelopmentModule, type InstalledModule } from "./registry";
@@ -418,6 +422,7 @@ export class Host {
       const action = parseAction(raw);
       if (!action) return { ok: false, error: "Tavora did not understand that request." };
       try {
+        if (action.type === "share-icons") return await this.shareIcons(action.gameIds);
         const id = await this.perform(action);
         return id === undefined ? { ok: true } : { ok: true, id };
       } catch (error) {
@@ -499,6 +504,14 @@ export class Host {
       case "choose-game-image":
         await this.chooseGameImage(action.gameId);
         break;
+      case "use-original-icon": {
+        const previous = useOriginalGameIcon(library, action.gameId);
+        await this.dropIconFile(previous);
+        break;
+      }
+      case "share-icons":
+        // Answered with a count, so the IPC handler runs it itself.
+        throw new Error("share-icons is not run through perform");
       case "trash-game": {
         const wasOpen = this.gameId === action.gameId;
         trashGame(library, action.gameId, new Date());
@@ -569,6 +582,8 @@ export class Host {
         return this.updates?.restartNow();
       case "set-online-search":
         library.onlineSearch = action.enabled;
+        // Turned on: games without an icon may find one on the service, and the share list can be built.
+        if (action.enabled) this.fetchIconsSoon();
         break;
       case "set-steam-icons":
         library.steamIcons = action.enabled;
@@ -703,8 +718,8 @@ export class Host {
   /**
    * Finds, one game at a time, the icon of every game that has none yet: from
    * the installed game itself, then from the Steam client on this PC (or Steam's
-   * public address), then Steam's small public icon. This app does it itself:
-   * Tavora's service is never involved. Quiet on purpose: a failure is tried
+   * public address), then the icons the Tavora service hosts, then Steam's small
+   * public icon. This app does it itself. Quiet on purpose: a failure is tried
    * again at the next start or the next added game, and nothing is shown.
    */
   private async findIcons(): Promise<void> {
@@ -715,15 +730,87 @@ export class Host {
         steamDir: await findSteamDir(),
         baseUrl: this.options.steamIcons,
         serviceUrl: this.options.apiUrl,
+        loadHostedList: () => this.loadHostedList(),
         shouldRun: () => !this.window.isDestroyed(),
         onChange: () => {
           this.saveLibrary();
           this.pushState();
         },
       });
+      // Games that have their own icon never reached the list: look at it now, to know which ones the service lacks.
+      if (this.shareCandidates().length > 0) await this.loadHostedList();
     } catch (error) {
       console.error("[tavora] finding game icons failed", error);
     }
+  }
+
+  // ── Offering icons to the Tavora service ─────────────────────────────
+
+  /** The service's list of hosted icons, asked for once per run, or null (off, or it did not answer). */
+  private hostedList: HostedList | null = null;
+  private hostedListLoading: Promise<HostedList | null> | null = null;
+
+  private loadHostedList(): Promise<HostedList | null> {
+    if (!this.library.onlineSearch || this.options.steamIcons === "off") return Promise.resolve(null);
+    if (this.hostedList) return Promise.resolve(this.hostedList);
+    this.hostedListLoading ??= fetchHostedList({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL }).then((list) => {
+      this.hostedList = list;
+      this.hostedListLoading = null;
+      if (list) this.pushState();
+      return list;
+    });
+    return this.hostedListLoading;
+  }
+
+  /**
+   * The icon file of a game that could be offered: the game's own icon found on
+   * this PC (never a picture the player chose, a hosted icon or Steam's small one),
+   * for a game with an id the service knows, that the service has no icon for and
+   * that was not offered before. Null otherwise.
+   */
+  private shareableFile(game: GameEntry): string | null {
+    return shareableIconFile(game, this.library, this.hostedList);
+  }
+
+  /** Games that have an icon of their own and an id the service knows: the ones worth asking the list about. */
+  private shareCandidates(): GameEntry[] {
+    const library = this.library;
+    if (!library.steamIcons || !library.onlineSearch) return [];
+    return Object.values(library.games).filter(isShareCandidate);
+  }
+
+  /** Offers these games' icons to the service, one at a time. Returns how many it took. */
+  private async shareIcons(gameIds: string[]): Promise<ActionResult> {
+    let tried = 0;
+    let shared = 0;
+    let unreachable = false;
+    for (const id of gameIds) {
+      const game = this.library.games[id];
+      const file = game ? this.shareableFile(game) : null;
+      if (!game || !file) continue;
+      tried += 1;
+      let ico: Uint8Array | null = null;
+      try {
+        ico = largestIcoFrame(new Uint8Array(await readFile(path.join(this.steamIconDir, file))));
+      } catch {
+        ico = null;
+      }
+      if (!ico) continue;
+      const outcome = await submitIcon({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL }, { id: game.id, name: game.name, source: shareSource(file), ico });
+      if (outcome === "failed") {
+        unreachable = true;
+        break;
+      }
+      // Sent, or refused for good: either way it is not offered again.
+      markIconShared(this.library, game.id, new Date());
+      if (outcome === "sent") shared += 1;
+      this.saveLibrary();
+      this.pushState();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    if (tried === 0) return { ok: false, error: "There is nothing to share right now." };
+    if (unreachable && shared === 0) return { ok: false, error: "Tavora could not reach its service. Please try again later." };
+    return { ok: true, shared };
   }
 
   private async dropIconFile(icon: GameIcon | null): Promise<void> {
@@ -1011,7 +1098,9 @@ export class Host {
       id: game.id,
       name: game.name,
       icon: game.icon.kind === "image" ? { kind: "image", url: ICON_URL + game.icon.file } : game.icon,
-      steamIcon: this.library.steamIcons && game.iconFile ? STEAM_ICON_URL + game.iconFile : null,
+      steamIcon: this.library.steamIcons && game.useOriginalIcon && game.iconFile ? STEAM_ICON_URL + game.iconFile : null,
+      iconChoice: game.icon.kind === "image" ? "image" : game.useOriginalIcon ? "original" : "letters",
+      shareIcon: ((file) => (file ? STEAM_ICON_URL + file : null))(this.shareableFile(game)),
       builtIn: game.catalogId !== null,
       addedAt: game.addedAt,
       lastPlayedAt: game.lastPlayedAt,

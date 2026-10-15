@@ -25,6 +25,13 @@ export interface GameView {
    * an image and the setting is on; the host UI sets it on a tile.
    */
   steamIcon: string | null;
+  /** What the player chose: the game's own icon, their letters, or their own image. */
+  iconChoice: "original" | "letters" | "image";
+  /**
+   * The game's own icon from this PC or Steam, as an address, when Tavora does not have an icon for the game
+   * yet and the player could offer this one; otherwise null. Never the player's own picture.
+   */
+  shareIcon: string | null;
   /** Picked from the built-in list rather than added by name. */
   builtIn: boolean;
   addedAt: string;
@@ -205,7 +212,9 @@ export type HostAction =
   | { type: "add-game"; online: OnlineGame }
   | { type: "rename-game"; gameId: string; name: string }
   | { type: "set-game-label"; gameId: string; label: string | null }
-  | { type: "choose-game-image"; gameId: string }  | { type: "trash-game"; gameId: string }
+  | { type: "choose-game-image"; gameId: string }
+  | { type: "use-original-icon"; gameId: string }
+  | { type: "share-icons"; gameIds: string[] }  | { type: "trash-game"; gameId: string }
   | { type: "restore-game"; gameId: string }
   | { type: "delete-game"; gameId: string }
   | { type: "favorite"; gameId: string; index?: number }
@@ -258,7 +267,7 @@ export type HostAction =
   | { type: "delete-snapshot"; snapshotId: string };
 
 /** `id` is set when the action created something (a game, a folder). */
-export type ActionResult = { ok: true; id?: string } | { ok: false; error: string };
+export type ActionResult = { ok: true; id?: string; shared?: number } | { ok: false; error: string };
 
 export interface CatalogMatch {
   id: string;

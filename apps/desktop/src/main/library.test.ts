@@ -8,6 +8,7 @@ import {
   emptyLibrary,
   gamesNeedingIcon,
   LibraryError,
+  markIconShared,
   markPlayed,
   monogram,
   moveFolder,
@@ -26,6 +27,8 @@ import {
   setRail,
   sortedRoot,
   trashGame,
+  useOriginalGameIcon,
+  setGameImage,
   type Library,
 } from "./library";
 
@@ -464,5 +467,80 @@ describe("sanitizeLibrary", () => {
   it("gives an empty library for anything else", () => {
     expect(sanitizeLibrary(null)).toEqual(emptyLibrary());
     expect(sanitizeLibrary("x")).toEqual(emptyLibrary());
+  });
+});
+
+
+describe("which icon a game shows", () => {
+  const picked = (library: Library, id: string) => setGameImage(library, id, "pick.png");
+
+  it("starts with the game's own icon", () => {
+    const library = libraryWith("Diablo IV");
+    expect(library.games["local-diablo-iv"]).toMatchObject({ useOriginalIcon: true, iconSharedAt: null });
+  });
+
+  it("stops showing the game's own icon when the player chooses letters, so their letters are what shows", () => {
+    const library = libraryWith("Diablo IV");
+    setGameLabel(library, "local-diablo-iv", "D4");
+    expect(library.games["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "D4" }, useOriginalIcon: false });
+    setGameLabel(library, "local-diablo-iv", null);
+    expect(library.games["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "DI" }, useOriginalIcon: false });
+  });
+
+  it("goes back to the game's own icon from letters or from a picked image, and returns what was replaced", () => {
+    const library = libraryWith("Diablo IV");
+    setGameLabel(library, "local-diablo-iv", "D4");
+    expect(useOriginalGameIcon(library, "local-diablo-iv")).toEqual({ kind: "monogram", text: "D4" });
+    expect(library.games["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "DI" }, useOriginalIcon: true });
+
+    picked(library, "local-diablo-iv");
+    expect(useOriginalGameIcon(library, "local-diablo-iv")).toEqual({ kind: "image", file: "pick.png" });
+    expect(library.games["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "DI" }, useOriginalIcon: true });
+  });
+
+  it("keeps the choice of letters when an image is picked and then dropped for letters again", () => {
+    const library = libraryWith("Diablo IV");
+    setGameLabel(library, "local-diablo-iv", "D4");
+    picked(library, "local-diablo-iv");
+    expect(library.games["local-diablo-iv"]!.icon.kind).toBe("image");
+    setGameLabel(library, "local-diablo-iv", "XY");
+    expect(library.games["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "XY" }, useOriginalIcon: false });
+  });
+
+  it("refuses a game that is not there", () => {
+    const library = libraryWith("Diablo IV");
+    expect(() => useOriginalGameIcon(library, "nope")).toThrow(LibraryError);
+  });
+
+  it("notes that an icon was offered, once per game, and ignores a game that is gone", () => {
+    const library = libraryWith("Diablo IV");
+    markIconShared(library, "local-diablo-iv", day(5));
+    expect(library.games["local-diablo-iv"]!.iconSharedAt).toBe(day(5).toISOString());
+    markIconShared(library, "nope", day(5));
+  });
+
+  it("loads the choice and the offer from a saved library, with the original icon as the default", () => {
+    const saved = (extra: Record<string, unknown>) => ({
+      games: {
+        "elden-ring": {
+          id: "elden-ring",
+          catalogId: "elden-ring",
+          name: "Elden Ring",
+          icon: { kind: "monogram", text: "ER" },
+          showNews: true,
+          addedAt: "2026-10-01T10:00:00.000Z",
+          lastPlayedAt: null,
+          trashedAt: null,
+          ...extra,
+        },
+      },
+    });
+    const game = (extra: Record<string, unknown>) => sanitizeLibrary(saved(extra)).games["elden-ring"]!;
+    expect(game({})).toMatchObject({ useOriginalIcon: true, iconSharedAt: null });
+    expect(game({ useOriginalIcon: false })).toMatchObject({ useOriginalIcon: false });
+    expect(game({ useOriginalIcon: "no" }).useOriginalIcon).toBe(true);
+    expect(game({ iconSharedAt: "2026-10-02T10:00:00.000Z" }).iconSharedAt).toBe("2026-10-02T10:00:00.000Z");
+    expect(game({ iconSharedAt: "yesterday" }).iconSharedAt).toBeNull();
+    expect(game({ iconSharedAt: 5 }).iconSharedAt).toBeNull();
   });
 });
