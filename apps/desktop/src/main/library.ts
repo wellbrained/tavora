@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { isGameId } from "@tavora/module-schema";
 import type { RootItem, RootSort, Startup } from "../shared/host-api";
 import { CATALOG, catalogGame } from "./catalog";
-import { isIconFileName, isSteamAppId, needsIcon } from "./steam-icons";
+import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
 
 export type { RootItem, RootSort, Startup };
 
@@ -24,9 +24,9 @@ export interface GameEntry {
   icon: GameIcon;
   /** The game's Steam application id, a hidden key used to find its icon; null when it has none. */
   steamAppId: number | null;
-  /** The game's Steam icon (an .ico) in the player's data folder, kept unchanged; null until found. */
+  /** The game's own icon in the player's data folder, kept unchanged (from the installed game or from Steam); null until found. */
   iconFile: string | null;
-  /** When Steam last had no icon for this game, so it is not asked again for a while. */
+  /** When no icon was found for this game, so it is not looked up again for a while. */
   iconCheckedAt: string | null;
   showNews: boolean;
   addedAt: string;
@@ -266,17 +266,17 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
   return id;
 }
 
-/** Live games that have a Steam id and no icon yet, and are due to be asked. */
+/** Live games that have no icon yet and are due to be looked up. */
 export function gamesNeedingIcon(library: Library, now: Date): GameEntry[] {
   return liveGames(library).filter((game) => needsIcon(game, now));
 }
 
-/** Records the outcome of looking for a Steam icon: the saved file, or that Steam has none. */
+/** Records the outcome of looking for a game's icon: the saved file, or that none was found. */
 export function recordIcon(library: Library, id: string, outcome: { file: string } | { none: Date }): void {
   const game = library.games[id];
-  if (!game || game.steamAppId === null) return;
+  if (!game) return;
   if ("file" in outcome) {
-    if (outcome.file !== `${game.steamAppId}.ico`) return;
+    if (!iconFileAllowed(game, outcome.file)) return;
     game.iconFile = outcome.file;
     game.iconCheckedAt = null;
   } else {
@@ -477,8 +477,8 @@ export function sanitizeLibrary(raw: unknown): Library {
       name,
       icon: sanitizeIcon(game.icon, name),
       steamAppId,
-      // The icon file is named after the Steam id, so a changed or forged name is dropped.
-      iconFile: steamAppId !== null && isIconFileName(game.iconFile) && game.iconFile === `${steamAppId}.ico` ? game.iconFile : null,
+      // The icon file is named after the Steam id or the game id, so a changed or forged name is dropped.
+      iconFile: iconFileAllowed({ id: game.id, steamAppId }, game.iconFile) ? game.iconFile : null,
       iconCheckedAt: typeof game.iconCheckedAt === "string" && ISO.test(game.iconCheckedAt) ? game.iconCheckedAt : null,
       showNews: game.showNews !== false,
       addedAt: game.addedAt,

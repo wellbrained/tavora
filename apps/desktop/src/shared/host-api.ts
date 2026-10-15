@@ -20,7 +20,7 @@ export interface GameView {
   name: string;
   icon: IconView;
   /**
-   * The game's own Steam icon (an .ico kept on this PC, as an address in the
+   * The game's own icon (a file kept on this PC, from the installed game or Steam, as an address in the
    * host's own protocol), or null. Shown only while the player has not picked
    * an image and the setting is on; the host UI sets it on a tile.
    */

@@ -151,16 +151,21 @@ describe("Steam icons", () => {
     expect(sanitizeLibrary({ steamIcons: "no" }).steamIcons).toBe(true);
   });
 
-  it("asks only for games that have a Steam id and no cover, and not again soon after a miss", () => {
+  it("asks for every game that has no icon, and not again soon after a miss", () => {
     const library = emptyLibrary();
     addGame(library, { catalogId: "elden-ring" }, day(1));
     addGame(library, { catalogId: "fortnite" }, day(1));
     addGame(library, { name: "My Own Game" }, day(1));
-    expect(gamesNeedingIcon(library, day(2)).map((game) => game.id)).toEqual(["elden-ring"]);
+    expect(gamesNeedingIcon(library, day(2)).map((game) => game.id)).toEqual(["elden-ring", "fortnite", "local-my-own-game"]);
 
     recordIcon(library, "elden-ring", { none: day(2) });
-    expect(gamesNeedingIcon(library, day(3))).toEqual([]);
-    expect(gamesNeedingIcon(library, new Date(Date.UTC(2026, 11, 1))).map((game) => game.id)).toEqual(["elden-ring"]);
+    recordIcon(library, "local-my-own-game", { none: day(2) });
+    expect(gamesNeedingIcon(library, day(3)).map((game) => game.id)).toEqual(["fortnite"]);
+    expect(gamesNeedingIcon(library, new Date(Date.UTC(2026, 11, 1))).map((game) => game.id)).toEqual([
+      "elden-ring",
+      "fortnite",
+      "local-my-own-game",
+    ]);
   });
 
   it("does not ask for games in Trash", () => {
@@ -179,6 +184,21 @@ describe("Steam icons", () => {
     expect(library.games["elden-ring"]).toMatchObject({ iconFile: "1245620.ico", iconCheckedAt: null });
     expect(gamesNeedingIcon(library, day(2))).toEqual([]);
     recordIcon(library, "no-such-game", { file: "1.ico" });
+  });
+
+  it("records an icon read from the installed game, and the small Steam icon, but only under the game's own names", () => {
+    const library = emptyLibrary();
+    addGame(library, { catalogId: "elden-ring" }, day(1));
+    addGame(library, { name: "My Own Game" }, day(1));
+    recordIcon(library, "elden-ring", { file: "exe-someone-else.ico" });
+    recordIcon(library, "local-my-own-game", { file: "1245620.ico" });
+    expect(library.games["elden-ring"]!.iconFile).toBeNull();
+    expect(library.games["local-my-own-game"]!.iconFile).toBeNull();
+
+    recordIcon(library, "elden-ring", { file: "1245620.jpg" });
+    expect(library.games["elden-ring"]!.iconFile).toBe("1245620.jpg");
+    recordIcon(library, "local-my-own-game", { file: "exe-local-my-own-game.ico" });
+    expect(library.games["local-my-own-game"]).toMatchObject({ iconFile: "exe-local-my-own-game.ico", iconCheckedAt: null });
   });
 
   it("knows when another game shares an icon file", () => {
@@ -211,7 +231,9 @@ describe("Steam icons", () => {
     // Saved before Steam icons existed: the built-in list supplies the Steam id.
     expect(sanitizeLibrary(saved({})).games["elden-ring"]).toMatchObject({ steamAppId: 1245620, iconFile: null, iconCheckedAt: null });
     expect(sanitizeLibrary(saved({ steamAppId: 1245620, iconFile: "1245620.ico" })).games["elden-ring"]!.iconFile).toBe("1245620.ico");
-    for (const iconFile of ["../1245620.ico", "1245620.jpg", "999.ico", 7, null]) {
+    expect(sanitizeLibrary(saved({ steamAppId: 1245620, iconFile: "1245620.jpg" })).games["elden-ring"]!.iconFile).toBe("1245620.jpg");
+    expect(sanitizeLibrary(saved({ iconFile: "exe-elden-ring.ico" })).games["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
+    for (const iconFile of ["../1245620.ico", "999.ico", "1245620.png", "exe-other.ico", "exe-../elden-ring.ico", 7, null]) {
       expect(sanitizeLibrary(saved({ steamAppId: 1245620, iconFile })).games["elden-ring"]!.iconFile).toBeNull();
     }
     expect(sanitizeLibrary(saved({ steamAppId: "5" })).games["elden-ring"]!.steamAppId).toBe(1245620);

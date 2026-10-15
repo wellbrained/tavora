@@ -33,13 +33,30 @@ export function steamIconUrl(appid: number, hash: string, base: string = STEAM_I
   return `${base.replace(/\/+$/, "")}/${appid}/${hash}.ico`;
 }
 
-/** The file name for a game's icon: only digits, so it can never point elsewhere. */
+/** The file name for a game's Steam client icon: only digits, so it can never point elsewhere. */
 export function iconFileName(appid: number): string {
   return `${appid}.ico`;
 }
 
+/** The file name of the small icon Steam's public address has for any app. */
+export function publicIconFileName(appid: number): string {
+  return `${appid}.jpg`;
+}
+
+/** The file name of an icon read from the installed game itself. Game ids are letters, digits and dashes. */
+export function exeIconFileName(gameId: string): string {
+  return `exe-${gameId}.ico`;
+}
+
 export function isIconFileName(value: unknown): value is string {
-  return typeof value === "string" && /^\d{1,10}\.ico$/.test(value);
+  return typeof value === "string" && /^(\d{1,10}\.(ico|jpg)|exe-[a-z0-9][a-z0-9-]{0,63}\.ico)$/.test(value);
+}
+
+/** The only icon file names a game may have, so a changed or forged name in the saved library is dropped. */
+export function iconFileAllowed(game: { id: string; steamAppId: number | null }, file: unknown): file is string {
+  if (!isIconFileName(file)) return false;
+  if (file === exeIconFileName(game.id)) return true;
+  return game.steamAppId !== null && (file === iconFileName(game.steamAppId) || file === publicIconFileName(game.steamAppId));
 }
 
 /** Recognises an ICO file by its header and its frame table, whatever it is called. */
@@ -202,12 +219,80 @@ export async function removeSteamIcon(iconDir: string, file: string): Promise<vo
   await rm(path.join(iconDir, file), { force: true });
 }
 
-/** True when a game with a Steam id should be asked for its icon now. */
-export function needsIcon(
-  game: { steamAppId: number | null; iconFile: string | null; iconCheckedAt: string | null },
-  now: Date,
-): boolean {
-  if (game.steamAppId === null || game.iconFile !== null) return false;
+// ── The icon read from the installed game ────────────────────────────────
+
+/** Saves an `.ico` read from a game's own program, unchanged. `none` when it is not a usable icon. */
+export async function saveExeIcon(iconDir: string, gameId: string, bytes: Uint8Array): Promise<IconResult> {
+  const file = exeIconFileName(gameId);
+  if (!isIconFileName(file) || !isIco(bytes)) return { status: "none" };
+  await writeFileAtomic(path.join(iconDir, file), bytes);
+  return { status: "saved", file };
+}
+
+// ── Steam's public address, for games the Steam client has no icon for ───
+
+export const STEAM_API_BASE = "https://api.steampowered.com";
+
+export type HashResult = { status: "found"; hash: string } | { status: "none" } | { status: "failed" };
+
+/**
+ * The hash of a game's small community icon from Steam's public store API. No
+ * key and no account are needed, and it works for games the player does not own.
+ */
+export async function fetchPublicIconHash(appid: number, options: { fetchImpl?: typeof fetch; apiUrl?: string } = {}): Promise<HashResult> {
+  if (!isSteamAppId(appid)) return { status: "none" };
+  try {
+    const url = `${(options.apiUrl ?? STEAM_API_BASE).replace(/\/+$/, "")}/ICommunityService/GetApps/v1?appids%5B0%5D=${appid}`;
+    const response = await (options.fetchImpl ?? fetch)(url, {
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+      redirect: "error",
+      signal: AbortSignal.timeout(ICON_TIMEOUT_MS),
+    });
+    if (response.status === 404 || response.status === 403) return { status: "none" };
+    if (!response.ok) return { status: "failed" };
+    const body: unknown = await response.json();
+    const apps = (body as { response?: { apps?: unknown } } | null)?.response?.apps;
+    const app = Array.isArray(apps) ? (apps[0] as { appid?: unknown; icon?: unknown } | undefined) : undefined;
+    return app && app.appid === appid && isIconHash(app.icon) ? { status: "found", hash: app.icon } : { status: "none" };
+  } catch {
+    return { status: "failed" };
+  }
+}
+
+/** True for a JPEG file, whatever it is called. */
+export function isJpeg(bytes: Uint8Array): boolean {
+  return bytes.byteLength >= 128 && bytes.byteLength <= MAX_STEAM_ICON_BYTES && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
+/** Downloads the small community icon (a 32 px JPEG) from Steam's public address, unchanged. */
+export async function savePublicSteamIcon(iconDir: string, appid: number, hash: string, options: SaveIconOptions = {}): Promise<IconResult> {
+  if (!isSteamAppId(appid) || !isIconHash(hash)) return { status: "none" };
+  const file = publicIconFileName(appid);
+  try {
+    const url = `${(options.baseUrl ?? STEAM_ICON_BASE).replace(/\/+$/, "")}/${appid}/${hash}.jpg`;
+    const response = await (options.fetchImpl ?? fetch)(url, {
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+      redirect: "error",
+      signal: AbortSignal.timeout(ICON_TIMEOUT_MS),
+    });
+    if (response.status === 404 || response.status === 403) return { status: "none" };
+    if (!response.ok) return { status: "failed" };
+    const declared = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > MAX_STEAM_ICON_BYTES) return { status: "none" };
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (!isJpeg(bytes)) return { status: "none" };
+    await writeFileAtomic(path.join(iconDir, file), bytes);
+    return { status: "saved", file };
+  } catch {
+    return { status: "failed" };
+  }
+}
+
+/** True when a game should be looked up for its icon now: it has none, and was not asked about lately. */
+export function needsIcon(game: { iconFile: string | null; iconCheckedAt: string | null }, now: Date): boolean {
+  if (game.iconFile !== null) return false;
   if (game.iconCheckedAt === null) return true;
   const checked = Date.parse(game.iconCheckedAt);
   return !Number.isFinite(checked) || now.getTime() - checked > ICON_RETRY_DAYS * 24 * 60 * 60 * 1000;
