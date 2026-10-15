@@ -22,6 +22,22 @@ const MANIFEST = "tavora.module.json";
 /** Module ids starting with this publisher are reserved for official modules. */
 export const OFFICIAL_PREFIX = "tavora.";
 
+/**
+ * Modules that ship with Tavora as starting points for module authors: the
+ * UI Playground and the example modules. The module library lists them under
+ * Development instead of next to the modules players use.
+ */
+const DEVELOPMENT_MODULES = new Set([
+  "tavora.playground",
+  "local.example.vanilla-module",
+  "local.example.react-module",
+  "local.example.vue-module",
+]);
+
+export function isDevelopmentModule(id: string): boolean {
+  return DEVELOPMENT_MODULES.has(id);
+}
+
 export interface ModuleSources {
   /** Modules that ship with Tavora. Searched first, so they win over a local copy. */
   official?: string[];

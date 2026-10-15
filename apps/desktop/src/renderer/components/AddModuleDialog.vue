@@ -10,19 +10,27 @@ import ModalDialog from "./ModalDialog.vue";
 /** Who publishes a module: Tavora itself, or a package found on this computer. */
 const PROVENANCE_LABEL = { official: "Official", local: "Local" } as const;
 
-type Category = "all" | "official" | "local";
+type Category = "all" | "official" | "local" | "development";
 
 const CATEGORIES: { id: Category; label: string }[] = [
   { id: "all", label: "All modules" },
   { id: "official", label: "Official" },
   { id: "local", label: "On this computer" },
+  { id: "development", label: "Development" },
 ];
+
+type ModuleView = NonNullable<typeof state.value>["modules"][number];
+
+/** The one category a module is listed under; playgrounds and examples go to Development. */
+function categoryOf(module: ModuleView): Exclude<Category, "all"> {
+  return module.development ? "development" : module.provenance;
+}
 
 const query = ref("");
 const category = ref<Category>("all");
 
 function count(id: Category): number {
-  return state.value!.modules.filter((module) => id === "all" || module.provenance === id).length;
+  return state.value!.modules.filter((module) => id === "all" || categoryOf(module) === id).length;
 }
 
 const groups = computed(() => {
@@ -30,10 +38,9 @@ const groups = computed(() => {
   const matches = state.value!.modules.filter(
     (module) => !text || module.name.toLowerCase().includes(text) || (module.description ?? "").toLowerCase().includes(text),
   );
-  return [
-    { id: "official", label: "Official", items: matches.filter((module) => module.provenance === "official") },
-    { id: "local", label: "On this computer", items: matches.filter((module) => module.provenance === "local") },
-  ].filter((group) => group.items.length && (category.value === "all" || category.value === group.id));
+  return CATEGORIES.filter((item) => item.id !== "all")
+    .map((item) => ({ ...item, items: matches.filter((module) => categoryOf(module) === item.id) }))
+    .filter((group) => group.items.length && (category.value === "all" || category.value === group.id));
 });
 
 /** How many panels of a module are already open in this game. */

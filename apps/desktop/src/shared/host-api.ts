@@ -141,6 +141,8 @@ export interface HostViewState {
     minHeight: number;
     /** Official modules ship with Tavora; local ones were found on disk. */
     provenance: "official" | "local";
+    /** A playground or example for module authors, listed under Development. */
+    development: boolean;
   }[];
   /** Panels of the current game, in the order they were opened. */
   panels: PanelView[];

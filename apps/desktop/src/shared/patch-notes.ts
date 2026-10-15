@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.4.4",
+    date: "2026-10-15",
+    title: "A Development shelf in the module library",
+    notes: [
+      "The UI Playground and the example modules now have their own Development category in the module library, so they no longer sit between Notes, To-Dos and your own modules. They are still there for anyone who wants to try building a module.",
+    ],
+  },
+  {
     version: "0.4.3",
     date: "2026-10-15",
     title: "Icons for games you have not installed",

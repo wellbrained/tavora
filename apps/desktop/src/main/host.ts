@@ -65,7 +65,7 @@ import { UpdateManager, type UpdaterLike } from "./updates";
 import { syncIcons } from "./icon-sync";
 import { findSteamDir, removeSteamIcon } from "./steam-icons";
 import { ModuleView } from "./module-view";
-import { discoverModules, type InstalledModule } from "./registry";
+import { discoverModules, isDevelopmentModule, type InstalledModule } from "./registry";
 import { DataRegistry } from "./storage";
 import { writeFileAtomic } from "./fsutil";
 import {
@@ -942,6 +942,7 @@ export class Host {
         minWidth: module.manifest.viewport.minWidth,
         minHeight: module.manifest.viewport.minHeight,
         provenance: module.provenance,
+        development: isDevelopmentModule(module.manifest.id),
       })),
       panels: workspace.instances.map((record) => ({
         instanceId: record.instanceId,
