@@ -38,6 +38,10 @@ function toggleRail() {
 }
 const manual = computed(() => library.value.sort === "manual");
 const favorites = computed(() => library.value.favorites.map((id) => library.value.games[id]).filter(isGame));
+// A game lives in one place: favorited games leave the main list (and its folders) until unfavorited.
+const favoriteIds = computed(() => new Set<string>(library.value.favorites));
+const rootEntries = computed(() => library.value.root.filter((entry) => entry.kind === "folder" || !favoriteIds.value.has(entry.id)));
+const folderGames = (id: string) => folder(id).games.filter((gameId) => !favoriteIds.value.has(gameId));
 const openFolders = reactive(new Set<string>());
 
 function isGame(game: GameView | undefined): game is GameView {
@@ -204,7 +208,11 @@ async function onDrop(event: DragEvent, target: Target) {
   }
   if (target.place.list === "favorites") {
     await act({ type: "favorite", gameId: item.id, index: indexIn(library.value.favorites, target.id, zone) });
-  } else if (target.kind === "folder" && zone === "into") {
+    return;
+  }
+  // Dropping a favorite back into the main list takes it out of Favorites, since it can't be in both.
+  if (favoriteIds.value.has(item.id)) await act({ type: "unfavorite", gameId: item.id });
+  if (target.kind === "folder" && zone === "into") {
     await act({ type: "move-game", gameId: item.id, folderId: target.id });
     openFolders.add(target.id);
   } else if (target.place.list === "root" && zone === "into") {
@@ -296,7 +304,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           :key="item.id"
           :game="item"
           :testid="`rail-favorite-${item.id}`"
-          :active="false"
+          :active="isActive(item.id)"
           :expanded="expanded"
           :menu="menuFor(item.id, true)"
           :hint="hintFor({ kind: 'game', id: item.id, place: { list: 'favorites' } })"
@@ -309,7 +317,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       </section>
 
       <section class="flex flex-col gap-1" aria-label="All games">
-        <template v-for="entry in library.root" :key="`${entry.kind}:${entry.id}`">
+        <template v-for="entry in rootEntries" :key="`${entry.kind}:${entry.id}`">
           <RailGame
             v-if="entry.kind === 'game'"
             :game="game(entry.id)"
@@ -347,7 +355,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                       {{ folder(entry.id).label }}
                     </span>
                     <template v-else>
-                      <GameIcon v-for="id in folder(entry.id).games.slice(0, 4)" :key="id" :game="game(id)" :size="20" />
+                      <GameIcon v-for="id in folderGames(entry.id).slice(0, 4)" :key="id" :game="game(id)" :size="20" />
                     </template>
                   </span>
                   <template v-if="expanded">
@@ -370,7 +378,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
             </MenuArea>
             <div v-if="openFolders.has(entry.id)" class="flex flex-col gap-1 [&>div]:px-1" role="group" :aria-label="folder(entry.id).name">
               <RailGame
-                v-for="id in folder(entry.id).games"
+                v-for="id in folderGames(entry.id)"
                 :key="id"
                 :game="game(id)"
                 :testid="`rail-game-${id}`"
