@@ -461,7 +461,7 @@ export const de: Record<keyof typeof en, string> = {
   "search.railKeywords": "leiste, seitenleiste, rail, sidebar",
   "workspace.addModule": "Modul hinzufügen",
   "workspace.startTitle": "Baue deinen Arbeitsbereich auf",
-  "workspace.startText": "Wähle zuerst ein Layout: Öffne oben Layouts und nimm eine Vorlage. Füge dann Module für {name} hinzu, die sie füllen. Du kannst sie jederzeit neu anordnen; das Layout wird für dieses Spiel gespeichert.",
+  "workspace.startText": "Wähle ein Layout. Füge dann jedem Bereich ein Modul hinzu. Du kannst Layout und Module jederzeit ändern oder verschieben.",
   "workspace.panel": "Panel",
   "workspace.options": "Optionen für {name}",
   "workspace.removeSlot": "Platz entfernen",
