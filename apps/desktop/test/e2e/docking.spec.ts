@@ -231,3 +231,25 @@ test("a template lays out empty slots that modules fill, and is kept", async () 
   await expect(third.page.locator("[data-testid^='empty-slot-']")).toHaveCount(2);
   await third.app.close();
 });
+
+test("the templates submenu opens level with its entry and stays open on the way to it", async () => {
+  const { app, page } = await launch();
+  await page.getByTestId("layouts").click();
+  const entry = page.getByTestId("layout-templates");
+  await entry.hover();
+  const target = page.getByTestId("layout-template-two-bottom");
+  await expect(target).toBeVisible();
+  const from = (await entry.boundingBox())!;
+  const submenu = (await page.locator('[role="group"][aria-label="Templates"]').boundingBox())!;
+  expect(Math.abs(submenu.y - from.y)).toBeLessThanOrEqual(2);
+
+  // Moving diagonally from the entry to the last template, across the menu below it, keeps the submenu open.
+  const to = (await target.boundingBox())!;
+  await page.mouse.move(from.x + from.width * 0.8, from.y + from.height / 2);
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
+  await expect(target).toBeVisible();
+  await target.click();
+  await expect(groups(page)).toHaveCount(3);
+  await expect(page.locator("[data-testid^='empty-slot-']")).toHaveCount(3);
+  await app.close();
+});
