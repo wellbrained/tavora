@@ -40,8 +40,6 @@ export interface MenuItem {
   danger?: boolean;
   /** Starts a new section of the menu. */
   separator?: boolean;
-  /** A small title above the item, naming the section it starts. */
-  heading?: string;
   disabled?: boolean;
   /** Marks the current choice in a list of choices; a list where any item sets this shows a check column. */
   checked?: boolean;

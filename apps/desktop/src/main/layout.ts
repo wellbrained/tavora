@@ -2,7 +2,7 @@
 // docking itself; the main process only checks what it is asked to save
 // and keeps layouts in step with the panels that exist.
 import type { LayoutGroup, LayoutNode, SavedLayout } from "../shared/host-api";
-import type { LayoutTemplate, TemplatePart } from "../shared/layout-templates";
+import { templateWeight as weight, type LayoutTemplate } from "../shared/layout-templates";
 import { INSTANCE_ID } from "./ids";
 
 export type { LayoutGroup, LayoutNode, LayoutSplit, SavedLayout } from "../shared/host-api";
@@ -137,7 +137,6 @@ export function templateLayout(template: LayoutTemplate, panels: readonly string
   const row = template.direction === "row";
   const along = row ? TEMPLATE_AREA.width : TEMPLATE_AREA.height;
   const across = row ? TEMPLATE_AREA.height : TEMPLATE_AREA.width;
-  const weight = (part: TemplatePart): number => (typeof part === "number" ? part : part.reduce<number>((sum, value) => sum + value, 0));
   const total = template.parts.reduce<number>((sum, part) => sum + weight(part), 0);
   const slots: LayoutGroup[] = [];
   const slot = (size: number): LayoutGroup => {

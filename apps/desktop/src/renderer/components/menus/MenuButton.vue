@@ -15,8 +15,10 @@ withDefaults(
     side?: "right" | "bottom";
     align?: "start" | "end";
     class?: string;
+    /** Classes for the open menu, e.g. a wider one. */
+    menuClass?: string;
   }>(),
-  { side: "right", align: "start", class: undefined },
+  { side: "right", align: "start", class: undefined, menuClass: undefined },
 );
 const track = useFloating();
 </script>
@@ -38,9 +40,10 @@ const track = useFloating();
         <slot><Ellipsis class="size-4" :stroke-width="1.5" /></slot>
       </button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent data-testid="menu" :side="side" :align="align" class="max-w-72 min-w-52">
+    <DropdownMenuContent data-testid="menu" :side="side" :align="align" :class="cn('max-w-72 min-w-52', menuClass)">
       <DropdownMenuLabel class="text-muted-foreground truncate text-xs font-normal">{{ title }}</DropdownMenuLabel>
       <MenuEntries :items="items()" kind="dropdown" />
+      <slot name="after" />
     </DropdownMenuContent>
   </DropdownMenu>
 </template>

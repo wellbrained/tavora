@@ -3,9 +3,11 @@
 // Below them, templates: common arrangements of empty slots to fill with modules.
 import { ChevronDown, LayoutPanelLeft } from "@lucide/vue";
 import type { SnapshotView } from "../../../shared/host-api";
-import { LAYOUT_TEMPLATES } from "../../../shared/layout-templates";
+import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "../../../shared/layout-templates";
+import { DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { act, confirmAction, prompt, state, submitAction, type MenuItem } from "../../host";
 import MenuButton from "../menus/MenuButton.vue";
+import TemplatePreview from "./TemplatePreview.vue";
 
 function saveAs() {
   prompt({
@@ -52,6 +54,11 @@ function snapshotItems(snapshot: SnapshotView): MenuItem[] {
   ];
 }
 
+/** Runs after the menu has closed, like the other menu entries. */
+function apply(templateId: LayoutTemplateId) {
+  setTimeout(() => void act({ type: "apply-layout-template", templateId }), 0);
+}
+
 function items(): MenuItem[] {
   const view = state.value!;
   return [
@@ -67,12 +74,6 @@ function items(): MenuItem[] {
       disabled: view.panels.length === 0,
       run: saveAs,
     },
-    ...LAYOUT_TEMPLATES.map((template, index) => ({
-      label: template.name,
-      testid: `layout-template-${template.id}`,
-      heading: index === 0 ? "Templates" : undefined,
-      run: () => act({ type: "apply-layout-template", templateId: template.id }),
-    })),
   ];
 }
 </script>
@@ -85,8 +86,25 @@ function items(): MenuItem[] {
     label="Saved layouts"
     side="bottom"
     align="end"
+    menu-class="w-80 max-w-80"
     class="flex h-8 w-auto gap-1.5 rounded-lg px-2.5 text-sm font-medium"
   >
     <LayoutPanelLeft class="size-4" :stroke-width="1.5" /> Layouts <ChevronDown class="size-3.5" :stroke-width="1.5" />
+    <template #after>
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel class="text-muted-foreground text-xs font-normal">Templates</DropdownMenuLabel>
+      <div class="grid grid-cols-3 gap-1 p-1 pt-0">
+        <DropdownMenuItem
+          v-for="template in LAYOUT_TEMPLATES"
+          :key="template.id"
+          class="group flex-col gap-1.5 px-1 py-2 text-xs"
+          :data-testid="`layout-template-${template.id}`"
+          @select="apply(template.id)"
+        >
+          <TemplatePreview :template="template" class="text-muted-foreground group-data-[highlighted]:text-primary h-8 w-12" />
+          <span class="w-full truncate text-center">{{ template.name }}</span>
+        </DropdownMenuItem>
+      </div>
+    </template>
   </MenuButton>
 </template>
