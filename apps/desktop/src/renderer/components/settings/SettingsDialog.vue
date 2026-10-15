@@ -112,6 +112,14 @@ const updateRow = computed(() => {
       : "Tavora checks for new versions by itself.";
   return { text, button: "Check now", busy: false, run: "check-for-updates" as const };
 });
+const copied = ref(false);
+async function copyDiagnostics() {
+  const result = await act({ type: "copy-diagnostics" });
+  if (!result.ok) return;
+  copied.value = true;
+  setTimeout(() => (copied.value = false), 2500);
+}
+
 function pressUpdateButton() {
   const run = updateRow.value.run;
   if (run) void act({ type: run });
@@ -308,6 +316,14 @@ function deleteNow(gameId: string, name: string) {
               :highlighted="highlight === 'backups'"
             >
               <Button variant="secondary" data-testid="open-backups" @click="submitAction({ type: 'open-backups' })">Open folder</Button>
+            </SettingRow>
+            <SettingRow
+              label="Diagnostic info"
+              description="Copies Tavora's version, your system, how long things took, the update log and the last errors, to paste to whoever is helping you. It holds no game names, notes or folders, and nothing is sent anywhere."
+              setting="diagnostics"
+              :highlighted="highlight === 'diagnostics'"
+            >
+              <Button variant="secondary" data-testid="copy-diagnostics" @click="copyDiagnostics">{{ copied ? 'Copied' : 'Copy' }}</Button>
             </SettingRow>
             <SettingRow
               label="Game icons from this PC and Steam"

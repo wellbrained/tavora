@@ -34,6 +34,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "restart":
     case "download-update":
     case "open-backups":
+    case "copy-diagnostics":
     case "check-for-updates":
     case "restart-to-update":
     case "reset-theme":
@@ -41,6 +42,10 @@ export function parseAction(raw: unknown): HostAction | null {
     case "open-themes-folder":
     case "create-starter-theme":
       return only() ? { type: a.type } : null;
+    case "record-timing":
+      return only("name", "ms") && a.name === "game-switch" && typeof a.ms === "number" && Number.isFinite(a.ms) && a.ms >= 0 && a.ms < 600_000
+        ? { type: a.type, name: a.name, ms: a.ms }
+        : null;
     case "set-theme":
       return only("themeId", "variationId", "fixed") && isModuleId(a.themeId) && isVariationId(a.variationId) && (a.fixed === undefined || typeof a.fixed === "boolean")
         ? { type: a.type, themeId: a.themeId, variationId: a.variationId, ...(a.fixed === undefined ? {} : { fixed: a.fixed }) }
