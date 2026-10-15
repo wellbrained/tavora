@@ -108,8 +108,8 @@ if (!app.requestSingleInstanceLock()) {
         devServer,
         // A packaged app only ever talks to api.mytavora.app.
         apiUrl: !app.isPackaged ? process.env.TAVORA_API_URL : undefined,
-        // Likewise, a packaged app only ever asks Steam for covers.
-        steamArt: !app.isPackaged ? process.env.TAVORA_STEAM_ART_URL : undefined,
+        // Likewise, a packaged app only ever uses Steam's own icon address.
+        steamIcons: !app.isPackaged ? process.env.TAVORA_STEAM_ICONS_URL : undefined,
       });
     })
     .catch((error: unknown) => {

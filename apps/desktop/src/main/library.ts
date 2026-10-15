@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { isGameId } from "@tavora/module-schema";
 import type { RootItem, RootSort, Startup } from "../shared/host-api";
 import { CATALOG, catalogGame } from "./catalog";
-import { isArtFileName, isSteamAppId, needsArt } from "./steam-art";
+import { isIconFileName, isSteamAppId, needsIcon } from "./steam-icons";
 
 export type { RootItem, RootSort, Startup };
 
@@ -22,12 +22,12 @@ export interface GameEntry {
   /** Display name. Renaming never changes the id. */
   name: string;
   icon: GameIcon;
-  /** The game's Steam application id, a hidden key used to fetch its cover; null when it has none. */
+  /** The game's Steam application id, a hidden key used to find its icon; null when it has none. */
   steamAppId: number | null;
-  /** The fetched Steam cover in the player's data folder, kept unchanged; null until fetched. */
-  artFile: string | null;
-  /** When Steam last had no cover for this game, so it is not asked again for a while. */
-  artCheckedAt: string | null;
+  /** The game's Steam icon (an .ico) in the player's data folder, kept unchanged; null until found. */
+  iconFile: string | null;
+  /** When Steam last had no icon for this game, so it is not asked again for a while. */
+  iconCheckedAt: string | null;
   showNews: boolean;
   addedAt: string;
   lastPlayedAt: string | null;
@@ -61,7 +61,7 @@ export interface Library {
   onlineSearch: boolean;
   /** New versions of Tavora download by themselves. Off means the player starts the download. */
   autoUpdate: boolean;
-  /** Game covers may be fetched from Steam on this PC. Off means the generated badge. */
+  /** Game icons may be taken from Steam on this PC. Off means the generated badge. */
   steamIcons: boolean;
   /** False until the first-run welcome was finished or skipped. */
   onboarded: boolean;
@@ -255,8 +255,8 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
     name,
     icon: { kind: "monogram", text: monogram(name) },
     steamAppId,
-    artFile: null,
-    artCheckedAt: null,
+    iconFile: null,
+    iconCheckedAt: null,
     showNews: true,
     addedAt: now.toISOString(),
     lastPlayedAt: null,
@@ -266,28 +266,28 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
   return id;
 }
 
-/** Live games that have a Steam id and no cover yet, and are due to be asked. */
-export function gamesNeedingArt(library: Library, now: Date): GameEntry[] {
-  return liveGames(library).filter((game) => needsArt(game, now));
+/** Live games that have a Steam id and no icon yet, and are due to be asked. */
+export function gamesNeedingIcon(library: Library, now: Date): GameEntry[] {
+  return liveGames(library).filter((game) => needsIcon(game, now));
 }
 
-/** Records the outcome of asking Steam for a cover: the saved file, or that Steam has none. */
-export function recordArt(library: Library, id: string, art: { file: string } | { none: Date }): void {
+/** Records the outcome of looking for a Steam icon: the saved file, or that Steam has none. */
+export function recordIcon(library: Library, id: string, outcome: { file: string } | { none: Date }): void {
   const game = library.games[id];
   if (!game || game.steamAppId === null) return;
-  if ("file" in art) {
-    if (art.file !== `${game.steamAppId}.jpg`) return;
-    game.artFile = art.file;
-    game.artCheckedAt = null;
+  if ("file" in outcome) {
+    if (outcome.file !== `${game.steamAppId}.ico`) return;
+    game.iconFile = outcome.file;
+    game.iconCheckedAt = null;
   } else {
-    game.artFile = null;
-    game.artCheckedAt = art.none.toISOString();
+    game.iconFile = null;
+    game.iconCheckedAt = outcome.none.toISOString();
   }
 }
 
-/** True when another game in the library uses this cover file. */
-export function artFileShared(library: Library, file: string, exceptId: string): boolean {
-  return Object.values(library.games).some((game) => game.id !== exceptId && game.artFile === file);
+/** True when another game in the library uses this icon file. */
+export function iconFileShared(library: Library, file: string, exceptId: string): boolean {
+  return Object.values(library.games).some((game) => game.id !== exceptId && game.iconFile === file);
 }
 
 function liveGame(library: Library, id: unknown): GameEntry {
@@ -469,7 +469,7 @@ export function sanitizeLibrary(raw: unknown): Library {
     if (!isGameId(game.id) || library.games[game.id]) continue;
     const name = typeof game.name === "string" && game.name.trim() ? game.name.trim().slice(0, MAX_NAME) : null;
     if (!name || typeof game.addedAt !== "string" || !ISO.test(game.addedAt)) continue;
-    // A game saved before covers existed gets its Steam id from the built-in list, if it is there.
+    // A game saved before Steam icons existed gets its Steam id from the built-in list, if it is there.
     const steamAppId = isSteamAppId(game.steamAppId) ? game.steamAppId : (catalogGame(game.id)?.steamAppId ?? null);
     library.games[game.id] = {
       id: game.id,
@@ -477,9 +477,9 @@ export function sanitizeLibrary(raw: unknown): Library {
       name,
       icon: sanitizeIcon(game.icon, name),
       steamAppId,
-      // The cover file is named after the Steam id, so a changed or forged name is dropped.
-      artFile: steamAppId !== null && isArtFileName(game.artFile) && game.artFile === `${steamAppId}.jpg` ? game.artFile : null,
-      artCheckedAt: typeof game.artCheckedAt === "string" && ISO.test(game.artCheckedAt) ? game.artCheckedAt : null,
+      // The icon file is named after the Steam id, so a changed or forged name is dropped.
+      iconFile: steamAppId !== null && isIconFileName(game.iconFile) && game.iconFile === `${steamAppId}.ico` ? game.iconFile : null,
+      iconCheckedAt: typeof game.iconCheckedAt === "string" && ISO.test(game.iconCheckedAt) ? game.iconCheckedAt : null,
       showNews: game.showNews !== false,
       addedAt: game.addedAt,
       lastPlayedAt: typeof game.lastPlayedAt === "string" && ISO.test(game.lastPlayedAt) ? game.lastPlayedAt : null,

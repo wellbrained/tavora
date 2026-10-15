@@ -20,11 +20,11 @@ export interface GameView {
   name: string;
   icon: IconView;
   /**
-   * The game's Steam cover, fetched on this PC (an address in the host's own
-   * protocol), or null. Shown only while the player has not picked an image
-   * and fetching is on; the host UI crops and styles it.
+   * The game's own Steam icon (an .ico kept on this PC, as an address in the
+   * host's own protocol), or null. Shown only while the player has not picked
+   * an image and the setting is on; the host UI sets it on a tile.
    */
-  art: string | null;
+  steamIcon: string | null;
   /** Picked from the built-in list rather than added by name. */
   builtIn: boolean;
   addedAt: string;
@@ -121,7 +121,7 @@ export interface HostViewState {
     onlineSearch: boolean;
     /** New versions of Tavora download by themselves (installed builds only). */
     autoUpdate: boolean;
-    /** Whether game covers may be fetched from Steam on this PC. */
+    /** Whether game icons may be taken from Steam on this PC. */
     steamIcons: boolean;
     /** False until the player finished or skipped the first-run welcome. */
     onboarded: boolean;

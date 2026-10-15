@@ -93,8 +93,8 @@ export async function launch(
     env: {
       ...process.env,
       TAVORA_USER_DATA: dir,
-      // Tests never fetch game covers from Steam.
-      TAVORA_STEAM_ART_URL: "off",
+      // Tests never look at the Steam client on this machine or ask Steam for icons.
+      TAVORA_STEAM_ICONS_URL: "off",
       // Set TAVORA_HIDDEN=0 to watch the windows while debugging a test.
       TAVORA_HIDDEN: process.env.TAVORA_HIDDEN ?? "1",
       TAVORA_MODULE_DIRS: [path.join(repoRoot, "examples"), FIXTURES, ...extraModuleDirs].join(path.delimiter),
