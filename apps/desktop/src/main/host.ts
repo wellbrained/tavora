@@ -114,7 +114,7 @@ export interface HostOptions {
   /**
    * Development and tests only: another place to ask for Steam icons than
    * Steam's own address, or "off" to look for none (tests never read the
-   * Steam client on the machine they run on). A packaged app only uses Steam.
+   * launchers or the Steam client on the machine they run on). A packaged app only uses Steam.
    */
   steamIcons?: string | undefined;
   /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
@@ -251,7 +251,7 @@ export class Host {
     host.registerWindowEvents();
     await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
     if (host.screen === "game") host.openCurrentGame();
-    // Steam icons of games that have none yet are looked for quietly in the background.
+    // Icons of games that have none yet are looked for quietly in the background.
     host.fetchIconsSoon();
     await host.startUpdates();
     return host;
@@ -567,7 +567,7 @@ export class Host {
   private iconsRunning = false;
   private iconsAgain = false;
 
-  /** Looks for Steam icons unless that is already going on, off, or switched off for this run. */
+  /** Looks for game icons unless that is already going on, off, or switched off for this run. */
   private fetchIconsSoon(): void {
     if (!this.library.steamIcons || this.options.steamIcons === "off") return;
     if (this.iconsRunning) {
@@ -586,9 +586,9 @@ export class Host {
   }
 
   /**
-   * Finds, one game at a time, the Steam icon of every game that has a Steam
-   * id and none yet: the hash comes from the Steam client on this PC, the file
-   * from there or from Steam's public address. This app does it itself:
+   * Finds, one game at a time, the icon of every game that has none yet: from
+   * the installed game itself, then from the Steam client on this PC (or Steam's
+   * public address), then Steam's small public icon. This app does it itself:
    * Tavora's service is never involved. Quiet on purpose: a failure is tried
    * again at the next start or the next added game, and nothing is shown.
    */

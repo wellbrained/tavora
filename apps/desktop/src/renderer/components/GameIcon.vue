@@ -7,7 +7,7 @@ const props = withDefaults(defineProps<{ game: GameView; size?: number }>(), { s
 
 // Tone and pattern come from the id, so a game keeps its look when renamed.
 const look = computed(() => gameBadgeLook(props.game.id));
-// An image the player picked always wins; then the game's own Steam icon; then the badge.
+// An image the player picked always wins; then the game's own icon (from the installed game or Steam); then the badge.
 const steamIcon = computed(() => (props.game.icon.kind === "monogram" ? props.game.steamIcon : null));
 // An icon that cannot be shown falls back to the badge instead of a broken image.
 const iconFailed = ref(false);
