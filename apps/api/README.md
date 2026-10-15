@@ -65,7 +65,7 @@ Commit `data/icons` and deploy with `scripts/Deploy-Api.ps1`. **A takedown reque
 Offers wait in the state file until a person approves them. The review page is a second, private listener (`ADMIN_PORT`, 127.0.0.1 only, never forwarded by Caddy) and every call needs the `ADMIN_TOKEN` in an `X-Admin-Token` header, so reaching it takes the server and the token.
 
 ```powershell
-ssh -t root@100.64.0.1 tavora-api-set-setting admin-token   # once: prints a token, save it
+ssh root@100.64.0.1 tavora-api-set-setting admin-token      # once: prints a token, save it (done 2026-10-15: D:\Server\tavora-icon-admin-token.txt)
 apps\api\scripts\Open-IconReview.ps1                           # opens an SSH tunnel and the page
 ```
 
