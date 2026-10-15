@@ -148,7 +148,7 @@ describe("DiscordConnection", () => {
     await until(() => connection.view().call?.id === "10");
     fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "30", name: null, voice_states: [person("1", "Brain"), person("5", "Kira")] } }));
     fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: "30" });
-    await until(() => connection.view().call?.id === "30");
+    await until(() => connection.view().call?.id === "30" && connection.view().server === null);
     expect(connection.view()).toMatchObject({ server: null, channels: [], call: { name: "Call" } });
     expect(fake.commands).toContainEqual({ cmd: "UNSUBSCRIBE", args: { channel_id: "10" }, evt: "SPEAKING_START" });
 
@@ -191,7 +191,7 @@ describe("DiscordConnection", () => {
     // A call without a server is not remembered, and Sign out forgets it.
     fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "30", name: null, voice_states: [person("1", "Brain")] } }));
     fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: "30" });
-    await until(() => connection.view().call?.id === "30");
+    await until(() => connection.view().call?.id === "30" && connection.view().server === null);
     expect(connection.view().last?.channelId).toBe("10");
     await connection.signOut();
     expect(connection.view().last).toBeNull();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
-import { checkRelease, compareVersions, lastReleased } from "./release-guards.mjs";
+import { CHECKLIST, checkCi, checkRelease, compareVersions, lastReleased } from "./release-guards.mjs";
 
 const ready = { branch: "main", dirty: false, ahead: 0, behind: 0, tags: [] as string[], noteVersions: ["0.4.0"] };
 
@@ -75,5 +75,31 @@ describe("checkRelease", () => {
 
   it("rejects a version that is not major.minor.patch", () => {
     expect(checkRelease("0.4.0-rc.1", ready)[0]).toContain("not major.minor.patch");
+  });
+});
+
+describe("checkCi", () => {
+  const SHA = "4c52cdd48cb60e8499bef9ec49c57fe8858c95b5";
+  const run = (status: string, conclusion: string | null, createdAt: string, headSha = SHA) => ({ status, conclusion, headSha, createdAt });
+
+  it("passes when the newest run for the commit finished green", () => {
+    expect(checkCi([run("completed", "success", "2026-10-16T10:00:00Z")], SHA)).toEqual([]);
+  });
+
+  it("goes by the newest run: a green rerun fixes a red one, a red one after green does not", () => {
+    expect(checkCi([run("completed", "failure", "2026-10-16T10:00:00Z"), run("completed", "success", "2026-10-16T10:05:00Z")], SHA)).toEqual([]);
+    expect(checkCi([run("completed", "success", "2026-10-16T10:00:00Z"), run("completed", "failure", "2026-10-16T10:05:00Z")], SHA)[0]).toContain("failure");
+  });
+
+  it("waits for runs that are not done and for commits GitHub has not seen", () => {
+    expect(checkCi([run("in_progress", null, "2026-10-16T10:00:00Z")], SHA)[0]).toContain("in_progress");
+    expect(checkCi([run("completed", "success", "2026-10-16T10:00:00Z", "other")], SHA)[0]).toContain("no Checks run");
+    expect(checkCi([], SHA)).toHaveLength(1);
+  });
+});
+
+describe("CHECKLIST", () => {
+  it("has the four by-hand checks that can be made before publishing", () => {
+    expect(CHECKLIST).toHaveLength(4);
   });
 });
