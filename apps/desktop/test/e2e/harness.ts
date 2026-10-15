@@ -78,12 +78,14 @@ export interface LaunchOptions {
   systemTheme?: "dark" | "light";
   /** More command line switches for Chromium, e.g. host resolver rules. */
   args?: string[];
+  /** More environment variables, e.g. a pretend Discord app. */
+  env?: Record<string, string>;
 }
 
 export async function launch(
   userData?: string,
   extraModuleDirs: string[] = [],
-  { seed = true, systemTheme, args = [] }: LaunchOptions = {},
+  { seed = true, systemTheme, args = [], env = {} }: LaunchOptions = {},
 ): Promise<Running> {
   const dir = userData ?? (await newUserData());
   const libraryFile = path.join(dir, "library.json");
@@ -104,6 +106,7 @@ export async function launch(
       // The system is pretended to be dark, so the theme tests do not depend on the PC they run on.
       TAVORA_SYSTEM_THEME: systemTheme ?? process.env.TAVORA_SYSTEM_THEME ?? "dark",
       TAVORA_MODULE_DIRS: [path.join(repoRoot, "examples"), FIXTURES, ...extraModuleDirs].join(path.delimiter),
+      ...env,
     },
   });
   const page = await app.firstWindow();

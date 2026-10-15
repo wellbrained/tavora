@@ -1,4 +1,4 @@
-import { Blocks, Globe, Keyboard, Palette, SlidersHorizontal, Trash2 } from "@lucide/vue";
+import { Blocks, Globe, Headphones, Keyboard, Palette, SlidersHorizontal, Trash2 } from "@lucide/vue";
 
 // The section menu, in groups. New settings get a row in a section, or a
 // new section here, rather than a longer page.
@@ -10,6 +10,7 @@ export const GROUPS = [
       { id: "appearance", label: "Appearance", icon: Palette },
       { id: "modules", label: "Modules", icon: Blocks },
       { id: "browser", label: "Browser", icon: Globe },
+      { id: "discord", label: "Discord", icon: Headphones },
       { id: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard },
     ],
   },
@@ -206,6 +207,20 @@ export const SETTINGS: SettingEntry[] = [
     label: "Clear shared browser data",
     description: "Signs you out of the sites signed in for all games and deletes their cookies, site data and cache.",
     keywords: ["browser", "cookies", "cache", "sign out", "logout", "clear", "delete", "privacy", "shared"],
+  },
+  {
+    id: "discord-connection",
+    section: "discord",
+    label: "Discord connection",
+    description: "Connects the Discord panel to the Discord app on this PC, or signs Tavora out of Discord.",
+    keywords: ["discord", "voice", "channel", "call", "connect", "sign out", "logout", "talking", "speaking"],
+  },
+  {
+    id: "discord-secret",
+    section: "discord",
+    label: "Client Secret",
+    description: "The secret of Tavora's Discord application, kept encrypted on this PC.",
+    keywords: ["discord", "secret", "client", "developer", "application", "token", "key"],
   },
   {
     id: "shortcuts",

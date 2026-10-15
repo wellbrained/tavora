@@ -86,6 +86,52 @@ export interface BrowserState {
   downloadsRefused: number;
 }
 
+/** Someone in a Discord voice channel, as the Discord panel shows them. Names come from Discord and are shown as text only. */
+export interface DiscordMember {
+  id: string;
+  name: string;
+  /** Their Discord picture as a data address, or null until it is loaded (or when they have none). */
+  avatar: string | null;
+  speaking: boolean;
+  selfMute: boolean;
+  selfDeaf: boolean;
+  /** Muted or deafened by a moderator. */
+  serverMute: boolean;
+  serverDeaf: boolean;
+}
+
+export interface DiscordChannel {
+  id: string;
+  name: string;
+  members: DiscordMember[];
+}
+
+/**
+ * off: no Discord panel is open. no-secret: Settings has no Client Secret yet.
+ * signed-out: Tavora was never approved, or the player signed out. not-running:
+ * the Discord app was not found (Tavora keeps looking). approving: Discord shows
+ * its pop-up. error: `error` says what went wrong.
+ */
+export type DiscordStatus = "off" | "no-secret" | "signed-out" | "connecting" | "not-running" | "approving" | "connected" | "error";
+
+/** The Discord panel and Settings > Discord. Sent on its own channel, because speaking changes often. */
+export interface DiscordView {
+  status: DiscordStatus;
+  error: string | null;
+  /** A Client Secret is saved (it is never sent to the host UI). */
+  secretSaved: boolean;
+  /** False where this PC can't encrypt secrets, so none can be saved. */
+  canSaveSecret: boolean;
+  /** Who Tavora is signed in to Discord as. */
+  user: { id: string; name: string } | null;
+  /** The server of the voice channel the player is in; null in a direct or group call. */
+  server: { id: string; name: string; icon: string | null } | null;
+  /** The voice channel or call the player is in, or null. */
+  call: DiscordChannel | null;
+  /** The server's other voice channels, in Discord's order. */
+  others: DiscordChannel[];
+}
+
 /** Toolbar buttons of a Browser panel. */
 export type BrowserCommand = "back" | "forward" | "reload" | "stop" | "open-external" | "mute" | "unmute" | "exit-fullscreen";
 
@@ -337,6 +383,12 @@ export type HostAction =
   | { type: "browser-forget-site"; list: "shared" | "adblock-off"; site: string }
   /** Deletes cookies, logins and caches: the current game's, or the ones shared by all games. */
   | { type: "clear-browser-data"; scope: "game" | "shared" }
+  /** Saves the Discord application's Client Secret on this PC, encrypted; null removes it and signs out. */
+  | { type: "discord-set-secret"; secret: string | null }
+  /** Connects to the Discord app, asking for approval in Discord if Tavora was never approved. */
+  | { type: "discord-connect" }
+  /** Forgets Tavora's Discord sign-in on this PC. */
+  | { type: "discord-sign-out" }
   /** Null when nothing is docked any more. */
   | { type: "save-layout"; layout: SavedLayout | null }
   /** Rearranges the workspace into empty slots of a layout template; open panels fill the first ones. */
@@ -409,6 +461,8 @@ export interface TavoraHostApi {
   onFrozen(listener: (images: Record<string, string>) => void): void;
   /** Tavora-wide keyboard shortcuts, also when a module panel has focus. */
   onShortcut(listener: (shortcut: HostShortcut) => void): void;
+  getDiscord(): Promise<DiscordView | null>;
+  onDiscord(listener: (view: DiscordView) => void): void;
 }
 
 /** `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). */
