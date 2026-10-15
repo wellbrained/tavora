@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.21",
+    date: "2026-10-16",
+    title: "Your own module icons",
+    notes: [
+      "A module can bring its own icon (the icon line in its tavora.module.json, a PNG or WebP). It shows on the panel tab, in Add module and in Settings > Modules.",
+      "Modules without an icon show a puzzle piece instead of a letter.",
+    ],
+  },
+  {
     version: "0.5.20",
     date: "2026-10-16",
     title: "Discord panel: a steady channel order and a smaller header",

@@ -1608,6 +1608,7 @@ export class Host {
         version: module.manifest.version,
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
+        icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null,
       })),
       moduleProblems: this.moduleProblems.map((problem) => ({ ...problem })),
       panels: workspace.instances.map((record) => {
