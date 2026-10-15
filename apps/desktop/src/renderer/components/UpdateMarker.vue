@@ -6,6 +6,7 @@ import { ArrowDownToLine, Loader, RefreshCw } from "@lucide/vue";
 import { computed } from "vue";
 import { cn } from "@/lib/utils";
 import { act, state } from "../host";
+import { t } from "../i18n";
 
 defineProps<{ expanded: boolean }>();
 
@@ -15,9 +16,9 @@ const visible = computed(() => !["idle", "checking"].includes(update.value.statu
 
 const label = computed(() => {
   const u = update.value;
-  if (u.status === "ready") return `Restart to update to ${u.version}`;
-  if (u.status === "available") return `Download update ${u.version}`;
-  if (u.status === "downloading") return `Downloading ${u.version}…`;
+  if (u.status === "ready") return t("update.marker.ready", { version: u.version });
+  if (u.status === "available") return t("update.marker.available", { version: u.version });
+  if (u.status === "downloading") return t("update.marker.downloading", { version: u.version });
   return "";
 });
 

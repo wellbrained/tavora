@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import type { CatalogMatch, GameView, OnlineGame } from "../../shared/host-api";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import { act, api, dialog, openSettings, searchOpen, state } from "../host";
+import { t, templateName } from "../i18n";
 
 import GameIcon from "./GameIcon.vue";
 import { sectionLabel, settingEntries } from "./settings/settings-index";
@@ -27,9 +28,17 @@ interface Item {
 }
 
 interface Group {
+  id: "games" | "game" | "actions" | "settings" | "add";
   label: string;
   items: Item[];
 }
+
+/** A comma-separated list from the locale files as search words. */
+const splitWords = (text: string) =>
+  text
+    .split(",")
+    .map((word) => word.trim())
+    .filter(Boolean);
 
 const query = ref("");
 const active = ref(0);
@@ -82,8 +91,8 @@ const addItems = computed<Item[]>(() => {
   ];
   return rows.slice(0, MAX_ADD_ITEMS).map((row) => ({
     id: `add-game-${row.id}`,
-    label: `Add ${row.name}`,
-    hint: "New game",
+    label: t("search.add", { name: row.name }),
+    hint: t("search.newGame"),
     icon: Plus,
     run: close(() => addAndOpen(row.input)),
   }));
@@ -111,13 +120,14 @@ const gamesInOrder = computed(() => {
 const groups = computed<Group[]>(() => {
   const all: Group[] = [
     {
-      label: "Games",
+      id: "games",
+      label: t("common.games"),
       items: [
-        { id: "home", label: "Home", keywords: ["welcome", "start"], icon: Home, run: close(() => act({ type: "show-welcome" })) },
+        { id: "home", label: t("rail.home"), keywords: splitWords(t("search.homeKeywords")), icon: Home, run: close(() => act({ type: "show-welcome" })) },
         ...gamesInOrder.value.map((game) => ({
           id: `game-${game.id}`,
           label: game.name,
-          hint: game.id === currentGame.value?.id ? "Open now" : undefined,
+          hint: game.id === currentGame.value?.id ? t("search.openNow") : undefined,
           game,
           run: close(() => act({ type: "open-game", gameId: game.id })),
         })),
@@ -126,31 +136,32 @@ const groups = computed<Group[]>(() => {
   ];
   if (currentGame.value) {
     all.push({
-      label: `In ${currentGame.value.name}`,
+      id: "game",
+      label: t("search.group.in", { name: currentGame.value.name }),
       items: [
         ...view.value.modules
           .filter((module) => module.available)
           .map((module) => ({
             id: `module-${module.id}`,
-            label: `Open ${module.name}`,
-            hint: "Module",
-            keywords: [module.name, module.description ?? "", "panel"],
+            label: t("search.openModule", { name: module.name }),
+            hint: t("search.module"),
+            keywords: [module.name, module.description ?? "", ...splitWords(t("search.moduleKeywords"))],
             icon: Blocks,
             run: close(() => act({ type: "open-module", moduleId: module.id })),
           })),
         ...view.value.snapshots.map((snapshot) => ({
           id: `layout-${snapshot.id}`,
-          label: `Use layout ${snapshot.name}`,
-          hint: "Layout",
-          keywords: ["snapshot", "saved layout"],
+          label: t("search.useLayout", { name: snapshot.name }),
+          hint: t("search.layout"),
+          keywords: splitWords(t("search.layoutKeywords")),
           icon: LayoutPanelLeft,
           run: close(() => act({ type: "apply-snapshot", snapshotId: snapshot.id })),
         })),
         ...LAYOUT_TEMPLATES.map((template) => ({
           id: `layout-template-${template.id}`,
-          label: `Use template ${template.name}`,
-          hint: "Layout",
-          keywords: ["layout", "template", "empty", "split"],
+          label: t("search.useTemplate", { name: templateName(template) }),
+          hint: t("search.layout"),
+          keywords: splitWords(t("search.templateKeywords")),
           icon: LayoutPanelLeft,
           run: close(() => act({ type: "apply-layout-template", templateId: template.id })),
         })),
@@ -159,21 +170,23 @@ const groups = computed<Group[]>(() => {
   }
   const expanded = library.value.rail.expanded;
   all.push({
-    label: "Actions",
+    id: "actions",
+    label: t("search.group.actions"),
     items: [
-      { id: "add-game", label: "Add game", keywords: ["new game"], icon: Plus, run: close(() => (dialog.value = { kind: "add-game" })) },
-      { id: "settings", label: "Settings", keywords: ["preferences", "options"], icon: Settings, run: close(() => openSettings()) },
+      { id: "add-game", label: t("common.addGame"), keywords: splitWords(t("search.addGameKeywords")), icon: Plus, run: close(() => (dialog.value = { kind: "add-game" })) },
+      { id: "settings", label: t("rail.settings"), keywords: splitWords(t("search.settingsKeywords")), icon: Settings, run: close(() => openSettings()) },
       {
         id: "toggle-rail",
-        label: expanded ? "Collapse game list" : "Expand game list",
-        keywords: ["rail", "sidebar"],
+        label: expanded ? t("rail.collapse") : t("rail.expand"),
+        keywords: splitWords(t("search.railKeywords")),
         icon: expanded ? PanelLeftClose : PanelLeftOpen,
         run: close(() => act({ type: "set-rail", expanded: !expanded })),
       },
     ],
   });
   all.push({
-    label: "Settings",
+    id: "settings",
+    label: t("rail.settings"),
     items: settingEntries().map((setting) => ({
       id: `setting-${setting.id}`,
       label: setting.label,
@@ -190,12 +203,12 @@ const groups = computed<Group[]>(() => {
 // Settings only show up once something is typed.
 const shown = computed<Group[]>(() => {
   const text = query.value.trim();
-  if (!text) return groups.value.filter((group) => group.label !== "Settings");
+  if (!text) return groups.value.filter((group) => group.id !== "settings");
   const ranked = groups.value
     .map((group) => ({ ...group, items: rank(group.items, text, (item) => ({ name: item.label, extra: item.keywords })) }))
     .filter((group) => group.items.length > 0);
   // Already ranked by the search itself, and placed after the player's own games.
-  if (addItems.value.length) ranked.splice(ranked[0]?.label === "Games" ? 1 : 0, 0, { label: "Add a game", items: addItems.value });
+  if (addItems.value.length) ranked.splice(ranked[0]?.id === "games" ? 1 : 0, 0, { id: "add", label: t("addGame.title"), items: addItems.value });
   return ranked;
 });
 
@@ -232,16 +245,16 @@ function onKey(event: KeyboardEvent) {
       data-testid="search"
       :show-close-button="false"
     >
-      <DialogTitle class="sr-only">Search Tavora</DialogTitle>
-      <DialogDescription class="sr-only">Find a game, module, layout, action or setting.</DialogDescription>
+      <DialogTitle class="sr-only">{{ t("search.title") }}</DialogTitle>
+      <DialogDescription class="sr-only">{{ t("search.description") }}</DialogDescription>
       <div class="relative border-b">
         <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2" :stroke-width="1.5" />
         <input
           v-model="query"
           class="placeholder:text-muted-foreground h-14 w-full bg-transparent pr-4 pl-12 text-base focus-visible:outline-none"
-          placeholder="Search games, modules, layouts and settings"
+          :placeholder="t('search.placeholder')"
           role="combobox"
-          aria-label="Search Tavora"
+          :aria-label="t('search.title')"
           aria-expanded="true"
           aria-controls="search-results"
           aria-autocomplete="list"
@@ -254,9 +267,9 @@ function onKey(event: KeyboardEvent) {
         />
       </div>
 
-      <div id="search-results" ref="list" class="max-h-[min(420px,60vh)] overflow-y-auto p-2" role="listbox" aria-label="Results">
-        <p v-if="!flat.length" class="text-muted-foreground px-3 py-6 text-center" data-testid="search-empty">Nothing matches "{{ query.trim() }}".</p>
-        <div v-for="group in shown" :key="group.label" role="group" :aria-label="group.label" class="pb-1">
+      <div id="search-results" ref="list" class="max-h-[min(420px,60vh)] overflow-y-auto p-2" role="listbox" :aria-label="t('search.results')">
+        <p v-if="!flat.length" class="text-muted-foreground px-3 py-6 text-center" data-testid="search-empty">{{ t("search.empty", { query: query.trim() }) }}</p>
+        <div v-for="group in shown" :key="group.id" role="group" :aria-label="group.label" class="pb-1">
           <div class="text-muted-foreground px-3 pt-2 pb-1 text-xs font-medium" aria-hidden="true">{{ group.label }}</div>
           <div
             v-for="item in group.items"
@@ -278,9 +291,9 @@ function onKey(event: KeyboardEvent) {
       </div>
 
       <div class="text-muted-foreground flex gap-4 border-t px-4 py-2 text-xs" aria-hidden="true">
-        <span><kbd class="font-sans">↑</kbd> <kbd class="font-sans">↓</kbd> to move</span>
-        <span><kbd class="font-sans">Enter</kbd> to open</span>
-        <span><kbd class="font-sans">Esc</kbd> to close</span>
+        <span><kbd class="font-sans">↑</kbd> <kbd class="font-sans">↓</kbd> {{ t("search.hint.move") }}</span>
+        <span><kbd class="font-sans">{{ t("search.key.enter") }}</kbd> {{ t("search.hint.open") }}</span>
+        <span><kbd class="font-sans">{{ t("search.key.esc") }}</kbd> {{ t("search.hint.close") }}</span>
       </div>
     </DialogContent>
   </Dialog>

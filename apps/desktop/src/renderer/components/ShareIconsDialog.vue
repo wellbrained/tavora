@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import type { GameView } from "../../shared/host-api";
 import { act, dialog, showToast, state, type ShareIconsRequest } from "../host";
+import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
 const props = defineProps<{ request: ShareIconsRequest }>();
@@ -38,22 +39,20 @@ async function share() {
   }
   dialog.value = null;
   showToast(
-    result.shared
-      ? "Thank you. A person at Tavora checks each icon before anyone else sees it."
-      : "Tavora does not need those icons right now.",
+    result.shared ? t("shareIcons.thanks") : t("shareIcons.nothingNeeded"),
   );
 }
 </script>
 
 <template>
   <ModalDialog
-    title="Share icons with Tavora"
-    description="Tavora does not have these games' icons yet. Share the icon your PC has, so other players can see it too."
+    :title="t('shareIcons.title')"
+    :description="t('shareIcons.description')"
     testid="share-icons-dialog"
     class="sm:max-w-[460px]"
     @close="dialog = null"
   >
-    <ul v-if="games.length" class="-mx-2 max-h-[280px] overflow-y-auto" aria-label="Games with an icon to share">
+    <ul v-if="games.length" class="-mx-2 max-h-[280px] overflow-y-auto" :aria-label="t('shareIcons.list')">
       <li v-for="game in games" :key="game.id">
         <label class="hover:bg-accent flex cursor-pointer items-center gap-3 rounded-md px-2 py-2">
           <input
@@ -70,18 +69,17 @@ async function share() {
       </li>
     </ul>
     <p v-else class="text-muted-foreground text-sm" data-testid="share-icons-empty">
-      There is nothing to share right now. Games whose own icon Tavora already has, or that have none on this PC, are not listed.
+      {{ t("shareIcons.empty") }}
     </p>
 
     <p class="text-muted-foreground text-xs leading-relaxed">
-      Only the icon file, the game's id and its name are sent. Nothing that identifies you. A person at Tavora checks every
-      icon before anyone else sees it. Game names and icons belong to their publishers; Tavora is not affiliated with them.
+      {{ t("shareIcons.notice") }}
     </p>
     <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="share-icons-error">{{ error }}</p>
     <div class="flex justify-end gap-2">
-      <Button type="button" variant="secondary" @click="dialog = null">Cancel</Button>
+      <Button type="button" variant="secondary" @click="dialog = null">{{ t("common.cancel") }}</Button>
       <Button type="button" data-testid="share-icons-submit" :disabled="busy || count === 0" @click="share">
-        {{ count > 1 ? `Share ${count} icons` : "Share icon" }}
+        {{ t("shareIcons.submit", { count: Math.max(count, 1) }) }}
       </Button>
     </div>
   </ModalDialog>

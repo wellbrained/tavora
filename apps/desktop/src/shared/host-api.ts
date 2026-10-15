@@ -77,8 +77,8 @@ export interface BrowserState {
   adblock: boolean;
   /** Ads and trackers blocked on this page. */
   blocked: number;
-  /** Why the page is not shown, or null. */
-  error: string | null;
+  /** Why the page is not shown, or null; the host UI words it. */
+  error: BrowserError | null;
   /** A video or other element fills the page view. */
   fullscreen: boolean;
   audible: boolean;
@@ -359,6 +359,12 @@ export type ActionResult = { ok: true; id?: string; shared?: number; added?: num
 export interface CatalogMatch {
   id: string;
   name: string;
+}
+
+/** Why a Browser panel's page is not shown: `detail` is what the engine said, for the "unknown" kind. */
+export interface BrowserError {
+  kind: "cert" | "notFound" | "offline" | "noAnswer" | "badAddress" | "unknown" | "crashed";
+  detail: string;
 }
 
 /** A game from the Tavora service. `id` is its canonical id. */
