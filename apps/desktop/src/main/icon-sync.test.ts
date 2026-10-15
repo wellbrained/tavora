@@ -483,3 +483,42 @@ describe("syncIcons: an icon saved with frames that disagree with their entries"
     expect(new Uint8Array(await readFile(path.join(icons, "exe-elden-ring.ico")))).toEqual(ICON);
   });
 });
+
+describe("syncIcons: the small icon in Steam's library cache", () => {
+  const cacheDir = () => path.join(steam, "appcache", "librarycache", "1145350");
+  const BIGGER = Uint8Array.from({ length: 900 }, (_, i) => (i === 0 ? 0xff : i === 1 ? 0xd8 : i === 2 ? 0xff : i % 249));
+
+  it("takes it from this PC when Steam's public address does not have it, asking the network for nothing", async () => {
+    await mkdir(cacheDir(), { recursive: true });
+    await writeFile(path.join(cacheDir(), `${hashOf("p")}.jpg`), BIGGER);
+    await writeFile(path.join(cacheDir(), `${hashOf("c")}.jpg`), JPEG);
+    await writeFile(path.join(cacheDir(), "logo.png"), "not an icon");
+    const library = libraryWith("hades-2");
+    const net = fakeSteam({});
+    expect(await run(library, net).done).toBe(1);
+    expect(net.asked).toEqual([]);
+    expect(library.games["hades-2"]!.iconFile).toBe("1145350.jpg");
+    expect(new Uint8Array(await readFile(path.join(icons, "1145350.jpg")))).toEqual(JPEG);
+  });
+
+  it("replaces the icon of a Steam game's program with it, but leaves a launcher's own icon alone", async () => {
+    await mkdir(cacheDir(), { recursive: true });
+    await writeFile(path.join(cacheDir(), `${hashOf("c")}.jpg`), JPEG);
+    await mkdir(icons, { recursive: true });
+    await writeFile(path.join(icons, "exe-hades-2.ico"), ICON);
+    await writeFile(path.join(icons, "exe-elden-ring.ico"), ICON);
+    const library = libraryWith("hades-2", "elden-ring");
+    recordIcon(library, "hades-2", { file: "exe-hades-2.ico" });
+    recordIcon(library, "elden-ring", { file: "exe-elden-ring.ico" });
+    const job = run(library, fakeSteam({}), {
+      installedGames: async () => [
+        { source: "steam", name: "Hades II", file: "G:/h2.exe", index: 0, steamAppId: 1145350 },
+        { source: "battlenet", name: "Elden Ring", file: "G:/er.exe", index: 0 },
+      ],
+    });
+    await job.done;
+    expect(library.games["hades-2"]!.iconFile).toBe("1145350.jpg");
+    expect(library.games["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
+    expect((await readdir(icons)).sort()).toEqual(["1145350.jpg", "exe-elden-ring.ico"]);
+  });
+});

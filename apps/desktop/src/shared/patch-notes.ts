@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.32",
+    date: "2026-10-16",
+    title: "Steam's own icon for more games",
+    notes: [
+      "A Steam game takes the small icon Steam keeps on your PC (Battlefield 6's soldiers, for example) when Steam's website does not have it.",
+      "A Steam game that was showing the picture of its program switches to Steam's icon on the next start.",
+    ],
+  },
+  {
     version: "0.5.31",
     date: "2026-10-16",
     title: "Behind the scenes",
