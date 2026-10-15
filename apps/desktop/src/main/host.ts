@@ -22,7 +22,8 @@ import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { ActionResult, AppearanceView, GameView, HostAction, HostViewState, OnlineSearchResult, Screen } from "../shared/host-api";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
-import { LAYOUT_LIMITS, layoutPanels, pruneLayout, type SavedLayout } from "./layout";
+import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, type SavedLayout } from "./layout";
+import { layoutTemplate } from "../shared/layout-templates";
 import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, orphanedPartitions } from "./gamedata";
@@ -703,6 +704,8 @@ export class Host {
         return this.views.get(action.instanceId)?.stop();
       case "save-layout":
         return this.saveLayout(action.layout);
+      case "apply-layout-template":
+        return this.applyLayoutTemplate(action.templateId);
       case "save-snapshot":
         return this.saveSnapshot(action.name);
       case "update-snapshot":
@@ -952,10 +955,22 @@ export class Host {
     return this.gameWorkspace(game.id);
   }
 
-  private saveLayout(layout: SavedLayout): void {
+  private saveLayout(layout: SavedLayout | null): void {
     const workspace = this.currentWorkspace();
     const open = new Set(workspace.instances.map((record) => record.instanceId));
     workspace.layout = pruneLayout(layout, (id) => open.has(id));
+    this.saveWorkspace();
+  }
+
+  /** Rearranges the open panels into a template's slots, in the order they are laid out now. */
+  private applyLayoutTemplate(templateId: string): void {
+    const template = layoutTemplate(templateId);
+    if (!template) throw new WorkspaceError("That layout template no longer exists.");
+    const workspace = this.currentWorkspace();
+    const laidOut = layoutPanels(workspace.layout);
+    const rest = workspace.instances.map((record) => record.instanceId).filter((id) => !laidOut.includes(id));
+    workspace.layout = templateLayout(template, [...laidOut, ...rest]);
+    this.layoutEpoch++;
     this.saveWorkspace();
   }
 

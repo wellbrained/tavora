@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The module library: every installed module, to open in the current game.
 import { computed, ref } from "vue";
-import { act, dialog, state } from "../host";
+import { act, dialog, nextPanelSlot, state, type AddModuleRequest } from "../host";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -49,6 +49,7 @@ function openCount(moduleId: string): number {
 }
 
 function add(moduleId: string) {
+  nextPanelSlot.value = (dialog.value as AddModuleRequest).slot ?? null;
   dialog.value = null;
   void act({ type: "open-module", moduleId });
 }

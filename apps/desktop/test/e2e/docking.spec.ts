@@ -117,10 +117,17 @@ test("a tab dragged to the edge of another group splits it", async () => {
   await tab.dispatchEvent("dragstart", { dataTransfer });
   // Module views are hidden during the drag, so the drop zones can be seen and used.
   await expect(page.locator("[data-testid^='panel-content-'] img").first()).toBeAttached();
-  await content.dispatchEvent("dragenter", at);
+  // The drop guide shows over the group; aiming at its middle cell means a tab, at its right cell a split.
+  const centre = { dataTransfer, clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
+  await content.dispatchEvent("dragenter", centre);
+  await content.dispatchEvent("dragover", centre);
+  await expect(page.getByTestId("drop-guide")).toHaveAttribute("data-position", "center");
+  await content.dispatchEvent("dragover", { ...centre, clientX: centre.clientX + 46 });
+  await expect(page.getByTestId("drop-guide")).toHaveAttribute("data-position", "right");
   await content.dispatchEvent("dragover", at);
   await content.dispatchEvent("drop", at);
   await tab.dispatchEvent("dragend", { dataTransfer });
+  await expect(page.getByTestId("drop-guide")).toHaveCount(0);
   await expect(groups(page)).toHaveCount(2);
   const left = (await panels(page, VANILLA).boundingBox())!;
   const right = (await panels(page, REACT).boundingBox())!;
@@ -180,4 +187,47 @@ test("named layouts are saved, applied, renamed and deleted", async () => {
   // Deleting a layout leaves the open panels alone.
   await expect(panels(again.page)).toHaveCount(2);
   await again.app.close();
+});
+
+test("a template lays out empty slots that modules fill, and is kept", async () => {
+  const { app, page, userData } = await launch();
+  const slots = page.locator("[data-testid^='empty-slot-']");
+  await page.getByTestId("layouts").click();
+  await page.locator('[role="menu"][data-state="open"] [data-testid="layout-template-three-columns"]').click();
+  await expect(groups(page)).toHaveCount(3);
+  await expect(slots).toHaveCount(3);
+  await expect(page.getByTestId("empty-workspace")).toHaveCount(0);
+
+  // A slot's own button fills that slot.
+  await slots.nth(1).getByTestId("slot-add-module").click();
+  await page.getByTestId(`open-${VANILLA}`).click();
+  await expect(groups(page).nth(1).locator(`[data-panel-tab][data-module-id="${VANILLA}"]`)).toHaveCount(1);
+  await expect(slots).toHaveCount(2);
+  // Add module in the toolbar fills the next empty slot instead of splitting.
+  await openModule(page, REACT);
+  await expect(groups(page)).toHaveCount(3);
+  await expect(slots).toHaveCount(1);
+  await expectModuleText(app, VANILLA, "status", "Connected");
+
+  await slots.first().getByTestId("slot-remove").click();
+  await expect(slots).toHaveCount(0);
+  await expect(groups(page)).toHaveCount(2);
+  await page.waitForTimeout(500); // the layout is saved once it has been still briefly
+  await app.close();
+
+  // Applying a template to open panels fills its first slots with them, and empty slots are kept.
+  const again = await launch(userData);
+  await expect(groups(again.page)).toHaveCount(2);
+  await again.page.getByTestId("layouts").click();
+  await again.page.locator('[role="menu"][data-state="open"] [data-testid="layout-template-grid"]').click();
+  await expect(groups(again.page)).toHaveCount(4);
+  await expect(panels(again.page)).toHaveCount(2);
+  await expect(again.page.locator("[data-testid^='empty-slot-']")).toHaveCount(2);
+  await again.page.waitForTimeout(500);
+  await again.app.close();
+
+  const third = await launch(userData);
+  await expect(groups(third.page)).toHaveCount(4);
+  await expect(third.page.locator("[data-testid^='empty-slot-']")).toHaveCount(2);
+  await third.app.close();
 });

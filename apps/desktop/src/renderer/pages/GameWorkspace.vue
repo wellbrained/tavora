@@ -9,14 +9,30 @@ import {
   type DockviewApi,
   type DockviewGroupPanel,
   type DockviewReadyEvent,
+  type DockviewWillShowOverlayLocationEvent,
+  type Position,
+  type PositionResolver,
   type VueComponent,
 } from "dockview-vue";
 import { computed, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds } from "../../shared/host-api";
 import { Button } from "@/components/ui/button";
-import { act, api as host, dialog, dragging, state } from "../host";
-import { fromDockview, groupMinimum, guardDrop, placePanel, toDockview, type PanelInfo } from "../dock";
+import { act, api as host, dialog, dragging, nextPanelSlot, state } from "../host";
+import {
+  dropAllowed,
+  fromDockview,
+  groupMinimum,
+  guardDrop,
+  guideFits,
+  placePanel,
+  resolveDropPosition,
+  resolveOuterEdge,
+  toDockview,
+  type PanelInfo,
+} from "../dock";
+import DropGuide, { type GuideState } from "../components/workspace/DropGuide.vue";
 import GameIcon from "../components/GameIcon.vue";
+import EmptySlot from "../components/workspace/EmptySlot.vue";
 import GroupActions from "../components/workspace/GroupActions.vue";
 import LayoutsMenu from "../components/workspace/LayoutsMenu.vue";
 import PanelContent from "../components/workspace/PanelContent.vue";
@@ -127,7 +143,8 @@ function reconcile(api: DockviewApi) {
   }
   for (const id of open) {
     if (!api.getPanel(id)) {
-      placePanel(api, id, info);
+      placePanel(api, id, info, nextPanelSlot.value);
+      nextPanelSlot.value = null;
       changed = true;
     }
   }
@@ -148,8 +165,7 @@ function updateConstraints(api: DockviewApi) {
 function saveSoon() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    const layout = dock && fromDockview(dock.toJSON());
-    if (layout) void act({ type: "save-layout", layout }, { quiet: true });
+    if (dock) void act({ type: "save-layout", layout: fromDockview(dock.toJSON()) }, { quiet: true });
   }, SAVE_DELAY_MS);
 }
 
@@ -173,6 +189,52 @@ let resizing = false;
 function endDrag() {
   resizing = false;
   dragging.value = false;
+  guide.value = null;
+}
+
+// ── The drop guide ─────────────────────────────────────────────────────
+
+const guide = ref<GuideState | null>(null);
+const POSITIONS: Position[] = ["top", "left", "center", "right", "bottom"];
+
+/**
+ * Picks where a drop goes. The outer edges of the dock work as dockview's
+ * do; over a group, the guide's cells decide, else the nearest edge, else
+ * the middle. The outer target is the only one as big as the whole dock.
+ */
+const dropResolver: PositionResolver = {
+  resolve({ x, y, width, height, zones }) {
+    const outer = dock && width >= dock.width - 1 && height >= dock.height - 1;
+    const position = outer ? resolveOuterEdge(x, y, width, height, zones) : resolveDropPosition(x, y, width, height, zones);
+    return position ? { position } : null;
+  },
+};
+
+/** Shows the guide over the group a panel is dragged across, and hides drops that would not fit. */
+function onWillShowOverlay(event: DockviewWillShowOverlayLocationEvent, api: DockviewApi) {
+  const data = event.getData();
+  if (!dropAllowed(api, info, data, event.group, event.position)) event.preventDefault();
+  const content = event.kind === "content" ? event.group?.element.querySelector(".dv-content-container") : null;
+  const container = root.value;
+  if (!content || !container) {
+    guide.value = null;
+    return;
+  }
+  const area = content.getBoundingClientRect();
+  const origin = container.getBoundingClientRect();
+  if (!guideFits(area.width, area.height)) {
+    guide.value = null;
+    return;
+  }
+  const allowed = Object.fromEntries(POSITIONS.map((position) => [position, dropAllowed(api, info, data, event.group, position)]));
+  guide.value = {
+    x: area.left - origin.left,
+    y: area.top - origin.top,
+    width: area.width,
+    height: area.height,
+    position: event.position,
+    allowed: allowed as Record<Position, boolean>,
+  };
 }
 function endResize() {
   if (resizing) endDrag();
@@ -206,6 +268,7 @@ function onReady({ api }: DockviewReadyEvent) {
   api.onWillDragPanel(() => (dragging.value = true));
   api.onWillDragGroup(() => (dragging.value = true));
   api.onWillDrop((event) => guardDrop(event, api, info));
+  api.onWillShowOverlay((event) => onWillShowOverlay(event, api));
   api.onDidDrop(() => endDrag());
 }
 
@@ -232,6 +295,7 @@ onBeforeUnmount(() => {
 const components = { panel: PanelContent as unknown as VueComponent };
 const tab = PanelTab as unknown as VueComponent;
 const groupActions = GroupActions as unknown as VueComponent;
+const emptySlot = EmptySlot as unknown as VueComponent;
 </script>
 
 <template>
@@ -255,12 +319,15 @@ const groupActions = GroupActions as unknown as VueComponent;
         :components="components"
         :default-tab-component="tab"
         :right-header-actions-component="groupActions"
+        :watermark-component="emptySlot"
         :disable-floating-groups="true"
         dnd-strategy="html5"
+        :drop-position-resolver="dropResolver"
         @ready="onReady"
       />
+      <DropGuide v-if="guide" :guide="guide" />
       <div
-        v-if="!view.panels.length"
+        v-if="!view.panels.length && !view.layout"
         class="bg-background absolute inset-x-2 top-0 bottom-2 flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed text-center"
         data-testid="empty-workspace"
       >
