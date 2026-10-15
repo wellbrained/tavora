@@ -55,6 +55,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["theme-variation", "appearance"],
   ["own-themes", "appearance"],
   ["reset-theme", "appearance"],
+  ["module-icons", "appearance"],
   ["share-icons", "general"],
   ["steam-import", "integrations"],
   ["own-modules", "modules"],

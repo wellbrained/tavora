@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.14",
+    date: "2026-10-16",
+    title: "Icons on panel tabs",
+    notes: [
+      "Panel tabs show a small icon in front of the module name: the Discord logo for Discord, and plain icons for the Browser, Notes and To-Dos.",
+      "Settings > Appearance has a switch, Icons on panel tabs, to turn them off.",
+    ],
+  },
+  {
     version: "0.5.13",
     date: "2026-10-15",
     title: "Discord panel fixes",

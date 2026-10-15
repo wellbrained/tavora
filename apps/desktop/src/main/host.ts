@@ -758,6 +758,9 @@ export class Host {
       case "set-steam-profile":
         library.steamProfile = action.profile;
         break;
+      case "set-module-icons":
+        library.moduleIcons = action.enabled;
+        break;
       case "set-steam-icons":
         library.steamIcons = action.enabled;
         if (action.enabled) this.fetchIconsSoon();
@@ -1558,6 +1561,7 @@ export class Host {
         onlineSearch: library.onlineSearch,
         autoUpdate: library.autoUpdate,
         steamIcons: library.steamIcons,
+        moduleIcons: library.moduleIcons,
         steamProfile: library.steamProfile,
         onboarded: library.onboarded,
         rail: { ...library.rail },

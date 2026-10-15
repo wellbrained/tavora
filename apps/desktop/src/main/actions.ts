@@ -172,6 +172,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "set-online-search":
     case "set-auto-update":
     case "set-steam-icons":
+    case "set-module-icons":
       return only("enabled") && typeof a.enabled === "boolean" ? { type: a.type, enabled: a.enabled } : null;
     case "set-language":
       return only("language") && isLanguageSetting(a.language) ? { type: a.type, language: a.language } : null;

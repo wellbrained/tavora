@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { act, state } from "../../host";
 import { t } from "../../i18n";
 import MenuArea from "../menus/MenuArea.vue";
+import ModuleIcon from "../ModuleIcon.vue";
 import { DOCK, panelMenu } from "./dock-context";
 
 const STATUS_LABEL = (status: InstanceStatus): string => (status === "ready" ? "" : t(`panel.status.${status}`));
@@ -35,6 +36,7 @@ function items() {
       :data-module-id="panel?.moduleId"
       :data-status="status"
     >
+      <ModuleIcon v-if="state?.library.moduleIcons" :module-id="panel?.moduleId" />
       <span class="truncate font-medium">{{ panel?.name }}</span>
       <span
         v-if="STATUS_LABEL(status)"
