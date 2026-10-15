@@ -86,24 +86,32 @@ const label = (member: DiscordMember) =>
         <span v-else class="text-muted-foreground font-medium">Discord</span>
       </header>
 
-      <p v-if="!call" class="text-muted-foreground flex flex-1 items-center justify-center p-4 text-center" data-testid="discord-no-call">
-        {{ t("discord.panel.noCall") }}
-      </p>
+      <div v-if="!call" class="flex flex-1 flex-col items-center justify-center gap-3 p-4 text-center">
+        <p class="text-muted-foreground" data-testid="discord-no-call">{{ t("discord.panel.noCall") }}</p>
+        <Button v-if="view?.last" size="sm" class="h-auto flex-col gap-0 py-1.5" data-testid="discord-rejoin" @click="act({ type: 'discord-join', channelId: view.last.channelId })">
+          <span>{{ t("discord.panel.rejoin", { name: view.last.name }) }}</span>
+          <span v-if="view.last.serverName" class="text-xs font-normal opacity-80">{{ t("discord.panel.rejoinOn", { server: view.last.serverName }) }}</span>
+        </Button>
+      </div>
 
       <ul v-else class="min-h-0 flex-1 overflow-y-auto px-2 py-2" data-testid="discord-channels">
         <li v-for="{ channel, current } in channels" :key="channel.id" :class="cn(!current && 'mt-1')">
-          <div
+          <component
+            :is="current ? 'div' : 'button'"
+            :type="current ? undefined : 'button'"
             :class="
               cn(
-                'flex h-8 items-center gap-1.5 rounded-md px-2',
-                current ? 'bg-secondary text-foreground font-medium' : 'text-muted-foreground',
+                'flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-left',
+                current ? 'bg-secondary text-foreground font-medium' : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground cursor-pointer',
               )
             "
-            :data-testid="current ? 'discord-current' : undefined"
+            :title="current ? undefined : t('discord.panel.join', { name: channel.name })"
+            :data-testid="current ? 'discord-current' : `discord-join-${channel.id}`"
+            @click="!current && act({ type: 'discord-join', channelId: channel.id })"
           >
             <Volume2 class="size-4 flex-none" :stroke-width="1.75" />
             <span class="min-w-0 truncate">{{ channel.name }}</span>
-          </div>
+          </component>
           <ul class="mt-0.5">
             <li
               v-for="member in channel.members"

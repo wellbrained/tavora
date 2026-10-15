@@ -847,6 +847,8 @@ export class Host {
         return this.discord.connectNow();
       case "discord-sign-out":
         return this.discord.signOut();
+      case "discord-join":
+        return this.discord.join(action.channelId);
       case "save-layout":
         return this.saveLayout(action.layout);
       case "apply-layout-template":

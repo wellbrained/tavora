@@ -1,5 +1,6 @@
 import { readFile, rm } from "node:fs/promises";
-import type { DiscordSecrets, DiscordToken } from "./discord";
+import type { DiscordLast, DiscordSecrets, DiscordToken } from "./discord";
+import { isSnowflake } from "./discord-voice";
 import { writeFileAtomic } from "./fsutil";
 
 // The Discord Client Secret and sign-in, kept in discord.json in the user
@@ -13,7 +14,7 @@ export interface Encryptor {
   decrypt(data: Buffer): string;
 }
 
-const EMPTY: DiscordSecrets = { secret: null, token: null };
+const EMPTY: DiscordSecrets = { secret: null, token: null, last: null };
 const MAX_SECRET = 200;
 
 export const isClientSecret = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{8,200}$/.test(value);
@@ -26,6 +27,14 @@ function token(value: unknown): DiscordToken | null {
     : null;
 }
 
+function last(value: unknown): DiscordLast | null {
+  const raw = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
+  const name = (text: unknown) => (typeof text === "string" && text.length > 0 && text.length <= 64 ? text : null);
+  const channelName = name(raw.name);
+  if (!isSnowflake(raw.channelId) || !isSnowflake(raw.guildId) || !channelName) return null;
+  return { channelId: raw.channelId, guildId: raw.guildId, name: channelName, serverName: name(raw.serverName) };
+}
+
 export async function loadDiscordSecrets(file: string, encryptor: Encryptor): Promise<DiscordSecrets> {
   if (!encryptor.isAvailable()) return EMPTY;
   try {
@@ -33,7 +42,7 @@ export async function loadDiscordSecrets(file: string, encryptor: Encryptor): Pr
     if (saved.v !== 1 || typeof saved.data !== "string") return EMPTY;
     const raw = JSON.parse(encryptor.decrypt(Buffer.from(saved.data, "base64"))) as Record<string, unknown>;
     const secret = isClientSecret(raw.secret) && raw.secret.length <= MAX_SECRET ? raw.secret : null;
-    return { secret, token: secret ? token(raw.token) : null };
+    return { secret, token: secret ? token(raw.token) : null, last: secret ? last(raw.last) : null };
   } catch {
     // Missing, damaged, or encrypted by another user or PC: start without.
     return EMPTY;
@@ -41,7 +50,7 @@ export async function loadDiscordSecrets(file: string, encryptor: Encryptor): Pr
 }
 
 export async function saveDiscordSecrets(file: string, encryptor: Encryptor, secrets: DiscordSecrets): Promise<void> {
-  if (!secrets.secret && !secrets.token) {
+  if (!secrets.secret && !secrets.token && !secrets.last) {
     await rm(file, { force: true });
     return;
   }

@@ -132,6 +132,8 @@ export interface DiscordView {
   call: DiscordChannel | null;
   /** The server's other voice channels, in Discord's order. */
   others: DiscordChannel[];
+  /** The server channel the player was last in, which the panel offers to join again. */
+  last: { channelId: string; name: string; serverName: string | null } | null;
 }
 
 /** Toolbar buttons of a Browser panel. */
@@ -392,6 +394,8 @@ export type HostAction =
   | { type: "discord-set-secret"; secret: string | null }
   /** Connects to the Discord app, asking for approval in Discord if Tavora was never approved. */
   | { type: "discord-connect" }
+  /** Join a voice channel in the Discord app: the last one, or one of the server's listed channels. */
+  | { type: "discord-join"; channelId: string }
   /** Forgets Tavora's Discord sign-in on this PC. */
   | { type: "discord-sign-out" }
   /** Null when nothing is docked any more. */

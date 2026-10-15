@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.10",
+    date: "2026-10-15",
+    title: "Join your Discord voice channel again",
+    notes: [
+      "The Discord panel remembers the voice channel you were last in. When you are not in one, press Rejoin to go back to it.",
+      "Press any of the server's other voice channels in the list to join it.",
+      "Joining is the only thing Tavora does in Discord. It still can't hear, talk or read messages.",
+    ],
+  },
+  {
     version: "0.5.9",
     date: "2026-10-15",
     title: "Who's in your Discord voice channel",
