@@ -1,7 +1,9 @@
 /**
  * What changed in each version, newest first. Shown in Settings > Patch notes.
  * Every version bump of apps/desktop/package.json adds an entry here; a test
- * keeps the two in step.
+ * keeps the two in step. Write for players, in plain friendly words. At 1.0 these
+ * entries are replaced by a "1.0 release catalog" of all features, and a fresh
+ * changelog starts (docs/decisions.md).
  */
 export interface PatchNote {
   /** major.minor.patch, as in apps/desktop/package.json. */
@@ -20,14 +22,14 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     date: "2026-10-15",
     title: "The first numbered version",
     notes: [
-      "A game library with a rail: favorites, folders, your own order, and a Trash that keeps removed games for 30 days.",
-      "Workspaces with docked panels, saved layouts and snapshots; the official Notes and To-Dos modules and the UI Playground.",
-      "Add games from a built-in list or search more than 100,000 games online; without a connection the built-in list is used. Online search can be turned off in Settings.",
-      "Games without an image get a generated badge; you can set your own letters or pick an image.",
-      "A local profile with a picture, a first-run welcome and a Keyboard shortcuts list (Ctrl+/).",
-      "Ctrl+K searches games, modules, layouts and settings.",
-      "A Grayscale text option for OLED screens.",
-      "The version and these patch notes in Settings.",
+      "Your games live in a list on the left. Pin favorites, sort games into folders, put them in your own order, and bring back anything you removed within 30 days.",
+      "Every game has its own workspace. Arrange notes, to-do lists and other panels the way you like, and save layouts to come back to.",
+      "Add a game by searching more than 100,000 titles online. No internet? A built-in list of popular games still works, and you can switch online search off in Settings.",
+      "Games without a picture get a colourful badge. You can change its letters or choose your own image.",
+      "Make Tavora yours with a profile picture. A short welcome helps you get started, and Ctrl+/ shows every keyboard shortcut.",
+      "Press Ctrl+K to find a game, a panel, a layout or a setting in seconds.",
+      "A grayscale text option makes text crisper on OLED screens.",
+      "You can now see which version of Tavora you have, and what changed, right here in Settings.",
     ],
   },
 ];
