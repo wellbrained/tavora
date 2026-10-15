@@ -6,6 +6,7 @@ import { t } from "../i18n";
 import GameIcon from "./GameIcon.vue";
 import MenuArea from "./menus/MenuArea.vue";
 import MenuButton from "./menus/MenuButton.vue";
+import RailTooltip from "./RailTooltip.vue";
 
 defineProps<{
   game: GameView;
@@ -32,6 +33,7 @@ defineOptions({ inheritAttrs: false });
       v-bind="$attrs"
     >
       <span class="rail-pill" aria-hidden="true" />
+      <RailTooltip :text="game.name" :disabled="expanded">
       <button
         type="button"
         :class="
@@ -46,7 +48,6 @@ defineOptions({ inheritAttrs: false });
         :data-testid="testid"
         :aria-current="active ? 'page' : undefined"
         :aria-label="game.name"
-        :title="expanded ? undefined : game.name"
         @click="emit('open')"
       >
         <span class="rail-icon flex-none rounded-[12px]"><GameIcon :game="game" :size="48" /></span>
@@ -58,6 +59,7 @@ defineOptions({ inheritAttrs: false });
           >{{ shortcut }}</kbd
         >
       </button>
+      </RailTooltip>
       <div
         v-if="expanded"
         class="bg-accent absolute right-4 opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100"

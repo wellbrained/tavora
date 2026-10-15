@@ -13,6 +13,7 @@ import MenuButton from "./menus/MenuButton.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
 import UpdateMarker from "./UpdateMarker.vue";
 import RailGame from "./RailGame.vue";
+import RailTooltip from "./RailTooltip.vue";
 
 const COMPACT = 72;
 const MIN_WIDTH = 180;
@@ -396,6 +397,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 draggable="true"
                 v-on="dnd({ kind: 'folder', id: entry.id, place: { list: 'root' } })"
               >
+                <RailTooltip :text="folder(entry.id).name" :disabled="expanded">
                 <button
                   type="button"
                   :class="cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent', folderHint(entry.id) === 'into' && 'ring-primary ring-2 ring-inset')"
@@ -403,7 +405,6 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                   :data-testid="`rail-folder-${entry.id}-toggle`"
                   :aria-expanded="openFolders.has(entry.id)"
                   :aria-label="t('rail.folder', { name: folder(entry.id).name })"
-                  :title="expanded ? undefined : folder(entry.id).name"
                   @click="toggleFolder(entry.id)"
                 >
                   <span class="rail-icon bg-card flex size-12 flex-none flex-wrap content-center items-center justify-center gap-1 overflow-hidden rounded-lg p-0.5" aria-hidden="true">
@@ -419,6 +420,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                     <component :is="openFolders.has(entry.id) ? ChevronDown : ChevronRight" class="text-muted-foreground mr-8 size-4 flex-none" />
                   </template>
                 </button>
+                </RailTooltip>
                 <div
                   v-if="expanded"
                   class="bg-accent absolute right-4 opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100"

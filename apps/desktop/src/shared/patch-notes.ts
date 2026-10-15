@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.34",
+    date: "2026-10-16",
+    title: "A readable game name tooltip",
+    notes: [
+      "Hovering a game or folder in the compact sidebar shows its name in a large, high-contrast label next to the icon, instead of the small system tooltip.",
+    ],
+  },
+  {
     version: "0.5.33",
     date: "2026-10-16",
     title: "The icon Steam shows for a game",
