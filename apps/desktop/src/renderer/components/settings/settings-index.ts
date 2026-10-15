@@ -75,6 +75,14 @@ export const SETTINGS: SettingEntry[] = [
     keywords: ["internet", "network", "privacy", "offline", "database", "service", "online"],
   },
   {
+    id: "steam-icons",
+    section: "general",
+    label: "Game icons from Steam",
+    description:
+      "Shows each game's official Steam cover as its icon. Tavora downloads it from Steam straight to this PC; the Tavora service is not involved. Games without a Steam cover, and any image you pick yourself, are not affected. Turn it off to use the plain badges.",
+    keywords: ["cover", "art", "image", "picture", "download", "internet", "network", "privacy", "offline", "badge", "steam"],
+  },
+  {
     id: "shortcuts",
     section: "shortcuts",
     label: "Keyboard shortcuts",

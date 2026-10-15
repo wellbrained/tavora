@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   addGame,
+  artFileShared,
   createFolder,
   deleteFolder,
   deleteTrashedGame,
   emptyLibrary,
+  gamesNeedingArt,
   LibraryError,
   markPlayed,
   monogram,
@@ -14,6 +16,7 @@ import {
   purgeExpired,
   RAIL,
   recentGames,
+  recordArt,
   removeFavorite,
   renameGame,
   restoreGame,
@@ -109,6 +112,114 @@ describe("adding games", () => {
     expect(sanitizeLibrary({ onlineSearch: "no" }).onlineSearch).toBe(true);
   });
 });
+describe("Steam covers", () => {
+  it("takes a game's Steam id from the built-in list, the service, or leaves it empty", () => {
+    const library = emptyLibrary();
+    addGame(library, { catalogId: "elden-ring" }, day(1));
+    addGame(library, { online: { id: "hades", name: "Hades", steamAppId: 1145360 } }, day(1));
+    // The service had no appid for a built-in game: the built-in list's is used.
+    addGame(library, { online: { id: "factorio", name: "Factorio", steamAppId: null } }, day(1));
+    addGame(library, { online: { id: "obscure-game", name: "Obscure Game" } }, day(1));
+    addGame(library, { name: "My Own Game" }, day(1));
+    addGame(library, { catalogId: "fortnite" }, day(1));
+    expect(Object.fromEntries(Object.values(library.games).map((game) => [game.id, game.steamAppId]))).toEqual({
+      "elden-ring": 1245620,
+      hades: 1145360,
+      factorio: 427520,
+      "obscure-game": null,
+      "local-my-own-game": null,
+      fortnite: null,
+    });
+    expect(library.games.hades).toMatchObject({ artFile: null, artCheckedAt: null });
+  });
+
+  it("ignores a service appid that is not a real Steam id", () => {
+    const library = emptyLibrary();
+    addGame(library, { online: { id: "odd-game", name: "Odd Game", steamAppId: -4 } }, day(1));
+    expect(library.games["odd-game"]!.steamAppId).toBeNull();
+  });
+
+  it("has fetching on by default and keeps only a real setting", () => {
+    expect(emptyLibrary().steamIcons).toBe(true);
+    expect(sanitizeLibrary({ steamIcons: false }).steamIcons).toBe(false);
+    expect(sanitizeLibrary({ steamIcons: "no" }).steamIcons).toBe(true);
+  });
+
+  it("asks only for games that have a Steam id and no cover, and not again soon after a miss", () => {
+    const library = emptyLibrary();
+    addGame(library, { catalogId: "elden-ring" }, day(1));
+    addGame(library, { catalogId: "fortnite" }, day(1));
+    addGame(library, { name: "My Own Game" }, day(1));
+    expect(gamesNeedingArt(library, day(2)).map((game) => game.id)).toEqual(["elden-ring"]);
+
+    recordArt(library, "elden-ring", { none: day(2) });
+    expect(gamesNeedingArt(library, day(3))).toEqual([]);
+    expect(gamesNeedingArt(library, new Date(Date.UTC(2026, 11, 1))).map((game) => game.id)).toEqual(["elden-ring"]);
+  });
+
+  it("does not ask for games in Trash", () => {
+    const library = emptyLibrary();
+    addGame(library, { catalogId: "elden-ring" }, day(1));
+    trashGame(library, "elden-ring", day(2));
+    expect(gamesNeedingArt(library, day(3))).toEqual([]);
+  });
+
+  it("records a saved cover, and refuses a file that does not belong to the game", () => {
+    const library = emptyLibrary();
+    addGame(library, { catalogId: "elden-ring" }, day(1));
+    recordArt(library, "elden-ring", { file: "999.jpg" });
+    expect(library.games["elden-ring"]!.artFile).toBeNull();
+    recordArt(library, "elden-ring", { file: "1245620.jpg" });
+    expect(library.games["elden-ring"]).toMatchObject({ artFile: "1245620.jpg", artCheckedAt: null });
+    expect(gamesNeedingArt(library, day(2))).toEqual([]);
+    recordArt(library, "no-such-game", { file: "1.jpg" });
+  });
+
+  it("knows when another game shares a cover file", () => {
+    const library = emptyLibrary();
+    addGame(library, { catalogId: "elden-ring" }, day(1));
+    addGame(library, { online: { id: "elden-ring-again", name: "Elden Ring Again", steamAppId: 1245620 } }, day(1));
+    recordArt(library, "elden-ring", { file: "1245620.jpg" });
+    recordArt(library, "elden-ring-again", { file: "1245620.jpg" });
+    expect(artFileShared(library, "1245620.jpg", "elden-ring")).toBe(true);
+    deleteTrashedGame(trashed(library, "elden-ring-again"), "elden-ring-again");
+    expect(artFileShared(library, "1245620.jpg", "elden-ring")).toBe(false);
+  });
+
+  it("loads covers from a saved library, gives old games their Steam id and drops a forged file name", () => {
+    const saved = (extra: Record<string, unknown>) => ({
+      games: {
+        "elden-ring": {
+          id: "elden-ring",
+          catalogId: "elden-ring",
+          name: "Elden Ring",
+          icon: { kind: "monogram", text: "ER" },
+          showNews: true,
+          addedAt: "2026-10-01T10:00:00.000Z",
+          lastPlayedAt: null,
+          trashedAt: null,
+          ...extra,
+        },
+      },
+    });
+    // Saved before covers existed: the built-in list supplies the Steam id.
+    expect(sanitizeLibrary(saved({})).games["elden-ring"]).toMatchObject({ steamAppId: 1245620, artFile: null, artCheckedAt: null });
+    expect(sanitizeLibrary(saved({ steamAppId: 1245620, artFile: "1245620.jpg" })).games["elden-ring"]!.artFile).toBe("1245620.jpg");
+    for (const artFile of ["../1245620.jpg", "1245620.png", "999.jpg", 7, null]) {
+      expect(sanitizeLibrary(saved({ steamAppId: 1245620, artFile })).games["elden-ring"]!.artFile).toBeNull();
+    }
+    expect(sanitizeLibrary(saved({ steamAppId: "5" })).games["elden-ring"]!.steamAppId).toBe(1245620);
+    expect(sanitizeLibrary(saved({ artCheckedAt: "yesterday" })).games["elden-ring"]!.artCheckedAt).toBeNull();
+    expect(sanitizeLibrary(saved({ artCheckedAt: "2026-10-02T10:00:00.000Z" })).games["elden-ring"]!.artCheckedAt).toBe("2026-10-02T10:00:00.000Z");
+  });
+});
+
+/** Puts a game in Trash so it can be deleted for good, and returns the library. */
+function trashed(library: Library, id: string): Library {
+  trashGame(library, id, day(5));
+  return library;
+}
+
 describe("monogram", () => {
   it.each([
     ["Path of Exile 2", "PE2"],
