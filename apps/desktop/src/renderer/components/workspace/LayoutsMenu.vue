@@ -1,12 +1,14 @@
 <script setup lang="ts">
 // Saved layouts of the current game: apply one, or save the current layout.
-// Below them, templates: common arrangements of empty slots to fill with modules.
+// Below them, templates (uneven arrangements of empty slots to fill with
+// modules) and a picker for even grids.
 import { ChevronDown, LayoutPanelLeft } from "@lucide/vue";
 import type { SnapshotView } from "../../../shared/host-api";
 import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "../../../shared/layout-templates";
 import { DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { act, confirmAction, prompt, state, submitAction, type MenuItem } from "../../host";
 import MenuButton from "../menus/MenuButton.vue";
+import GridPicker from "./GridPicker.vue";
 import TemplatePreview from "./TemplatePreview.vue";
 
 function saveAs() {
@@ -86,14 +88,14 @@ function items(): MenuItem[] {
     label="Saved layouts"
     side="bottom"
     align="end"
-    menu-class="w-[26rem] max-w-[26rem]"
+    menu-class="w-80 max-w-80"
     class="flex h-8 w-auto gap-1.5 rounded-lg px-2.5 text-sm font-medium"
   >
     <LayoutPanelLeft class="size-4" :stroke-width="1.5" /> Layouts <ChevronDown class="size-3.5" :stroke-width="1.5" />
     <template #after>
       <DropdownMenuSeparator />
       <DropdownMenuLabel class="text-muted-foreground text-xs font-normal">Templates</DropdownMenuLabel>
-      <div class="grid grid-cols-4 gap-1 p-1 pt-0" role="group" aria-label="Templates">
+      <div class="grid grid-cols-3 gap-1 p-1 pt-0" role="group" aria-label="Templates">
         <DropdownMenuItem
           v-for="template in LAYOUT_TEMPLATES"
           :key="template.id"
@@ -107,6 +109,9 @@ function items(): MenuItem[] {
           <TemplatePreview :template="template" class="text-muted-foreground group-data-[highlighted]:text-primary size-auto h-14 w-[84px]" />
         </DropdownMenuItem>
       </div>
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel class="text-muted-foreground text-xs font-normal">Grid</DropdownMenuLabel>
+      <GridPicker />
     </template>
   </MenuButton>
 </template>

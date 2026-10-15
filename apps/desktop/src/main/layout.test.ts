@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layoutTemplate } from "../shared/layout-templates";
+import { gridTemplate, layoutTemplate } from "../shared/layout-templates";
 import { layoutPanels, parseLayout, pruneLayout, templateLayout, type LayoutNode, type SavedLayout } from "./layout";
 
 const A = "00000000-0000-4000-8000-00000000000a";
@@ -82,14 +82,16 @@ describe("templateLayout", () => {
   });
 
   it("fills slots in order with the open panels, extras as tabs in the last", () => {
-    const built = templateLayout(layoutTemplate("two-columns")!, [A, B, C]);
+    const built = templateLayout(gridTemplate(2, 1), [A, B, C]);
     expect(built.root.children).toEqual([
       { kind: "group", size: 600, panels: [A], active: A },
       { kind: "group", size: 600, panels: [B, C], active: B },
     ]);
-    const grid = templateLayout(layoutTemplate("grid")!, [A]);
-    expect(layoutPanels(grid)).toEqual([A]);
-    expect(parseLayout(grid)).toEqual(grid);
+    for (const [columns, rows] of [[2, 2], [5, 4], [1, 3], [1, 1]] as const) {
+      const grid = templateLayout(gridTemplate(columns, rows), [A]);
+      expect(layoutPanels(grid)).toEqual([A]);
+      expect(parseLayout(grid)).toEqual(grid);
+    }
   });
 });
 

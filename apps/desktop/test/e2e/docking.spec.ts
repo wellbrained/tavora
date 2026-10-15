@@ -193,7 +193,7 @@ test("a template lays out empty slots that modules fill, and is kept", async () 
   const { app, page, userData } = await launch();
   const slots = page.locator("[data-testid^='empty-slot-']");
   await page.getByTestId("layouts").click();
-  await page.locator('[role="menu"][data-state="open"] [data-testid="layout-template-three-columns"]').click();
+  await page.locator('[role="menu"][data-state="open"] [data-testid="layout-grid-3x1"]').click();
   await expect(groups(page)).toHaveCount(3);
   await expect(slots).toHaveCount(3);
   await expect(page.getByTestId("empty-workspace")).toHaveCount(0);
@@ -219,7 +219,7 @@ test("a template lays out empty slots that modules fill, and is kept", async () 
   const again = await launch(userData);
   await expect(groups(again.page)).toHaveCount(2);
   await again.page.getByTestId("layouts").click();
-  await again.page.locator('[role="menu"][data-state="open"] [data-testid="layout-template-grid"]').click();
+  await again.page.locator('[role="menu"][data-state="open"] [data-testid="layout-grid-2x2"]').click();
   await expect(groups(again.page)).toHaveCount(4);
   await expect(panels(again.page)).toHaveCount(2);
   await expect(again.page.locator("[data-testid^='empty-slot-']")).toHaveCount(2);
