@@ -30,6 +30,8 @@ export function parseAction(raw: unknown): HostAction | null {
   switch (a.type) {
     case "show-welcome":
     case "restart":
+    case "download-update":
+    case "restart-to-update":
       return only() ? { type: a.type } : null;
     case "open-game":
     case "choose-game-image":
@@ -118,6 +120,7 @@ export function parseAction(raw: unknown): HostAction | null {
       return only() ? { type: a.type } : null;
     case "set-grayscale-text":
     case "set-online-search":
+    case "set-auto-update":
     case "set-steam-icons":
       return only("enabled") && typeof a.enabled === "boolean" ? { type: a.type, enabled: a.enabled } : null;
     case "set-onboarded":

@@ -10,6 +10,7 @@ import GameIcon from "./GameIcon.vue";
 import MenuArea from "./menus/MenuArea.vue";
 import MenuButton from "./menus/MenuButton.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
+import UpdateMarker from "./UpdateMarker.vue";
 import RailGame from "./RailGame.vue";
 
 const COMPACT = 72;
@@ -444,6 +445,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
 
     <!-- Player things live at the bottom on their own: the profile, then Settings. -->
     <div class="flex flex-col gap-1 border-t py-2">
+      <UpdateMarker :expanded="expanded" />
       <ProfileMenu :expanded="expanded" />
       <button
         type="button"

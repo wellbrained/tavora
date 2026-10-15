@@ -59,6 +59,8 @@ export interface Library {
   grayscaleText: boolean;
   /** Search may ask the Tavora service online. Off means the built-in games only. */
   onlineSearch: boolean;
+  /** New versions of Tavora download by themselves. Off means the player starts the download. */
+  autoUpdate: boolean;
   /** Game covers may be fetched from Steam on this PC. Off means the generated badge. */
   steamIcons: boolean;
   /** False until the first-run welcome was finished or skipped. */
@@ -86,6 +88,7 @@ export function emptyLibrary(): Library {
     startup: "last-game",
     grayscaleText: false,
     onlineSearch: true,
+    autoUpdate: true,
     steamIcons: true,
     onboarded: false,
     lastGameId: null,
@@ -522,6 +525,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (saved.startup === "welcome" || saved.startup === "last-game") library.startup = saved.startup;
   if (typeof saved.grayscaleText === "boolean") library.grayscaleText = saved.grayscaleText;
   if (typeof saved.onlineSearch === "boolean") library.onlineSearch = saved.onlineSearch;
+  if (typeof saved.autoUpdate === "boolean") library.autoUpdate = saved.autoUpdate;
   if (typeof saved.steamIcons === "boolean") library.steamIcons = saved.steamIcons;
   // A library saved before the welcome existed belongs to someone who is past it.
   library.onboarded = typeof saved.onboarded === "boolean" ? saved.onboarded : true;

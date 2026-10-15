@@ -75,6 +75,13 @@ export const SETTINGS: SettingEntry[] = [
     keywords: ["internet", "network", "privacy", "offline", "database", "service", "online"],
   },
   {
+    id: "auto-update",
+    section: "general",
+    label: "Download updates automatically",
+    description: "New versions of Tavora download in the background and install when you close the app. Turn it off to choose when to download.",
+    keywords: ["update", "updates", "upgrade", "new version", "download", "install", "automatic"],
+  },
+  {
     id: "steam-icons",
     section: "general",
     label: "Game icons from Steam",

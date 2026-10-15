@@ -14,7 +14,11 @@ protocol.registerSchemesAsPrivileged([
 // Every renderer is sandboxed, including any created by accident.
 app.enableSandbox();
 
+// The data folder is fixed, not derived from the app's name: it has always been
+// %APPDATA%\@tavora\desktop (the package name), and the installed app is named
+// Tavora, which would otherwise move everyone's games and settings.
 if (process.env.TAVORA_USER_DATA) app.setPath("userData", path.resolve(process.env.TAVORA_USER_DATA));
+else app.setPath("userData", path.join(app.getPath("appData"), "@tavora", "desktop"));
 
 // OLED panels don't use the RGB subpixel layout ClearType assumes, so small
 // text gets colour fringes there. Chromium only takes this switch before the
