@@ -151,7 +151,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
     <div class="flex min-h-9 items-start gap-1.5 py-1 pr-1 pl-0.5">
       <span
         v-if="!compact"
-        class="text-muted-foreground flex h-7 w-4 flex-none cursor-grab items-center justify-center opacity-0 group-hover/task:opacity-100"
+        class="text-muted-foreground flex h-[32px] w-4 flex-none cursor-grab items-center justify-center opacity-0 group-hover/task:opacity-100"
         draggable="true"
         aria-hidden="true"
         title="Drag to move"
@@ -160,8 +160,8 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
       >
         <GripVertical class="size-3.5" :stroke-width="1.5" />
       </span>
-      <!-- Controls sit in 28 px boxes, the height of the title's first line, so they line up with it. -->
-      <span class="flex h-7 flex-none items-center px-0.5">
+      <!-- Controls sit in boxes as tall as a one-line title (buttons are at least 32 px), so they line up with its first line. -->
+      <span class="flex h-[32px] flex-none items-center px-0.5">
         <input
           type="checkbox"
           class="todo-check"
@@ -174,7 +174,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
       <button
         v-if="!expanded"
         type="button"
-        class="flex min-w-0 flex-1 flex-col items-start rounded-sm px-1 py-1 text-left"
+        class="flex min-w-0 flex-1 flex-col items-start justify-center rounded-sm px-1 py-1 text-left"
         :aria-expanded="false"
         data-testid="task-open"
         @click="emit('toggle')"
@@ -203,7 +203,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
         @blur="saveTitle"
         @keydown="onTitleKey"
       />
-      <span v-if="task.pinned && !expanded && !compact" class="flex h-7 flex-none items-center">
+      <span v-if="task.pinned && !expanded && !compact" class="flex h-[32px] flex-none items-center">
         <Pin class="text-primary size-3.5" :stroke-width="1.5" aria-label="Pinned" />
       </span>
       <button
