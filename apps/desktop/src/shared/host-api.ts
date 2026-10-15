@@ -130,10 +130,20 @@ export interface DiscordView {
   server: { id: string; name: string; icon: string | null } | null;
   /** The voice channel or call the player is in, or null. */
   call: DiscordChannel | null;
-  /** The server's other voice channels, in Discord's order. */
+  /** The server the panel lists channels of: the open game's remembered server, else the one of the call. */
+  browseServer: { id: string; name: string; icon: string | null } | null;
+  /** That server's voice channels except the call, in Discord's order, read again every 5 minutes. */
   others: DiscordChannel[];
-  /** The server channel the player was last in, which the panel offers to join again. */
+  /** The channel the panel offers to join again: the open game's last one, or the last one anywhere. */
   last: { channelId: string; name: string; serverName: string | null } | null;
+  /** "Remember the server on this game" for the open game, and the server it remembers. */
+  game: { remember: boolean; serverId: string | null };
+  /** The servers the player is on, to choose one for a game. */
+  servers: { id: string; name: string }[];
+  /** Tavora may mute and deafen the player; false until the player approves that in Discord. */
+  canControl: boolean;
+  /** The player's own mute and deafen state while in a call. */
+  self: { mute: boolean; deaf: boolean } | null;
 }
 
 /** Toolbar buttons of a Browser panel. */
@@ -396,6 +406,18 @@ export type HostAction =
   | { type: "discord-connect" }
   /** Join a voice channel in the Discord app: the last one, or one of the server's listed channels. */
   | { type: "discord-join"; channelId: string }
+  /** Leaves the voice channel in the Discord app. */
+  | { type: "discord-leave" }
+  /** Mutes or deafens the player in the Discord app (turning either on or off). */
+  | { type: "discord-voice"; mute?: boolean; deaf?: boolean }
+  /** Asks Discord to approve muting and deafening, for sign-ins made before it existed. */
+  | { type: "discord-allow-control" }
+  /** Reads the server list and the browsed server's channels now. */
+  | { type: "discord-refresh" }
+  /** The tick box "Remember the server on this game". */
+  | { type: "discord-game-remember"; gameId: string; remember: boolean }
+  /** Chooses the server of a game from the servers the player is on. */
+  | { type: "discord-game-server"; gameId: string; guildId: string }
   /** Forgets Tavora's Discord sign-in on this PC. */
   | { type: "discord-sign-out" }
   /** Null when nothing is docked any more. */

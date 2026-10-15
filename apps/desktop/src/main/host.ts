@@ -850,6 +850,18 @@ export class Host {
         return this.discord.signOut();
       case "discord-join":
         return this.discord.join(action.channelId);
+      case "discord-leave":
+        return this.discord.leave();
+      case "discord-voice":
+        return this.discord.setVoice({ ...(action.mute === undefined ? {} : { mute: action.mute }), ...(action.deaf === undefined ? {} : { deaf: action.deaf }) });
+      case "discord-allow-control":
+        return this.discord.allowControl();
+      case "discord-refresh":
+        return this.discord.reload();
+      case "discord-game-remember":
+        return this.discord.rememberGame(action.gameId, action.remember);
+      case "discord-game-server":
+        return this.discord.setGameServer(action.gameId, action.guildId);
       case "save-layout":
         return this.saveLayout(action.layout);
       case "apply-layout-template":
@@ -1621,6 +1633,7 @@ export class Host {
   }
 
   private pushState(): void {
+    this.discord.setGame(this.screen === "game" ? this.gameId : null);
     if (!this.window.isDestroyed()) this.window.webContents.send("host:state", this.viewState());
   }
 
