@@ -76,6 +76,8 @@ export interface LaunchOptions {
   seed?: boolean;
   /** What the system pretends to be (default dark), so the theme tests do not depend on the PC. */
   systemTheme?: "dark" | "light";
+  /** What the system pretends to speak (default en). */
+  locale?: string;
   /** More command line switches for Chromium, e.g. host resolver rules. */
   args?: string[];
 }
@@ -83,7 +85,7 @@ export interface LaunchOptions {
 export async function launch(
   userData?: string,
   extraModuleDirs: string[] = [],
-  { seed = true, systemTheme, args = [] }: LaunchOptions = {},
+  { seed = true, systemTheme, locale, args = [] }: LaunchOptions = {},
 ): Promise<Running> {
   const dir = userData ?? (await newUserData());
   const libraryFile = path.join(dir, "library.json");
@@ -99,6 +101,8 @@ export async function launch(
       TAVORA_USER_DATA: dir,
       // Tests never look at the Steam client on this machine or ask Steam for icons.
       TAVORA_STEAM_ICONS_URL: "off",
+      // Tests read English texts whatever language the PC they run on speaks.
+      TAVORA_LOCALE: locale ?? "en",
       // Set TAVORA_HIDDEN=0 to watch the windows while debugging a test.
       TAVORA_HIDDEN: process.env.TAVORA_HIDDEN ?? "1",
       // The system is pretended to be dark, so the theme tests do not depend on the PC they run on.

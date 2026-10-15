@@ -1,9 +1,12 @@
 import type { HostViewState } from "../shared/host-api";
+import { t } from "./i18n";
 
 // What Settings > Keyboard shortcuts (Ctrl+/) lists. The Tavora-wide ones are
 // caught in main/shortcuts.ts; keep both in step.
 
-const MOD = navigator.platform.startsWith("Mac") ? "Cmd" : "Ctrl";
+const MAC = navigator.platform.startsWith("Mac");
+/** The modifier key's name: Cmd on a Mac, otherwise Ctrl (Strg in German). */
+export const MOD = (): string => (MAC ? "Cmd" : t("shortcuts.ctrl"));
 
 export interface ShortcutRow {
   action: string;
@@ -11,40 +14,43 @@ export interface ShortcutRow {
   keys: string[];
 }
 
-export const SHORTCUT_GROUPS: { title: string; rows: ShortcutRow[] }[] = [
-  {
-    title: "General",
-    rows: [
-      { action: "Search games, modules and settings", keys: [MOD, "K"] },
-      { action: "Keyboard shortcuts", keys: [MOD, "/"] },
-      { action: "Settings", keys: [MOD, ","] },
-      { action: "Home", keys: [MOD, "H"] },
-      { action: "Collapse or expand the game list", keys: [MOD, "\\"] },
-    ],
-  },
-  {
-    title: "Games",
-    rows: [{ action: "Open game 1 to 9 in the game list", keys: [MOD, "1–9"] }],
-  },
-  {
-    title: "Browser panel",
-    rows: [
-      { action: "Go to the address bar", keys: [MOD, "L"] },
-      { action: "Back", keys: ["Alt", "←"] },
-      { action: "Forward", keys: ["Alt", "→"] },
-      { action: "Leave full screen", keys: ["Esc"] },
-    ],
-  },
-  {
-    title: "Lists and dialogs",
-    rows: [
-      { action: "Move through the game list", keys: ["↑", "↓"] },
-      { action: "Resize the game list when its edge has focus", keys: ["←", "→"] },
-      { action: "Pick the highlighted result", keys: ["Enter"] },
-      { action: "Close a dialog, menu or search", keys: ["Esc"] },
-    ],
-  },
-];
+export function shortcutGroups(): { title: string; rows: ShortcutRow[] }[] {
+  const mod = MOD();
+  return [
+    {
+      title: t("shortcuts.group.general"),
+      rows: [
+        { action: t("shortcuts.search"), keys: [mod, "K"] },
+        { action: t("shortcuts.shortcuts"), keys: [mod, "/"] },
+        { action: t("shortcuts.settings"), keys: [mod, ","] },
+        { action: t("shortcuts.home"), keys: [mod, "H"] },
+        { action: t("shortcuts.rail"), keys: [mod, "\\"] },
+      ],
+    },
+    {
+      title: t("shortcuts.group.games"),
+      rows: [{ action: t("shortcuts.openGame"), keys: [mod, "1–9"] }],
+    },
+    {
+      title: t("shortcuts.group.browser"),
+      rows: [
+        { action: t("shortcuts.address"), keys: [mod, "L"] },
+        { action: t("shortcuts.back"), keys: ["Alt", "←"] },
+        { action: t("shortcuts.forward"), keys: ["Alt", "→"] },
+        { action: t("shortcuts.leaveFullscreen"), keys: ["Esc"] },
+      ],
+    },
+    {
+      title: t("shortcuts.group.lists"),
+      rows: [
+        { action: t("shortcuts.moveList"), keys: ["↑", "↓"] },
+        { action: t("shortcuts.resizeList"), keys: ["←", "→"] },
+        { action: t("shortcuts.pick"), keys: ["Enter"] },
+        { action: t("shortcuts.closeDialog"), keys: ["Esc"] },
+      ],
+    },
+  ];
+}
 
 /**
  * The games Ctrl+1 to Ctrl+9 open: the rail from top to bottom, favorites

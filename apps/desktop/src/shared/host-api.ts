@@ -1,3 +1,4 @@
+import type { Language, LanguageSetting } from "./i18n";
 // Contract between the trusted host UI (renderer) and the main process.
 // Types only: imported by both sides, so it must not import Electron or Node.
 import type { LayoutTemplateId } from "./layout-templates";
@@ -225,8 +226,8 @@ export interface HostViewState {
     /** A playground or example for module authors, listed under Development. */
     development: boolean;
     version: string;
-    /** Where it was found, in words, without a full path: Tavora itself, the modules folder, or a development folder. */
-    origin: string;
+    /** Where it was found, without a full path: Tavora itself, an example, the player's modules folder or a development folder. */
+    origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
     /** Only a module in the player's own modules folder can be removed from Settings. */
     removable: boolean;
   }[];
@@ -249,6 +250,8 @@ export interface HostViewState {
   /** The app's version as major.minor.patch, from apps/desktop/package.json. */
   appVersion: string;
   appearance: AppearanceView;
+  /** The language setting, and the language it comes to now (the system's, when following it). */
+  language: { setting: LanguageSetting; resolved: Language };
 }
 
 /** Everything the host UI can ask the main process to do. Parsed strictly in main. */
@@ -296,6 +299,7 @@ export type HostAction =
   /** Quits, installs the downloaded version and starts Tavora again. */
   | { type: "restart-to-update" }
   | { type: "set-steam-icons"; enabled: boolean }
+  | { type: "set-language"; language: LanguageSetting }
   /** Remembers the Steam profile for the import on this PC; null forgets it. */
   | { type: "set-steam-profile"; profile: string | null }
   /** ixed turns Follow System off; without it the pick keeps following the system. */
