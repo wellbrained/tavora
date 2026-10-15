@@ -33,7 +33,8 @@ variants = {
 for v,(name,fill,bg) in variants.items():
     for size in (1024, 512, 256):
         im = render(name, size, fill, bg)
+        if bg: im = im.convert("RGB")
         im.save(f"{OUT}/tavora-{v}-{size}.png", optimize=True)
         if bg and size == 1024:
-            im.convert("RGB").save(f"{OUT}/tavora-{v}-{size}.jpg", quality=95)
+            im.save(f"{OUT}/tavora-{v}-{size}.jpg", quality=95)
         print(v, size, im.size, im.mode)
