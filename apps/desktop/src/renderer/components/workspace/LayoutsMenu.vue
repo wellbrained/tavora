@@ -93,16 +93,18 @@ function items(): MenuItem[] {
     <template #after>
       <DropdownMenuSeparator />
       <DropdownMenuLabel class="text-muted-foreground text-xs font-normal">Templates</DropdownMenuLabel>
-      <div class="grid grid-cols-3 gap-1 p-1 pt-0">
+      <div class="grid grid-cols-3 gap-1 p-1 pt-0" role="group" aria-label="Templates">
         <DropdownMenuItem
           v-for="template in LAYOUT_TEMPLATES"
           :key="template.id"
-          class="group flex-col gap-1.5 px-1 py-2 text-xs"
+          class="group justify-center p-2"
           :data-testid="`layout-template-${template.id}`"
+          :aria-label="template.name"
+          :title="template.name"
           @select="apply(template.id)"
         >
-          <TemplatePreview :template="template" class="text-muted-foreground group-data-[highlighted]:text-primary h-8 w-12" />
-          <span class="w-full truncate text-center">{{ template.name }}</span>
+          <!-- size-auto keeps the menu item's default 16 px icon size off the preview. -->
+          <TemplatePreview :template="template" class="text-muted-foreground group-data-[highlighted]:text-primary size-auto h-14 w-[84px]" />
         </DropdownMenuItem>
       </div>
     </template>
