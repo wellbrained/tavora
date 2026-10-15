@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.22",
+    date: "2026-10-16",
+    title: "Volume and mute for each person in Discord",
+    notes: [
+      "Right-click a person in your voice channel, or press the … button next to their name, to set how loud they are (0 to 200%) or mute them for yourself only. It is the same setting as in Discord's own menu.",
+      "A person you muted shows a speaker-off icon, and a person whose volume you changed shows a small speaker with the percentage.",
+      "After you press Leave, you disappear from the list at once instead of after a few seconds.",
+    ],
+  },
+  {
     version: "0.5.21",
     date: "2026-10-16",
     title: "Your own module icons",

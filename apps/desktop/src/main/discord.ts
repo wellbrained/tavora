@@ -141,6 +141,8 @@ export class DiscordConnection {
       selfDeaf: person.selfDeaf,
       serverMute: person.serverMute,
       serverDeaf: person.serverDeaf,
+      volume: person.volume,
+      mutedForMe: person.mutedForMe,
     });
     const channel = (voice: VoiceChannel): DiscordChannel => ({ id: voice.id, name: voice.name, members: voice.people.map(member) });
     const server = (guildId: string | null | undefined, fallback: string | null) => {
@@ -232,19 +234,22 @@ export class DiscordConnection {
     await this.loaded;
     const client = this.client;
     if (!client || this.status !== "connected") throw new DiscordError("discord.error.joinNotConnected");
+    // Show it at once: Discord can take a few seconds to answer.
+    this.markLeft(client);
     try {
       await client.command("SELECT_VOICE_CHANNEL", { channel_id: null });
     } catch (error) {
+      void this.followSelected().catch(() => undefined);
       if (error instanceof RpcError && error.code !== 0) throw new DiscordError("discord.error.leaveFailed");
       throw error;
     }
-    this.markLeft(client);
+    // Look again a moment later, in case Discord did not leave after all.
+    this.setTimer(() => {
+      if (client === this.client) void this.followSelected().catch(() => undefined);
+    }, 1500);
   }
 
-  /**
-   * Discord said yes to leaving: show it at once, since its own event can come
-   * late or not at all, and look again a moment later in case it was not so.
-   */
+  /** The player left: the panel shows it now, without waiting for Discord's answer or its own event. */
   private markLeft(client: RpcClient): void {
     if (client !== this.client || !this.call) return;
     const previous = this.call;
@@ -253,9 +258,6 @@ export class DiscordConnection {
     this.speaking.clear();
     this.emit();
     void this.loadBrowse(client);
-    this.setTimer(() => {
-      if (client === this.client) void this.followSelected().catch(() => undefined);
-    }, 1500);
   }
 
   /** Mutes or deafens the player in the Discord app, if the player approved it. */
@@ -267,6 +269,33 @@ export class DiscordConnection {
     try {
       await client.command("SET_VOICE_SETTINGS", { ...(settings.mute === undefined ? {} : { mute: settings.mute }), ...(settings.deaf === undefined ? {} : { deaf: settings.deaf }) });
     } catch (error) {
+      if (error instanceof RpcError && error.code !== 0) throw new DiscordError("discord.error.voiceFailed");
+      throw error;
+    }
+  }
+
+  /**
+   * Sets how loud a person in the player's call is and/or mutes them for the
+   * player only (Discord's own per-person settings, the same as its right-click
+   * menu). Shown at once; if Discord refuses, what Discord says is read again.
+   */
+  async setUserVoice(userId: string, settings: { volume?: number; mute?: boolean }): Promise<void> {
+    await this.loaded;
+    const client = this.client;
+    if (!client || this.status !== "connected") throw new DiscordError("discord.error.joinNotConnected");
+    const person = userId === this.user?.id ? undefined : this.call?.people.find((other) => other.id === userId);
+    if (!person) throw new DiscordError("discord.error.personGone");
+    if (settings.volume !== undefined) person.volume = settings.volume;
+    if (settings.mute !== undefined) person.mutedForMe = settings.mute;
+    this.emit();
+    try {
+      await client.command("SET_USER_VOICE_SETTINGS", {
+        user_id: userId,
+        ...(settings.volume === undefined ? {} : { volume: settings.volume }),
+        ...(settings.mute === undefined ? {} : { mute: settings.mute }),
+      });
+    } catch (error) {
+      void this.followSelected().catch(() => undefined);
       if (error instanceof RpcError && error.code !== 0) throw new DiscordError("discord.error.voiceFailed");
       throw error;
     }

@@ -861,6 +861,8 @@ export class Host {
         return this.discord.leave();
       case "discord-voice":
         return this.discord.setVoice({ ...(action.mute === undefined ? {} : { mute: action.mute }), ...(action.deaf === undefined ? {} : { deaf: action.deaf }) });
+      case "discord-user-voice":
+        return this.discord.setUserVoice(action.userId, { ...(action.volume === undefined ? {} : { volume: action.volume }), ...(action.mute === undefined ? {} : { mute: action.mute }) });
       case "discord-allow-control":
         return this.discord.allowControl();
       case "discord-refresh":
