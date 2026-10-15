@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { act, confirmAction, state, submitAction } from "../../host";
 import { t } from "../../i18n";
+import ModuleIcon from "../ModuleIcon.vue";
 import SettingRow from "./SettingRow.vue";
 
 defineProps<{ highlight: string | null }>();
@@ -75,6 +76,7 @@ function remove(module: ModuleView) {
       >
         <div class="flex min-w-0 flex-1 flex-col gap-0.5">
           <span class="flex items-center gap-2">
+            <ModuleIcon :module-id="module.id" />
             <span class="truncate font-medium">{{ module.name }}</span>
             <span class="text-muted-foreground flex-none text-xs tabular-nums">{{ module.version }}</span>
             <span
