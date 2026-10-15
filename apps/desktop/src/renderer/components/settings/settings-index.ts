@@ -50,6 +50,14 @@ export const SETTINGS: SettingEntry[] = [
     keywords: ["oled", "cleartype", "font", "blurry", "sharp", "crisp", "antialiasing", "display"],
   },
   {
+    id: "online-search",
+    section: "general",
+    label: "Online game search",
+    description:
+      "Finds more games than the built-in list on the Tavora service. It sees the text you type and nothing that identifies you. Turn it off to use the built-in games only.",
+    keywords: ["internet", "network", "privacy", "offline", "database", "service", "online"],
+  },
+  {
     id: "shortcuts",
     section: "general",
     label: "Keyboard shortcuts",

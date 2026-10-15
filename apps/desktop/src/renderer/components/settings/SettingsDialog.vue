@@ -89,6 +89,10 @@ const grayscaleText = computed({
   get: () => library.value.grayscaleText,
   set: (enabled: boolean) => void act({ type: "set-grayscale-text", enabled }),
 });
+const onlineSearch = computed({
+  get: () => library.value.onlineSearch,
+  set: (enabled: boolean) => void act({ type: "set-online-search", enabled }),
+});
 
 /** Leaves Settings and Home shows the first-run welcome again. */
 async function showWelcomeAgain() {
@@ -222,6 +226,14 @@ function deleteNow(gameId: string, name: string) {
               :highlighted="highlight === 'grayscale-text'"
             >
               <Switch v-model="grayscaleText" aria-label="Grayscale text" data-testid="grayscale-text" />
+            </SettingRow>
+            <SettingRow
+              label="Online game search"
+              description="Finds more games than the built-in list on the Tavora service. It sees the text you type and nothing that identifies you. Turn it off to use the built-in games only."
+              setting="online-search"
+              :highlighted="highlight === 'online-search'"
+            >
+              <Switch v-model="onlineSearch" aria-label="Online game search" data-testid="online-search" />
             </SettingRow>
             <SettingRow
               label="Keyboard shortcuts"

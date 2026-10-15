@@ -50,6 +50,8 @@ export interface Library {
   startup: Startup;
   /** Grayscale instead of ClearType text, for OLED screens. Read before the app is ready. */
   grayscaleText: boolean;
+  /** Search and icons may ask the Tavora service online. Off means the built-in games only. */
+  onlineSearch: boolean;
   /** False until the first-run welcome was finished or skipped. */
   onboarded: boolean;
   lastGameId: string | null;
@@ -74,6 +76,7 @@ export function emptyLibrary(): Library {
     rail: { expanded: false, width: RAIL.defaultWidth },
     startup: "last-game",
     grayscaleText: false,
+    onlineSearch: true,
     onboarded: false,
     lastGameId: null,
   };
@@ -140,7 +143,7 @@ export function searchCatalog(library: Library, query: string, limit = 8) {
 }
 
 function normalize(text: string): string {
-  return text.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").trim();
+  return text.toLowerCase().normalize("NFKD").replace(/\p{M}+/gu, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 // ── Games ────────────────────────────────────────────────────────────────
@@ -190,7 +193,16 @@ function customGameId(library: Library, name: string): string {
   return id;
 }
 
-export type NewGame = { catalogId: string } | { name: string };
+export type NewGame = { catalogId: string } | { name: string } | { online: { id: string; name: string } };
+
+function checkNotInLibrary(library: Library, id: string): void {
+  const existing = library.games[id];
+  if (existing) {
+    throw new LibraryError(
+      existing.trashedAt ? `${existing.name} is in Trash. Restore it from Settings.` : `${existing.name} is already in your library.`,
+    );
+  }
+}
 
 /** Adds a game at the end of the rail with an empty workspace. Returns its id. */
 export function addGame(library: Library, input: NewGame, now: Date): string {
@@ -200,14 +212,18 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
   if ("catalogId" in input) {
     const known = catalogGame(input.catalogId);
     if (!known) throw new LibraryError("That game is not in the built-in list.");
-    const existing = library.games[known.id];
-    if (existing) {
-      throw new LibraryError(
-        existing.trashedAt ? `${existing.name} is in Trash. Restore it from Settings.` : `${existing.name} is already in your library.`,
-      );
-    }
+    checkNotInLibrary(library, known.id);
     ({ id, name } = known);
     catalogId = known.id;
+  } else if ("online" in input) {
+    // The service issues canonical ids; a built-in game found online is still that built-in game.
+    // `local-` ids belong to games the player added by name.
+    const known = catalogGame(input.online.id);
+    id = input.online.id;
+    if (id.startsWith("local-")) throw new LibraryError("That game can't be added.");
+    name = known ? known.name : cleanName(input.online.name);
+    catalogId = known ? known.id : null;
+    checkNotInLibrary(library, id);
   } else {
     name = cleanName(input.name);
     id = customGameId(library, name);
@@ -455,6 +471,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (saved.sort === "manual" || saved.sort === "recent") library.sort = saved.sort;
   if (saved.startup === "welcome" || saved.startup === "last-game") library.startup = saved.startup;
   if (typeof saved.grayscaleText === "boolean") library.grayscaleText = saved.grayscaleText;
+  if (typeof saved.onlineSearch === "boolean") library.onlineSearch = saved.onlineSearch;
   // A library saved before the welcome existed belongs to someone who is past it.
   library.onboarded = typeof saved.onboarded === "boolean" ? saved.onboarded : true;
   setRail(library, asRecord(saved.rail));

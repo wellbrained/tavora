@@ -40,6 +40,18 @@ export function parseAction(raw: unknown): HostAction | null {
     case "add-game":
       if (only("catalogId") && isGameId(a.catalogId)) return { type: a.type, catalogId: a.catalogId };
       if (only("name") && text(a.name)) return { type: a.type, name: a.name };
+      if (only("online")) {
+        const game = a.online as Fields | null;
+        if (
+          typeof game === "object" &&
+          game !== null &&
+          Object.keys(game).every((key) => key === "id" || key === "name") &&
+          isGameId(game.id) &&
+          text(game.name)
+        ) {
+          return { type: a.type, online: { id: game.id, name: game.name } };
+        }
+      }
       return null;
     case "rename-game":
       return only("gameId", "name") && isGameId(a.gameId) && text(a.name)
@@ -100,6 +112,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "remove-profile-picture":
       return only() ? { type: a.type } : null;
     case "set-grayscale-text":
+    case "set-online-search":
       return only("enabled") && typeof a.enabled === "boolean" ? { type: a.type, enabled: a.enabled } : null;
     case "set-onboarded":
       return only("done") && typeof a.done === "boolean" ? { type: a.type, done: a.done } : null;

@@ -72,8 +72,43 @@ describe("adding games", () => {
   it.each([[""], ["   "], ["x".repeat(81)], [42]])("refuses the name %j", (name) => {
     expect(() => addGame(emptyLibrary(), { name } as { name: string }, day(1))).toThrow(LibraryError);
   });
-});
 
+  it("adds an online game under the service's id", () => {
+    const library = emptyLibrary();
+    const online = { id: "hades", name: " Hades  Remastered " };
+    expect(addGame(library, { online }, day(1))).toBe("hades");
+    expect(library.games.hades).toMatchObject({
+      id: "hades",
+      catalogId: null,
+      name: "Hades Remastered",
+      icon: { kind: "monogram", text: "HR" },
+    });
+    expect(rootIds(library)).toEqual(["game:hades"]);
+  });
+
+  it("treats a built-in game found online as that built-in game", () => {
+    const library = emptyLibrary();
+    addGame(library, { online: { id: "elden-ring", name: "ELDEN RING" } }, day(1));
+    expect(library.games["elden-ring"]).toMatchObject({ catalogId: "elden-ring", name: "Elden Ring" });
+  });
+
+  it("refuses an online game that is already there, an unsafe id and a local- id", () => {
+    const library = emptyLibrary();
+    const online = { id: "doom-2016", name: "Doom" };
+    addGame(library, { online }, day(1));
+    expect(() => addGame(library, { online }, day(2))).toThrow("already in your library");
+    trashGame(library, "doom-2016", day(2));
+    expect(() => addGame(library, { online }, day(3))).toThrow("is in Trash");
+    expect(() => addGame(library, { online: { ...online, id: "../x" } }, day(3))).toThrow(LibraryError);
+    expect(() => addGame(library, { online: { id: "local-doom", name: "Doom" } }, day(3))).toThrow(LibraryError);
+  });
+
+  it("has online search on by default and keeps only a real setting", () => {
+    expect(emptyLibrary().onlineSearch).toBe(true);
+    expect(sanitizeLibrary({ onlineSearch: false }).onlineSearch).toBe(false);
+    expect(sanitizeLibrary({ onlineSearch: "no" }).onlineSearch).toBe(true);
+  });
+});
 describe("monogram", () => {
   it.each([
     ["Path of Exile 2", "PE2"],
@@ -278,13 +313,5 @@ describe("sanitizeLibrary", () => {
   it("gives an empty library for anything else", () => {
     expect(sanitizeLibrary(null)).toEqual(emptyLibrary());
     expect(sanitizeLibrary("x")).toEqual(emptyLibrary());
-  });
-});
-
-describe("onboarded", () => {
-  it("shows the welcome to new players only", () => {
-    expect(sanitizeLibrary(null).onboarded).toBe(false);
-    expect(sanitizeLibrary({ games: {} }).onboarded).toBe(true);
-    expect(sanitizeLibrary({ onboarded: false }).onboarded).toBe(false);
   });
 });

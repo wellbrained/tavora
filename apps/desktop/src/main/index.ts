@@ -102,6 +102,8 @@ if (!app.requestSingleInstanceLock()) {
         restart,
         hidden: !app.isPackaged && process.env.TAVORA_HIDDEN === "1",
         devServer,
+        // A packaged app only ever talks to api.mytavora.app.
+        apiUrl: !app.isPackaged ? process.env.TAVORA_API_URL : undefined,
       });
     })
     .catch((error: unknown) => {
