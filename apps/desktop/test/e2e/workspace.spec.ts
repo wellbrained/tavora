@@ -17,6 +17,9 @@ test("a new game starts with an empty workspace", async () => {
   const { app, page } = await launch();
   await expect(page.getByTestId("empty-workspace")).toBeVisible();
   await expect(panels(page)).toHaveCount(0);
+  // The card must sit above the docking area, or neither its text nor its button can be clicked.
+  await page.getByTestId("empty-add-module").click({ timeout: 3000 });
+  await expect(page.getByTestId("add-module-dialog").or(page.getByRole("dialog"))).toBeVisible();
   await app.close();
 });
 

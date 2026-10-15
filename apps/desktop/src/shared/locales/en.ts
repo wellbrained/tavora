@@ -459,7 +459,7 @@ export const en = {
   "search.railKeywords": "rail, sidebar",
   "workspace.addModule": "Add module",
   "workspace.startTitle": "Start building your workspace",
-  "workspace.startText": "Add modules for {name}. Arrange them however you like; the layout is saved for this game.",
+  "workspace.startText": "Choose a layout first: open Layouts above and pick a template. Then add modules for {name} to fill it. You can rearrange them any time; the layout is saved for this game.",
   "workspace.panel": "Panel",
   "workspace.options": "{name} options",
   "workspace.removeSlot": "Remove slot",
