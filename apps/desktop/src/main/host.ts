@@ -715,6 +715,9 @@ export class Host {
         // Turned on: games without an icon may find one on the service, and the share list can be built.
         if (action.enabled) this.fetchIconsSoon();
         break;
+      case "set-steam-profile":
+        library.steamProfile = action.profile;
+        break;
       case "set-steam-icons":
         library.steamIcons = action.enabled;
         if (action.enabled) this.fetchIconsSoon();
@@ -1320,6 +1323,7 @@ export class Host {
         onlineSearch: library.onlineSearch,
         autoUpdate: library.autoUpdate,
         steamIcons: library.steamIcons,
+        steamProfile: library.steamProfile,
         onboarded: library.onboarded,
         rail: { ...library.rail },
       },

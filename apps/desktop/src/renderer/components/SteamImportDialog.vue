@@ -3,10 +3,12 @@ import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { SteamGameView } from "../../shared/host-api";
-import { act, api, dialog, showToast } from "../host";
+import { act, api, dialog, showToast, state } from "../host";
 import ModalDialog from "./ModalDialog.vue";
 
-const profile = ref("");
+const profile = ref(state.value?.library.steamProfile ?? "");
+// Remembered on this PC only, and only once a lookup worked.
+const remember = ref(state.value?.library.steamProfile != null);
 const games = ref<SteamGameView[] | null>(null);
 const ticked = ref(new Set<number>());
 const filter = ref("");
@@ -33,6 +35,8 @@ async function lookUp() {
     return;
   }
   games.value = result.games;
+  const wanted = remember.value ? profile.value.trim() : null;
+  if (wanted !== (state.value?.library.steamProfile ?? null)) void act({ type: "set-steam-profile", profile: wanted }, { quiet: true });
   filter.value = "";
   ticked.value = new Set(result.games.filter((game) => game.status === "new").map((game) => game.appid));
 }
@@ -92,8 +96,12 @@ const status = (game: SteamGameView) => (game.status === "trash" ? "In Trash" : 
       />
       <p class="text-muted-foreground text-xs leading-relaxed">
         On Steam, your profile's Game details must be set to Public while you import; you can set them back afterwards. The link
-        goes to the Tavora service, which asks Steam for your game list and sends it straight back. Nothing is kept.
+        goes to the Tavora service, which asks Steam for your game list and sends it straight back; the service keeps nothing. Tick the box below to keep the link on this PC for next time.
       </p>
+      <label class="flex items-center gap-2 text-sm">
+        <input v-model="remember" type="checkbox" class="accent-primary size-4" data-testid="steam-remember" />
+        Remember this profile on this PC
+      </label>
       <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="steam-import-error">{{ error }}</p>
       <div class="flex justify-end gap-2">
         <Button type="button" variant="secondary" @click="dialog = null">Cancel</Button>
