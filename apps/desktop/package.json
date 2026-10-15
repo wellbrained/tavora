@@ -1,6 +1,6 @@
 {
   "name": "@tavora/desktop",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p . && vue-tsc --noEmit -p src/renderer",
     "test:e2e": "playwright test",
     "package": "electron-builder",
+    "release": "node scripts/release.mjs",
     "dev": "node scripts/dev.mjs"
   },
   "devDependencies": {

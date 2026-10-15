@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.3.3",
+    date: "2026-10-15",
+    title: "Behind the scenes",
+    notes: ["New versions of Tavora can now be published with a single command, with checks that stop a half-finished version from reaching anyone."],
+  },
+  {
     version: "0.3.2",
     date: "2026-10-15",
     title: "Behind the scenes",

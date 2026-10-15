@@ -1,0 +1,16 @@
+updates.mytavora.app {
+    bind 167.233.235.154 2a01:4f8:c013:d350::1
+    root * /srv/tavora-updates
+    header X-Content-Type-Options nosniff
+    # No access log on purpose: it would record who updates, and when.
+    # No compression: installers are already compressed and the updater downloads
+    # byte ranges of them, which compression would break.
+    # The manifests change with every release and must never be cached.
+    @manifests path *.yml
+    header @manifests Cache-Control "no-cache"
+    # An installer or blockmap with a version in its name never changes.
+    @versioned path *.exe *.blockmap
+    header @versioned Cache-Control "public, max-age=31536000, immutable"
+    # Only files that were published are served; there is no directory listing.
+    file_server
+}
