@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { discoverModules } from "./registry";
+import { describeModules, discoverModules, type ModuleProblem } from "./registry";
 
 async function makeModule(root: string, folder: string, id: string, name = id): Promise<string> {
   const dir = path.join(root, folder);
@@ -58,5 +58,52 @@ describe("discoverModules", () => {
     await makeModule(official, "todos", "tavora.todos");
     const modules = await discoverModules({ official: [official] });
     expect([...modules.keys()]).toEqual(["tavora.todos"]);
+  });
+
+  it("reports why a local folder was not loaded, but not an official one or a plain folder", async () => {
+    const official = await mkdtemp(path.join(tmpdir(), "tavora-official-"));
+    const local = await mkdtemp(path.join(tmpdir(), "tavora-local-"));
+    await makeModule(official, "good", "tavora.good");
+    await mkdir(path.join(official, "notamodule"));
+    await mkdir(path.join(local, "notamodule"));
+    await mkdir(path.join(local, "broken"));
+    await writeFile(path.join(local, "broken", "tavora.module.json"), "{ nope");
+    await mkdir(path.join(local, "invalid"));
+    await writeFile(path.join(local, "invalid", "tavora.module.json"), JSON.stringify({ id: "x" }));
+    const unbuilt = await makeModule(local, "unbuilt", "local.me.unbuilt");
+    await rm(path.join(unbuilt, "index.html"));
+    await makeModule(local, "fake", "tavora.fake");
+    const problems: ModuleProblem[] = [];
+    await discoverModules({ official: [official], local: [local] }, problems);
+    expect(problems.map((problem) => problem.folder).sort()).toEqual(["broken", "fake", "invalid", "unbuilt"]);
+    expect(problems.find((problem) => problem.folder === "unbuilt")?.message).toContain("index.html");
+    expect(problems.find((problem) => problem.folder === "fake")?.message).toContain("reserved");
+  });
+});
+
+describe("describeModules", () => {
+  it("lets Settings remove only direct children of the player's own modules folder", async () => {
+    const official = await mkdtemp(path.join(tmpdir(), "tavora-official-"));
+    const dev = await mkdtemp(path.join(tmpdir(), "tavora-dev-"));
+    const own = await mkdtemp(path.join(tmpdir(), "tavora-own-"));
+    await makeModule(official, "notes", "tavora.notes");
+    await makeModule(dev, "tool", "local.dev.tool");
+    await makeModule(own, "mine", "local.me.mine");
+    await makeModule(own, "nested/deeper", "local.me.deeper");
+    const modules = await discoverModules({ official: [official], local: [dev, own] });
+    const info = await describeModules(own, modules);
+    expect(info.get("tavora.notes")).toEqual({ origin: "Ships with Tavora", removable: false });
+    expect(info.get("local.dev.tool")).toMatchObject({ removable: false, origin: expect.stringContaining("development folder") });
+    expect(info.get("local.me.mine")).toEqual({ origin: "Your modules folder, in mine", removable: true });
+    // Found two levels down: not a direct child, so Settings leaves it alone.
+    expect(info.has("local.me.deeper")).toBe(false);
+  });
+
+  it("does not offer the folder itself when the module sits straight in it", async () => {
+    const own = await mkdtemp(path.join(tmpdir(), "tavora-own-"));
+    await makeModule(path.dirname(own), path.basename(own), "local.me.straight");
+    const modules = await discoverModules({ local: [own] });
+    const info = await describeModules(own, modules);
+    expect(info.get("local.me.straight")?.removable).toBe(false);
   });
 });

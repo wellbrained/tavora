@@ -1,3 +1,4 @@
+import type { JsonValue } from "@tavora/sdk";
 import { describe, expect, it } from "vitest";
 import {
   addGroup,
@@ -10,6 +11,7 @@ import {
   findTask,
   moveGroup,
   moveTask,
+  LIMITS,
   normalizeLink,
   parseList,
   pinnedTasks,
@@ -154,5 +156,41 @@ describe("normalizeLink", () => {
     expect(normalizeLink("maxroll.gg/poe2")).toBe("https://maxroll.gg/poe2");
     expect(normalizeLink("javascript:alert(1)")).toBeNull();
     expect(normalizeLink("mailto:a@b.c")).toBeNull();
+  });
+});
+
+describe("parseList hardening", () => {
+  it("keeps only web addresses as links", () => {
+    const data = parseList({
+      version: 1,
+      groups: [
+        {
+          id: "g",
+          name: "G",
+          tasks: [
+            { id: "a", title: "A", link: "javascript:alert(1)" },
+            { id: "b", title: "B", link: "https://example.com/guide" },
+            { id: "c", title: "C", link: "data:text/html,x" },
+            { id: "d", title: "D", link: "example.com" },
+          ],
+        },
+      ],
+    });
+    expect(data.groups[0]!.tasks.map((task) => task.link)).toEqual(["", "https://example.com/guide", "", "https://example.com/"]);
+  });
+
+  it("limits how much a stored list can hold", () => {
+    const many = (count: number, make: (n: number) => JsonValue): JsonValue[] => Array.from({ length: count }, (_, n) => make(n));
+    const data = parseList({
+      version: 1,
+      groups: many(LIMITS.groups + 5, (g) => ({
+        id: `g${g}`,
+        name: "G",
+        tasks: g === 0 ? many(LIMITS.tasksPerGroup + 5, (t) => ({ id: `t${t}`, title: "T", steps: many(LIMITS.stepsPerTask + 5, (s) => ({ id: `s${s}`, title: "S" })) })) : [],
+      })),
+    });
+    expect(data.groups).toHaveLength(LIMITS.groups);
+    expect(data.groups[0]!.tasks).toHaveLength(LIMITS.tasksPerGroup);
+    expect(data.groups[0]!.tasks[0]!.steps).toHaveLength(LIMITS.stepsPerTask);
   });
 });
