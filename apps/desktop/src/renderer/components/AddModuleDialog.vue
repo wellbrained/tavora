@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
+import ModuleIcon from "./ModuleIcon.vue";
+import { hasModuleIcon } from "../module-icons";
 
 /** Who publishes a module: Tavora itself, or a package found on this computer. */
 const provenanceLabel = (provenance: "official" | "local") => (provenance === "official" ? t("common.official") : t("common.local"));
@@ -97,7 +99,7 @@ function submit() {
               <span
                 class="bg-background text-primary flex size-10 flex-none items-center justify-center rounded-[10px] border text-base font-semibold"
                 aria-hidden="true"
-                >{{ [...module.name][0] }}</span
+                ><ModuleIcon v-if="hasModuleIcon(module.id)" :module-id="module.id" size="size-5" /><template v-else>{{ [...module.name][0] }}</template></span
               >
               <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span class="flex items-center gap-2">

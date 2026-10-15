@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.17",
+    date: "2026-10-16",
+    title: "Module icons in the library",
+    notes: [
+      "Add module and Settings > Modules show the module icons too. They are always shown there; the Icons on panel tabs switch only affects the tabs.",
+    ],
+  },
+  {
     version: "0.5.16",
     date: "2026-10-15",
     title: "Browser tabs",
