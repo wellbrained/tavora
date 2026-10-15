@@ -50,7 +50,7 @@ Output lives in `apps/desktop/release/`. Builds include Notes, To-Dos and the ex
 
 ### Releasing
 
-Installed apps update only when a **minor** version (x.y.0) is released; ordinary PRs raise the patch number and publish nothing. To release, raise the minor number in `apps/desktop/package.json`, fold the patch-notes entries since the last release into one entry for it (`apps/desktop/src/shared/patch-notes.ts`), merge that through a PR, then on the maintainer's PC:
+Installed apps update only when a **minor** version (x.y.0) is released; ordinary PRs raise the patch number and publish nothing. To release, raise the minor number in `apps/desktop/package.json` (and the same version in the root `package.json`, which tracker shows; a test keeps them equal), fold the patch-notes entries since the last release into one entry for it (`apps/desktop/src/shared/patch-notes.ts`), merge that through a PR, then on the maintainer's PC:
 
 ```sh
 pnpm release --dry-run   # checks, tests, e2e and the installer build; stops before the upload
