@@ -21,43 +21,18 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.5.0",
     date: "2026-10-15",
-    title: "Themes",
+    title: "Themes, game icons and a safety copy",
     notes: [
       "Settings has a new Appearance section where you can pick how Tavora looks. Every theme is shown in its own colours before you pick it, and your modules change colour along with Tavora.",
       "Three themes come with Tavora, each in Dark and Light: Tavora with its warm charcoal and gold, Nightfall in cool slate and moonlight blue, and Hearthwood in deep forest green.",
       "You can make your own theme: press New theme in Appearance to get a copy of the Tavora theme in your themes folder, change its colours, and press Reload. Reset to Tavora Default always takes you back.",
-      "The UI Playground and the example modules now have their own Development category in the module library, so they no longer sit between Notes, To-Dos and your own modules. They are still there for anyone who wants to try building a module.",
+      "Games installed through Battle.net, Epic, GOG, EA and other launchers now show their own icon, taken from the game on your PC. Games you have not installed can show theirs too, from a small, growing set Tavora keeps: when Online game search is on, Tavora asks only for the icons of your own games, and the service keeps no log of what is asked. Game names and icons belong to their publishers, and Tavora is not affiliated with them.",
       "Change icon now has three plain choices: Original icon, Set letters and Select own icon. The one in use is ticked, and picking another replaces it, so there is no separate Reset. Letters you set now always show, even for a game that has its own icon.",
       "If your PC has a game's own icon that Tavora does not have yet, you can share it: right-click the game and choose Share icon, or open Settings and press Share. You see exactly what is sent (the icon, the game's id and its name, nothing about you), and a person at Tavora checks each one before anyone else sees it.",
+      "Tavora now keeps a copy of your games, layouts, notes and settings from the last 7 days, made when it first starts each day. If something ever goes wrong, open Settings, then Backups, and press Open folder to find them. If you go back to an older version of Tavora, it no longer overwrites what a newer version saved: it keeps a copy of that file next to it first.",
+      "The UI Playground and the example modules now have their own Development category in the module library, so they no longer sit between Notes, To-Dos and your own modules. They are still there for anyone who wants to try building a module.",
     ],
-  },
-  {
-    version: "0.4.4",
-    date: "2026-10-15",
-    title: "A safety copy of your data",
-    notes: [
-      "Tavora now keeps a copy of your games, layouts, notes and settings from the last 7 days, made when it first starts each day. If something ever goes wrong, open Settings, then Backups, and press Open folder to find them.",
-      "If you go back to an older version of Tavora, it no longer overwrites what a newer version saved: it keeps a copy of that file next to it first.",
-    ],
-  },
-  {
-    version: "0.4.3",
-    date: "2026-10-15",
-    title: "Icons for games you have not installed",
-    notes: [
-      "Tavora now keeps a small, growing set of game icons for games that are not installed on your PC. When Online game search is on, a game you added shows its icon from there. Tavora asks only for the icons of your own games, and the service keeps no log of what is asked.",
-      "Game names and icons belong to their publishers. Tavora is not affiliated with them, and Settings says so.",
-    ],
-  },
-  {
-    version: "0.4.2",
-    date: "2026-10-15",
-    title: "Game icons from your launchers",
-    notes: [
-      "Games installed through Battle.net, Epic, GOG, EA and other launchers now show their own icon, taken from the game on your PC. Games from Steam you don't have installed get Steam's small icon too, and the Steam setting in Settings now covers all of this.",
-    ],
-  },
-  {
+  },  {
     version: "0.4.1",
     date: "2026-10-15",
     title: "Check for updates",
