@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // UI Playground: every control the official modules share, shown on its own
 // so the look and feel can be tried out and compared. Nothing here is saved
-// except this panel's filter and the "Disabled" switch.
+// except this panel's filter and the "Show disabled" switch, which turns every
+// control into its disabled state.
 import {
   AlertTriangle,
   Bold,
@@ -170,7 +171,7 @@ function bump(by: number) {
       </div>
       <Label class="text-muted-foreground flex-none px-1 text-xs font-normal">
         <Switch :model-value="panel.disabled" data-testid="disable-all" @update:model-value="setPanel({ disabled: $event })" />
-        Disabled
+        Show disabled
       </Label>
     </header>
 

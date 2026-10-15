@@ -179,21 +179,50 @@
 
 /* Drop position markers on the rail while dragging. */
 @layer components {
+  /* A thick line across the rail with a dot at its start: "it goes here". */
   .drop-before::before,
   .drop-after::after {
     content: "";
     position: absolute;
-    left: 8px;
-    right: 8px;
-    height: 2px;
-    border-radius: 1px;
+    z-index: 1;
+    left: 6px;
+    right: 2px;
+    height: 3px;
+    border-radius: 2px;
     background: var(--primary);
+    pointer-events: none;
   }
   .drop-before::before {
-    top: -3px;
+    top: -4px;
   }
   .drop-after::after {
-    bottom: -3px;
+    bottom: -4px;
+  }
+  .drop-before > [data-rail-item]::before,
+  .drop-after > [data-rail-item]::after {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    left: 2px;
+    width: 9px;
+    height: 9px;
+    border-radius: 9999px;
+    background: var(--primary);
+    pointer-events: none;
+  }
+  .drop-before > [data-rail-item]::before {
+    top: -7px;
+  }
+  .drop-after > [data-rail-item]::after {
+    bottom: -7px;
+  }
+  /* Dropping into a folder (or onto a game to make one) fills it lightly. */
+  .drop-into > [data-rail-item] {
+    background: color-mix(in oklab, var(--primary) 18%, transparent);
+  }
+  /* The item being dragged, where it came from. */
+  .drag-source {
+    opacity: 0.4;
   }
 }
 

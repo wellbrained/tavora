@@ -141,6 +141,9 @@ function onDragStart(event: DragEvent, item: Dragged) {
   dragged.value = item;
   event.dataTransfer?.setData("text/plain", item.id);
   if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  // Dim the item where it came from, a frame later so the drag image stays solid.
+  const row = event.currentTarget as HTMLElement;
+  requestAnimationFrame(() => row.classList.add("drag-source"));
 }
 
 function onDragEnd() {
@@ -251,7 +254,10 @@ async function onFavoritesDrop(event: DragEvent) {
 function dnd(target: Target, item: Dragged = { kind: target.kind, id: target.id }) {
   return {
     dragstart: (event: DragEvent) => onDragStart(event, item),
-    dragend: onDragEnd,
+    dragend: (event: DragEvent) => {
+      (event.currentTarget as HTMLElement).classList.remove("drag-source");
+      onDragEnd();
+    },
     dragover: (event: DragEvent) => onDragOver(event, target),
     dragleave: (event: DragEvent) => onDragLeave(event, target),
     drop: (event: DragEvent) => void onDrop(event, target),

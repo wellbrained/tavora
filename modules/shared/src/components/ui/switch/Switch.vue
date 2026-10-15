@@ -25,7 +25,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
   >
     <SwitchThumb
       data-slot="switch-thumb"
-      class="bg-background pointer-events-none block size-4 rounded-full transition-transform data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0"
+      class="data-[state=checked]:bg-background data-[state=unchecked]:bg-foreground pointer-events-none block size-4 rounded-full transition-transform data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0"
     >
       <slot name="thumb" v-bind="slotProps" />
     </SwitchThumb>
