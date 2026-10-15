@@ -274,6 +274,45 @@ describe("DiscordConnection", () => {
     expect(old.fake.commands.some((c) => c.cmd === "AUTHORIZE")).toBe(true);
   });
 
+  it("shows the volume and mute for me of each person, and changes them for the player only", async () => {
+    const { connection, fake } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({
+      data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain"), { ...person("2", "Lena"), volume: 150, mute: true }, { ...person("3", "Tobi"), volume: 999 }] },
+    }));
+    await connection.setWanted(true);
+    await until(() => connection.view().status === "connected" && connection.view().call?.members.length === 3);
+    const lena = () => connection.view().call!.members.find((m) => m.id === "2")!;
+    expect(connection.view().call!.members.map((m) => [m.volume, m.mutedForMe])).toEqual([[100, false], [150, true], [200, false]]);
+
+    // Shown at once, and sent to Discord for that person only.
+    await connection.setUserVoice("2", { volume: 80 });
+    expect(lena().volume).toBe(80);
+    await connection.setUserVoice("2", { mute: false });
+    expect(lena().mutedForMe).toBe(false);
+    expect(fake.commands.filter((c) => c.cmd === "SET_USER_VOICE_SETTINGS").map((c) => c.args)).toEqual([
+      { user_id: "2", volume: 80 },
+      { user_id: "2", mute: false },
+    ]);
+
+    // Not for the player, and not for someone who is not in the call.
+    await expect(connection.setUserVoice("1", { volume: 50 })).rejects.toMatchObject({ key: "discord.error.personGone" });
+    await expect(connection.setUserVoice("99", { mute: true })).rejects.toMatchObject({ key: "discord.error.personGone" });
+
+    // Discord refusing puts back what Discord says.
+    fake.answers.set("SET_USER_VOICE_SETTINGS", () => ({ error: { code: 4000, message: "No" } }));
+    await expect(connection.setUserVoice("2", { volume: 10 })).rejects.toMatchObject({ key: "discord.error.voiceFailed" });
+    await until(() => lena().volume === 150 && lena().mutedForMe);
+  });
+
+  it("leaves at once, and comes back when Discord refuses", async () => {
+    const { connection, fake } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    await connection.setWanted(true);
+    await until(() => connection.view().status === "connected" && connection.view().call !== null);
+    fake.answers.set("SELECT_VOICE_CHANNEL", () => ({ error: { code: 4000, message: "No" } }));
+    await expect(connection.leave()).rejects.toMatchObject({ key: "discord.error.leaveFailed" });
+    await until(() => connection.view().call !== null);
+  });
+
   it("does not join while not connected", async () => {
     const { connection } = await setup();
     await expect(connection.join("10")).rejects.toMatchObject({ key: "discord.error.joinNotConnected" });
