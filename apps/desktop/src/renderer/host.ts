@@ -74,7 +74,13 @@ export interface ShareIconsRequest {
   gameIds: string[];
 }
 
-export type DialogRequest = PromptRequest | ConfirmRequest | ShareIconsRequest | { kind: "add-game" } | { kind: "add-module" };
+/** Adding a module; `slot` is the empty slot (a dock group id) it should fill. */
+export interface AddModuleRequest {
+  kind: "add-module";
+  slot?: string;
+}
+
+export type DialogRequest = PromptRequest | ConfirmRequest | ShareIconsRequest | { kind: "add-game" } | AddModuleRequest;
 
 export const dialog = shallowRef<DialogRequest | null>(null);
 
@@ -143,6 +149,9 @@ const openMenus = ref(0);
 
 /** True while a panel or group is dragged, or a split is being resized. */
 export const dragging = ref(false);
+
+/** The empty slot (a dock group id) the next panel to open goes into, if any. */
+export const nextPanelSlot = ref<string | null>(null);
 
 /** Still images of the panels, by instance id, while they are hidden. */
 export const frozen = shallowRef<Record<string, string>>({});

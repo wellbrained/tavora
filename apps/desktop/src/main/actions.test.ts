@@ -55,6 +55,8 @@ describe("parseAction", () => {
     [{ type: "open-module", moduleId: "local.example.vue-module" }],
     [{ type: "close-panel", instanceId: FOLDER }],
     [{ type: "save-layout", layout: LAYOUT }],
+    [{ type: "save-layout", layout: null }],
+    [{ type: "apply-layout-template", templateId: "grid" }],
     [{ type: "save-snapshot", name: "Mapping" }],
     [{ type: "apply-snapshot", snapshotId: FOLDER }],
     [{ type: "rename-snapshot", snapshotId: FOLDER, name: "Bossing" }],
@@ -131,6 +133,8 @@ describe("parseAction", () => {
     [{ type: "close-panel", instanceId: "../x" }],
     [{ type: "save-layout", layout: { ...LAYOUT, direction: "diagonal" } }],
     [{ type: "save-layout" }],
+    [{ type: "apply-layout-template", templateId: "spiral" }],
+    [{ type: "apply-layout-template" }],
     [{ type: "save-snapshot", name: "x".repeat(81) }],
     [{ type: "delete-snapshot", snapshotId: "1" }],
   ])("rejects %j", (action) => {
