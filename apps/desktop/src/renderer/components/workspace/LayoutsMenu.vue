@@ -110,7 +110,7 @@ function items(): MenuItem[] {
         </DropdownMenuSubTrigger>
         <!-- Opens level with the Templates entry: -5 offsets the panel's border and padding. -->
         <DropdownMenuSubContent class="w-auto" side="right" align="start" :align-offset="-5">
-          <div class="grid grid-cols-3 gap-1" role="group" aria-label="Templates">
+          <div class="grid grid-cols-2 gap-1" role="group" aria-label="Templates">
             <DropdownMenuItem
               v-for="template in LAYOUT_TEMPLATES"
               :key="template.id"
