@@ -55,7 +55,7 @@ Each variation:
 | --- | --- | --- |
 | `id` | yes | Lowercase letters, digits and `-`, at most 32 characters, unique in the theme. When a player switches themes, a variation with the same id (say `light`) is kept. |
 | `name` | yes | 1 to 24 characters, shown in a segmented control. |
-| `mode` | yes | `"dark"` or `"light"`. Native menus, scrollbars and form controls follow it. |
+| `mode` | yes | `"dark"` or `"light"`. Native menus, scrollbars and form controls follow it. Players can follow the system (the default): Tavora then shows the variation whose mode matches the system's light or dark setting, so a theme that comes in Dark and Light works with it unchanged. |
 | `contrast` | no | `"normal"` (default) or `"high"`. High-contrast variations need 7:1 for text instead of 4.5:1. |
 | `radius` | no | Corner radius in px, a whole number from 4 to 12. Default 8. |
 | `colors` | yes | Every token below, each as `#rrggbb`. No transparency. |

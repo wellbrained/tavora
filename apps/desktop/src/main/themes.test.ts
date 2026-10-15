@@ -11,6 +11,7 @@ import {
   FALLBACK_THEME,
   moduleTheme,
   resolveTheme,
+  variationForMode,
   starterTheme,
   THEME_MANIFEST,
   themeManifest,
@@ -165,6 +166,33 @@ describe("resolveTheme", () => {
     expect(resolveTheme(themes, { id: "tavora.nightfall", variation: "oled" }).variation.id).toBe("dark");
     const gone = resolveTheme(themes, { id: "community.gone", variation: "dark" });
     expect([gone.theme.id, gone.variation.id]).toEqual([DEFAULT_THEME.id, DEFAULT_THEME.variation]);
+  });
+});
+
+describe("resolveTheme when following the system", () => {
+  it("shows the variation that suits the system, whichever one was saved", async () => {
+    const { themes } = await discoverThemes({ official: [officialDir] });
+    const pick = (variation: string, mode: "dark" | "light") => resolveTheme(themes, { id: "tavora.nightfall", variation }, mode).variation.id;
+    expect([pick("dark", "light"), pick("light", "dark"), pick("dark", "dark"), pick("light", "light")]).toEqual(["light", "dark", "dark", "light"]);
+  });
+
+  it("uses the default theme's matching variation when the saved theme is gone", async () => {
+    const { themes } = await discoverThemes({ official: [officialDir] });
+    const gone = resolveTheme(themes, { id: "community.gone", variation: "dark" }, "light");
+    expect([gone.theme.id, gone.variation.mode]).toEqual([DEFAULT_THEME.id, "light"]);
+  });
+
+  it("prefers normal contrast over high contrast, and keeps a theme that only has the other mode", async () => {
+    const { themes } = await discoverThemes({ official: [officialDir] });
+    const base = themes.get("tavora.nightfall")!.theme;
+    const dark = base.variations.find((item) => item.mode === "dark")!;
+    const light = base.variations.find((item) => item.mode === "light")!;
+    const withHigh = { ...base, variations: [{ ...light, id: "light-high", contrast: "high" as const }, light, dark] };
+    expect(variationForMode(withHigh, "dark", "light").id).toBe(light.id);
+    // A saved variation that already suits the system is kept, even a high contrast one.
+    expect(variationForMode(withHigh, "light-high", "light").id).toBe("light-high");
+    const darkOnly = { ...base, variations: [dark] };
+    expect(variationForMode(darkOnly, dark.id, "light").id).toBe(dark.id);
   });
 });
 

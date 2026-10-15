@@ -112,6 +112,13 @@ export const SETTINGS: SettingEntry[] = [
     keywords: ["theme", "colour", "color", "look", "style", "dark", "palette", "skin", "appearance"],
   },
   {
+    id: "appearance-mode",
+    section: "appearance",
+    label: "Light or dark",
+    description: "Follow System, or stay in Dark or Light. Follow System switches with your system's setting.",
+    keywords: ["follow system", "system", "automatic", "auto", "dark", "light", "dark mode", "light mode", "night", "day", "os", "windows", "mac"],
+  },
+  {
     id: "theme-variation",
     section: "appearance",
     label: "Variation",

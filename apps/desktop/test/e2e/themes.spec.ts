@@ -26,7 +26,8 @@ test("picking a theme recolours Tavora and its modules, and is kept after a rest
   await page.getByTestId("theme-tavora.nightfall").click();
   await expect(page.getByTestId("theme-tavora.nightfall")).toHaveAttribute("aria-pressed", "true");
   await expect.poll(() => rootToken(page, "background")).toBe("#12161c");
-  await page.getByTestId("variation-light").click();
+  // Nightfall comes in exactly Dark and Light, so the choice is the Light or dark row.
+  await page.getByTestId("mode-light").click();
   await expect.poll(() => rootToken(page, "background")).toBe("#eef2f7");
   // The module page's user stylesheet follows too.
   await expect
@@ -46,8 +47,37 @@ test("picking a theme recolours Tavora and its modules, and is kept after a rest
   await again.app.close();
 });
 
-test("the player's own themes load from the themes folder, and broken ones say why", async () => {
+test("Follow System shows the version that suits the system, and Dark or Light stays put", async () => {
   const userData = await newUserData();
+  const { app, page } = await launch(userData, [], { systemTheme: "light" });
+  // Nobody has chosen: the Tavora theme follows the system, which is light here.
+  await expect.poll(() => rootToken(page, "background")).toBe("#f6f2ea");
+  await openAppearance(page);
+  await expect(page.getByTestId("mode-system")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("reset-theme")).toBeDisabled();
+
+  await page.getByTestId("mode-dark").click();
+  await expect(page.getByTestId("mode-dark")).toHaveAttribute("aria-checked", "true");
+  await expect.poll(() => rootToken(page, "background")).toBe("#171412");
+  await expect(page.getByTestId("reset-theme")).toBeEnabled();
+  await app.close();
+
+  // Dark was chosen, so it stays dark after a restart although the system is light.
+  const saved = JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as { followSystem: boolean };
+  expect(saved.followSystem).toBe(false);
+  const again = await launch(userData, [], { systemTheme: "light" });
+  await expect.poll(() => rootToken(again.page, "background")).toBe("#171412");
+  await openAppearance(again.page);
+  await again.page.getByTestId("mode-system").click();
+  await expect.poll(() => rootToken(again.page, "background")).toBe("#f6f2ea");
+  await again.page.getByTestId("mode-dark").click();
+  await again.page.getByTestId("reset-theme").click();
+  await expect(again.page.getByTestId("mode-system")).toHaveAttribute("aria-checked", "true");
+  await expect.poll(() => rootToken(again.page, "background")).toBe("#f6f2ea");
+  await again.app.close();
+});
+
+test("the player's own themes load from the themes folder, and broken ones say why", async () => {  const userData = await newUserData();
   const { app, page } = await launch(userData);
   const official = JSON.parse(
     await readFile(path.resolve(desktopDir, "../../themes/nightfall/tavora.theme.json"), "utf8"),

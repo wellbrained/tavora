@@ -74,12 +74,14 @@ export function seedLibrary() {
 export interface LaunchOptions {
   /** Write the two-game library before the first start (default true). */
   seed?: boolean;
+  /** What the system pretends to be (default dark), so the theme tests do not depend on the PC. */
+  systemTheme?: "dark" | "light";
 }
 
 export async function launch(
   userData?: string,
   extraModuleDirs: string[] = [],
-  { seed = true }: LaunchOptions = {},
+  { seed = true, systemTheme }: LaunchOptions = {},
 ): Promise<Running> {
   const dir = userData ?? (await newUserData());
   const libraryFile = path.join(dir, "library.json");
@@ -97,6 +99,8 @@ export async function launch(
       TAVORA_STEAM_ICONS_URL: "off",
       // Set TAVORA_HIDDEN=0 to watch the windows while debugging a test.
       TAVORA_HIDDEN: process.env.TAVORA_HIDDEN ?? "1",
+      // The system is pretended to be dark, so the theme tests do not depend on the PC they run on.
+      TAVORA_SYSTEM_THEME: systemTheme ?? process.env.TAVORA_SYSTEM_THEME ?? "dark",
       TAVORA_MODULE_DIRS: [path.join(repoRoot, "examples"), FIXTURES, ...extraModuleDirs].join(path.delimiter),
     },
   });
