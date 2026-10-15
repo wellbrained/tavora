@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.2",
+    date: "2026-10-15",
+    title: "Help when something goes wrong",
+    notes: [
+      "Settings, then General, has a new Diagnostic info button. It copies Tavora's version, your system, how long things took, the update log and the last errors, so you can paste it to whoever is helping you. It leaves out game names, notes and folders, and nothing is sent anywhere.",
+    ],
+  },
+  {
     version: "0.5.1",
     date: "2026-10-15",
     title: "Light or dark, like your system",

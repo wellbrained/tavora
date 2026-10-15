@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { app, protocol } from "electron";
 import { HOST_SCHEME, MODULE_SCHEME } from "./assets";
+import { errorLog } from "./diagnostics";
 import { Host } from "./host";
+
+// The last errors of this run, for Settings > Copy diagnostic info.
+errorLog.capture();
 
 // Both schemes behave like https origins: standard URL parsing, a secure
 // context and per-origin storage. Neither may register service workers.

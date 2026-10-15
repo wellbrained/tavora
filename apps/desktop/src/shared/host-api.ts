@@ -234,6 +234,10 @@ export type HostAction =
   | { type: "set-auto-update"; enabled: boolean }
   /** Starts the download of a version that was found while automatic download is off. */
   | { type: "download-update" }
+  /** How long the screen took to show something the player asked for, measured where it is drawn. */
+  | { type: "record-timing"; name: "game-switch"; ms: number }
+  /** Puts the version, system, timings, update log and last errors on the clipboard, to paste to whoever is helping. */
+  | { type: "copy-diagnostics" }
   /** Opens the folder with the daily copies of the player's data. */
   | { type: "open-backups" }
   /** Asks the update server now, without waiting for the next scheduled check. */
