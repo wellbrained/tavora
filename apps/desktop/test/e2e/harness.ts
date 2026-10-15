@@ -93,6 +93,8 @@ export async function launch(
     env: {
       ...process.env,
       TAVORA_USER_DATA: dir,
+      // Set TAVORA_HIDDEN=0 to watch the windows while debugging a test.
+      TAVORA_HIDDEN: process.env.TAVORA_HIDDEN ?? "1",
       TAVORA_MODULE_DIRS: [path.join(repoRoot, "examples"), FIXTURES, ...extraModuleDirs].join(path.delimiter),
     },
   });

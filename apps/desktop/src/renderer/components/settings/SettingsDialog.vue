@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { Search, X } from "@lucide/vue";
+import { RotateCw, Search, X } from "@lucide/vue";
 import { computed, nextTick, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { RootSort, Startup } from "../../../shared/host-api";
@@ -84,6 +85,10 @@ const sort = computed({
   get: () => library.value.sort,
   set: (value: RootSort) => void act({ type: "set-sort", sort: value }),
 });
+const grayscaleText = computed({
+  get: () => library.value.grayscaleText,
+  set: (enabled: boolean) => void act({ type: "set-grayscale-text", enabled }),
+});
 
 function deleteNow(gameId: string, name: string) {
   confirmAction({
@@ -143,7 +148,7 @@ function deleteNow(gameId: string, name: string) {
         </div>
       </nav>
 
-      <div class="relative min-w-0 flex-1 overflow-y-auto">
+      <div class="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
         <DialogClose as-child>
           <Button variant="ghost" size="icon" class="absolute top-4 right-4" data-testid="settings-close" aria-label="Close settings" title="Close">
             <X :stroke-width="1.5" />
@@ -202,6 +207,14 @@ function deleteNow(gameId: string, name: string) {
                 ]"
               />
             </SettingRow>
+            <SettingRow
+              label="Grayscale text"
+              description="Smooths text without colour fringes. Turn it on if text looks blurry on an OLED screen. Applies after a restart."
+              setting="grayscale-text"
+              :highlighted="highlight === 'grayscale-text'"
+            >
+              <Switch v-model="grayscaleText" aria-label="Grayscale text" data-testid="grayscale-text" />
+            </SettingRow>
           </template>
 
           <template v-else-if="section === 'trash'">
@@ -239,6 +252,18 @@ function deleteNow(gameId: string, name: string) {
               </ul>
             </div>
           </template>
+        </div>
+
+        <!-- Settings that apply on start share one bar, so several changes need one restart. -->
+        <div
+          v-if="state!.restartPending"
+          class="bg-card sticky bottom-0 mt-auto flex flex-none items-center gap-4 border-t px-10 py-3"
+          role="status"
+          data-testid="restart-bar"
+        >
+          <RotateCw class="text-primary size-4 flex-none" :stroke-width="1.5" />
+          <span class="flex-1">Some changes apply after a restart.</span>
+          <Button data-testid="restart-now" @click="act({ type: 'restart' })">Restart now</Button>
         </div>
       </div>
     </DialogContent>

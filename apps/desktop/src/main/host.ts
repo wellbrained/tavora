@@ -99,6 +99,12 @@ export interface HostOptions {
   hostPreload: string;
   icon: string;
   devTools: boolean;
+  /** Whether this run started with grayscale text (see Library.grayscaleText). */
+  grayscaleText: boolean;
+  /** Quits and starts Tavora again, so settings that apply on start take effect. */
+  restart: () => void;
+  /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
+  hidden?: boolean;
   /**
    * Development only: the Vite dev server that serves the host UI with hot
    * reload, instead of the built files in `rendererDir`.
@@ -162,7 +168,16 @@ export class Host {
     });
     this.window.removeMenu();
     if (windowState.maximized) this.window.maximize();
-    this.window.once("ready-to-show", () => this.window.show());
+    if (options.hidden) {
+      // A truly hidden window never resizes its panels, so tests get one that
+      // is shown but transparent, click-through, unfocused and off the taskbar.
+      this.window.setOpacity(0);
+      this.window.setIgnoreMouseEvents(true);
+      this.window.setSkipTaskbar(true);
+      this.window.once("ready-to-show", () => this.window.showInactive());
+    } else {
+      this.window.once("ready-to-show", () => this.window.show());
+    }
     this.watchShortcuts(this.window.webContents);
   }
 
@@ -298,6 +313,8 @@ export class Host {
     switch (action.type) {
       case "show-welcome":
         return this.showScreen("welcome");
+      case "restart":
+        return this.options.restart();
       case "open-game":
         return this.openGame(action.gameId);
       case "add-game": {
@@ -364,6 +381,9 @@ export class Host {
         break;
       case "set-startup":
         library.startup = action.startup;
+        break;
+      case "set-grayscale-text":
+        library.grayscaleText = action.enabled;
         break;
       case "set-rail":
         setRail(library, action);
@@ -740,6 +760,7 @@ export class Host {
         })),
         sort: library.sort,
         startup: library.startup,
+        grayscaleText: library.grayscaleText,
         rail: { ...library.rail },
       },
       modules: [...this.modules.values()].map((module) => ({
@@ -761,6 +782,7 @@ export class Host {
       layoutEpoch: this.layoutEpoch,
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
       notice: this.notice,
+      restartPending: library.grayscaleText !== this.options.grayscaleText,
     };
   }
 

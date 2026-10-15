@@ -26,6 +26,7 @@ export function parseAction(raw: unknown): HostAction | null {
 
   switch (a.type) {
     case "show-welcome":
+    case "restart":
       return only() ? { type: a.type } : null;
     case "open-game":
     case "choose-game-image":
@@ -85,6 +86,8 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("startup") && (a.startup === "welcome" || a.startup === "last-game")
         ? { type: a.type, startup: a.startup }
         : null;
+    case "set-grayscale-text":
+      return only("enabled") && typeof a.enabled === "boolean" ? { type: a.type, enabled: a.enabled } : null;
     case "set-rail": {
       if (!only("expanded", "width")) return null;
       if (a.expanded !== undefined && typeof a.expanded !== "boolean") return null;
