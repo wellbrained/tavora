@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.1",
+    date: "2026-10-15",
+    title: "Light or dark, like your system",
+    notes: [
+      "Tavora now follows your system: when your computer switches between light and dark, Tavora and its modules switch with it, using the Light or Dark version of your theme. Settings, then Appearance, has a Light or dark choice where you can stay in Dark or Light instead.",
+    ],
+  },
+  {
     version: "0.5.0",
     date: "2026-10-15",
     title: "Themes",
