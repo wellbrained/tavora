@@ -578,7 +578,7 @@ export const en = {
   "discord.panel.connect": "Connect",
   "discord.panel.openSettings": "Open Settings",
   "discord.panel.call": "Call",
-  "discord.panel.noCall": "You're not in a voice channel. Press a channel below to join it.",
+  "discord.panel.noCall": "You're in no voice channel. Click on any channel to join it.",
   "discord.panel.noCallEmpty": "You're not in a voice channel yet. Join one in Discord, or tick \"Remember the server on this game\" below and choose a server to see its channels here.",
   "discord.member.talking": "talking",
   "discord.member.muted": "muted",
