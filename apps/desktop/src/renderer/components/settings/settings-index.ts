@@ -43,6 +43,13 @@ export const SETTINGS: SettingEntry[] = [
     keywords: ["sort", "rail", "recently played", "manual", "order"],
   },
   {
+    id: "grayscale-text",
+    section: "general",
+    label: "Grayscale text",
+    description: "Smooths text without colour fringes. Turn it on if text looks blurry on an OLED screen. Applies after a restart.",
+    keywords: ["oled", "cleartype", "font", "blurry", "sharp", "crisp", "antialiasing", "display"],
+  },
+  {
     id: "trash",
     section: "trash",
     label: "Trash",

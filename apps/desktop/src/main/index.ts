@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { app, protocol } from "electron";
 import { HOST_SCHEME, MODULE_SCHEME } from "./assets";
@@ -15,6 +16,22 @@ app.enableSandbox();
 
 if (process.env.TAVORA_USER_DATA) app.setPath("userData", path.resolve(process.env.TAVORA_USER_DATA));
 
+// OLED panels don't use the RGB subpixel layout ClearType assumes, so small
+// text gets colour fringes there. Chromium only takes this switch before the
+// app is ready, so the setting is read straight from library.json and a
+// change applies on the next start.
+const grayscaleText = readGrayscaleText();
+if (grayscaleText) app.commandLine.appendSwitch("disable-lcd-text");
+
+function readGrayscaleText(): boolean {
+  try {
+    const saved: unknown = JSON.parse(readFileSync(path.join(app.getPath("userData"), "library.json"), "utf8"));
+    return (saved as { grayscaleText?: unknown } | null)?.grayscaleText === true;
+  } catch {
+    return false;
+  }
+}
+
 // Last line of defence for any webContents the host did not configure itself.
 app.on("web-contents-created", (_event, contents) => {
   contents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -29,6 +46,19 @@ const devServer = !app.isPackaged ? process.env.TAVORA_DEV_SERVER : undefined;
 if (devServer) {
   process.on("message", (message) => message === "quit" && app.quit());
   process.on("SIGTERM", () => app.quit());
+}
+
+// Quitting saves layouts and window bounds first (see window-all-closed).
+// Under `pnpm dev` the dev script restarts Tavora, so it keeps hot reload.
+// A portable build relaunches its own .exe, not the copy it unpacked.
+function restart(): void {
+  if (devServer && process.send) {
+    process.send("restart");
+    return;
+  }
+  const portable = process.env.PORTABLE_EXECUTABLE_FILE;
+  app.relaunch(portable ? { execPath: portable } : undefined);
+  app.quit();
 }
 
 const repoRoot = path.resolve(__dirname, "../../../..");
@@ -68,6 +98,9 @@ if (!app.requestSingleInstanceLock()) {
         hostPreload: path.join(__dirname, "../preload/host.cjs"),
         icon: path.join(__dirname, "../../assets/icon-256.png"),
         devTools: !app.isPackaged && process.env.TAVORA_DEVTOOLS === "1",
+        grayscaleText,
+        restart,
+        hidden: !app.isPackaged && process.env.TAVORA_HIDDEN === "1",
         devServer,
       });
     })

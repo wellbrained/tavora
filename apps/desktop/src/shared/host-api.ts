@@ -103,6 +103,7 @@ export interface HostViewState {
     trash: { game: GameView; trashedAt: string; purgeAt: string }[];
     sort: RootSort;
     startup: Startup;
+    grayscaleText: boolean;
     rail: { expanded: boolean; width: number };
   };
   modules: {
@@ -124,11 +125,14 @@ export interface HostViewState {
   layoutEpoch: number;
   snapshots: SnapshotView[];
   notice: string | null;
+  /** A setting that only applies on start was changed since Tavora started. */
+  restartPending: boolean;
 }
 
 /** Everything the host UI can ask the main process to do. Parsed strictly in main. */
 export type HostAction =
   | { type: "show-welcome" }
+  | { type: "restart" }
   | { type: "open-game"; gameId: string }
   | { type: "add-game"; catalogId: string }
   | { type: "add-game"; name: string }
@@ -148,6 +152,7 @@ export type HostAction =
   | { type: "move-folder"; folderId: string; index: number }
   | { type: "set-sort"; sort: RootSort }
   | { type: "set-startup"; startup: Startup }
+  | { type: "set-grayscale-text"; enabled: boolean }
   | { type: "set-rail"; expanded?: boolean; width?: number }
   | { type: "open-module"; moduleId: string }
   | { type: "close-panel"; instanceId: string }

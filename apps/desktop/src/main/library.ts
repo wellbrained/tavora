@@ -48,6 +48,8 @@ export interface Library {
   sort: RootSort;
   rail: { expanded: boolean; width: number };
   startup: Startup;
+  /** Grayscale instead of ClearType text, for OLED screens. Read before the app is ready. */
+  grayscaleText: boolean;
   lastGameId: string | null;
 }
 
@@ -69,6 +71,7 @@ export function emptyLibrary(): Library {
     sort: "recent",
     rail: { expanded: false, width: RAIL.defaultWidth },
     startup: "last-game",
+    grayscaleText: false,
     lastGameId: null,
   };
 }
@@ -448,6 +451,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   library.favorites = [...favorites];
   if (saved.sort === "manual" || saved.sort === "recent") library.sort = saved.sort;
   if (saved.startup === "welcome" || saved.startup === "last-game") library.startup = saved.startup;
+  if (typeof saved.grayscaleText === "boolean") library.grayscaleText = saved.grayscaleText;
   setRail(library, asRecord(saved.rail));
   if (typeof saved.lastGameId === "string" && isLive(library, saved.lastGameId)) library.lastGameId = saved.lastGameId;
   return library;

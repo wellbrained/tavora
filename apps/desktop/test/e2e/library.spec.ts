@@ -271,3 +271,28 @@ test("Tavora starts on Home or on the last game, as chosen in Settings", async (
   await expect(again.page.getByTestId("recent-poe2")).toBeVisible();
   await again.app.close();
 });
+
+test("grayscale text is chosen in Settings and applies on the next start", async () => {
+  const { app, page, userData } = await launch();
+  const hasSwitch = (running: typeof app) => running.evaluate(({ app }) => app.commandLine.hasSwitch("disable-lcd-text"));
+  expect(await hasSwitch(app)).toBe(false);
+
+  await page.getByTestId("rail-settings").click();
+  const toggle = page.getByTestId("grayscale-text");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  // One bar offers the restart; switching back means none is needed.
+  await expect(page.getByTestId("restart-bar")).toBeVisible();
+  await toggle.click();
+  await expect(page.getByTestId("restart-bar")).toHaveCount(0);
+  await toggle.click();
+  await expect(page.getByTestId("restart-bar")).toBeVisible();
+  await app.close();
+
+  const again = await launch(userData);
+  expect(await hasSwitch(again.app)).toBe(true);
+  await again.page.getByTestId("rail-settings").click();
+  await expect(again.page.getByTestId("grayscale-text")).toHaveAttribute("aria-checked", "true");
+  await expect(again.page.getByTestId("restart-bar")).toHaveCount(0);
+  await again.app.close();
+});

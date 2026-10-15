@@ -42,6 +42,13 @@ function start() {
   current.on("exit", (code) => {
     if (app === current) void stop(code ?? 0);
   });
+  // Settings > Restart now asks this script, so Tavora stays under it.
+  current.on("message", (message) => {
+    if (message === "restart" && app === current) {
+      console.log("[dev] restart requested by Tavora");
+      restart();
+    }
+  });
 }
 
 function restart() {
