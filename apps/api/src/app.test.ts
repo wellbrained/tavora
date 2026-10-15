@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
+import { createHostedStore } from "./hosted-store.ts";
+import { IconState } from "./icon-state.ts";
+import { encodePng } from "./png.ts";
 import { createRateLimiter } from "./rate-limit.ts";
+import { createSubmissions } from "./submissions.ts";
 import { SteamError, type SteamClient } from "./steam.ts";
 
 const db = writeDatabase(
@@ -208,5 +212,82 @@ describe("icon endpoints", () => {
     expect((await get(app, "/v1/games/search?q=elden")).headers.get("cache-control")).toBe("no-store");
     expect((await get(app, "/v2/icons")).headers.get("cache-control")).toBe("no-store");
     expect((await app.request("http://tavora.test/v1/icons", { method: "POST" })).status).toBe(404);
+  });
+});
+
+describe("icon offers", () => {
+  const picture = (size: number) => Uint8Array.from({ length: size * size * 4 }, (_, i) => (i % 4 === 3 ? 255 : (i * 7) % 256));
+  const icon = (size = 32) => Buffer.from(encodePng(size, size, picture(size))).toString("base64");
+  const setup = (options: { contact?: string; limit?: number } = {}) => {
+    const state = new IconState(":memory:");
+    const store = createHostedStore({ list: () => [], file: () => null }, state);
+    const submissions = createSubmissions({ state, store, gameName: (id) => (id === "elden-ring" ? "Elden Ring" : null) });
+    const app = createApp({
+      db,
+      icons: store,
+      submissions,
+      ...(options.contact === undefined ? {} : { takedownContact: options.contact }),
+      submitRateLimiter: createRateLimiter({ limit: options.limit ?? 10, windowMs: 3_600_000 }),
+    });
+    return { app, state };
+  };
+  const post = (app: ReturnType<typeof createApp>, body: unknown, headers: Record<string, string> = { "Content-Type": "application/json" }) =>
+    app.request("http://tavora.test/v1/icons/submit", { method: "POST", headers, body: typeof body === "string" ? body : JSON.stringify(body) });
+  const offer = (over: Record<string, unknown> = {}) => ({ id: "elden-ring", name: "Elden Ring", source: "installed", icon: icon(), ...over });
+
+  it("takes an offer, answers 202 and queues it, serving nothing yet", async () => {
+    const { app, state } = setup({ contact: "legal@example.test" });
+    const response = await post(app, offer());
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({ status: "received" });
+    expect(state.pendingCount()).toBe(1);
+    expect(await (await get(app, "/v1/icons")).json()).toMatchObject({ icons: [] });
+    expect((await get(app, "/v1/icons/elden-ring.png")).status).toBe(404);
+  });
+
+  it("is never cached, and only POST is routed", async () => {
+    const { app } = setup({ contact: "legal@example.test" });
+    expect((await post(app, offer())).headers.get("cache-control")).toBe("no-store");
+    expect((await get(app, "/v1/icons/submit")).status).toBe(404);
+  });
+
+  it("offers nothing without a takedown contact, and without the review queue", async () => {
+    expect((await post(setup().app, offer())).status).toBe(503);
+    const bare = createApp({ db, takedownContact: "legal@example.test" });
+    expect((await post(bare, offer())).status).toBe(503);
+  });
+
+  it("wants JSON, and answers what is wrong with an offer", async () => {
+    const { app, state } = setup({ contact: "legal@example.test" });
+    expect((await post(app, offer(), { "Content-Type": "text/plain" })).status).toBe(415);
+    expect((await post(app, offer(), {})).status).toBe(415);
+    expect((await post(app, "{ nope")).status).toBe(400);
+    expect((await post(app, offer({ id: "not-a-game" }))).status).toBe(400);
+    expect((await post(app, offer({ icon: "AAAA" }))).status).toBe(400);
+    expect((await post(app, offer({ icon: icon(16) }))).status).toBe(400);
+    expect((await post(app, { id: "elden-ring" })).status).toBe(400);
+    expect(state.pendingCount()).toBe(0);
+  });
+
+  it("refuses a body over 400 KB before reading it", async () => {
+    const { app, state } = setup({ contact: "legal@example.test" });
+    const response = await post(app, offer({ icon: "A".repeat(500_000) }));
+    expect(response.status).toBe(413);
+    expect(state.pendingCount()).toBe(0);
+  });
+
+  it("limits how many offers one client can make in an hour", async () => {
+    const { app } = setup({ contact: "legal@example.test", limit: 2 });
+    await post(app, offer());
+    await post(app, offer());
+    const limited = await post(app, offer());
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBeTruthy();
+  });
+
+  it("does not echo anything the player sent", async () => {
+    const { app } = setup({ contact: "legal@example.test" });
+    const response = await post(app, offer({ name: "SECRET-NAME", icon: "bad icon SECRET" }));
+    expect(await response.text()).not.toMatch(/SECRET/);
   });
 });
