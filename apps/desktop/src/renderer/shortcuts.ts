@@ -35,6 +35,8 @@ export function shortcutGroups(): { title: string; rows: ShortcutRow[] }[] {
       title: t("shortcuts.group.browser"),
       rows: [
         { action: t("shortcuts.address"), keys: [mod, "L"] },
+        { action: t("shortcuts.newTab"), keys: [mod, "T"] },
+        { action: t("shortcuts.closeTab"), keys: [mod, "W"] },
         { action: t("shortcuts.back"), keys: ["Alt", "←"] },
         { action: t("shortcuts.forward"), keys: ["Alt", "→"] },
         { action: t("shortcuts.leaveFullscreen"), keys: ["Esc"] },

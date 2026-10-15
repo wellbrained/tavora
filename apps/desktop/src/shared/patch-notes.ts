@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.16",
+    date: "2026-10-15",
+    title: "Browser tabs",
+    notes: [
+      "Open more pages at once: press + in the Browser toolbar or Ctrl+T for a new tab next to the one you're in.",
+      "Links that want a new window now open in a new tab beside the page. Middle-click opens one without leaving the page you're on.",
+      "Ctrl+W closes the Browser tab you're in.",
+    ],
+  },
+  {
     version: "0.5.15",
     date: "2026-10-16",
     title: "Clearer Discord panel text",

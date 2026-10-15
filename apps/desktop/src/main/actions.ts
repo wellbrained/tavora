@@ -192,6 +192,8 @@ export function parseAction(raw: unknown): HostAction | null {
         ...(a.width === undefined ? {} : { width: a.width as number }),
       };
     }
+    case "browser-new-tab":
+      return only("instanceId") && uuid(a.instanceId) ? { type: a.type, instanceId: a.instanceId } : null;
     case "browser-navigate":
       return only("instanceId", "address") && uuid(a.instanceId) && text(a.address, MAX_ADDRESS) && a.address.trim() !== ""
         ? { type: a.type, instanceId: a.instanceId, address: a.address }

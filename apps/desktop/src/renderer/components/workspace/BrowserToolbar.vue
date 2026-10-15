@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // A Browser panel's toolbar. It is drawn by the host UI, above the page's
 // native view, so a page can never draw over it or fake the address it shows.
-import { ArrowLeft, ArrowRight, ExternalLink, Minimize2, RotateCw, ShieldCheck, ShieldOff, Users, Volume2, VolumeX, X } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import { ArrowLeft, ArrowRight, ExternalLink, Minimize2, Plus, RotateCw, ShieldCheck, ShieldOff, Users, Volume2, VolumeX, X } from "@lucide/vue";
+import { computed, onMounted, ref, watch } from "vue";
 import type { BrowserCommand, BrowserState } from "../../../shared/host-api";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { act, addressFocus, showToast } from "../../host";
 import { t } from "../../i18n";
+import { MOD } from "../../shortcuts";
 
 const props = defineProps<{ instanceId: string; browser: BrowserState }>();
 
@@ -40,8 +41,30 @@ function cancel() {
   input.value?.blur();
 }
 
-// Ctrl+L in the page (or the host) lands here.
-watch(addressFocus, (request) => request?.instanceId === props.instanceId && focusAddress());
+// Ctrl+L in the page (or the host) lands here, and so does a new tab, whose
+// request can arrive before this toolbar is mounted.
+function takeFocusRequest() {
+  if (addressFocus.value?.instanceId !== props.instanceId) return;
+  addressFocus.value = null;
+  focusAddress();
+}
+watch(addressFocus, takeFocusRequest);
+onMounted(takeFocusRequest);
+
+function newTab() {
+  void act({ type: "browser-new-tab", instanceId: props.instanceId });
+}
+
+// The same tab keys as in the page, for when the toolbar has the focus.
+function onKeydown(event: KeyboardEvent) {
+  const mod = navigator.platform.startsWith("Mac") ? event.metaKey : event.ctrlKey;
+  if (!mod || event.altKey || event.shiftKey) return;
+  const key = event.key.toLowerCase();
+  if (key === "t") newTab();
+  else if (key === "w") void act({ type: "close-panel", instanceId: props.instanceId });
+  else return;
+  event.preventDefault();
+}
 
 // Downloads are refused in the main process; the player is told each time.
 watch(
@@ -61,7 +84,7 @@ function toggleAdblock() {
 </script>
 
 <template>
-  <div class="flex h-10 flex-none items-center gap-0.5 border-b px-1.5" :data-testid="`browser-toolbar-${instanceId}`">
+  <div class="flex h-10 flex-none items-center gap-0.5 border-b px-1.5" :data-testid="`browser-toolbar-${instanceId}`" @keydown="onKeydown">
     <Button variant="ghost" size="icon-sm" :aria-label="t('browser.back')" :title="t('browser.backTitle')" :disabled="!browser.canGoBack" data-testid="browser-back" @click="command('back')">
       <ArrowLeft :stroke-width="1.5" />
     </Button>
@@ -154,6 +177,9 @@ function toggleAdblock() {
       @click="toggleShared"
     >
       <Users :stroke-width="1.5" />
+    </Button>
+    <Button variant="ghost" size="icon-sm" :aria-label="t('browser.newTab')" :title="t('browser.newTabTitle', { mod: MOD() })" data-testid="browser-new-tab" @click="newTab">
+      <Plus :stroke-width="1.5" />
     </Button>
     <Button variant="ghost" size="icon-sm" :aria-label="t('browser.external')" :title="t('browser.external')" :disabled="!browser.url" data-testid="browser-external" @click="command('open-external')">
       <ExternalLink :stroke-width="1.5" />

@@ -192,6 +192,8 @@ export class Host {
   private readonly viewsByContents = new Map<number, ModuleView>();
   /** Browser panels by the contents of their page, for requests the page makes. */
   private readonly browsersByContents = new Map<number, BrowserPanel>();
+  /** Browser tabs opened from another tab, so the host UI docks them beside it. Only used when a panel is first placed. */
+  private readonly openedFrom = new Map<string, { instanceId: string; background: boolean }>();
   /** What every browser session is made safe with; built when the first Browser panel opens. */
   private browserHooks: BrowserSessionHooks | undefined;
   /** Open Discord panels. They have no view of their own: the host UI draws them. */
@@ -826,6 +828,8 @@ export class Host {
         return this.views.get(action.instanceId)?.reload();
       case "stop-panel":
         return this.views.get(action.instanceId)?.stop();
+      case "browser-new-tab":
+        return this.openBrowserTab(action.instanceId, null, false);
       case "browser-navigate":
         return this.browser(action.instanceId).navigate(action.address);
       case "browser-command":
@@ -1090,7 +1094,7 @@ export class Host {
   }
 
   /** Opens a new panel; the host UI docks it. Returns its instance id. */
-  private openModule(moduleId: string): string | void {
+  private openModule(moduleId: string, openedFrom?: { instanceId: string; background: boolean }): string | void {
     const game = this.game;
     const module = this.modules.get(moduleId);
     if (!game || !module || !this.supportsGame(module, game.id)) return;
@@ -1100,9 +1104,19 @@ export class Host {
     }
     const record = { instanceId: randomUUID(), moduleId };
     records.push(record);
+    if (openedFrom) this.openedFrom.set(record.instanceId, openedFrom);
     this.saveWorkspace();
     this.createView(record, game, performance.now());
     return record.instanceId;
+  }
+
+  /** A new Browser tab in the same dock group as the one it was opened from; an empty one gets the address bar's focus. */
+  private openBrowserTab(fromInstanceId: string, url: string | null, background: boolean): void {
+    this.browser(fromInstanceId);
+    const id = this.openModule(BROWSER_MODULE_ID, { instanceId: fromInstanceId, background });
+    if (!id) return;
+    if (url) this.browser(id).restore(url);
+    else setTimeout(() => this.window.webContents.send("host:shortcut", `address:${id}`), 100);
   }
 
   private closePanel(instanceId: string): void {
@@ -1119,6 +1133,7 @@ export class Host {
 
   /** Removes a panel's view and its UI state; module settings and documents stay. */
   private closeView(instanceId: string): void {
+    this.openedFrom.delete(instanceId);
     this.destroyView(instanceId);
     this.panelBounds.delete(instanceId);
     void this.data.panelState.remove(instanceId).catch((error: unknown) => console.error("[tavora]", error));
@@ -1402,6 +1417,20 @@ export class Host {
         if (this.views.get(instanceId) !== panel) return;
         void this.data.panelState.set(instanceId, { url }).catch((error: unknown) => console.error("[tavora]", error));
       },
+      onOpenTab: (url, background) => {
+        try {
+          this.openBrowserTab(instanceId, url, background);
+        } catch (error) {
+          // The workspace is full; the player is told the same as for Add module.
+          if (error instanceof WorkspaceError) this.notice = error.message;
+        } finally {
+          this.pushState();
+        }
+      },
+      onCloseTab: () => {
+        this.closePanel(instanceId);
+        this.pushState();
+      },
       onFocusAddress: () => {
         this.window.webContents.focus();
         this.window.webContents.send("host:shortcut", `address:${instanceId}`);
@@ -1586,11 +1615,12 @@ export class Host {
         const name = this.modules.get(record.moduleId)!.manifest.name;
         // A Discord panel is drawn by the host UI itself, so it is ready at once.
         if (this.discordPanels.has(record.instanceId)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: "ready" as const };
+        const openedFrom = this.openedFrom.get(record.instanceId);
         if (!(view instanceof BrowserPanel)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: view?.status ?? "loading" };
         const browser = view.state;
         // A Browser tab is named after its page, like a browser tab.
         const title = (browser.title || browser.host).trim().slice(0, 80);
-        return { instanceId: record.instanceId, moduleId: record.moduleId, name: title || name, status: view.status, browser };
+        return { instanceId: record.instanceId, moduleId: record.moduleId, name: title || name, status: view.status, browser, ...(openedFrom ? { openedFrom } : {}) };
       }),
       layout: workspace.layout,
       layoutEpoch: this.layoutEpoch,
