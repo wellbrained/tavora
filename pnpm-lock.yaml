@@ -34,6 +34,9 @@ importers:
       '@types/node':
         specifier: ^22.20.5
         version: 22.20.5
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
 
   apps/desktop:
     devDependencies:
