@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Position } from "dockview-vue";
 import { GUIDE, resolveDropPosition, resolveOuterEdge, shareOut } from "./dock";
-import { LAYOUT_TEMPLATES, templateRects } from "../shared/layout-templates";
+import { gridName, gridTemplate, LAYOUT_TEMPLATES, templateRects } from "../shared/layout-templates";
 
 describe("shareOut", () => {
   it("shares room evenly when every minimum fits", () => {
@@ -47,9 +47,17 @@ describe("resolveDropPosition", () => {
   });
 });
 
+describe("gridTemplate", () => {
+  it("lays out even columns and rows", () => {
+    expect(templateRects(gridTemplate(3, 2))).toHaveLength(6);
+    expect(templateRects(gridTemplate(1, 4)).map((rect) => rect.y)).toEqual([0, 0.25, 0.5, 0.75]);
+    expect([gridName(1, 1), gridName(4, 1), gridName(1, 3), gridName(3, 2)]).toEqual(["1 slot", "4 columns", "3 rows", "3 × 2 grid"]);
+  });
+});
+
 describe("templateRects", () => {
   it("covers the whole area once for every template", () => {
-    for (const template of LAYOUT_TEMPLATES) {
+    for (const template of [...LAYOUT_TEMPLATES, gridTemplate(3, 2), gridTemplate(1, 4), gridTemplate(5, 1)]) {
       const area = templateRects(template).reduce((sum, rect) => sum + rect.width * rect.height, 0);
       expect(area).toBeCloseTo(1);
     }

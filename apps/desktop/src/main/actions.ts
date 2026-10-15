@@ -3,7 +3,7 @@ import type { BrowserCommand, HostAction, SteamImportGame } from "../shared/host
 import { isSite, MAX_ADDRESS } from "./browser-url";
 import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
-import { layoutTemplate } from "../shared/layout-templates";
+import { isGridSize, layoutTemplate } from "../shared/layout-templates";
 import { MAX_INITIALS, MAX_PICTURE_BYTES, MAX_PROFILE_NAME } from "./profile";
 import { isSteamAppId } from "./steam-icons";
 import { MAX_IMPORT_GAMES, parseSteamGame } from "./steam-import";
@@ -222,6 +222,10 @@ export function parseAction(raw: unknown): HostAction | null {
       const template = only("templateId") && typeof a.templateId === "string" ? layoutTemplate(a.templateId) : undefined;
       return template ? { type: a.type, templateId: template.id } : null;
     }
+    case "apply-layout-grid":
+      return only("columns", "rows") && isGridSize(a.columns, a.rows)
+        ? { type: a.type, columns: a.columns as number, rows: a.rows as number }
+        : null;
     case "save-snapshot":
       return only("name") && text(a.name, MAX_SNAPSHOT_NAME) ? { type: a.type, name: a.name } : null;
     case "update-snapshot":

@@ -341,6 +341,8 @@ export type HostAction =
   | { type: "save-layout"; layout: SavedLayout | null }
   /** Rearranges the workspace into empty slots of a layout template; open panels fill the first ones. */
   | { type: "apply-layout-template"; templateId: LayoutTemplateId }
+  /** The same, for an even grid (at most GRID_LIMITS). */
+  | { type: "apply-layout-grid"; columns: number; rows: number }
   | { type: "save-snapshot"; name: string }
   | { type: "update-snapshot"; snapshotId: string }
   | { type: "apply-snapshot"; snapshotId: string }
