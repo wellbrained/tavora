@@ -14,6 +14,8 @@ defineProps<{
   menu: () => MenuItem[];
   /** Where a dragged item would land relative to this one. */
   hint?: "before" | "after" | "into" | null;
+  /** The number Ctrl+1 to 9 opens it with, shown while Ctrl is held. */
+  shortcut?: number | undefined;
 }>();
 const emit = defineEmits<{ open: [] }>();
 // Drag handlers from the rail go on the row, not on the menu wrapper.
@@ -48,6 +50,12 @@ defineOptions({ inheritAttrs: false });
       >
         <span class="rail-icon flex-none rounded-[12px]"><GameIcon :game="game" :size="48" /></span>
         <span v-if="expanded" class="truncate text-sm font-medium">{{ game.name }}</span>
+        <kbd
+          v-if="shortcut"
+          class="bg-secondary text-primary ml-auto flex-none rounded-sm border border-b-2 px-1.5 py-0.5 font-mono text-xs"
+          :data-testid="`${testid}-shortcut`"
+          >{{ shortcut }}</kbd
+        >
       </button>
       <div
         v-if="expanded"

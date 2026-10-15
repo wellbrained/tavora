@@ -2,6 +2,21 @@
 import { expect, test } from "@playwright/test";
 import { inModule, launch, openGame, openModule, panels, VANILLA } from "./harness";
 
+test("Tavora's shortcuts open the overview, Settings, Home and numbered games", async () => {
+  const { app, page } = await launch();
+  await page.keyboard.press("Control+/");
+  await expect(page.getByTestId("shortcuts")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+,");
+  await expect(page.getByTestId("settings")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+H");
+  await expect(page.getByTestId("welcome")).toBeVisible();
+  await page.keyboard.press("Control+1");
+  await expect(page.getByTestId("workspace")).toBeVisible();
+  await app.close();
+});
+
 test("Ctrl+K finds games, modules and settings and runs them", async () => {
   const { app, page } = await launch();
   await page.keyboard.press("Control+K");

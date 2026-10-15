@@ -50,6 +50,8 @@ export interface Library {
   startup: Startup;
   /** Grayscale instead of ClearType text, for OLED screens. Read before the app is ready. */
   grayscaleText: boolean;
+  /** False until the first-run welcome was finished or skipped. */
+  onboarded: boolean;
   lastGameId: string | null;
 }
 
@@ -72,6 +74,7 @@ export function emptyLibrary(): Library {
     rail: { expanded: false, width: RAIL.defaultWidth },
     startup: "last-game",
     grayscaleText: false,
+    onboarded: false,
     lastGameId: null,
   };
 }
@@ -452,6 +455,8 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (saved.sort === "manual" || saved.sort === "recent") library.sort = saved.sort;
   if (saved.startup === "welcome" || saved.startup === "last-game") library.startup = saved.startup;
   if (typeof saved.grayscaleText === "boolean") library.grayscaleText = saved.grayscaleText;
+  // A library saved before the welcome existed belongs to someone who is past it.
+  library.onboarded = typeof saved.onboarded === "boolean" ? saved.onboarded : true;
   setRail(library, asRecord(saved.rail));
   if (typeof saved.lastGameId === "string" && isLive(library, saved.lastGameId)) library.lastGameId = saved.lastGameId;
   return library;

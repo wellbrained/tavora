@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { CatalogMatch } from "../../shared/host-api";
-import { act, api, dialog } from "../host";
+import { act, api, dialog, state } from "../host";
 import { Input } from "@/components/ui/input";
 import ModalDialog from "./ModalDialog.vue";
 
@@ -28,8 +28,9 @@ async function add(input: { catalogId: string } | { name: string }) {
   const added = await act({ type: "add-game", ...input }, { quiet: true });
   if (added.ok && added.id) {
     dialog.value = null;
-    // A new game starts with an empty workspace; take the player there.
-    await act({ type: "open-game", gameId: added.id });
+    // A new game starts with an empty workspace; take the player there,
+    // unless they are still in the first-run welcome, which lists it.
+    if (state.value?.library.onboarded) await act({ type: "open-game", gameId: added.id });
   } else if (!added.ok) {
     error.value = added.error;
   }

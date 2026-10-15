@@ -50,6 +50,20 @@ export const SETTINGS: SettingEntry[] = [
     keywords: ["oled", "cleartype", "font", "blurry", "sharp", "crisp", "antialiasing", "display"],
   },
   {
+    id: "shortcuts",
+    section: "general",
+    label: "Keyboard shortcuts",
+    description: "Every shortcut Tavora has. Press Ctrl+/ anywhere to see them.",
+    keywords: ["keys", "hotkeys", "keyboard", "ctrl"],
+  },
+  {
+    id: "welcome-tour",
+    section: "general",
+    label: "Welcome tour",
+    description: "The short introduction Tavora shows on its first start: your profile, your first games and a few tips.",
+    keywords: ["onboarding", "first run", "intro", "tutorial", "tips", "start"],
+  },
+  {
     id: "trash",
     section: "trash",
     label: "Trash",

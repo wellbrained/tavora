@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ChevronDown, ChevronLeft, ChevronRight, Plus, Settings } from "@lucide/vue";
-import { computed, onBeforeUnmount, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import type { FolderView, GameView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
-import { act, dialog, openSettings, prompt, state, submitAction } from "../host";
+import { act, dialog, openSettings, prompt, railToggles, state, submitAction } from "../host";
+import { numberedGames } from "../shortcuts";
 import { folderMenu, gameMenu } from "../rail-actions";
 import GameIcon from "./GameIcon.vue";
 import MenuArea from "./menus/MenuArea.vue";
@@ -37,6 +38,22 @@ function toggleRail() {
   if (narrow.value) peek.value = !peek.value;
   else void act({ type: "set-rail", expanded: !expanded.value });
 }
+watch(railToggles, toggleRail);
+
+// While Ctrl is held, the expanded rail shows which game Ctrl+1 to 9 opens.
+const ctrlHeld = ref(false);
+const onCtrl = (event: KeyboardEvent) => (ctrlHeld.value = event.ctrlKey || event.metaKey);
+const releaseCtrl = () => (ctrlHeld.value = false);
+addEventListener("keydown", onCtrl);
+addEventListener("keyup", onCtrl);
+addEventListener("blur", releaseCtrl);
+onBeforeUnmount(() => {
+  removeEventListener("keydown", onCtrl);
+  removeEventListener("keyup", onCtrl);
+  removeEventListener("blur", releaseCtrl);
+});
+const numbers = computed(() => new Map(numberedGames(library.value).map((id, index) => [id, index + 1])));
+const shortcutOf = (id: string) => (ctrlHeld.value && expanded.value ? numbers.value.get(id) : undefined);
 const manual = computed(() => library.value.sort === "manual");
 const favorites = computed(() => library.value.favorites.map((id) => library.value.games[id]).filter(isGame));
 // A game lives in one place: favorited games leave the main list (and its folders) until unfavorited.
@@ -313,6 +330,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           :testid="`rail-favorite-${item.id}`"
           :active="isActive(item.id)"
           :expanded="expanded"
+          :shortcut="shortcutOf(item.id)"
           :menu="menuFor(item.id, true)"
           :hint="hintFor({ kind: 'game', id: item.id, place: { list: 'favorites' } })"
           v-on="dnd({ kind: 'game', id: item.id, place: { list: 'favorites' } })"
@@ -331,6 +349,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
             :testid="`rail-game-${entry.id}`"
             :active="isActive(entry.id)"
             :expanded="expanded"
+            :shortcut="shortcutOf(entry.id)"
             :menu="menuFor(entry.id)"
             :hint="hintFor({ kind: 'game', id: entry.id, place: { list: 'root' } })"
             v-on="dnd({ kind: 'game', id: entry.id, place: { list: 'root' } })"
@@ -391,6 +410,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 :testid="`rail-game-${id}`"
                 :active="isActive(id)"
                 :expanded="expanded"
+                :shortcut="shortcutOf(id)"
                 :menu="menuFor(id)"
                 :hint="hintFor({ kind: 'game', id, place: { list: 'folder', folderId: entry.id } })"
                 v-on="dnd({ kind: 'game', id, place: { list: 'folder', folderId: entry.id } })"

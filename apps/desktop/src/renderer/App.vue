@@ -6,8 +6,10 @@ import GameRail from "./components/GameRail.vue";
 import PromptDialog from "./components/PromptDialog.vue";
 import SearchDialog from "./components/SearchDialog.vue";
 import SettingsDialog from "./components/settings/SettingsDialog.vue";
+import ShortcutsDialog from "./components/ShortcutsDialog.vue";
 import { dialog, state, toast } from "./host";
 import GameWorkspace from "./pages/GameWorkspace.vue";
+import OnboardingPage from "./pages/OnboardingPage.vue";
 import WelcomePage from "./pages/WelcomePage.vue";
 </script>
 
@@ -17,7 +19,8 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <div class="relative h-full min-w-0 flex-1">
       <GameWorkspace v-if="state.screen === 'game' && state.currentGameId" :key="state.currentGameId" />
       <template v-else>
-        <WelcomePage />
+        <OnboardingPage v-if="!state.library.onboarded" />
+        <WelcomePage v-else />
         <!-- Lets the window be moved from the empty top edge of Home. -->
         <div class="app-drag absolute inset-x-0 top-0 h-12" aria-hidden="true" />
       </template>
@@ -25,6 +28,7 @@ import WelcomePage from "./pages/WelcomePage.vue";
 
     <SettingsDialog />
     <SearchDialog />
+    <ShortcutsDialog />
     <AddGameDialog v-if="dialog?.kind === 'add-game'" />
     <AddModuleDialog v-else-if="dialog?.kind === 'add-module'" />
     <PromptDialog v-else-if="dialog?.kind === 'prompt'" :key="dialog.title" :request="dialog" />

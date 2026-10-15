@@ -104,6 +104,8 @@ export interface HostViewState {
     sort: RootSort;
     startup: Startup;
     grayscaleText: boolean;
+    /** False until the player finished or skipped the first-run welcome. */
+    onboarded: boolean;
     rail: { expanded: boolean; width: number };
   };
   modules: {
@@ -155,6 +157,8 @@ export type HostAction =
   | { type: "set-sort"; sort: RootSort }
   | { type: "set-startup"; startup: Startup }
   | { type: "set-grayscale-text"; enabled: boolean }
+  /** Done ends the first-run welcome; false shows it again. */
+  | { type: "set-onboarded"; done: boolean }
   | { type: "save-profile"; name: string; initials: string }
   /** A cropped 256 px PNG, base64-encoded. */
   | { type: "set-profile-picture"; png: string }
@@ -198,4 +202,4 @@ export interface TavoraHostApi {
   onShortcut(listener: (shortcut: HostShortcut) => void): void;
 }
 
-export type HostShortcut = "search";
+export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}`;
