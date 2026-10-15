@@ -105,6 +105,37 @@ export type UpdateState =
   | { status: "downloading"; version: string }
   | { status: "ready"; version: string };
 
+/** One variation of an installed theme, with its full palette for the preview. */
+export interface ThemeVariationView {
+  id: string;
+  name: string;
+  mode: "dark" | "light";
+  radius: number;
+  /** Every semantic colour token, as #rrggbb. */
+  colors: Record<string, string>;
+}
+
+export interface ThemeView {
+  id: string;
+  name: string;
+  description: string | null;
+  author: string | null;
+  /** Official themes ship with Tavora; local ones are in the player's themes folder. */
+  provenance: "official" | "local";
+  variations: ThemeVariationView[];
+}
+
+export interface AppearanceView {
+  /** The theme and variation in use; the default when the picked one is not installed. */
+  themeId: string;
+  variationId: string;
+  /** Whether the Tavora default is what is in use, so Reset has nothing to do. */
+  isDefault: boolean;
+  themes: ThemeView[];
+  /** Theme folders that could not be used, and why, for theme authors. */
+  problems: { folder: string; message: string }[];
+}
+
 export interface HostViewState {
   screen: Screen;
   currentGameId: string | null;
@@ -141,6 +172,8 @@ export interface HostViewState {
     minHeight: number;
     /** Official modules ship with Tavora; local ones were found on disk. */
     provenance: "official" | "local";
+    /** A playground or example for module authors, listed under Development. */
+    development: boolean;
   }[];
   /** Panels of the current game, in the order they were opened. */
   panels: PanelView[];
@@ -158,6 +191,7 @@ export interface HostViewState {
   update: UpdateState;
   /** The app's version as major.minor.patch, from apps/desktop/package.json. */
   appVersion: string;
+  appearance: AppearanceView;
 }
 
 /** Everything the host UI can ask the main process to do. Parsed strictly in main. */
@@ -196,6 +230,15 @@ export type HostAction =
   /** Quits, installs the downloaded version and starts Tavora again. */
   | { type: "restart-to-update" }
   | { type: "set-steam-icons"; enabled: boolean }
+  | { type: "set-theme"; themeId: string; variationId: string }
+  /** Back to the Tavora default theme, whatever is active. */
+  | { type: "reset-theme" }
+  /** Looks for themes again, after the player changed their themes folder. */
+  | { type: "reload-themes" }
+  /** Opens the player's themes folder in the file manager, creating it first. */
+  | { type: "open-themes-folder" }
+  /** Copies the Tavora theme into the themes folder as a new theme to change; answers with its id. */
+  | { type: "create-starter-theme" }
   /** Done ends the first-run welcome; false shows it again. */
   | { type: "set-onboarded"; done: boolean }
   | { type: "save-profile"; name: string; initials: string }

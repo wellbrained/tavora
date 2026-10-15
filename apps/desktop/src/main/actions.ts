@@ -4,6 +4,7 @@ import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
 import { MAX_INITIALS, MAX_PICTURE_BYTES, MAX_PROFILE_NAME } from "./profile";
 import { isSteamAppId } from "./steam-icons";
+import { isVariationId } from "./themes";
 import { MAX_SNAPSHOT_NAME } from "./workspace";
 
 export type { ActionResult, HostAction } from "../shared/host-api";
@@ -34,7 +35,15 @@ export function parseAction(raw: unknown): HostAction | null {
     case "open-backups":
     case "check-for-updates":
     case "restart-to-update":
+    case "reset-theme":
+    case "reload-themes":
+    case "open-themes-folder":
+    case "create-starter-theme":
       return only() ? { type: a.type } : null;
+    case "set-theme":
+      return only("themeId", "variationId") && isModuleId(a.themeId) && isVariationId(a.variationId)
+        ? { type: a.type, themeId: a.themeId, variationId: a.variationId }
+        : null;
     case "open-game":
     case "choose-game-image":
     case "trash-game":

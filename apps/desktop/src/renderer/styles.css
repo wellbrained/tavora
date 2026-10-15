@@ -4,8 +4,9 @@
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
 
-/* Tavora default theme. Dark only for now: warm charcoal surfaces, ivory
-   text and a restrained firelight gold. Token names follow shadcn-vue so its
+/* Tavora default theme (Tavora, Dark): warm charcoal surfaces, ivory
+   text and a restrained firelight gold. Another installed theme replaces
+   these values at runtime (src/renderer/theme.ts). Token names follow shadcn-vue so its
    components work unchanged; rail, success, warning and info are Tavora's.
    Components use these tokens, never raw colours. The module theme in
    src/main/games.ts carries the same values. */

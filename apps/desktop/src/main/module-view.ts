@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { MessageChannelMain, session, WebContentsView, type Session } from "electron";
 import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
-import { THEME } from "./games";
+import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, MODULE_CSP, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BridgeSession } from "./bridge";
 import type { InstalledModule } from "./registry";
@@ -20,7 +20,7 @@ export interface ModuleViewOptions {
   preload: string;
   devTools: boolean;
   getTheme(): TavoraTheme;
-  /** Tavora's default look for the page, below the module's own styles (module-style.ts). */
+  /** Tavora's default look for the page, below the module's own styles (module-style.ts). Colours come from the theme stylesheet. */
   baseCss: string;
   onStatus(status: InstanceStatus): void;
 }
@@ -91,6 +91,10 @@ export class ModuleView {
   private bridge: BridgeSession | undefined;
   private viewport: TavoraViewport = { width: 0, height: 0 };
   private suspended = false;
+  /** The inserted theme stylesheet of the current page, removed when the theme changes. */
+  private themeCssKey: string | undefined;
+  /** Theme stylesheets are swapped one at a time, so none is left behind. */
+  private themeCssQueue: Promise<void> = Promise.resolve();
   private heartbeat: ReturnType<typeof setInterval> | undefined;
   private lastPong = 0;
   status: InstanceStatus = "loading";
@@ -115,7 +119,7 @@ export class ModuleView {
     });
 
     // No white flash before the page has painted.
-    this.view.setBackgroundColor(THEME.tokens.background);
+    this.view.setBackgroundColor(options.getTheme().tokens.background);
     // Panels are rounded cards in the host UI; the view follows their corners.
     this.view.setBorderRadius(PANEL_RADIUS - 1);
 
@@ -153,10 +157,13 @@ export class ModuleView {
       this.setStatus("failed");
     });
     // A user stylesheet: every rule the module writes still wins over it.
+    // The theme's colours go in a second one, replaced when the theme changes.
     contents.on("dom-ready", () => {
+      this.themeCssQueue = this.themeCssQueue.then(() => void (this.themeCssKey = undefined));
       contents.insertCSS(options.baseCss, { cssOrigin: "user" }).catch(() => {
         // The page went away before the styles landed.
       });
+      void this.insertThemeCss(options.getTheme());
     });
     contents.on("did-finish-load", () => {
       if (this.status !== "loading") return;
@@ -235,8 +242,25 @@ export class ModuleView {
     this.bridge?.emit("workspace.resize", { ...this.viewport });
   }
 
-  emitTheme(theme: TavoraTheme): void {
+  /** Recolours the page and tells the module, which may restyle itself through ui.onThemeChange. */
+  applyTheme(theme: TavoraTheme): void {
+    this.view.setBackgroundColor(theme.tokens.background);
+    void this.insertThemeCss(theme);
     this.bridge?.emit("ui.theme", theme);
+  }
+
+  private insertThemeCss(theme: TavoraTheme): Promise<void> {
+    const contents = this.view.webContents;
+    this.themeCssQueue = this.themeCssQueue.then(async () => {
+      const previous = this.themeCssKey;
+      try {
+        this.themeCssKey = await contents.insertCSS(moduleThemeCss(theme), { cssOrigin: "user" });
+        if (previous) await contents.removeInsertedCSS(previous);
+      } catch {
+        // The page went away; the next one gets the theme on dom-ready.
+      }
+    });
+    return this.themeCssQueue;
   }
 
   /** Tells the module it is hidden; it should pause timers and animations. */
