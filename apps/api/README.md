@@ -19,7 +19,7 @@ pnpm --filter @tavora/api dev          # http://127.0.0.1:4010, restarts on chan
 
 ## API
 
-- `GET /v1/games/search?q=<text>&limit=<1-20>` returns `[{ "id": "elden-ring", "name": "Elden Ring" }]`, best match first: exact name, exact alias, name prefix, alias prefix, then every word as a word start. Case, accents and apostrophes are ignored. `q` is at most 100 characters, `limit` defaults to 8.
+- `GET /v1/games/search?q=<text>&limit=<1-20>` returns `{ "results": [{ "id": "elden-ring", "name": "Elden Ring" }] }`, best match first: exact name, exact alias, name prefix, alias prefix, then every word as a word start. Case, accents and apostrophes are ignored. `q` is at most 100 characters, `limit` defaults to 8.
 - `GET /v1/health` returns `{ ok, games, builtAt }`.
 - 60 requests a minute per client, then `429` with `Retry-After`. No CORS: the app calls it from its main process.
 - Answers are never cached. The service never logs a request, so what a player typed is not kept.
