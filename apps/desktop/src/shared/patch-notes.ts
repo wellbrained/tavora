@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.5",
+    date: "2026-10-15",
+    title: "Remember my Steam profile",
+    notes: [
+      "The Steam import can now remember your profile link. Tick Remember this profile on this PC and it is filled in next time. It stays on your PC only; untick it and look up again to forget it.",
+    ],
+  },
+  {
     version: "0.5.4",
     date: "2026-10-15",
     title: "Your modules, in one place",

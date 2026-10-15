@@ -71,6 +71,8 @@ export interface Library {
   autoUpdate: boolean;
   /** Game icons may be taken from Steam on this PC. Off means the generated badge. */
   steamIcons: boolean;
+  /** The Steam profile link or id the player chose to remember for the Steam import, or null. Kept only on this PC. */
+  steamProfile: string | null;
   /** The picked theme and variation. Kept even while that theme is not installed, which shows the default. */
   theme: { id: string; variation: string };
   /** Show the variation that matches the system's light or dark setting, and change with it. */
@@ -102,6 +104,7 @@ export function emptyLibrary(): Library {
     onlineSearch: true,
     autoUpdate: true,
     steamIcons: true,
+    steamProfile: null,
     theme: { ...DEFAULT_THEME },
     followSystem: true,
     onboarded: false,
@@ -566,6 +569,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.onlineSearch === "boolean") library.onlineSearch = saved.onlineSearch;
   if (typeof saved.autoUpdate === "boolean") library.autoUpdate = saved.autoUpdate;
   if (typeof saved.steamIcons === "boolean") library.steamIcons = saved.steamIcons;
+  if (typeof saved.steamProfile === "string" && saved.steamProfile.trim() && saved.steamProfile.length <= 200) library.steamProfile = saved.steamProfile.trim();
   const theme = asRecord(saved.theme);
   if (isModuleId(theme.id) && isVariationId(theme.variation)) library.theme = { id: theme.id, variation: theme.variation };
   if (typeof saved.followSystem === "boolean") library.followSystem = saved.followSystem;

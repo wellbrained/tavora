@@ -169,6 +169,8 @@ export interface HostViewState {
     autoUpdate: boolean;
     /** Whether game icons may be taken from Steam on this PC. */
     steamIcons: boolean;
+    /** The Steam profile the player asked Tavora to remember for the import, or null. */
+    steamProfile: string | null;
     /** False until the player finished or skipped the first-run welcome. */
     onboarded: boolean;
     rail: { expanded: boolean; width: number };
@@ -257,6 +259,8 @@ export type HostAction =
   /** Quits, installs the downloaded version and starts Tavora again. */
   | { type: "restart-to-update" }
   | { type: "set-steam-icons"; enabled: boolean }
+  /** Remembers the Steam profile for the import on this PC; null forgets it. */
+  | { type: "set-steam-profile"; profile: string | null }
   /** ixed turns Follow System off; without it the pick keeps following the system. */
   | { type: "set-theme"; themeId: string; variationId: string; fixed?: boolean }
   /** Follow the system's light or dark setting, or stay in one mode. */
