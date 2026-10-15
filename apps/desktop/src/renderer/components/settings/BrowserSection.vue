@@ -48,8 +48,7 @@ function clear(scope: "game" | "shared") {
 </script>
 
 <template>
-  <h2 class="text-xl font-semibold">{{ t("settings.section.browser") }}</h2>
-  <p class="text-muted-foreground mt-2 mb-4">{{ t("settings.browser.intro") }}</p>
+  <p class="text-muted-foreground mb-4">{{ t("settings.browser.intro") }}</p>
   <div v-for="list in LISTS" :key="list.id" class="-mx-3 rounded-lg border-b px-3 py-4 transition-colors duration-500" :class="highlight === list.setting && 'bg-primary/10'" :data-setting="list.setting">
     <div class="flex flex-col gap-1">
       <span class="font-medium">{{ list.label() }}</span>
