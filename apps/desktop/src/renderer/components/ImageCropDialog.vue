@@ -4,6 +4,7 @@ import { computed, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useFloating } from "../host";
+import { t } from "../i18n";
 
 // Crops a picked image to a square. The whole image stays still and fitted;
 // the player moves the crop frame over it and sizes it with the slider, the
@@ -164,7 +165,7 @@ function onOpenChange(value: boolean) {
     <DialogContent class="gap-5 sm:max-w-[360px]" data-testid="crop-dialog" :show-close-button="false">
       <div class="flex flex-col gap-1">
         <DialogTitle class="text-lg">{{ title }}</DialogTitle>
-        <DialogDescription>Drag the {{ round ? "circle" : "frame" }} to choose the part to keep. Resize it with the slider, the mouse wheel or its handle.</DialogDescription>
+        <DialogDescription>{{ round ? t("crop.help.round") : t("crop.help.square") }}</DialogDescription>
       </div>
 
       <div
@@ -172,7 +173,7 @@ function onOpenChange(value: boolean) {
         :style="{ width: `${VIEW}px`, height: `${VIEW}px` }"
         tabindex="0"
         role="img"
-        aria-label="Crop area. Arrow keys move the frame, plus and minus resize it."
+        :aria-label="t('crop.area')"
         data-crop-area
         data-testid="crop-area"
         @pointermove="onPointerMove"
@@ -209,7 +210,7 @@ function onOpenChange(value: boolean) {
       </div>
 
       <div class="flex items-center gap-3">
-        <Button size="icon-sm" variant="ghost" aria-label="Smaller" title="Smaller" :disabled="share <= MIN_SHARE + 0.001" @click="resize(frame.side / 1.25)">
+        <Button size="icon-sm" variant="ghost" :aria-label="t('crop.smaller')" :title="t('crop.smaller')" :disabled="share <= MIN_SHARE + 0.001" @click="resize(frame.side / 1.25)">
           <Minus :stroke-width="1.5" />
         </Button>
         <input
@@ -218,19 +219,19 @@ function onOpenChange(value: boolean) {
           :min="MIN_SHARE"
           max="1"
           step="0.005"
-          aria-label="Size of the part to keep"
+          :aria-label="t('crop.size')"
           data-testid="crop-size"
           :value="share"
           @input="resize(Number(($event.target as HTMLInputElement).value) * maxSide)"
         />
-        <Button size="icon-sm" variant="ghost" aria-label="Larger" title="Larger" :disabled="share >= 0.999" @click="resize(frame.side * 1.25)">
+        <Button size="icon-sm" variant="ghost" :aria-label="t('crop.larger')" :title="t('crop.larger')" :disabled="share >= 0.999" @click="resize(frame.side * 1.25)">
           <Plus :stroke-width="1.5" />
         </Button>
       </div>
 
       <div class="flex justify-end gap-2">
-        <Button variant="secondary" data-testid="crop-cancel" @click="emit('cancel')">Cancel</Button>
-        <Button data-testid="crop-save" :disabled="!image || saving" @click="save">Save</Button>
+        <Button variant="secondary" data-testid="crop-cancel" @click="emit('cancel')">{{ t("common.cancel") }}</Button>
+        <Button data-testid="crop-save" :disabled="!image || saving" @click="save">{{ t("common.save") }}</Button>
       </div>
     </DialogContent>
   </Dialog>

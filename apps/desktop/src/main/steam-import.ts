@@ -1,5 +1,6 @@
 import { isGameId } from "@tavora/module-schema";
 import type { SteamGameView, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
+import { translate, type Language, type MessageKey } from "../shared/i18n";
 import { normalizeName } from "./launcher-games";
 import { addGame, type Library } from "./library";
 import { isSteamAppId } from "./steam-icons";
@@ -53,6 +54,8 @@ export function parseSteamGame(raw: unknown): SteamImportGame | null {
 
 export interface SteamImportOptions {
   baseUrl: string;
+  /** The language of the messages made here; the service's own messages stay as it sent them. */
+  language?: Language;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }
@@ -66,9 +69,10 @@ export async function fetchSteamLibrary(
   options: SteamImportOptions,
   profile: string,
 ): Promise<{ status: "ok"; games: SteamImportGame[] } | { status: "error"; error: string }> {
+  const say = (key: MessageKey) => ({ status: "error" as const, error: translate(options.language ?? "en", key) });
   const text = profile.trim();
-  if (!text) return { status: "error", error: "Enter a Steam profile link or a SteamID64." };
-  if (text.length > MAX_PROFILE_LENGTH) return { status: "error", error: "That is too long for a Steam profile link." };
+  if (!text) return say("error.steam.enter");
+  if (text.length > MAX_PROFILE_LENGTH) return say("error.steam.tooLong");
   try {
     const response = await (options.fetchImpl ?? fetch)(`${options.baseUrl.replace(/\/+$/, "")}/v1/steam/library`, {
       method: "POST",
@@ -81,20 +85,19 @@ export async function fetchSteamLibrary(
       body: JSON.stringify({ profile: text }),
     });
     const body = (await response.json().catch(() => null)) as { games?: unknown; error?: unknown } | null;
-    if (response.status === 429) return { status: "error", error: "Too many tries. Please wait a minute and try again." };
+    if (response.status === 429) return say("error.steam.tooMany");
     if (!response.ok) {
       // The service words its refusals for players (a wrong link, a private profile, Steam being down).
-      const message = typeof body?.error === "string" && body.error.length <= 300 ? body.error : "Steam import is not available right now.";
-      return { status: "error", error: message };
+      return typeof body?.error === "string" && body.error.length <= 300 ? { status: "error", error: body.error } : say("error.steam.unavailable");
     }
-    if (!Array.isArray(body?.games)) return { status: "error", error: "Tavora's service sent an answer the app could not read." };
+    if (!Array.isArray(body?.games)) return say("error.steam.unreadable");
     const games = body.games
       .slice(0, MAX_IMPORT_GAMES)
       .map(parseSteamGame)
       .filter((game): game is SteamImportGame => game !== null);
     return { status: "ok", games };
   } catch {
-    return { status: "error", error: "Tavora could not reach its service. Please try again later." };
+    return say("error.unreachable");
   }
 }
 

@@ -7,6 +7,7 @@ import type { BrowserCommand, BrowserState } from "../../../shared/host-api";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { act, addressFocus, showToast } from "../../host";
+import { t } from "../../i18n";
 
 const props = defineProps<{ instanceId: string; browser: BrowserState }>();
 
@@ -46,7 +47,7 @@ watch(addressFocus, (request) => request?.instanceId === props.instanceId && foc
 watch(
   () => props.browser.downloadsRefused,
   (count, previous) => {
-    if (count > (previous ?? 0)) showToast("Tavora doesn't download files. Use Open in your browser to download it there.");
+    if (count > (previous ?? 0)) showToast(t("browser.downloadRefused"));
   },
 );
 
@@ -61,16 +62,16 @@ function toggleAdblock() {
 
 <template>
   <div class="flex h-10 flex-none items-center gap-0.5 border-b px-1.5" :data-testid="`browser-toolbar-${instanceId}`">
-    <Button variant="ghost" size="icon-sm" aria-label="Back" title="Back (Alt+Left)" :disabled="!browser.canGoBack" data-testid="browser-back" @click="command('back')">
+    <Button variant="ghost" size="icon-sm" :aria-label="t('browser.back')" :title="t('browser.backTitle')" :disabled="!browser.canGoBack" data-testid="browser-back" @click="command('back')">
       <ArrowLeft :stroke-width="1.5" />
     </Button>
-    <Button variant="ghost" size="icon-sm" aria-label="Forward" title="Forward (Alt+Right)" :disabled="!browser.canGoForward" data-testid="browser-forward" @click="command('forward')">
+    <Button variant="ghost" size="icon-sm" :aria-label="t('browser.forward')" :title="t('browser.forwardTitle')" :disabled="!browser.canGoForward" data-testid="browser-forward" @click="command('forward')">
       <ArrowRight :stroke-width="1.5" />
     </Button>
-    <Button v-if="browser.loading" variant="ghost" size="icon-sm" aria-label="Stop loading" title="Stop loading" data-testid="browser-stop" @click="command('stop')">
+    <Button v-if="browser.loading" variant="ghost" size="icon-sm" :aria-label="t('browser.stop')" :title="t('browser.stop')" data-testid="browser-stop" @click="command('stop')">
       <X :stroke-width="1.5" />
     </Button>
-    <Button v-else variant="ghost" size="icon-sm" aria-label="Reload" title="Reload" :disabled="!browser.url" data-testid="browser-reload" @click="command('reload')">
+    <Button v-else variant="ghost" size="icon-sm" :aria-label="t('browser.reload')" :title="t('browser.reload')" :disabled="!browser.url" data-testid="browser-reload" @click="command('reload')">
       <RotateCw :stroke-width="1.5" />
     </Button>
 
@@ -79,8 +80,8 @@ function toggleAdblock() {
         v-if="browser.url && !browser.secure && !editing"
         class="text-destructive pointer-events-none absolute left-2.5 text-xs font-medium"
         data-testid="browser-not-secure"
-      >Not secure</span>
-      <label class="sr-only" :for="`address-${instanceId}`">Address</label>
+      >{{ t("browser.notSecure") }}</span>
+      <label class="sr-only" :for="`address-${instanceId}`">{{ t("browser.address") }}</label>
       <input
         :id="`address-${instanceId}`"
         ref="input"
@@ -91,7 +92,7 @@ function toggleAdblock() {
             browser.url && !browser.secure && !editing && 'pl-[5.25rem]',
           )
         "
-        placeholder="Search or type an address"
+        :placeholder="t('browser.addressPlaceholder')"
         spellcheck="false"
         autocomplete="off"
         :data-testid="`browser-address-${instanceId}`"
@@ -103,15 +104,15 @@ function toggleAdblock() {
       />
     </form>
 
-    <Button v-if="browser.fullscreen" variant="ghost" size="icon-sm" aria-label="Exit full screen" title="Exit full screen (Esc)" data-testid="browser-exit-fullscreen" @click="command('exit-fullscreen')">
+    <Button v-if="browser.fullscreen" variant="ghost" size="icon-sm" :aria-label="t('browser.exitFullscreen')" :title="t('browser.exitFullscreenTitle')" data-testid="browser-exit-fullscreen" @click="command('exit-fullscreen')">
       <Minimize2 :stroke-width="1.5" />
     </Button>
     <Button
       v-if="browser.audible || browser.muted"
       variant="ghost"
       size="icon-sm"
-      :aria-label="browser.muted ? 'Unmute' : 'Mute'"
-      :title="browser.muted ? 'Unmute' : 'Mute'"
+      :aria-label="browser.muted ? t('browser.unmute') : t('browser.mute')"
+      :title="browser.muted ? t('browser.unmute') : t('browser.mute')"
       data-testid="browser-mute"
       @click="command(browser.muted ? 'unmute' : 'mute')"
     >
@@ -122,12 +123,12 @@ function toggleAdblock() {
       variant="ghost"
       size="icon-sm"
       :class="cn(browser.adblock ? 'text-success' : 'text-muted-foreground', 'relative')"
-      :aria-label="browser.adblock ? `Ad blocking on for ${browser.site ?? 'this site'}` : `Ad blocking off for ${browser.site ?? 'this site'}`"
+      :aria-label="browser.adblock ? t('browser.adblockOn', { site: browser.site ?? t('browser.thisSite') }) : t('browser.adblockOff', { site: browser.site ?? t('browser.thisSite') })"
       :aria-pressed="browser.adblock"
       :title="
         browser.adblock
-          ? `Ads blocked on this page: ${browser.blocked}. Click to allow ads on ${browser.site ?? 'this site'}.`
-          : `Ads allowed on ${browser.site ?? 'this site'}. Click to block them.`
+          ? t('browser.adblockOnTitle', { blocked: browser.blocked, site: browser.site ?? t('browser.thisSite') })
+          : t('browser.adblockOffTitle', { site: browser.site ?? t('browser.thisSite') })
       "
       :disabled="!browser.site"
       data-testid="browser-adblock"
@@ -141,12 +142,12 @@ function toggleAdblock() {
       variant="ghost"
       size="icon-sm"
       :class="browser.shared ? 'text-primary' : 'text-muted-foreground'"
-      :aria-label="`Signed in for all games on ${browser.site ?? 'this site'}`"
+      :aria-label="t('browser.sharedLabel', { site: browser.site ?? t('browser.thisSite') })"
       :aria-pressed="browser.shared"
       :title="
         browser.shared
-          ? `${browser.site} uses one sign-in for all games. Click to sign in per game.`
-          : `Sign-ins on ${browser.site ?? 'this site'} are kept for this game only. Click to use one sign-in for all games.`
+          ? t('browser.sharedOnTitle', { site: browser.site ?? t('browser.thisSite') })
+          : t('browser.sharedOffTitle', { site: browser.site ?? t('browser.thisSite') })
       "
       :disabled="!browser.site"
       data-testid="browser-shared"
@@ -154,7 +155,7 @@ function toggleAdblock() {
     >
       <Users :stroke-width="1.5" />
     </Button>
-    <Button variant="ghost" size="icon-sm" aria-label="Open in your browser" title="Open in your browser" :disabled="!browser.url" data-testid="browser-external" @click="command('open-external')">
+    <Button variant="ghost" size="icon-sm" :aria-label="t('browser.external')" :title="t('browser.external')" :disabled="!browser.url" data-testid="browser-external" @click="command('open-external')">
       <ExternalLink :stroke-width="1.5" />
     </Button>
   </div>

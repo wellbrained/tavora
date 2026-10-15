@@ -5,19 +5,16 @@ import { act, dialog, nextPanelSlot, state, type AddModuleRequest } from "../hos
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
 /** Who publishes a module: Tavora itself, or a package found on this computer. */
-const PROVENANCE_LABEL = { official: "Official", local: "Local" } as const;
+const provenanceLabel = (provenance: "official" | "local") => (provenance === "official" ? t("common.official") : t("common.local"));
 
 type Category = "all" | "official" | "local" | "development";
 
-const CATEGORIES: { id: Category; label: string }[] = [
-  { id: "all", label: "All modules" },
-  { id: "official", label: "Official" },
-  { id: "local", label: "On this computer" },
-  { id: "development", label: "Development" },
-];
+const CATEGORY_IDS: Category[] = ["all", "official", "local", "development"];
+const CATEGORIES = computed(() => CATEGORY_IDS.map((id) => ({ id, label: t(`addModule.category.${id}`) })));
 
 type ModuleView = NonNullable<typeof state.value>["modules"][number];
 
@@ -38,7 +35,7 @@ const groups = computed(() => {
   const matches = state.value!.modules.filter(
     (module) => !text || module.name.toLowerCase().includes(text) || (module.description ?? "").toLowerCase().includes(text),
   );
-  return CATEGORIES.filter((item) => item.id !== "all")
+  return CATEGORIES.value.filter((item) => item.id !== "all")
     .map((item) => ({ ...item, items: matches.filter((module) => categoryOf(module) === item.id) }))
     .filter((group) => group.items.length && (category.value === "all" || category.value === group.id));
 });
@@ -62,13 +59,13 @@ function submit() {
 </script>
 
 <template>
-  <ModalDialog title="Module library" class="sm:max-w-[720px]" testid="add-module-dialog" @close="dialog = null">
+  <ModalDialog :title="t('addModule.title')" class="sm:max-w-[720px]" testid="add-module-dialog" @close="dialog = null">
     <form @submit.prevent="submit">
-      <label class="sr-only" for="module-search">Search modules</label>
-      <Input id="module-search" v-model="query" placeholder="Search modules" autocomplete="off" data-testid="module-search" autofocus />
+      <label class="sr-only" for="module-search">{{ t("addModule.search") }}</label>
+      <Input id="module-search" v-model="query" :placeholder="t('addModule.search')" autocomplete="off" data-testid="module-search" autofocus />
     </form>
     <div class="flex min-h-0 gap-4">
-      <nav class="flex w-44 flex-none flex-col gap-0.5" aria-label="Categories">
+      <nav class="flex w-44 flex-none flex-col gap-0.5" :aria-label="t('addModule.categories')">
         <button
           v-for="item in CATEGORIES"
           :key="item.id"
@@ -113,10 +110,10 @@ function submit() {
                       )
                     "
                     :data-testid="`provenance-${module.id}`"
-                    >{{ PROVENANCE_LABEL[module.provenance] }}</span
+                    >{{ provenanceLabel(module.provenance) }}</span
                   >
                 </span>
-                <span v-if="!module.available" class="text-muted-foreground text-sm">Does not support this game</span>
+                <span v-if="!module.available" class="text-muted-foreground text-sm">{{ t("addModule.unsupported") }}</span>
                 <span v-else-if="module.description" class="text-muted-foreground line-clamp-2 text-sm">{{ module.description }}</span>
               </span>
               <span class="flex flex-none flex-col items-end gap-1">
@@ -126,18 +123,18 @@ function submit() {
                   class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary"
                   :data-testid="`open-${module.id}`"
                   :disabled="!module.available"
-                  :aria-label="`Add ${module.name}`"
+                  :aria-label="t('addModule.addLabel', { name: module.name })"
                   @click="add(module.id)"
                 >
-                  Add
+                  {{ t("common.add") }}
                 </Button>
-                <span v-if="openCount(module.id)" class="text-muted-foreground text-xs">{{ openCount(module.id) }} open</span>
+                <span v-if="openCount(module.id)" class="text-muted-foreground text-xs">{{ t("addModule.open", { count: openCount(module.id) }) }}</span>
               </span>
             </li>
           </ul>
         </section>
         <p v-if="!groups.length" class="text-muted-foreground py-6 text-center text-sm" data-testid="module-search-empty">
-          No module matches "{{ query.trim() }}".
+          {{ t("addModule.none", { query: query.trim() }) }}
         </p>
       </div>
     </div>

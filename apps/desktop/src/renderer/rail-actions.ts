@@ -2,6 +2,7 @@
 // menu equivalent here, so the rail works from the keyboard too.
 import type { FolderView, GameView } from "../shared/host-api";
 import { act, confirmAction, dialog, prompt, state, submitAction, type MenuItem } from "./host";
+import { t } from "./i18n";
 
 function lib() {
   return state.value!.library;
@@ -20,9 +21,9 @@ export function placement(gameId: string): { folderId: string | null; index: num
 
 export function newFolderWith(gameId: string): void {
   prompt({
-    title: "New folder",
-    label: "Folder name",
-    confirm: "Create",
+    title: t("rail.newFolder.title"),
+    label: t("rail.folderName"),
+    confirm: t("rail.newFolder.confirm"),
     submit: (name) => submitAction({ type: "create-folder", name, gameIds: [gameId] }),
   });
 }
@@ -35,22 +36,22 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
   const manual = library.sort === "manual" || where.folderId !== null;
 
   const items: MenuItem[] = [
-    { label: "Open", testid: "menu-open", run: () => act({ type: "open-game", gameId: game.id }) },
+    { label: t("menu.open"), testid: "menu-open", run: () => act({ type: "open-game", gameId: game.id }) },
     isFavorite
-      ? { label: "Remove from Favorites", testid: "menu-unfavorite", run: () => act({ type: "unfavorite", gameId: game.id }) }
-      : { label: "Add to Favorites", testid: "menu-favorite", run: () => act({ type: "favorite", gameId: game.id }) },
+      ? { label: t("menu.favorite.remove"), testid: "menu-unfavorite", run: () => act({ type: "unfavorite", gameId: game.id }) }
+      : { label: t("menu.favorite.add"), testid: "menu-favorite", run: () => act({ type: "favorite", gameId: game.id }) },
   ];
 
   if (options.inFavorites) {
     items.push(
       {
-        label: "Move up in Favorites",
+        label: t("menu.favorite.up"),
         testid: "menu-favorite-up",
         disabled: favoriteIndex <= 0,
         run: () => act({ type: "favorite", gameId: game.id, index: favoriteIndex - 1 }),
       },
       {
-        label: "Move down in Favorites",
+        label: t("menu.favorite.down"),
         testid: "menu-favorite-down",
         disabled: favoriteIndex >= library.favorites.length - 1,
         run: () => act({ type: "favorite", gameId: game.id, index: favoriteIndex + 1 }),
@@ -60,7 +61,7 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
   }
 
   items.push({
-    label: "Move to folder",
+    label: t("menu.moveToFolder"),
     testid: "menu-move-to-folder",
     submenu: () => [
       ...Object.values(library.folders)
@@ -72,12 +73,12 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
             run: () => act({ type: "move-game", gameId: game.id, folderId: folder.id }),
           }),
         ),
-      { label: "New folder…", testid: "menu-new-folder", run: () => newFolderWith(game.id) },
+      { label: t("menu.newFolder"), testid: "menu-new-folder", run: () => newFolderWith(game.id) },
     ],
   });
   if (where.folderId) {
     items.push({
-      label: "Take out of folder",
+      label: t("menu.takeOut"),
       testid: "menu-unfolder",
       run: () => act({ type: "move-game", gameId: game.id, folderId: null }),
     });
@@ -85,13 +86,13 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
   if (manual) {
     items.push(
       {
-        label: "Move up",
+        label: t("menu.moveUp"),
         testid: "menu-up",
         disabled: where.index <= 0,
         run: () => act({ type: "move-game", gameId: game.id, folderId: where.folderId, index: where.index - 1 }),
       },
       {
-        label: "Move down",
+        label: t("menu.moveDown"),
         testid: "menu-down",
         disabled: where.index >= where.size - 1,
         run: () => act({ type: "move-game", gameId: game.id, folderId: where.folderId, index: where.index + 1 }),
@@ -100,44 +101,44 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
   }
   items.push(
     {
-      label: "Rename…",
+      label: t("menu.rename"),
       testid: "menu-rename",
       run: () =>
         prompt({
-          title: `Rename ${game.name}`,
-          label: "Name",
+          title: t("menu.rename.title", { name: game.name }),
+          label: t("menu.rename.label"),
           value: game.name,
-          confirm: "Rename",
+          confirm: t("menu.rename.confirm"),
           submit: (name) => submitAction({ type: "rename-game", gameId: game.id, name }),
         }),
     },
     {
-      label: "Change icon",
+      label: t("menu.changeIcon"),
       testid: "menu-icon",
       // Three choices, one current: choosing any replaces the others, so there is nothing to "remove".
       submenu: () => [
         {
-          label: "Original icon",
+          label: t("menu.icon.original"),
           testid: "menu-icon-original",
           checked: game.iconChoice === "original",
           run: () => act({ type: "use-original-icon", gameId: game.id }),
         },
         {
-          label: "Set letters…",
+          label: t("menu.icon.letters"),
           testid: "menu-icon-label",
           checked: game.iconChoice === "letters",
           run: () =>
             prompt({
-              title: "Icon letters",
-              label: "Up to 3 letters or digits",
+              title: t("menu.icon.letters.title"),
+              label: t("menu.icon.letters.label"),
               value: game.icon.kind === "monogram" ? game.icon.text : "",
               maxLength: 3,
-              confirm: "Save",
+              confirm: t("common.save"),
               submit: (label) => submitAction({ type: "set-game-label", gameId: game.id, label }),
             }),
         },
         {
-          label: "Select own icon…",
+          label: t("menu.icon.own"),
           testid: "menu-icon-image",
           checked: game.iconChoice === "image",
           run: () => act({ type: "choose-game-image", gameId: game.id }),
@@ -146,18 +147,17 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
     },
     // Only for a game whose own icon Tavora does not have yet: the whole item is the offer.
     ...(game.shareIcon
-      ? [{ label: "Share icon", testid: "menu-share-icon", run: () => (dialog.value = { kind: "share-icons", gameIds: [game.id] }) } satisfies MenuItem]
+      ? [{ label: t("menu.shareIcon"), testid: "menu-share-icon", run: () => (dialog.value = { kind: "share-icons", gameIds: [game.id] }) } satisfies MenuItem]
       : []),
     {
-      label: "Remove game…",
+      label: t("menu.removeGame"),
       testid: "menu-remove",
       danger: true,
       run: () =>
         confirmAction({
-          title: `Remove ${game.name}?`,
-          message:
-            "The game, its workspace and all module data move to Trash. You can restore them from Settings for 30 days; after that they are deleted for good.",
-          confirm: "Move to Trash",
+          title: t("menu.remove.title", { name: game.name }),
+          message: t("menu.remove.message"),
+          confirm: t("menu.remove.confirm"),
           danger: true,
           run: () => submitAction({ type: "trash-game", gameId: game.id }),
         }),
@@ -171,34 +171,34 @@ export function folderMenu(folder: FolderView): MenuItem[] {
   const index = library.root.findIndex((item) => item.kind === "folder" && item.id === folder.id);
   const items: MenuItem[] = [
     {
-      label: "Rename…",
+      label: t("menu.rename"),
       testid: "menu-rename",
       run: () =>
         prompt({
-          title: `Rename ${folder.name}`,
-          label: "Folder name",
+          title: t("menu.rename.title", { name: folder.name }),
+          label: t("rail.folderName"),
           value: folder.name,
-          confirm: "Rename",
+          confirm: t("menu.rename.confirm"),
           submit: (name) => submitAction({ type: "rename-folder", folderId: folder.id, name }),
         }),
     },
     {
-      label: "Set letters…",
+      label: t("menu.icon.letters"),
       testid: "menu-folder-label",
       run: () =>
         prompt({
-          title: "Folder letters",
-          label: "Shown instead of the game icons, up to 3 characters",
+          title: t("menu.folder.letters.title"),
+          label: t("menu.folder.letters.label"),
           value: folder.label ?? "",
           maxLength: 3,
-          confirm: "Save",
+          confirm: t("common.save"),
           submit: (label) => submitAction({ type: "set-folder-label", folderId: folder.id, label }),
         }),
     },
   ];
   if (folder.label) {
     items.push({
-      label: "Show game icons",
+      label: t("menu.folder.showIcons"),
       testid: "menu-folder-collage",
       run: () => act({ type: "set-folder-label", folderId: folder.id, label: null }),
     });
@@ -206,13 +206,13 @@ export function folderMenu(folder: FolderView): MenuItem[] {
   if (library.sort === "manual") {
     items.push(
       {
-        label: "Move up",
+        label: t("menu.moveUp"),
         testid: "menu-up",
         disabled: index <= 0,
         run: () => act({ type: "move-folder", folderId: folder.id, index: index - 1 }),
       },
       {
-        label: "Move down",
+        label: t("menu.moveDown"),
         testid: "menu-down",
         disabled: index >= library.root.length - 1,
         run: () => act({ type: "move-folder", folderId: folder.id, index: index + 1 }),
@@ -220,14 +220,14 @@ export function folderMenu(folder: FolderView): MenuItem[] {
     );
   }
   items.push({
-    label: "Delete folder",
+    label: t("menu.folder.delete"),
     testid: "menu-delete-folder",
     danger: true,
     run: () =>
       confirmAction({
-        title: `Delete ${folder.name}?`,
-        message: "Its games move back to the game list. No game or data is removed.",
-        confirm: "Delete folder",
+        title: t("menu.folder.delete.title", { name: folder.name }),
+        message: t("menu.folder.delete.message"),
+        confirm: t("menu.folder.delete"),
         danger: true,
         run: () => submitAction({ type: "delete-folder", folderId: folder.id }),
       }),

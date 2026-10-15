@@ -14,48 +14,49 @@ import {
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
 import { act, confirmAction, prompt, state, submitAction, type MenuItem } from "../../host";
+import { t, templateName } from "../../i18n";
 import MenuButton from "../menus/MenuButton.vue";
 import GridPicker from "./GridPicker.vue";
 import TemplatePreview from "./TemplatePreview.vue";
 
 function saveAs() {
   prompt({
-    title: "Save layout",
-    label: "Layout name",
-    confirm: "Save",
+    title: t("layouts.save.title"),
+    label: t("layouts.name"),
+    confirm: t("common.save"),
     submit: (name) => submitAction({ type: "save-snapshot", name }),
   });
 }
 
 function snapshotItems(snapshot: SnapshotView): MenuItem[] {
   return [
-    { label: "Apply", testid: "layout-apply", run: () => act({ type: "apply-snapshot", snapshotId: snapshot.id }) },
+    { label: t("layouts.apply"), testid: "layout-apply", run: () => act({ type: "apply-snapshot", snapshotId: snapshot.id }) },
     {
-      label: "Replace with current layout",
+      label: t("layouts.replace"),
       testid: "layout-update",
       run: () => act({ type: "update-snapshot", snapshotId: snapshot.id }),
     },
     {
-      label: "Rename…",
+      label: t("menu.rename"),
       testid: "layout-rename",
       run: () =>
         prompt({
-          title: "Rename layout",
-          label: "Layout name",
+          title: t("layouts.rename.title"),
+          label: t("layouts.name"),
           value: snapshot.name,
-          confirm: "Rename",
+          confirm: t("menu.rename.confirm"),
           submit: (name) => submitAction({ type: "rename-snapshot", snapshotId: snapshot.id, name }),
         }),
     },
     {
-      label: "Delete",
+      label: t("layouts.delete"),
       testid: "layout-delete",
       danger: true,
       run: () =>
         confirmAction({
-          title: `Delete the layout "${snapshot.name}"?`,
-          message: "Only the saved arrangement is deleted. Open panels and module data stay as they are.",
-          confirm: "Delete layout",
+          title: t("layouts.delete.title", { name: snapshot.name }),
+          message: t("layouts.delete.message"),
+          confirm: t("layouts.delete.confirm"),
           danger: true,
           run: () => submitAction({ type: "delete-snapshot", snapshotId: snapshot.id }),
         }),
@@ -77,7 +78,7 @@ function items(): MenuItem[] {
       submenu: () => snapshotItems(snapshot),
     })),
     {
-      label: "Save current layout…",
+      label: t("layouts.saveCurrent"),
       testid: "layout-save",
       separator: true,
       disabled: view.panels.length === 0,
@@ -90,15 +91,15 @@ function items(): MenuItem[] {
 <template>
   <MenuButton
     :items="items"
-    title="Saved layouts"
+    :title="t('layouts.title')"
     testid="layouts"
-    label="Saved layouts"
+    :label="t('layouts.title')"
     side="bottom"
     align="end"
     menu-class="w-72"
     class="flex h-8 w-auto gap-1.5 rounded-lg px-2.5 text-sm font-medium"
   >
-    <LayoutPanelLeft class="size-4" :stroke-width="1.5" /> Layouts <ChevronDown class="size-3.5" :stroke-width="1.5" />
+    <LayoutPanelLeft class="size-4" :stroke-width="1.5" /> {{ t("layouts.button") }} <ChevronDown class="size-3.5" :stroke-width="1.5" />
     <template #after>
       <DropdownMenuSeparator />
       <!-- Templates sit one level down, so the grid picker stays in the main menu. -->
@@ -106,18 +107,18 @@ function items(): MenuItem[] {
         <!-- The safe zone toward the submenu lasts 1.5 s instead of 0.3 s: the way to it crosses the grid
              picker, and an unhurried mouse must not highlight a grid cell and close the submenu. -->
         <DropdownMenuSubTrigger data-testid="layout-templates" :grace-duration="1500">
-          <LayoutTemplate class="size-4" :stroke-width="1.5" /> Templates
+          <LayoutTemplate class="size-4" :stroke-width="1.5" /> {{ t("layouts.templates") }}
         </DropdownMenuSubTrigger>
         <!-- Opens level with the Templates entry: -5 offsets the panel's border and padding. -->
         <DropdownMenuSubContent class="w-auto" side="right" align="start" :align-offset="-5">
-          <div class="grid grid-cols-2 gap-1" role="group" aria-label="Templates">
+          <div class="grid grid-cols-2 gap-1" role="group" :aria-label="t('layouts.templates')">
             <DropdownMenuItem
               v-for="template in LAYOUT_TEMPLATES"
               :key="template.id"
               class="group justify-center p-2"
               :data-testid="`layout-template-${template.id}`"
-              :aria-label="template.name"
-              :title="template.name"
+              :aria-label="templateName(template)"
+              :title="templateName(template)"
               @select="apply(template.id)"
             >
               <!-- size-auto keeps the menu item's default 16 px icon size off the preview. -->
@@ -127,7 +128,7 @@ function items(): MenuItem[] {
         </DropdownMenuSubContent>
       </DropdownMenuSub>
       <DropdownMenuSeparator />
-      <DropdownMenuLabel class="text-muted-foreground text-xs font-normal">Grid</DropdownMenuLabel>
+      <DropdownMenuLabel class="text-muted-foreground text-xs font-normal">{{ t("layouts.grid") }}</DropdownMenuLabel>
       <GridPicker />
     </template>
   </MenuButton>

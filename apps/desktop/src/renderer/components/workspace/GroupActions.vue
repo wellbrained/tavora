@@ -3,6 +3,7 @@
 import type { IDockviewHeaderActionsProps } from "dockview-vue";
 import { computed, inject } from "vue";
 import { state } from "../../host";
+import { t } from "../../i18n";
 import MenuButton from "../menus/MenuButton.vue";
 import { DOCK, panelMenu } from "./dock-context";
 
@@ -10,7 +11,7 @@ const props = defineProps<{ params: IDockviewHeaderActionsProps }>();
 const dock = inject(DOCK)!;
 const name = computed(() => {
   const id = props.params.activePanel?.id;
-  return state.value?.panels.find((item) => item.instanceId === id)?.name ?? "Panel";
+  return state.value?.panels.find((item) => item.instanceId === id)?.name ?? t("workspace.panel");
 });
 
 function items() {
@@ -26,7 +27,7 @@ function items() {
       :items="items"
       :title="name"
       testid="group-menu"
-      :label="`${name} options`"
+      :label="t('workspace.options', { name })"
       side="bottom"
       align="end"
     />

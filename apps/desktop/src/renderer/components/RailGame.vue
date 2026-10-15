@@ -2,6 +2,7 @@
 import type { GameView } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
 import type { MenuItem } from "@/host";
+import { t } from "../i18n";
 import GameIcon from "./GameIcon.vue";
 import MenuArea from "./menus/MenuArea.vue";
 import MenuButton from "./menus/MenuButton.vue";
@@ -61,7 +62,7 @@ defineOptions({ inheritAttrs: false });
         v-if="expanded"
         class="bg-accent absolute right-4 opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100"
       >
-        <MenuButton :items="menu" :title="game.name" :testid="`${testid}-menu`" :label="`More actions for ${game.name}`" />
+        <MenuButton :items="menu" :title="game.name" :testid="`${testid}-menu`" :label="t('rail.moreGame', { name: game.name })" />
       </div>
     </div>
   </MenuArea>

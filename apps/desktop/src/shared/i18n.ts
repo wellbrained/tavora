@@ -51,3 +51,6 @@ export function translate(language: Language, key: MessageKey, params?: Params):
 
 /** Dates and numbers follow the language, not the machine's own locale. */
 export const intlLocale = (language: Language): string => (language === "de" ? "de-DE" : "en-GB");
+
+/** Whether a text exists, for keys built from data such as a template's id. */
+export const hasMessage = (key: string): key is MessageKey => key in en || `${key}.other` in en;
