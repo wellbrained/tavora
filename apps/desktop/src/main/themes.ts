@@ -312,15 +312,37 @@ async function candidates(dir: string): Promise<string[]> {
 
 // ── Using a theme ────────────────────────────────────────────────────────
 
-/** The theme and variation to show for a saved choice; anything missing falls back to the default. */
-export function resolveTheme(themes: Map<string, InstalledTheme>, choice: ThemeChoice): { theme: ThemePackage; variation: ThemeVariation } {
+/**
+ * The variation of a theme that suits the system's light or dark setting: the saved one when it already
+ * suits, else the first of that mode (normal contrast before high), else the saved one (a theme that
+ * only comes in the other mode keeps its look).
+ */
+export function variationForMode(theme: ThemePackage, saved: string, mode: "dark" | "light"): ThemeVariation {
+  const savedVariation = theme.variations.find((item) => item.id === saved);
+  if (savedVariation?.mode === mode) return savedVariation;
+  const suiting = theme.variations.filter((item) => item.mode === mode);
+  return suiting.find((item) => item.contrast === "normal") ?? suiting[0] ?? savedVariation ?? theme.variations[0]!;
+}
+
+/**
+ * The theme and variation to show for a saved choice; anything missing falls back to the default. With a
+ * `systemMode` (the player follows the system) the variation is the one that suits it.
+ */
+export function resolveTheme(
+  themes: Map<string, InstalledTheme>,
+  choice: ThemeChoice,
+  systemMode?: "dark" | "light",
+): { theme: ThemePackage; variation: ThemeVariation } {
   const installed = themes.get(choice.id);
   if (installed) {
-    const variation = installed.theme.variations.find((item) => item.id === choice.variation) ?? installed.theme.variations[0]!;
+    const variation = systemMode
+      ? variationForMode(installed.theme, choice.variation, systemMode)
+      : (installed.theme.variations.find((item) => item.id === choice.variation) ?? installed.theme.variations[0]!);
     return { theme: installed.theme, variation };
   }
   const fallback = themes.get(DEFAULT_THEME.id)?.theme ?? FALLBACK_THEME;
-  return { theme: fallback, variation: fallback.variations.find((item) => item.id === DEFAULT_THEME.variation) ?? fallback.variations[0]! };
+  const saved = fallback.variations.find((item) => item.id === DEFAULT_THEME.variation) ?? fallback.variations[0]!;
+  return { theme: fallback, variation: systemMode ? variationForMode(fallback, saved.id, systemMode) : saved };
 }
 
 /** What modules get through ui.getTheme and the ui.theme event. */

@@ -41,9 +41,11 @@ export function parseAction(raw: unknown): HostAction | null {
     case "create-starter-theme":
       return only() ? { type: a.type } : null;
     case "set-theme":
-      return only("themeId", "variationId") && isModuleId(a.themeId) && isVariationId(a.variationId)
-        ? { type: a.type, themeId: a.themeId, variationId: a.variationId }
+      return only("themeId", "variationId", "fixed") && isModuleId(a.themeId) && isVariationId(a.variationId) && (a.fixed === undefined || typeof a.fixed === "boolean")
+        ? { type: a.type, themeId: a.themeId, variationId: a.variationId, ...(a.fixed === undefined ? {} : { fixed: a.fixed }) }
         : null;
+    case "set-appearance-mode":
+      return only("mode") && (a.mode === "system" || a.mode === "dark" || a.mode === "light") ? { type: a.type, mode: a.mode } : null;
     case "open-game":
     case "choose-game-image":
     case "use-original-icon":

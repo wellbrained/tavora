@@ -73,6 +73,8 @@ export interface Library {
   steamIcons: boolean;
   /** The picked theme and variation. Kept even while that theme is not installed, which shows the default. */
   theme: { id: string; variation: string };
+  /** Show the variation that matches the system's light or dark setting, and change with it. */
+  followSystem: boolean;
   /** False until the first-run welcome was finished or skipped. */
   onboarded: boolean;
   lastGameId: string | null;
@@ -101,6 +103,7 @@ export function emptyLibrary(): Library {
     autoUpdate: true,
     steamIcons: true,
     theme: { ...DEFAULT_THEME },
+    followSystem: true,
     onboarded: false,
     lastGameId: null,
   };
@@ -563,6 +566,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.steamIcons === "boolean") library.steamIcons = saved.steamIcons;
   const theme = asRecord(saved.theme);
   if (isModuleId(theme.id) && isVariationId(theme.variation)) library.theme = { id: theme.id, variation: theme.variation };
+  if (typeof saved.followSystem === "boolean") library.followSystem = saved.followSystem;
   // A library saved before the welcome existed belongs to someone who is past it.
   library.onboarded = typeof saved.onboarded === "boolean" ? saved.onboarded : true;
   setRail(library, asRecord(saved.rail));
