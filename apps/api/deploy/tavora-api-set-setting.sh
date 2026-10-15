@@ -3,7 +3,8 @@
 # settings in /srv/tavora-api/shared/production.env without touching the others,
 # and restarts the service.
 #
-#   tavora-api-set-setting.sh takedown       where publishers ask for an icon to be removed
+#   tavora-api-set-setting.sh takedown [address]
+#                                            where publishers ask for an icon to be removed
 #                                            (an email address or a link); hosted icons are
 #                                            only served while it is set
 #   tavora-api-set-setting.sh admin-token    makes a new token for the review page and prints
@@ -26,8 +27,10 @@ set_var() {
 
 case "${1:-}" in
   takedown)
-    read -rp 'Takedown contact (an email address or a link): ' contact
-    contact="$(printf '%s' "$contact" | tr -d '[:space:]')"
+    contact="${2:-}"
+    [[ -n "$contact" ]] || read -rp 'Takedown contact (an email address or a link): ' contact
+    # Text piped from Windows PowerShell can start with a byte-order mark: drop it with the whitespace.
+    contact="$(printf '%s' "$contact" | LC_ALL=C sed 's/^\xef\xbb\xbf//' | tr -d '[:space:]')"
     # Letters, digits and . _ - @ : / ? = & % + ~ # only, so nothing can end up in the shell or the env file as code.
     case "$contact" in *[!A-Za-z0-9._@:/?=\&%+~#-]*) contact="" ;; esac
     (( ${#contact} >= 3 && ${#contact} <= 200 )) || { echo 'That does not look like an address or a link (letters, digits and . _ - @ : / ? = & % + ~ # only). Nothing was saved.'; exit 1; }
@@ -40,7 +43,7 @@ case "${1:-}" in
     shown='a new admin token'
     ;;
   *)
-    echo 'Usage: tavora-api-set-setting.sh takedown | admin-token'
+    echo 'Usage: tavora-api-set-setting.sh takedown [address] | admin-token'
     exit 2
     ;;
 esac
