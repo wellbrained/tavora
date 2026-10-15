@@ -1,18 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { GameView } from "../../shared/host-api";
+import { gameBadgeLook } from "../game-badge";
 
 const props = withDefaults(defineProps<{ game: GameView; size?: number }>(), { size: 48 });
 
-// Muted, warm tones that keep ivory text readable. Picked by id so a game
-// keeps its colour when renamed.
-const TONES = ["#6b4f2a", "#5a3d36", "#3f4a3a", "#3b4656", "#5b4a63", "#4d4a3c", "#64422a", "#37504f"];
-
-const tone = computed(() => {
-  let hash = 0;
-  for (const char of props.game.id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return TONES[hash % TONES.length];
-});
+// Tone and pattern come from the id, so a game keeps its look when renamed.
+const look = computed(() => gameBadgeLook(props.game.id));
 // Small icons (folder collages) show only the first letter.
 const text = computed(() => {
   const full = props.game.icon.kind === "monogram" ? props.game.icon.text : "";
@@ -31,7 +25,12 @@ const fontSize = computed(() => Math.max(12, Math.round(props.size * ([...text.v
     <span
       v-else
       class="text-foreground flex size-full items-center justify-center font-semibold tracking-wide"
-      :style="{ background: tone, fontSize: `${fontSize}px` }"
+      :style="{
+        backgroundColor: look.color,
+        backgroundImage: look.image,
+        backgroundSize: look.size,
+        fontSize: `${fontSize}px`,
+      }"
       >{{ text }}</span
     >
   </span>
