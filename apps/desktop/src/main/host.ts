@@ -20,6 +20,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { ActionResult, AppearanceView, BrowserCommand, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
+import { resolveLanguage, type Language } from "../shared/i18n";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, type SavedLayout } from "./layout";
@@ -158,6 +159,8 @@ export interface HostOptions {
   hidden?: boolean;
   /** Tests only: pretend the system is in this mode, so a test does not depend on the PC it runs on. */
   systemTheme?: "dark" | "light" | undefined;
+  /** Development and tests only: what the system's language is taken to be, instead of the real one. */
+  systemLocale?: string | undefined;
   /**
    * Development only: the Vite dev server that serves the host UI with hot
    * reload, instead of the built files in `rendererDir`.
@@ -725,6 +728,9 @@ export class Host {
         library.onlineSearch = action.enabled;
         // Turned on: games without an icon may find one on the service, and the share list can be built.
         if (action.enabled) this.fetchIconsSoon();
+        break;
+      case "set-language":
+        library.language = action.language;
         break;
       case "set-steam-profile":
         library.steamProfile = action.profile;
@@ -1486,7 +1492,7 @@ export class Host {
         provenance: module.provenance,
         development: isDevelopmentModule(module.manifest.id),
         version: module.manifest.version,
-        origin: this.moduleInfo.get(module.manifest.id)?.origin ?? "",
+        origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
       })),
       moduleProblems: this.moduleProblems.map((problem) => ({ ...problem })),
@@ -1510,9 +1516,15 @@ export class Host {
       },
       restartPending: library.grayscaleText !== this.options.grayscaleText,
       appearance: this.appearanceView(),
+      language: { setting: library.language, resolved: this.language },
       appVersion: app.getVersion(),
       update: this.updates?.state ?? { status: "idle", checkedAt: null, failed: false },
     };
+  }
+
+  /** The language of Tavora's texts now. */
+  get language(): Language {
+    return resolveLanguage(this.library.language, this.options.systemLocale ?? app.getLocale());
   }
 
   private appearanceView(): AppearanceView {

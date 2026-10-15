@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.7",
+    date: "2026-10-15",
+    title: "Tavora speaks German (first part)",
+    notes: [
+      "Settings has a new Language row: Follow System (the default), English or Deutsch. The change shows at once, and Tavora follows your system's language until you choose one. German is a first part for now: all of Settings is translated, and the rest of Tavora follows in the next versions.",
+    ],
+  },
+  {
     version: "0.5.6",
     date: "2026-10-15",
     title: "A browser next to your game",

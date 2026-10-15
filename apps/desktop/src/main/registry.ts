@@ -136,8 +136,8 @@ async function loadModule(dir: string, provenance: Provenance, problem: (message
 }
 
 export interface ModuleInfo {
-  /** Where the module was found, in words and without a full path. */
-  origin: string;
+  /** Where the module was found, without a full path; the host UI words it. */
+  origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
   /** Only a direct child of the player's own modules folder can be removed from Settings. */
   removable: boolean;
 }
@@ -148,14 +148,8 @@ export async function describeModules(userModules: string, modules: Map<string, 
   const info = new Map<string, ModuleInfo>();
   for (const [id, module] of modules) {
     const own = module.provenance === "local" && path.dirname(module.root) === userRoot;
-    const origin =
-      module.provenance === "official"
-        ? "Ships with Tavora"
-        : isDevelopmentModule(id)
-          ? "Example that ships with Tavora"
-          : own
-            ? `Your modules folder, in ${path.basename(module.root)}`
-            : `A development folder, ${path.basename(module.root)}`;
+    const kind = module.provenance === "official" ? "official" : isDevelopmentModule(id) ? "example" : own ? "own" : "dev";
+    const origin = { kind, folder: path.basename(module.root) } as const;
     info.set(id, { origin, removable: own });
   }
   return info;

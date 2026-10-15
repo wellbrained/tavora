@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { isGameId, isModuleId } from "@tavora/module-schema";
 import type { RootItem, RootSort, Startup } from "../shared/host-api";
 import { isSite } from "./browser-url";
+import { isLanguageSetting, type LanguageSetting } from "../shared/i18n";
 import { CATALOG, catalogGame } from "./catalog";
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
 import { DEFAULT_THEME, isVariationId } from "./themes";
@@ -74,6 +75,8 @@ export interface Library {
   steamIcons: boolean;
   /** The Steam profile link or id the player chose to remember for the Steam import, or null. Kept only on this PC. */
   steamProfile: string | null;
+  /** The language of Tavora's texts: one of them, or the system's. */
+  language: LanguageSetting;
   /** The picked theme and variation. Kept even while that theme is not installed, which shows the default. */
   theme: { id: string; variation: string };
   /** Show the variation that matches the system's light or dark setting, and change with it. */
@@ -108,6 +111,7 @@ export function emptyLibrary(): Library {
     autoUpdate: true,
     steamIcons: true,
     steamProfile: null,
+    language: "system",
     theme: { ...DEFAULT_THEME },
     followSystem: true,
     onboarded: false,
@@ -573,6 +577,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.onlineSearch === "boolean") library.onlineSearch = saved.onlineSearch;
   if (typeof saved.autoUpdate === "boolean") library.autoUpdate = saved.autoUpdate;
   if (typeof saved.steamIcons === "boolean") library.steamIcons = saved.steamIcons;
+  if (isLanguageSetting(saved.language)) library.language = saved.language;
   if (typeof saved.steamProfile === "string" && saved.steamProfile.trim() && saved.steamProfile.length <= 200) library.steamProfile = saved.steamProfile.trim();
   const theme = asRecord(saved.theme);
   if (isModuleId(theme.id) && isVariationId(theme.variation)) library.theme = { id: theme.id, variation: theme.variation };

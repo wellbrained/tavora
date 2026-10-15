@@ -8,6 +8,7 @@ import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { act, confirmAction, state, submitAction } from "../../host";
+import { t } from "../../i18n";
 import SettingRow from "./SettingRow.vue";
 
 defineProps<{ highlight: string | null }>();
@@ -30,10 +31,9 @@ function openCount(moduleId: string): number {
 
 function remove(module: ModuleView) {
   confirmAction({
-    title: `Remove ${module.name}?`,
-    message:
-      "Its folder moves to the recycle bin and its panels close in every game. Its notes and other data stay on this PC, so adding the module again brings them back.",
-    confirm: "Remove",
+    title: t("settings.modules.removeTitle", { name: module.name }),
+    message: t("settings.modules.removeMessage"),
+    confirm: t("common.remove"),
     danger: true,
     run: () => submitAction({ type: "remove-module", moduleId: module.id }),
   });
@@ -41,25 +41,25 @@ function remove(module: ModuleView) {
 </script>
 
 <template>
-  <h2 class="mb-4 text-xl font-semibold">Modules</h2>
+  <h2 class="mb-4 text-xl font-semibold">{{ t("settings.section.modules") }}</h2>
 
   <SettingRow
-    label="Your own modules"
-    description="Put a module's folder into your modules folder, then press Reload. Only add modules from people you trust: a module runs on your PC and can see the game it is opened in."
+    :label="t('settings.own-modules.label')"
+    :description="t('settings.own-modules.description')"
     setting="own-modules"
     :highlighted="highlight === 'own-modules'"
   >
     <span class="flex flex-none flex-wrap justify-end gap-2">
       <Button variant="secondary" data-testid="open-modules-folder" @click="act({ type: 'open-modules-folder' })">
-        <FolderOpen :stroke-width="1.5" /> Open folder
+        <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
       </Button>
-      <Button variant="secondary" data-testid="reload-modules" @click="act({ type: 'reload-modules' })"><RefreshCw :stroke-width="1.5" /> Reload</Button>
+      <Button variant="secondary" data-testid="reload-modules" @click="act({ type: 'reload-modules' })"><RefreshCw :stroke-width="1.5" /> {{ t("common.reload") }}</Button>
     </span>
   </SettingRow>
-  <ul v-if="problems.length" class="-mt-2 mb-2 flex flex-col gap-1.5 py-2" aria-label="Modules that could not be loaded" data-testid="module-problems">
+  <ul v-if="problems.length" class="-mt-2 mb-2 flex flex-col gap-1.5 py-2" :aria-label="t('settings.modules.problems')" data-testid="module-problems">
     <li v-for="problem in problems" :key="problem.folder" class="text-sm">
       <span class="text-destructive font-medium">{{ problem.folder }}</span>
-      <span class="text-muted-foreground"> could not be loaded: {{ problem.message }}.</span>
+      <span class="text-muted-foreground"> {{ t("settings.modules.problem", { folder: "", message: problem.message }).trim() }}</span>
     </li>
   </ul>
 
@@ -67,8 +67,8 @@ function remove(module: ModuleView) {
     :class="cn('-mx-3 rounded-lg px-3 pt-4 transition-colors duration-500', highlight === 'installed-modules' && 'bg-primary/10')"
     data-setting="installed-modules"
   >
-    <p class="font-medium">Installed modules</p>
-    <ul class="mt-2 flex flex-col" aria-label="Installed modules" data-testid="module-list">
+    <p class="font-medium">{{ t("settings.installed-modules.label") }}</p>
+    <ul class="mt-2 flex flex-col" :aria-label="t('settings.installed-modules.label')" data-testid="module-list">
       <li
         v-for="module in sorted"
         :key="module.id"
@@ -81,21 +81,21 @@ function remove(module: ModuleView) {
             <span class="text-muted-foreground flex-none text-xs tabular-nums">{{ module.version }}</span>
             <span
               :class="cn('flex-none rounded-sm border px-1.5 text-xs', module.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
-              >{{ module.provenance === "official" ? "Official" : "Local" }}</span
+              >{{ module.provenance === "official" ? t("common.official") : t("common.local") }}</span
             >
           </span>
           <span v-if="module.description" class="text-muted-foreground line-clamp-2 text-sm">{{ module.description }}</span>
-          <span class="text-muted-foreground text-xs" :data-testid="`module-origin-${module.id}`">{{ module.origin }}</span>
+          <span class="text-muted-foreground text-xs" :data-testid="`module-origin-${module.id}`">{{ t(`modules.origin.${module.origin.kind}`, { folder: module.origin.folder }) }}</span>
         </div>
         <Button
           v-if="module.removable"
           variant="secondary"
-          :aria-label="`Remove ${module.name}`"
-          :title="openCount(module.id) ? 'Its open panels close' : undefined"
+          :aria-label="t('settings.modules.removeLabel', { name: module.name })"
+          :title="openCount(module.id) ? t('settings.modules.removeHint') : undefined"
           :data-testid="`remove-module-${module.id}`"
           @click="remove(module)"
         >
-          <Trash2 :stroke-width="1.5" /> Remove
+          <Trash2 :stroke-width="1.5" /> {{ t("common.remove") }}
         </Button>
       </li>
     </ul>
