@@ -11,10 +11,15 @@ Environment=PORT=4010
 Environment=TRUST_PROXY=1
 Environment=TAVORA_GAMES_DB=/srv/tavora-api/current/games.sqlite
 Environment=TAVORA_ICONS_DIR=/srv/tavora-api/current/icons
+Environment=TAVORA_STATE_DIR=/var/lib/tavora-api
 # The Steam Web API key lives here (STEAM_WEB_API_KEY=…), set with tavora-api-set-steam-key.sh. Optional.
-# TAKEDOWN_CONTACT=... (where publishers ask for an icon to be removed) lives in the same file; hosted icons are only served when it is set.
+# TAKEDOWN_CONTACT=... (where publishers ask for an icon to be removed; hosted icons are only served when it is set) and ADMIN_TOKEN=... (the review page,
+# on 127.0.0.1:4011 only) live in the same file; set them with tavora-api-set-setting.sh.
 EnvironmentFile=-/srv/tavora-api/shared/production.env
 ExecStart=/usr/local/bin/node /srv/tavora-api/current/server.mjs
+# The only writable place: icons players offered, approved ones and takedowns (a small SQLite file).
+StateDirectory=tavora-api
+StateDirectoryMode=0700
 Restart=on-failure
 RestartSec=5
 MemoryMax=256M

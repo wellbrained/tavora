@@ -79,6 +79,11 @@ if ! cmp -s /tmp/tavora-api.caddy /etc/caddy/tavora-api.caddy; then
 fi
 rm -f /tmp/tavora-api.caddy
 
+# The helper scripts Nik runs by hand (ssh -t root@... tavora-api-set-setting takedown), kept next to the other server tools.
+for helper in set-steam-key set-setting; do
+  if [[ -f "/tmp/tavora-api-$helper.sh" ]]; then install -m 750 -o root -g root "/tmp/tavora-api-$helper.sh" "/usr/local/sbin/tavora-api-$helper"; rm -f "/tmp/tavora-api-$helper.sh"; fi
+done
+
 # Keep the five newest releases for rollback.
 ls -1dt "$root"/releases/*/ | tail -n +6 | xargs -r rm -rf
 printf 'Published %s (service on 127.0.0.1:4010)\n' "$release"

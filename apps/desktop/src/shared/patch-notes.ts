@@ -26,14 +26,16 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "Settings has a new Appearance section where you can pick how Tavora looks. Every theme is shown in its own colours before you pick it, and your modules change colour along with Tavora.",
       "Three themes come with Tavora. Tavora has Dark, OLED (true black) and High contrast. Nightfall is cool slate and moonlight blue, in Dusk and Midnight. Hearthwood is deep forest green.",
       "You can make your own theme: open the themes folder from Appearance, add a folder with a tavora.theme.json, and press Reload. Reset to Tavora Default always takes you back.",
+      "The UI Playground and the example modules now have their own Development category in the module library, so they no longer sit between Notes, To-Dos and your own modules. They are still there for anyone who wants to try building a module.",
     ],
   },
   {
     version: "0.4.4",
     date: "2026-10-15",
-    title: "A Development shelf in the module library",
+    title: "A safety copy of your data",
     notes: [
-      "The UI Playground and the example modules now have their own Development category in the module library, so they no longer sit between Notes, To-Dos and your own modules. They are still there for anyone who wants to try building a module.",
+      "Tavora now keeps a copy of your games, layouts, notes and settings from the last 7 days, made when it first starts each day. If something ever goes wrong, open Settings, then Backups, and press Open folder to find them.",
+      "If you go back to an older version of Tavora, it no longer overwrites what a newer version saved: it keeps a copy of that file next to it first.",
     ],
   },
   {

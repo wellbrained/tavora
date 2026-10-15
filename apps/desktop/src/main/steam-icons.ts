@@ -122,25 +122,27 @@ export async function findSteamDir(options: SteamDirOptions = {}): Promise<strin
       }
     });
 
+  // Paths follow the platform being asked about, so tests can stand in for another OS.
+  const p = platform === "win32" ? path.win32 : path.posix;
   const candidates: string[] = [];
   if (platform === "win32") {
     const fromRegistry = await (options.registry ?? windowsRegistryPath)();
     if (fromRegistry) candidates.push(fromRegistry);
     for (const base of [env["ProgramFiles(x86)"], env.ProgramFiles, "C:\\Program Files (x86)"]) {
-      if (base) candidates.push(path.join(base, "Steam"));
+      if (base) candidates.push(p.join(base, "Steam"));
     }
   } else if (platform === "linux") {
     candidates.push(
-      path.join(home, ".steam", "steam"),
-      path.join(home, ".local", "share", "Steam"),
-      path.join(home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),
+      p.join(home, ".steam", "steam"),
+      p.join(home, ".local", "share", "Steam"),
+      p.join(home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),
     );
   } else if (platform === "darwin") {
-    candidates.push(path.join(home, "Library", "Application Support", "Steam"));
+    candidates.push(p.join(home, "Library", "Application Support", "Steam"));
   }
   for (const candidate of candidates) {
-    const dir = path.normalize(candidate);
-    if (await exists(path.join(dir, "appcache", "appinfo.vdf"))) return dir;
+    const dir = p.normalize(candidate);
+    if (await exists(p.join(dir, "appcache", "appinfo.vdf"))) return dir;
   }
   return null;
 }

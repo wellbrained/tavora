@@ -32,6 +32,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "show-welcome":
     case "restart":
     case "download-update":
+    case "open-backups":
     case "check-for-updates":
     case "restart-to-update":
     case "reset-theme":

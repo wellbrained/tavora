@@ -1,3 +1,4 @@
 data/games.sqlite
 data/games.sqlite.tmp
 dist
+data/state

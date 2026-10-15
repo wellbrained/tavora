@@ -16,9 +16,10 @@ key="$(printf '%s' "$key" | tr -d '[:space:]')"
 code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H "x-webapi-key: $key" 'https://api.steampowered.com/ISteamWebAPIUtil/GetSupportedAPIList/v1/')"
 [[ "$code" == 200 ]] || { echo "Steam rejected the key (status $code). Nothing was saved."; exit 1; }
 
+# Only this one line changes; the other settings in the file (TAKEDOWN_CONTACT, ADMIN_TOKEN) stay.
 umask 077
 tmp="$(mktemp /srv/tavora-api/shared/.env.XXXXXX)"
-printf 'STEAM_WEB_API_KEY=%s\n' "$key" > "$tmp"
+{ [[ -f "$file" ]] && grep -v '^STEAM_WEB_API_KEY=' "$file" || true; printf 'STEAM_WEB_API_KEY=%s\n' "$key"; } > "$tmp"
 chown root:tavora-api "$tmp"
 chmod 640 "$tmp"
 mv -f "$tmp" "$file"
