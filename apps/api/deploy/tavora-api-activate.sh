@@ -12,6 +12,8 @@ archive="/tmp/tavora-api-$release.tar.gz"
 
 id tavora-api >/dev/null 2>&1 || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin tavora-api
 install -d -m 755 "$root" "$root/releases"
+# Settings that are not part of a release (the Steam key); only root and the service read it.
+install -d -m 750 -o root -g tavora-api "$root/shared"
 
 previous="$(readlink "$root/current" || true)"
 target="$root/releases/$release"

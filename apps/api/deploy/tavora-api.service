@@ -10,6 +10,8 @@ Environment=NODE_ENV=production
 Environment=PORT=4010
 Environment=TRUST_PROXY=1
 Environment=TAVORA_GAMES_DB=/srv/tavora-api/current/games.sqlite
+# The Steam Web API key lives here (STEAM_WEB_API_KEY=…), set with tavora-api-set-steam-key.sh. Optional.
+EnvironmentFile=-/srv/tavora-api/shared/production.env
 ExecStart=/usr/local/bin/node /srv/tavora-api/current/server.mjs
 Restart=on-failure
 RestartSec=5
