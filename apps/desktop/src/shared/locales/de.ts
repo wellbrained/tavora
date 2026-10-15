@@ -296,6 +296,8 @@ export const de: Record<keyof typeof en, string> = {
   "steamImport.added.one": "1 Spiel von Steam hinzugefügt.",
   "steamImport.added.other": "{count} Spiele von Steam hinzugefügt.",
   "steamImport.trademark": "Die Spielelisten stammen von Steam. Steam und das Steam-Logo sind Marken der Valve Corporation; Tavora steht in keiner Verbindung zu Valve und wird weder von Valve unterstützt noch gefördert. Spielnamen gehören ihren Publishern.",
+  "settings.language.searchPlaceholder": "Sprachen suchen",
+  "settings.language.none": "Keine Sprache passt.",
   "error.generic": "Etwas ist schiefgelaufen. Bitte versuche es noch einmal.",
   "error.notAllowed": "Nicht erlaubt.",
   "error.notUnderstood": "Tavora hat diese Anfrage nicht verstanden.",

@@ -45,6 +45,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     capabilities: new Set(),
     getViewport: () => ({ width: 400, height: 300 }),
     getTheme: () => THEME,
+    getLanguage: () => "de",
     isSuspended: () => false,
   };
 }
@@ -115,6 +116,11 @@ describe("handshake", () => {
 });
 
 describe("identity", () => {
+  it("tells the module the language of Tavora's texts", async () => {
+    expect(await call(port, "ui.getLanguage")).toMatchObject({ ok: true, result: "de" });
+    expect(await call(port, "ui.getLanguage", { x: 1 })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+
   it("answers with the bound game, ignoring anything the module claims", async () => {
     expect(await call(port, "game.getCurrent")).toEqual({
       v: 1,

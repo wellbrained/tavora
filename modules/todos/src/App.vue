@@ -9,6 +9,7 @@ import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import AddInput from "./AddInput.vue";
 import GroupSection, { type DropTarget } from "./GroupSection.vue";
+import { plural, setLanguage, t } from "./i18n";
 import { createTodoStore, type TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
 import { addGroup, addTask, deleteGroup, findTask, LIST_ID, MAX, moveTask, parseList, pinnedTasks, type Group, type TodoList } from "./todos";
@@ -37,7 +38,7 @@ const cleanup: (() => void)[] = [];
 
 onMounted(async () => {
   try {
-    const connected = await connectModule();
+    const connected = await connectModule(setLanguage);
     const todos = createTodoStore(connected);
     const [state] = await Promise.all([connected.panel.getState<Partial<PanelState>>(), todos.load()]);
     panel.value = {
@@ -128,7 +129,7 @@ function dropTask() {
 
 <template>
   <p v-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">
-    {{ error ? `Could not connect: ${error}` : "Loading to-dos…" }}
+    {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
   <div v-else class="flex h-full min-h-0 flex-col" data-testid="todos-app">
     <header v-if="store.error.value || panel.hideDone || hasDone" class="flex h-10 flex-none items-center gap-1 border-b px-2">
@@ -145,18 +146,18 @@ function dropTask() {
       >
         <EyeOff v-if="!panel.hideDone" :stroke-width="1.5" />
         <Eye v-else :stroke-width="1.5" />
-        {{ panel.hideDone ? "Show finished" : "Hide finished" }}
+        {{ panel.hideDone ? t("app.showFinished") : t("app.hideFinished") }}
       </Button>
     </header>
 
     <div class="min-h-0 flex-1 overflow-y-auto p-2" @dragend="dragEnd">
       <div v-if="!list.groups.length" class="flex flex-col items-center gap-3 px-4 py-10 text-center" data-testid="empty">
-        <p class="text-muted-foreground text-sm">Keep track of what you want to do in this game.</p>
-        <AddInput class="w-full max-w-80" outlined placeholder="Add a to-do" :maxlength="MAX.title" data-testid="first-task" @add="firstTask" />
+        <p class="text-muted-foreground text-sm">{{ t("app.empty") }}</p>
+        <AddInput class="w-full max-w-80" outlined :placeholder="t('app.addTodo')" :maxlength="MAX.title" data-testid="first-task" @add="firstTask" />
       </div>
 
-      <section v-if="objectives.length" class="mb-3" aria-label="Current objectives" data-testid="objectives">
-        <h2 class="text-muted-foreground px-2 pt-1 pb-1 text-xs font-medium">Current objectives</h2>
+      <section v-if="objectives.length" class="mb-3" :aria-label="t('app.objectives')" data-testid="objectives">
+        <h2 class="text-muted-foreground px-2 pt-1 pb-1 text-xs font-medium">{{ t("app.objectives") }}</h2>
         <ul role="list">
           <li v-for="{ task, group } in objectives" :key="task.id">
             <TaskRow
@@ -201,8 +202,8 @@ function dropTask() {
       <AddInput
         v-if="list.groups.length"
         class="mt-2 rounded-lg border border-dashed"
-        placeholder="Add new group"
-        label="New group name"
+        :placeholder="t('app.newGroup')"
+        :label="t('app.newGroupLabel')"
         :maxlength="MAX.groupName"
         data-testid="group-name-new"
         @add="createGroup"
@@ -211,9 +212,10 @@ function dropTask() {
 
     <ConfirmDialog
       v-if="pendingGroup"
-      :title="`Delete “${pendingGroup.name}”?`"
-      :description="`Its ${pendingGroup.tasks.length} ${pendingGroup.tasks.length === 1 ? 'to-do is' : 'to-dos are'} removed for good. This cannot be undone.`"
-      confirm="Delete group"
+      :title="t('app.deleteGroupTitle', { name: pendingGroup.name })"
+      :description="plural('app.deleteGroupMessage', pendingGroup.tasks.length)"
+      :confirm="t('app.deleteGroupConfirm')"
+      :cancel="t('cancel')"
       @confirm="removeGroup"
       @cancel="pendingGroup = null"
     />

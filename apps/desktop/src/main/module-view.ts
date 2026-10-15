@@ -20,6 +20,7 @@ export interface ModuleViewOptions {
   preload: string;
   devTools: boolean;
   getTheme(): TavoraTheme;
+  getLanguage(): string;
   /** Tavora's default look for the page, below the module's own styles (module-style.ts). Colours come from the theme stylesheet. */
   baseCss: string;
   onStatus(status: InstanceStatus): void;
@@ -226,6 +227,7 @@ export class ModuleView {
         getViewport: () => ({ ...this.viewport }),
         isSuspended: () => this.suspended,
         getTheme: this.options.getTheme,
+        getLanguage: this.options.getLanguage,
       },
       () => {
         if (this.bridge === bridge) this.bridge = undefined;
@@ -251,6 +253,11 @@ export class ModuleView {
     this.view.setBackgroundColor(theme.tokens.background);
     void this.insertThemeCss(theme);
     this.bridge?.emit("ui.theme", theme);
+  }
+
+  /** Tells the module the player changed the language, so it can word itself anew through ui.onLanguageChange. */
+  applyLanguage(language: string): void {
+    this.bridge?.emit("ui.language", language);
   }
 
   private insertThemeCss(theme: TavoraTheme): Promise<void> {

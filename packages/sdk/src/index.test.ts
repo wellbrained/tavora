@@ -155,6 +155,19 @@ describe("requests", () => {
   });
 });
 
+describe("language", () => {
+  it("asks the host and hears when it changes", async () => {
+    const host = fakeHost((request) => (request.method === "ui.getLanguage" ? { result: "de" } : standard(request)));
+    hosts.push(host);
+    const tavora = await sdk.connect();
+    expect(await tavora.ui.getLanguage()).toBe("de");
+    const seen = vi.fn();
+    tavora.ui.onLanguageChange(seen);
+    host.emit("ui.language", "en");
+    await vi.waitFor(() => expect(seen).toHaveBeenCalledWith("en"));
+  });
+});
+
 describe("events", () => {
   it("delivers events to listeners until they unsubscribe", async () => {
     const host = fakeHost(standard);

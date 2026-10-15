@@ -34,6 +34,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import LinkDialog from "./LinkDialog.vue";
+import { t } from "./i18n";
 import { contentFromText, SCRATCHPAD_ID, type NoteData, type NoteEntry, type RichText } from "./notes";
 import type { NotesStore } from "./store";
 
@@ -65,11 +66,11 @@ const editor = useEditor({
     TaskItem.configure({ nested: true }),
     Placeholder.configure({
       placeholder: () =>
-        props.noteId === SCRATCHPAD_ID ? "Quick thoughts, builds, reminders…" : "Start with a title on the first line",
+        props.noteId === SCRATCHPAD_ID ? t("editor.placeholderScratchpad") : t("editor.placeholderNote"),
     }),
   ],
   editorProps: {
-    attributes: { class: "note-content", "data-testid": "editor", "aria-label": "Note text", spellcheck: "true" },
+    attributes: { class: "note-content", "data-testid": "editor", "aria-label": t("editor.text"), spellcheck: "true" },
   },
   onUpdate: () => {
     if (loadedId === null) return;
@@ -198,12 +199,12 @@ function applyLink(href: string | null) {
   else chain.unsetLink().run();
 }
 
-const textStyles = [
-  { label: "Text", level: 0 },
-  { label: "Heading 1", level: 1 },
-  { label: "Heading 2", level: 2 },
-  { label: "Heading 3", level: 3 },
-] as const;
+const textStyles = computed(() => [
+  { label: t("style.text"), level: 0 },
+  { label: t("style.h1"), level: 1 },
+  { label: t("style.h2"), level: 2 },
+  { label: t("style.h3"), level: 3 },
+] as const);
 
 function setTextStyle(level: 0 | 1 | 2 | 3) {
   const chain = editor.value?.chain().focus();
@@ -246,20 +247,20 @@ const toolGroups = computed((): Tool[][] => {
   });
   return [
     [
-      toggle("Bold", Bold, "bold", 0, () => e.chain().focus().toggleBold().run()),
-      toggle("Italic", Italic, "italic", 0, () => e.chain().focus().toggleItalic().run()),
-      toggle("Strikethrough", Strikethrough, "strike", 580, () => e.chain().focus().toggleStrike().run()),
-      toggle("Inline code", Code, "code", 580, () => e.chain().focus().toggleCode().run()),
+      toggle(t("tool.bold"), Bold, "bold", 0, () => e.chain().focus().toggleBold().run()),
+      toggle(t("tool.italic"), Italic, "italic", 0, () => e.chain().focus().toggleItalic().run()),
+      toggle(t("tool.strike"), Strikethrough, "strike", 580, () => e.chain().focus().toggleStrike().run()),
+      toggle(t("tool.code"), Code, "code", 580, () => e.chain().focus().toggleCode().run()),
     ],
     [
-      toggle("Bulleted list", List, "bulletList", 420, () => e.chain().focus().toggleBulletList().run()),
-      toggle("Numbered list", ListOrdered, "orderedList", 420, () => e.chain().focus().toggleOrderedList().run()),
-      toggle("Checklist", ListChecks, "taskList", 0, () => e.chain().focus().toggleTaskList().run()),
+      toggle(t("tool.bullets"), List, "bulletList", 420, () => e.chain().focus().toggleBulletList().run()),
+      toggle(t("tool.numbers"), ListOrdered, "orderedList", 420, () => e.chain().focus().toggleOrderedList().run()),
+      toggle(t("tool.checklist"), ListChecks, "taskList", 0, () => e.chain().focus().toggleTaskList().run()),
     ],
     [
-      toggle("Quote", Quote, "blockquote", 500, () => e.chain().focus().toggleBlockquote().run()),
-      toggle("Code block", SquareCode, "codeBlock", 500, () => e.chain().focus().toggleCodeBlock().run()),
-      toggle("Link", Link2, "link", 420, openLinkDialog),
+      toggle(t("tool.quote"), Quote, "blockquote", 500, () => e.chain().focus().toggleBlockquote().run()),
+      toggle(t("tool.codeBlock"), SquareCode, "codeBlock", 500, () => e.chain().focus().toggleCodeBlock().run()),
+      toggle(t("tool.link"), Link2, "link", 420, openLinkDialog),
     ],
   ];
 });
@@ -271,17 +272,11 @@ const shownGroups = computed(() =>
 );
 const moreTools = computed(() => toolGroups.value.flat().filter((tool) => tool.minWidth > room.value));
 
-const STATUS_TEXT: Record<SaveState, string> = {
-  idle: "",
-  pending: "Editing",
-  saving: "Saving…",
-  saved: "Saved",
-  error: "Could not save",
-};
+const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`save.${state}`));
 </script>
 
 <template>
-  <section ref="root" class="flex h-full min-w-0 flex-col" aria-label="Note" data-testid="note-editor" :data-loaded="loadedNote ?? ''">
+  <section ref="root" class="flex h-full min-w-0 flex-col" :aria-label="t('editor.note')" data-testid="note-editor" :data-loaded="loadedNote ?? ''">
     <header class="flex h-10 flex-none items-center gap-1 border-b px-2">
       <Button
         v-if="narrow"
@@ -289,16 +284,16 @@ const STATUS_TEXT: Record<SaveState, string> = {
         size="icon-sm"
         class="flex-none"
         data-testid="back"
-        aria-label="All notes"
-        title="All notes"
+        :aria-label="t('editor.allNotes')"
+        :title="t('editor.allNotes')"
         @click="emit('back')"
       >
         <ChevronLeft :stroke-width="1.5" />
       </Button>
-      <div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden" role="toolbar" aria-label="Formatting">
+      <div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden" role="toolbar" :aria-label="t('editor.formatting')">
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
-            <Button variant="ghost" size="icon-sm" aria-label="Text style" title="Text style">
+            <Button variant="ghost" size="icon-sm" :aria-label="t('editor.textStyle')" :title="t('editor.textStyle')">
               <Heading :stroke-width="1.5" />
             </Button>
           </DropdownMenuTrigger>
@@ -327,7 +322,7 @@ const STATUS_TEXT: Record<SaveState, string> = {
         </template>
         <DropdownMenu v-if="moreTools.length">
           <DropdownMenuTrigger as-child>
-            <Button variant="ghost" size="icon-sm" class="flex-none" aria-label="More formatting" title="More formatting">
+            <Button variant="ghost" size="icon-sm" class="flex-none" :aria-label="t('editor.moreFormatting')" :title="t('editor.moreFormatting')">
               <Ellipsis :stroke-width="1.5" />
             </Button>
           </DropdownMenuTrigger>
@@ -335,7 +330,7 @@ const STATUS_TEXT: Record<SaveState, string> = {
             <DropdownMenuItem v-for="tool in moreTools" :key="tool.label" @select="tool.run()">
               <component :is="tool.icon" :stroke-width="1.5" />
               {{ tool.label }}
-              <Check v-if="tool.active" class="ml-auto" :stroke-width="1.5" aria-label="On" />
+              <Check v-if="tool.active" class="ml-auto" :stroke-width="1.5" :aria-label="t('editor.on')" />
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -346,16 +341,16 @@ const STATUS_TEXT: Record<SaveState, string> = {
         data-testid="save-state"
         :data-state="saveState"
         :title="saveState === 'error' ? saveError : undefined"
-      >{{ STATUS_TEXT[saveState] }}</span>
+      >{{ statusText(saveState) }}</span>
       <Button
         v-if="noteId !== SCRATCHPAD_ID"
         variant="ghost"
         size="icon-sm"
         class="flex-none"
         data-testid="toggle-pin"
-        :aria-label="entry?.pinned ? 'Unpin note' : 'Pin note'"
+        :aria-label="entry?.pinned ? t('editor.unpin') : t('editor.pin')"
         :aria-pressed="entry?.pinned ?? false"
-        :title="entry?.pinned ? 'Unpin note' : 'Pin note'"
+        :title="entry?.pinned ? t('editor.unpin') : t('editor.pin')"
         @click="emit('togglePin')"
       >
         <PinOff v-if="entry?.pinned" :stroke-width="1.5" />

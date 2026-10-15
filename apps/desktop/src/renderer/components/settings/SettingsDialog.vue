@@ -4,7 +4,6 @@ import { computed, nextTick, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { LANGUAGES } from "../../../shared/i18n";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { RootSort, Startup } from "../../../shared/host-api";
@@ -15,6 +14,7 @@ import { formatDate, language, t } from "../../i18n";
 import { MOD, shortcutGroups } from "../../shortcuts";
 import GameIcon from "../GameIcon.vue";
 import AppearanceSection from "./AppearanceSection.vue";
+import LanguagePicker from "./LanguagePicker.vue";
 import ModulesSection from "./ModulesSection.vue";
 import BrowserSection from "./BrowserSection.vue";
 import DiscordSection from "./DiscordSection.vue";
@@ -301,14 +301,7 @@ function deleteNow(gameId: string, name: string) {
               setting="language"
               :highlighted="highlight === 'language'"
             >
-              <SegmentedControl
-                v-model="languageSetting"
-                :label="t('settings.language.label')"
-                :options="[
-                  { value: 'system', label: t('settings.language.system'), testid: 'language-system' },
-                  ...LANGUAGES.map((item) => ({ value: item.id, label: item.name, testid: `language-${item.id}` })),
-                ]"
-              />
+              <LanguagePicker v-model="languageSetting" />
             </SettingRow>
             <SettingRow
               :label="t('settings.grayscale-text.label')"

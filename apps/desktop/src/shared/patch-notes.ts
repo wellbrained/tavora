@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.11",
+    date: "2026-10-15",
+    title: "German for Notes and To-Dos, and a language list",
+    notes: [
+      "Notes and To-Dos speak German too, and change language the moment you do. Modules can ask Tavora which language to use.",
+      "The language in Settings is now a list with a search field on top, so more languages fit later.",
+    ],
+  },
+  {
     version: "0.5.10",
     date: "2026-10-15",
     title: "Join your Discord voice channel again",

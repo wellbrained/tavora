@@ -16,6 +16,7 @@ import {
 } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { computed, nextTick, ref, watch } from "vue";
 import AddInput from "./AddInput.vue";
+import { t } from "./i18n";
 import type { TodoStore } from "./store";
 import {
   addStep,
@@ -109,7 +110,7 @@ function saveDetails() {
 function saveLink() {
   const href = normalizeLink(link.value);
   if (href === null) {
-    linkError.value = "Enter a web address such as https://example.com.";
+    linkError.value = t("task.linkInvalid");
     return;
   }
   linkError.value = "";
@@ -154,7 +155,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
         class="text-muted-foreground flex h-[32px] w-4 flex-none cursor-grab items-center justify-center opacity-0 group-hover/task:opacity-100"
         draggable="true"
         aria-hidden="true"
-        title="Drag to move"
+        :title="t('task.drag')"
         @dragstart="emit('dragstart', $event)"
         @dragend="emit('dragend')"
       >
@@ -166,7 +167,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
           type="checkbox"
           class="todo-check"
           :checked="task.done"
-          :aria-label="task.done ? `Mark “${task.title}” as not done` : `Mark “${task.title}” as done`"
+          :aria-label="task.done ? t('task.notDone', { title: task.title }) : t('task.done', { title: task.title })"
           data-testid="task-done"
           @change="setTaskDone(checked($event))"
         />
@@ -187,8 +188,8 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
           class="text-muted-foreground flex w-full min-w-0 items-center gap-2 text-xs"
         >
           <span v-if="compact" class="truncate">{{ group.name }}</span>
-          <span v-if="task.steps.length" class="flex-none tabular-nums" data-testid="task-steps">{{ stepsDone }}/{{ task.steps.length }} steps</span>
-          <Link2 v-if="task.link" class="size-3 flex-none" :stroke-width="1.5" aria-label="Has a source link" />
+          <span v-if="task.steps.length" class="flex-none tabular-nums" data-testid="task-steps">{{ t("task.steps", { done: stepsDone, total: task.steps.length }) }}</span>
+          <Link2 v-if="task.link" class="size-3 flex-none" :stroke-width="1.5" :aria-label="t('task.hasLink')" />
           <span v-if="task.details && !compact" class="truncate">{{ task.details }}</span>
         </span>
       </button>
@@ -197,7 +198,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
         ref="titleInput"
         v-model="title"
         class="focus-visible:border-ring h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-medium outline-none"
-        aria-label="Title"
+        :aria-label="t('task.title')"
         data-testid="task-title-input"
         :maxlength="MAX.title"
         @blur="saveTitle"
@@ -210,8 +211,8 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
         v-if="expanded"
         type="button"
         class="text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md"
-        aria-label="Close details"
-        title="Close details"
+        :aria-label="t('task.closeDetails')"
+        :title="t('task.closeDetails')"
         data-testid="task-close"
         @click="emit('toggle')"
       >
@@ -225,8 +226,8 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
               (expanded || menuOpen) && 'opacity-100',
             )
           "
-          :aria-label="`More for ${task.title}`"
-          title="More"
+          :aria-label="t('moreFor', { name: task.title })"
+          :title="t('more')"
           data-testid="task-menu"
         >
           <Ellipsis class="size-4" :stroke-width="1.5" />
@@ -235,17 +236,17 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
           <DropdownMenuItem data-testid="menu-pin" @select="setPinned(!task.pinned)">
             <PinOff v-if="task.pinned" :stroke-width="1.5" />
             <Pin v-else :stroke-width="1.5" />
-            {{ task.pinned ? "Unpin objective" : "Pin as current objective" }}
+            {{ task.pinned ? t("task.unpin") : t("task.pin") }}
           </DropdownMenuItem>
           <template v-if="!compact">
             <DropdownMenuItem :disabled="index === 0" @select="change((data) => shiftTask(data, task.id, -1))">
-              <ArrowUp :stroke-width="1.5" /> Move up
+              <ArrowUp :stroke-width="1.5" /> {{ t("task.moveUp") }}
             </DropdownMenuItem>
             <DropdownMenuItem :disabled="index === group.tasks.length - 1" @select="change((data) => shiftTask(data, task.id, 1))">
-              <ArrowDown :stroke-width="1.5" /> Move down
+              <ArrowDown :stroke-width="1.5" /> {{ t("task.moveDown") }}
             </DropdownMenuItem>
             <DropdownMenuSub v-if="otherGroups.length">
-              <DropdownMenuSubTrigger><FolderInput :stroke-width="1.5" /> Move to group</DropdownMenuSubTrigger>
+              <DropdownMenuSubTrigger><FolderInput :stroke-width="1.5" /> {{ t("task.moveToGroup") }}</DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuItem
                   v-for="target in otherGroups"
@@ -259,7 +260,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
           </template>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" data-testid="menu-delete" @select="change((data) => deleteTask(data, task.id))">
-            <Trash2 :stroke-width="1.5" /> Delete to-do
+            <Trash2 :stroke-width="1.5" /> {{ t("task.delete") }}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -272,13 +273,13 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
         data-testid="task-details-input"
         rows="3"
         :maxlength="MAX.details"
-        placeholder="Details"
-        aria-label="Details"
+        :placeholder="t('task.details')"
+        :aria-label="t('task.details')"
         class="placeholder:text-muted-foreground border-input focus-visible:border-ring field-sizing-content min-h-16 w-full resize-none rounded-md border bg-transparent px-2 py-1.5 text-sm outline-none"
         @blur="saveDetails"
       />
       <div>
-        <label class="text-muted-foreground mb-1 block text-xs" :for="`link-${task.id}`">Source link</label>
+        <label class="text-muted-foreground mb-1 block text-xs" :for="`link-${task.id}`">{{ t("task.sourceLink") }}</label>
         <input
           :id="`link-${task.id}`"
           v-model="link"
@@ -294,14 +295,14 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
         <p v-if="linkError" class="text-destructive mt-1 text-xs" role="alert">{{ linkError }}</p>
       </div>
       <div>
-        <p class="text-muted-foreground mb-1 text-xs">Steps</p>
+        <p class="text-muted-foreground mb-1 text-xs">{{ t("task.stepsTitle") }}</p>
         <ul role="list" data-testid="steps">
           <li v-for="step in task.steps" :key="step.id" class="group/step flex items-center gap-2 rounded-md pl-1" :data-testid="`step-${step.id}`">
             <input
               type="checkbox"
               class="todo-check todo-check-sm"
               :checked="step.done"
-              :aria-label="`Step done: ${step.title}`"
+              :aria-label="t('task.stepDone', { title: step.title })"
               data-testid="step-done"
               @change="setStep(step.id, { done: checked($event) })"
             />
@@ -313,7 +314,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
                   step.done && 'text-muted-foreground line-through',
                 )
               "
-              aria-label="Step"
+              :aria-label="t('task.step')"
               :maxlength="MAX.title"
               @change="setStep(step.id, { title: value($event) })"
               @keydown.enter="($event.target as HTMLInputElement).blur()"
@@ -321,15 +322,15 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
             <button
               type="button"
               class="text-muted-foreground hover:text-destructive flex size-6 flex-none items-center justify-center rounded-md opacity-0 group-hover/step:opacity-100 focus-visible:opacity-100"
-              :aria-label="`Delete step ${step.title}`"
-              title="Delete step"
+              :aria-label="t('task.deleteStepLabel', { title: step.title })"
+              :title="t('task.deleteStep')"
               @click="change((data) => deleteStep(data, task.id, step.id))"
             >
               <X class="size-3.5" :stroke-width="1.5" />
             </button>
           </li>
         </ul>
-        <AddInput placeholder="Add a step" data-testid="add-step" :maxlength="MAX.title" @add="newStep" />
+        <AddInput :placeholder="t('task.addStep')" data-testid="add-step" :maxlength="MAX.title" @add="newStep" />
       </div>
     </div>
   </div>

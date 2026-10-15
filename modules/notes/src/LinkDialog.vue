@@ -3,6 +3,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { ref } from "vue";
+import { t } from "./i18n";
 import { normalizeLink } from "./notes";
 
 const props = defineProps<{ initial: string }>();
@@ -15,7 +16,7 @@ function submit() {
   if (!value.value.trim()) return emit("apply", null);
   const href = normalizeLink(value.value);
   if (!href) {
-    error.value = "Enter a web address such as https://example.com.";
+    error.value = t("link.invalid");
     return;
   }
   emit("apply", href);
@@ -26,15 +27,15 @@ function submit() {
   <Dialog :open="true" @update:open="(open: boolean) => !open && emit('cancel')">
     <DialogContent class="top-[12vh] translate-y-0 gap-4 sm:max-w-[420px]" data-testid="link-dialog" :show-close-button="false">
       <DialogHeader>
-        <DialogTitle class="text-lg">{{ initial ? "Edit link" : "Add link" }}</DialogTitle>
-        <DialogDescription>Links are saved with the note and shown in gold.</DialogDescription>
+        <DialogTitle class="text-lg">{{ initial ? t("link.edit") : t("link.add") }}</DialogTitle>
+        <DialogDescription>{{ t("link.help") }}</DialogDescription>
       </DialogHeader>
       <form class="flex flex-col gap-2" @submit.prevent="submit">
         <Input
           v-model="value"
           data-testid="link-input"
           placeholder="https://"
-          aria-label="Web address"
+          :aria-label="t('link.address')"
           :aria-invalid="error ? true : undefined"
           autofocus
           @update:model-value="error = ''"
@@ -42,10 +43,10 @@ function submit() {
         <p v-if="error" class="text-destructive text-sm" role="alert">{{ error }}</p>
         <div class="mt-2 flex justify-end gap-2">
           <Button v-if="initial" type="button" variant="secondary" class="text-destructive mr-auto" @click="emit('apply', null)">
-            Remove link
+            {{ t("link.remove") }}
           </Button>
-          <Button type="button" variant="secondary" @click="emit('cancel')">Cancel</Button>
-          <Button type="submit" data-testid="link-submit">Save link</Button>
+          <Button type="button" variant="secondary" @click="emit('cancel')">{{ t("cancel") }}</Button>
+          <Button type="submit" data-testid="link-submit">{{ t("link.save") }}</Button>
         </div>
       </form>
     </DialogContent>
