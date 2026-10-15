@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
+import os from "node:os";
 import { appendFile, mkdir, readFile, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   nativeTheme,
@@ -18,6 +20,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { ActionResult, AppearanceView, GameView, HostAction, HostViewState, OnlineSearchResult, Screen } from "../shared/host-api";
+import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, type SavedLayout } from "./layout";
 import { layoutTemplate } from "../shared/layout-templates";
@@ -289,6 +292,7 @@ export class Host {
     host.screen = library.startup === "last-game" && library.lastGameId ? "game" : "welcome";
     host.registerIpc();
     host.registerWindowEvents();
+    host.window.once("ready-to-show", () => timings.record("startup", process.uptime() * 1000));
     await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
     if (host.screen === "game") host.openCurrentGame();
     // Icons of games that have none yet are looked for quietly in the background.
@@ -400,6 +404,25 @@ export class Host {
     await mkdir(dir, { recursive: true });
     const error = await shell.openPath(dir);
     if (error) throw new LibraryError(`Couldn't open the themes folder: ${error}`);
+  }
+
+  /** The text of Settings > Copy diagnostic info. */
+  private async diagnosticReport(): Promise<string> {
+    const log = await readFile(path.join(this.options.userData, "updates.log"), "utf8").catch(() => "");
+    return buildReport({
+      version: app.getVersion(),
+      packaged: app.isPackaged,
+      electron: process.versions.electron ?? "?",
+      chrome: process.versions.chrome ?? "?",
+      locale: app.getLocale(),
+      games: Object.keys(this.library.games).length,
+      panels: this.views.size,
+      updateLog: log.split("\n").filter(Boolean).slice(-30),
+      errors: errorLog.recent(),
+      timings: timings.summary(),
+      uptimeSeconds: process.uptime(),
+      folders: { home: os.homedir(), userData: this.options.userData },
+    });
   }
 
   /** One line per update event in the app's data folder, to see what the updater did. */
@@ -595,6 +618,12 @@ export class Host {
         library.autoUpdate = action.enabled;
         this.updates?.setAutoDownload(action.enabled);
         break;
+      case "record-timing":
+        timings.record(action.name, action.ms);
+        return;
+      case "copy-diagnostics":
+        clipboard.writeText(await this.diagnosticReport());
+        return;
       case "open-backups": {
         const dir = backupsDir(this.options.userData);
         await mkdir(dir, { recursive: true });
@@ -895,7 +924,7 @@ export class Host {
     const record = { instanceId: randomUUID(), moduleId };
     records.push(record);
     this.saveWorkspace();
-    this.createView(record, game);
+    this.createView(record, game, performance.now());
     return record.instanceId;
   }
 
@@ -1029,7 +1058,9 @@ export class Host {
     this.layoutEpoch++;
   }
 
-  private createView(record: InstanceRecord, game: TavoraGame): void {
+  /** openedAt is when the player asked for the panel; its time to a loaded page is measured from there. */
+  private createView(record: InstanceRecord, game: TavoraGame, openedAt?: number): void {
+    let measured = openedAt === undefined;
     const module = this.modules.get(record.moduleId)!;
     const view = new ModuleView({
       instanceId: record.instanceId,
@@ -1042,7 +1073,13 @@ export class Host {
       devTools: this.options.devTools,
       getTheme: () => this.currentTheme,
       baseCss: (moduleCss ??= moduleBaseCss(MODULE_FONTS)),
-      onStatus: () => this.pushState(),
+      onStatus: (status) => {
+        if (!measured && status === "ready") {
+          measured = true;
+          timings.record("panel-open", performance.now() - openedAt!);
+        }
+        this.pushState();
+      },
     });
     const contentsId = view.webContentsId;
     this.views.set(record.instanceId, view);

@@ -1,6 +1,6 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import type { ActionResult, HostAction, HostShortcut, HostViewState } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
 import type { SettingsSection } from "./components/settings/settings-index";
@@ -27,9 +27,18 @@ export function showToast(message: string): void {
 
 /** Runs an action. Errors are shown as a toast unless the caller handles them. */
 export async function act(action: HostAction, { quiet = false } = {}): Promise<ActionResult> {
+  const started = performance.now();
   const result = await api.act(action);
   if (!result.ok && !quiet) showToast(result.error);
+  if (result.ok && action.type === "open-game") void measureSwitch(started);
   return result;
+}
+
+/** How long a game switch took until the new screen was drawn, for Settings > Diagnostic info. */
+async function measureSwitch(started: number): Promise<void> {
+  await nextTick();
+  await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  void api.act({ type: "record-timing", name: "game-switch", ms: performance.now() - started });
 }
 
 // ── Menus and dialogs ──────────────────────────────────────────────────

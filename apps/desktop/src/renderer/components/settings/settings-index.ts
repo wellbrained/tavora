@@ -97,6 +97,13 @@ export const SETTINGS: SettingEntry[] = [
     keywords: ["backup", "restore", "copy", "recover", "undo", "data", "safety", "export"],
   },
   {
+    id: "diagnostics",
+    section: "general",
+    label: "Diagnostic info",
+    description: "Copy version, system, timings, update log and last errors to share when something goes wrong.",
+    keywords: ["diagnostic", "debug", "bug", "problem", "error", "log", "report", "support", "help", "copy", "version", "slow", "performance"],
+  },
+  {
     id: "steam-icons",
     section: "general",
     label: "Game icons from this PC and Steam",
