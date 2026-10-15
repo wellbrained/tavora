@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.42",
+    date: "2026-10-16",
+    title: "Colors for To-Do groups",
+    notes: ["In To-Dos, a group's ... menu has a new Color entry. Pick a color to tint the group's header, or None to take it off."],
+  },
+  {
     version: "0.5.41",
     date: "2026-10-16",
     title: "An open folder is one panel",
