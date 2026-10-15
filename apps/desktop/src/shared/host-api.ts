@@ -125,6 +125,8 @@ export interface HostViewState {
   layoutEpoch: number;
   snapshots: SnapshotView[];
   notice: string | null;
+  /** The player's local profile. */
+  profile: { name: string; pictureUrl: string | null };
   /** A setting that only applies on start was changed since Tavora started. */
   restartPending: boolean;
 }
@@ -153,6 +155,10 @@ export type HostAction =
   | { type: "set-sort"; sort: RootSort }
   | { type: "set-startup"; startup: Startup }
   | { type: "set-grayscale-text"; enabled: boolean }
+  | { type: "set-profile-name"; name: string }
+  /** A cropped 256 px PNG, base64-encoded. */
+  | { type: "set-profile-picture"; png: string }
+  | { type: "remove-profile-picture" }
   | { type: "set-rail"; expanded?: boolean; width?: number }
   | { type: "open-module"; moduleId: string }
   | { type: "close-panel"; instanceId: string }

@@ -8,6 +8,7 @@ import { folderMenu, gameMenu } from "../rail-actions";
 import GameIcon from "./GameIcon.vue";
 import MenuArea from "./menus/MenuArea.vue";
 import MenuButton from "./menus/MenuButton.vue";
+import ProfileMenu from "./profile/ProfileMenu.vue";
 import RailGame from "./RailGame.vue";
 
 const COMPACT = 72;
@@ -421,9 +422,9 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       </section>
     </div>
 
-    <!-- Player things live at the bottom on their own: Settings now, the
-         player's profile once there are accounts. -->
+    <!-- Player things live at the bottom on their own: the profile, then Settings. -->
     <div class="flex flex-col gap-1 border-t py-2">
+      <ProfileMenu :expanded="expanded" />
       <button
         type="button"
         :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors', expanded && 'hover:bg-accent')"
