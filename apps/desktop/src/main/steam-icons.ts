@@ -48,14 +48,19 @@ export function exeIconFileName(gameId: string): string {
   return `exe-${gameId}.ico`;
 }
 
+/** The file name of an icon downloaded from the Tavora service's hosted set. */
+export function hostedIconFileName(gameId: string): string {
+  return `hosted-${gameId}.png`;
+}
+
 export function isIconFileName(value: unknown): value is string {
-  return typeof value === "string" && /^(\d{1,10}\.(ico|jpg)|exe-[a-z0-9][a-z0-9-]{0,63}\.ico)$/.test(value);
+  return typeof value === "string" && /^(\d{1,10}\.(ico|jpg)|(exe-[a-z0-9][a-z0-9-]{0,63}\.ico)|(hosted-[a-z0-9][a-z0-9-]{0,63}\.png))$/.test(value);
 }
 
 /** The only icon file names a game may have, so a changed or forged name in the saved library is dropped. */
 export function iconFileAllowed(game: { id: string; steamAppId: number | null }, file: unknown): file is string {
   if (!isIconFileName(file)) return false;
-  if (file === exeIconFileName(game.id)) return true;
+  if (file === exeIconFileName(game.id) || file === hostedIconFileName(game.id)) return true;
   return game.steamAppId !== null && (file === iconFileName(game.steamAppId) || file === publicIconFileName(game.steamAppId));
 }
 

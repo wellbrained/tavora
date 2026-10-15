@@ -1,4 +1,6 @@
+import { fetchHostedList, matchHosted, saveHostedIcon, type HostedList } from "./hosted-icons";
 import { findInstalledGames, matchInstalled, type InstalledGame } from "./launcher-games";
+import { DEFAULT_API_URL } from "./online";
 import { readIcoFromFile } from "./pe-icon";
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
 import { gamesNeedingIcon, recordIcon, type GameEntry, type Library } from "./library";
@@ -21,6 +23,8 @@ export interface IconSyncOptions {
   baseUrl?: string | undefined;
   /** Where Steam's public store API is; its public address unless told otherwise. */
   apiUrl?: string | undefined;
+  /** The Tavora service, for its hosted icons; its public address unless told otherwise. */
+  serviceUrl?: string | undefined;
   fetchImpl?: typeof fetch | undefined;
   /** Steam's appinfo.vdf as bytes, or null when it cannot be read. */
   loadAppInfoImpl?: (steamDir: string) => Promise<Uint8Array | null>;
@@ -42,7 +46,9 @@ export interface IconSyncOptions {
  * that has one, one game at a time:
  *  1. the installed game itself (Battle.net first, then Epic, GOG and the rest),
  *  2. the icon Steam's client keeps on this PC (or the same file from Steam's public address),
- *  3. the small icon Steam's public store API knows for any Steam game.
+ *  3. the Tavora service's hosted icon, when online features are on (the app takes its list and
+ *     asks for a file only when a game is in it),
+ *  4. the small icon Steam's public store API knows for any Steam game.
  * Quiet on purpose. When the network fails it stops and leaves the rest for the
  * next start or the next added game. Returns how many icons were saved.
  */
@@ -89,6 +95,22 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
     return hash === undefined ? { status: "none" } : saveSteamIcon(iconDir, steamDir, appid, hash, network);
   };
 
+  // The service's list is asked for once per run, and only when a game gets this far.
+  const serviceOptions = {
+    baseUrl: options.serviceUrl ?? DEFAULT_API_URL,
+    ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+  };
+  let hostedList: HostedList | null | undefined;
+  const fromHosted = async (game: GameEntry): Promise<IconResult> => {
+    // Online features off: the service is never contacted.
+    if (!library.onlineSearch) return { status: "none" };
+    hostedList ??= await fetchHostedList(serviceOptions);
+    // The list could not be had: say nothing about this game, so it is asked again next time.
+    if (hostedList === null) return { status: "failed" };
+    const icon = matchHosted(game, hostedList);
+    return icon ? saveHostedIcon(iconDir, game.id, icon, serviceOptions) : { status: "none" };
+  };
+
   const fromSteamPublic = async (appid: number): Promise<IconResult> => {
     const hash = await fetchPublicIconHash(appid, {
       ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
@@ -105,11 +127,10 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
     if (!game) return saved;
 
     let result = await fromInstalledGame(game);
-    const asksSteam = result.status !== "saved" && game.steamAppId !== null;
-    if (asksSteam) {
-      result = await fromSteamClient(game.steamAppId!);
-      if (result.status === "none") result = await fromSteamPublic(game.steamAppId!);
-    }
+    const asksNetwork = result.status !== "saved";
+    if (result.status === "none" && game.steamAppId !== null) result = await fromSteamClient(game.steamAppId);
+    if (result.status === "none") result = await fromHosted(game);
+    if (result.status === "none" && game.steamAppId !== null) result = await fromSteamPublic(game.steamAppId);
     if (result.status === "failed") return saved;
 
     if (result.status === "saved" && !library.games[game.id]) {
@@ -121,6 +142,6 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
     if (result.status === "saved") saved += 1;
     onChange();
     const pause = options.pauseMs ?? 150;
-    if (asksSteam && pause > 0) await new Promise((resolve) => setTimeout(resolve, pause));
+    if (asksNetwork && pause > 0) await new Promise((resolve) => setTimeout(resolve, pause));
   }
 }
