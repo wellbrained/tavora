@@ -12,7 +12,7 @@ import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import { act, api, dialog, openSettings, searchOpen, state } from "../host";
 
 import GameIcon from "./GameIcon.vue";
-import { SECTION_LABEL, SETTINGS } from "./settings/settings-index";
+import { sectionLabel, settingEntries } from "./settings/settings-index";
 
 interface Item {
   id: string;
@@ -174,10 +174,10 @@ const groups = computed<Group[]>(() => {
   });
   all.push({
     label: "Settings",
-    items: SETTINGS.map((setting) => ({
+    items: settingEntries().map((setting) => ({
       id: `setting-${setting.id}`,
       label: setting.label,
-      hint: SECTION_LABEL[setting.section],
+      hint: sectionLabel(setting.section),
       keywords: [setting.description, ...setting.keywords],
       icon: SlidersHorizontal,
       run: close(() => openSettings({ section: setting.section, setting: setting.id })),
