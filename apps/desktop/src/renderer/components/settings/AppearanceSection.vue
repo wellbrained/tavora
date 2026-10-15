@@ -61,8 +61,6 @@ const showVariation = computed(() => {
 });
 </script>
 
-<template>
-  <h2 class="mb-4 text-xl font-semibold">{{ t("settings.section.appearance") }}</h2>
 
   <div
     :class="cn('-mx-3 rounded-lg border-b px-3 pt-2 pb-5 transition-colors duration-500', highlight === 'theme' && 'bg-primary/10')"
