@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { CATALOG } from "../../desktop/src/main/catalog.ts";
 import { buildDataset, emptyRegistry, registryOf, writeDatabase, type SteamApp, type WikidataGame } from "../src/dataset.ts";
 import { formatRegistry, parseRegistry } from "../src/registry-file.ts";
+import { collectWikidata, type WikidataRow } from "../src/wikidata-rows.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const databasePath = resolve(root, "data/games.sqlite");
@@ -33,29 +34,21 @@ async function sparql(query: string): Promise<{ results: { bindings: Record<stri
 // ranges of appids so no single query runs long.
 async function fetchWikidata(): Promise<WikidataGame[]> {
   const byItem = new Map<string, WikidataGame>();
+  const langs = new Map<string, string>();
   const width = 250_000;
   for (let from = 0; from < 5_000_000; from += width) {
     const remaining = rowLimit === undefined ? undefined : rowLimit - byItem.size;
     if (remaining !== undefined && remaining <= 0) break;
     const query = `
-      SELECT ?item ?label ?appid (GROUP_CONCAT(DISTINCT ?alt; separator="|") AS ?alts) WHERE {
+      SELECT ?item ?label ?lang ?appid (GROUP_CONCAT(DISTINCT ?alt; separator="|") AS ?alts) WHERE {
         ?item wdt:P31/wdt:P279* wd:Q7889 ; wdt:P1733 ?appid ; rdfs:label ?label .
-        FILTER(LANG(?label) = "en")
+        BIND(LANG(?label) AS ?lang)
+        FILTER(?lang IN ("en", "mul"))
         FILTER(xsd:integer(?appid) >= ${from} && xsd:integer(?appid) < ${from + width})
-        OPTIONAL { ?item skos:altLabel ?alt . FILTER(LANG(?alt) = "en") }
-      } GROUP BY ?item ?label ?appid ${remaining !== undefined ? `LIMIT ${remaining}` : ""}`;
+        OPTIONAL { ?item skos:altLabel ?alt . FILTER(LANG(?alt) IN ("en", "mul")) }
+      } GROUP BY ?item ?label ?lang ?appid ${remaining !== undefined ? `LIMIT ${remaining}` : ""}`;
     const { results } = await sparql(query);
-    for (const row of results.bindings) {
-      const qid = row.item!.value.split("/").pop()!;
-      const appid = Number(row.appid!.value);
-      if (!Number.isInteger(appid) || byItem.has(qid)) continue;
-      byItem.set(qid, {
-        qid,
-        label: row.label!.value,
-        aliases: row.alts?.value ? row.alts.value.split("|") : [],
-        steamAppId: appid,
-      });
-    }
+    collectWikidata(results.bindings as unknown as WikidataRow[], byItem, langs);
     console.log(`Wikidata: appids below ${from + width}: ${byItem.size} games so far`);
   }
   return [...byItem.values()];
