@@ -46,11 +46,21 @@ export function parseAction(raw: unknown): HostAction | null {
         : null;
     case "open-game":
     case "choose-game-image":
+    case "use-original-icon":
     case "trash-game":
     case "restore-game":
     case "delete-game":
     case "unfavorite":
       return only("gameId") && isGameId(a.gameId) ? { type: a.type, gameId: a.gameId } : null;
+    case "share-icons":
+      return only("gameIds") &&
+        Array.isArray(a.gameIds) &&
+        a.gameIds.length >= 1 &&
+        a.gameIds.length <= 50 &&
+        a.gameIds.every((id) => isGameId(id)) &&
+        new Set(a.gameIds).size === a.gameIds.length
+        ? { type: a.type, gameIds: a.gameIds as string[] }
+        : null;
     case "add-game":
       if (only("catalogId") && isGameId(a.catalogId)) return { type: a.type, catalogId: a.catalogId };
       if (only("name") && text(a.name)) return { type: a.type, name: a.name };

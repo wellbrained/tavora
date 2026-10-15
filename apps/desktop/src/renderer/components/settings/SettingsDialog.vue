@@ -8,7 +8,7 @@ import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { RootSort, Startup } from "../../../shared/host-api";
 import { PATCH_NOTES } from "../../../shared/patch-notes";
-import { act, confirmAction, settingsOpen, settingsTarget, state, submitAction } from "../../host";
+import { act, confirmAction, dialog, settingsOpen, settingsTarget, state, submitAction } from "../../host";
 import { SHORTCUT_GROUPS } from "../../shortcuts";
 import GameIcon from "../GameIcon.vue";
 import AppearanceSection from "./AppearanceSection.vue";
@@ -320,6 +320,21 @@ function deleteNow(gameId: string, name: string) {
             <p class="text-muted-foreground -mt-2 mb-4 max-w-prose text-xs leading-relaxed" data-testid="icon-notice">
               Game names and icons belong to their publishers and are trademarks of their owners. Tavora is not affiliated with, endorsed by or sponsored by them. Icons are used only to identify the games, shown unchanged and never sold. A publisher can ask for a hosted icon to be removed, and it is removed: see the privacy page at mytavora.app.
             </p>
+            <SettingRow
+              label="Share game icons"
+              description="Offer the icons your PC has for games Tavora does not have an icon for yet. You choose which, and see exactly what is sent. A person at Tavora checks each one before anyone else sees it. Needs Online game search."
+              setting="share-icons"
+              :highlighted="highlight === 'share-icons'"
+            >
+              <Button
+                variant="secondary"
+                data-testid="open-share-icons"
+                :disabled="!library.onlineSearch || !library.steamIcons"
+                @click="dialog = { kind: 'share-icons', gameIds: [] }"
+              >
+                Share…
+              </Button>
+            </SettingRow>
             <SettingRow
 
               label="Welcome tour"
