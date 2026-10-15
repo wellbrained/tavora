@@ -47,9 +47,18 @@ export interface DiscordToken {
 }
 
 /** What Tavora keeps on this PC, encrypted by the host (safeStorage). */
+/** The voice channel the player was last in on a server, so it can be joined again from the panel. */
+export interface DiscordLast {
+  channelId: string;
+  guildId: string;
+  name: string;
+  serverName: string | null;
+}
+
 export interface DiscordSecrets {
   secret: string | null;
   token: DiscordToken | null;
+  last?: DiscordLast | null;
 }
 
 export interface DiscordDeps {
@@ -124,6 +133,7 @@ export class DiscordConnection {
       server: connected && this.guild && this.call?.guildId === this.guild.id ? { id: this.guild.id, name: this.guild.name, icon: this.guildIcons.get(this.guild.id) ?? null } : null,
       call: connected && this.call ? channel(this.call) : null,
       others: connected && this.call?.guildId ? this.others.map(channel) : [],
+      last: this.secrets.last ? { channelId: this.secrets.last.channelId, name: this.secrets.last.name, serverName: this.secrets.last.serverName } : null,
     };
   }
 
@@ -149,7 +159,7 @@ export class DiscordConnection {
   async setSecret(secret: string | null): Promise<void> {
     await this.loaded;
     if (secret !== null && !this.deps.canSaveSecret) throw new DiscordError("discord.error.cantSave");
-    this.secrets = { secret, token: secret === null ? null : this.secrets.token };
+    this.secrets = { secret, token: secret === null ? null : this.secrets.token, last: secret === null ? null : this.secrets.last ?? null };
     await this.deps.save(this.secrets);
     if (secret === null) this.stop(this.wanted ? "no-secret" : "off");
     else if (this.wanted && (this.status === "no-secret" || this.status === "error" || this.status === "off")) void this.start(false);
@@ -158,10 +168,28 @@ export class DiscordConnection {
 
   async signOut(): Promise<void> {
     await this.loaded;
-    this.secrets = { ...this.secrets, token: null };
+    this.secrets = { ...this.secrets, token: null, last: null };
     await this.deps.save(this.secrets);
     this.user = null;
     this.stop(this.wanted ? (this.secrets.secret ? "signed-out" : "no-secret") : "off");
+  }
+
+  /**
+   * Joins a voice channel in the Discord app: the one the player was last in,
+   * or one of the server's channels the panel lists. The only command Tavora
+   * sends that changes anything in Discord, and only after the player asked.
+   */
+  async join(channelId: string): Promise<void> {
+    await this.loaded;
+    const client = this.client;
+    if (!client || this.status !== "connected") throw new DiscordError("discord.error.joinNotConnected");
+    if (channelId !== this.secrets.last?.channelId && !this.others.some((other) => other.id === channelId)) throw new DiscordError("discord.error.joinUnknown");
+    try {
+      await client.command("SELECT_VOICE_CHANNEL", { channel_id: channelId, force: true });
+    } catch (error) {
+      if (error instanceof RpcError && error.code !== 0) throw new DiscordError("discord.error.joinFailed");
+      throw error;
+    }
   }
 
   dispose(): void {
@@ -333,8 +361,20 @@ export class DiscordConnection {
     this.emit();
     if (channel.guildId) {
       if (this.guild?.id !== channel.guildId) await this.loadGuild(client, channel.guildId);
+      void this.remember(channel);
       await this.loadOthers(client);
     } else this.others = [];
+    this.emit();
+  }
+
+  /** Keeps the server channel the player is in as the one to rejoin; a direct or group call can't be joined this way. */
+  private async remember(channel: VoiceChannel): Promise<void> {
+    if (!channel.guildId || this.call?.id !== channel.id) return;
+    const known = this.secrets.last;
+    const serverName = this.guild?.id === channel.guildId ? this.guild.name : known?.guildId === channel.guildId ? known.serverName : null;
+    if (known && known.channelId === channel.id && known.name === channel.name && known.serverName === serverName) return;
+    this.secrets = { ...this.secrets, last: { channelId: channel.id, guildId: channel.guildId, name: channel.name, serverName } };
+    await this.deps.save(this.secrets).catch(() => undefined);
     this.emit();
   }
 

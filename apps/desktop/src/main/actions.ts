@@ -2,6 +2,7 @@ import { isGameId, isModuleId } from "@tavora/module-schema";
 import type { BrowserCommand, HostAction, SteamImportGame } from "../shared/host-api";
 import { isSite, MAX_ADDRESS } from "./browser-url";
 import { isClientSecret } from "./discord-store";
+import { isSnowflake } from "./discord-voice";
 import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
 import { isGridSize, layoutTemplate } from "../shared/layout-templates";
@@ -210,6 +211,8 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("scope") && (a.scope === "game" || a.scope === "shared") ? { type: a.type, scope: a.scope } : null;
     case "discord-set-secret":
       return only("secret") && (a.secret === null || isClientSecret(a.secret)) ? { type: a.type, secret: a.secret } : null;
+    case "discord-join":
+      return only("channelId") && isSnowflake(a.channelId) ? { type: a.type, channelId: a.channelId } : null;
     case "discord-connect":
     case "discord-sign-out":
       return only() ? { type: a.type } : null;

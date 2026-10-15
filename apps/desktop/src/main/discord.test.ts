@@ -157,6 +157,50 @@ describe("DiscordConnection", () => {
     expect(connection.view().status).toBe("connected");
   });
 
+  it("remembers the last server channel, and joins it or another listed one when asked", async () => {
+    const { connection, fake, saved } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    await connection.setWanted(true);
+    await until(() => connection.view().status === "connected" && connection.view().others.length === 1);
+    const last = { channelId: "10", guildId: "20", name: "Factory Floor", serverName: "Wellbrained Crew" };
+    await until(() => saved.at(-1)?.last?.serverName === "Wellbrained Crew");
+    expect(saved.at(-1)?.last).toEqual(last);
+    expect(connection.view().last).toEqual({ channelId: "10", name: "Factory Floor", serverName: "Wellbrained Crew" });
+
+    // Leaving keeps it, and Rejoin joins it. Nothing is sent before the player asks.
+    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: null }));
+    fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: null });
+    await until(() => connection.view().call === null);
+    expect(connection.view().last?.channelId).toBe("10");
+    expect(fake.commands.some((c) => c.cmd === "SELECT_VOICE_CHANNEL")).toBe(false);
+    await connection.join("10");
+    expect(fake.commands.find((c) => c.cmd === "SELECT_VOICE_CHANNEL")?.args).toEqual({ channel_id: "10", force: true });
+
+    // A listed channel can be joined; one Tavora never showed cannot.
+    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain")] } }));
+    fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: "10" });
+    await until(() => connection.view().others.length === 1);
+    await connection.join("11");
+    expect(fake.commands.filter((c) => c.cmd === "SELECT_VOICE_CHANNEL").map((c) => c.args.channel_id)).toEqual(["10", "11"]);
+    await expect(connection.join("99")).rejects.toMatchObject({ key: "discord.error.joinUnknown" });
+
+    // Discord refusing (no permission) is said plainly.
+    fake.answers.set("SELECT_VOICE_CHANNEL", () => ({ error: { code: 4000, message: "No permission" } }));
+    await expect(connection.join("11")).rejects.toMatchObject({ key: "discord.error.joinFailed" });
+
+    // A call without a server is not remembered, and Sign out forgets it.
+    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "30", name: null, voice_states: [person("1", "Brain")] } }));
+    fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: "30" });
+    await until(() => connection.view().call?.id === "30");
+    expect(connection.view().last?.channelId).toBe("10");
+    await connection.signOut();
+    expect(connection.view().last).toBeNull();
+  });
+
+  it("does not join while not connected", async () => {
+    const { connection } = await setup();
+    await expect(connection.join("10")).rejects.toMatchObject({ key: "discord.error.joinNotConnected" });
+  });
+
   it("refreshes an expired sign-in, and asks again when Discord refuses it", async () => {
     const expired = { secret: "s3cret_value", token: { accessToken: "old", refreshToken: "r", expiresAt: 0 } };
     const first = await setup({ secrets: expired });
@@ -201,8 +245,8 @@ describe("DiscordConnection", () => {
     await connection.setWanted(false);
     expect(connection.view()).toMatchObject({ status: "off", call: null });
     await connection.signOut();
-    expect(saved.at(-1)).toEqual({ secret: "s3cret_value", token: null });
+    expect(saved.at(-1)).toEqual({ secret: "s3cret_value", token: null, last: null });
     await connection.setSecret(null);
-    expect(saved.at(-1)).toEqual({ secret: null, token: null });
+    expect(saved.at(-1)).toEqual({ secret: null, token: null, last: null });
   });
 });
