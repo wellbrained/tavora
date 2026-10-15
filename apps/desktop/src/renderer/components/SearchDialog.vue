@@ -7,13 +7,9 @@ import { computed, nextTick, ref, watch, type Component } from "vue";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
-<<<<<<< origin/main
 import type { CatalogMatch, GameView, OnlineGame } from "../../shared/host-api";
-import { act, api, dialog, openSettings, searchOpen, shortcutsOpen, state } from "../host";
-=======
-import type { GameView } from "../../shared/host-api";
-import { act, dialog, openSettings, searchOpen, state } from "../host";
->>>>>>> HEAD
+import { act, api, dialog, openSettings, searchOpen, state } from "../host";
+
 import GameIcon from "./GameIcon.vue";
 import { SECTION_LABEL, SETTINGS } from "./settings/settings-index";
 

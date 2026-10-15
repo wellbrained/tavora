@@ -233,7 +233,6 @@ function deleteNow(gameId: string, name: string) {
               <Switch v-model="grayscaleText" aria-label="Grayscale text" data-testid="grayscale-text" />
             </SettingRow>
             <SettingRow
-<<<<<<< origin/main
               label="Online game search"
               description="Finds more games than the built-in list on the Tavora service. It sees the text you type and nothing that identifies you. Turn it off to use the built-in games only."
               setting="online-search"
@@ -242,16 +241,7 @@ function deleteNow(gameId: string, name: string) {
               <Switch v-model="onlineSearch" aria-label="Online game search" data-testid="online-search" />
             </SettingRow>
             <SettingRow
-              label="Keyboard shortcuts"
-              description="Every shortcut Tavora has. Press Ctrl+/ anywhere to see them."
-              setting="shortcuts"
-              :highlighted="highlight === 'shortcuts'"
-            >
-              <Button variant="secondary" data-testid="show-shortcuts" @click="shortcutsOpen = true">Show shortcuts</Button>
-            </SettingRow>
-            <SettingRow
-=======
->>>>>>> HEAD
+
               label="Welcome tour"
               description="The short introduction Tavora shows on its first start: your profile, your first games and a few tips."
               setting="welcome-tour"
