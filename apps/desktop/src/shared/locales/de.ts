@@ -462,6 +462,7 @@ export const de: Record<keyof typeof en, string> = {
   "workspace.addModule": "Modul hinzufügen",
   "workspace.startTitle": "Baue deinen Arbeitsbereich auf",
   "workspace.startText": "Wähle ein Layout. Füge dann jedem Bereich ein Modul hinzu. Du kannst Layout und Module jederzeit ändern oder verschieben.",
+  "workspace.chooseLayout": "Layout wählen",
   "workspace.panel": "Panel",
   "workspace.options": "Optionen für {name}",
   "workspace.removeSlot": "Platz entfernen",

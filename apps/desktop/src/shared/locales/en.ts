@@ -460,6 +460,7 @@ export const en = {
   "workspace.addModule": "Add module",
   "workspace.startTitle": "Start building your workspace",
   "workspace.startText": "Choose a layout. Then add a module to each pane. You can change the layout and the modules at any time, or move them around.",
+  "workspace.chooseLayout": "Choose a layout",
   "workspace.panel": "Panel",
   "workspace.options": "{name} options",
   "workspace.removeSlot": "Remove slot",

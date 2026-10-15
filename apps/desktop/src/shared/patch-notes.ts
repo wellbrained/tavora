@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.36",
+    date: "2026-10-16",
+    title: "Start a new game's workspace with a layout",
+    notes: [
+      "A new game's empty workspace now asks you to choose a layout first: pick one of the six layouts or point at a grid size. Each pane then has its own Add module button.",
+      "You can still change the layout and the modules at any time.",
+    ],
+  },
+  {
     version: "0.5.35",
     date: "2026-10-16",
     title: "A pointer on the game name tooltip",
