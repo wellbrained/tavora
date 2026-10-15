@@ -1,6 +1,7 @@
 import { TavoraError, type JsonValue, type TavoraSDK } from "@tavora/sdk";
 import { describe, expect, it } from "vitest";
 import { serial, updateDocument } from "./documents";
+import { applyTheme } from "./theme";
 
 /** A stand-in for the host's documents with revisions and CONFLICT. */
 function fakeDocuments(initial: { data: JsonValue; revision: number } | null) {
@@ -66,5 +67,23 @@ describe("serial", () => {
     await expect(slow).rejects.toThrow("boom");
     await fast;
     expect(order).toEqual(["slow", "fast"]);
+  });
+});
+
+describe("applyTheme", () => {
+  it("sets the tokens, the colour scheme and the dark class the components' dark: styles use", () => {
+    const props = new Map<string, string>();
+    const classes = new Set<string>(["dark"]);
+    const root = {
+      style: { setProperty: (name: string, value: string) => props.set(name, value), colorScheme: "" },
+      classList: { toggle: (name: string, on: boolean) => (on ? classes.add(name) : classes.delete(name)) },
+    } as unknown as HTMLElement;
+    applyTheme({ mode: "light", radius: 6, tokens: { primary: "#2a5f9e" } } as never, root);
+    expect(props.get("--primary")).toBe("#2a5f9e");
+    expect(props.get("--radius")).toBe("6px");
+    expect(root.style.colorScheme).toBe("light");
+    expect(classes.has("dark")).toBe(false);
+    applyTheme({ mode: "dark", radius: 8, tokens: {} } as never, root);
+    expect(classes.has("dark")).toBe(true);
   });
 });
