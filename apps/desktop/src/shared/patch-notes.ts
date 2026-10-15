@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.15",
+    date: "2026-10-16",
+    title: "Clearer Discord panel text",
+    notes: ["When you are not in a voice channel, the Discord panel now says what to do next: press a channel in the list, or choose a server for the game to see its channels."],
+  },
+  {
     version: "0.5.14",
     date: "2026-10-16",
     title: "Icons on panel tabs",
