@@ -54,8 +54,7 @@ function removeSecret() {
 </script>
 
 <template>
-  <h2 class="text-xl font-semibold">{{ t("settings.section.discord") }}</h2>
-  <p class="text-muted-foreground mt-2 mb-4">{{ t("discord.settings.intro") }}</p>
+  <p class="text-muted-foreground mb-4">{{ t("discord.settings.intro") }}</p>
   <SettingRow :label="t('settings.discord-connection.label')" :description="status" setting="discord-connection" :highlighted="highlight === 'discord-connection'">
     <Button v-if="connected || view?.user" variant="secondary" data-testid="discord-sign-out" @click="act({ type: 'discord-sign-out' })">{{ t("discord.settings.signOut") }}</Button>
     <Button v-else variant="secondary" :disabled="!view?.secretSaved" data-testid="discord-settings-connect" @click="act({ type: 'discord-connect' })">{{ t("discord.settings.connect") }}</Button>
