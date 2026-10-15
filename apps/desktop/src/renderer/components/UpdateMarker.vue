@@ -10,6 +10,8 @@ import { act, state } from "../host";
 defineProps<{ expanded: boolean }>();
 
 const update = computed(() => state.value!.update);
+// Only a version that was found shows up here; a check in progress or an idle one is not shown.
+const visible = computed(() => !["idle", "checking"].includes(update.value.status));
 
 const label = computed(() => {
   const u = update.value;
@@ -29,7 +31,7 @@ function press() {
 
 <template>
   <button
-    v-if="update.status !== 'idle'"
+    v-if="visible"
     type="button"
     :class="
       cn(

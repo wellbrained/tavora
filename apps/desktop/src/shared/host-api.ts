@@ -94,9 +94,13 @@ export interface PanelBounds {
 }
 
 /** What the host UI renders. Contains no module data. */
-/** Idle: nothing new. Available: found, waiting for the player (automatic download off). */
+/**
+ * Idle: nothing new (when it was last checked, and whether that check failed). Available: found,
+ * waiting for the player (automatic download off).
+ */
 export type UpdateState =
-  | { status: "idle" }
+  | { status: "idle"; checkedAt: string | null; failed: boolean }
+  | { status: "checking" }
   | { status: "available"; version: string }
   | { status: "downloading"; version: string }
   | { status: "ready"; version: string };
@@ -185,6 +189,8 @@ export type HostAction =
   | { type: "set-auto-update"; enabled: boolean }
   /** Starts the download of a version that was found while automatic download is off. */
   | { type: "download-update" }
+  /** Asks the update server now, without waiting for the next scheduled check. */
+  | { type: "check-for-updates" }
   /** Quits, installs the downloaded version and starts Tavora again. */
   | { type: "restart-to-update" }
   | { type: "set-steam-icons"; enabled: boolean }

@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.4.1",
+    date: "2026-10-15",
+    title: "Check for updates",
+    notes: [
+      "Settings now has a Check for updates button. Press it to see right away whether there is a newer version of Tavora, instead of waiting for the automatic check. It also tells you when it last looked.",
+    ],
+  },
+  {
     version: "0.4.0",
     date: "2026-10-15",
     title: "The first version you can install",

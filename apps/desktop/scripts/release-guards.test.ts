@@ -34,6 +34,15 @@ describe("checkRelease", () => {
     expect(problems[0]).toContain("patch version");
   });
 
+  it("publishes a patch version only when asked for a one-off", () => {
+    const state = { ...ready, tags: ["v0.4.0"], noteVersions: ["0.4.1", "0.4.0"] };
+    expect(checkRelease("0.4.1", state, { allowPatch: true })).toEqual([]);
+    expect(checkRelease("0.4.1", state)[0]).toContain("--allow-patch");
+    // The other guards still apply: not newer, wrong notes.
+    expect(checkRelease("0.4.0", { ...state, noteVersions: ["0.4.0"] }, { allowPatch: true }).join(" ")).toContain("already released");
+    expect(checkRelease("0.4.1", { ...state, noteVersions: ["0.4.0"] }, { allowPatch: true }).join(" ")).toContain("newest patch-notes entry");
+  });
+
   it("wants main, clean and level with origin/main", () => {
     expect(checkRelease("0.4.0", { ...ready, branch: "feat/x" })[0]).toContain("from main");
     expect(checkRelease("0.4.0", { ...ready, dirty: true })[0]).toContain("uncommitted");

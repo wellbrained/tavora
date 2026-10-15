@@ -31,6 +31,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "show-welcome":
     case "restart":
     case "download-update":
+    case "check-for-updates":
     case "restart-to-update":
       return only() ? { type: a.type } : null;
     case "open-game":
