@@ -11,6 +11,7 @@ import { PATCH_NOTES } from "../../../shared/patch-notes";
 import { act, confirmAction, settingsOpen, settingsTarget, state, submitAction } from "../../host";
 import { SHORTCUT_GROUPS } from "../../shortcuts";
 import GameIcon from "../GameIcon.vue";
+import AppearanceSection from "./AppearanceSection.vue";
 import SegmentedControl from "./SegmentedControl.vue";
 import { GROUPS, SECTION_LABEL, SETTINGS, type SettingsSection } from "./settings-index";
 import SettingRow from "./SettingRow.vue";
@@ -320,6 +321,10 @@ function deleteNow(gameId: string, name: string) {
             >
               <Button variant="secondary" data-testid="show-welcome-again" @click="showWelcomeAgain">Show again</Button>
             </SettingRow>
+          </template>
+
+          <template v-else-if="section === 'appearance'">
+            <AppearanceSection :highlight="highlight" />
           </template>
 
           <template v-else-if="section === 'shortcuts'">

@@ -1,0 +1,40 @@
+{
+  "id": "tavora.hearthwood",
+  "name": "Hearthwood",
+  "description": "Deep forest greens with a touch of moss.",
+  "author": "Tavora",
+  "version": "1.0.0",
+  "variations": [
+    {
+      "id": "dark",
+      "name": "Dark",
+      "mode": "dark",
+      "radius": 10,
+      "colors": {
+        "background": "#121612",
+        "foreground": "#ecefe4",
+        "card": "#1a1f1a",
+        "card-foreground": "#ecefe4",
+        "popover": "#1a1f1a",
+        "popover-foreground": "#ecefe4",
+        "primary": "#a8c66c",
+        "primary-hover": "#bcd685",
+        "primary-foreground": "#121612",
+        "secondary": "#242b23",
+        "secondary-foreground": "#ecefe4",
+        "muted": "#242b23",
+        "muted-foreground": "#98a192",
+        "accent": "#242b23",
+        "accent-foreground": "#ecefe4",
+        "destructive": "#e8705f",
+        "border": "#2f372d",
+        "input": "#646e5f",
+        "ring": "#a8c66c",
+        "rail": "#0d100d",
+        "success": "#7fc48a",
+        "warning": "#e5c463",
+        "info": "#7fb0d6"
+      }
+    }
+  ]
+}

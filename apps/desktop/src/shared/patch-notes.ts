@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.0",
+    date: "2026-10-15",
+    title: "Themes",
+    notes: [
+      "Settings has a new Appearance section where you can pick how Tavora looks. Every theme is shown in its own colours before you pick it, and your modules change colour along with Tavora.",
+      "Three themes come with Tavora. Tavora has Dark, OLED (true black) and High contrast. Nightfall is cool slate and moonlight blue, in Dusk and Midnight. Hearthwood is deep forest green.",
+      "You can make your own theme: open the themes folder from Appearance, add a folder with a tavora.theme.json, and press Reload. Reset to Tavora Default always takes you back.",
+    ],
+  },
+  {
     version: "0.4.4",
     date: "2026-10-15",
     title: "A Development shelf in the module library",

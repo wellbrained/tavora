@@ -14,9 +14,9 @@ modules get the same tokens and may follow it.
 - **Stack:** Electron, Vue 3, Reka UI for accessible primitives, shadcn-vue for
   owned component source (`src/renderer/components/ui`), Tailwind CSS with CSS
   custom properties. Not Nuxt UI.
-- **Look:** warm charcoal and firelight gold. Milestone C ships only this
-  default theme; theme packages with variations and personal overrides come
-  later.
+- **Look:** warm charcoal and firelight gold. Since 0.5.0 other installed
+  theme packages can replace these colours (see "Themes" below); personal
+  overrides come later.
 - **How it is enforced:** tokens are defined once as CSS custom properties and
   mapped into Tailwind and the shadcn-vue components. Components use semantic
   tokens only, never raw hex values. Later theme packages supply the same
@@ -188,7 +188,7 @@ but Tavora's usability rules always win.
 
 | Area | Milestone C | Later |
 | --- | --- | --- |
-| Theme | Tavora default only (this guide, dark) | Installed theme packages, each with variations such as Dark, Light, OLED, High Contrast |
+| Theme | Tavora default only (this guide, dark). Since 0.5.0: installed theme packages, each with up to four variations; Tavora ships Tavora (Dark, OLED, High contrast), Nightfall (Dusk, Midnight) and Hearthwood (Dark) | Published themes from the catalog |
 | Personal overrides | None | Accent colour, density, corner radius (4 to 12 px), base text size (13 to 16 px), clamped |
 | Fonts | Inter and JetBrains Mono | Themes may bundle any font under OFL, Apache 2.0 or MIT, packaged locally |
 | Rail | Collapse or expand, width 180 to 420 px | Same |
@@ -202,15 +202,20 @@ but Tavora's usability rules always win.
   variation, then personal overrides, each checked and clamped against the
   rules.
 - **Scope:** one global theme; per-game themes only if players ask for them.
-- **Theme packages are data:** tokens and licensed local assets only. No CSS,
-  Tailwind classes, JavaScript or Electron access. Themes are previewed before
-  they apply.
+- **Theme packages are data:** a `tavora.theme.json` with the colour tokens
+  and a radius per variation ([format](../../apps/docs/reference/theme.md)).
+  No CSS, Tailwind classes, JavaScript or Electron access; bundled fonts and
+  other licensed local assets come later. Each theme card in Settings >
+  Appearance is drawn in the theme's own colours, so it is previewed before
+  it applies.
 - **Recovery:** the default theme is the fallback, and **Reset to Tavora
   Default** is always reachable and works whatever theme is active.
 - **Validation** uses the rules in this guide: contrast (AA for every theme,
   AAA for High Contrast variants), 12 px minimum text, focus visibility,
   distinguishable error and warning states, hit targets, reduced motion and
-  text scaling.
-- **Timing:** variations, overrides and Reset get their own milestone right
-  after Browser. Theme publishing opens after Milestone E, once the theme
+  text scaling. Themes only set colours and the radius, so today the check is
+  contrast on every pair the host draws and a radius from 4 to 12 px; a
+  variation that fails is not loaded and Settings names the failing pair.
+- **Timing:** theme packages, variations and Reset shipped in 0.5.0, ahead of
+  Browser at Dominik's request. Personal overrides follow later. Theme publishing opens after Milestone E, once the theme
   validator and review run.

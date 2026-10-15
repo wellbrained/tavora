@@ -1,0 +1,71 @@
+{
+  "id": "tavora.nightfall",
+  "name": "Nightfall",
+  "description": "Cool slate and moonlight blue, for late sessions.",
+  "author": "Tavora",
+  "version": "1.0.0",
+  "variations": [
+    {
+      "id": "dusk",
+      "name": "Dusk",
+      "mode": "dark",
+      "radius": 8,
+      "colors": {
+        "background": "#12161c",
+        "foreground": "#e6ebf2",
+        "card": "#1a2029",
+        "card-foreground": "#e6ebf2",
+        "popover": "#1a2029",
+        "popover-foreground": "#e6ebf2",
+        "primary": "#7fb4f0",
+        "primary-hover": "#9cc6f5",
+        "primary-foreground": "#0e1218",
+        "secondary": "#232b36",
+        "secondary-foreground": "#e6ebf2",
+        "muted": "#232b36",
+        "muted-foreground": "#94a0b0",
+        "accent": "#232b36",
+        "accent-foreground": "#e6ebf2",
+        "destructive": "#ef7a6c",
+        "border": "#2e3744",
+        "input": "#5f6b7c",
+        "ring": "#7fb4f0",
+        "rail": "#0c0f13",
+        "success": "#86c99a",
+        "warning": "#e6c86a",
+        "info": "#a9a2ee"
+      }
+    },
+    {
+      "id": "midnight",
+      "name": "Midnight",
+      "mode": "dark",
+      "radius": 8,
+      "colors": {
+        "background": "#0a0d12",
+        "foreground": "#e6ebf2",
+        "card": "#11161d",
+        "card-foreground": "#e6ebf2",
+        "popover": "#11161d",
+        "popover-foreground": "#e6ebf2",
+        "primary": "#7fb4f0",
+        "primary-hover": "#9cc6f5",
+        "primary-foreground": "#0e1218",
+        "secondary": "#1a212b",
+        "secondary-foreground": "#e6ebf2",
+        "muted": "#1a212b",
+        "muted-foreground": "#94a0b0",
+        "accent": "#1a212b",
+        "accent-foreground": "#e6ebf2",
+        "destructive": "#ef7a6c",
+        "border": "#242c38",
+        "input": "#5a6577",
+        "ring": "#7fb4f0",
+        "rail": "#06080b",
+        "success": "#86c99a",
+        "warning": "#e6c86a",
+        "info": "#a9a2ee"
+      }
+    }
+  ]
+}

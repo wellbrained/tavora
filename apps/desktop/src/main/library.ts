@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { isGameId } from "@tavora/module-schema";
+import { isGameId, isModuleId } from "@tavora/module-schema";
 import type { RootItem, RootSort, Startup } from "../shared/host-api";
 import { CATALOG, catalogGame } from "./catalog";
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
+import { DEFAULT_THEME, isVariationId } from "./themes";
 
 export type { RootItem, RootSort, Startup };
 
@@ -63,6 +64,8 @@ export interface Library {
   autoUpdate: boolean;
   /** Game icons may be taken from Steam on this PC. Off means the generated badge. */
   steamIcons: boolean;
+  /** The picked theme and variation. Kept even while that theme is not installed, which shows the default. */
+  theme: { id: string; variation: string };
   /** False until the first-run welcome was finished or skipped. */
   onboarded: boolean;
   lastGameId: string | null;
@@ -90,6 +93,7 @@ export function emptyLibrary(): Library {
     onlineSearch: true,
     autoUpdate: true,
     steamIcons: true,
+    theme: { ...DEFAULT_THEME },
     onboarded: false,
     lastGameId: null,
   };
@@ -527,6 +531,8 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.onlineSearch === "boolean") library.onlineSearch = saved.onlineSearch;
   if (typeof saved.autoUpdate === "boolean") library.autoUpdate = saved.autoUpdate;
   if (typeof saved.steamIcons === "boolean") library.steamIcons = saved.steamIcons;
+  const theme = asRecord(saved.theme);
+  if (isModuleId(theme.id) && isVariationId(theme.variation)) library.theme = { id: theme.id, variation: theme.variation };
   // A library saved before the welcome existed belongs to someone who is past it.
   library.onboarded = typeof saved.onboarded === "boolean" ? saved.onboarded : true;
   setRail(library, asRecord(saved.rail));
