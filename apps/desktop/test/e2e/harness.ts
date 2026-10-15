@@ -190,6 +190,7 @@ export async function onWindow(app: ElectronApplication, action: "hide" | "show"
 
 export const NOTES = "tavora.notes";
 export const TODOS = "tavora.todos";
+export const PLAYGROUND = "tavora.playground";
 
 /** Types text into whatever has focus in the nth panel of a module, as a player would. */
 export async function typeInModule(app: ElectronApplication, moduleId: string, text: string, index = 0): Promise<void> {

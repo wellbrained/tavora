@@ -1,10 +1,11 @@
-// Shared by the official modules (Notes, To-Dos). Everything here uses only
+// Shared by the official modules (Notes, To-Dos, UI Playground). Everything here uses only
 // the public @tavora/sdk, like any community module could.
 
 import { connect, THEME_TOKENS, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
 
 export { cn } from "./lib/utils";
 export { default as ConfirmDialog } from "./components/ConfirmDialog.vue";
+export { default as SegmentedControl } from "./components/SegmentedControl.vue";
 export { errorMessage, readDocument, serial, updateDocument, type UpdateOptions, type Versioned } from "./documents";
 
 /** Connects to Tavora and keeps the page's CSS tokens in step with the host theme. */
