@@ -38,6 +38,12 @@ export function isDevelopmentModule(id: string): boolean {
   return DEVELOPMENT_MODULES.has(id);
 }
 
+/** A folder that looks like a module but could not be loaded, and why, in words a player can read. */
+export interface ModuleProblem {
+  folder: string;
+  message: string;
+}
+
 export interface ModuleSources {
   /** Modules that ship with Tavora. Searched first, so they win over a local copy. */
   official?: string[];
@@ -51,7 +57,10 @@ export interface ModuleSources {
  * where a module was found, never from its manifest, so a local module
  * cannot pass itself off as official.
  */
-export async function discoverModules({ official = [], local = [] }: ModuleSources): Promise<Map<string, InstalledModule>> {
+export async function discoverModules(
+  { official = [], local = [] }: ModuleSources,
+  problems: ModuleProblem[] = [],
+): Promise<Map<string, InstalledModule>> {
   const modules = new Map<string, InstalledModule>();
   const dirs = [
     ...official.map((dir) => ({ dir, provenance: "official" as const })),
@@ -59,15 +68,19 @@ export async function discoverModules({ official = [], local = [] }: ModuleSourc
   ];
   for (const { dir, provenance } of dirs) {
     for (const candidate of await candidates(dir)) {
-      const installed = await loadModule(candidate, provenance);
+      const installed = await loadModule(candidate, provenance, (message) => {
+        if (provenance === "local") problems.push({ folder: path.basename(candidate), message });
+      });
       if (!installed) continue;
       const { id } = installed.manifest;
       if (provenance !== "official" && id.startsWith(OFFICIAL_PREFIX)) {
         console.warn(`[tavora] module id ${id} in ${candidate} is reserved for official Tavora modules; skipping it`);
+        problems.push({ folder: path.basename(candidate), message: "its id is reserved for Tavora's own modules" });
         continue;
       }
       if (modules.has(id)) {
         console.warn(`[tavora] duplicate module id ${id} in ${candidate}; keeping the first one`);
+        if (provenance === "local") problems.push({ folder: path.basename(candidate), message: "another module with the same id is already loaded" });
         continue;
       }
       modules.set(id, installed);
@@ -86,27 +99,59 @@ async function candidates(dir: string): Promise<string[]> {
   }
 }
 
-async function loadModule(dir: string, provenance: Provenance): Promise<InstalledModule | undefined> {
+async function loadModule(dir: string, provenance: Provenance, problem: (message: string) => void): Promise<InstalledModule | undefined> {
   let raw: unknown;
   try {
     raw = JSON.parse(await readFile(path.join(dir, MANIFEST), "utf8"));
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.warn(`[tavora] unreadable manifest in ${dir}`);
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.warn(`[tavora] unreadable manifest in ${dir}`);
+      problem("its tavora.module.json cannot be read");
+    }
     return undefined;
   }
   const result = validateManifest(raw);
   if (!result.ok) {
     console.warn(`[tavora] invalid module in ${dir}: ${result.errors.join("; ")}`);
+    problem(result.errors.slice(0, 2).join("; "));
     return undefined;
   }
   const root = await realpath(dir);
   if (!(await resolveAsset(root, `/${result.manifest.entry}`))) {
     console.warn(`[tavora] module ${result.manifest.id} has no entry file ${result.manifest.entry}; is it built?`);
+    problem(`the entry file ${result.manifest.entry} is missing (is it built?)`);
     return undefined;
   }
   if (result.manifest.icon !== undefined && !(await resolveAsset(root, `/${result.manifest.icon}`))) {
     console.warn(`[tavora] module ${result.manifest.id} has no icon file ${result.manifest.icon}`);
+    problem(`the icon file ${result.manifest.icon} is missing`);
     return undefined;
   }
   return { manifest: result.manifest, root, provenance };
+}
+
+export interface ModuleInfo {
+  /** Where the module was found, in words and without a full path. */
+  origin: string;
+  /** Only a direct child of the player's own modules folder can be removed from Settings. */
+  removable: boolean;
+}
+
+/** Where each module was found, and whether Settings may remove it. */
+export async function describeModules(userModules: string, modules: Map<string, InstalledModule>): Promise<Map<string, ModuleInfo>> {
+  const userRoot = await realpath(userModules).catch(() => path.resolve(userModules));
+  const info = new Map<string, ModuleInfo>();
+  for (const [id, module] of modules) {
+    const own = module.provenance === "local" && path.dirname(module.root) === userRoot;
+    const origin =
+      module.provenance === "official"
+        ? "Ships with Tavora"
+        : isDevelopmentModule(id)
+          ? "Example that ships with Tavora"
+          : own
+            ? `Your modules folder, in ${path.basename(module.root)}`
+            : `A development folder, ${path.basename(module.root)}`;
+    info.set(id, { origin, removable: own });
+  }
+  return info;
 }

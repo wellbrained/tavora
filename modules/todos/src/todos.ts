@@ -12,6 +12,8 @@ export const LIST_TITLE = "To-Dos";
 export const DEFAULT_GROUP = "To-Dos";
 
 export const MAX = { groupName: 80, title: 300, details: 5000, link: 2000 } as const;
+/** What a stored list may hold; a damaged or hand-edited document cannot make the panel build more than this. */
+export const LIMITS = { groups: 200, tasksPerGroup: 2000, stepsPerTask: 200 } as const;
 
 export interface Step {
   [key: string]: JsonValue;
@@ -77,10 +79,10 @@ export function parseList(raw: JsonValue | null): TodoList {
   return {
     version: 1,
     groups: unique(
-      groups.map((group) => ({
+      groups.slice(0, LIMITS.groups).map((group) => ({
         id: text(group.id, 64),
         name: text(group.name, MAX.groupName) || DEFAULT_GROUP,
-        tasks: unique(list(group.tasks).map(parseTask)),
+        tasks: unique(list(group.tasks).slice(0, LIMITS.tasksPerGroup).map(parseTask)),
       })),
     ),
   };
@@ -93,10 +95,13 @@ function parseTask(task: JsonObject): Task {
     title: text(task.title, MAX.title),
     done,
     details: text(task.details, MAX.details),
-    link: text(task.link, MAX.link),
+    // Only web addresses are kept, whatever an older version or a hand edit left there.
+    link: normalizeLink(text(task.link, MAX.link)) ?? "",
     pinned: task.pinned === true,
     steps: unique(
-      list(task.steps).map((step) => ({ id: text(step.id, 64), title: text(step.title, MAX.title), done: step.done === true })),
+      list(task.steps)
+        .slice(0, LIMITS.stepsPerTask)
+        .map((step) => ({ id: text(step.id, 64), title: text(step.title, MAX.title), done: step.done === true })),
     ),
     createdAt: text(task.createdAt, 40),
     doneAt: done && typeof task.doneAt === "string" ? task.doneAt.slice(0, 40) : null,

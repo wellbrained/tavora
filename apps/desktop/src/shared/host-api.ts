@@ -185,7 +185,14 @@ export interface HostViewState {
     provenance: "official" | "local";
     /** A playground or example for module authors, listed under Development. */
     development: boolean;
+    version: string;
+    /** Where it was found, in words, without a full path: Tavora itself, the modules folder, or a development folder. */
+    origin: string;
+    /** Only a module in the player's own modules folder can be removed from Settings. */
+    removable: boolean;
   }[];
+  /** Folders in the modules folder that could not be loaded, and why, for module authors. */
+  moduleProblems: { folder: string; message: string }[];
   /** Panels of the current game, in the order they were opened. */
   panels: PanelView[];
   /** The current game's saved layout; panels missing from it are placed by the host UI. */
@@ -260,6 +267,12 @@ export type HostAction =
   | { type: "reload-themes" }
   /** Opens the player's themes folder in the file manager, creating it first. */
   | { type: "open-themes-folder" }
+  /** Opens the player's modules folder in the file manager, creating it first. */
+  | { type: "open-modules-folder" }
+  /** Looks for modules again, after the player changed their modules folder. */
+  | { type: "reload-modules" }
+  /** Moves a module from the player's modules folder to the recycle bin; its data stays. */
+  | { type: "remove-module"; moduleId: string }
   /** Copies the Tavora theme into the themes folder as a new theme to change; answers with its id. */
   | { type: "create-starter-theme" }
   /** Done ends the first-run welcome; false shows it again. */
