@@ -101,6 +101,9 @@ export interface DiscordMember {
   /** Muted or deafened by a moderator. */
   serverMute: boolean;
   serverDeaf: boolean;
+  /** The player's own volume for this person (0 to 200, 100 normally) and whether the player muted them for themselves. */
+  volume: number;
+  mutedForMe: boolean;
 }
 
 export interface DiscordChannel {
@@ -419,6 +422,8 @@ export type HostAction =
   | { type: "discord-leave" }
   /** Mutes or deafens the player in the Discord app (turning either on or off). */
   | { type: "discord-voice"; mute?: boolean; deaf?: boolean }
+  /** Sets how loud a person in the player's call is (0 to 200) and/or mutes them for the player only. */
+  | { type: "discord-user-voice"; userId: string; volume?: number; mute?: boolean }
   /** Asks Discord to approve muting and deafening, for sign-ins made before it existed. */
   | { type: "discord-allow-control" }
   /** Reads the server list and the browsed server's channels now. */

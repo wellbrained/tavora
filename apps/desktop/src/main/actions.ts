@@ -223,6 +223,14 @@ export function parseAction(raw: unknown): HostAction | null {
       if (!only("mute", "deaf") || !ok(a.mute) || !ok(a.deaf) || (a.mute === undefined && a.deaf === undefined)) return null;
       return { type: a.type, ...(a.mute === undefined ? {} : { mute: a.mute as boolean }), ...(a.deaf === undefined ? {} : { deaf: a.deaf as boolean }) };
     }
+    case "discord-user-voice": {
+      const volume = a.volume;
+      const mute = a.mute;
+      const volumeOk = volume === undefined || (typeof volume === "number" && Number.isInteger(volume) && volume >= 0 && volume <= 200);
+      const muteOk = mute === undefined || typeof mute === "boolean";
+      if (!only("userId", "volume", "mute") || !isSnowflake(a.userId) || !volumeOk || !muteOk || (volume === undefined && mute === undefined)) return null;
+      return { type: a.type, userId: a.userId, ...(volume === undefined ? {} : { volume: volume as number }), ...(mute === undefined ? {} : { mute: mute as boolean }) };
+    }
     case "discord-game-remember":
       return only("gameId", "remember") && isGameId(a.gameId) && typeof a.remember === "boolean" ? { type: a.type, gameId: a.gameId, remember: a.remember } : null;
     case "discord-game-server":
