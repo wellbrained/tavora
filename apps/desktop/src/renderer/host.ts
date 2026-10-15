@@ -1,7 +1,8 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import type { ActionResult, HostAction, HostViewState } from "../shared/host-api";
+import type { ActionResult, HostAction, HostShortcut, HostViewState } from "../shared/host-api";
+import { shortcutForKey } from "../shared/shortcut-keys";
 import type { SettingsSection } from "./components/settings/settings-index";
 import { numberedGames } from "./shortcuts";
 
@@ -83,7 +84,7 @@ export const searchOpen = ref(false);
 /** Bumped by Ctrl+\; the rail toggles itself when it changes. */
 export const railToggles = ref(0);
 
-api.onShortcut((shortcut) => {
+function runShortcut(shortcut: HostShortcut): void {
   if (shortcut === "search") searchOpen.value = !searchOpen.value;
   else if (shortcut === "shortcuts") openSettings({ section: "shortcuts" });
   else if (shortcut === "settings") openSettings();
@@ -94,13 +95,21 @@ api.onShortcut((shortcut) => {
     const gameId = library ? numberedGames(library)[Number(shortcut.slice("game-".length)) - 1] : undefined;
     if (gameId) void act({ type: "open-game", gameId });
   }
-});
-// Main catches Ctrl+K before any page sees it; this covers key events that
-// reach the page without passing through main, such as synthetic ones.
+}
+
+api.onShortcut(runShortcut);
+
+// Main catches Tavora's shortcuts before any page sees the key (and stops it
+// there, so this never runs twice for one press). This covers key events that
+// reach the page without passing through main, such as synthetic ones in tests.
 addEventListener("keydown", (event) => {
-  if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== "k") return;
+  const shortcut = shortcutForKey(
+    { type: "keyDown", key: event.key, control: event.ctrlKey, meta: event.metaKey, alt: event.altKey, shift: event.shiftKey },
+    navigator.platform.startsWith("Mac"),
+  );
+  if (!shortcut) return;
   event.preventDefault();
-  searchOpen.value = !searchOpen.value;
+  runShortcut(shortcut);
 });
 
 export function prompt(request: Omit<PromptRequest, "kind" | "value" | "maxLength"> & { value?: string; maxLength?: number }) {
