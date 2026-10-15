@@ -342,7 +342,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         <LayoutGrid class="text-muted-foreground mb-2 size-12" :stroke-width="1" />
         <p class="text-lg font-semibold">{{ t("workspace.startTitle") }}</p>
         <p class="text-muted-foreground max-w-sm text-sm">{{ t("workspace.startText", { name: game?.name ?? "" }) }}</p>
-        <div class="mt-3 flex flex-wrap justify-center gap-2" role="group" :aria-label="t('layouts.templates')" data-testid="empty-templates">
+        <div class="mt-3 flex flex-wrap justify-center gap-2" role="group" :aria-label="t('workspace.chooseLayout')" data-testid="empty-templates">
           <button
             v-for="template in LAYOUT_TEMPLATES"
             :key="template.id"
