@@ -43,4 +43,7 @@ test("Copy diagnostic info has what helps and nothing private, and the timings a
 
 // Measured on the development PC: startup about 360, a typical switch 25 (the first, cold one 250), a panel 100.
 // The budgets are the plan's targets or about five times the measurement, whichever is looser, for slower machines.
-const BUDGET = { startup: 2000, gameSwitch: 150, gameSwitchSlowest: 1000, panelOpen: 600 };
+// CI draws everything in software on a shared machine (measured there: startup 3800, a typical switch 2000), so
+// it only catches a collapse; the real budgets are enforced where `pnpm release` runs the tests, on a real PC.
+const SCALE = process.env.CI ? 20 : 1;
+const BUDGET = { startup: 2000 * SCALE, gameSwitch: 150 * SCALE, gameSwitchSlowest: 1000 * SCALE, panelOpen: 600 * SCALE };
