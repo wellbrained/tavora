@@ -19,66 +19,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.3.3",
+    version: "0.4.0",
     date: "2026-10-15",
-    title: "Behind the scenes",
-    notes: ["New versions of Tavora can now be published with a single command, with checks that stop a half-finished version from reaching anyone."],
-  },
-  {
-    version: "0.3.2",
-    date: "2026-10-15",
-    title: "Behind the scenes",
-    notes: ["Tavora's keyboard shortcuts are now covered by the automatic tests, so they are less likely to break in future versions."],
-  },
-  {
-    version: "0.3.1",
-    date: "2026-10-15",
-    title: "Tavora can update itself",
+    title: "The first version you can install",
     notes: [
-      "Install Tavora with the new installer and it keeps itself up to date: new versions download quietly in the background and install when you close the app.",
-      "A small arrow appears at the bottom of the game list when an update is ready, so you can restart into it whenever you like.",
-      "Settings has a switch if you would rather choose when updates download.",
-    ],
-  },
-  {
-    version: "0.3.0",
-    date: "2026-10-15",
-    title: "Games show their own Steam icon",
-    notes: [
-      "If Steam is installed on your PC, each game now shows the same icon Steam uses for it, on a tile in Tavora's colours. Tavora copies it from your Steam folder, or downloads the same file from Steam if it is missing. The Tavora service is never involved.",
-      "This replaces the Steam covers from the last version, which did not fit well.",
-      "Games without a Steam icon keep their badge, and an image you pick yourself always comes first. You can switch the Steam icons off under Settings, Game icons from Steam.",
-    ],
-  },
-  {
-    version: "0.2.0",
-    date: "2026-10-15",
-    title: "Real game icons",
-    notes: [
-      "Games now show their official Steam cover as their icon, with Tavora's rounded border and a slightly warmer tone. Tavora downloads each cover from Steam to your PC; nothing is hosted or sent through Tavora's service.",
-      "Games without a Steam cover keep their colourful badge, and an image you pick yourself always comes first.",
-      "You can switch the covers off under Settings, Game icons from Steam.",
-    ],
-  },
-  {
-    version: "0.1.1",
-    date: "2026-10-15",
-    title: "Tidier Settings",
-    notes: ["The patch notes now open only when you press the version number at the bottom of Settings. They no longer show up as a menu entry or in search."],
-  },
-  {
-    version: "0.1.0",
-    date: "2026-10-15",
-    title: "The first numbered version",
-    notes: [
+      "Tavora now comes with an installer and keeps itself up to date. New versions download quietly in the background and install when you close the app. A small arrow at the bottom of the game list shows when an update is ready, and Settings has a switch if you would rather choose when updates download.",
       "Your games live in a list on the left. Pin favorites, sort games into folders, put them in your own order, and bring back anything you removed within 30 days.",
       "Every game has its own workspace. Arrange notes, to-do lists and other panels the way you like, and save layouts to come back to.",
       "Add a game by searching more than 100,000 titles online. No internet? A built-in list of popular games still works, and you can switch online search off in Settings.",
-      "Games without a picture get a colourful badge. You can change its letters or choose your own image.",
+      "If Steam is installed on your PC, each game shows the same icon Steam uses for it, on a tile in Tavora's colours. Games without one keep a colourful badge, and an image you pick yourself always comes first. You can switch the Steam icons off in Settings.",
       "Make Tavora yours with a profile picture. A short welcome helps you get started, and Ctrl+/ shows every keyboard shortcut.",
       "Press Ctrl+K to find a game, a panel, a layout or a setting in seconds.",
       "A grayscale text option makes text crisper on OLED screens.",
-      "You can now see which version of Tavora you have, and what changed, right here in Settings.",
+      "Press the version number at the bottom of Settings to see which version you have and what changed.",
     ],
   },
 ];

@@ -1,6 +1,6 @@
 # Decision log
 
-The installer, updater, feed, release-channel and signing decisions below describe the planned release process. Current test packaging remains portable exe/zip and AppImage; automatic updates, NSIS installers and the feed are not implemented yet. The existing `pnpm dev` Vite hot reload workflow supersedes the earlier rebuild-only proposal from PR #6.
+The installer, updater, feed, release-channel and signing decisions below describe the release process. Implemented: the Windows NSIS installer, automatic updates and `pnpm release` (0.3.1 to 0.3.3), publishing to `updates.mytavora.app`. Not implemented: the beta channel, signing and Linux (AppImage) updates. The existing `pnpm dev` Vite hot reload workflow supersedes the earlier rebuild-only proposal from PR #6.
 
 2026-10-14 developer docs live in this repo as `apps/docs` (VitePress); the marketing site stays in `tavora-website`. Manifest, protocol and SDK docs change alongside code; TypeDoc generates the API reference and the manifest schema is published with the built site. The site is published at docs.mytavora.app as static files behind Caddy on the existing Hetzner server, like mytavora.app, rather than GitHub Pages: the server already hosts the other apps, and no deploy key has to live in GitHub. `apps/docs/scripts/Deploy-Docs.ps1` builds on the PC and switches to a new release with rollback; publishing is manual.
 
