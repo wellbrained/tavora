@@ -238,6 +238,24 @@ export class DiscordConnection {
       if (error instanceof RpcError && error.code !== 0) throw new DiscordError("discord.error.leaveFailed");
       throw error;
     }
+    this.markLeft(client);
+  }
+
+  /**
+   * Discord said yes to leaving: show it at once, since its own event can come
+   * late or not at all, and look again a moment later in case it was not so.
+   */
+  private markLeft(client: RpcClient): void {
+    if (client !== this.client || !this.call) return;
+    const previous = this.call;
+    for (const evt of VOICE_EVENTS) void client.unsubscribe(evt, { channel_id: previous.id }).catch(() => undefined);
+    this.call = null;
+    this.speaking.clear();
+    this.emit();
+    void this.loadBrowse(client);
+    this.setTimer(() => {
+      if (client === this.client) void this.followSelected().catch(() => undefined);
+    }, 1500);
   }
 
   /** Mutes or deafens the player in the Discord app, if the player approved it. */
