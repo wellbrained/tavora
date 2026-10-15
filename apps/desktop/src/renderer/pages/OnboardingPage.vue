@@ -12,9 +12,10 @@ import ImageCropDialog from "../components/ImageCropDialog.vue";
 import { readPicture } from "../components/profile/picture";
 import ProfileAvatar from "../components/profile/ProfileAvatar.vue";
 import { act, dialog, state } from "../host";
+import { t } from "../i18n";
+import { MOD } from "../shortcuts";
 
-const MOD = navigator.platform.startsWith("Mac") ? "Cmd" : "Ctrl";
-const STEPS = ["You", "Games", "Tips"] as const;
+const STEPS = ["you", "games", "tips"] as const;
 
 const view = computed(() => state.value!);
 const profile = computed(() => view.value.profile);
@@ -54,11 +55,11 @@ async function finish() {
   await act({ type: "set-onboarded", done: true });
 }
 
-const TIPS = [
-  { icon: PanelLeft, title: "Your games live on the left", text: "Drag them into your own order or into folders. Right-click a game for more." },
-  { icon: Search, title: "Find anything", keys: [MOD, "K"], text: "Jump to a game, open a module or change a setting." },
-  { icon: Keyboard, title: "All shortcuts", keys: [MOD, "/"], text: `${MOD}+1 to 9 open your first games, ${MOD}+\\ folds the game list away.` },
-];
+const tips = computed(() => [
+  { icon: PanelLeft, title: t("onboarding.tip.games.title"), text: t("onboarding.tip.games.text") },
+  { icon: Search, title: t("onboarding.tip.find.title"), keys: [MOD(), "K"], text: t("onboarding.tip.find.text") },
+  { icon: Keyboard, title: t("onboarding.tip.shortcuts.title"), keys: [MOD(), "/"], text: t("onboarding.tip.shortcuts.text", { mod: MOD() }) },
+]);
 </script>
 
 <template>
@@ -69,16 +70,16 @@ const TIPS = [
       data-testid="onboarding-skip"
       @click="finish"
     >
-      Skip
+      {{ t("onboarding.skip") }}
     </button>
 
     <!-- Step dots -->
-    <ol class="mb-10 flex items-center gap-2" aria-label="Steps">
+    <ol class="mb-10 flex items-center gap-2" :aria-label="t('onboarding.steps')">
       <li v-for="(label, index) in STEPS" :key="label" class="flex items-center gap-2">
         <span
           :class="cn('h-1.5 rounded-full transition-all duration-300', index === step ? 'bg-primary w-8' : index < step ? 'bg-primary/50 w-3' : 'bg-muted w-3')"
           :aria-current="index === step ? 'step' : undefined"
-          :aria-label="label"
+          :aria-label="t(`onboarding.step.${label}`)"
         />
       </li>
     </ol>
@@ -87,15 +88,15 @@ const TIPS = [
       <!-- 1: welcome and profile -->
       <section v-if="step === 0" key="you" class="flex w-full max-w-[420px] flex-col items-center text-center">
         <img class="mb-6" src="/brand/emblem-240.png" alt="" width="93" height="100" draggable="false" />
-        <h1 class="text-3xl font-semibold">Welcome to Tavora</h1>
-        <p class="text-muted-foreground mt-2 mb-8">Your home between adventures. First, who's playing?</p>
+        <h1 class="text-3xl font-semibold">{{ t("welcome.title.new") }}</h1>
+        <p class="text-muted-foreground mt-2 mb-8">{{ t("onboarding.tagline") }}</p>
 
         <button
           type="button"
           class="group/avatar focus-visible:outline-ring relative mb-5 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4"
           data-testid="onboarding-picture"
-          aria-label="Choose a picture"
-          title="Choose a picture"
+          :aria-label="t('onboarding.picture')"
+          :title="t('onboarding.picture')"
           @click="fileInput?.click()"
         >
           <ProfileAvatar :name="name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="96" />
@@ -108,23 +109,23 @@ const TIPS = [
         <Input
           v-model="name"
           class="h-10 max-w-72 text-center text-base"
-          placeholder="Your name"
-          aria-label="Your name"
+          :placeholder="t('onboarding.name')"
+          :aria-label="t('onboarding.name')"
           autocomplete="off"
           spellcheck="false"
           maxlength="32"
           data-testid="onboarding-name"
           @keydown.enter="go(1)"
         />
-        <p class="text-muted-foreground mt-2 text-xs">Only stored on this PC. You can change it any time from your avatar.</p>
+        <p class="text-muted-foreground mt-2 text-xs">{{ t("onboarding.nameHint") }}</p>
 
-        <Button class="mt-8 min-w-32" data-testid="onboarding-next" @click="go(1)">Next</Button>
+        <Button class="mt-8 min-w-32" data-testid="onboarding-next" @click="go(1)">{{ t("common.next") }}</Button>
       </section>
 
       <!-- 2: first games -->
       <section v-else-if="step === 1" key="games" class="flex w-full max-w-[560px] flex-col items-center text-center">
-        <h1 class="text-3xl font-semibold">What do you play?</h1>
-        <p class="text-muted-foreground mt-2 mb-8">Each game gets its own workspace with notes, to-dos and more.</p>
+        <h1 class="text-3xl font-semibold">{{ t("onboarding.games.title") }}</h1>
+        <p class="text-muted-foreground mt-2 mb-8">{{ t("onboarding.games.sub") }}</p>
 
         <ul class="mb-6 flex flex-wrap justify-center gap-3" data-testid="onboarding-games">
           <li v-for="game in games" :key="game.id" class="flex w-20 flex-col items-center gap-1.5">
@@ -141,25 +142,25 @@ const TIPS = [
               <span class="border-input text-muted-foreground grid size-14 place-items-center rounded-2xl border border-dashed">
                 <Plus class="size-6" :stroke-width="1.5" />
               </span>
-              <span class="text-muted-foreground text-xs">Add game</span>
+              <span class="text-muted-foreground text-xs">{{ t("common.addGame") }}</span>
             </button>
           </li>
         </ul>
         <!-- Steam import: an "Import from Steam" button goes here once it exists. -->
 
         <div class="mt-4 flex items-center gap-3">
-          <Button variant="ghost" @click="go(0)"><ArrowLeft :stroke-width="1.5" /> Back</Button>
-          <Button class="min-w-32" data-testid="onboarding-next" @click="go(2)">{{ games.length ? "Next" : "Later" }}</Button>
+          <Button variant="ghost" @click="go(0)"><ArrowLeft :stroke-width="1.5" /> {{ t("common.back") }}</Button>
+          <Button class="min-w-32" data-testid="onboarding-next" @click="go(2)">{{ games.length ? t("common.next") : t("onboarding.later") }}</Button>
         </div>
       </section>
 
       <!-- 3: tips -->
       <section v-else key="tips" class="flex w-full max-w-[560px] flex-col items-center text-center">
-        <h1 class="text-3xl font-semibold">Three things to know</h1>
-        <p class="text-muted-foreground mt-2 mb-8">That's all you need to find your way around.</p>
+        <h1 class="text-3xl font-semibold">{{ t("onboarding.tips.title") }}</h1>
+        <p class="text-muted-foreground mt-2 mb-8">{{ t("onboarding.tips.sub") }}</p>
 
         <ul class="flex w-full flex-col gap-2 text-left">
-          <li v-for="tip in TIPS" :key="tip.title" class="bg-card flex items-center gap-4 rounded-lg border p-4">
+          <li v-for="tip in tips" :key="tip.title" class="bg-card flex items-center gap-4 rounded-lg border p-4">
             <span class="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-lg">
               <component :is="tip.icon" class="size-5" :stroke-width="1.5" />
             </span>
@@ -174,13 +175,13 @@ const TIPS = [
         </ul>
 
         <div class="mt-8 flex items-center gap-3">
-          <Button variant="ghost" @click="go(1)"><ArrowLeft :stroke-width="1.5" /> Back</Button>
-          <Button class="min-w-32" data-testid="onboarding-done" @click="finish">Let's go</Button>
+          <Button variant="ghost" @click="go(1)"><ArrowLeft :stroke-width="1.5" /> {{ t("common.back") }}</Button>
+          <Button class="min-w-32" data-testid="onboarding-done" @click="finish">{{ t("onboarding.done") }}</Button>
         </div>
       </section>
     </Transition>
 
-    <ImageCropDialog :src="cropping" title="Crop your picture" round @save="savePicture" @cancel="cropping = null" />
+    <ImageCropDialog :src="cropping" :title="t('onboarding.crop')" round @save="savePicture" @cancel="cropping = null" />
   </main>
 </template>
 

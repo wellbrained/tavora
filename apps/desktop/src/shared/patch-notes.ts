@@ -19,7 +19,7 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.5.7",
+    version: "0.5.9",
     date: "2026-10-15",
     title: "Who's in your Discord voice channel",
     notes: [
@@ -27,6 +27,22 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "It follows you when you switch channels, works on any server and in calls, and lists the server's other voice channels too.",
       "You keep talking in the Discord app as usual. Tavora only reads your voice channel: it can't hear, talk, read messages or change anything.",
       "Connect it under Settings, then Discord. For now this needs the Client Secret of Tavora's Discord application.",
+    ],
+  },
+  {
+    version: "0.5.8",
+    date: "2026-10-15",
+    title: "Tavora speaks German (second part)",
+    notes: [
+      "The rest of Tavora is in German now, too: the game list, menus, dialogs, search, the Steam import, the Browser panel and the messages Tavora shows. Pick Deutsch under Settings, then General, then Language, or leave it on Follow System. Notes and To-Dos follow next.",
+    ],
+  },
+  {
+    version: "0.5.7",
+    date: "2026-10-15",
+    title: "Tavora speaks German (first part)",
+    notes: [
+      "Settings has a new Language row: Follow System (the default), English or Deutsch. The change shows at once, and Tavora follows your system's language until you choose one. German is a first part for now: all of Settings is translated, and the rest of Tavora follows in the next versions.",
     ],
   },
   {

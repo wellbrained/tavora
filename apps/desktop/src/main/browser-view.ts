@@ -2,7 +2,7 @@
 // it has no preload, no bridge and no IPC: the toolbar is drawn by the host
 // UI, and the page is only ever told where to go by the main process.
 import { session, WebContentsView, type Session, type WebContents } from "electron";
-import type { BrowserState, InstanceStatus } from "../shared/host-api";
+import type { BrowserError, BrowserState, InstanceStatus } from "../shared/host-api";
 import { judgeRequest, type AdBlocker } from "./browser-filter";
 import { addressToUrl, displayHost, isPrivateUrl, isWebUrl, parseUrl, siteOfUrl } from "./browser-url";
 import { BROWSER_MODULE_ID } from "./registry";
@@ -124,7 +124,7 @@ export class BrowserPanel {
   private hopUrl: string | null = null;
   /** The address last asked for: shown until a page commits, and tried again by Reload when it failed. */
   private requestedUrl: string | null = null;
-  private error: string | null = null;
+  private error: BrowserError | null = null;
   private blocked = 0;
   private fullscreen = false;
   private downloadsRefused = 0;
@@ -386,7 +386,7 @@ export class BrowserPanel {
       shared: this.kind === "shared",
       adblock: parsed ? this.options.adblockOn(url) : true,
       blocked: this.blocked,
-      error: this.status === "crashed" ? "This page crashed." : this.error,
+      error: this.status === "crashed" ? { kind: "crashed", detail: "" } : this.error,
       fullscreen: this.fullscreen,
       audible: !destroyed && contents.isCurrentlyAudible(),
       muted: !destroyed && contents.isAudioMuted(),
@@ -482,12 +482,12 @@ function pageTitle(title: string, url: string): string {
   return title === url || title === bare || url.startsWith(`${title}`) || bare.startsWith(title) ? "" : title;
 }
 
-/** A short, plain reason a page did not load. */
-export function loadError(code: number, description: string): string {
-  if (code <= -200 && code > -300) return "This site's security certificate isn't trusted, so Tavora won't open it.";
-  if (code === -105 || code === -137) return "Tavora couldn't find this site. Check the address.";
-  if (code === -106) return "You're offline.";
-  if (code === -102 || code === -118 || code === -7) return "The site didn't answer.";
-  if (code === -20 || code === -21 || code === -27) return "Tavora doesn't open this kind of address.";
-  return `The page couldn't be opened (${description || code}).`;
+/** A short, plain reason a page did not load; the host UI words it. */
+export function loadError(code: number, description: string): BrowserError {
+  if (code <= -200 && code > -300) return { kind: "cert", detail: "" };
+  if (code === -105 || code === -137) return { kind: "notFound", detail: "" };
+  if (code === -106) return { kind: "offline", detail: "" };
+  if (code === -102 || code === -118 || code === -7) return { kind: "noAnswer", detail: "" };
+  if (code === -20 || code === -21 || code === -27) return { kind: "badAddress", detail: "" };
+  return { kind: "unknown", detail: description || String(code) };
 }

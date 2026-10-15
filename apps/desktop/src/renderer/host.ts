@@ -5,6 +5,7 @@ import type { ActionResult, DiscordView, HostAction, HostShortcut, HostViewState
 import { shortcutForKey } from "../shared/shortcut-keys";
 import type { SettingsSection } from "./components/settings/settings-index";
 import { numberedGames } from "./shortcuts";
+import { setLanguage } from "./i18n";
 import { applyTheme } from "./theme";
 
 export const api = window.tavoraHost;
@@ -14,7 +15,11 @@ api.onState((next) => (state.value = next));
 void api.getState().then((initial) => {
   if (initial && !state.value) state.value = initial;
 });
-watch(state, (next) => next && applyTheme(next.appearance));
+watch(state, (next) => {
+  if (!next) return;
+  applyTheme(next.appearance);
+  setLanguage(next.language.resolved);
+});
 
 /** The Discord panel's connection and voice channel; it has its own channel because speaking changes often. */
 export const discord = shallowRef<DiscordView | null>(null);

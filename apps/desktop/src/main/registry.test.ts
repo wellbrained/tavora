@@ -92,9 +92,9 @@ describe("describeModules", () => {
     await makeModule(own, "nested/deeper", "local.me.deeper");
     const modules = await discoverModules({ official: [official], local: [dev, own] });
     const info = await describeModules(own, modules);
-    expect(info.get("tavora.notes")).toEqual({ origin: "Ships with Tavora", removable: false });
-    expect(info.get("local.dev.tool")).toMatchObject({ removable: false, origin: expect.stringContaining("development folder") });
-    expect(info.get("local.me.mine")).toEqual({ origin: "Your modules folder, in mine", removable: true });
+    expect(info.get("tavora.notes")).toEqual({ origin: { kind: "official", folder: "notes" }, removable: false });
+    expect(info.get("local.dev.tool")).toEqual({ origin: { kind: "dev", folder: "tool" }, removable: false });
+    expect(info.get("local.me.mine")).toEqual({ origin: { kind: "own", folder: "mine" }, removable: true });
     // Found two levels down: not a direct child, so Settings leaves it alone.
     expect(info.has("local.me.deeper")).toBe(false);
   });

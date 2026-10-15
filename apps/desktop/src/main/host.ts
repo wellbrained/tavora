@@ -21,6 +21,8 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { ActionResult, AppearanceView, BrowserCommand, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
+import { resolveLanguage, translate, type Language } from "../shared/i18n";
+import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, type SavedLayout } from "./layout";
@@ -83,7 +85,7 @@ import { siteOfUrl } from "./browser-url";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
 import { BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, discordModule, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
-import { DiscordConnection, DiscordError, DISCORD_CLIENT_ID } from "./discord";
+import { DiscordConnection, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
 import {
@@ -168,6 +170,8 @@ export interface HostOptions {
   hidden?: boolean;
   /** Tests only: pretend the system is in this mode, so a test does not depend on the PC it runs on. */
   systemTheme?: "dark" | "light" | undefined;
+  /** Development and tests only: what the system's language is taken to be, instead of the real one. */
+  systemLocale?: string | undefined;
   /**
    * Development only: the Vite dev server that serves the host UI with hot
    * reload, instead of the built files in `rendererDir`.
@@ -404,21 +408,21 @@ export class Host {
     const dir = userModulesDir(this.options);
     await mkdir(dir, { recursive: true });
     const error = await shell.openPath(dir);
-    if (error) throw new LibraryError(`Couldn't open the modules folder: ${error}`);
+    if (error) throw new LibraryError("error.openModulesFolder", { problem: error });
   }
 
   /** Moves a module out of the player's modules folder (to the recycle bin) and forgets it. */
   private async removeModule(moduleId: string): Promise<void> {
     const module = this.modules.get(moduleId);
     if (!module || !this.moduleInfo.get(moduleId)?.removable) {
-      throw new LibraryError("Only modules in your own modules folder can be removed here.");
+      throw new LibraryError("error.removeOnlyOwn");
     }
     try {
       // Test runs keep the window hidden and have no recycle bin to rely on.
       if (this.options.hidden) await rm(module.root, { recursive: true, force: true });
       else await shell.trashItem(module.root);
     } catch {
-      throw new LibraryError("Couldn't move the module to the recycle bin. Close anything using its folder and try again.");
+      throw new LibraryError("error.removeFailed");
     }
     await this.reloadModules();
   }
@@ -496,7 +500,7 @@ export class Host {
     const dir = path.join(this.options.userData, "themes");
     await mkdir(dir, { recursive: true });
     const error = await shell.openPath(dir);
-    if (error) throw new LibraryError(`Couldn't open the themes folder: ${error}`);
+    if (error) throw new LibraryError("error.openThemesFolder", { problem: error });
   }
 
   /** The text of Settings > Copy diagnostic info. */
@@ -563,20 +567,20 @@ export class Host {
 
     ipcMain.handle("host:get-state", (event) => (fromHost(event) ? this.viewState() : null));
     ipcMain.handle("host:action", async (event, raw: unknown): Promise<ActionResult> => {
-      if (!fromHost(event)) return { ok: false, error: "Not allowed." };
+      if (!fromHost(event)) return { ok: false, error: translate(this.language, "error.notAllowed") };
       const action = parseAction(raw);
-      if (!action) return { ok: false, error: "Tavora did not understand that request." };
+      if (!action) return { ok: false, error: translate(this.language, "error.notUnderstood") };
       try {
         if (action.type === "share-icons") return await this.shareIcons(action.gameIds);
         if (action.type === "import-steam-games") return this.importSteam(action.games);
         const id = await this.perform(action);
         return id === undefined ? { ok: true } : { ok: true, id };
       } catch (error) {
-        if (error instanceof LibraryError || error instanceof IconError || error instanceof WorkspaceError || error instanceof DiscordError) {
-          return { ok: false, error: error.message };
+        if (error instanceof PlayerError) {
+          return { ok: false, error: translate(this.language, error.key, error.params) };
         }
         console.error(`[tavora] ${action.type} failed`, error);
-        return { ok: false, error: "Something went wrong. Please try again." };
+        return { ok: false, error: translate(this.language, "error.generic") };
       } finally {
         this.pushState();
       }
@@ -595,9 +599,9 @@ export class Host {
       return { ...result, games: result.games.filter((game) => !this.library.games[game.id]) };
     });
     ipcMain.handle("host:steam-library", async (event, profile: unknown): Promise<SteamLibraryResult> => {
-      if (!fromHost(event) || typeof profile !== "string") return { status: "error", error: "Tavora did not understand that request." };
-      if (!this.library.onlineSearch) return { status: "error", error: "Turn on Online game search in Settings to import from Steam." };
-      const result = await fetchSteamLibrary({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL }, profile);
+      if (!fromHost(event) || typeof profile !== "string") return { status: "error", error: translate(this.language, "error.notUnderstood") };
+      if (!this.library.onlineSearch) return { status: "error", error: translate(this.language, "error.onlineOff") };
+      const result = await fetchSteamLibrary({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL, language: this.language }, profile);
       return result.status === "ok" ? steamLibraryView(this.library, result.games) : result;
     });
     ipcMain.on("host:panel-bounds", (event, bounds: unknown) => {
@@ -732,13 +736,13 @@ export class Host {
         const dir = backupsDir(this.options.userData);
         await mkdir(dir, { recursive: true });
         const problem = await shell.openPath(dir);
-        if (problem) throw new LibraryError(`Couldn't open the folder: ${problem}`);
+        if (problem) throw new LibraryError("error.openFolder", { problem });
         return;
       }
       case "download-update":
         return this.updates?.download();
       case "check-for-updates":
-        if (!this.updates) throw new LibraryError("Updates only work in the installed Tavora, not in a development run.");
+        if (!this.updates) throw new LibraryError("error.updatesDev");
         return this.updates.check();
       case "restart-to-update":
         return this.updates?.restartNow();
@@ -746,6 +750,9 @@ export class Host {
         library.onlineSearch = action.enabled;
         // Turned on: games without an icon may find one on the service, and the share list can be built.
         if (action.enabled) this.fetchIconsSoon();
+        break;
+      case "set-language":
+        library.language = action.language;
         break;
       case "set-steam-profile":
         library.steamProfile = action.profile;
@@ -756,7 +763,7 @@ export class Host {
         break;
       case "set-theme":
         if (!this.themes.get(action.themeId)?.theme.variations.some((variation) => variation.id === action.variationId)) {
-          throw new LibraryError("That theme is not installed any more.");
+          throw new LibraryError("error.themeGone");
         }
         library.theme = { id: action.themeId, variation: action.variationId };
         if (action.fixed) library.followSystem = false;
@@ -768,7 +775,7 @@ export class Host {
         } else {
           const { theme } = resolveTheme(this.themes, library.theme);
           const variation = variationForMode(theme, library.theme.variation, action.mode);
-          if (variation.mode !== action.mode) throw new LibraryError(` has no ${action.mode} version.`);
+          if (variation.mode !== action.mode) throw new LibraryError("error.themeNoMode", { mode: translate("en", action.mode === "dark" ? "common.dark" : "common.light") });
           library.theme = { id: theme.id, variation: variation.id };
           library.followSystem = false;
         }
@@ -822,7 +829,7 @@ export class Host {
       case "browser-set-shared":
       case "browser-set-adblock": {
         const site = siteOfUrl(this.browser(action.instanceId).state.url);
-        if (!site) throw new LibraryError("Open a page first.");
+        if (!site) throw new LibraryError("error.openPageFirst");
         if (action.type === "browser-set-shared") setSiteListed(library, "sharedSites", site, action.shared);
         else setSiteListed(library, "adblockOff", site, !action.enabled);
         this.browserSitesChanged();
@@ -868,7 +875,7 @@ export class Host {
   }
 
   private openGame(gameId: string): void {
-    if (!isLive(this.library, gameId)) throw new LibraryError("That game no longer exists.");
+    if (!isLive(this.library, gameId)) throw new LibraryError("error.gameGone");
     if (this.gameId === gameId) return;
     this.showScreen("game");
     markPlayed(this.library, gameId, new Date());
@@ -877,11 +884,11 @@ export class Host {
   }
 
   private async chooseGameImage(gameId: string): Promise<void> {
-    if (!isLive(this.library, gameId)) throw new LibraryError("That game no longer exists.");
+    if (!isLive(this.library, gameId)) throw new LibraryError("error.gameGone");
     const picked = await dialog.showOpenDialog(this.window, {
-      title: "Choose an icon",
+      title: translate(this.language, "dialog.chooseIcon"),
       properties: ["openFile"],
-      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
+      filters: [{ name: translate(this.language, "dialog.images"), extensions: ["png", "jpg", "jpeg", "webp"] }],
     });
     const source = picked.filePaths[0];
     if (picked.canceled || !source) return;
@@ -1035,8 +1042,8 @@ export class Host {
       this.pushState();
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
-    if (tried === 0) return { ok: false, error: "There is nothing to share right now." };
-    if (unreachable && shared === 0) return { ok: false, error: "Tavora could not reach its service. Please try again later." };
+    if (tried === 0) return { ok: false, error: translate(this.language, "error.nothingToShare") };
+    if (unreachable && shared === 0) return { ok: false, error: translate(this.language, "error.unreachable") };
     return { ok: true, shared };
   }
 
@@ -1071,7 +1078,7 @@ export class Host {
     if (!game || !module || !this.supportsGame(module, game.id)) return;
     const records = this.records(game.id);
     if (records.length >= LAYOUT_LIMITS.panels) {
-      throw new WorkspaceError(`A workspace can have up to ${LAYOUT_LIMITS.panels} panels. Close one to open another.`);
+      throw new WorkspaceError("error.panelLimit", { max: LAYOUT_LIMITS.panels });
     }
     const record = { instanceId: randomUUID(), moduleId };
     records.push(record);
@@ -1103,7 +1110,7 @@ export class Host {
 
   private browser(instanceId: string): BrowserPanel {
     const view = this.views.get(instanceId);
-    if (!(view instanceof BrowserPanel)) throw new WorkspaceError("That panel is no longer open.");
+    if (!(view instanceof BrowserPanel)) throw new WorkspaceError("error.panelClosed");
     return view;
   }
 
@@ -1193,7 +1200,7 @@ export class Host {
   /** Deletes the Browser's cookies, logins, storage and caches: the current game's, or the ones shared by all games. */
   private async clearBrowserData(scope: "game" | "shared"): Promise<void> {
     const game = this.game;
-    if (scope === "game" && !game) throw new LibraryError("Open a game first.");
+    if (scope === "game" && !game) throw new LibraryError("error.openGameFirst");
     const ses = this.browserSessionFor(scope, game?.id ?? "");
     await ses.clearStorageData();
     await ses.clearCache();
@@ -1205,7 +1212,7 @@ export class Host {
 
   private currentWorkspace(): GameWorkspace {
     const game = this.game;
-    if (!game) throw new WorkspaceError("Open a game first.");
+    if (!game) throw new WorkspaceError("error.openGameFirst");
     return this.gameWorkspace(game.id);
   }
 
@@ -1218,7 +1225,7 @@ export class Host {
 
   /** Rearranges the open panels into a template's slots, in the order they are laid out now. */
   private applyLayoutTemplate(template: LayoutTemplate | undefined): void {
-    if (!template) throw new WorkspaceError("That layout template no longer exists.");
+    if (!template) throw new WorkspaceError("error.templateGone");
     const workspace = this.currentWorkspace();
     const laidOut = layoutPanels(workspace.layout);
     const rest = workspace.instances.map((record) => record.instanceId).filter((id) => !laidOut.includes(id));
@@ -1229,17 +1236,17 @@ export class Host {
 
   private snapshot(snapshotId: string): Snapshot {
     const found = this.currentWorkspace().snapshots.find((snapshot) => snapshot.id === snapshotId);
-    if (!found) throw new WorkspaceError("That layout no longer exists.");
+    if (!found) throw new WorkspaceError("error.layoutGone");
     return found;
   }
 
   private snapshotName(name: string, except?: string): string {
     const trimmed = name.trim();
-    if (!trimmed) throw new WorkspaceError("Give the layout a name.");
+    if (!trimmed) throw new WorkspaceError("error.layoutNeedsName");
     const taken = this.currentWorkspace().snapshots.some(
       (snapshot) => snapshot.id !== except && snapshot.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase(),
     );
-    if (taken) throw new WorkspaceError(`There is already a layout called "${trimmed}".`);
+    if (taken) throw new WorkspaceError("error.layoutTaken", { name: trimmed });
     return trimmed;
   }
 
@@ -1248,7 +1255,7 @@ export class Host {
     const workspace = this.currentWorkspace();
     const layout = workspace.layout;
     const panels = layoutPanels(layout);
-    if (!layout || panels.length === 0) throw new WorkspaceError("Open a module first, then save the layout.");
+    if (!layout || panels.length === 0) throw new WorkspaceError("error.layoutNeedsModule");
     const moduleOf = new Map(workspace.instances.map((record) => [record.instanceId, record.moduleId]));
     return {
       layout: structuredClone(layout),
@@ -1260,7 +1267,7 @@ export class Host {
   private saveSnapshot(name: string): string {
     const workspace = this.currentWorkspace();
     if (workspace.snapshots.length >= MAX_SNAPSHOTS) {
-      throw new WorkspaceError(`A game can have up to ${MAX_SNAPSHOTS} saved layouts. Delete one to save another.`);
+      throw new WorkspaceError("error.layoutLimit", { max: MAX_SNAPSHOTS });
     }
     const snapshot: Snapshot = { id: randomUUID(), name: this.snapshotName(name), ...this.captureLayout() };
     workspace.snapshots.push(snapshot);
@@ -1550,7 +1557,7 @@ export class Host {
         provenance: module.provenance,
         development: isDevelopmentModule(module.manifest.id),
         version: module.manifest.version,
-        origin: this.moduleInfo.get(module.manifest.id)?.origin ?? "",
+        origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
       })),
       moduleProblems: this.moduleProblems.map((problem) => ({ ...problem })),
@@ -1576,9 +1583,15 @@ export class Host {
       },
       restartPending: library.grayscaleText !== this.options.grayscaleText,
       appearance: this.appearanceView(),
+      language: { setting: library.language, resolved: this.language },
       appVersion: app.getVersion(),
       update: this.updates?.state ?? { status: "idle", checkedAt: null, failed: false },
     };
+  }
+
+  /** The language of Tavora's texts now. */
+  get language(): Language {
+    return resolveLanguage(this.library.language, this.options.systemLocale ?? app.getLocale());
   }
 
   private appearanceView(): AppearanceView {

@@ -118,6 +118,7 @@ if (!app.requestSingleInstanceLock()) {
         grayscaleText,
         restart,
         hidden: !app.isPackaged && process.env.TAVORA_HIDDEN === "1",
+        systemLocale: !app.isPackaged ? process.env.TAVORA_LOCALE : undefined,
         systemTheme: !app.isPackaged && (process.env.TAVORA_SYSTEM_THEME === "dark" || process.env.TAVORA_SYSTEM_THEME === "light") ? process.env.TAVORA_SYSTEM_THEME : undefined,
         devServer,
         // A packaged app only ever talks to api.mytavora.app.
