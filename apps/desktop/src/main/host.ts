@@ -599,6 +599,7 @@ export class Host {
         iconDir: this.steamIconDir,
         steamDir: await findSteamDir(),
         baseUrl: this.options.steamIcons,
+        serviceUrl: this.options.apiUrl,
         shouldRun: () => !this.window.isDestroyed(),
         onChange: () => {
           this.saveLibrary();

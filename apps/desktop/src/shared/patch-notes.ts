@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.4.3",
+    date: "2026-10-15",
+    title: "Icons for games you have not installed",
+    notes: [
+      "Tavora now keeps a small, growing set of game icons for games that are not installed on your PC. When Online game search is on, a game you added shows its icon from there. Tavora asks only for the icons of your own games, and the service keeps no log of what is asked.",
+      "Game names and icons belong to their publishers. Tavora is not affiliated with them, and Settings says so.",
+    ],
+  },
+  {
     version: "0.4.2",
     date: "2026-10-15",
     title: "Game icons from your launchers",

@@ -30,6 +30,9 @@ New-Item -ItemType Directory -Path $staging | Out-Null
 try {
   Copy-Item $bundle (Join-Path $staging 'server.mjs')
   Copy-Item $dataset (Join-Path $staging 'games.sqlite')
+  # The hosted game icons travel with the release. They are only served once TAKEDOWN_CONTACT is set in shared/production.env.
+  $icons = Join-Path $api 'data\icons'
+  if (Test-Path (Join-Path $icons 'index.json')) { Copy-Item $icons (Join-Path $staging 'icons') -Recurse }
   & tar.exe -czf $archive -C $staging .
   if ($LASTEXITCODE -ne 0) { throw 'Archive failed.' }
   $deploy = Join-Path $api 'deploy'

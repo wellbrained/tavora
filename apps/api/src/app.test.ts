@@ -151,3 +151,62 @@ describe("rate limit", () => {
     expect(limiter.check("x", 1001)).toBe(0);
   });
 });
+
+
+describe("icon endpoints", () => {
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+  const icons = {
+    list: () => [{ id: "diablo-iv", names: ["Diablo IV", "Diablo 4"], sha256: "a".repeat(64), size: png.byteLength }],
+    file: (id: string) => (id === "diablo-iv" ? png : null),
+  };
+  const app = createApp({ db, icons, takedownContact: " legal@example.test " });
+
+  it("lists the icons with the notice and where to ask for a removal", async () => {
+    const response = await get(app, "/v1/icons");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { notice: string; takedown: string; icons: unknown[] };
+    expect(body.takedown).toBe("legal@example.test");
+    expect(body.notice).toMatch(/not affiliated with, endorsed by or sponsored by/);
+    expect(body.notice).toMatch(/trademarks/);
+    expect(body.icons).toEqual(icons.list());
+  });
+
+  it("serves an icon file unchanged, as the same for everyone, and may be cached", async () => {
+    const response = await get(app, "/v1/icons/diablo-iv.png");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect(response.headers.get("cache-control")).toBe("public, max-age=86400");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(png);
+    expect((await get(app, "/v1/icons")).headers.get("cache-control")).toBe("public, max-age=300");
+  });
+
+  it("answers 404 for an icon that is not hosted and for names that are not an id with .png", async () => {
+    for (const path of ["/v1/icons/other.png", "/v1/icons/diablo-iv", "/v1/icons/diablo-iv.jpg", "/v1/icons/Diablo-IV.png", "/v1/icons/..%2Fx.png", "/v1/icons/a.b.png"]) {
+      expect((await get(app, path)).status).toBe(404);
+    }
+  });
+
+  it("offers nothing without a takedown contact", async () => {
+    for (const contact of [undefined, "", "   "]) {
+      const unmanned = createApp({ db, icons, ...(contact === undefined ? {} : { takedownContact: contact }) });
+      expect((await get(unmanned, "/v1/icons")).status).toBe(503);
+      expect((await get(unmanned, "/v1/icons/diablo-iv.png")).status).toBe(404);
+    }
+  });
+
+  it("lists no icons when none are hosted, and rate-limits like the rest", async () => {
+    const empty = createApp({ db, takedownContact: "legal@example.test", rateLimiter: createRateLimiter({ limit: 2, windowMs: 60_000 }) });
+    expect(await (await get(empty, "/v1/icons")).json()).toMatchObject({ icons: [] });
+    await get(empty, "/v1/icons");
+    const limited = await get(empty, "/v1/icons/diablo-iv.png");
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBeTruthy();
+  });
+
+  it("leaves everything else uncached, and only GET is routed", async () => {
+    expect((await get(app, "/v1/games/search?q=elden")).headers.get("cache-control")).toBe("no-store");
+    expect((await get(app, "/v2/icons")).headers.get("cache-control")).toBe("no-store");
+    expect((await app.request("http://tavora.test/v1/icons", { method: "POST" })).status).toBe(404);
+  });
+});
