@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.5.23",
+    date: "2026-10-16",
+    title: "Behind the scenes",
+    notes: ["Nothing changes for players. Testing tools now build the app first when it is missing."],
+  },
+  {
     version: "0.5.22",
     date: "2026-10-16",
     title: "Volume and mute for each person in Discord",

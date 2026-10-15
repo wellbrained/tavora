@@ -4,6 +4,7 @@ import { defineConfig } from "@playwright/test";
 // run as a non-root user so Chromium's OS sandbox stays enabled.
 export default defineConfig({
   testDir: "test/e2e",
+  globalSetup: "./test/e2e/global-setup.ts",
   timeout: 60_000,
   workers: 1,
   reporter: "list",
