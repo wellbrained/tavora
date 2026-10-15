@@ -168,7 +168,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", closeOutside))
 
       <div class="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <div v-if="!call" class="flex flex-col items-center gap-3 p-3 text-center">
-          <p class="text-muted-foreground" data-testid="discord-no-call">{{ t("discord.panel.noCall") }}</p>
+          <p class="text-muted-foreground" data-testid="discord-no-call">{{ t(others.length ? "discord.panel.noCall" : "discord.panel.noCallEmpty") }}</p>
         </div>
 
         <ul class="min-h-0" data-testid="discord-channels">
