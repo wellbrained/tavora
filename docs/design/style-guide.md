@@ -118,8 +118,8 @@ Everything sits on a 4 px grid with one 8 px corner radius.
   multicolour icons.
 - **Logo:** the flame mark sits at the top of the rail (32 px) and is the Home
   button. The full emblem appears once on Home (about 120 px). The app icon and
-  taskbar use the emblem kit files. The logo is never recoloured, stretched,
-  outlined or placed on a light background. Vector masters live in
+  taskbar use the emblem kit files. The logo is never recoloured, stretched
+  or outlined. It sits on a light background only in light themes (since 0.5.0). Vector masters live in
   [`brand/logo`](../../brand/logo/README.md).
 - **Game art:** Tavora ships no game logos or cover art. Games show a monogram
   (for example PE2 for Path of Exile 2) on a tone derived from the game id, or
@@ -188,7 +188,7 @@ but Tavora's usability rules always win.
 
 | Area | Milestone C | Later |
 | --- | --- | --- |
-| Theme | Tavora default only (this guide, dark). Since 0.5.0: installed theme packages, each with up to four variations; Tavora ships Tavora (Dark, OLED, High contrast), Nightfall (Dusk, Midnight) and Hearthwood (Dark) | Published themes from the catalog |
+| Theme | Tavora default only (this guide, dark). Since 0.5.0: installed theme packages, each with up to four variations; Tavora ships Tavora (Dark, OLED, High contrast, Light), Nightfall (Dusk, Midnight) and Hearthwood (Dark) | Published themes from the catalog |
 | Personal overrides | None | Accent colour, density, corner radius (4 to 12 px), base text size (13 to 16 px), clamped |
 | Fonts | Inter and JetBrains Mono | Themes may bundle any font under OFL, Apache 2.0 or MIT, packaged locally |
 | Rail | Collapse or expand, width 180 to 420 px | Same |

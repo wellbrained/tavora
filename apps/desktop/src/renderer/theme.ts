@@ -19,5 +19,6 @@ export function applyTheme(appearance: AppearanceView): void {
   for (const [name, value] of Object.entries(variation.colors)) root.setProperty(`--${name}`, value);
   root.setProperty("--radius", `${variation.radius}px`);
   root.setProperty("color-scheme", variation.mode);
-  document.documentElement.dataset.themeMode = variation.mode;
+  // shadcn-vue's dark: variants follow the theme's mode.
+  document.documentElement.classList.toggle("dark", variation.mode === "dark");
 }
