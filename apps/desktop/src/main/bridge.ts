@@ -7,6 +7,7 @@ import {
   type EventName,
   type Events,
   type HandshakeResult,
+  type NetworkResponse,
   type TavoraGame,
   type TavoraTheme,
   type TavoraViewport,
@@ -35,7 +36,8 @@ export interface BridgeContext {
   game: TavoraGame;
   data: ModuleData;
   panelState: PanelStateStore;
-  capabilities: ReadonlySet<Capability>;
+  /** What the player has granted this module right now; asked on every gated call, so a revoke takes effect at once. */
+  capabilities(): ReadonlySet<Capability>;
   getViewport(): TavoraViewport;
   getTheme(): TavoraTheme;
   getLanguage(): string;
@@ -43,6 +45,8 @@ export interface BridgeContext {
   isSuspended(): boolean;
   /** Opens a web address in a Browser panel. Throws a HostError when the panel did not just get a click or key press, or the address is not a web address. */
   openLink(url: string): void;
+  /** network.fetch: checks the grant on every hop and makes the request (network.ts). Throws HostErrors. */
+  fetch(params: unknown): Promise<NetworkResponse>;
   /**
    * The module started (true) or finished (false) having requests answered; `served` counts the
    * answered ones apart from the handshake. The host uses it to tell when a page has its data.
@@ -124,6 +128,21 @@ const handlers = new Map<string, Handler>([
     },
   ],
 
+  [
+    "network.fetch",
+    async (s, params) => {
+      // Without any granted host the answer is the same as for every other capability not granted (G9).
+      if (!s.context.capabilities().has("network")) throw new HostError("PERMISSION_DENIED", `network.fetch needs the "network" permission`, { capability: "network" });
+      if (s.networkInFlight >= LIMITS.maxNetworkInFlight) throw new HostError("BAD_REQUEST", `at most ${LIMITS.maxNetworkInFlight} network requests at once`);
+      s.networkInFlight++;
+      try {
+        return await s.context.fetch(params);
+      } finally {
+        s.networkInFlight--;
+      }
+    },
+  ],
+
   ["panel.getState", (s, params) => (noParams(params), s.context.panelState.get(s.context.instanceId))],
   [
     "panel.setState",
@@ -144,6 +163,8 @@ export class BridgeSession {
   private served = 0;
   private closed = false;
   private handshakeDone = false;
+  /** network.fetch calls of this panel still running. */
+  networkInFlight = 0;
 
   constructor(
     private readonly port: BridgePort,
@@ -193,7 +214,7 @@ export class BridgeSession {
       protocol: PROTOCOL_VERSION,
       host: { name: "tavora-desktop", version: this.context.hostVersion },
       module: { id: this.context.moduleId, version: this.context.moduleVersion },
-      capabilities: [...this.context.capabilities],
+      capabilities: [...this.context.capabilities()],
     };
   }
 
@@ -234,7 +255,7 @@ export class BridgeSession {
         const capability = RESERVED_METHODS[method]!;
         // Nothing can grant these yet; the check is here so the error shape
         // stays the same once something can.
-        if (!this.context.capabilities.has(capability)) {
+        if (!this.context.capabilities().has(capability)) {
           throw new HostError("PERMISSION_DENIED", `${method} needs the "${capability}" permission`, { capability });
         }
         throw new HostError("UNKNOWN_METHOD", `${method} is not available in this host version`);

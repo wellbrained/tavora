@@ -6,6 +6,7 @@ import {
   BLOB_PATH,
   CLIPBOARD_PATH,
   HELLO_MESSAGE,
+  LIMITS,
   PORT_MESSAGE,
   PROTOCOL_VERSION,
   type BlobInfo,
@@ -22,6 +23,8 @@ import {
   type JsonValue,
   type MethodName,
   type Methods,
+  type NetworkRequest,
+  type NetworkResponse,
   type PutDocumentParams,
   type TavoraDocument,
   type TavoraGame,
@@ -39,6 +42,8 @@ export type {
   ErrorCode,
   HandshakeResult,
   JsonValue,
+  NetworkRequest,
+  NetworkResponse,
   PutDocumentParams,
   TavoraDocument,
   TavoraGame,
@@ -144,6 +149,14 @@ export interface TavoraSDK {
      */
     open(url: string): Promise<void>;
   };
+  network: {
+    /**
+     * Makes a web request through Tavora, to a host listed in `permissions.network` that the player
+     * granted (PERMISSION_DENIED otherwise). HTTPS only, no cookies, at most 5 MB back and 15 seconds.
+     * Error statuses such as 404 are answers, not errors; NETWORK_ERROR means no answer came.
+     */
+    fetch(url: string, init?: Omit<NetworkRequest, "url">): Promise<NetworkResponse>;
+  };
   lifecycle: {
     /** The panel is hidden; pause timers and animations. Called immediately if already suspended. */
     onSuspend(fn: () => void): Unsubscribe;
@@ -236,13 +249,13 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
   };
   port.start();
 
-  function call<M extends MethodName>(method: M, params?: Methods[M]["params"]): Promise<Methods[M]["result"]> {
+  function call<M extends MethodName>(method: M, params?: Methods[M]["params"], timeoutMs = requestTimeoutMs): Promise<Methods[M]["result"]> {
     const id = nextId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(id);
         reject(new TavoraError({ code: "TIMEOUT", message: `${method} timed out` }));
-      }, requestTimeoutMs);
+      }, Math.max(timeoutMs, requestTimeoutMs));
       pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
       port.postMessage({ v: PROTOCOL_VERSION, id, method, params });
     });
@@ -350,6 +363,10 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       open: async (url) => {
         await call("links.open", { url });
       },
+    },
+    network: {
+      // The host gives up after its own limit; this waits a little longer so its answer arrives first.
+      fetch: (url, init = {}) => call("network.fetch", { ...init, url }, LIMITS.networkTimeoutMs + 5000),
     },
     lifecycle: {
       onSuspend: (fn) => on("lifecycle.suspend", fn),

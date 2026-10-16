@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.16.7",
+    date: "2026-10-16",
+    title: "Groundwork for module permissions",
+    notes: [
+      "Behind the scenes, Tavora can now let a module reach websites you allowed for it, and only those, with Tavora making each request so the module never gets your cookies or sign-ins. Nothing changes for you yet: the dialog that asks you comes in the next version, and until then no module can reach the internet.",
+    ],
+  },
+  {
     version: "0.16.6",
     date: "2026-10-16",
     title: "Minimum age for accounts",

@@ -11,6 +11,7 @@ import { serveBlobs } from "./blob-http";
 import { serveClipboard } from "./clipboard-http";
 import { isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
+import { moduleFetch, type TestHosts } from "./network";
 import type { InstalledModule } from "./registry";
 import type { InstanceStatus } from "../shared/host-api";
 import type { ModuleData, PanelStateStore } from "./storage";
@@ -40,6 +41,10 @@ export interface ModuleViewOptions {
   onReveal?(): void;
   /** The player opened a web address from the module (links.open); it was checked to be one. */
   onOpenLink(url: string): void;
+  /** Hosts the player granted this module for network.fetch, as installed now; asked on every call and redirect. */
+  networkHosts(): ReadonlySet<string>;
+  /** Test runs only: hosts mapped to a local server (network.ts). */
+  testHosts?: TestHosts;
 }
 
 /** How often the host checks that a module's page still runs. */
@@ -105,8 +110,9 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
     });
   });
 
-  // Network mediation does not exist yet, so modules get none: every request
-  // that is not for the module's own bundle is cancelled.
+  // The page itself gets no network: every request that is not for the
+  // module's own bundle is cancelled. Granted hosts are reached only through
+  // network.fetch, which the main process makes (network.ts).
   ses.webRequest.onBeforeRequest((details, callback) => {
     const allowed = details.url.startsWith(`${origin}/`) || details.url.startsWith("devtools://");
     callback({ cancel: !allowed });
@@ -333,8 +339,13 @@ export class ModuleView {
         game,
         data,
         panelState,
-        // No permission can be granted yet (see apps/docs/reference/protocol.md).
-        capabilities: new Set<Capability>(),
+        capabilities: () => new Set<Capability>(this.options.networkHosts().size > 0 ? ["network"] : []),
+        fetch: (params) =>
+          moduleFetch(params, {
+            allowedHosts: this.options.networkHosts,
+            userAgent: `Tavora/${hostVersion} (module ${module.manifest.id})`,
+            ...(this.options.testHosts ? { testHosts: this.options.testHosts } : {}),
+          }),
         getViewport: () => ({ ...this.viewport }),
         isSuspended: () => this.suspended,
         getTheme: this.options.getTheme,

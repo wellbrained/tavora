@@ -141,6 +141,24 @@ describe("requests", () => {
     await expect(tavora.game.getCurrent()).rejects.toMatchObject({ code: "TIMEOUT" });
   });
 
+  it("sends network.fetch with the address and options, and waits longer than for other calls", async () => {
+    const answer = { status: 200, url: "https://api.example.com/v1", headers: {}, body: "{}" };
+    let reply: (() => void) | undefined;
+    const host = fakeHost((request) => {
+      if (request.method === "bridge.handshake") return { result: handshake };
+      reply = () => host.raw({ v: PROTOCOL_VERSION, id: request.id, ok: true, result: answer });
+      return undefined;
+    });
+    hosts.push(host);
+    const tavora = await sdk.connect({ requestTimeoutMs: 20 });
+    const pending = tavora.network.fetch("https://api.example.com/v1", { method: "POST", body: "{}", responseType: "text" });
+    // Past the ordinary request timeout, a network request is still waiting for its answer.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    reply!();
+    await expect(pending).resolves.toEqual(answer);
+    expect(host.requests.at(-1)).toMatchObject({ method: "network.fetch", params: { url: "https://api.example.com/v1", method: "POST", body: "{}", responseType: "text" } });
+  });
+
   it("ignores messages for another protocol version", async () => {
     const host = fakeHost(standard);
     hosts.push(host);

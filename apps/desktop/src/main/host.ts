@@ -34,6 +34,8 @@ import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
 import { applyOwners, forgetOwner, installZip, readOwnerRecords } from "./installer";
+import { GrantStore } from "./grants";
+import type { TestHosts } from "./network";
 import { shortcutFor } from "./shortcuts";
 import { IconError, importIcon, removeIcon } from "./icons";
 import { readJsonOrSetAside } from "./json";
@@ -193,6 +195,8 @@ export interface HostOptions {
   systemLocale?: string | undefined;
   /** Tests only: what a module may keep in its browser storage, in bytes, instead of the usual limit. */
   moduleStorageLimit?: number | undefined;
+  /** Tests only: host names network.fetch reaches on a local server, over plain http (network.ts). */
+  testNetworkHosts?: TestHosts | undefined;
   /**
    * Development only: the Vite dev server that serves the host UI with hot
    * reload, instead of the built files in `rendererDir`.
@@ -235,6 +239,8 @@ export class Host {
   private notice: string | null = null;
   /** Every (owner, module) with saved settings or documents, for Settings > Modules. */
   private moduleData: { owner: string; moduleId: string }[] = [];
+  /** What the player granted each module (grants.ts); loaded before any module panel opens. */
+  private grants!: GrantStore;
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
   private pendingLink: string | null = null;
   /** Where modules keep their pictures. */
@@ -375,6 +381,7 @@ export class Host {
 
     const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
     host.moduleData = await listModuleData(userData, host.files.root());
+    host.grants = await GrantStore.load(userData);
     // Native menus, dialogs and scrollbars follow the theme's mode.
     host.syncNativeTheme();
     await host.account.init();
@@ -533,8 +540,10 @@ export class Host {
     } catch {
       throw new LibraryError("error.removeFailed");
     }
-    // Its data stays under its owner, so the same publisher's module finds it again.
+    // Its data stays under its owner, so the same publisher's module finds it again. Its grants go:
+    // whatever is installed next under this id is asked again.
     await forgetOwner(this.options.userData, path.basename(module.root));
+    await this.grants.revoke(module.owner, moduleId);
     await this.reloadModules();
   }
 
@@ -1691,6 +1700,8 @@ export class Host {
       onStorageOver: () => void this.purgeModuleStorage(module.manifest.id, game.id),
       onReveal: () => this.applyBounds(),
       onOpenLink: (url) => this.openLinkFromModule(url),
+      networkHosts: () => this.networkHostsOf(record.moduleId),
+      ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
       onStatus: (status) => {
         if (!measured && status === "ready") {
           measured = true;
@@ -1708,6 +1719,12 @@ export class Host {
     view.view.setVisible(false);
     view.suspend();
     this.window.contentView.addChildView(view.view);
+  }
+
+  /** Hosts a module may reach now: its grant, as far as the module installed now still asks for them. */
+  private networkHostsOf(moduleId: string): ReadonlySet<string> {
+    const module = this.modules.get(moduleId);
+    return new Set(module ? this.grants.allowed(module).network : []);
   }
 
   private createBrowser(record: InstanceRecord, game: TavoraGame): void {

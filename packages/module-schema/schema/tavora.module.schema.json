@@ -127,12 +127,18 @@
       "required": [
         "network"
       ],
-      "description": "Capabilities the module asks for. None can be granted yet, so every list must be empty.",
+      "description": "What the module asks for. Each permission needs the player's grant before it works; the player is asked when they first add the module.",
       "properties": {
         "network": {
           "type": "array",
-          "maxItems": 0,
-          "description": "Hosts the module may reach through the host. Not supported yet: must be empty."
+          "maxItems": 32,
+          "uniqueItems": true,
+          "description": "Exact public host names the module may reach through network.fetch, such as api.example.com. HTTPS only; no scheme, port, wildcard, IP address or local name.",
+          "items": {
+            "type": "string",
+            "maxLength": 253,
+            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+(?!(?:[0-9]+|localhost|local|internal|arpa)$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+          }
         },
         "webAssembly": {
           "type": "boolean",
