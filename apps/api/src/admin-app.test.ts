@@ -40,7 +40,7 @@ const offer = (over: Record<string, unknown> = {}) => submissions.submit({ id: "
 
 describe("the page", () => {
   it("is served without a token, with a strict content security policy and no outside resources", async () => {
-    for (const path of ["/", "/admin.js", "/admin.css"]) {
+    for (const path of ["/", "/admin.js", "/admin.css", "/inter.woff2"]) {
       const response = await call(path, { token: null });
       expect(response.status).toBe(200);
       expect(response.headers.get("cache-control")).toBe("no-store");
@@ -50,6 +50,7 @@ describe("the page", () => {
       expect(policy).not.toContain("unsafe-inline");
       expect(policy).not.toContain("unsafe-eval");
       expect(policy).toContain("frame-ancestors 'none'");
+      expect(policy).toContain("font-src 'self'");
     }
     const html = await (await call("/", { token: null })).text();
     expect(html).not.toMatch(/https?:\/\//);
