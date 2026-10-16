@@ -71,6 +71,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["ai-usage-accounts", "integrations"],
   ["ai-usage-interval", "integrations"],
   ["ai-usage-style", "integrations"],
+  ["module-grants", "integrations"],
   ["shortcuts", "shortcuts"],
   ["welcome-tour", "general"],
   ["trash", "trash"],

@@ -1,4 +1,4 @@
-import { isGameId, isModuleId, isOwnerId } from "@tavora/module-schema";
+import { isGameId, isModuleId, isNetworkHost, isOwnerId, MAX_NETWORK_HOSTS } from "@tavora/module-schema";
 import type { BrowserCommand, HostAction, SteamImportGame } from "../shared/host-api";
 import { isSite, MAX_ADDRESS } from "./browser-url";
 import { isSnowflake } from "./discord-voice";
@@ -58,7 +58,17 @@ export function parseAction(raw: unknown): HostAction | null {
       return only() ? { type: a.type } : null;
     case "remove-module":
     case "move-local-data":
+    case "revoke-module":
       return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
+    case "grant-module":
+      return only("moduleId", "network") &&
+        isModuleId(a.moduleId) &&
+        Array.isArray(a.network) &&
+        a.network.length <= MAX_NETWORK_HOSTS &&
+        a.network.every(isNetworkHost) &&
+        new Set(a.network).size === a.network.length
+        ? { type: a.type, moduleId: a.moduleId, network: [...(a.network as string[])] }
+        : null;
     case "delete-module-data":
       return only("owner", "moduleId") && isOwnerId(a.owner) && isModuleId(a.moduleId) ? { type: a.type, owner: a.owner, moduleId: a.moduleId } : null;
     case "record-timing":

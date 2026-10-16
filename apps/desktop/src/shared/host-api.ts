@@ -390,6 +390,10 @@ export interface HostViewState {
     localDataWaiting: boolean;
     /** The icon from the module's manifest as a data address (PNG or WebP), or null. */
     icon: string | null;
+    /** What the module may do: what its manifest asks for (`asks`), what the player granted of it, and what is still to answer. */
+    permissions: { asks: ModulePermissions; granted: ModulePermissions; missing: ModulePermissions };
+    /** Games (ids in the library) with a panel of this module, for the dialogs that remove them. */
+    usedIn: string[];
   }[];
   /** Folders in the modules folder that could not be loaded, and why, for module authors. */
   moduleProblems: { folder: string; message: string }[];
@@ -418,6 +422,11 @@ export interface HostViewState {
   appearance: AppearanceView;
   /** The language setting, and the language it comes to now (the system's, when following it). */
   language: { setting: LanguageSetting; resolved: Language };
+}
+
+/** What a module may do as far as grants decide it (main/grants.ts): hosts for network.fetch. */
+export interface ModulePermissions {
+  network: string[];
 }
 
 /** Everything the host UI can ask the main process to do. Parsed strictly in main. */
@@ -490,8 +499,12 @@ export type HostAction =
   | { type: "open-modules-folder" }
   /** Looks for modules again, after the player changed their modules folder. */
   | { type: "reload-modules" }
-  /** Moves a module from the player's modules folder to the recycle bin; its data stays. */
+  /** Moves a module from the player's modules folder to the recycle bin, after removing its panels in every game; its data stays. */
   | { type: "remove-module"; moduleId: string }
+  /** The player's yes in the consent dialog: exactly the hosts it showed (only those the module still asks for are granted). */
+  | { type: "grant-module"; moduleId: string; network: string[] }
+  /** Takes back everything granted to a module, after removing its panels in every game; its data stays. */
+  | { type: "revoke-module"; moduleId: string }
   /** Asks for a module zip and installs it into the player's modules folder; answers with the module's id. */
   | { type: "install-module" }
   /** Deletes the data a module that is not installed left behind (owner as in leftoverModuleData). */

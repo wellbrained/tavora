@@ -1,7 +1,7 @@
 // Docking layouts as the main process stores them. The host UI owns the
 // docking itself; the main process only checks what it is asked to save
 // and keeps layouts in step with the panels that exist.
-import type { LayoutGroup, LayoutNode, SavedLayout } from "../shared/host-api";
+import type { LayoutGroup, LayoutNode, LayoutSplit, SavedLayout } from "../shared/host-api";
 import { templateWeight as weight, type LayoutTemplate } from "../shared/layout-templates";
 import { INSTANCE_ID } from "./ids";
 
@@ -117,6 +117,23 @@ export function pruneLayout(
     };
   }
   return { ...layout, root: { kind: "split", size: layout.root.size, children } };
+}
+
+/**
+ * Takes panels out without changing the arrangement: a group that loses some panels keeps the
+ * rest, and one that loses all of them stays as an empty slot, so the player sees where they were
+ * (decisions.md, module grants row of 2026-10-16).
+ */
+export function vacateLayout(layout: SavedLayout | null, remove: (id: string) => boolean): SavedLayout | null {
+  if (!layout) return null;
+  const group = (node: LayoutGroup): LayoutGroup => {
+    const panels = node.panels.filter((id) => !remove(id));
+    if (panels.length === 0) return { kind: "group", size: node.size, panels: [], active: null };
+    const active = node.active !== null && panels.includes(node.active) ? node.active : panels[0]!;
+    return { kind: "group", size: node.size, panels, active };
+  };
+  const split = (node: LayoutSplit): LayoutSplit => ({ ...node, children: node.children.map((child) => (child.kind === "split" ? split(child) : group(child))) });
+  return { ...layout, root: split(layout.root) };
 }
 
 /** Scales sizes so they add up to `total`, keeping their proportions. */
