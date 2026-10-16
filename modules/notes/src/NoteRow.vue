@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // One note in the list. Its menu opens from the ⋯ button or a right-click.
-import { Ellipsis, NotebookPen, Pin, PinOff, Trash2 } from "@lucide/vue";
+// Double-click on the row (or F2) renames it in place.
+import { Ellipsis, NotebookPen, Pencil, Pin, PinOff, Trash2 } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import {
   DropdownMenu,
@@ -9,12 +10,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { locale, plural, t } from "./i18n";
-import { previewFor, relativeTime, SCRATCHPAD_ID, UNTITLED, type NoteEntry } from "./notes";
+import { MAX_FIXED_TITLE, previewFor, relativeTime, SCRATCHPAD_ID, UNTITLED, type NoteEntry } from "./notes";
 
 const props = defineProps<{ entry: NoteEntry; selected: boolean }>();
-const emit = defineEmits<{ select: []; togglePin: []; remove: [] }>();
+const emit = defineEmits<{ select: []; togglePin: []; remove: []; rename: [title: string] }>();
 
 const menuOpen = ref(false);
 const scratchpad = computed(() => props.entry.id === SCRATCHPAD_ID);
@@ -29,6 +30,35 @@ const when = computed(() =>
 );
 /** The stored title of the scratchpad and of a note without text are English; show them in the player's language. */
 const title = computed(() => (scratchpad.value ? t("scratchpad") : props.entry.title === UNTITLED ? t("untitled") : props.entry.title));
+
+const renaming = ref(false);
+const draft = ref("");
+/** What the input started with, so an untouched Enter does not turn the first line into a fixed title. */
+let initial = "";
+const input = ref<HTMLInputElement | null>(null);
+
+async function startRename() {
+  if (scratchpad.value) return;
+  initial = props.entry.fixedTitle || (props.entry.title === UNTITLED ? "" : props.entry.title);
+  draft.value = initial;
+  renaming.value = true;
+  await nextTick();
+  input.value?.focus();
+  input.value?.select();
+}
+
+function finishRename(save: boolean) {
+  if (!renaming.value) return;
+  renaming.value = false;
+  if (save && draft.value !== initial) emit("rename", draft.value);
+}
+
+/** The menu gives focus back to its button when it closes; wait so that does not end the rename at once. */
+function startRenameLater() {
+  setTimeout(() => void startRename(), 120);
+}
+
+defineExpose({ startRename });
 </script>
 
 <template>
@@ -43,11 +73,29 @@ const title = computed(() => (scratchpad.value ? t("scratchpad") : props.entry.t
     :data-selected="selected"
     @contextmenu.prevent="menuOpen = true"
   >
+    <div v-if="renaming" class="flex min-w-0 flex-1 flex-col items-start gap-0.5 px-3 py-2">
+      <input
+        ref="input"
+        v-model="draft"
+        type="text"
+        :maxlength="MAX_FIXED_TITLE"
+        :placeholder="title"
+        :aria-label="t('row.renameLabel')"
+        data-testid="rename-input"
+        class="bg-background border-ring placeholder:text-muted-foreground h-6 w-full min-w-0 rounded-sm border px-1 text-sm font-medium outline-none"
+        @keydown.enter.prevent="finishRename(true)"
+        @keydown.esc.stop.prevent="finishRename(false)"
+        @blur="finishRename(true)"
+      />
+    </div>
     <button
+      v-else
       type="button"
       class="flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left"
       :aria-current="selected ? 'true' : undefined"
       @click="emit('select')"
+      @dblclick="startRename"
+      @keydown.f2.prevent="startRename"
     >
       <span class="flex w-full min-w-0 items-center gap-1.5 text-sm font-medium">
         <NotebookPen v-if="scratchpad" class="text-muted-foreground size-3.5 flex-none" :stroke-width="1.5" aria-hidden="true" />
@@ -74,6 +122,10 @@ const title = computed(() => (scratchpad.value ? t("scratchpad") : props.entry.t
         <Ellipsis class="size-4" :stroke-width="1.5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        <DropdownMenuItem v-if="!scratchpad" data-testid="menu-rename" @select="startRenameLater">
+          <Pencil :stroke-width="1.5" />
+          {{ t("row.rename") }}
+        </DropdownMenuItem>
         <DropdownMenuItem v-if="!scratchpad" data-testid="menu-pin" @select="emit('togglePin')">
           <PinOff v-if="entry.pinned" :stroke-width="1.5" />
           <Pin v-else :stroke-width="1.5" />

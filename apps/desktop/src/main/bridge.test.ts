@@ -282,3 +282,21 @@ describe("denied and malformed calls", () => {
     });
   });
 });
+
+describe("onBusy", () => {
+  it("reports when requests start and finish, counting the handshake apart", async () => {
+    const events: [boolean, number][] = [];
+    const ctx = { ...makeContext(), onBusy: (busy: boolean, served: number) => void events.push([busy, served]) };
+    const p = await connected(ctx);
+    expect(events).toEqual([
+      [true, 0],
+      [false, 0],
+    ]);
+    events.length = 0;
+    await call(p, "game.getCurrent");
+    expect(events).toEqual([
+      [true, 0],
+      [false, 1],
+    ]);
+  });
+});

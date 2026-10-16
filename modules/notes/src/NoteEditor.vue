@@ -6,6 +6,8 @@ import {
   Check,
   ChevronLeft,
   Ellipsis,
+  Eraser,
+  FilePlus,
   Code,
   Heading,
   Italic,
@@ -35,11 +37,11 @@ import { EditorContent, useEditor } from "@tiptap/vue-3";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import LinkDialog from "./LinkDialog.vue";
 import { t } from "./i18n";
-import { contentFromText, SCRATCHPAD_ID, type NoteData, type NoteEntry, type RichText } from "./notes";
-import type { NotesStore } from "./store";
+import { contentFromText, MAX_FIXED_TITLE, SCRATCHPAD_ID, titleFor, UNTITLED, type NoteData, type NoteEntry, type RichText } from "./notes";
+import type { NotePatch, NotesStore } from "./store";
 
 const props = defineProps<{ store: NotesStore; noteId: string; entry: NoteEntry | undefined; narrow: boolean }>();
-const emit = defineEmits<{ back: []; togglePin: [] }>();
+const emit = defineEmits<{ back: []; togglePin: []; clear: []; saveAsNote: [] }>();
 
 /** How long typing must pause before the note is saved. */
 const SAVE_DELAY_MS = 400;
@@ -51,6 +53,13 @@ const saveError = ref("");
 const loadedNote = ref<string | null>(null);
 /** Which note the editor currently holds; null while one is loading. */
 let loadedId: string | null = null;
+/** The title field's text; empty means the first line is the title. */
+const titleDraft = ref("");
+const titleInput = ref<HTMLInputElement | null>(null);
+let titleFocused = false;
+/** Which parts of the note have changes that are not saved yet. */
+let contentDirty = false;
+let titleDirty = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let saving: Promise<void> = Promise.resolve();
 let loading: Promise<void> = Promise.resolve();
@@ -66,7 +75,11 @@ const editor = useEditor({
     TaskItem.configure({ nested: true }),
     Placeholder.configure({
       placeholder: () =>
-        props.noteId === SCRATCHPAD_ID ? t("editor.placeholderScratchpad") : t("editor.placeholderNote"),
+        props.noteId === SCRATCHPAD_ID
+          ? t("editor.placeholderScratchpad")
+          : props.entry?.fixedTitle
+            ? t("editor.placeholderTitled")
+            : t("editor.placeholderNote"),
     }),
   ],
   editorProps: {
@@ -74,6 +87,7 @@ const editor = useEditor({
   },
   onUpdate: () => {
     if (loadedId === null) return;
+    contentDirty = true;
     saveState.value = "pending";
     clearTimeout(timer);
     timer = setTimeout(() => void flush(), SAVE_DELAY_MS);
@@ -87,11 +101,17 @@ function flush(): Promise<void> {
   const instance = editor.value;
   const id = loadedId;
   if (!instance || id === null || saveState.value !== "pending") return saving;
-  const content = instance.getJSON() as RichText;
-  const text = instance.getText({ blockSeparator: "\n" });
+  const patch: NotePatch = {};
+  if (contentDirty) {
+    patch.content = instance.getJSON() as RichText;
+    patch.text = instance.getText({ blockSeparator: "\n" });
+  }
+  if (titleDirty) patch.title = titleDraft.value;
+  contentDirty = false;
+  titleDirty = false;
   saveState.value = "saving";
   saving = saving
-    .then(() => props.store.saveContent(id, content, text))
+    .then(() => props.store.save(id, patch))
     .then(
       () => {
         if (saveState.value === "saving") saveState.value = "saved";
@@ -124,6 +144,9 @@ async function load(id: string) {
     // Another note was picked while this one loaded.
     if (props.noteId !== id || !editor.value) return;
     showContent(editor.value, note.data);
+    titleDraft.value = note.data.title;
+    contentDirty = false;
+    titleDirty = false;
     loadedId = id;
     loadedNote.value = id;
   } finally {
@@ -154,6 +177,7 @@ async function reloadFromOtherPanel() {
   const note = await props.store.open(props.noteId);
   if (busy()) return;
   const { from, to } = instance.state.selection;
+  if (!titleFocused) titleDraft.value = note.data.title;
   showContent(instance, note.data);
   const end = instance.state.doc.content.size;
   instance.commands.setTextSelection({ from: Math.min(from, end), to: Math.min(to, end) });
@@ -163,10 +187,44 @@ async function reloadFromOtherPanel() {
 function discard() {
   clearTimeout(timer);
   timer = undefined;
+  contentDirty = false;
+  titleDirty = false;
   loadedId = null;
   loadedNote.value = null;
   saveState.value = "idle";
 }
+
+function onTitleInput() {
+  if (loadedId === null) return;
+  titleDirty = true;
+  saveState.value = "pending";
+  clearTimeout(timer);
+  timer = setTimeout(() => void flush(), SAVE_DELAY_MS);
+}
+
+function onTitleFocus() {
+  titleFocused = true;
+}
+
+function onTitleBlur() {
+  titleFocused = false;
+  void flush();
+}
+
+/** Another panel or the list renamed the note: show its title, unless this field is being typed in. */
+watch(
+  () => props.entry?.fixedTitle,
+  (title) => {
+    if (title === undefined || titleFocused || titleDirty || saveState.value === "pending" || saveState.value === "saving") return;
+    if (loadedId === props.noteId) titleDraft.value = title;
+  },
+);
+
+/** The first-line title, shown greyed out in the empty title field. */
+const derivedTitle = computed(() => {
+  const title = titleFor(props.noteId, props.entry?.text ?? "");
+  return title === UNTITLED ? t("untitled") : title;
+});
 
 /** Puts the cursor in the note once it has loaded. */
 async function focus() {
@@ -266,18 +324,20 @@ const toolGroups = computed((): Tool[][] => {
 });
 
 /** The back button takes room from the tools in a narrow panel. */
-const room = computed(() => width.value - (props.narrow ? 40 : 0));
+const room = computed(() => width.value - (props.narrow ? 40 : 0) - (props.noteId === SCRATCHPAD_ID ? 64 : 0));
 const shownGroups = computed(() =>
   toolGroups.value.map((group) => group.filter((tool) => tool.minWidth <= room.value)).filter((group) => group.length),
 );
 const moreTools = computed(() => toolGroups.value.flat().filter((tool) => tool.minWidth > room.value));
+
+const scratchpadEmpty = computed(() => editor.value?.isEmpty ?? true);
 
 const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`save.${state}`));
 </script>
 
 <template>
   <section ref="root" class="flex h-full min-w-0 flex-col" :aria-label="t('editor.note')" data-testid="note-editor" :data-loaded="loadedNote ?? ''">
-    <header class="flex h-10 flex-none items-center gap-1 border-b px-2">
+    <header class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2">
       <Button
         v-if="narrow"
         variant="ghost"
@@ -342,8 +402,34 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         :data-state="saveState"
         :title="saveState === 'error' ? saveError : undefined"
       >{{ statusText(saveState) }}</span>
+      <template v-if="noteId === SCRATCHPAD_ID">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          class="flex-none"
+          data-testid="save-as-note"
+          :disabled="scratchpadEmpty"
+          :aria-label="t('editor.saveAsNote')"
+          :title="t('editor.saveAsNote')"
+          @click="emit('saveAsNote')"
+        >
+          <FilePlus :stroke-width="1.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          class="flex-none"
+          data-testid="clear-scratchpad"
+          :disabled="scratchpadEmpty"
+          :aria-label="t('editor.clear')"
+          :title="t('editor.clear')"
+          @click="emit('clear')"
+        >
+          <Eraser :stroke-width="1.5" />
+        </Button>
+      </template>
       <Button
-        v-if="noteId !== SCRATCHPAD_ID"
+        v-else
         variant="ghost"
         size="icon-sm"
         class="flex-none"
@@ -358,7 +444,25 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
       </Button>
     </header>
     <div class="min-h-0 flex-1 overflow-y-auto">
-      <EditorContent :editor="editor" class="mx-auto max-w-[760px] px-4 py-3" />
+      <div class="mx-auto max-w-[760px] px-4 py-3">
+        <input
+          v-if="noteId !== SCRATCHPAD_ID"
+          ref="titleInput"
+          v-model="titleDraft"
+          type="text"
+          class="note-title placeholder:text-muted-foreground mb-3 w-full min-w-0 border-b border-transparent bg-transparent pb-1 text-xl font-semibold outline-none"
+          data-testid="note-title-input"
+          :maxlength="MAX_FIXED_TITLE"
+          :placeholder="derivedTitle"
+          :aria-label="t('editor.title')"
+          :disabled="loadedNote !== noteId"
+          @input="onTitleInput"
+          @focus="onTitleFocus"
+          @blur="onTitleBlur"
+          @keydown.enter.prevent="editor?.commands.focus('start')"
+        />
+        <EditorContent :editor="editor" />
+      </div>
     </div>
     <LinkDialog v-if="linkOpen" :initial="currentLink" @apply="applyLink" @cancel="linkOpen = false" />
   </section>
@@ -373,13 +477,18 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
 .note-content > * + * {
   margin-top: 8px;
 }
+.note-title:focus {
+  border-bottom-color: var(--primary);
+}
 .note-content h1 {
+  color: var(--primary);
   font-size: 20px;
   line-height: 26px;
   font-weight: 600;
   margin-top: 16px;
 }
 .note-content h2 {
+  color: var(--primary);
   font-size: 16px;
   line-height: 22px;
   font-weight: 600;

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { contentFromText, matches, normalizeLink, parseNote, previewFor, relativeTime, sections, titleFor, type NoteEntry } from "./notes";
+import { cleanTitle, contentFromText, matches, normalizeLink, parseNote, previewFor, relativeTime, sections, titleFor, type NoteEntry } from "./notes";
 
 function entry(id: string, patch: Partial<NoteEntry> = {}): NoteEntry {
-  return { id, title: id, text: "", pinned: false, updatedAt: "2026-10-14T10:00:00.000Z", revision: 1, ...patch };
+  return { id, title: id, text: "", fixedTitle: "", pinned: false, updatedAt: "2026-10-14T10:00:00.000Z", revision: 1, ...patch };
 }
 
 describe("parseNote", () => {
@@ -11,11 +11,17 @@ describe("parseNote", () => {
       version: 1,
       content: { type: "doc", content: [{ type: "paragraph" }] },
       text: "",
+      title: "",
       pinned: false,
       createdAt: "T",
     });
     expect(parseNote({ content: "nope", text: 4, pinned: "yes" }, "T").pinned).toBe(false);
     expect(parseNote([1, 2] as never, "T").text).toBe("");
+    expect(parseNote({ title: 4 }, "T").title).toBe("");
+  });
+
+  it("reads a title set by hand and tidies it", () => {
+    expect(parseNote({ title: "  Boss \n plan " }, "T").title).toBe("Boss plan");
   });
 
   it("keeps valid fields", () => {
@@ -38,7 +44,21 @@ describe("contentFromText", () => {
   });
 });
 
+describe("cleanTitle", () => {
+  it("makes one trimmed line and caps the length", () => {
+    expect(cleanTitle("  a \n\t b  ")).toBe("a b");
+    expect(cleanTitle("   ")).toBe("");
+    expect(cleanTitle("x".repeat(300))).toHaveLength(120);
+  });
+});
+
 describe("titleFor", () => {
+  it("prefers a title set by hand to the first line", () => {
+    expect(titleFor("a", "First line\nmore", "Boss plan")).toBe("Boss plan");
+    expect(titleFor("a", "First line", "")).toBe("First line");
+    expect(titleFor("scratchpad", "x", "Mine")).toBe("Scratchpad");
+  });
+
   it("uses the first non-empty line without Markdown markers", () => {
     expect(titleFor("a", "\n  Count Geonor  \nPhase two")).toBe("Count Geonor");
     expect(titleFor("a", "## Boss plan")).toBe("Boss plan");
@@ -57,8 +77,9 @@ describe("titleFor", () => {
 
 describe("previewFor", () => {
   it("skips the title line, except for the scratchpad", () => {
-    expect(previewFor({ id: "a", text: "Title\nfirst\n\nsecond" })).toBe("first second");
-    expect(previewFor({ id: "scratchpad", text: "one\ntwo" })).toBe("one two");
+    expect(previewFor({ id: "a", text: "Title\nfirst\n\nsecond", fixedTitle: "" })).toBe("first second");
+    expect(previewFor({ id: "scratchpad", text: "one\ntwo", fixedTitle: "" })).toBe("one two");
+    expect(previewFor({ id: "a", text: "Title\nfirst", fixedTitle: "Mine" })).toBe("Title first");
   });
 });
 

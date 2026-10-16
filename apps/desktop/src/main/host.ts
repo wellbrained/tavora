@@ -1444,6 +1444,7 @@ export class Host {
       baseCss: (moduleCss ??= moduleBaseCss(MODULE_FONTS)),
       ...(this.options.moduleStorageLimit === undefined ? {} : { storageLimit: this.options.moduleStorageLimit }),
       onStorageOver: () => void this.purgeModuleStorage(module.manifest.id, game.id),
+      onReveal: () => this.applyBounds(),
       onStatus: (status) => {
         if (!measured && status === "ready") {
           measured = true;
@@ -1609,7 +1610,8 @@ export class Host {
     for (const [instanceId, view] of this.views) {
       const rect = this.panelBounds.get(instanceId);
       if (rect) view.setBounds(rect);
-      view.setVisible(rect !== undefined && !this.overlay);
+      // A module page stays hidden until it has its data, so switching games does not show it building itself.
+      view.setVisible(rect !== undefined && !this.overlay && (!(view instanceof ModuleView) || view.revealed));
       if (rect && !this.windowHidden) view.resume();
       else view.suspend();
     }
@@ -1628,7 +1630,7 @@ export class Host {
     const images: Record<string, string> = {};
     await Promise.all(
       [...this.views].map(async ([instanceId, view]) => {
-        if (!this.panelBounds.has(instanceId) || view.status !== "ready") return;
+        if (!this.panelBounds.has(instanceId) || view.status !== "ready" || (view instanceof ModuleView && !view.revealed)) return;
         if (view instanceof BrowserPanel && !view.capturable) return;
         const image = await Promise.race([
           view.view.webContents.capturePage().catch(() => null),
