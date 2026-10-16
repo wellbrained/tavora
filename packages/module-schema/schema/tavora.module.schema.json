@@ -140,6 +140,14 @@
             "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+(?!(?:[0-9]+|localhost|local|internal|arpa)$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
           }
         },
+        "connectors": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "Parts of Tavora that hold a sign-in, which the module asks to use without seeing the token. ai-usage reads the usage of the player's Claude and Codex accounts.",
+          "items": {
+            "enum": ["ai-usage"]
+          }
+        },
         "webAssembly": {
           "type": "boolean",
           "description": "Lets the page compile WebAssembly. Only Tavora's own modules may ask for it; any other module that does is not loaded."

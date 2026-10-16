@@ -216,7 +216,7 @@ type ModuleState = HostViewState["modules"][number];
 
 /** Whether the module asks for something the player has not granted yet. */
 export function needsGrant(module: ModuleState): boolean {
-  return module.permissions.missing.network.length > 0;
+  return module.permissions.missing.network.length > 0 || module.permissions.missing.connectors.length > 0;
 }
 
 /**

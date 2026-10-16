@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // The consent dialog (decisions.md, module grants row of 2026-10-16): what a module asks for that the
 // player has not granted, shown when the module is first added or when an update asks for more.
-// Tavora draws it, never the module, so a module cannot fake or hide what it asks for.
-import { Globe } from "@lucide/vue";
+// Tavora draws it, never the module, so a module cannot fake or hide what it asks for. A connector
+// shows what the module would read through it: for AI Usage, the accounts set up right now.
+import { Gauge, Globe } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
-import { act, dialog, nextPanelSlot, state, type GrantRequest } from "../host";
+import { act, aiUsage, dialog, nextPanelSlot, openSettings, state, type GrantRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 import ModuleIcon from "./ModuleIcon.vue";
@@ -16,12 +17,14 @@ const busy = ref(false);
 
 const module = computed(() => state.value?.modules.find((item) => item.id === props.request.moduleId) ?? null);
 const hosts = computed(() => module.value?.permissions.missing.network ?? []);
+const connectors = computed(() => module.value?.permissions.missing.connectors ?? []);
+const aiAccounts = computed(() => aiUsage.value?.accounts ?? []);
 
 // The module went away, or has nothing left to ask: nothing to answer.
 watch(
-  [module, hosts],
+  [module, hosts, connectors],
   () => {
-    if (!busy.value && (!module.value || hosts.value.length === 0)) dialog.value = null;
+    if (!busy.value && (!module.value || hosts.value.length + connectors.value.length === 0)) dialog.value = null;
   },
   { immediate: true },
 );
@@ -33,12 +36,18 @@ const from = computed(() => {
   return current.provenance === "official" ? t("grant.from.official") : t("grant.from.local");
 });
 
+/** The accounts are chosen in Settings; the dialog closes so the page is not behind it. */
+function editAccounts() {
+  dialog.value = null;
+  openSettings({ section: "integrations", setting: "ai-usage-accounts" });
+}
+
 async function allow() {
   const current = module.value;
   if (!current) return;
   busy.value = true;
   // Exactly what this dialog shows: the main process grants only what the module still asks for.
-  const result = await act({ type: "grant-module", moduleId: current.id, network: [...hosts.value] }, { quiet: true });
+  const result = await act({ type: "grant-module", moduleId: current.id, network: [...hosts.value], connectors: [...connectors.value] }, { quiet: true });
   busy.value = false;
   if (!result.ok) {
     error.value = result.error;
@@ -65,7 +74,20 @@ async function allow() {
       </span>
       <span class="text-muted-foreground text-sm" data-testid="grant-from">{{ from }}</span>
     </div>
-    <section class="flex flex-col gap-2" :aria-label="t('grant.network')">
+    <section v-if="connectors.includes('ai-usage')" class="flex flex-col gap-2" :aria-label="t('grant.aiUsage')" data-testid="grant-ai-usage">
+      <h3 class="flex items-center gap-2 font-medium"><Gauge :stroke-width="1.5" class="size-4" /> {{ t("grant.aiUsage") }}</h3>
+      <ul v-if="aiAccounts.length" class="bg-muted flex flex-col gap-1 rounded-md px-3 py-2 text-sm" data-testid="grant-ai-accounts">
+        <li v-for="account in aiAccounts" :key="account.id" class="truncate">
+          {{ account.label }} <span class="text-muted-foreground">· {{ t(`aiUsage.provider.${account.provider}`) }}</span>
+        </li>
+      </ul>
+      <p v-else class="bg-muted text-muted-foreground rounded-md px-3 py-2 text-sm">{{ t("grant.aiUsageNone") }}</p>
+      <p class="text-muted-foreground text-sm">
+        {{ t("grant.aiUsageNote") }}
+        <button type="button" class="text-foreground underline underline-offset-2" @click="editAccounts">{{ t("grant.aiUsageAccounts") }}</button>
+      </p>
+    </section>
+    <section v-if="hosts.length" class="flex flex-col gap-2" :aria-label="t('grant.network')">
       <h3 class="flex items-center gap-2 font-medium"><Globe :stroke-width="1.5" class="size-4" /> {{ t("grant.network") }}</h3>
       <ul class="bg-muted flex flex-col gap-1 rounded-md px-3 py-2 text-sm" data-testid="grant-hosts">
         <li v-for="host in hosts" :key="host" class="font-mono break-all">{{ host }}</li>

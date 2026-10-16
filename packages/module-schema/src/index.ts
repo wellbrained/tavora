@@ -22,6 +22,8 @@ export interface ModuleManifest {
   permissions: {
     /** Hosts the module asks to reach through network.fetch, such as `api.example.com`. Each needs the player's grant. */
     network: string[];
+    /** Parts of Tavora that hold a sign-in, which the module asks to use (see CONNECTORS). Each needs the player's grant. */
+    connectors?: Connector[];
     /** Lets the page compile WebAssembly (Excalidraw's picture resizing needs it). Only Tavora's own modules may ask for it. */
     webAssembly?: boolean;
   };
@@ -60,6 +62,17 @@ export function isOwnerId(value: unknown): value is string {
 
 export function isGameId(value: unknown): value is string {
   return typeof value === "string" && GAME_ID.test(value);
+}
+
+/**
+ * Connectors (glossary): parts of Tavora that hold a sign-in and let a granted module use it without
+ * seeing the token. `ai-usage` reads the usage of the player's Claude and Codex accounts.
+ */
+export const CONNECTORS = ["ai-usage"] as const;
+export type Connector = (typeof CONNECTORS)[number];
+
+export function isConnector(value: unknown): value is Connector {
+  return (CONNECTORS as readonly unknown[]).includes(value);
 }
 
 /** Most hosts one manifest may ask for. */
@@ -151,8 +164,13 @@ export function validateManifest(input: unknown): ManifestResult {
     }
   }
   if (isRecord(permissions)) {
-    const unsupported = Object.keys(permissions).filter((key) => key !== "network" && key !== "webAssembly");
+    const unsupported = Object.keys(permissions).filter((key) => key !== "network" && key !== "connectors" && key !== "webAssembly");
     if (unsupported.length > 0) errors.push(`unsupported permissions: ${unsupported.join(", ")}`);
+    if ("connectors" in permissions) {
+      const connectors = permissions.connectors;
+      if (!Array.isArray(connectors) || !connectors.every(isConnector)) errors.push(`permissions.connectors must list connectors Tavora has: ${CONNECTORS.join(", ")}`);
+      else if (new Set(connectors).size !== connectors.length) errors.push("permissions.connectors lists a connector twice");
+    }
     if ("webAssembly" in permissions && typeof permissions.webAssembly !== "boolean") errors.push("permissions.webAssembly must be true or false");
   }
 

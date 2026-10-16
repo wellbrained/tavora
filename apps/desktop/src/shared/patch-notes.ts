@@ -19,6 +19,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.16.9",
+    date: "2026-10-17",
+    title: "AI Usage is a module",
+    notes: [
+      "AI Usage is now a module like Notes and To-Dos. The first time you open it, Tavora asks whether it may read the usage of your AI accounts. It never sees your logins: Tavora reads each account and hands it only the answer.",
+      "Put your accounts in the order you like: press the cog in the AI Usage panel. Whether it shows % left or % used and how often it refreshes moved there too, and they are the same in every game. Your settings and last readings come along.",
+      "Claude accounts now show who is signed in when you point at the name, like Codex accounts already did.",
+      "Settings > Integrations > AI usage lists which modules may read your accounts, and you can take it back there.",
+    ],
+  },
+  {
     version: "0.16.8",
     date: "2026-10-17",
     title: "You decide what modules may reach",

@@ -1,9 +1,12 @@
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { AiUsageView } from "../shared/host-api";
-import { AiUsage, DEFAULT_MINUTES, USAGE_URL, type AiUsageDeps } from "./ai-usage";
-import type { CodexReading } from "./ai-usage-codex";
-import { claudeAccessToken, claudePlan, codexPlan, parseClaudeWindows, parseCodexResets, parseCodexWindows, parseEmail } from "./ai-usage-parse";
+import { AiUsageConnector, MAX_ANSWER_BYTES, USAGE_URL, type AiUsageDeps } from "./ai-usage";
+import { parseClaudeStatus } from "./ai-usage-claude";
+import { profileEnv } from "./ai-usage-cli";
+import { CodexMissingError, type CodexReading } from "./ai-usage-codex";
+import { claudeAccessToken, claudePlan, codexPlan, parseEmail } from "./ai-usage-parse";
+import { HostError } from "./errors";
 import { PlayerError } from "./messages";
 
 // The credentials in these tests are made up; nothing here reads a real login.
@@ -11,101 +14,21 @@ import { PlayerError } from "./messages";
 const HOME = path.resolve("/home/tester");
 const CLAUDE_DIR = path.join(HOME, ".claude");
 const CODEX_DIR = path.join(HOME, ".codex");
+const FILE = path.join(HOME, "ai-usage.json");
 
-describe("parseClaudeWindows", () => {
-  it("reads the self-describing limits, keeping model scopes and inactive windows", () => {
-    const windows = parseClaudeWindows({
-      limits: [
-        { kind: "session", percent: 12.5, resets_at: "2026-10-16T15:00:00Z", is_active: true },
-        { kind: "weekly_all", percent: 40, resets_at: "2026-10-20T00:00:00Z", is_active: false },
-        { kind: "weekly_scoped", percent: 70, resets_at: null, scope: { model: { display_name: "Sonnet" } } },
-        { kind: "something_new", percent: 5 },
-        { kind: "session", percent: 140 },
-      ],
-    });
-    expect(windows).toEqual([
-      { kind: "five-hour", name: null, usedPercent: 12.5, resetsAt: Date.parse("2026-10-16T15:00:00Z") },
-      { kind: "weekly", name: null, usedPercent: 40, resetsAt: Date.parse("2026-10-20T00:00:00Z") },
-      { kind: "weekly", name: "Sonnet", usedPercent: 70, resetsAt: null },
-      { kind: "other", name: "something_new", usedPercent: 5, resetsAt: null },
-    ]);
-  });
-
-  it("falls back to the older flat fields", () => {
-    const windows = parseClaudeWindows({ five_hour: { utilization: 10, resets_at: "2026-10-16T15:00:00Z" }, seven_day: { utilization: 20 }, seven_day_opus: { utilization: 30 } });
-    expect(windows.map((w) => [w.kind, w.name, w.usedPercent])).toEqual([
-      ["five-hour", null, 10],
-      ["weekly", null, 20],
-      ["weekly", "Opus", 30],
-    ]);
-  });
-
-  it("returns nothing for answers it does not understand, never zeros", () => {
-    for (const answer of [null, "x", 5, [], {}, { limits: [] }, { limits: [{ kind: "session" }] }, { five_hour: { utilization: "10" } }]) {
-      expect(parseClaudeWindows(answer)).toEqual([]);
-    }
-  });
-
-  it("cleans names from the provider", () => {
-    const [window] = parseClaudeWindows({ limits: [{ kind: "weekly_scoped", percent: 1, scope: { model: { display_name: `Son\u0007net${"x".repeat(100)}` } } }] });
-    expect(window?.name).toBe(`Sonnet${"x".repeat(34)}`);
-  });
-});
-
-describe("parseCodexWindows", () => {
-  it("names windows by their length and keeps extra limits' own names", () => {
-    const windows = parseCodexWindows({
-      rateLimitsByLimitId: {
-        codex: { limitName: null, primary: { usedPercent: 25, windowDurationMins: 300, resetsAt: 1_760_000_000 }, secondary: { usedPercent: 50, windowDurationMins: 10_080, resetsAt: 1_760_500_000 } },
-        spark: { limitName: "GPT-Spark", primary: { usedPercent: 1, windowDurationMins: 4320 } },
-      },
-    });
-    expect(windows).toEqual([
-      { kind: "five-hour", name: null, usedPercent: 25, resetsAt: 1_760_000_000_000 },
-      { kind: "weekly", name: null, usedPercent: 50, resetsAt: 1_760_500_000_000 },
-      { kind: "other", name: "3-day · GPT-Spark", usedPercent: 1, resetsAt: null },
-    ]);
-  });
-
-  it("uses the single older bucket when there is no list", () => {
-    expect(parseCodexWindows({ rateLimits: { primary: { usedPercent: 9, windowDurationMins: 300 } } })).toEqual([{ kind: "five-hour", name: null, usedPercent: 9, resetsAt: null }]);
-  });
-
-  it("ignores broken windows and impossible reset times", () => {
-    const windows = parseCodexWindows({ rateLimits: { primary: { usedPercent: "9" }, secondary: { usedPercent: 3, windowDurationMins: 90, resetsAt: 9e15 } } });
-    expect(windows).toEqual([{ kind: "other", name: "90-minute", usedPercent: 3, resetsAt: null }]);
-  });
-});
-
-describe("manual resets and email", () => {
-  it("reads how many resets Codex offers and when the first expires", () => {
-    expect(
-      parseCodexResets({
-        rateLimitResetCredits: {
-          availableCount: 2,
-          credits: [
-            { status: "available", expiresAt: 1_760_900_000 },
-            { status: "available", expiresAt: 1_760_800_000 },
-            { status: "used", expiresAt: 1_700_000_000 },
-            { status: "available", expiresAt: "soon" },
-          ],
-        },
-      }),
-    ).toEqual({ available: 2, earliestExpiry: 1_760_800_000_000 });
-  });
-
-  it("keeps an explicit zero but treats anything unclear as unknown", () => {
-    expect(parseCodexResets({ rateLimitResetCredits: { availableCount: 0 } })).toEqual({ available: 0, earliestExpiry: null });
-    for (const answer of [null, {}, { rateLimitResetCredits: null }, { rateLimitResetCredits: { availableCount: -1 } }, { rateLimitResetCredits: { availableCount: "2" } }, { rateLimitResetCredits: { availableCount: 1.5 } }]) {
-      expect(parseCodexResets(answer)).toBeNull();
-    }
-  });
-
+describe("emails", () => {
   it("accepts one plain address and nothing else", () => {
     expect(parseEmail("me.name+tag@example.com")).toBe("me.name+tag@example.com");
     for (const value of ["a@b", "a b@c.de", "<x>@c.de", "a@c.de\nb@c.de", 'a"@c.de', "", null, 5, `${"x".repeat(250)}@c.de`]) {
       expect(parseEmail(value)).toBeNull();
     }
+  });
+
+  it("takes Claude's email only when `claude auth status` says the profile is signed in", () => {
+    expect(parseClaudeStatus(JSON.stringify({ loggedIn: true, email: "me@example.com", orgName: "x" }))).toBe("me@example.com");
+    expect(parseClaudeStatus(JSON.stringify({ loggedIn: false, email: "me@example.com" }))).toBeNull();
+    expect(parseClaudeStatus(JSON.stringify({ loggedIn: true, email: "not an email" }))).toBeNull();
+    expect(parseClaudeStatus("Logged in as me@example.com")).toBeNull();
   });
 });
 
@@ -133,25 +56,36 @@ describe("plans and tokens", () => {
   });
 });
 
-// ── The service ─────────────────────────────────────────────────────────
+describe("profileEnv", () => {
+  it("points the command line at the profile and removes every key that would bill something else", () => {
+    const env = profileEnv("claude", CLAUDE_DIR, { PATH: "/bin", ANTHROPIC_API_KEY: "k", ANTHROPIC_BASE_URL: "https://elsewhere", CLAUDE_CODE_OAUTH_TOKEN: "t", OPENAI_API_KEY: "o" });
+    expect(env).toEqual({ PATH: "/bin", CLAUDE_CONFIG_DIR: CLAUDE_DIR });
+    expect(profileEnv("codex", CODEX_DIR, { CODEX_API_KEY: "c" })).toEqual({ CODEX_HOME: CODEX_DIR });
+  });
+});
+
+// ── The connector ───────────────────────────────────────────────────────
 
 const CLAUDE_LOGIN = JSON.stringify({ claudeAiOauth: { accessToken: "test-token", subscriptionType: "pro" } });
-const USAGE_ANSWER = { limits: [{ kind: "session", percent: 30, resets_at: "2026-10-16T15:00:00Z" }] };
+const USAGE_ANSWER = { limits: [{ kind: "session", percent: 30, resets_at: "2026-10-16T15:00:00Z", is_active: true }], extra_usage: { is_enabled: false } };
+const CODEX_LIMITS = { rateLimits: { primary: { usedPercent: 10, windowDurationMins: 300 } }, rateLimitResetCredits: { availableCount: 3 } };
 
 function setup(overrides: Partial<AiUsageDeps> = {}, files: Record<string, string> = {}) {
   const store = new Map<string, string>(Object.entries(files));
   const views: AiUsageView[] = [];
   const clock = { now: Date.parse("2026-10-16T12:00:00Z") };
   const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify(USAGE_ANSWER), { status: 200 }));
-  const codex = vi.fn(async (): Promise<CodexReading> => ({ signedIn: true, apiKey: false, email: null, limits: { rateLimits: { primary: { usedPercent: 10, windowDurationMins: 300 } } } }));
+  const codex = vi.fn(async (): Promise<CodexReading> => ({ signedIn: true, apiKey: false, email: "codex@example.com", limits: CODEX_LIMITS }));
+  const email = vi.fn(async (_directory: string): Promise<string | null> => "claude@example.com");
   const deps: AiUsageDeps = {
-    file: path.join(HOME, "ai-usage.json"),
+    file: FILE,
     version: "9.9.9",
     fetch: fetchMock as unknown as typeof fetch,
     readText: async (file) => store.get(file) ?? null,
     isDirectory: async (directory) => directory.startsWith(HOME),
     writeText: async (file, text) => void store.set(file, text),
     readCodex: codex,
+    readClaudeEmail: email,
     detect: async () => [
       { provider: "claude", directory: CLAUDE_DIR },
       { provider: "codex", directory: CODEX_DIR },
@@ -161,234 +95,235 @@ function setup(overrides: Partial<AiUsageDeps> = {}, files: Record<string, strin
     ...overrides,
   };
   store.set(path.join(CLAUDE_DIR, ".credentials.json"), CLAUDE_LOGIN);
-  const usage = new AiUsage(deps);
-  return { usage, store, views, clock, fetchMock, codex, deps };
+  const connector = new AiUsageConnector(deps);
+  return { connector, store, views, clock, fetchMock, codex, email, deps };
 }
 
-describe("AiUsage", () => {
+const onlyClaude = { detect: async () => [{ provider: "claude" as const, directory: CLAUDE_DIR }] };
+const onlyCodex = { detect: async () => [{ provider: "codex" as const, directory: CODEX_DIR }] };
+
+async function firstId(connector: AiUsageConnector): Promise<string> {
+  return (await connector.accountInfos())[0]!.id;
+}
+
+describe("AiUsageConnector accounts", () => {
   it("offers the profile folders found on this PC the first time only", async () => {
-    const { usage, store, deps } = setup();
-    const view = await usage.view();
-    expect(view.accounts.map((a) => [a.provider, a.label, a.directory])).toEqual([
-      ["claude", "claude", CLAUDE_DIR],
-      ["codex", "codex", CODEX_DIR],
+    const { connector, store, deps } = setup();
+    const view = await connector.view();
+    expect(view.accounts.map((a) => [a.provider, a.label, a.directory, a.plan])).toEqual([
+      ["claude", "claude", CLAUDE_DIR, "Pro"],
+      ["codex", "codex", CODEX_DIR, null],
     ]);
-    expect(view.accounts[0]?.plan).toBe("Pro");
-    expect(view.refreshMinutes).toBe(DEFAULT_MINUTES);
     // A second start reads the saved file; removing everything does not bring the defaults back.
-    const again = new AiUsage({ ...deps, detect: async () => [{ provider: "claude", directory: CLAUDE_DIR }] });
+    const again = new AiUsageConnector({ ...deps, detect: async () => [{ provider: "claude", directory: CLAUDE_DIR }] });
     const saved = await again.view();
     expect(saved.accounts).toHaveLength(2);
     for (const account of saved.accounts) await again.remove(account.id);
-    expect((await new AiUsage(deps).view()).accounts).toEqual([]);
-    expect(store.has(deps.file)).toBe(true);
+    expect((await new AiUsageConnector(deps).view()).accounts).toEqual([]);
+    expect(JSON.parse(store.get(FILE)!)).toEqual({ version: 2, accounts: [] });
   });
 
-  it("reads a Claude account with the login's token and shows the windows", async () => {
-    const { usage, fetchMock } = setup({ detect: async () => [{ provider: "claude", directory: CLAUDE_DIR }] });
-    await usage.refreshNow();
+  it("gives modules the accounts without their folders", async () => {
+    const { connector } = setup();
+    const infos = await connector.accountInfos();
+    expect(infos.map((info) => Object.keys(info).sort())).toEqual([
+      ["id", "label", "plan", "provider"],
+      ["id", "label", "plan", "provider"],
+    ]);
+    expect(JSON.stringify(infos)).not.toContain(HOME);
+  });
+
+  it("checks accounts before adding or changing them", async () => {
+    const { connector } = setup(onlyClaude);
+    const key = (promise: Promise<unknown>) => promise.then(() => "ok", (error: unknown) => (error instanceof PlayerError ? error.key : "other"));
+    expect(await key(connector.add("codex", "  ", CODEX_DIR))).toBe("aiUsage.error.label");
+    expect(await key(connector.add("codex", "x".repeat(61), CODEX_DIR))).toBe("aiUsage.error.label");
+    expect(await key(connector.add("codex", "Work", "relative/folder"))).toBe("aiUsage.error.directory");
+    expect(await key(connector.add("codex", "Work", path.resolve("/elsewhere")))).toBe("aiUsage.error.directory");
+    expect(await key(connector.add("claude", "Again", CLAUDE_DIR))).toBe("aiUsage.error.duplicate");
+    expect(await key(connector.add("codex", "Work", CODEX_DIR))).toBe("ok");
+    expect(await key(connector.update("00000000-0000-4000-8000-000000000000", "A", CODEX_DIR))).toBe("aiUsage.error.unknown");
+    expect(await key(connector.remove("00000000-0000-4000-8000-000000000000"))).toBe("aiUsage.error.unknown");
+  });
+
+  it("tells Settings and modules when the accounts change", async () => {
+    const { connector, views } = setup(onlyClaude);
+    await connector.add("codex", "Work", CODEX_DIR);
+    const id = await firstId(connector);
+    await connector.update(id, "Renamed", CLAUDE_DIR);
+    await connector.remove(id);
+    expect(views.map((view) => view.accounts.map((a) => a.label))).toEqual([["claude", "Work"], ["Renamed", "Work"], ["Work"]]);
+  });
+
+  it("limits the number of accounts", async () => {
+    const { connector } = setup({ detect: async () => [] });
+    for (let n = 0; n < 20; n++) await connector.add("claude", `A${n}`, path.join(HOME, `.claude-${n}`));
+    await expect(connector.add("claude", "One more", path.join(HOME, ".claude-extra"))).rejects.toMatchObject({ key: "aiUsage.error.limit" });
+  });
+
+  it("starts empty from a damaged file instead of failing, and offers nothing", async () => {
+    const { connector } = setup({}, { [FILE]: "{not json" });
+    expect((await connector.view()).accounts).toEqual([]);
+  });
+
+  it("drops saved accounts that are not valid", async () => {
+    const saved = JSON.stringify({
+      version: 2,
+      accounts: [
+        { id: "a", provider: "claude", label: "Good", directory: CLAUDE_DIR },
+        { id: "a", provider: "claude", label: "Same id", directory: CODEX_DIR },
+        { id: "b", provider: "gemini", label: "Bad provider", directory: CLAUDE_DIR },
+        { id: "c", provider: "claude", label: "Relative", directory: "rel" },
+      ],
+    });
+    const { connector } = setup({}, { [FILE]: saved });
+    expect((await connector.view()).accounts.map((a) => a.label)).toEqual(["Good"]);
+  });
+});
+
+describe("AiUsageConnector reads", () => {
+  it("reads a Claude account with the login's token and hands over the answer as it came", async () => {
+    const { connector, fetchMock, email } = setup(onlyClaude);
+    const reading = await connector.read(await firstId(connector));
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe(USAGE_URL);
     expect((init?.headers as Record<string, string>).authorization).toBe("Bearer test-token");
-    const [account] = (await usage.view()).accounts;
-    expect(account).toMatchObject({ state: "ready", stale: false, fetchedAt: Date.parse("2026-10-16T12:00:00Z") });
-    expect(account?.windows).toEqual([{ kind: "five-hour", name: null, usedPercent: 30, resetsAt: Date.parse("2026-10-16T15:00:00Z") }]);
+    expect(init?.redirect).toBe("error");
+    expect(email).toHaveBeenCalledWith(CLAUDE_DIR);
+    expect(reading).toEqual({ status: "ok", retryAfterMs: null, answer: USAGE_ANSWER, email: "claude@example.com", plan: "Pro", readAt: "2026-10-16T12:00:00.000Z" });
   });
 
-  it("never saves or shows the token", async () => {
-    const { usage, store, views } = setup({ detect: async () => [{ provider: "claude", directory: CLAUDE_DIR }] });
-    await usage.refreshNow();
-    expect(store.get(path.join(HOME, "ai-usage.json"))).not.toContain("test-token");
+  it("asks a test server instead when one is set", async () => {
+    const { connector, fetchMock } = setup({ ...onlyClaude, usageUrl: "http://127.0.0.1:9/usage" });
+    await connector.read(await firstId(connector));
+    expect(fetchMock.mock.calls[0]![0]).toBe("http://127.0.0.1:9/usage");
+  });
+
+  it("never saves the token or hands it to a module, and never saves an email", async () => {
+    const { connector, store, views } = setup(onlyClaude);
+    const reading = await connector.read(await firstId(connector));
+    expect(JSON.stringify(reading)).not.toContain("test-token");
+    expect(store.get(FILE)).not.toContain("test-token");
+    expect(store.get(FILE)).not.toContain("claude@example.com");
     expect(JSON.stringify(views)).not.toContain("test-token");
   });
 
   it("reads a Codex account through the Codex command", async () => {
-    const { usage, codex } = setup({ detect: async () => [{ provider: "codex", directory: CODEX_DIR }] });
-    await usage.refreshNow();
+    const { connector, codex } = setup(onlyCodex);
+    const reading = await connector.read(await firstId(connector));
     expect(codex).toHaveBeenCalledWith(CODEX_DIR, expect.any(AbortSignal));
-    expect((await usage.view()).accounts[0]).toMatchObject({ state: "ready", windows: [{ kind: "five-hour", usedPercent: 10 }] });
-  });
-
-  it("maps failures to states and keeps the last reading as stale", async () => {
-    const { usage, fetchMock, clock } = setup({ detect: async () => [{ provider: "claude", directory: CLAUDE_DIR }] });
-    await usage.refreshNow();
-    fetchMock.mockResolvedValueOnce(new Response("no", { status: 401 }));
-    clock.now += 10 * 60_000;
-    await usage.refreshNow();
-    expect((await usage.view()).accounts[0]).toMatchObject({ state: "sign-in", stale: true, windows: [{ usedPercent: 30 }] });
-    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 200 }));
-    clock.now += 60 * 60_000;
-    await usage.refreshNow();
-    expect((await usage.view()).accounts[0]?.state).toBe("unavailable");
-    fetchMock.mockRejectedValueOnce(new Error("offline"));
-    clock.now += 24 * 3_600_000;
-    await usage.refreshNow();
-    expect((await usage.view()).accounts[0]?.state).toBe("unavailable");
+    expect(reading).toMatchObject({ status: "ok", answer: CODEX_LIMITS, email: "codex@example.com" });
   });
 
   it("says sign-in when there is no login, without a request", async () => {
-    const { usage, fetchMock, store } = setup({ detect: async () => [{ provider: "claude", directory: CLAUDE_DIR }] });
+    const { connector, fetchMock, store } = setup(onlyClaude);
     store.delete(path.join(CLAUDE_DIR, ".credentials.json"));
-    await usage.refreshNow();
+    expect(await connector.read(await firstId(connector))).toMatchObject({ status: "sign-in", answer: null });
     expect(fetchMock).not.toHaveBeenCalled();
-    expect((await usage.view()).accounts[0]?.state).toBe("sign-in");
+  });
+
+  it.each([
+    ["a refused login", () => new Response("no", { status: 401 }), "sign-in"],
+    ["a server error", () => new Response("", { status: 500 }), "unavailable"],
+    ["an answer that is not JSON", () => new Response("<html>", { status: 200 }), "unavailable"],
+    ["an answer far too big", () => new Response(JSON.stringify({ x: "y".repeat(MAX_ANSWER_BYTES) }), { status: 200 }), "unavailable"],
+  ])("maps %s to a status, with no details", async (_name, answer, status) => {
+    const { connector, fetchMock } = setup(onlyClaude);
+    fetchMock.mockImplementationOnce(async () => answer());
+    expect(await connector.read(await firstId(connector))).toMatchObject({ status, answer: null });
+  });
+
+  it("maps an unreachable provider to unavailable", async () => {
+    const { connector, fetchMock } = setup(onlyClaude);
+    fetchMock.mockRejectedValueOnce(new Error(`ENOTFOUND ${CLAUDE_DIR}`));
+    const reading = await connector.read(await firstId(connector));
+    expect(reading.status).toBe("unavailable");
+    expect(JSON.stringify(reading)).not.toContain(HOME);
   });
 
   it("reports a missing Codex command, an API-key login and a missing sign-in", async () => {
-    const { CodexMissingError } = await import("./ai-usage-codex");
-    const { usage, codex, clock } = setup({ detect: async () => [{ provider: "codex", directory: CODEX_DIR }] });
+    const { connector, codex, clock } = setup(onlyCodex);
+    const id = await firstId(connector);
     codex.mockRejectedValueOnce(new CodexMissingError());
-    await usage.refreshNow();
-    expect((await usage.view()).accounts[0]?.state).toBe("cli-missing");
-    clock.now += 10 * 3_600_000;
+    expect((await connector.read(id)).status).toBe("cli-missing");
+    clock.now += 60_000;
     codex.mockResolvedValueOnce({ signedIn: true, apiKey: true, email: null, limits: null });
-    await usage.refreshNow();
-    expect((await usage.view()).accounts[0]?.state).toBe("unavailable");
-    clock.now += 10 * 3_600_000;
+    expect((await connector.read(id)).status).toBe("api-key");
+    clock.now += 60_000;
     codex.mockResolvedValueOnce({ signedIn: false, apiKey: false, email: null, limits: null });
-    await usage.refreshNow();
-    expect((await usage.view()).accounts[0]?.state).toBe("sign-in");
+    expect((await connector.read(id)).status).toBe("sign-in");
   });
 
-  it("respects a provider's wait time, also for the refresh button", async () => {
-    const { usage, fetchMock, clock } = setup({ detect: async () => [{ provider: "claude", directory: CLAUDE_DIR }] });
+  it("reads each account at most once a minute, for every module together", async () => {
+    const { connector, fetchMock, clock } = setup(onlyClaude);
+    const id = await firstId(connector);
+    const [a, b] = await Promise.all([connector.read(id), connector.read(id)]);
+    expect(a).toEqual(b);
+    clock.now += 59_000;
+    expect(await connector.read(id)).toEqual(a);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    clock.now += 1_000;
+    await connector.read(id);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("respects a provider's wait time and counts it down", async () => {
+    const { connector, fetchMock, clock } = setup(onlyClaude);
+    const id = await firstId(connector);
     fetchMock.mockResolvedValueOnce(new Response("slow", { status: 429, headers: { "retry-after": "1800" } }));
-    await usage.refreshNow();
-    expect((await usage.view()).accounts[0]?.state).toBe("rate-limited");
+    expect(await connector.read(id)).toMatchObject({ status: "rate-limited", retryAfterMs: 1_800_000 });
     clock.now += 10 * 60_000;
-    await usage.refreshNow();
+    expect(await connector.read(id)).toMatchObject({ status: "rate-limited", retryAfterMs: 1_200_000 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    clock.now += 30 * 60_000;
-    await usage.refreshNow();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("reads on its own only when an account is due, and backs off after failures", async () => {
-    const { usage, fetchMock, clock } = setup({ detect: async () => [{ provider: "claude", directory: CLAUDE_DIR }] });
-    await usage.tick();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    clock.now += 4 * 60_000;
-    await usage.tick();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    clock.now += 2 * 60_000;
-    await usage.tick();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    fetchMock.mockResolvedValue(new Response("", { status: 500 }));
-    clock.now += 6 * 60_000;
-    await usage.tick();
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    // One failure doubles the wait: ten minutes.
-    clock.now += 6 * 60_000;
-    await usage.tick();
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    clock.now += 5 * 60_000;
-    await usage.tick();
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-  });
-
-  it("marks an overdue reading as stale", async () => {
-    const { usage, clock } = setup({ detect: async () => [{ provider: "claude", directory: CLAUDE_DIR }] });
-    await usage.refreshNow();
     clock.now += 20 * 60_000;
-    expect((await usage.view()).accounts[0]?.stale).toBe(true);
+    expect((await connector.read(id)).status).toBe("ok");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("takes no readings until a panel is open", async () => {
-    vi.useFakeTimers();
-    try {
-      const { usage, fetchMock } = setup({ detect: async () => [{ provider: "claude", directory: CLAUDE_DIR }] });
-      await usage.view();
-      await vi.advanceTimersByTimeAsync(120_000);
-      expect(fetchMock).not.toHaveBeenCalled();
-      await usage.setWanted(true);
-      await vi.advanceTimersByTimeAsync(1);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      await usage.setWanted(false);
-      await vi.advanceTimersByTimeAsync(3_600_000);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.useRealTimers();
-    }
+  it("forgets the last reading when an account moves to another folder", async () => {
+    const { connector, fetchMock, store } = setup(onlyClaude);
+    const other = path.join(HOME, ".claude-other");
+    store.set(path.join(other, ".credentials.json"), CLAUDE_LOGIN);
+    const id = await firstId(connector);
+    await connector.read(id);
+    await connector.update(id, "Renamed", CLAUDE_DIR);
+    await connector.read(id);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await connector.update(id, "Renamed", other);
+    await connector.read(id);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("checks accounts before adding or changing them", async () => {
-    const { usage } = setup({ detect: async () => [{ provider: "claude", directory: CLAUDE_DIR }] });
-    const key = (promise: Promise<unknown>) => promise.then(() => "ok", (error: unknown) => (error instanceof PlayerError ? error.key : "other"));
-    expect(await key(usage.add("codex", "  ", CODEX_DIR))).toBe("aiUsage.error.label");
-    expect(await key(usage.add("codex", "x".repeat(61), CODEX_DIR))).toBe("aiUsage.error.label");
-    expect(await key(usage.add("codex", "Work", "relative/folder"))).toBe("aiUsage.error.directory");
-    expect(await key(usage.add("codex", "Work", path.resolve("/elsewhere")))).toBe("aiUsage.error.directory");
-    expect(await key(usage.add("claude", "Again", CLAUDE_DIR))).toBe("aiUsage.error.duplicate");
-    expect(await key(usage.add("codex", "Work", CODEX_DIR))).toBe("ok");
-    expect(await key(usage.update("00000000-0000-4000-8000-000000000000", "A", CODEX_DIR))).toBe("aiUsage.error.unknown");
-    expect(await key(usage.remove("00000000-0000-4000-8000-000000000000"))).toBe("aiUsage.error.unknown");
+  it("refuses an account that does not exist", async () => {
+    const { connector } = setup(onlyClaude);
+    await expect(connector.read("nope")).rejects.toBeInstanceOf(HostError);
+  });
+});
+
+describe("the built-in panel's settings", () => {
+  const VERSION_1 = JSON.stringify({
+    version: 1,
+    refreshMinutes: 15,
+    style: "used",
+    accounts: [{ id: "a", provider: "claude", label: "Good", directory: CLAUDE_DIR }],
+    readings: { a: { fetchedAt: 1, windows: [{ kind: "weekly", name: null, usedPercent: 20, resetsAt: null }] }, gone: { fetchedAt: 1, windows: [] } },
   });
 
-  it("forgets the old reading when an account moves to another folder", async () => {
-    const { usage } = setup({ detect: async () => [{ provider: "claude", directory: CLAUDE_DIR }] });
-    await usage.refreshNow();
-    const [account] = (await usage.view()).accounts;
-    await usage.update(account!.id, "Renamed", CLAUDE_DIR);
-    expect((await usage.view()).accounts[0]).toMatchObject({ label: "Renamed", windows: [{ usedPercent: 30 }] });
-    await usage.update(account!.id, "Renamed", path.join(HOME, ".claude-other"));
-    expect((await usage.view()).accounts[0]).toMatchObject({ windows: [], fetchedAt: null, state: "waiting" });
-  });
-
-  it("limits the number of accounts and the refresh interval", async () => {
-    const { usage } = setup({ detect: async () => [] });
-    for (let n = 0; n < 20; n++) await usage.add("claude", `A${n}`, path.join(HOME, `.claude-${n}`));
-    await expect(usage.add("claude", "One more", path.join(HOME, ".claude-extra"))).rejects.toMatchObject({ key: "aiUsage.error.limit" });
-    await usage.setInterval(500);
-    expect((await usage.view()).refreshMinutes).toBe(60);
-    await usage.setInterval(0);
-    expect((await usage.view()).refreshMinutes).toBe(1);
-  });
-
-  it("starts empty from a damaged file instead of failing", async () => {
-    const { usage } = setup({ detect: async () => [] }, { [path.join(HOME, "ai-usage.json")]: "{not json" });
-    expect((await usage.view()).accounts).toEqual([]);
-  });
-
-  it("shows a Codex account's email and resets, the resets only while the reading is fresh, and never saves the email", async () => {
-    const { usage, codex, store, clock } = setup({ detect: async () => [{ provider: "codex", directory: CODEX_DIR }] });
-    codex.mockResolvedValueOnce({
-      signedIn: true,
-      apiKey: false,
-      email: "me@example.com",
-      limits: { rateLimits: { primary: { usedPercent: 10, windowDurationMins: 300 } }, rateLimitResetCredits: { availableCount: 3 } },
-    });
-    await usage.refreshNow();
-    expect((await usage.view()).accounts[0]).toMatchObject({ email: "me@example.com", resets: { available: 3, earliestExpiry: null } });
-    expect(store.get(path.join(HOME, "ai-usage.json"))).not.toContain("me@example.com");
-    codex.mockRejectedValueOnce(new Error("closed"));
-    clock.now += 60 * 60_000;
-    await usage.refreshNow();
-    expect((await usage.view()).accounts[0]).toMatchObject({ state: "unavailable", resets: null });
-  });
-
-  it("keeps the usage style, defaulting to what is left", async () => {
-    const { usage, deps } = setup({ detect: async () => [] });
-    expect((await usage.view()).style).toBe("remaining");
-    await usage.setStyle("used");
-    expect((await new AiUsage(deps).view()).style).toBe("used");
-    expect((await new AiUsage({ ...deps, readText: async () => JSON.stringify({ style: "weird", accounts: [] }) }).view()).style).toBe("remaining");
-  });
-
-  it("drops saved accounts and readings that are not valid", async () => {
-    const saved = JSON.stringify({
-      version: 1,
+  it("are handed over once from version 1 of the file, then dropped from it", async () => {
+    const { connector, store, deps } = setup({}, { [FILE]: VERSION_1 });
+    expect(await connector.legacyPanelData()).toEqual({
       refreshMinutes: 15,
-      accounts: [
-        { id: "a", provider: "claude", label: "Good", directory: CLAUDE_DIR },
-        { id: "b", provider: "gemini", label: "Bad provider", directory: CLAUDE_DIR },
-        { id: "c", provider: "claude", label: "Relative", directory: "rel" },
-      ],
-      readings: { a: { fetchedAt: 1, windows: [{ kind: "weekly", name: null, usedPercent: 20, resetsAt: null }, { kind: "nope" }] } },
+      style: "used",
+      readings: { a: { fetchedAt: 1, windows: [{ kind: "weekly", name: null, usedPercent: 20, resetsAt: null }] } },
     });
-    const { usage } = setup({}, { [path.join(HOME, "ai-usage.json")]: saved });
-    const view = await usage.view();
-    expect(view.refreshMinutes).toBe(15);
-    expect(view.accounts.map((a) => a.id)).toEqual(["a"]);
-    expect(view.accounts[0]?.windows).toHaveLength(1);
+    await connector.forgetLegacyPanelData();
+    expect(JSON.parse(store.get(FILE)!)).toEqual({ version: 2, accounts: [{ id: "a", provider: "claude", label: "Good", directory: CLAUDE_DIR }] });
+    expect(await connector.legacyPanelData()).toBeNull();
+    expect(await new AiUsageConnector(deps).legacyPanelData()).toBeNull();
+  });
+
+  it("are clamped and defaulted when odd", async () => {
+    const { connector } = setup({}, { [FILE]: JSON.stringify({ version: 1, refreshMinutes: 500, style: "weird", accounts: [] }) });
+    expect(await connector.legacyPanelData()).toEqual({ refreshMinutes: 60, style: "remaining", readings: {} });
   });
 });

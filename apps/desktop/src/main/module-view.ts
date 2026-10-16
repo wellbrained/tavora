@@ -5,7 +5,7 @@ import { modulePartition } from "./gamedata";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BLOB_PATH, CLIPBOARD_PATH } from "@tavora/sdk/protocol";
-import { BridgeSession } from "./bridge";
+import { BridgeSession, type BridgeContext } from "./bridge";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
 import { serveClipboard } from "./clipboard-http";
@@ -14,7 +14,7 @@ import { HostError } from "./errors";
 import { moduleFetch, type TestHosts } from "./network";
 import type { InstalledModule } from "./registry";
 import type { InstanceStatus } from "../shared/host-api";
-import type { ModuleData, PanelStateStore } from "./storage";
+import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
 import { MODULE_STORAGE_LIMIT, overStorageLimit, STORAGE_CHECK_MS } from "./storage-guard";
 
 export type { InstanceStatus } from "../shared/host-api";
@@ -43,6 +43,12 @@ export interface ModuleViewOptions {
   onOpenLink(url: string): void;
   /** Hosts the player granted this module for network.fetch, as installed now; asked on every call and redirect. */
   networkHosts(): ReadonlySet<string>;
+  /** Connectors the player granted this module, as installed now; asked on every call. */
+  connectors(): ReadonlySet<string>;
+  /** The module's settings shared by every game (storage.app). */
+  appSettings: ModuleStore;
+  /** The ai-usage connector, for a module granted it. */
+  aiUsage: BridgeContext["aiUsage"];
   /** Test runs only: hosts mapped to a local server (network.ts). */
   testHosts?: TestHosts;
 }
@@ -339,7 +345,9 @@ export class ModuleView {
         game,
         data,
         panelState,
-        capabilities: () => new Set<Capability>(this.options.networkHosts().size > 0 ? ["network"] : []),
+        appSettings: this.options.appSettings,
+        aiUsage: this.options.aiUsage,
+        capabilities: () => this.capabilities(),
         fetch: (params) =>
           moduleFetch(params, {
             allowedHosts: this.options.networkHosts,
@@ -359,6 +367,19 @@ export class ModuleView {
     );
     this.bridge = bridge;
     this.view.webContents.postMessage("tavora:port", null, [port2]);
+  }
+
+  /** What the player has granted now (grants.ts): `network` with any granted host, `aiUsage` with the ai-usage connector. */
+  private capabilities(): ReadonlySet<Capability> {
+    const granted = new Set<Capability>();
+    if (this.options.networkHosts().size > 0) granted.add("network");
+    if (this.options.connectors().has("ai-usage")) granted.add("aiUsage");
+    return granted;
+  }
+
+  /** The player changed the AI accounts; a module granted the connector hears it. */
+  notifyAiUsageAccounts(): void {
+    if (this.capabilities().has("aiUsage")) this.bridge?.emit("aiUsage.accountsChanged", null);
   }
 
   setBounds(bounds: { x: number; y: number; width: number; height: number }): void {

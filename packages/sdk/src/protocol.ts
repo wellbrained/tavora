@@ -129,6 +129,44 @@ export interface NetworkResponse {
   body: string;
 }
 
+/** An AI account the player set up in Settings > Integrations > AI usage, as the ai-usage connector shows it. */
+export interface AiUsageAccountInfo {
+  /** Chosen by Tavora; stays the same while the account exists. */
+  id: string;
+  provider: "claude" | "codex";
+  /** The player's name for it. */
+  label: string;
+  /** The subscription plan from the profile's saved login, from a fixed list of names (Pro, Max 5×, Plus, ...), or null. */
+  plan: string | null;
+}
+
+/**
+ * One reading of an account's usage through the ai-usage connector. Tavora reads the login itself
+ * and hands over only the provider's answer, never the token. An account is read at most once a
+ * minute (LIMITS.aiUsageMinReadMs); asking sooner gives the last reading again.
+ */
+export interface AiUsageReading {
+  /**
+   * ok: `answer` holds the provider's answer. sign-in: the profile has no usable subscription login.
+   * rate-limited: the provider asked to wait (`retryAfterMs`). api-key: the login is an API key,
+   * which has no subscription allowance. cli-missing: the Codex command line is not installed.
+   * unavailable: anything else.
+   */
+  status: "ok" | "sign-in" | "rate-limited" | "api-key" | "cli-missing" | "unavailable";
+  /** For rate-limited: how long to wait at least, in milliseconds; otherwise null. */
+  retryAfterMs: number | null;
+  /**
+   * The provider's answer as it came, for status ok: Claude's usage answer (undocumented, may change)
+   * or the Codex app-server's `account/rateLimits/read` result. Null otherwise.
+   */
+  answer: JsonValue | null;
+  /** The signed-in email the provider reports, or null. */
+  email: string | null;
+  plan: string | null;
+  /** When Tavora took this reading (ISO 8601). */
+  readAt: string;
+}
+
 export interface DocumentChange {
   id: string;
   revision: number;
@@ -138,10 +176,11 @@ export interface DocumentChange {
 /**
  * Capabilities gate methods beyond the always-available core. A module has a
  * capability once the player granted one of its permissions for it (`network`:
- * a host in `permissions.network`); calling a gated method without it fails
- * with PERMISSION_DENIED. The others cannot be granted yet.
+ * a host in `permissions.network`; `aiUsage`: the `ai-usage` connector); calling
+ * a gated method without it fails with PERMISSION_DENIED. The others cannot be
+ * granted yet.
  */
-export type Capability = "network" | "files" | "clipboard" | "sharedData";
+export type Capability = "network" | "aiUsage" | "files" | "clipboard" | "sharedData";
 
 /** Request methods and their params/result types. */
 export interface Methods {
@@ -151,6 +190,11 @@ export interface Methods {
   "storage.set": { params: { key: string; value: JsonValue }; result: null };
   "storage.delete": { params: { key: string }; result: null };
   "storage.keys": { params: undefined; result: string[] };
+  /** The same calls for settings shared by every game: this module's own, in all games. */
+  "storage.app.get": { params: { key: string }; result: JsonValue | null };
+  "storage.app.set": { params: { key: string; value: JsonValue }; result: null };
+  "storage.app.delete": { params: { key: string }; result: null };
+  "storage.app.keys": { params: undefined; result: string[] };
   "documents.list": { params: undefined; result: DocumentSummary[] };
   "documents.get": { params: { id: string }; result: TavoraDocument | null };
   "documents.put": { params: PutDocumentParams; result: DocumentSummary };
@@ -168,6 +212,10 @@ export interface Methods {
   "blobs.delete": { params: { id: string }; result: null };
   /** A web request to a granted host (capability `network`). */
   "network.fetch": { params: NetworkRequest; result: NetworkResponse };
+  /** The AI accounts the player set up, in their order (capability `aiUsage`). */
+  "aiUsage.accounts": { params: undefined; result: AiUsageAccountInfo[] };
+  /** Reads one account's usage (capability `aiUsage`). */
+  "aiUsage.read": { params: { accountId: string }; result: AiUsageReading };
 }
 
 export type MethodName = keyof Methods;
@@ -189,6 +237,8 @@ export interface Events {
   "ui.theme": TavoraTheme;
   "ui.language": string;
   "documents.changed": DocumentChange;
+  /** The player added, renamed or removed an AI account; ask aiUsage.accounts again. Only with capability `aiUsage`. */
+  "aiUsage.accountsChanged": null;
   "lifecycle.suspend": null;
   "lifecycle.resume": null;
   "lifecycle.dispose": null;
@@ -281,6 +331,10 @@ export const LIMITS = {
   maxNetworkRedirects: 5,
   /** network.fetch calls one panel may have running at once; more fail with BAD_REQUEST. */
   maxNetworkInFlight: 6,
+  /** How often Tavora reads one AI account at most, for every module together; asking sooner gives the last reading. */
+  aiUsageMinReadMs: 60_000,
+  /** How long one aiUsage.read may take; the Codex command line can be slow to start. */
+  aiUsageTimeoutMs: 40_000,
 } as const;
 
 /** The kinds of file a module can keep with blobs.put, found by looking at the file itself. */

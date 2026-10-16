@@ -54,6 +54,7 @@ Methods without params must be sent with `params` left out.
 | `storage.set` | `{ key, value }` | `null` |
 | `storage.delete` | `{ key }` | `null` |
 | `storage.keys` | none | sorted array of keys |
+| `storage.app.get`, `storage.app.set`, `storage.app.delete`, `storage.app.keys` | as `storage.*` | the same calls for settings shared by every game, see [Where data lives](#where-data-lives) |
 | `documents.list` | none | `DocumentSummary[]`, newest first |
 | `documents.get` | `{ id }` | `{ id, title, revision, updatedAt, bytes, data }` or `null` |
 | `documents.put` | `{ id?, title, data, ifRevision? }` | `DocumentSummary` of the saved document |
@@ -68,17 +69,20 @@ Methods without params must be sent with `params` left out.
 | `blobs.delete` | `{ id }` | `null` (also when the file did not exist); `INVALID_PARAMS` for an id the host did not make |
 | `ui.getTheme` | none | `{ mode, colors: { background, surface, text, textMuted, accent }, tokens, radius }`: `tokens` holds every semantic colour by its shadcn-vue name (`THEME_TOKENS`), `radius` is in CSS pixels |
 | `network.fetch` | `{ url, method?, headers?, body?, responseType? }` | `{ status, url, headers, body }`; needs the `network` capability, see [Network](#network) |
+| `aiUsage.accounts` | none | `AiUsageAccountInfo[]` in the player's order; needs the `aiUsage` capability, see [Connectors](#connectors) |
+| `aiUsage.read` | `{ accountId }` | `AiUsageReading`; needs the `aiUsage` capability |
 
 ### Where data lives
 
 | Kind | Scope | Removed when |
 | --- | --- | --- |
 | `storage` | module + game, shared by all its panels | never by closing panels; later by uninstalling (Milestone C) |
+| `storage.app` | module, shared by all its panels in every game | never by closing panels or deleting a game; with the module's data in Settings > Modules |
 | `documents` | module + game, shared by all its panels | as above |
 | `blobs` (pictures) | module + game, shared by all its panels | the game is deleted from the Trash; never by closing panels |
 | `panel` state | one panel instance | the panel is closed |
 
-A module never sees another module's data, or its own data for another game. Data belongs to the module's id together with who published it (the key that signed its zip, or "local" for an unsigned folder), so a module from another publisher with the same id starts with nothing.
+A module never sees another module's data, or its own data for another game (except what it keeps in `storage.app` for every game). `storage.app` has the same limits as a game's `storage`; use it for settings the player expects to stay the same from game to game. Data belongs to the module's id together with who published it (the key that signed its zip, or "local" for an unsigned folder), so a module from another publisher with the same id starts with nothing.
 
 ### Files (blobs)
 
@@ -108,6 +112,16 @@ A module's page has no network of its own: it cannot fetch, load remote images o
 - **Limits:** at most 5 MB of body (after unpacking; `QUOTA_EXCEEDED` otherwise), 15 seconds per request including redirects, and 6 requests at once per panel (`BAD_REQUEST` for a seventh). When no answer comes at all (unknown host, refused connection, certificate error, too slow), the error is `NETWORK_ERROR`.
 - **To show a picture** from a granted host, ask for `responseType: "base64"` and use a `data:` address, or store it with `blobs.put`.
 
+### Connectors
+
+A connector is a part of Tavora that holds a sign-in and lets a module use it without ever seeing the token. A module asks for one in [`permissions.connectors`](./manifest.md); the player agrees when they first add the module, and can take it back in Settings > Integrations. Until then the handshake reports no capability for it and its calls fail with `PERMISSION_DENIED`.
+
+**`ai-usage`** (capability `aiUsage`, `sdk.connectors.aiUsage`): the Claude and Codex accounts the player set up in Settings > Integrations > AI usage, by the folder of each CLI profile. Tavora reads each account with its own login and hands over only the answer.
+
+- `aiUsage.accounts` gives `{ id, provider, label, plan }` per account, in the player's order: `provider` is `"claude"` or `"codex"`, `plan` a name such as `"Pro"` or `"Max 5×"`, or `null`. The profile folder is never given out. The `aiUsage.accountsChanged` event says the list changed.
+- `aiUsage.read` gives `{ status, retryAfterMs, answer, email, plan, readAt }`. `status` is `ok`, `sign-in` (no usable subscription login), `rate-limited` (wait `retryAfterMs`), `api-key` (the profile uses an API key, which has no subscription allowance), `cli-missing` (the Codex command line is not installed) or `unavailable`. For `ok`, `answer` is the provider's answer as it came: Claude's usage answer (undocumented, it may change) or the result of the Codex app-server's `account/rateLimits/read`. `email` is who is signed in, when the provider says; keep it in memory only. `readAt` is an ISO 8601 time.
+- Tavora reads each account at most once a minute for all modules together; asking sooner gives the last reading again, and a provider's wait applies to every module. One read can take up to 40 seconds while the Codex command starts. An unknown `accountId` is `INVALID_PARAMS`.
+
 ### Documents
 
 A document is a named JSON value with a title and a revision. `DocumentSummary` is `{ id, title, revision, updatedAt, bytes }`; `updatedAt` is an ISO 8601 timestamp and `bytes` the size of `data` as stored.
@@ -127,6 +141,7 @@ Writes are atomic: a crash leaves either the old or the new document, never a mi
 | `ui.theme` | theme, as `ui.getTheme` | the host theme changed |
 | `ui.language` | language code, as `ui.getLanguage` | the player changed the language |
 | `documents.changed` | `{ id, revision, deleted }` | another panel of this module changed a document |
+| `aiUsage.accountsChanged` | `null` | the player added, renamed or removed an AI account; only with the `aiUsage` capability |
 | `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden, its tab is in the background, or another group is maximized); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
 | `lifecycle.resume` | `null` | the panel is visible again |
 | `lifecycle.dispose` | `null` | the panel is closing. Best effort only: it may never arrive, so never rely on it to save |
@@ -182,6 +197,7 @@ Some methods need a capability the player grants. A module asks for it in its ma
 | Method | Capability | |
 | --- | --- | --- |
 | `network.fetch` | `network` | granted per host, see [Network](#network) |
+| `aiUsage.accounts`, `aiUsage.read` | `aiUsage` | granted for the `ai-usage` connector, see [Connectors](#connectors) |
 | `files.open`, `files.save` | `files` | reserved |
 | `clipboard.writeText`, `clipboard.readText` | `clipboard` | reserved |
 | `sharedData.publish`, `sharedData.read`, `sharedData.subscribe` | `sharedData` | reserved |
@@ -196,13 +212,14 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | Requests in flight per panel | 64 |
 | Bytes of requests in flight per panel | 16 MiB |
 | Storage key length | 256 characters |
-| Storage per module and game | 5 MiB (keys + serialized values) |
+| Storage per module and game | 5 MiB (keys + serialized values); the same again for `storage.app` |
 | One document's `data` | 4 MiB |
 | All documents per module and game | 50 MiB, at most 1000 documents |
 | Document title | 200 characters |
 | Panel state | 256 KiB |
 | JSON nesting depth | 64 |
 | `network.fetch` answer | 5 MB of body, 15 s, 5 redirects, 6 requests at once per panel |
+| `aiUsage.read` | one reading per account and minute for all modules, 40 s, answers up to 256 KB |
 
 These limits are checked first inside your own page, by the preload Tavora gives it, before a message reaches the host. A request over a limit is answered with `BAD_REQUEST` (`INVALID_PARAMS` for data that is not plain JSON) and never sent on, so a module that sends something huge can only slow itself down. A request id cannot be reused while its answer is pending.
 
