@@ -65,7 +65,6 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["browser-clear-game", "browser"],
   ["browser-clear-shared", "browser"],
   ["discord-connection", "integrations"],
-  ["discord-secret", "integrations"],
   ["shortcuts", "shortcuts"],
   ["welcome-tour", "general"],
   ["trash", "trash"],

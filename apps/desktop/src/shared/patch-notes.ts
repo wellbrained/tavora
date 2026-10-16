@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.6.1",
+    date: "2026-10-16",
+    title: "Discord connects without a secret",
+    notes: [
+      "Discord no longer asks you to paste a Client Secret. Open a Discord panel, press Connect and approve Tavora in Discord. Nothing secret is kept on your PC anymore. For now Discord lets only approved testers of Tavora do this; if Discord refuses, ask to be added as a tester.",
+    ],
+  },
+  {
     version: "0.6.0",
     date: "2026-10-16",
     title: "Discord, a Browser, German and a tidier sidebar",
