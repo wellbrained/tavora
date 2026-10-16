@@ -56,6 +56,18 @@ describe("the page", () => {
     expect(html).not.toMatch(/<script>|onclick=|style=/);
   });
 
+  it("has two tabs, opens on the ones to review, and has no token button", async () => {
+    const html = await (await call("/", { token: null })).text();
+    expect(html).toContain('data-tab="pending"');
+    expect(html).toContain('data-tab="hosted"');
+    expect(html).toMatch(/id="panel-hosted"[^>]*hidden/);
+    expect(html).not.toMatch(/id="panel-pending"[^>]*hidden/);
+    expect(html).toContain('id="search"');
+    expect(html).not.toContain("Forget token");
+    expect(ADMIN_JS).not.toContain("forget");
+    expect(() => new Function(ADMIN_JS)).not.toThrow();
+  });
+
   it("puts nothing a player sent into the page as markup", () => {
     expect(ADMIN_JS).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(/);
     expect(ADMIN_JS).toContain("textContent");

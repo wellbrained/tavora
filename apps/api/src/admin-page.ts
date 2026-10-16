@@ -19,17 +19,19 @@ export const ADMIN_HTML = `<!doctype html>
   <h1>Icon review</h1>
   <p id="status" role="status"></p>
   <button id="refresh" type="button">Refresh</button>
-  <button id="forget" type="button">Forget token</button>
 </header>
+<nav role="tablist">
+  <button id="tab-pending" class="tab" type="button" role="tab" data-tab="pending">Needs review</button>
+  <button id="tab-hosted" class="tab" type="button" role="tab" data-tab="hosted">Hosted</button>
+</nav>
 <main>
-  <section>
-    <h2>Waiting for review <span id="pending-count"></span></h2>
+  <section id="panel-pending" role="tabpanel">
     <p class="hint">Check that each icon really is the game's own, then approve it. Deny and block refuses the same file for ever.</p>
     <div id="pending" class="grid"></div>
   </section>
-  <section>
-    <h2>Hosted <span id="hosted-count"></span></h2>
+  <section id="panel-hosted" role="tabpanel" hidden>
     <p class="hint">Take down removes an icon at once, for a publisher's request. Release icons also have to be removed from the repository and deployed.</p>
+    <input id="search" type="search" placeholder="Search by game name" autocomplete="off">
     <div id="hosted" class="grid"></div>
   </section>
 </main>
@@ -47,6 +49,11 @@ h1 { font-size: 18px; margin: 0; }
 h2 { font-size: 15px; margin: 0 0 4px; }
 main { padding: 16px; max-width: 1200px; margin: 0 auto; }
 section { margin-bottom: 32px; }
+[hidden] { display: none !important; }
+nav { display: flex; gap: 4px; padding: 8px 16px 0; border-bottom: 1px solid var(--line); }
+.tab { border-radius: 6px 6px 0 0; border-bottom: none; margin-bottom: -1px; background: transparent; color: var(--muted); }
+.tab[aria-selected="true"] { background: var(--card); color: var(--text); border-color: var(--gold); }
+input[type="search"] { font: inherit; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; width: 100%; max-width: 320px; margin: 0 0 12px; }
 .hint, #status { color: var(--muted); margin: 0 0 12px; }
 #status { margin: 0 auto 0 0; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
@@ -75,6 +82,9 @@ const $ = (id) => document.getElementById(id);
 const status = (text) => { $("status").textContent = text; };
 let token = sessionStorage.getItem("adminToken") || "";
 const urls = [];
+let data = null;
+let tab = "pending";
+try { if (sessionStorage.getItem("adminTab") === "hosted") tab = "hosted"; } catch {}
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -173,12 +183,30 @@ async function hostedCard(icon) {
   return card;
 }
 
-async function fill(id, countId, items, make, empty) {
+async function fill(id, items, make, empty) {
   const holder = $(id);
   const cards = [];
   for (const item of items) cards.push(await make(item));
   holder.replaceChildren(...(cards.length ? cards : [el("p", "empty", empty)]));
-  $(countId).textContent = "(" + items.length + ")";
+}
+
+async function render() {
+  if (!data) return;
+  for (const name of ["pending", "hosted"]) {
+    $("tab-" + name).setAttribute("aria-selected", String(name === tab));
+    $("panel-" + name).hidden = name !== tab;
+  }
+  $("tab-pending").textContent = "Needs review (" + data.pending.length + ")";
+  $("tab-hosted").textContent = "Hosted (" + data.hosted.length + ")";
+  for (const url of urls.splice(0)) URL.revokeObjectURL(url);
+  // only the open tab loads its pictures
+  if (tab === "pending") {
+    await fill("pending", data.pending, pendingCard, "Nothing is waiting.");
+    return;
+  }
+  const query = $("search").value.trim().toLowerCase();
+  const shown = data.hosted.filter((icon) => !query || icon.id.includes(query) || icon.names.some((name) => name.toLowerCase().includes(query)));
+  await fill("hosted", shown, hostedCard, data.hosted.length ? "No hosted icon matches." : "No icons are hosted.");
 }
 
 async function load() {
@@ -190,17 +218,22 @@ async function load() {
   status("Loading\\u2026");
   try {
     const response = await call("/api/overview");
-    const data = await response.json();
-    for (const url of urls.splice(0)) URL.revokeObjectURL(url);
-    await fill("pending", "pending-count", data.pending, pendingCard, "Nothing is waiting.");
-    await fill("hosted", "hosted-count", data.hosted, hostedCard, "No icons are hosted.");
+    data = await response.json();
+    await render();
     status("Up to date.");
   } catch (error) {
     status(String(error.message || error));
   }
 }
 
+for (const name of ["pending", "hosted"]) {
+  $("tab-" + name).addEventListener("click", () => {
+    tab = name;
+    try { sessionStorage.setItem("adminTab", name); } catch {}
+    render().catch((error) => status(String(error.message || error)));
+  });
+}
+$("search").addEventListener("input", () => { render().catch((error) => status(String(error.message || error))); });
 $("refresh").addEventListener("click", load);
-$("forget").addEventListener("click", () => { sessionStorage.removeItem("adminToken"); token = ""; status("Token forgotten."); });
 load();
 `;
