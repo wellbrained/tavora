@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { serve } from "@hono/node-server";
 import { AccountStore } from "./account-store.ts";
 import { createAdminApp } from "./admin-app.ts";
+import { createDiscordClient } from "./discord.ts";
 import { createApp } from "./app.ts";
 import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
@@ -77,7 +78,17 @@ const app = createApp({
   db,
   icons,
   submissions,
-  ...(mailer && accountStore ? { accounts: { store: accountStore, mailer, ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }) } } : {}),
+  ...(mailer && accountStore
+    ? {
+        accounts: {
+          store: accountStore,
+          mailer,
+          ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
+          // Discord login: Tavora's public Discord app, no secret; DISCORD_API only for a pretend Discord in tests.
+          discord: createDiscordClient(process.env.DISCORD_API ? { api: process.env.DISCORD_API } : {}),
+        },
+      }
+    : {}),
   ...(takedownContact ? { takedownContact } : {}),
   ...(steamKey ? { steam: createSteamClient({ key: steamKey }) } : {}),
   clientKey: (request) =>

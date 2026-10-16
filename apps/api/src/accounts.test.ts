@@ -3,20 +3,21 @@ import { AccountStore, CODE_TTL_MS, normalizeEmail, SESSION_IDLE_MS } from "./ac
 import { createApp } from "./app.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { BREVO_URL, createBrevoMailer, createTestInbox, createTestInboxApp, MailLimitError, maskEmail, type Mailer } from "./mail.ts";
+import { cleanDiscordName, createDiscordClient, DiscordError, type DiscordClient } from "./discord.ts";
 import { encodePng } from "./png.ts";
 import { createRateLimiter } from "./rate-limit.ts";
 
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
 const roomy = () => createRateLimiter({ limit: 1000, windowMs: 60_000 });
 
-function setup(options: { mailer?: Mailer; mailDailyLimit?: number } = {}) {
+function setup(options: { mailer?: Mailer; mailDailyLimit?: number; discord?: DiscordClient } = {}) {
   const store = new AccountStore(":memory:");
   const inbox = createTestInbox();
   const clock = { now: Date.parse("2026-10-16T12:00:00Z") };
   const app = createApp({
     db,
     rateLimiter: roomy(),
-    accounts: { store, mailer: options.mailer ?? inbox, codeRateLimiter: roomy(), verifyRateLimiter: roomy(), now: () => clock.now, ...(options.mailDailyLimit === undefined ? {} : { mailDailyLimit: options.mailDailyLimit }) },
+    accounts: { store, mailer: options.mailer ?? inbox, codeRateLimiter: roomy(), verifyRateLimiter: roomy(), now: () => clock.now, ...(options.mailDailyLimit === undefined ? {} : { mailDailyLimit: options.mailDailyLimit }), ...(options.discord ? { discord: options.discord } : {}) },
   });
   const call = (method: string, path: string, body?: unknown, token?: string) =>
     app.request(`http://tavora.test/v1/account${path}`, {
@@ -137,7 +138,7 @@ describe("signed in", () => {
     const first = await signIn("me@example.com", "windows");
     const second = await signIn("me@example.com", "toaster");
     const answer = (await (await call("GET", "", undefined, second)).json()) as { account: unknown; devices: { os: string; current: boolean }[] };
-    expect(answer.account).toEqual({ email: "me@example.com", createdAt: "2026-10-16T12:00:00.000Z" });
+    expect(answer.account).toEqual({ email: "me@example.com", discord: null, createdAt: "2026-10-16T12:00:00.000Z" });
     expect(answer.devices.map(({ os, current }) => ({ os, current }))).toEqual([
       { os: "windows", current: false },
       { os: "other", current: true },
@@ -349,5 +350,131 @@ describe("Brevo", () => {
     const other = answer(401, '{"code":"unauthorized"}').send(mail);
     await expect(other).rejects.toThrow("Brevo answered 401");
     await expect(other).rejects.not.toThrow(/secret/);
+  });
+});
+
+describe("Discord login", () => {
+  const NIK = { id: "123456789012345678", name: "nik" };
+  const OTHER = { id: "223456789012345678", name: "other" };
+  const VERIFIER = "v".repeat(43);
+  /** A pretend Discord: each code stands for one Discord user; "bad" is refused. */
+  const pretend = (users: Record<string, { id: string; name: string }>): DiscordClient => ({
+    identify: async (code) => {
+      const user = users[code];
+      if (!user) throw new DiscordError("discord-refused");
+      return user;
+    },
+  });
+  const setupDiscord = () => setup({ discord: pretend({ codenik00000: NIK, codeother000: OTHER, codenikrenamed: { ...NIK, name: "nik2" } }) });
+
+  it("asks before creating a Discord-only account, then signs the same login in again", async () => {
+    const { call } = setupDiscord();
+    const first = (await (await call("POST", "/discord/sign-in", { code: "codenik00000", verifier: VERIFIER, os: "windows" })).json()) as { status: string; ticket: string };
+    expect(first).toMatchObject({ status: "no-account", discord: { name: "nik" } });
+    const created = (await (await call("POST", "/discord/create", { ticket: first.ticket, os: "windows" })).json()) as Record<string, unknown>;
+    expect(created).toMatchObject({ status: "created", account: { email: null, discord: { name: "nik" } } });
+    // The ticket is spent.
+    expect(await (await call("POST", "/discord/create", { ticket: first.ticket })).json()).toMatchObject({ reason: "discord-expired" });
+    // Signing in again finds it, and a new username is picked up; the id is never shown.
+    const again = (await (await call("POST", "/discord/sign-in", { code: "codenikrenamed", verifier: VERIFIER })).json()) as Record<string, unknown>;
+    expect(again).toMatchObject({ status: "signed-in", account: { discord: { name: "nik2" } } });
+    expect(JSON.stringify(again)).not.toContain(NIK.id);
+  });
+
+  it("lets a held Discord login expire after 10 minutes", async () => {
+    const { call, clock } = setupDiscord();
+    const { ticket } = (await (await call("POST", "/discord/sign-in", { code: "codenik00000", verifier: VERIFIER })).json()) as { ticket: string };
+    clock.now += 10 * 60_000;
+    expect(await (await call("POST", "/discord/create", { ticket })).json()).toMatchObject({ reason: "discord-expired" });
+  });
+
+  it("connects Discord only from a signed-in account, never taking it from another, and never merges", async () => {
+    const { call, signIn, store } = setupDiscord();
+    const mine = await signIn("me@example.com");
+    const theirs = await signIn("them@example.com");
+    expect(await (await call("POST", "/discord", { code: "codenik00000", verifier: VERIFIER }, mine)).json()).toMatchObject({ account: { email: "me@example.com", discord: { name: "nik" } } });
+    expect(await (await call("POST", "/discord", { code: "codenik00000", verifier: VERIFIER }, theirs)).json()).toMatchObject({ reason: "discord-taken" });
+    expect(store.accountByEmail("them@example.com")?.discord).toBeNull();
+    // The Discord sign-in now reaches the email account.
+    expect(await (await call("POST", "/discord/sign-in", { code: "codenik00000", verifier: VERIFIER })).json()).toMatchObject({ status: "signed-in", account: { email: "me@example.com" } });
+  });
+
+  it("never removes the last way in", async () => {
+    const { call, signIn } = setupDiscord();
+    const token = await signIn("me@example.com");
+    expect(await (await call("DELETE", "/discord", undefined, token)).json()).toMatchObject({ reason: "no-discord" });
+    expect(await (await call("DELETE", "/email", undefined, token)).json()).toMatchObject({ reason: "last-method" });
+    await call("POST", "/discord", { code: "codenik00000", verifier: VERIFIER }, token);
+    expect(await (await call("DELETE", "/email", undefined, token)).json()).toMatchObject({ account: { email: null, discord: { name: "nik" } } });
+    expect(await (await call("DELETE", "/discord", undefined, token)).json()).toMatchObject({ reason: "last-method" });
+    expect(await (await call("DELETE", "/email", undefined, token)).json()).toMatchObject({ reason: "no-email" });
+  });
+
+  it("adds an email to a Discord-only account with a code, and sends no change notice to a missing address", async () => {
+    const { call, inbox, lastCode } = setupDiscord();
+    const { ticket } = (await (await call("POST", "/discord/sign-in", { code: "codenik00000", verifier: VERIFIER })).json()) as { ticket: string };
+    const { token } = (await (await call("POST", "/discord/create", { ticket })).json()) as { token: string };
+    await call("POST", "/email/code", { email: "me@example.com" }, token);
+    expect(await (await call("POST", "/email", { email: "me@example.com", code: lastCode() }, token)).json()).toMatchObject({ account: { email: "me@example.com", discord: { name: "nik" } } });
+    expect(inbox.mails()).toHaveLength(1);
+  });
+
+  it("deletes a Discord-only account by a fresh Discord sign-in with its own login", async () => {
+    const { call, store } = setupDiscord();
+    const { ticket } = (await (await call("POST", "/discord/sign-in", { code: "codenik00000", verifier: VERIFIER })).json()) as { ticket: string };
+    const { token } = (await (await call("POST", "/discord/create", { ticket })).json()) as { token: string };
+    expect(await (await call("POST", "/delete/code", {}, token)).json()).toMatchObject({ reason: "no-email" });
+    expect(await (await call("POST", "/delete/discord", { code: "codeother000", verifier: VERIFIER }, token)).json()).toMatchObject({ reason: "discord-mismatch" });
+    expect((await call("POST", "/delete/discord", { code: "codenik00000", verifier: VERIFIER }, token)).status).toBe(204);
+    expect(store.accountByDiscord(NIK.id)).toBeNull();
+    expect((await call("GET", "", undefined, token)).status).toBe(401);
+  });
+
+  it("refuses what is not a Discord code or verifier, says when Discord refuses, and is off without a client", async () => {
+    const { call } = setupDiscord();
+    expect((await call("POST", "/discord/sign-in", { code: "x", verifier: VERIFIER })).status).toBe(400);
+    expect((await call("POST", "/discord/sign-in", { code: "codenik00000", verifier: "short" })).status).toBe(400);
+    expect(await (await call("POST", "/discord/sign-in", { code: "unknowncode1", verifier: VERIFIER })).json()).toMatchObject({ reason: "discord-refused" });
+    const off = setup();
+    expect(await (await off.call("POST", "/discord/sign-in", { code: "codenik00000", verifier: VERIFIER })).json()).toMatchObject({ reason: "unavailable" });
+  });
+});
+
+describe("Discord client", () => {
+  const VERIFIER = "v".repeat(43);
+
+  it("exchanges the code without a secret, reads only id and username, and revokes the token", async () => {
+    const calls: { url: string; body: string; auth: string | null }[] = [];
+    const client = createDiscordClient({
+      api: "https://discord.test/api",
+      fetch: (async (url: string, init: RequestInit) => {
+        calls.push({ url, body: String(init.body ?? ""), auth: new Headers(init.headers).get("authorization") });
+        if (url.endsWith("/oauth2/token")) return Response.json({ access_token: "tok", scope: "identify" });
+        if (url.endsWith("/users/@me")) return Response.json({ id: "123456789012345678", username: "nik\u202e", email: "never@example.com" });
+        return new Response(null, { status: 200 });
+      }) as unknown as typeof fetch,
+    });
+    expect(await client.identify("codenik00000", VERIFIER)).toEqual({ id: "123456789012345678", name: "nik" });
+    expect(calls.map((call) => call.url)).toEqual(["https://discord.test/api/oauth2/token", "https://discord.test/api/users/@me", "https://discord.test/api/oauth2/token/revoke"]);
+    const exchange = new URLSearchParams(calls[0]!.body);
+    expect(Object.fromEntries(exchange)).toEqual({ client_id: "1560388687370387610", grant_type: "authorization_code", code: "codenik00000", redirect_uri: "http://127.0.0.1:53682/discord", code_verifier: VERIFIER });
+    expect(calls[1]!.auth).toBe("Bearer tok");
+    expect(new URLSearchParams(calls[2]!.body).get("token")).toBe("tok");
+  });
+
+  it("tells a refusal from an outage, and refuses a user without a proper id", async () => {
+    const answering = (token: Response, me?: Response) =>
+      createDiscordClient({ fetch: (async (url: string) => (url.endsWith("/oauth2/token") ? token : (me ?? new Response(null)))) as unknown as typeof fetch });
+    await expect(answering(new Response("{}", { status: 400 })).identify("codenik00000", VERIFIER)).rejects.toMatchObject({ reason: "discord-refused" });
+    await expect(answering(new Response("{}", { status: 503 })).identify("codenik00000", VERIFIER)).rejects.toMatchObject({ reason: "discord-unreachable" });
+    await expect(answering(Response.json({ access_token: "t" }), Response.json({ id: "abc", username: "x" })).identify("codenik00000", VERIFIER)).rejects.toMatchObject({ reason: "discord-refused" });
+    const offline = createDiscordClient({ fetch: (async () => { throw new TypeError("offline"); }) as unknown as typeof fetch });
+    await expect(offline.identify("codenik00000", VERIFIER)).rejects.toMatchObject({ reason: "discord-unreachable" });
+  });
+
+  it("keeps a username as plain text of at most 32 characters", () => {
+    expect(cleanDiscordName("a\u0000b\u202ec")).toBe("abc");
+    expect(cleanDiscordName("x".repeat(40))).toHaveLength(32);
+    expect(cleanDiscordName("  ")).toBeNull();
   });
 });
