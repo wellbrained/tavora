@@ -20,6 +20,7 @@ export interface ModuleManifest {
   games: string[];
   viewport: ModuleViewport;
   permissions: {
+    /** Hosts the module asks to reach through network.fetch, such as `api.example.com`. Each needs the player's grant. */
     network: string[];
     /** Lets the page compile WebAssembly (Excalidraw's picture resizing needs it). Only Tavora's own modules may ask for it. */
     webAssembly?: boolean;
@@ -59,6 +60,24 @@ export function isOwnerId(value: unknown): value is string {
 
 export function isGameId(value: unknown): value is string {
   return typeof value === "string" && GAME_ID.test(value);
+}
+
+/** Most hosts one manifest may ask for. */
+export const MAX_NETWORK_HOSTS = 32;
+const HOST_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/**
+ * A host a module may ask to reach (docs/decisions.md, module grants row of 2026-10-16): an exact,
+ * lowercase public name such as `api.example.com`. No wildcards, ports, schemes, IP addresses or
+ * names of this PC or the local network (`localhost`, `.local`), so a grant always names one site.
+ */
+export function isNetworkHost(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 253) return false;
+  const labels = value.split(".");
+  if (labels.length < 2 || !labels.every((label) => HOST_LABEL.test(label))) return false;
+  const last = labels.at(-1)!;
+  // A top-level label of digits only is an IP address (or not a name at all).
+  return !/^\d+$/.test(last) && !["localhost", "local", "internal", "arpa"].includes(last);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -121,10 +140,15 @@ export function validateManifest(input: unknown): ManifestResult {
   const permissions = input.permissions;
   if (!isRecord(permissions) || !Array.isArray(permissions.network)) {
     errors.push("permissions.network must be an array");
-  } else if (permissions.network.length > 0) {
-    // Mediated network access arrives after Milestone B; refuse rather than
-    // silently ignore a permission the module expects to have.
-    errors.push("permissions.network is not supported yet and must be empty");
+  } else {
+    const hosts = permissions.network as unknown[];
+    if (hosts.length > MAX_NETWORK_HOSTS) errors.push(`permissions.network may name at most ${MAX_NETWORK_HOSTS} hosts`);
+    const bad = hosts.filter((host) => !isNetworkHost(host));
+    if (bad.length > 0) {
+      errors.push(`permissions.network must list exact public host names such as api.example.com (lowercase, no scheme, port or wildcard): ${bad.slice(0, 3).map(String).join(", ")}`);
+    } else if (new Set(hosts).size !== hosts.length) {
+      errors.push("permissions.network lists a host twice");
+    }
   }
   if (isRecord(permissions)) {
     const unsupported = Object.keys(permissions).filter((key) => key !== "network" && key !== "webAssembly");

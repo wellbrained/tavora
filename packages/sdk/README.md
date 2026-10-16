@@ -46,6 +46,6 @@ The same small module built three ways: [vanilla TypeScript](../../examples/vani
 
 ## Building a module
 
-- Bundle everything. Modules have no network access, so no CDN scripts, web fonts or remote images.
+- Bundle everything. A module's page has no network access, so no CDN scripts, web fonts or remote images. To reach a web API, list its host in `permissions.network` and use `tavora.network.fetch` once the player has granted it.
 - Use relative asset paths (Vite: `base: "./"`). The page is served from `tavora-module://<module-id>/`.
 - Point the manifest's `entry` at the built HTML file.

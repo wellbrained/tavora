@@ -43,12 +43,13 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     game: { id: "poe2", displayName: "Path of Exile 2" },
     data: registry.get("local", moduleId, "poe2"),
     panelState: registry.panelState,
-    capabilities: new Set(),
+    capabilities: () => new Set(),
     getViewport: () => ({ width: 400, height: 300 }),
     getTheme: () => THEME,
     getLanguage: () => "de",
     isSuspended: () => false,
     openLink: () => {},
+    fetch: () => Promise.reject(new Error("no network in this test")),
   };
 }
 
@@ -328,6 +329,58 @@ describe("links.open", () => {
       },
     });
     expect(await call(p, "links.open", { url: "https://example.com" })).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED" } });
+  });
+});
+
+describe("network.fetch", () => {
+  const ANSWER = { status: 200, url: "https://api.example.com/", headers: {}, body: "ok" };
+
+  it("reports the network capability in the handshake once a host is granted", async () => {
+    const p = new FakePort();
+    new BridgeSession(p, { ...makeContext(), capabilities: () => new Set(["network"] as const) });
+    expect(await call(p, "bridge.handshake", { protocol: 1, sdkVersion: "0.1.0" })).toMatchObject({ ok: true, result: { capabilities: ["network"] } });
+  });
+
+  it("hands the request to the host and answers with what came back", async () => {
+    const asked: unknown[] = [];
+    const p = await connected({ ...makeContext(), capabilities: () => new Set(["network"] as const), fetch: async (params) => (asked.push(params), ANSWER) });
+    expect(await call(p, "network.fetch", { url: "https://api.example.com/" })).toMatchObject({ ok: true, result: ANSWER });
+    expect(asked).toEqual([{ url: "https://api.example.com/" }]);
+  });
+
+  it("asks for the grant on every call, so a revoke takes effect at once", async () => {
+    let granted = true;
+    const p = await connected({ ...makeContext(), capabilities: () => new Set(granted ? (["network"] as const) : []), fetch: async () => ANSWER });
+    expect(await call(p, "network.fetch", { url: "https://api.example.com/" })).toMatchObject({ ok: true });
+    granted = false;
+    expect(await call(p, "network.fetch", { url: "https://api.example.com/" })).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "network" } });
+  });
+
+  it("passes on the host's refusals and failures", async () => {
+    const p = await connected({
+      ...makeContext(),
+      capabilities: () => new Set(["network"] as const),
+      fetch: async () => {
+        throw new HostError("NETWORK_ERROR", "could not reach api.example.com");
+      },
+    });
+    expect(await call(p, "network.fetch", { url: "https://api.example.com/" })).toMatchObject({ ok: false, error: { code: "NETWORK_ERROR", message: "could not reach api.example.com" } });
+  });
+
+  it("lets one panel run only a few requests at once", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const p = await connected({ ...makeContext(), capabilities: () => new Set(["network"] as const), fetch: async () => (await gate, ANSWER) });
+    const first = nextId;
+    for (let i = 0; i <= LIMITS.maxNetworkInFlight; i++) p.receive({ v: 1, id: nextId++, method: "network.fetch", params: { url: "https://api.example.com/" } });
+    await flush();
+    const response = (id: number) => p.sent.find((m) => (m as { id?: number }).id === id);
+    expect(response(first + LIMITS.maxNetworkInFlight)).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
+    release();
+    await flush();
+    expect(response(first)).toMatchObject({ ok: true });
+    // The slots are free again.
+    expect(await call(p, "network.fetch", { url: "https://api.example.com/" })).toMatchObject({ ok: true });
   });
 });
 

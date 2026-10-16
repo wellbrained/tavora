@@ -102,6 +102,33 @@ export interface PutDocumentParams {
   ifRevision?: number;
 }
 
+/**
+ * A web request the host makes for the module (network.fetch). Only to a host the module names in
+ * `permissions.network` and the player granted, only over HTTPS; the host sends no cookies and
+ * follows redirects only to granted hosts.
+ */
+export interface NetworkRequest {
+  url: string;
+  /** Default GET. */
+  method?: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE";
+  /** Cookie, Host, Origin, Referer, Proxy-*, Sec-* and the transfer headers are set by the host and refused here. */
+  headers?: Record<string, string>;
+  /** Text only; send binary data as base64 or JSON. */
+  body?: string;
+  /** "base64" for pictures and other binary answers. Default "text" (read as UTF-8). */
+  responseType?: "text" | "base64";
+}
+
+export interface NetworkResponse {
+  status: number;
+  /** The address that answered, after any redirects. */
+  url: string;
+  /** Lowercase names; Set-Cookie is left out. */
+  headers: Record<string, string>;
+  /** The answer as text, or base64 when the request asked for it. */
+  body: string;
+}
+
 export interface DocumentChange {
   id: string;
   revision: number;
@@ -109,8 +136,10 @@ export interface DocumentChange {
 }
 
 /**
- * Capabilities gate methods beyond the always-available core. None of the
- * gated ones can be granted yet; calling them fails with PERMISSION_DENIED.
+ * Capabilities gate methods beyond the always-available core. A module has a
+ * capability once the player granted one of its permissions for it (`network`:
+ * a host in `permissions.network`); calling a gated method without it fails
+ * with PERMISSION_DENIED. The others cannot be granted yet.
  */
 export type Capability = "network" | "files" | "clipboard" | "sharedData";
 
@@ -137,13 +166,14 @@ export interface Methods {
   "blobs.list": { params: undefined; result: BlobInfo[] };
   "blobs.usage": { params: undefined; result: BlobUsage };
   "blobs.delete": { params: { id: string }; result: null };
+  /** A web request to a granted host (capability `network`). */
+  "network.fetch": { params: NetworkRequest; result: NetworkResponse };
 }
 
 export type MethodName = keyof Methods;
 
 /** Methods reserved for later milestones, and the capability each needs. */
 export const RESERVED_METHODS: Readonly<Record<string, Capability>> = {
-  "network.fetch": "network",
   "files.open": "files",
   "files.save": "files",
   "clipboard.writeText": "clipboard",
@@ -175,8 +205,10 @@ export type ErrorCode =
   | "INVALID_PARAMS"
   /** The method exists but this module has not been granted its capability. */
   | "PERMISSION_DENIED"
-  /** A storage, document or panel-state limit would be exceeded. */
+  /** A storage, document or panel-state limit would be exceeded, or a network answer was too large. */
   | "QUOTA_EXCEEDED"
+  /** network.fetch got no answer: the host could not be found or reached, the connection failed or it took too long. An answer with an error status (404, 500) is not this; it is returned. */
+  | "NETWORK_ERROR"
   /** `ifRevision` did not match the stored revision. */
   | "CONFLICT"
   /** The SDK and host speak different protocol versions. */
@@ -241,6 +273,14 @@ export const LIMITS = {
   maxBlobsBytes: 500 * 1024 * 1024,
   /** A PNG a module puts on the clipboard. */
   maxClipboardImageBytes: 20 * 1024 * 1024,
+  /** The body of one network.fetch answer, before any base64. A longer answer fails with QUOTA_EXCEEDED. */
+  maxNetworkResponseBytes: 5 * 1024 * 1024,
+  /** How long one network.fetch may take, redirects included. */
+  networkTimeoutMs: 15_000,
+  /** Redirects one network.fetch follows; each must go to a granted host. */
+  maxNetworkRedirects: 5,
+  /** network.fetch calls one panel may have running at once; more fail with BAD_REQUEST. */
+  maxNetworkInFlight: 6,
 } as const;
 
 /** The kinds of file a module can keep with blobs.put, found by looking at the file itself. */
