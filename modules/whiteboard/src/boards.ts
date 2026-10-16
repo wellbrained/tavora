@@ -1,7 +1,15 @@
 // The data side of the Whiteboard: what a stored board looks like and the pure rules for ids, names and size.
 // Kept free of React and Excalidraw so it can be unit tested.
 
-import type { JsonValue } from "@tavora/sdk";
+import { BLOB_ID, type JsonValue } from "@tavora/sdk";
+
+/** The stored file (see blobs) behind a picture on a board. */
+export interface StoredFile {
+  [key: string]: JsonValue;
+  blobId: string;
+  mimeType: string;
+  created: number;
+}
 
 /** What the Whiteboard stores in each document. */
 export interface BoardData {
@@ -9,6 +17,8 @@ export interface BoardData {
   version: 1;
   /** Excalidraw's elements, without the ones that were deleted. */
   elements: JsonValue[];
+  /** Picture file id → its stored file, for the pictures on the board. */
+  files: Record<string, StoredFile>;
   /** The colour of the board's background. */
   background: string;
   createdAt: string;
@@ -29,7 +39,21 @@ export const MAX_NAME = 60;
 export const DEFAULT_BACKGROUND = "#ffffff";
 
 export function emptyBoard(now = new Date().toISOString()): BoardData {
-  return { version: 1, elements: [], background: DEFAULT_BACKGROUND, createdAt: now };
+  return { version: 1, elements: [], files: {}, background: DEFAULT_BACKGROUND, createdAt: now };
+}
+
+/** The stored files in a board's data, keeping only well-formed entries. */
+function parseFiles(raw: JsonValue | undefined): Record<string, StoredFile> {
+  const files: Record<string, StoredFile> = {};
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return files;
+  for (const [id, value] of Object.entries(raw)) {
+    if (id.length === 0 || id.length > 64 || value === null || typeof value !== "object" || Array.isArray(value)) continue;
+    const { blobId, mimeType, created } = value;
+    if (typeof blobId === "string" && BLOB_ID.test(blobId) && typeof mimeType === "string" && mimeType.length <= 40 && typeof created === "number" && Number.isFinite(created)) {
+      files[id] = { blobId, mimeType, created };
+    }
+  }
+  return files;
 }
 
 /** Turns stored data into a valid board, whatever an older version or a bad write left there. */
@@ -38,6 +62,7 @@ export function parseBoard(raw: JsonValue | null, now = new Date().toISOString()
   return {
     version: 1,
     elements: Array.isArray(value.elements) ? value.elements.filter((element) => element !== null && typeof element === "object" && !Array.isArray(element)) : [],
+    files: parseFiles(value.files),
     background: typeof value.background === "string" && /^#[0-9a-fA-F]{3,8}$|^transparent$/.test(value.background) ? value.background : DEFAULT_BACKGROUND,
     createdAt: typeof value.createdAt === "string" ? value.createdAt : now,
   };

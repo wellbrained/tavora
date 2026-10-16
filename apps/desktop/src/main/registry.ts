@@ -90,6 +90,11 @@ export async function discoverModules(
         problems.push({ folder: path.basename(candidate), message: "its id is reserved for Tavora's own modules" });
         continue;
       }
+      if (provenance !== "official" && installed.manifest.permissions.webAssembly === true) {
+        console.warn(`[tavora] module ${id} in ${candidate} asks to run WebAssembly, which only Tavora's own modules may; skipping it`);
+        problems.push({ folder: path.basename(candidate), message: "permissions.webAssembly is only for Tavora's own modules" });
+        continue;
+      }
       if (modules.has(id)) {
         console.warn(`[tavora] duplicate module id ${id} in ${candidate}; keeping the first one`);
         if (provenance === "local") problems.push({ folder: path.basename(candidate), message: "another module with the same id is already loaded" });

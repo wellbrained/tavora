@@ -21,6 +21,8 @@ export interface ModuleManifest {
   viewport: ModuleViewport;
   permissions: {
     network: string[];
+    /** Lets the page compile WebAssembly (Excalidraw's picture resizing needs it). Only Tavora's own modules may ask for it. */
+    webAssembly?: boolean;
   };
 }
 
@@ -111,8 +113,9 @@ export function validateManifest(input: unknown): ManifestResult {
     errors.push("permissions.network is not supported yet and must be empty");
   }
   if (isRecord(permissions)) {
-    const unsupported = Object.keys(permissions).filter((key) => key !== "network");
+    const unsupported = Object.keys(permissions).filter((key) => key !== "network" && key !== "webAssembly");
     if (unsupported.length > 0) errors.push(`unsupported permissions: ${unsupported.join(", ")}`);
+    if ("webAssembly" in permissions && typeof permissions.webAssembly !== "boolean") errors.push("permissions.webAssembly must be true or false");
   }
 
   const extra = Object.keys(input).filter((key) => !FIELDS.includes(key));
