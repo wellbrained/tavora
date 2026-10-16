@@ -71,3 +71,18 @@ Nothing is shared between games or between modules. See [Where data lives](../re
 - Don't use Ctrl+K (Cmd+K on macOS) as a shortcut. Tavora takes it for its own search before your page sees the key.
 - Point the manifest's `entry` at the built HTML file.
 - Add `"$schema"` to the manifest so your editor checks it. The schema is published at `https://docs.mytavora.app/schema/tavora.module.schema.json`.
+
+## Share the module
+
+Pack the built module into a zip signed with your publisher key:
+
+```sh
+pnpm pack-module examples/vanilla-module
+```
+
+The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`) and the icon, plus `tavora.signature.json`. Your sources and `node_modules` stay out. Use `--out` to choose the file name.
+
+The first run makes your publisher key in `~/.tavora/publisher-key.pem` (or the file you pass with `--key`). It stays on your PC. **Back it up and never share it.** The key is who you are to Tavora: the settings and documents your module saves for players belong to your key, so only modules signed by it can see them. Lose the key and your next version counts as a different publisher, whose module starts with empty data. A module signed by another key can never read your module's data, even if it uses the same id.
+
+While you build, keep loading the module from a folder: an unsigned folder module needs no key, and its data is kept apart from the signed version's.
+

@@ -355,6 +355,8 @@ export interface HostViewState {
     origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
     /** Only a module in the player's own modules folder can be removed from Settings. */
     removable: boolean;
+    /** The fingerprint of the key that signed it, for a module installed from a signed zip; null otherwise. */
+    publisher: string | null;
     /** The icon from the module's manifest as a data address (PNG or WebP), or null. */
     icon: string | null;
   }[];
@@ -446,6 +448,8 @@ export type HostAction =
   | { type: "reload-modules" }
   /** Moves a module from the player's modules folder to the recycle bin; its data stays. */
   | { type: "remove-module"; moduleId: string }
+  /** Asks for a module zip and installs it into the player's modules folder; answers with the module's id. */
+  | { type: "install-module" }
   /** Copies the Tavora theme into the themes folder as a new theme to change; answers with its id. */
   | { type: "create-starter-theme" }
   /** Done ends the first-run welcome; false shows it again. */

@@ -1,9 +1,11 @@
 // Settings > Modules: the list says where each module came from, Reload picks
 // up a module put into the player's modules folder and explains one that
 // cannot be loaded, and Remove takes a module away together with its panels.
+import { generateKeyPairSync } from "node:crypto";
 import { access, mkdir, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test, type ElectronApplication } from "@playwright/test";
+import { packModule } from "@tavora/pack";
 import { expectModuleText, inModule, launch, newUserData, openGame, openModule, panels, VANILLA } from "./harness";
 
 async function addModule(userData: string, folder: string, id: string): Promise<string> {
@@ -88,4 +90,37 @@ test("data saved before modules had owners is moved under its owner and still fo
   expect(await inModule(again.app, VANILLA, "localStorage.getItem('kept')")).toBe("yes");
   expect(await readdir(data)).toEqual(["local"]);
   await again.app.close();
+});
+
+/** Makes the next file dialog answer with this file, as if the player picked it. */
+async function pickFile(app: ElectronApplication, file: string) {
+  await app.evaluate(({ dialog }, picked) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as typeof dialog.showOpenDialog;
+  }, file);
+}
+
+test("a signed zip installs from Settings, updates only from its publisher, and a copycat is refused (S5)", async () => {
+  const userData = await newUserData();
+  const work = path.join(userData, "..", `${path.basename(userData)}-zips`);
+  const source = path.dirname(await addModule(work, "mini", "nik.mini"));
+  const key = generateKeyPairSync("ed25519").privateKey;
+  const zip = path.join(work, "mini.zip");
+  await writeFile(zip, (await packModule(path.join(source, "mini"), key)).zip);
+
+  const { app, page } = await launch(userData);
+  await page.getByTestId("rail-settings").click();
+  await page.getByTestId("settings-nav-modules").click();
+  await pickFile(app, zip);
+  await page.getByTestId("install-module").click();
+  await expect(page.getByTestId("module-nik.mini")).toBeVisible();
+  await expect(page.getByTestId("module-publisher-nik.mini")).toBeVisible();
+  await expect(page.getByTestId("module-origin-nik.mini")).toContainText("nik.mini");
+
+  // The same id signed by someone else cannot replace it.
+  const copycat = path.join(work, "copycat.zip");
+  await writeFile(copycat, (await packModule(path.join(source, "mini"), generateKeyPairSync("ed25519").privateKey)).zip);
+  await pickFile(app, copycat);
+  await page.getByTestId("install-module").click();
+  await expect(page.getByText("comes from a different publisher")).toBeVisible();
+  await app.close();
 });

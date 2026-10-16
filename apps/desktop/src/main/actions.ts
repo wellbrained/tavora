@@ -48,6 +48,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "create-starter-theme":
     case "open-modules-folder":
     case "reload-modules":
+    case "install-module":
       return only() ? { type: a.type } : null;
     case "remove-module":
       return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;

@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -32,6 +33,7 @@ import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/lay
 import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, migrateModuleData, orphanedPartitions } from "./gamedata";
+import { applyOwners, forgetOwner, installZip, readOwnerRecords } from "./installer";
 import { shortcutFor } from "./shortcuts";
 import { IconError, importIcon, removeIcon } from "./icons";
 import { readJsonOrSetAside } from "./json";
@@ -134,6 +136,11 @@ const FREEZE_TIMEOUT_MS = 250;
 /** The player's own modules, next to the themes folder in their data folder. */
 function userModulesDir(options: HostOptions): string {
   return path.join(options.userData, "modules");
+}
+
+/** The modules folder as module roots name it (they are real paths). */
+async function realUserModulesDir(options: HostOptions): Promise<string> {
+  return realpath(userModulesDir(options)).catch(() => path.resolve(userModulesDir(options)));
 }
 
 /** Leaves the workspace header's bottom border visible below the window controls. */
@@ -303,6 +310,7 @@ export class Host {
     await migrateModuleData(userData, (line) => console.warn(`[tavora] ${line}`)).catch((error: unknown) => console.error("[tavora] moving module data under its owner failed", error));
     const moduleProblems: ModuleProblem[] = [];
     const modules = await discoverModules(Host.moduleSources(options), moduleProblems);
+    applyOwners(modules, await realUserModulesDir(options), await readOwnerRecords(userData));
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     modules.set(DISCORD_MODULE_ID, discordModule(app.getVersion()));
     modules.set(AI_USAGE_MODULE_ID, aiUsageModule(app.getVersion()));
@@ -403,6 +411,7 @@ export class Host {
   private async reloadModules(): Promise<void> {
     const problems: ModuleProblem[] = [];
     const modules = await discoverModules(Host.moduleSources(this.options), problems);
+    applyOwners(modules, await realUserModulesDir(this.options), await readOwnerRecords(this.options.userData));
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     modules.set(DISCORD_MODULE_ID, discordModule(app.getVersion()));
     modules.set(AI_USAGE_MODULE_ID, aiUsageModule(app.getVersion()));
@@ -449,7 +458,30 @@ export class Host {
     } catch {
       throw new LibraryError("error.removeFailed");
     }
+    // Its data stays under its owner, so the same publisher's module finds it again.
+    await forgetOwner(this.options.userData, path.basename(module.root));
     await this.reloadModules();
+  }
+
+  /**
+   * Installs a module from a zip the player picks (installer.ts). An update
+   * from the same publisher replaces the folder and reloads its open panels.
+   * Answers with the module's id, or nothing when the player cancelled.
+   */
+  private async installModule(): Promise<string | void> {
+    const picked = await dialog.showOpenDialog(this.window, {
+      title: translate(this.language, "dialog.installModule"),
+      properties: ["openFile"],
+      filters: [{ name: translate(this.language, "dialog.moduleZip"), extensions: ["zip"] }],
+    });
+    const file = picked.filePaths[0];
+    if (picked.canceled || !file) return;
+    const installed = await installZip(file, { userData: this.options.userData, userModules: await realUserModulesDir(this.options), modules: this.modules });
+    await this.reloadModules();
+    if (installed.updated) {
+      for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === installed.manifest.id) view.reload();
+    }
+    return installed.manifest.id;
   }
 
   private static themeSources(options: HostOptions) {
@@ -829,6 +861,8 @@ export class Host {
         return this.openModulesFolder();
       case "remove-module":
         return this.removeModule(action.moduleId);
+      case "install-module":
+        return this.installModule();
       case "reload-themes":
         return this.reloadThemes();
       case "open-themes-folder":
@@ -1760,6 +1794,7 @@ export class Host {
         version: module.manifest.version,
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
+        publisher: isOwnerId(module.owner) && module.owner !== OFFICIAL_OWNER && module.owner !== LOCAL_OWNER ? module.owner : null,
         icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null,
       })),
       moduleProblems: this.moduleProblems.map((problem) => ({ ...problem })),

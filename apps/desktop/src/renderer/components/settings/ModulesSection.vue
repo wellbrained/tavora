@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // Settings > Modules: what is installed and where it came from, and the
-// player's own modules folder, the same way themes have theirs. Dropping a
-// module package into the folder and pressing Reload adds it; Remove moves it
+// player's own modules folder, the same way themes have theirs. Install from
+// zip checks and unpacks a module zip into the folder; dropping a module
+// package into the folder and pressing Reload adds it too. Remove moves it
 // to the recycle bin. A module's data stays, so adding it again finds it.
-import { FolderOpen, RefreshCw, Trash2 } from "@lucide/vue";
+import { FileArchive, FolderOpen, RefreshCw, Trash2 } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { act, confirmAction, state, submitAction } from "../../host";
+import { act, confirmAction, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 import SettingRow from "./SettingRow.vue";
@@ -30,6 +31,13 @@ function openCount(moduleId: string): number {
   return state.value!.panels.filter((panel) => panel.moduleId === moduleId).length;
 }
 
+async function install() {
+  const result = await act({ type: "install-module" });
+  if (!result.ok || !result.id) return;
+  const module = modules.value.find((item) => item.id === result.id);
+  if (module) showToast(t("settings.modules.installed", { name: module.name, version: module.version }));
+}
+
 function remove(module: ModuleView) {
   confirmAction({
     title: t("settings.modules.removeTitle", { name: module.name }),
@@ -49,6 +57,9 @@ function remove(module: ModuleView) {
     :highlighted="highlight === 'own-modules'"
   >
     <span class="flex flex-none flex-wrap justify-end gap-2">
+      <Button variant="secondary" data-testid="install-module" @click="install">
+        <FileArchive :stroke-width="1.5" /> {{ t("settings.modules.install") }}
+      </Button>
       <Button variant="secondary" data-testid="open-modules-folder" @click="act({ type: 'open-modules-folder' })">
         <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
       </Button>
@@ -82,6 +93,13 @@ function remove(module: ModuleView) {
             <span
               :class="cn('flex-none rounded-sm border px-1.5 text-xs', module.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
               >{{ module.provenance === "official" ? t("common.official") : t("common.local") }}</span
+            >
+            <span
+              v-if="module.publisher"
+              class="text-muted-foreground flex-none rounded-sm border px-1.5 font-mono text-xs"
+              :title="t('settings.modules.publisherHint', { key: module.publisher })"
+              :data-testid="`module-publisher-${module.id}`"
+              >{{ t("settings.modules.publisher", { short: module.publisher.slice(0, 8) }) }}</span
             >
           </span>
           <span v-if="module.description" class="text-muted-foreground line-clamp-2 text-sm">{{ module.description }}</span>
