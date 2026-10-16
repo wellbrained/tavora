@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.11.1",
+    date: "2026-10-16",
+    title: "Links: hand cursor and a choice",
+    notes: [
+      "In Notes, links show a hand cursor while you hold Ctrl, so you can tell a click will open them.",
+      "When a link is opened and the game has no Browser panel, Tavora now asks whether to use a new Browser panel or your system browser.",
+    ],
+  },
+  {
     version: "0.11.0",
     date: "2026-10-16",
     title: "Links in Notes open in the Browser",
