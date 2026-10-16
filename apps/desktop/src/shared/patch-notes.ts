@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.13.1",
+    date: "2026-10-16",
+    title: "Pictures: text flows around them",
+    notes: [
+      "A picture can now sit at the left or right with the text flowing around it, at the size it has. This replaces \"Inline\", which shrank the picture to the height of a line. Dragging the corner resizes any picture.",
+    ],
+  },
+  {
     version: "0.13.0",
     date: "2026-10-16",
     title: "Pictures in Notes",
