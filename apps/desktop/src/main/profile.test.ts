@@ -25,16 +25,17 @@ describe("sanitizeProfile", () => {
 
   it("keeps a saved profile and drops what it does not recognise", () => {
     const id = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b";
-    expect(sanitizeProfile({ id, name: "Brain", initials: "BR", picture: "avatar-0a1b2c3d.png", email: "x" })).toEqual({
+    expect(sanitizeProfile({ id, name: "Brain", initials: "BR", picture: "avatar-0a1b2c3d.png", updatedAt: "2026-10-16T10:00:00.000Z", email: "x" })).toEqual({
       version: 1,
       id,
       name: "Brain",
       initials: "BR",
       picture: "avatar-0a1b2c3d.png",
+      updatedAt: "2026-10-16T10:00:00.000Z",
     });
-    const broken = sanitizeProfile({ id: "nope", name: 3, initials: 4, picture: "../secret.png" });
+    const broken = sanitizeProfile({ id: "nope", name: 3, initials: 4, picture: "../secret.png", updatedAt: "soon" });
     expect(broken.id).not.toBe("nope");
-    expect(broken).toMatchObject({ name: "", initials: "", picture: null });
+    expect(broken).toMatchObject({ name: "", initials: "", picture: null, updatedAt: null });
   });
 });
 
