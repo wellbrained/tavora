@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { cleanTitle, contentFromText, fontStack, matches, normalizeLink, nudged, parseAppearance, parseNote, parseOrder, reordered, previewFor, relativeTime, sections, titleFor, type NoteEntry } from "./notes";
+import { cleanTitle, collectImageIds, contentFromText, formatMegabytes, fontStack, matches, normalizeLink, nudged, parseAppearance, parseNote, parseOrder, reordered, previewFor, relativeTime, sections, titleFor, type NoteEntry } from "./notes";
 
 function entry(id: string, patch: Partial<NoteEntry> = {}): NoteEntry {
-  return { id, title: id, text: "", fixedTitle: "", pinned: false, createdAt: "2026-10-14T10:00:00.000Z", updatedAt: "2026-10-14T10:00:00.000Z", revision: 1, ...patch };
+  return { id, title: id, text: "", fixedTitle: "", images: [], pinned: false, createdAt: "2026-10-14T10:00:00.000Z", updatedAt: "2026-10-14T10:00:00.000Z", revision: 1, ...patch };
 }
 
 describe("parseNote", () => {
@@ -12,6 +12,7 @@ describe("parseNote", () => {
       content: { type: "doc", content: [{ type: "paragraph" }] },
       text: "",
       title: "",
+      images: [],
       pinned: false,
       createdAt: "T",
     });
@@ -188,5 +189,38 @@ describe("a hand-made order", () => {
     expect(parseOrder({ ids: ["a", 3, "b"] })).toEqual(["a", "b"]);
     expect(parseOrder(null)).toEqual([]);
     expect(parseOrder({ ids: "a" })).toEqual([]);
+  });
+});
+
+describe("pictures", () => {
+  const a = "a".repeat(32);
+  const b = "b".repeat(32);
+  const image = (blobId: string | number | null) => ({ type: "image", attrs: { blobId, mode: "block", width: null } });
+
+  it("finds the ids of the pictures in a note, once each, wherever they sit", () => {
+    const doc = {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "hi" }, image(a)] },
+        { type: "bulletList", content: [{ type: "listItem", content: [{ type: "paragraph", content: [image(b), image(a)] }] }] },
+      ],
+    };
+    expect(collectImageIds(doc)).toEqual([a, b]);
+  });
+
+  it("ignores anything that is not a stored picture's id", () => {
+    expect(collectImageIds({ type: "doc", content: [{ type: "paragraph", content: [image("../x"), image(4), image(null), { type: "image" }] }] })).toEqual([]);
+    expect(collectImageIds(null)).toEqual([]);
+  });
+
+  it("keeps the ids in a stored note and drops bad ones", () => {
+    expect(parseNote({ images: [a, "nope", 3] }, "T").images).toEqual([a]);
+    expect(parseNote({ images: "x" }, "T").images).toEqual([]);
+  });
+
+  it("writes sizes in megabytes", () => {
+    expect(formatMegabytes(0)).toBe("0.0 MB");
+    expect(formatMegabytes(1.5 * 1024 * 1024)).toBe("1.5 MB");
+    expect(formatMegabytes(120 * 1024 * 1024)).toBe("120 MB");
   });
 });

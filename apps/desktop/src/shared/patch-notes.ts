@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.13.0",
+    date: "2026-10-16",
+    title: "Pictures in Notes",
+    notes: [
+      "Paste a screenshot, drop a picture file into a note, or use the Insert image button (PNG, JPEG, GIF, WebP). Click a picture to put it inline with the text or on its own line as Small, Medium or Full width, drag its corner to resize it freely, open it larger, or remove it.",
+      "Choose Optimized (shrunk to at most 1600 px, smaller files) or Original (the file exactly as it is) under the Insert image button. The menu also shows how much picture space the game has used.",
+      "Pictures of deleted notes are cleaned up the next time Notes opens.",
+    ],
+  },
+  {
     version: "0.12.0",
     date: "2026-10-16",
     title: "Modules can keep pictures",

@@ -9,7 +9,7 @@ import { t } from "./i18n";
 /** How long the notice stays when left alone. */
 const DURATION_MS = 10_000;
 
-defineProps<{ message: string }>();
+defineProps<{ message: string; /** A plain notice: no Undo button. */ plain?: boolean }>();
 const emit = defineEmits<{ undo: []; dismiss: [] }>();
 
 let remaining = DURATION_MS;
@@ -51,7 +51,7 @@ onBeforeUnmount(() => clearTimeout(timer));
     @focusout="resume"
   >
     <span class="min-w-0 truncate">{{ message }}</span>
-    <Button size="sm" variant="secondary" class="flex-none" data-testid="undo" @click="emit('undo')">{{ t("undo.undo") }}</Button>
+    <Button v-if="!plain" size="sm" variant="secondary" class="flex-none" data-testid="undo" @click="emit('undo')">{{ t("undo.undo") }}</Button>
     <Button size="icon-sm" variant="ghost" class="flex-none" :aria-label="t('undo.dismiss')" :title="t('undo.dismiss')" @click="emit('dismiss')">
       <X :stroke-width="1.5" />
     </Button>

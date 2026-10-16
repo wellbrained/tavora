@@ -35,6 +35,9 @@ const narrow = computed(() => width.value < NARROW_PX);
 /** In a narrow panel: whether the list or the editor is showing. */
 const showList = ref(false);
 /** The last delete or clear, which the player can still undo for a few seconds. */
+/** A short message to the player, such as a picture that could not be added. */
+const notice = ref<{ id: number; message: string } | null>(null);
+let noticeCount = 0;
 const undo = ref<{ id: number; message: string; run: () => Promise<void> } | null>(null);
 let undoCount = 0;
 const editor = ref<InstanceType<typeof NoteEditor> | null>(null);
@@ -105,7 +108,7 @@ onMounted(async () => {
   try {
     const connected = await connectModule(setLanguage);
     const notes = createNotesStore(connected);
-    const [state] = await Promise.all([connected.panel.getState<PanelState>(), notes.load(), notes.loadAppearance()]);
+    const [state] = await Promise.all([connected.panel.getState<PanelState>(), notes.load(), notes.loadAppearance(), notes.loadImageQuality()]);
     const saved = state?.selected;
     if (typeof saved === "string" && notes.entries.value.has(saved)) selectedId.value = saved;
     if (typeof state?.sidebarWidth === "number" && Number.isFinite(state.sidebarWidth)) sidebarWidth.value = clampSidebar(state.sidebarWidth);
@@ -117,6 +120,8 @@ onMounted(async () => {
     );
     sdk.value = connected;
     store.value = notes;
+    // Pictures no note uses any more (a deleted note's, or one removed from the text) are cleared out when a panel opens.
+    void notes.removeUnusedImages().catch(() => undefined);
   } catch (reason) {
     error.value = errorMessage(reason);
   }
@@ -300,8 +305,10 @@ async function move(id: string, delta: -1 | 1) {
         @clear="removeNote(entries.get(SCRATCHPAD_ID) ?? scratchpadEntry)"
         @save-as-note="saveAsNote"
         @open-link="openLink"
+        @notice="(message) => (notice = { id: ++noticeCount, message })"
       />
     </main>
+    <UndoToast v-if="notice && !undo" :key="`n${notice.id}`" plain :message="notice.message" @dismiss="notice = null" />
     <UndoToast v-if="undo" :key="undo.id" :message="undo.message" @undo="runUndo" @dismiss="undo = null" />
   </div>
 </template>
