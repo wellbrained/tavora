@@ -45,7 +45,7 @@ export type {
   TavoraViewport,
   ThemeToken,
 } from "./protocol.js";
-export { BLOB_TYPES, LIMITS, PROTOCOL_VERSION, THEME_TOKENS } from "./protocol.js";
+export { BLOB_ID, BLOB_TYPES, LIMITS, PROTOCOL_VERSION, THEME_TOKENS } from "./protocol.js";
 
 /** Version of this SDK package, sent to the host during the handshake. */
 export const SDK_VERSION = "0.1.0";
