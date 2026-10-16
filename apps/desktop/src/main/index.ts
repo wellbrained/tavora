@@ -118,6 +118,7 @@ if (!app.requestSingleInstanceLock()) {
         grayscaleText,
         restart,
         hidden: !app.isPackaged && process.env.TAVORA_HIDDEN === "1",
+        moduleStorageLimit: !app.isPackaged && process.env.TAVORA_MODULE_STORAGE_LIMIT_MB ? Number(process.env.TAVORA_MODULE_STORAGE_LIMIT_MB) * 1024 * 1024 : undefined,
         systemLocale: !app.isPackaged ? process.env.TAVORA_LOCALE : undefined,
         systemTheme: !app.isPackaged && (process.env.TAVORA_SYSTEM_THEME === "dark" || process.env.TAVORA_SYSTEM_THEME === "light") ? process.env.TAVORA_SYSTEM_THEME : undefined,
         devServer,

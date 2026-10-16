@@ -4,9 +4,11 @@
 
 import { createServer } from "node:http";
 import dgram from "node:dgram";
+import { readdir, stat } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
+import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { expectModuleText, HOSTILE, inModule, launch, openModule, VANILLA } from "./harness";
+import { expectModuleText, HOSTILE, inModule, launch, openModule, panels, VANILLA } from "./harness";
 
 async function hostileReady(app: ElectronApplication): Promise<void> {
   await expect.poll(() => inModule(app, HOSTILE, "typeof window.flood").catch(() => null)).toBe("function");
@@ -79,4 +81,33 @@ test("workers, service workers, WebRTC, WebTransport and frames cannot reach the
     udp.close();
     server.close();
   }
+});
+
+async function folderSize(dir: string): Promise<number> {
+  let total = 0;
+  for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const file = path.join(dir, entry.name);
+    total += entry.isDirectory() ? await folderSize(file) : (await stat(file).catch(() => ({ size: 0 }))).size;
+  }
+  return total;
+}
+
+test("a module cannot fill the disk through its own browser storage (G8)", async () => {
+  test.setTimeout(120_000);
+  // The limit is 256 MB; the test uses 16 MB so it does not have to write that much.
+  const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_MODULE_STORAGE_LIMIT_MB: "16" } });
+  await openModule(page, HOSTILE);
+  await hostileReady(app);
+
+  // The module writes until Tavora stops it. Its renderer is ended, so the call never returns and is not waited for.
+  void inModule(app, HOSTILE, "fillStorage('indexeddb', 8, 512)").catch(() => undefined);
+
+  await expect(page.getByTestId("notice")).toContainText("Hostile Test Module");
+  await expect(page.getByTestId("notice")).toContainText("cleared");
+  // The panel starts again, empty, and what is left on disk is far below what it tried to write.
+  await expect(panels(page, HOSTILE)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
+  await expect.poll(() => inModule(app, HOSTILE, "typeof window.fillStorage").catch(() => null)).toBe("function");
+  expect(await inModule<number>(app, HOSTILE, "navigator.storage.estimate().then((e) => e.usage)")).toBeLessThan(16 * 1024 * 1024);
+  expect(await folderSize(path.join(userData, "Partitions"))).toBeLessThan(64 * 1024 * 1024);
+  await app.close();
 });
