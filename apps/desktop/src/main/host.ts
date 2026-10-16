@@ -85,7 +85,7 @@ import { findSteamDir, removeSteamIcon } from "./steam-icons";
 import { ModuleView } from "./module-view";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { isWebUrl, siteOfUrl } from "./browser-url";
-import { copyStoredFiles, defaultFilesRoot, filesTarget, listStoredFiles, removeStoredFiles } from "./module-files";
+import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
 import { AI_USAGE_MODULE_ID, aiUsageModule, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, discordModule, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
@@ -220,10 +220,8 @@ export class Host {
   private notice: string | null = null;
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
   private pendingLink: string | null = null;
-  /** The pictures of modules are being copied to another folder. */
-  private moduleFilesMoving = false;
-  /** The folder with the pictures of modules was there when last looked at. */
-  private moduleFilesAvailable = true;
+  /** Where modules keep their pictures. */
+  private readonly files: ModuleFilesFolder;
   /** Where the host UI shows each visible panel, in window content coordinates. */
   private panelBounds = new Map<string, Rect>();
   /** True while the host UI shows a menu, dialog or drag that module views would cover. */
@@ -256,7 +254,19 @@ export class Host {
     private themeProblems: ThemeProblem[],
   ) {
     this.currentTheme = moduleTheme(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation);
-    this.data = new DataRegistry(options.userData, () => this.moduleFilesRoot(), () => this.moduleFilesMoving);
+    this.files = new ModuleFilesFolder({
+      userData: options.userData,
+      window: () => this.window,
+      language: () => this.language,
+      chosenFolder: () => this.library.moduleFilesFolder ?? null,
+      setChosenFolder: (folder) => {
+        this.library.moduleFilesFolder = folder;
+        this.saveLibrary();
+      },
+      notify: (message) => (this.notice = message),
+      changed: () => this.pushState(),
+    });
+    this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.discord = Host.discordConnection(options, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:discord", view);
@@ -364,7 +374,7 @@ export class Host {
     host.window.once("ready-to-show", () => timings.record("startup", process.uptime() * 1000));
     await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
     if (host.screen === "game") host.openCurrentGame();
-    void host.checkModuleFiles();
+    void host.files.check();
     // Icons of games that have none yet are looked for quietly in the background.
     host.fetchIconsSoon();
     host.backupSoon();
@@ -436,71 +446,6 @@ export class Host {
   }
 
   // ── Pictures of modules ──────────────────────────────────────────────
-
-  /** Where modules keep their pictures: the folder the player chose, or the default one. */
-  private moduleFilesRoot(): string {
-    return this.library.moduleFilesFolder ?? defaultFilesRoot(this.options.userData);
-  }
-
-  /** Looks whether the folder is there, and tells the player when a folder they chose is gone. */
-  private async checkModuleFiles(): Promise<void> {
-    const root = this.moduleFilesRoot();
-    this.moduleFilesAvailable = await stat(root).then((info) => info.isDirectory(), () => false);
-    // The default folder appears with the first picture; only one the player chose can be missing.
-    if (!this.moduleFilesAvailable && this.library.moduleFilesFolder === null) this.moduleFilesAvailable = true;
-    if (!this.moduleFilesAvailable) this.notice = translate(this.language, "notice.moduleFilesMissing", { folder: root });
-    this.pushState();
-  }
-
-  private async changeModuleFiles(): Promise<void> {
-    const picked = await dialog.showOpenDialog(this.window, {
-      title: translate(this.language, "dialog.chooseModuleFiles"),
-      properties: ["openDirectory", "createDirectory"],
-    });
-    const folder = picked.filePaths[0];
-    if (picked.canceled || !folder) return;
-    const target = await filesTarget(folder, this.moduleFilesRoot(), this.options.userData);
-    if ("problem" in target) {
-      const key = { same: "error.moduleFilesSame", nested: "error.moduleFilesNested", "inside-data": "error.moduleFilesInsideData", "not-writable": "error.moduleFilesNotWritable" } as const;
-      throw new LibraryError(key[target.problem]);
-    }
-    return this.moveModuleFiles(target.root);
-  }
-
-  /**
-   * Copies every picture to `target`, checks the copies, switches to the new folder, and only then removes the old
-   * files. If anything fails the old folder and the setting stay as they were. New pictures wait while it runs.
-   */
-  private async moveModuleFiles(target: string): Promise<void> {
-    if (this.moduleFilesMoving) throw new LibraryError("error.moduleFilesBusy");
-    const from = this.moduleFilesRoot();
-    if (path.resolve(from) === path.resolve(target)) return;
-    this.moduleFilesMoving = true;
-    this.pushState();
-    try {
-      const files = await listStoredFiles(from);
-      try {
-        await copyStoredFiles(from, target, files);
-      } catch (error) {
-        throw new LibraryError("error.moduleFilesFailed", { problem: error instanceof Error ? error.message : String(error) });
-      }
-      this.library.moduleFilesFolder = path.resolve(target) === path.resolve(defaultFilesRoot(this.options.userData)) ? null : path.resolve(target);
-      this.saveLibrary();
-      this.moduleFilesAvailable = true;
-      this.notice = translate(this.language, "notice.moduleFilesMoved", { count: files.length, folder: target });
-      await removeStoredFiles(from, files);
-    } finally {
-      this.moduleFilesMoving = false;
-      this.pushState();
-    }
-  }
-
-  private async openModuleFiles(): Promise<void> {
-    const root = this.moduleFilesRoot();
-    if (this.library.moduleFilesFolder === null) await mkdir(root, { recursive: true });
-    const error = await shell.openPath(root);
-    if (error) throw new LibraryError("error.openModuleFiles", { problem: error });
-  }
 
   private async openModulesFolder(): Promise<void> {
     const dir = userModulesDir(this.options);
@@ -747,11 +692,11 @@ export class Host {
       case "link-choice":
         return this.chooseLink(action.choice);
       case "module-files-change":
-        return this.changeModuleFiles();
+        return this.files.change();
       case "module-files-reset":
-        return this.moveModuleFiles(defaultFilesRoot(this.options.userData));
+        return this.files.reset();
       case "module-files-open":
-        return this.openModuleFiles();
+        return this.files.open();
       case "show-welcome":
         return this.showScreen("welcome");
       case "restart":
@@ -1204,11 +1149,8 @@ export class Host {
     this.saveWorkspace();
     await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
     this.data.forgetGame(game.id);
-    const filesRoot = this.moduleFilesRoot();
     // A folder the player chose can be gone (an unplugged drive): the game still goes, and they are told where its pictures may remain.
-    const filesGone = this.library.moduleFilesFolder !== null && !(await stat(filesRoot).then((info) => info.isDirectory(), () => false));
-    await deleteModuleData(this.options.userData, game.id, filesRoot);
-    if (filesGone) this.notice = translate(this.language, "notice.moduleFilesLeft", { name: game.name, folder: filesRoot });
+    await this.files.noteGameDeleted(game.name, (root) => deleteModuleData(this.options.userData, game.id, root));
     await this.dropIconFile(game.icon);
     if (game.iconFile && !iconFileShared(this.library, game.iconFile, game.id)) await removeSteamIcon(this.steamIconDir, game.iconFile);
     // Sessions may already be open in this run, so clear them; their
@@ -1877,7 +1819,7 @@ export class Host {
       layout: workspace.layout,
       layoutEpoch: this.layoutEpoch,
       pendingLink: this.pendingLink,
-      moduleFiles: { folder: this.moduleFilesRoot(), custom: this.library.moduleFilesFolder !== null, available: this.moduleFilesAvailable, moving: this.moduleFilesMoving },
+      moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
       notice: this.notice,
       profile: {
