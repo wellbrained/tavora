@@ -3,14 +3,14 @@
 // manifest `icon`) comes first; then, for the modules that stand for a
 // product (Discord, React, Vue, ...), its real logo, or a plain line icon
 // for the built-in ones; any other module gets a puzzle piece.
-import { Globe, ListTodo, NotebookPen, Puzzle } from "@lucide/vue";
+import { Gauge, Globe, ListTodo, NotebookPen, Puzzle } from "@lucide/vue";
 import { computed } from "vue";
 import { state } from "../host";
 import { BRAND_LOGOS } from "../module-icons";
 
 const props = withDefaults(defineProps<{ moduleId: string | undefined; size?: string }>(), { size: "size-4" });
 
-const LINE_ICONS = { "tavora.browser": Globe, "tavora.notes": NotebookPen, "tavora.todos": ListTodo } as const;
+const LINE_ICONS = { "tavora.ai-usage": Gauge, "tavora.browser": Globe, "tavora.notes": NotebookPen, "tavora.todos": ListTodo } as const;
 const picture = computed(() => state.value?.modules.find((module) => module.id === props.moduleId)?.icon ?? null);
 const logo = computed(() => BRAND_LOGOS[props.moduleId ?? ""]);
 const line = computed(() => LINE_ICONS[props.moduleId as keyof typeof LINE_ICONS] ?? Puzzle);

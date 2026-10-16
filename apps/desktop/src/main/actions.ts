@@ -237,6 +237,22 @@ export function parseAction(raw: unknown): HostAction | null {
     case "discord-connect":
     case "discord-sign-out":
       return only() ? { type: a.type } : null;
+    case "ai-usage-refresh":
+      return only() ? { type: a.type } : null;
+    case "ai-usage-add":
+      return only("provider", "label", "directory") && (a.provider === "claude" || a.provider === "codex") && text(a.label, 60) && text(a.directory, 500)
+        ? { type: a.type, provider: a.provider, label: a.label, directory: a.directory }
+        : null;
+    case "ai-usage-update":
+      return only("accountId", "label", "directory") && uuid(a.accountId) && text(a.label, 60) && text(a.directory, 500)
+        ? { type: a.type, accountId: a.accountId, label: a.label, directory: a.directory }
+        : null;
+    case "ai-usage-remove":
+      return only("accountId") && uuid(a.accountId) ? { type: a.type, accountId: a.accountId } : null;
+    case "ai-usage-set-interval":
+      return only("minutes") && typeof a.minutes === "number" && Number.isInteger(a.minutes) && a.minutes >= 1 && a.minutes <= 60 ? { type: a.type, minutes: a.minutes } : null;
+    case "ai-usage-set-style":
+      return only("style") && (a.style === "remaining" || a.style === "used") ? { type: a.type, style: a.style } : null;
     case "open-module":
       return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
     case "close-panel":

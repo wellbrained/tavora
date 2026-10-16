@@ -1,7 +1,7 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import type { ActionResult, DiscordView, HostAction, HostShortcut, HostViewState } from "../shared/host-api";
+import type { ActionResult, AiUsageView, DiscordView, HostAction, HostShortcut, HostViewState } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
 import type { SettingsSection } from "./components/settings/settings-index";
 import { numberedGames } from "./shortcuts";
@@ -26,6 +26,13 @@ export const discord = shallowRef<DiscordView | null>(null);
 api.onDiscord((next) => (discord.value = next));
 void api.getDiscord().then((initial) => {
   if (initial && !discord.value) discord.value = initial;
+});
+
+/** The AI usage panel's accounts and readings, and Settings > Integrations. */
+export const aiUsage = shallowRef<AiUsageView | null>(null);
+api.onAiUsage((next) => (aiUsage.value = next));
+void api.getAiUsage().then((initial) => {
+  if (initial && !aiUsage.value) aiUsage.value = initial;
 });
 
 export const toast = ref<string | null>(null);
