@@ -175,6 +175,8 @@ export interface HostOptions {
   discord?: { ipcPath: string; tokenUrl: string } | undefined;
   /** Settings > Account and the account service: on in development, off in release builds until accounts go live. */
   accounts?: boolean;
+  /** Development only: where accounts are, when not the same service as the rest (the local one by default). */
+  accountUrl?: string | undefined;
   /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
   hidden?: boolean;
   /** Tests only: pretend the system is in this mode, so a test does not depend on the PC it runs on. */
@@ -1412,7 +1414,7 @@ export class Host {
     const encryptor = Host.encryptor(options);
     return new AccountClient({
       enabled: options.accounts === true,
-      baseUrl: options.apiUrl ?? DEFAULT_API_URL,
+      baseUrl: options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL,
       fetch: (input, init) => fetch(input, init),
       os: deviceOs(process.platform),
       language,

@@ -141,6 +141,9 @@ describe("signing in", () => {
     const off = client(service({ "POST /code": () => json({ reason: "unavailable" }, 503) }).fetchImpl);
     await expect(off.account.sendCode("me@example.com")).rejects.toBeInstanceOf(PlayerError);
     await expect(off.account.sendCode("me@example.com")).rejects.toMatchObject({ key: "account.error.unavailable" });
+    // A service from before accounts answers 404.
+    const old = client(service({}).fetchImpl);
+    await expect(old.account.sendCode("me@example.com")).rejects.toMatchObject({ key: "account.error.unavailable" });
   });
 
   it("does nothing while accounts are switched off", async () => {
