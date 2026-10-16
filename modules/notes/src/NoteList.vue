@@ -3,29 +3,75 @@
 import { NotebookPen, PanelLeftClose, PanelLeftOpen, Pin, Plus, Search, X } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { computed } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { t } from "./i18n";
 import NoteRow from "./NoteRow.vue";
 import { matches, SCRATCHPAD_ID, sections, UNTITLED, type NoteEntry } from "./notes";
 
-const props = defineProps<{ entries: Map<string, NoteEntry>; selectedId: string; collapsed: boolean; narrow: boolean }>();
+const props = defineProps<{ entries: Map<string, NoteEntry>; order: string[]; selectedId: string; collapsed: boolean; narrow: boolean }>();
 const emit = defineEmits<{
   select: [id: string];
   create: [];
   togglePin: [id: string];
   remove: [entry: NoteEntry];
   rename: [id: string, title: string];
+  reorder: [id: string, target: string, after: boolean];
+  move: [id: string, delta: -1 | 1];
   toggleCollapsed: [];
 }>();
 
 const query = defineModel<string>("query", { required: true });
 
-const grouped = computed(() => sections(props.entries.values()));
+const grouped = computed(() => sections(props.entries.values(), props.order));
 const results = computed(() => {
   if (!query.value.trim()) return null;
   const { scratchpad, pinned, others } = grouped.value;
   return [scratchpad, ...pinned, ...others].filter((entry) => matches(entry, query.value));
 });
+
+// Notes can be put in a different order by dragging, or with Alt+Up and Alt+Down; only within pinned or within the rest.
+const renamingId = ref<string | null>(null);
+const dragId = ref<string | null>(null);
+const drop = ref<{ id: string; after: boolean } | null>(null);
+
+function onDragStart(event: DragEvent, entry: NoteEntry) {
+  dragId.value = entry.id;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", entry.title);
+  }
+}
+
+function onDragOver(event: DragEvent, entry: NoteEntry) {
+  const from = dragId.value ? props.entries.get(dragId.value) : undefined;
+  if (!from || from.id === entry.id || from.pinned !== entry.pinned) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  drop.value = { id: entry.id, after: event.clientY > rect.top + rect.height / 2 };
+}
+
+function onDrop(event: DragEvent) {
+  event.preventDefault();
+  if (dragId.value && drop.value) emit("reorder", dragId.value, drop.value.id, drop.value.after);
+  endDrag();
+}
+
+function endDrag() {
+  dragId.value = null;
+  drop.value = null;
+}
+
+async function onMove(id: string, delta: -1 | 1) {
+  emit("move", id, delta);
+  // The row is moved in the list, which drops keyboard focus; give it back.
+  await nextTick();
+  setTimeout(() => document.querySelector<HTMLElement>(`[data-testid="note-${id}"] button`)?.focus(), 60);
+}
+
+function dropShadow(entry: NoteEntry): string | false {
+  return drop.value?.id === entry.id && (drop.value.after ? "shadow-[0_2px_0_0_var(--primary)]" : "shadow-[0_-2px_0_0_var(--primary)]");
+}
 
 /** The collapsed strip: the scratchpad, pinned notes, then the rest, each as a small icon. */
 const railNotes = computed(() => {
@@ -131,12 +177,34 @@ function onSearchKey(event: KeyboardEvent) {
         <template v-if="grouped.pinned.length">
           <h2 class="text-primary px-3 pt-3 pb-1 text-xs font-semibold">{{ t("list.pinned") }}</h2>
           <ul role="list" data-testid="pinned">
-            <li v-for="entry in grouped.pinned" :key="entry.id"><NoteRow :entry="entry" :selected="entry.id === selectedId" @select="emit('select', entry.id)" @toggle-pin="emit('togglePin', entry.id)" @remove="emit('remove', entry)" @rename="(title) => emit('rename', entry.id, title)" /></li>
+            <li
+              v-for="entry in grouped.pinned"
+              :key="entry.id"
+              :draggable="renamingId !== entry.id"
+              :class="cn(dragId === entry.id && 'opacity-50', dropShadow(entry))"
+              @dragstart="onDragStart($event, entry)"
+              @dragover="onDragOver($event, entry)"
+              @drop="onDrop"
+              @dragend="endDrag"
+            >
+              <NoteRow :entry="entry" :selected="entry.id === selectedId" @select="emit('select', entry.id)" @toggle-pin="emit('togglePin', entry.id)" @remove="emit('remove', entry)" @rename="(title) => emit('rename', entry.id, title)" @move="(delta) => onMove(entry.id, delta)" @renaming="(on) => (renamingId = on ? entry.id : null)" />
+            </li>
           </ul>
         </template>
         <h2 v-if="grouped.others.length" class="text-primary px-3 pt-3 pb-1 text-xs font-semibold">{{ t("list.label") }}</h2>
         <ul role="list" data-testid="notes">
-          <li v-for="entry in grouped.others" :key="entry.id"><NoteRow :entry="entry" :selected="entry.id === selectedId" @select="emit('select', entry.id)" @toggle-pin="emit('togglePin', entry.id)" @remove="emit('remove', entry)" @rename="(title) => emit('rename', entry.id, title)" /></li>
+          <li
+            v-for="entry in grouped.others"
+            :key="entry.id"
+            :draggable="renamingId !== entry.id"
+            :class="cn(dragId === entry.id && 'opacity-50', dropShadow(entry))"
+            @dragstart="onDragStart($event, entry)"
+            @dragover="onDragOver($event, entry)"
+            @drop="onDrop"
+            @dragend="endDrag"
+          >
+            <NoteRow :entry="entry" :selected="entry.id === selectedId" @select="emit('select', entry.id)" @toggle-pin="emit('togglePin', entry.id)" @remove="emit('remove', entry)" @rename="(title) => emit('rename', entry.id, title)" @move="(delta) => onMove(entry.id, delta)" @renaming="(on) => (renamingId = on ? entry.id : null)" />
+          </li>
         </ul>
         <div v-if="!grouped.pinned.length && !grouped.others.length" class="px-3 py-6 text-center">
           <p class="text-muted-foreground text-sm">{{ t("list.empty") }}</p>

@@ -7,6 +7,8 @@ import type { JsonValue } from "@tavora/sdk";
 /** The one note every game has. It cannot be deleted, only cleared. */
 export const SCRATCHPAD_ID = "scratchpad";
 export const SCRATCHPAD_TITLE = "Scratchpad";
+/** The document that remembers the order the player put the notes in. It is not a note. */
+export const ORDER_ID = "order";
 export const UNTITLED = "Untitled note";
 /** Titles are shown in one line; the host allows up to 200 characters. */
 const MAX_TITLE = 80;
@@ -117,10 +119,11 @@ export interface NoteSections {
 
 /**
  * Splits notes for the list: the scratchpad first, then pinned notes, then
- * the rest, each in the order the notes were made, so a new note comes last and
- * editing never moves one. The scratchpad is always there, saved or not.
+ * the rest. Notes the player has put in an order (`order`) come first in that
+ * order; the others follow in the order they were made, so a new note comes
+ * last and editing never moves one. The scratchpad is always there, saved or not.
  */
-export function sections(entries: Iterable<NoteEntry>): NoteSections {
+export function sections(entries: Iterable<NoteEntry>, order: readonly string[] = []): NoteSections {
   let scratchpad: NoteEntry = {
     id: SCRATCHPAD_ID,
     title: SCRATCHPAD_TITLE,
@@ -137,8 +140,43 @@ export function sections(entries: Iterable<NoteEntry>): NoteSections {
     if (entry.id === SCRATCHPAD_ID) scratchpad = entry;
     else (entry.pinned ? pinned : others).push(entry);
   }
-  const oldestFirst = (a: NoteEntry, b: NoteEntry) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
-  return { scratchpad, pinned: pinned.sort(oldestFirst), others: others.sort(oldestFirst) };
+  const rank = new Map(order.map((id, index) => [id, index]));
+  const inOrder = (a: NoteEntry, b: NoteEntry) => {
+    const ra = rank.get(a.id);
+    const rb = rank.get(b.id);
+    if (ra !== undefined && rb !== undefined) return ra - rb;
+    if (ra !== undefined) return -1;
+    if (rb !== undefined) return 1;
+    return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+  };
+  return { scratchpad, pinned: pinned.sort(inOrder), others: others.sort(inOrder) };
+}
+
+/** The order to store after `id` is dropped before or after `target`; null when the two are not in the same group (pinned or not) or nothing changes. */
+export function reordered(entries: Iterable<NoteEntry>, order: readonly string[], id: string, target: string, after: boolean): string[] | null {
+  const { pinned, others } = sections(entries, order);
+  const group = [pinned, others].find((list) => list.some((entry) => entry.id === id));
+  if (!group || id === target || !group.some((entry) => entry.id === target)) return null;
+  const ids = group.map((entry) => entry.id).filter((other) => other !== id);
+  ids.splice(ids.indexOf(target) + (after ? 1 : 0), 0, id);
+  if (ids.join() === group.map((entry) => entry.id).join()) return null;
+  const rest = (group === pinned ? others : pinned).map((entry) => entry.id);
+  return group === pinned ? [...ids, ...rest] : [...rest, ...ids];
+}
+
+/** The order to store after `id` moves one place up (-1) or down (1) within its group; null at the ends. */
+export function nudged(entries: Iterable<NoteEntry>, order: readonly string[], id: string, delta: -1 | 1): string[] | null {
+  const { pinned, others } = sections(entries, order);
+  const group = [pinned, others].find((list) => list.some((entry) => entry.id === id));
+  const index = group?.findIndex((entry) => entry.id === id) ?? -1;
+  const neighbour = group?.[index + delta];
+  return neighbour ? reordered(entries, order, id, neighbour.id, delta === 1) : null;
+}
+
+/** Reads the stored order; anything that is not a list of ids is ignored. */
+export function parseOrder(raw: JsonValue | null): string[] {
+  const ids = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw.ids : null;
+  return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [];
 }
 
 /** The words relativeTime uses, and the locale for dates and times. */
