@@ -38,12 +38,13 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `viewport.minWidth`, `viewport.minHeight` | yes | Smallest usable panel size in CSS pixels, 1 to 10000. Tavora refuses to open a panel it cannot give this much room. |
 | `viewport.preferredWidth`, `viewport.preferredHeight` | no | Size the module looks best at, 1 to 10000. Used by the docking layout later. |
 | `permissions.network` | yes | Hosts the module asks to reach with [`network.fetch`](./protocol.md#network), at most 32, e.g. `["api.example.com"]`; `[]` for none. Exact lowercase public names only: no scheme, port, path, wildcard, IP address, `localhost`, `.local` or `.internal`. Each one works only once the player has granted it. |
+| `permissions.connectors` | no | Connectors the module asks to use, such as `["ai-usage"]` to read the usage of the player's Claude and Codex accounts (see [Connectors](./protocol.md#connectors)). Each name once; each works only once the player has granted it. |
 | `permissions.webAssembly` | no | `true` lets the page compile WebAssembly (the page's security policy gets `'wasm-unsafe-eval'`). Only Tavora's own modules may ask for it; a module from your modules folder that does is not loaded, and the Modules page says why. |
 
 Paths (`entry`, `icon`) are relative to the package root and must stay inside it: no leading `/`, no `.` or `..` segments, no empty segments, no backslashes or `:`. Tavora also checks that both files exist when it discovers the module.
 
 ## What is not in v1 yet
 
-- Permissions other than `network` and `webAssembly`. `sharedData`, `files` and `clipboard` arrive with their capabilities (see [Capabilities](./protocol.md#capabilities)).
+- Permissions other than `network`, `connectors` and `webAssembly`. `sharedData`, `files` and `clipboard` arrive with their capabilities (see [Capabilities](./protocol.md#capabilities)).
 - Author, homepage, license and screenshots. These belong to the catalog listing (Milestone E), not to what the desktop host needs to run a module.
 - Localized names.

@@ -210,6 +210,11 @@ describe("leftover module data", () => {
     await seed(userData, "local", "nik.tracker", "poe2", "local poe2");
     await seed(userData, "local", "nik.tracker", "satisfactory", "local satisfactory");
     await seed(userData, KEY, "nik.tracker", "satisfactory", "signed satisfactory");
+    // The settings shared by every game (storage.app) move like a game's.
+    for (const [folder, body] of [["_app", "local app"], ["not a game", "stays"]] as const) {
+      await mkdir(path.join(userData, "module-data", "local", "nik.tracker", folder), { recursive: true });
+      await writeFile(path.join(userData, "module-data", "local", "nik.tracker", folder, "storage.json"), body);
+    }
     await queueLocalDataMove(userData, "nik.tracker", KEY);
     await expect(queueLocalDataMove(userData, "nik.tracker", "local")).rejects.toThrow();
     await migrateModuleData(userData);
@@ -218,6 +223,8 @@ describe("leftover module data", () => {
     expect(await read(KEY, "poe2")).toBe("local poe2");
     expect(await read(KEY, "satisfactory")).toBe("signed satisfactory");
     expect(await read("local", "satisfactory")).toBe("local satisfactory");
+    expect(await read(KEY, "_app")).toBe("local app");
+    expect(await read("local", "not a game")).toBe("stays");
     expect((await readdir(path.join(userData, "Partitions"))).sort()).toEqual([
       `module%3A${KEY}%3Anik.tracker@poe2`,
       `module%3A${KEY}%3Anik.tracker@satisfactory`,

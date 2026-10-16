@@ -20,8 +20,8 @@ async function store(contents?: unknown) {
 describe("GrantStore", () => {
   it("allows nothing before the player grants anything", async () => {
     const { grants } = await store();
-    expect(grants.allowed(subject(["api.example.com"]))).toEqual({ network: [] });
-    expect(grants.missing(subject(["api.example.com"]))).toEqual({ network: ["api.example.com"] });
+    expect(grants.allowed(subject(["api.example.com"]))).toEqual({ network: [], connectors: [] });
+    expect(grants.missing(subject(["api.example.com"]))).toEqual({ network: ["api.example.com"], connectors: [] });
   });
 
   it("keeps a grant on disk, for the owner and id, with the version answered for", async () => {
@@ -29,38 +29,38 @@ describe("GrantStore", () => {
     await grants.grant(subject(["api.example.com", "cdn.example.com"]));
     expect(JSON.parse(await readFile(path.join(dir, GRANTS_FILE), "utf8"))).toEqual({
       version: 1,
-      owners: { [KEY]: { "community.someone.tracker": { version: "1.0.0", grantedAt: NOW.toISOString(), network: ["api.example.com", "cdn.example.com"] } } },
+      owners: { [KEY]: { "community.someone.tracker": { version: "1.0.0", grantedAt: NOW.toISOString(), network: ["api.example.com", "cdn.example.com"], connectors: [] } } },
     });
     const again = await GrantStore.load(dir);
-    expect(again.allowed(subject(["api.example.com", "cdn.example.com"]))).toEqual({ network: ["api.example.com", "cdn.example.com"] });
+    expect(again.allowed(subject(["api.example.com", "cdn.example.com"]))).toEqual({ network: ["api.example.com", "cdn.example.com"], connectors: [] });
   });
 
   it("never covers another publisher's module with the same id", async () => {
     const { grants } = await store();
     await grants.grant(subject(["api.example.com"]));
-    expect(grants.allowed(subject(["api.example.com"], "1.0.0", "local"))).toEqual({ network: [] });
-    expect(grants.allowed(subject(["api.example.com"], "1.0.0", "fedcba9876543210fedcba9876543210"))).toEqual({ network: [] });
+    expect(grants.allowed(subject(["api.example.com"], "1.0.0", "local"))).toEqual({ network: [], connectors: [] });
+    expect(grants.allowed(subject(["api.example.com"], "1.0.0", "fedcba9876543210fedcba9876543210"))).toEqual({ network: [], connectors: [] });
   });
 
   it("only grants what the manifest asks for", async () => {
     const { grants } = await store();
-    await grants.grant(subject(["api.example.com"]), { network: ["api.example.com", "evil.example.com"] });
+    await grants.grant(subject(["api.example.com"]), { network: ["api.example.com", "evil.example.com"], connectors: [] });
     expect(grants.get(KEY, "community.someone.tracker")?.network).toEqual(["api.example.com"]);
   });
 
   it("covers only what the current manifest still asks for", async () => {
     const { grants } = await store();
     await grants.grant(subject(["api.example.com", "old.example.com"]));
-    expect(grants.allowed(subject(["api.example.com"], "1.1.0"))).toEqual({ network: ["api.example.com"] });
+    expect(grants.allowed(subject(["api.example.com"], "1.1.0"))).toEqual({ network: ["api.example.com"], connectors: [] });
   });
 
   it("keeps an update's old grants working and lists only what it newly asks for", async () => {
     const { grants } = await store();
     await grants.grant(subject(["api.example.com"]));
     const update = subject(["api.example.com", "new.example.com"], "2.0.0");
-    expect(grants.allowed(update)).toEqual({ network: ["api.example.com"] });
-    expect(grants.missing(update)).toEqual({ network: ["new.example.com"] });
-    await grants.grant(update, { network: ["new.example.com"] });
+    expect(grants.allowed(update)).toEqual({ network: ["api.example.com"], connectors: [] });
+    expect(grants.missing(update)).toEqual({ network: ["new.example.com"], connectors: [] });
+    await grants.grant(update, { network: ["new.example.com"], connectors: [] });
     expect(grants.get(KEY, update.manifest.id)).toMatchObject({ version: "2.0.0", network: ["api.example.com", "new.example.com"] });
   });
 
@@ -68,10 +68,10 @@ describe("GrantStore", () => {
     const { dir, grants } = await store();
     const tracker = subject(["api.example.com", "cdn.example.com"]);
     await grants.grant(tracker);
-    await grants.revoke(KEY, tracker.manifest.id, { network: ["cdn.example.com"] });
-    expect(grants.allowed(tracker)).toEqual({ network: ["api.example.com"] });
+    await grants.revoke(KEY, tracker.manifest.id, { network: ["cdn.example.com"], connectors: [] });
+    expect(grants.allowed(tracker)).toEqual({ network: ["api.example.com"], connectors: [] });
     await grants.revoke(KEY, tracker.manifest.id);
-    expect(grants.allowed(tracker)).toEqual({ network: [] });
+    expect(grants.allowed(tracker)).toEqual({ network: [], connectors: [] });
     expect(JSON.parse(await readFile(path.join(dir, GRANTS_FILE), "utf8"))).toEqual({ version: 1, owners: {} });
   });
 
@@ -79,7 +79,7 @@ describe("GrantStore", () => {
     const { grants } = await store();
     const tracker = subject(["api.example.com"]);
     await grants.grant(tracker);
-    await grants.revoke(KEY, tracker.manifest.id, { network: ["api.example.com"] });
+    await grants.revoke(KEY, tracker.manifest.id, { network: ["api.example.com"], connectors: [] });
     expect(grants.get(KEY, tracker.manifest.id)).toBeUndefined();
   });
 
@@ -87,7 +87,40 @@ describe("GrantStore", () => {
     const dir = await mkdtemp(path.join(tmpdir(), "tavora-grants-"));
     await writeFile(path.join(dir, GRANTS_FILE), "{ not json");
     const grants = await GrantStore.load(dir);
-    expect(grants.allowed(subject(["api.example.com"]))).toEqual({ network: [] });
+    expect(grants.allowed(subject(["api.example.com"]))).toEqual({ network: [], connectors: [] });
+  });
+});
+
+describe("connector grants", () => {
+  const usage = (connectors: ("ai-usage")[], network: string[] = []): GrantSubject => ({
+    owner: "official",
+    manifest: { id: "tavora.ai-usage", version: "1.0.0", permissions: { network, connectors } },
+  });
+
+  it("asks for, grants and revokes a connector like a host", async () => {
+    const { grants } = await store();
+    expect(grants.missing(usage(["ai-usage"]))).toEqual({ network: [], connectors: ["ai-usage"] });
+    await grants.grant(usage(["ai-usage"], ["status.example.com"]), { network: [], connectors: ["ai-usage"] });
+    expect(grants.allowed(usage(["ai-usage"], ["status.example.com"]))).toEqual({ network: [], connectors: ["ai-usage"] });
+    expect(grants.missing(usage(["ai-usage"], ["status.example.com"]))).toEqual({ network: ["status.example.com"], connectors: [] });
+    await grants.revoke("official", "tavora.ai-usage", { network: [], connectors: ["ai-usage"] });
+    expect(grants.get("official", "tavora.ai-usage")).toBeUndefined();
+  });
+
+  it("does not cover a connector the manifest no longer asks for", async () => {
+    const { grants } = await store();
+    await grants.grant(usage(["ai-usage"]));
+    expect(grants.allowed(usage([]))).toEqual({ network: [], connectors: [] });
+  });
+
+  it("reads grants saved before connectors existed", () => {
+    const owners = sanitizeGrants({ version: 1, owners: { [KEY]: { "community.someone.tracker": { version: "1.0.0", grantedAt: "x", network: ["api.example.com"] } } } });
+    expect(owners.get(KEY)?.get("community.someone.tracker")).toEqual({ version: "1.0.0", grantedAt: "x", network: ["api.example.com"], connectors: [] });
+  });
+
+  it("drops connectors Tavora does not have", () => {
+    const owners = sanitizeGrants({ version: 1, owners: { official: { "tavora.ai-usage": { version: "1.0.0", grantedAt: "x", network: [], connectors: ["ai-usage", "discord", 7] } } } });
+    expect(owners.get("official")?.get("tavora.ai-usage")?.connectors).toEqual(["ai-usage"]);
   });
 });
 
@@ -105,7 +138,7 @@ describe("sanitizeGrants", () => {
       },
     });
     expect([...owners.keys()]).toEqual([KEY]);
-    expect([...owners.get(KEY)!.entries()]).toEqual([["community.someone.tracker", { version: "1.0.0", grantedAt: "x", network: ["api.example.com"] }]]);
+    expect([...owners.get(KEY)!.entries()]).toEqual([["community.someone.tracker", { version: "1.0.0", grantedAt: "x", network: ["api.example.com"], connectors: [] }]]);
   });
 
   it("reads nothing from something that is not a grants file", () => {

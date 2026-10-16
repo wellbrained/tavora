@@ -1,7 +1,6 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
-import path from "node:path";
+import type { ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
+import { findCli, profileEnv, startCli, stopCli } from "./ai-usage-cli";
 
 // Reads a Codex profile's allowance through the Codex command line's own
 // app-server, the way its desktop app does: a short-lived process on this PC,
@@ -28,47 +27,19 @@ export interface CodexReading {
   limits: unknown;
 }
 
-/** The first Codex command on PATH (or in npm's global folder on Windows), or null. */
-export function findCodex(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string | null {
-  const names = platform === "win32" ? ["codex.exe", "codex.cmd"] : ["codex"];
-  const dirs = (env.PATH ?? env.Path ?? "").split(path.delimiter).filter(Boolean);
-  if (platform === "win32" && env.APPDATA) dirs.push(path.join(env.APPDATA, "npm"));
-  for (const dir of dirs) {
-    for (const name of names) {
-      const file = path.join(dir, name);
-      if (existsSync(file)) return file;
-    }
-  }
-  return null;
-}
-
 const ARGS = ["app-server", "--listen", "stdio://"];
-
-function start(file: string, directory: string, env: NodeJS.ProcessEnv): ChildProcess {
-  const options = { cwd: directory, env, windowsHide: true, stdio: "pipe" } as const;
-  // A .cmd shim can only run through cmd.exe; the path is quoted and cannot contain a quote.
-  if (/\.(cmd|bat)$/i.test(file)) {
-    if (file.includes('"')) throw new CodexMissingError();
-    return spawn(env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", `""${file}" ${ARGS.join(" ")}"`], { ...options, windowsVerbatimArguments: true });
-  }
-  return spawn(file, ARGS, options);
-}
-
-function stop(child: ChildProcess): void {
-  if (child.exitCode !== null || child.pid === undefined) return;
-  if (process.platform === "win32") spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" }).on("error", () => undefined);
-  else child.kill();
-}
 
 /** Asks the Codex command for the allowance of the profile in `directory`. Throws when it fails or `signal` aborts. */
 export async function readCodexUsage(directory: string, version: string, signal: AbortSignal): Promise<CodexReading> {
-  const file = findCodex();
+  const file = findCli({ win32: ["codex.exe", "codex.cmd"], other: ["codex"] });
   if (!file) throw new CodexMissingError();
   // A profile uses its subscription login, never an API key the PC happens to have set.
-  const env: NodeJS.ProcessEnv = { ...process.env, CODEX_HOME: directory };
-  delete env.OPENAI_API_KEY;
-  delete env.CODEX_API_KEY;
-  const child = start(file, directory, env);
+  let child: ChildProcess;
+  try {
+    child = startCli(file, ARGS, { cwd: directory, env: profileEnv("codex", directory) });
+  } catch {
+    throw new CodexMissingError();
+  }
   const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
   const failAll = (error: Error) => {
     for (const entry of pending.values()) entry.reject(error);
@@ -119,6 +90,6 @@ export async function readCodexUsage(directory: string, version: string, signal:
   } finally {
     signal.removeEventListener("abort", onAbort);
     lines.close();
-    stop(child);
+    stopCli(child);
   }
 }

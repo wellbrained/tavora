@@ -19,8 +19,9 @@ export function validateKey(key: unknown): asserts key is string {
 }
 
 /**
- * Private key/value settings for one module in one game. Values are kept
- * serialized so the quota is measured on exactly what is written to disk.
+ * Private key/value settings for one module in one game, or shared by all its
+ * games (storage.app). Values are kept serialized so the quota is measured on
+ * exactly what is written to disk.
  */
 export class ModuleStore {
   private entries: Map<string, string> | undefined;
@@ -52,7 +53,7 @@ export class ModuleStore {
       const previous = entries.get(key);
       const next = this.bytes - (previous === undefined ? 0 : entrySize(key, previous)) + entrySize(key, serialized);
       if (next > this.maxBytes) {
-        throw new HostError("QUOTA_EXCEEDED", `settings are limited to ${this.maxBytes} bytes per module and game`);
+        throw new HostError("QUOTA_EXCEEDED", `settings are limited to ${this.maxBytes} bytes per store`);
       }
       entries.set(key, serialized);
       this.bytes = next;
@@ -150,9 +151,16 @@ export interface ModuleData {
   blobs: BlobStore;
 }
 
+/**
+ * The folder next to a module's game folders that holds its settings shared by every game
+ * (storage.app). Game ids never start with "_", so it cannot be taken for a game.
+ */
+export const APP_DATA_DIR = "_app";
+
 /** One settings store and one document store per (owner, module, game), shared by all its panels. */
 export class DataRegistry {
   private readonly data = new Map<string, ModuleData>();
+  private readonly app = new Map<string, ModuleStore>();
   readonly panelState: PanelStateStore;
 
   constructor(
@@ -182,11 +190,23 @@ export class DataRegistry {
     return data;
   }
 
+  /** The settings one owner's module shares across every game (storage.app), with the same limit as a game's. */
+  appSettings(owner: string, moduleId: string): ModuleStore {
+    if (!isOwnerId(owner) || !isModuleId(moduleId)) throw new Error("invalid owner or module id");
+    const file = path.join(this.dataDir, "module-data", owner, moduleId, APP_DATA_DIR, "storage.json");
+    let store = this.app.get(file);
+    if (!store) this.app.set(file, (store = new ModuleStore(file)));
+    return store;
+  }
+
   /** Drops cached stores of one owner's module whose data is being deleted. */
   forgetModule(owner: string, moduleId: string): void {
     const prefix = path.join(this.dataDir, "module-data", owner, moduleId) + path.sep;
     for (const key of [...this.data.keys()]) {
       if (key.startsWith(prefix)) this.data.delete(key);
+    }
+    for (const key of [...this.app.keys()]) {
+      if (key.startsWith(prefix)) this.app.delete(key);
     }
   }
 

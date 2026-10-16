@@ -147,6 +147,11 @@ const cases: [string, unknown, boolean][] = [
   ["long label", { ...valid, permissions: { network: [`${"a".repeat(64)}.example.com`] } }, false],
   ["unicode host", { ...valid, permissions: { network: ["müller.de"] } }, false],
   ["non-string host", { ...valid, permissions: { network: [7] } }, false],
+  ["ai-usage connector", { ...valid, permissions: { network: [], connectors: ["ai-usage"] } }, true],
+  ["no connectors", { ...valid, permissions: { network: [], connectors: [] } }, true],
+  ["unknown connector", { ...valid, permissions: { network: [], connectors: ["discord"] } }, false],
+  ["connector twice", { ...valid, permissions: { network: [], connectors: ["ai-usage", "ai-usage"] } }, false],
+  ["connectors not a list", { ...valid, permissions: { network: [], connectors: "ai-usage" } }, false],
   ["shared data permission", { ...valid, permissions: { network: [], sharedData: { consume: [] } } }, false],
   ["unknown field", { ...valid, nodeIntegration: true }, false],
 ];
