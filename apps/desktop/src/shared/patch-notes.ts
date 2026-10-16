@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.14.8",
+    date: "2026-10-16",
+    title: "Copy a whiteboard as a picture",
+    notes: [
+      "The Whiteboard's new Copy as picture button (or Shift+Alt+C) puts your drawing on the clipboard, pictures included, so you can paste it into Notes, Discord or any other app. With something selected it copies just that, otherwise the whole board, in the colours you see.",
+    ],
+  },
+  {
     version: "0.14.7",
     date: "2026-10-16",
     title: "Tidy-ups",

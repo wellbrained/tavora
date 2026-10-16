@@ -162,3 +162,104 @@ test("whiteboard: a pasted picture is kept in the file store, locked, and comes 
   await expect.poll(async () => (await storedBoard(userData, "Board 1"))?.elements.find((element) => element.type === "image")?.locked).toBe(false);
   await app.close();
 });
+
+/** A real click on an element of the module's page, so the host counts it as the player's. */
+async function click(app: ElectronApplication, testId: string) {
+  const box = await inModule<{ x: number; y: number }>(app, WHITEBOARD, `(() => { const r = ${q(testId)}.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+  await app.evaluate(
+    async ({ webContents }, { moduleId, box }) => {
+      const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
+      if (!target) throw new Error("no panel");
+      const at = { x: Math.round(box.x), y: Math.round(box.y), button: "left" as const, clickCount: 1 };
+      target.sendInputEvent({ type: "mouseMove", ...at });
+      target.sendInputEvent({ type: "mouseDown", ...at });
+      target.sendInputEvent({ type: "mouseUp", ...at });
+    },
+    { moduleId: WHITEBOARD, box },
+  );
+}
+
+test("whiteboard: Copy as picture puts the board with its pictures on the clipboard", async () => {
+  const { app, page } = await launch();
+  await openModule(page, WHITEBOARD);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`).catch(() => ""), { timeout: 20_000 }).toBe("Board 1");
+  await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
+
+  // Nothing to copy on an empty board.
+  expect(await inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(true);
+
+  // A screenshot-sized picture (the largest Excalidraw keeps) with a rectangle drawn over it.
+  const area = await inModule<{ x: number; y: number; width: number; height: number }>(app, WHITEBOARD, `(() => { const r = document.querySelector(".excalidraw canvas.interactive").getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
+  await movePointer(app, { x: area.x + area.width / 2, y: area.y + area.height / 2 });
+  await inModule(
+    app,
+    WHITEBOARD,
+    `(async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1440;
+      canvas.height = 900;
+      const context = canvas.getContext("2d");
+      for (let y = 0; y < 900; y += 30) for (let x = 0; x < 1440; x += 40) { context.fillStyle = "hsl(" + ((x + y) % 360) + " 60% 50%)"; context.fillRect(x, y, 38, 28); }
+      context.fillStyle = "#fff";
+      context.font = "24px sans-serif";
+      for (let y = 40; y < 900; y += 60) context.fillText("A screenshot with some text in it " + y, 20, y);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      const data = new DataTransfer();
+      data.items.add(new File([blob], "shot.png", { type: "image/png" }));
+      document.querySelector(".excalidraw").focus();
+      document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+    })()`,
+  );
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock")}?.dataset.locked ?? ""`), { timeout: 15_000 }).toBe("true");
+  await inModule(app, WHITEBOARD, `document.querySelector('[data-testid="toolbar-rectangle"]').click()`);
+  await drag(app, { x: area.x + 60, y: area.y + 60 }, { x: area.x + 260, y: area.y + 200 });
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(false);
+
+  /** Copies with a real click and returns the notice and the size of the picture on the clipboard. */
+  const copy = async () => {
+    await inModule(app, WHITEBOARD, `${q("notice-toast")}?.querySelector("button")?.click()`);
+    await app.evaluate(({ clipboard }) => clipboard.clear());
+    const started = Date.now();
+    await click(app, "copy-picture");
+    await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Copied");
+    // The host takes the copy only within 2 s of the click, so making the picture must be quick.
+    expect(Date.now() - started).toBeLessThan(2000);
+    // The PNG's size from its header (width and height follow the signature and the header chunk's length and type).
+    const size = await app.evaluate(async ({ clipboard }) => {
+      const item = (await clipboard.read()).find((entry) => entry.types.includes("image/png"));
+      if (!item) return { width: 0, height: 0 };
+      const header = new DataView(await (await item.getType("image/png")).arrayBuffer());
+      return { width: header.getUint32(16), height: header.getUint32(20) };
+    });
+    return { notice: await inModule<string>(app, WHITEBOARD, `${q("notice-toast")}.textContent`), size };
+  };
+
+  // The rectangle just drawn is selected, so only it is copied, twice its size.
+  const selection = await copy();
+  expect(selection.notice).toContain("Copied the selection as a picture");
+  expect(selection.size.width).toBeGreaterThan(400);
+  expect(selection.size.width).toBeLessThan(1000);
+
+  // A click on the locked picture clears the selection; then the whole board is copied, sharper than the 1440 px picture.
+  await drag(app, { x: area.x + area.width * 0.7, y: area.y + area.height * 0.6 }, { x: area.x + area.width * 0.7, y: area.y + area.height * 0.6 });
+  const board = await copy();
+  expect(board.notice).toContain("Copied the board as a picture");
+  expect(board.size.width).toBeGreaterThan(1440);
+  expect(Math.max(board.size.width, board.size.height)).toBeLessThanOrEqual(8192);
+
+  // Excalidraw's own shortcut for copying as PNG copies through Tavora too.
+  await inModule(app, WHITEBOARD, `${q("notice-toast")}?.querySelector("button")?.click()`);
+  await app.evaluate(({ clipboard }) => clipboard.clear());
+  await app.evaluate(
+    async ({ webContents }, moduleId) => {
+      const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
+      if (!target) throw new Error("no panel");
+      target.sendInputEvent({ type: "keyDown", keyCode: "C", modifiers: ["shift", "alt"] });
+      target.sendInputEvent({ type: "keyUp", keyCode: "C", modifiers: ["shift", "alt"] });
+    },
+    WHITEBOARD,
+  );
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Copied the board as a picture");
+  expect(await app.evaluate(async ({ clipboard }) => (await clipboard.read()).flatMap((item) => item.types))).toContain("image/png");
+  await app.close();
+});
