@@ -386,7 +386,8 @@ function onEditorClick(event: MouseEvent): boolean {
     linkPopover.value = null;
     return false;
   }
-  if (event.ctrlKey || event.metaKey) {
+  // Only web addresses open in the Browser; Ctrl+click on a mailto: link shows its bar like a plain click.
+  if ((event.ctrlKey || event.metaKey) && /^https?:/i.test(href)) {
     linkPopover.value = null;
     emit("openLink", href);
     return true;

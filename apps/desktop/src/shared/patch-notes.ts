@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.14.3",
+    date: "2026-10-16",
+    title: "Safer picture cleanup and link fixes",
+    notes: [
+      "Notes no longer clears out unused pictures while another panel has changed a note it has not read yet.",
+      "Ctrl+click on an email link in Notes shows the link bar instead of doing nothing, and a link that cannot be opened now says so.",
+      "Two quick clicks in a row each count as a click when a module opens a link.",
+    ],
+  },
+  {
     version: "0.14.2",
     date: "2026-10-16",
     title: "Whiteboard (first part)",
