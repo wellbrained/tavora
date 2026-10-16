@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.9.1",
+    date: "2026-10-16",
+    title: "Cleaner folders",
+    notes: ["Folders in the sidebar no longer show a number badge."],
+  },
+  {
     version: "0.9.0",
     date: "2026-10-16",
     title: "Notes: fonts and sizes",

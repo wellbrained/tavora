@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // A folder in the rail: a folder shape (with its tab), so it cannot be taken for a game, with up to four of its
 // games inside. The four places stay put and fill from the top left to the bottom right, so one game sits in
-// the first place and the rest stay empty. The folder shows how many games it holds, open or closed; an open one has
-// an outlined shape in the accent colour.
+// the first place and the rest stay empty. An open folder has an
+// outlined shape in the accent colour.
 import { computed } from "vue";
 import type { GameView } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
@@ -11,8 +11,6 @@ import GameIcon from "./GameIcon.vue";
 const props = defineProps<{
   /** The folder's games in order; only the first four are drawn. */
   games: GameView[];
-  /** How many games the folder holds. */
-  count: number;
   /** Letters the player chose for the folder, shown instead of its games. */
   label: string | null;
   open: boolean;
@@ -20,7 +18,6 @@ const props = defineProps<{
 
 const SLOTS = [0, 1, 2, 3];
 const shown = computed(() => props.games.slice(0, 4));
-const badge = computed(() => (props.count > 99 ? "99+" : String(props.count)));
 </script>
 
 <template>
@@ -38,13 +35,6 @@ const badge = computed(() => (props.count > 99 ? "99+" : String(props.count)));
         <GameIcon v-if="shown[slot]" :game="shown[slot]!" :size="17" />
         <span v-else class="bg-foreground/[0.07] size-[17px] rounded-[4px]" data-testid="folder-empty-slot" />
       </template>
-    </span>
-    <span
-      v-if="count > 0"
-      class="bg-primary text-primary-foreground absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] leading-none font-bold tabular-nums shadow-sm shadow-black/40"
-      data-testid="folder-count"
-    >
-      {{ badge }}
     </span>
   </span>
 </template>
