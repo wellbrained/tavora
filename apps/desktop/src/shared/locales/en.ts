@@ -698,5 +698,6 @@ export const en = {
   "aiUsage.panel.signedInAs": "Signed in as {email}",
   "notice.moduleFilesMoved": "Moved {count} pictures to {folder}.",
   "notice.moduleFilesMissing": "The folder with your modules' pictures cannot be found: {folder}. Pictures show as missing until it is back; Settings > Modules can point to another folder.",
+  "notice.moduleFilesLeft": "{name} was deleted, but the folder with your modules' pictures cannot be found: {folder}. Any pictures of {name} may still be there; delete them yourself if you do not need them.",
   "modules.storageCleared": "{name} stored more in its own browser storage than a module may, so Tavora cleared that storage and restarted the panel. What it saved through Tavora is untouched.",
 } as const;

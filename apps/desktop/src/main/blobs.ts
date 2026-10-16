@@ -18,6 +18,14 @@ const EXTENSIONS: Record<BlobType, string> = {
 };
 const TYPE_BY_EXTENSION = new Map(Object.entries(EXTENSIONS).map(([type, extension]) => [extension, type as BlobType]));
 
+/** The id and type of a stored file from its name (`<32 hex>.<extension>`); null for any other name. */
+export function parseBlobFileName(name: string): { id: string; type: BlobType } | null {
+  const dot = name.indexOf(".");
+  const type = TYPE_BY_EXTENSION.get(name.slice(dot + 1));
+  const id = name.slice(0, dot);
+  return dot === 32 && type && BLOB_ID.test(id) ? { id, type } : null;
+}
+
 /** What a file is, judged by its first bytes and nothing the module says. Null for any other kind of file. */
 export function sniffType(head: Uint8Array): BlobType | null {
   const is = (offset: number, bytes: number[]) => bytes.every((byte, index) => head[offset + index] === byte);
@@ -163,11 +171,11 @@ export class BlobStore {
         await rm(path.join(dir, name), { force: true });
         continue;
       }
-      const match = /^([a-f0-9]{32})\.(png|jpg|gif|webp)$/.exec(name);
-      if (!match) continue;
+      const parsed = parseBlobFileName(name);
+      if (!parsed) continue;
       try {
         const info = await stat(path.join(dir, name));
-        if (info.isFile()) files.push({ id: match[1]!, bytes: info.size, type: TYPE_BY_EXTENSION.get(match[2]!)!, createdAt: info.birthtime.toISOString() });
+        if (info.isFile()) files.push({ id: parsed.id, bytes: info.size, type: parsed.type, createdAt: info.birthtime.toISOString() });
       } catch {
         // Removed while we looked.
       }

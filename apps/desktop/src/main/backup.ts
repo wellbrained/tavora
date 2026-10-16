@@ -1,5 +1,6 @@
 import { copyFile, cp, mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { FILES_DIR } from "./module-files";
 
 /**
  * The file versions this Tavora understands (the "version" inside each file). A test keeps these
@@ -17,7 +18,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const DATA_FILES = ["library.json", "workspace.json", "profile.json"];
 const DATA_DIRS = ["module-data"];
 /** Pictures: the player's own images and profile picture, and the pictures modules keep. Left out of a snapshot that would be too big. */
-const PICTURE_DIRS = ["game-icons", "profile", "module-blobs"];
+const PICTURE_DIRS = ["game-icons", "profile", FILES_DIR];
 
 export function backupsDir(userData: string): string {
   return path.join(userData, "backups");

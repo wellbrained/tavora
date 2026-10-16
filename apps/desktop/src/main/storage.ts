@@ -8,6 +8,7 @@ import { HostError } from "./errors";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside, serializeJson } from "./json";
 import { INSTANCE_ID } from "./ids";
+import { defaultFilesRoot } from "./module-files";
 
 export { isJsonValue } from "./json";
 
@@ -157,7 +158,7 @@ export class DataRegistry {
   constructor(
     private readonly dataDir: string,
     /** The folder every module's files are kept under, by module and game. */
-    private readonly blobRoot: () => string = () => path.join(dataDir, "module-blobs"),
+    private readonly blobRoot: () => string = () => defaultFilesRoot(dataDir),
     /** True while that folder is being moved. */
     private readonly blobsLocked: () => boolean = () => false,
   ) {
