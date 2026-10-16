@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.16.7",
+    date: "2026-10-17",
+    title: "Sign in with Discord",
+    notes: ["Settings > Account: sign in with Discord in your browser, no email needed. Signed in, you can connect Discord to your account as a second way in, add or remove your email, and see both under Sign-in methods. Tavora keeps only your Discord user id and username, never a Discord token, and never links accounts by themselves."],
+  },
+  {
     version: "0.16.6",
     date: "2026-10-16",
     title: "Minimum age for accounts",

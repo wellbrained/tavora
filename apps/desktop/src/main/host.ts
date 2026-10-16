@@ -97,6 +97,7 @@ import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnection, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
 import { AccountClient, deviceOs, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
+import { discordLogin } from "./discord-login";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
 import {
   DEFAULT_THEME,
@@ -185,6 +186,11 @@ export interface HostOptions {
   accounts?: boolean;
   /** Development only: where accounts are, when not the same service as the rest. */
   accountUrl?: string | undefined;
+  /**
+   * Tests only: a pretend Discord sign-in page. The main process then follows it itself instead of
+   * opening the player's browser (it redirects straight back to the Discord login's return address).
+   */
+  discordAuthorizeUrl?: string | undefined;
   /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
   hidden?: boolean;
   /** Tests only: pretend the system is in this mode, so a test does not depend on the PC it runs on. */
@@ -1026,6 +1032,16 @@ export class Host {
         return this.account.sendDeleteCode();
       case "account-delete":
         return this.account.deleteAccount(action.code);
+      case "account-discord-sign-in":
+        return this.account.discordSignIn();
+      case "account-discord-connect":
+        return this.account.connectDiscord();
+      case "account-discord-disconnect":
+        return this.account.disconnectDiscord();
+      case "account-email-remove":
+        return this.account.removeEmail();
+      case "account-delete-discord":
+        return this.account.deleteWithDiscord();
       case "account-profile-choice":
         return this.account.chooseProfile(action.keep);
       case "ai-usage-refresh":
@@ -1507,6 +1523,13 @@ export class Host {
       save: (account) => saveAccount(file, encryptor, account),
       profile,
       onChange,
+      discordLogin: () =>
+        discordLogin({
+          language,
+          ...(options.discordAuthorizeUrl ? { authorizeUrl: options.discordAuthorizeUrl } : {}),
+          // The player's own browser; a test follows the pretend page itself.
+          open: options.discordAuthorizeUrl ? async (url) => void (await fetch(url)) : (url) => shell.openExternal(url),
+        }),
     });
   }
 

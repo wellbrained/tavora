@@ -15,7 +15,7 @@ const encryptor = (available = true): Encryptor => ({
 });
 
 const TOKEN = "t".repeat(43);
-const SAVED: SavedAccount = { token: TOKEN, email: "me@example.com", createdAt: "2026-10-16T12:00:00.000Z" };
+const SAVED: SavedAccount = { token: TOKEN, email: "me@example.com", discord: null, createdAt: "2026-10-16T12:00:00.000Z" };
 const DEVICE = { id: "dev1", os: "windows", createdAt: SAVED.createdAt, lastUsedAt: SAVED.createdAt, current: true };
 
 interface Call {
@@ -47,7 +47,7 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 
 const EMPTY_PROFILE: ProfileData = { name: "", initials: "", picture: null, updatedAt: null };
 
-function client(fetchImpl: typeof fetch, options: { saved?: SavedAccount | null; enabled?: boolean; canKeep?: boolean; profile?: ProfileData } = {}) {
+function client(fetchImpl: typeof fetch, options: { saved?: SavedAccount | null; enabled?: boolean; canKeep?: boolean; profile?: ProfileData; discordLogin?: () => Promise<{ code: string; verifier: string }> } = {}) {
   const views: AccountView[] = [];
   const kept: (SavedAccount | null)[] = [];
   /** This PC's profile, and every profile the account put in its place. */
@@ -62,6 +62,7 @@ function client(fetchImpl: typeof fetch, options: { saved?: SavedAccount | null;
     load: async () => options.saved ?? null,
     save: async (value) => void kept.push(value),
     onChange: (view) => views.push(view),
+    ...(options.discordLogin ? { discordLogin: options.discordLogin } : {}),
     profile: {
       get: async () => local.profile,
       apply: async (profile) => {
@@ -102,7 +103,7 @@ describe("signing in", () => {
     // The token never reaches the host UI; a malformed device is dropped.
     const view = account.view();
     expect(JSON.stringify(view)).not.toContain(TOKEN);
-    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", createdAt: SAVED.createdAt }, devices: [DEVICE], pending: null, profileChoice: null });
+    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", discord: null, createdAt: SAVED.createdAt }, discordLogin: false, devices: [DEVICE], pending: null, profileChoice: null });
   });
 
   it("asks before creating an account for a new address, then creates it with the same code", async () => {
@@ -335,5 +336,78 @@ describe("the profile in the account", () => {
     const { account } = client(fetchImpl, { profile: NIK });
     await account.profileChanged();
     expect(calls).toEqual([]);
+  });
+});
+
+describe("Discord login", () => {
+  const LOGIN = { code: "codenik00000", verifier: "v".repeat(43) };
+  const discordAccount = (email: string | null, name: string | null) => ({ email, discord: name ? { name } : null, createdAt: SAVED.createdAt });
+
+  it("signs a known Discord login in, keeping its username and no email", async () => {
+    const { calls, fetchImpl } = service({
+      "POST /discord/sign-in": () => json({ status: "signed-in", token: TOKEN, device: "dev1", account: discordAccount(null, "nik") }),
+      "GET /": () => json({ account: discordAccount(null, "nik"), devices: [] }),
+    });
+    const { account, kept } = client(fetchImpl, { discordLogin: async () => LOGIN });
+    await account.discordSignIn();
+    expect(calls[0]!.body).toEqual({ ...LOGIN, os: "windows" });
+    expect(account.view()).toMatchObject({ discordLogin: true, account: { email: null, discord: { name: "nik" } } });
+    expect(kept[0]).toEqual({ token: TOKEN, email: null, discord: "nik", createdAt: SAVED.createdAt });
+  });
+
+  it("asks before making an account for a new Discord login, and needs the age tick", async () => {
+    const { calls, fetchImpl } = service({
+      "POST /discord/sign-in": () => json({ status: "no-account", ticket: "t".repeat(43), discord: { name: "nik" } }),
+      "POST /discord/create": () => json({ status: "created", token: TOKEN, device: "dev1", account: discordAccount(null, "nik") }),
+    });
+    const { account } = client(fetchImpl, { discordLogin: async () => LOGIN });
+    await account.discordSignIn();
+    expect(account.view().pending).toEqual({ kind: "discord-create", name: "nik" });
+    await expect(account.create(false)).rejects.toMatchObject({ key: "account.error.ageRequired" });
+    await account.create(true);
+    expect(calls.find((call) => call.url.endsWith("/discord/create"))!.body).toEqual({ ticket: "t".repeat(43), os: "windows" });
+    expect(account.view().account).toMatchObject({ discord: { name: "nik" } });
+  });
+
+  it("connects and disconnects Discord, removes the email, and says why the last method stays", async () => {
+    const { fetchImpl } = service({
+      "POST /discord": () => json({ account: discordAccount("me@example.com", "nik") }),
+      "DELETE /email": () => json({ account: discordAccount(null, "nik") }),
+      "DELETE /discord": () => json({ reason: "last-method" }, 409),
+    });
+    const { account, kept } = client(fetchImpl, { saved: SAVED, discordLogin: async () => LOGIN });
+    await account.init();
+    await account.connectDiscord();
+    expect(account.view().account).toMatchObject({ email: "me@example.com", discord: { name: "nik" } });
+    await account.removeEmail();
+    expect(kept.at(-1)).toMatchObject({ email: null, discord: "nik" });
+    await expect(account.disconnectDiscord()).rejects.toMatchObject({ key: "account.error.lastMethod" });
+    expect(account.view().account).toMatchObject({ discord: { name: "nik" } });
+  });
+
+  it("tells a Discord login another account has apart", async () => {
+    const { fetchImpl } = service({ "POST /discord": () => json({ reason: "discord-taken" }, 409) });
+    const { account } = client(fetchImpl, { saved: SAVED, discordLogin: async () => LOGIN });
+    await account.init();
+    await expect(account.connectDiscord()).rejects.toMatchObject({ key: "account.error.discordTaken" });
+  });
+
+  it("deletes a Discord-only account with a fresh Discord sign-in", async () => {
+    const { calls, fetchImpl } = service({ "POST /delete/discord": () => new Response(null, { status: 204 }) });
+    const { account, kept } = client(fetchImpl, { saved: { ...SAVED, email: null, discord: "nik" }, discordLogin: async () => LOGIN });
+    await account.init();
+    await account.deleteWithDiscord();
+    expect(calls[0]!.body).toEqual(LOGIN);
+    expect(account.view().account).toBeNull();
+    expect(kept).toEqual([null]);
+  });
+
+  it("is not offered without a browser sign-in, and reads a 0.16 sign-in file", async () => {
+    const { account } = client(service({}).fetchImpl);
+    await expect(account.discordSignIn()).rejects.toMatchObject({ key: "account.error.unavailable" });
+    const where = path.join(await mkdtemp(path.join(os.tmpdir(), "tavora-account-")), "account.json");
+    const old = { token: TOKEN, email: "me@example.com", createdAt: SAVED.createdAt };
+    await saveAccount(where, encryptor(), old as unknown as SavedAccount);
+    expect(await loadAccount(where, encryptor())).toEqual({ ...old, discord: null });
   });
 });
