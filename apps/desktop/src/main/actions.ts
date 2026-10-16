@@ -35,6 +35,10 @@ export function parseAction(raw: unknown): HostAction | null {
   const only = (...keys: string[]) => Object.keys(a).every((key) => key === "type" || keys.includes(key));
 
   switch (a.type) {
+    case "module-files-change":
+    case "module-files-reset":
+    case "module-files-open":
+      return only() ? { type: a.type } : null;
     case "link-choice":
       return only("choice") && (a.choice === "panel" || a.choice === "system" || a.choice === "cancel") ? { type: "link-choice", choice: a.choice } : null;
     case "show-welcome":

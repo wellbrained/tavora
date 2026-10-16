@@ -19,7 +19,7 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.14.0",
+    version: "0.14.1",
     date: "2026-10-16",
     title: "Install modules from a zip",
     notes: [
@@ -27,6 +27,15 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "Modules signed by their maker show a publisher tag. Module makers create signed zips with the new pack command.",
       "What a module saves now belongs to whoever made it, not just to the module's name. Your existing notes, pictures, to-dos and module settings are moved over once at start; nothing changes for you.",
       "Data from modules you removed is listed in Settings > Modules, where you can delete it. If you used a local copy of a module before installing its signed version, you can move the local copy's data over.",
+    ],
+  },
+  {
+    version: "0.14.0",
+    date: "2026-10-16",
+    title: "Choose where module pictures are kept",
+    notes: [
+      "Settings > Modules has a new Module pictures folder setting: move the pictures of Notes (and other modules) to another drive, open the folder, or go back to the default. Tavora copies the pictures, checks them, and only then switches over, so nothing is lost if something goes wrong.",
+      "If a folder you chose is not there when Tavora starts (an unplugged drive, say), you get a notice, the pictures show as missing, and nothing is deleted.",
     ],
   },
   {

@@ -4,7 +4,7 @@
 // zip checks and unpacks a module zip into the folder; dropping a module
 // package into the folder and pressing Reload adds it too. Remove moves it
 // to the recycle bin. A module's data stays, so adding it again finds it.
-import { ArrowRightLeft, FileArchive, FolderOpen, RefreshCw, Trash2 } from "@lucide/vue";
+import { ArrowRightLeft, FileArchive, FolderInput, FolderOpen, RefreshCw, Trash2 } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ type ModuleView = NonNullable<typeof state.value>["modules"][number];
 const modules = computed(() => state.value!.modules);
 const problems = computed(() => state.value!.moduleProblems);
 const leftover = computed(() => state.value!.leftoverModuleData);
+const files = computed(() => state.value!.moduleFiles);
 
 // Modules for players first (Tavora's own, then the player's), examples last.
 const sorted = computed(() => {
@@ -92,6 +93,28 @@ function remove(module: ModuleView) {
       <span class="text-muted-foreground"> {{ t("settings.modules.problem", { folder: "", message: problem.message }).trim() }}</span>
     </li>
   </ul>
+
+  <SettingRow
+    :label="t('settings.module-files.label')"
+    :description="t('settings.module-files.description')"
+    setting="module-files"
+    :highlighted="highlight === 'module-files'"
+  >
+    <span class="flex flex-none flex-wrap justify-end gap-2">
+      <Button variant="secondary" data-testid="change-module-files" :disabled="files.moving" @click="act({ type: 'module-files-change' })">
+        <FolderInput :stroke-width="1.5" /> {{ files.moving ? t("settings.module-files.moving") : t("settings.module-files.change") }}
+      </Button>
+      <Button variant="secondary" data-testid="open-module-files" @click="act({ type: 'module-files-open' })">
+        <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
+      </Button>
+      <Button v-if="files.custom" variant="ghost" data-testid="reset-module-files" :disabled="files.moving" @click="act({ type: 'module-files-reset' })">
+        {{ t("settings.module-files.default") }}
+      </Button>
+    </span>
+  </SettingRow>
+  <p :class="cn('-mt-2 mb-2 py-2 text-sm break-all', files.available ? 'text-muted-foreground' : 'text-destructive')" data-testid="module-files-path">
+    {{ files.folder }}<template v-if="!files.available"> — {{ t("settings.module-files.missing") }}</template>
+  </p>
 
   <div
     :class="cn('-mx-3 rounded-lg px-3 pt-4 transition-colors duration-500', highlight === 'installed-modules' && 'bg-primary/10')"

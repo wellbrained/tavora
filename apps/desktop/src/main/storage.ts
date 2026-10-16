@@ -158,6 +158,8 @@ export class DataRegistry {
     private readonly dataDir: string,
     /** The folder every module's files are kept under, by owner, module and game. */
     private readonly blobRoot: () => string = () => path.join(dataDir, "module-blobs"),
+    /** True while that folder is being moved. */
+    private readonly blobsLocked: () => boolean = () => false,
   ) {
     this.panelState = new PanelStateStore(path.join(dataDir, "panel-state"));
   }
@@ -172,7 +174,7 @@ export class DataRegistry {
       data = {
         settings: new ModuleStore(path.join(dir, "storage.json")),
         documents: new DocumentStore(path.join(dir, "documents")),
-        blobs: new BlobStore(() => path.join(this.blobRoot(), owner, moduleId, gameId)),
+        blobs: new BlobStore(() => path.join(this.blobRoot(), owner, moduleId, gameId), undefined, this.blobsLocked),
       };
       this.data.set(dir, data);
     }

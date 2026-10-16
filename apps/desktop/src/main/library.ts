@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import { isGameId, isModuleId } from "@tavora/module-schema";
 import type { RootItem, RootSort, Startup } from "../shared/host-api";
 import { isSite } from "./browser-url";
@@ -76,6 +77,8 @@ export interface Library {
   steamIcons: boolean;
   /** The panel tabs show an icon before the module name. */
   moduleIcons: boolean;
+  /** Where modules keep their pictures, when the player moved it from the default folder. */
+  moduleFilesFolder: string | null;
   /** The Steam profile link or id the player chose to remember for the Steam import, or null. Kept only on this PC. */
   steamProfile: string | null;
   /** The language of Tavora's texts: one of them, or the system's. */
@@ -114,6 +117,7 @@ export function emptyLibrary(): Library {
     autoUpdate: true,
     steamIcons: true,
     moduleIcons: true,
+    moduleFilesFolder: null,
     steamProfile: null,
     language: "system",
     theme: { ...DEFAULT_THEME },
@@ -585,6 +589,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.autoUpdate === "boolean") library.autoUpdate = saved.autoUpdate;
   if (typeof saved.steamIcons === "boolean") library.steamIcons = saved.steamIcons;
   if (typeof saved.moduleIcons === "boolean") library.moduleIcons = saved.moduleIcons;
+  if (typeof saved.moduleFilesFolder === "string" && saved.moduleFilesFolder.length <= 500 && path.isAbsolute(saved.moduleFilesFolder)) library.moduleFilesFolder = saved.moduleFilesFolder;
   if (isLanguageSetting(saved.language)) library.language = saved.language;
   if (typeof saved.steamProfile === "string" && saved.steamProfile.trim() && saved.steamProfile.length <= 200) library.steamProfile = saved.steamProfile.trim();
   const theme = asRecord(saved.theme);

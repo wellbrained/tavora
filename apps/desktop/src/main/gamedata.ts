@@ -21,7 +21,8 @@ function partitionDirName(partition: string): string {
 
 /**
  * The folders modules keep data in, each laid out `<owner>/<module>/<game>`:
- * settings and documents, and files (pictures, see blobs.ts).
+ * settings and documents, and files (pictures, see blobs.ts). The files can
+ * sit in a folder the player chose (module-files.ts); callers pass it.
  */
 function dataRoots(userData: string, blobRoot = path.join(userData, "module-blobs")): string[] {
   return [path.join(userData, "module-data"), blobRoot];
@@ -75,11 +76,11 @@ export async function orphanedPartitions(userData: string, keep: ReadonlySet<str
  * module. A backup copied back by hand is moved too; data already under an
  * owner is never overwritten, and the old copy then stays where it is.
  */
-export async function migrateModuleData(userData: string, log: (line: string) => void = () => undefined): Promise<void> {
-  await applyPending(userData, log);
+export async function migrateModuleData(userData: string, log: (line: string) => void = () => undefined, blobRoot?: string): Promise<void> {
+  await applyPending(userData, log, blobRoot);
   const ownerOf = (moduleId: string) => (moduleId.startsWith(OFFICIAL_PREFIX) ? OFFICIAL_OWNER : LOCAL_OWNER);
 
-  for (const dataRoot of dataRoots(userData)) {
+  for (const dataRoot of dataRoots(userData, blobRoot)) {
     for (const name of await readdir(dataRoot).catch(() => [] as string[])) {
       // Owners never contain a dot and module ids always do.
       if (!isModuleId(name)) continue;
@@ -108,9 +109,9 @@ export async function migrateModuleData(userData: string, log: (line: string) =>
 }
 
 /** Every (owner, module) that has settings, documents or files saved, in any game. */
-export async function listModuleData(userData: string): Promise<{ owner: string; moduleId: string }[]> {
+export async function listModuleData(userData: string, blobRoot?: string): Promise<{ owner: string; moduleId: string }[]> {
   const found = new Map<string, { owner: string; moduleId: string }>();
-  for (const root of dataRoots(userData)) {
+  for (const root of dataRoots(userData, blobRoot)) {
     for (const owner of await readdir(root).catch(() => [] as string[])) {
       if (!isOwnerId(owner)) continue;
       for (const moduleId of await readdir(path.join(root, owner)).catch(() => [] as string[])) {
@@ -126,9 +127,9 @@ export async function listModuleData(userData: string): Promise<{ owner: string;
  * and answers with the browser sessions it had, for the host to clear (their
  * folders go with the next start's cleanup, see applyPending).
  */
-export async function deleteModuleDataOf(userData: string, owner: string, moduleId: string): Promise<string[]> {
+export async function deleteModuleDataOf(userData: string, owner: string, moduleId: string, blobRoot?: string): Promise<string[]> {
   if (!isOwnerId(owner) || !isModuleId(moduleId)) throw new Error("invalid owner or module id");
-  for (const root of dataRoots(userData)) await rm(path.join(root, owner, moduleId), { recursive: true, force: true });
+  for (const root of dataRoots(userData, blobRoot)) await rm(path.join(root, owner, moduleId), { recursive: true, force: true });
   const partitions: string[] = [];
   for (const name of await readdir(path.join(userData, "Partitions")).catch(() => [] as string[])) {
     const match = /^module:([a-z0-9]+):([a-z0-9.-]+)@([a-z0-9-]+)$/.exec(safeDecode(name));
@@ -184,11 +185,11 @@ export async function queueLocalDataMove(userData: string, moduleId: string, to:
  * module already saved something keeps its own data, and the local copy stays),
  * and deleted modules' browser storage folders go.
  */
-async function applyPending(userData: string, log: (line: string) => void): Promise<void> {
+async function applyPending(userData: string, log: (line: string) => void, blobRoot?: string): Promise<void> {
   const pending = await readPending(userData);
   const partitions = path.join(userData, "Partitions");
   for (const { moduleId, to } of pending.moves ?? []) {
-    for (const root of dataRoots(userData)) {
+    for (const root of dataRoots(userData, blobRoot)) {
       const from = path.join(root, LOCAL_OWNER, moduleId);
       for (const game of await readdir(from).catch(() => [] as string[])) {
         if (!isGameId(game)) continue;

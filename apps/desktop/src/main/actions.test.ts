@@ -13,6 +13,9 @@ describe("parseAction", () => {
   it.each([
     [{ type: "show-welcome" }],
     [{ type: "link-choice", choice: "panel" }],
+    [{ type: "module-files-change" }],
+    [{ type: "module-files-reset" }],
+    [{ type: "module-files-open" }],
     [{ type: "link-choice", choice: "system" }],
     [{ type: "link-choice", choice: "cancel" }],
     [{ type: "open-game", gameId: "poe2" }],
@@ -113,6 +116,8 @@ describe("parseAction", () => {
     [{ type: "nope" }],
     [{ type: "show-welcome", extra: 1 }],
     [{ type: "link-choice" }],
+    [{ type: "module-files-change", folder: "C:\\Users" }],
+    [{ type: "module-files-reset", extra: 1 }],
     [{ type: "link-choice", choice: "other" }],
     [{ type: "link-choice", choice: "system", url: "https://example.com" }],
     [{ type: "open-game", gameId: "../poe2" }],

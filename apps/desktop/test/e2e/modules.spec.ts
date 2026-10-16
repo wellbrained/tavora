@@ -6,7 +6,7 @@ import { access, mkdir, readdir, readFile, rename, writeFile } from "node:fs/pro
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { expectModuleText, inModule, launch, newUserData, openGame, openModule, panels, VANILLA } from "./harness";
+import { expectModuleText, inModule, launch, newUserData, openGame, openModule, panels, seedLibrary, VANILLA } from "./harness";
 
 async function addModule(userData: string, folder: string, id: string): Promise<string> {
   const dir = path.join(userData, "modules", folder);
@@ -181,3 +181,46 @@ async function exists(target: string): Promise<boolean> {
     () => false,
   );
 }
+
+test("the pictures folder shows the default place, and a folder that is gone is reported and can be left", async () => {
+  const userData = await newUserData();
+  const { app, page } = await launch(userData);
+  await page.getByTestId("rail-settings").click();
+  await page.getByTestId("settings-nav-modules").click();
+  await expect(page.getByTestId("module-files-path")).toHaveText(path.join(userData, "module-blobs"));
+  await expect(page.getByTestId("reset-module-files")).toHaveCount(0);
+  await expect(page.getByTestId("open-module-files")).toBeVisible();
+  await app.close();
+});
+
+test("a pictures folder that moved to a drive that is gone gives a notice; Use default brings the pictures back", async () => {
+  const userData = await newUserData();
+  const gone = path.join(userData, "unplugged", "Tavora module files");
+  await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), moduleFilesFolder: gone }));
+
+  // The drive is not there: Tavora says so and shows the pictures as missing; nothing is created or deleted.
+  let running = await launch(userData);
+  await expect(running.page.getByTestId("notice")).toContainText("cannot be found");
+  await running.page.getByTestId("rail-settings").click();
+  await running.page.getByTestId("settings-nav-modules").click();
+  await expect(running.page.getByTestId("module-files-path")).toContainText(gone);
+  await expect(running.page.getByTestId("module-files-path")).toContainText("cannot be found");
+  await running.app.close();
+  await expect(access(path.dirname(gone))).rejects.toThrow();
+
+  // The drive comes back with a picture on it; Use default copies it into Tavora's folder and removes it there.
+  const id = "0123456789abcdef0123456789abcdef";
+  await mkdir(path.join(gone, "tavora.notes", "poe2"), { recursive: true });
+  await writeFile(path.join(gone, "tavora.notes", "poe2", `${id}.png`), "picture");
+  running = await launch(userData);
+  await running.page.getByTestId("rail-settings").click();
+  await running.page.getByTestId("settings-nav-modules").click();
+  await expect(running.page.getByTestId("module-files-path")).toHaveText(gone);
+  await running.page.getByTestId("reset-module-files").click();
+  await expect(running.page.getByTestId("module-files-path")).toHaveText(path.join(userData, "module-blobs"));
+  // Saved there before modules had owners, so it was moved under its owner at start.
+  expect(await readdir(path.join(userData, "module-blobs", "official", "tavora.notes", "poe2"))).toEqual([`${id}.png`]);
+  expect(await readdir(gone)).toEqual([]);
+  await expect(running.page.getByTestId("reset-module-files")).toHaveCount(0);
+  await running.app.close();
+});

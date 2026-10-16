@@ -125,14 +125,18 @@ A module can keep pictures in a folder Tavora manages (`blobs` in the SDK, used 
 
 | # | Guarantee | Mechanism | Test |
 | --- | --- | --- | --- |
-| F1 | A module reaches only its own files, for the current game | the files are served and stored inside the module's own session (one per module and game), which answers only to its own address; the folder is `<root>/<owner>/<module id>/<game id>` from ids the host validated (owner since 0.14.0, finding S5) | unit: the bridge and `blobs.test.ts` use one store per module and game; the session wiring is reviewed by hand |
+| F1 | A module reaches only its own files, for the current game | the files are served and stored inside the module's own session (one per module and game), which answers only to its own address; the folder is `<root>/<owner>/<module id>/<game id>` from ids the host validated (owner since 0.14.1, finding S5) | unit: the bridge and `blobs.test.ts` use one store per module and game; the session wiring is reviewed by hand |
 | F2 | A module cannot choose where a file goes or read anything else | the module never gives a name or a path: the host makes a random 128-bit id, and every id it receives must match 32 lowercase hex characters before it touches a path | unit: `blobs.test.ts` ("refuses ids that are not ours"); `bridge.test.ts` |
 | F3 | Only pictures are stored, and a picture cannot run | the kind is judged from the first bytes (PNG, JPEG, GIF, WebP); SVG, BMP and everything else are refused; files are served with their own type, `nosniff`, `Content-Security-Policy: default-src 'none'; sandbox` and `Cross-Origin-Resource-Policy: same-origin` | unit: `blobs.test.ts` (sniffing, serving headers) |
 | F4 | A module cannot fill the disk | 50 MB per file and 500 MB per module and game, checked while the body streams in; a refused or cut-off write removes its temp file, and leftovers are cleaned up on the next listing | unit: `blobs.test.ts` (limits, leftovers) |
 | F5 | Files go with the game | deleting a game from the Trash removes its folder under every module; daily backups include the files unless the snapshot would be too big, as with pictures | unit: `gamedata.test.ts`; `backup.test.ts` |
 | F6 | No other page can read or write them | only the module's session handles `/_blobs/`; the Browser and the host UI use other sessions, and the answers are same-origin only | no test; reviewed by hand |
 
-Accepted: a module can use its whole 500 MB share, and the player cannot yet see per game how much that is; the Notes screen will show it. Changing the folder is not part of this release.
+| F7 | Only the player decides where the files go | the folder is picked in the system's own dialog, opened by the host when the host window asks (`module-files-change`, parsed by `parseAction` with no fields); a module cannot trigger it, name a place or learn the path | unit: `actions.test.ts` |
+| F8 | Moving never loses or mixes up a picture | the files are copied and each copy's size checked before the setting is switched, the old files are removed only after that, a cut-off move can be run again, and nothing new is accepted while it runs | unit: `module-files.test.ts` (copy, checks, resume, lock) |
+| F9 | A move cannot be pointed at something it should not touch | the files go into a folder of their own inside the place picked; places inside the current folder or around it, the same folder, Tavora's own data folder and folders that can't be written to are refused; only files named like ours (`<module>/<game>/<32 hex>.<png/jpg/gif/webp>`) are copied or removed | unit: `module-files.test.ts` (`filesTarget`, listing) |
+
+Accepted: a module can use its whole 500 MB share; Notes shows the usage. A folder the player moved is not part of the daily backup, and one on a drive that is unplugged shows the pictures as missing, with a notice, until it is back; nothing is deleted or re-pointed meanwhile.
 
 ## Known limits and open risks
 
@@ -161,7 +165,7 @@ Method: read the main-process side (`module-view.ts`, `bridge.ts`, `assets.ts`, 
 | S2 | Medium | **A module could fill the player's disk.** The quotas covered only bridge storage; a module's own IndexedDB and origin-private file system took 192 MB each with no error, and Chromium reported a 23 GB quota (about 60 % of the disk). An in-memory session does not help (it moves the problem to RAM, 5 GB). | Fixed (0.7.2): the host measures the session folder every second and clears it past 256 MB (G11). A module can still write for up to one second first; accepted. |
 | S3 | Low–Medium | **No Electron fuses were set**, although this model counted on them. With `RunAsNode` on, one environment variable turns the signed `Tavora.exe` into a Node interpreter. ASAR integrity cannot apply because the app ships with `asar: false`. | Fixed (no version change): fuses set and read back from a packaged exe. The ASAR point is accepted. |
 | S4 | Low | **Dev-only switches worked in packaged builds**: `TAVORA_USER_DATA`, `TAVORA_MODULE_DIRS`, `TAVORA_OFFICIAL_MODULE_DIRS`, `TAVORA_OFFICIAL_THEME_DIRS`. The `OFFICIAL` one could list any module as Official. Needs control of the environment Tavora starts in, so local malware, which is out of scope. | Fixed with S3. |
-| S5 | Medium | **A module id is a claim, not an identity.** Data is keyed by the manifest's `id`, and removing a module keeps its data (a decision, so adding it back brings it back). A different module that later claims the same id inherits that module's documents, settings and web storage. It needs the player to install it, and two modules with one id cannot run together. | Fixed: data is keyed by owner (a signing key, `local` or `official`) and id; see "Publisher binding" below and decisions.md. Storage keyed by owner, signed zips, the installer and the Settings controls since 0.14.0. The catalogue's name prefixes and key revocation wait for accounts. |
+| S5 | Medium | **A module id is a claim, not an identity.** Data is keyed by the manifest's `id`, and removing a module keeps its data (a decision, so adding it back brings it back). A different module that later claims the same id inherits that module's documents, settings and web storage. It needs the player to install it, and two modules with one id cannot run together. | Fixed: data is keyed by owner (a signing key, `local` or `official`) and id; see "Publisher binding" below and decisions.md. Storage keyed by owner, signed zips, the installer and the Settings controls since 0.14.1. The catalogue's name prefixes and key revocation wait for accounts. |
 
 ### What held
 
@@ -176,11 +180,11 @@ All of G1–G10 passed on a clean `main` (`isolation.spec.ts`), and these new pr
 
 ### Verdict for the SDK
 
-No finding met the blocking rule agreed for this review (a hostile module reading or writing outside its own module and game, running code outside its sandbox, or sending data off the PC). S1 was fixed anyway because it broke a stated guarantee and let a module take down the whole app. The SDK can go to a first outside developer once the fixes for S1 to S3 are released. S5 is fixed for data (0.14.0); until the catalogue has publisher names, a key's fingerprint is all a player sees of who made a zip.
+No finding met the blocking rule agreed for this review (a hostile module reading or writing outside its own module and game, running code outside its sandbox, or sending data off the PC). S1 was fixed anyway because it broke a stated guarantee and let a module take down the whole app. The SDK can go to a first outside developer once the fixes for S1 to S3 are released. S5 is fixed for data (0.14.1); until the catalogue has publisher names, a key's fingerprint is all a player sees of who made a zip.
 
 ### Rules for the zip installer
 
-Built in 0.14.0 (`main/installer.ts`, Settings > Modules > Install from zip; the zip reader is `readZip` in `packages/pack`). It must:
+Built in 0.14.1 (`main/installer.ts`, Settings > Modules > Install from zip; the zip reader is `readZip` in `packages/pack`). It must:
 
 1. Read the manifest from the archive and validate it with `validateManifest` before extracting anything.
 2. Extract only regular files: refuse links, absolute paths, `..`, drive letters, reserved Windows names and duplicate paths that differ only in case.
