@@ -192,7 +192,7 @@ export function isWindow(value: unknown): value is UsageWindow {
   );
 }
 
-/** Saved readings by account id; also what Tavora moved over from its built-in panel (before 0.16.9). */
+/** Saved readings by account id; also what Tavora moved over from its built-in panel (before 0.16.10). */
 export function parseReadings(value: unknown): Record<string, SavedReading> {
   const readings: Record<string, SavedReading> = {};
   if (!isObject(value)) return readings;

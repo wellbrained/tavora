@@ -1,7 +1,9 @@
 // Signing in to a Tavora account, end to end: the real service (apps/api) with
-// its test inbox, and the app reading the code out of the "mail".
+// its test inbox, and the app reading the code out of the "mail". Discord login
+// runs against a pretend Discord: its sign-in page sends the app straight back.
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
+import { createServer as createHttpServer, type Server } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -13,6 +15,8 @@ let service: ChildProcess | undefined;
 let stateDir = "";
 let apiUrl = "";
 let inboxUrl = "";
+let discord: Server | undefined;
+let discordUrl = "";
 
 const freePort = () =>
   new Promise<number>((resolve, reject) => {
@@ -35,8 +39,25 @@ test.beforeAll(async () => {
     const build = node(["--input-type=module", "-e", `const d = await import("./src/dataset.ts"); d.writeDatabase(${JSON.stringify(games)}, d.buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));`]);
     build.once("exit", (code) => (code === 0 ? resolve() : reject(new Error(`dataset build failed: ${code}`))));
   });
+  // A pretend Discord: its sign-in page sends the browser back with a code; the API answers as one user.
+  discord = createHttpServer((request, response) => {
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    if (url.pathname === "/oauth2/authorize") {
+      const back = new URL(url.searchParams.get("redirect_uri")!);
+      back.search = new URLSearchParams({ code: "pretendcode123", state: url.searchParams.get("state") ?? "" }).toString();
+      response.writeHead(302, { location: back.toString() }).end();
+    } else if (url.pathname === "/api/oauth2/token") {
+      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ access_token: "pretend-token", scope: "identify" }));
+    } else if (url.pathname === "/api/users/@me") {
+      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ id: "123456789012345678", username: "pretend_player" }));
+    } else {
+      response.writeHead(200).end();
+    }
+  });
+  await new Promise<void>((resolve) => discord!.listen(0, "127.0.0.1", resolve));
+  discordUrl = `http://127.0.0.1:${(discord.address() as { port: number }).port}`;
   const [port, inboxPort] = [await freePort(), await freePort()];
-  service = node(["src/server.ts"], { PORT: String(port), TAVORA_GAMES_DB: games, TAVORA_STATE_DIR: stateDir, TAVORA_ICONS_DIR: path.join(stateDir, "icons"), TAVORA_TEST_INBOX_PORT: String(inboxPort), NODE_ENV: "test" });
+  service = node(["src/server.ts"], { PORT: String(port), TAVORA_GAMES_DB: games, TAVORA_STATE_DIR: stateDir, TAVORA_ICONS_DIR: path.join(stateDir, "icons"), TAVORA_TEST_INBOX_PORT: String(inboxPort), DISCORD_API: `${discordUrl}/api`, NODE_ENV: "test" });
   apiUrl = `http://127.0.0.1:${port}`;
   inboxUrl = `http://127.0.0.1:${inboxPort}`;
   await expect.poll(async () => (await fetch(`${inboxUrl}/mails`).catch(() => null))?.ok ?? false, { timeout: 15_000 }).toBe(true);
@@ -44,6 +65,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   service?.kill();
+  discord?.close();
   await rm(stateDir, { recursive: true, force: true }).catch(() => undefined);
 });
 
@@ -80,6 +102,37 @@ test("a player creates an account with an emailed code, sees this PC, and signs 
     await expect(page.getByTestId("account")).toContainText("player@example.com");
     await expect(page.getByTestId("account-devices")).toContainText(process.platform === "win32" ? "Windows" : process.platform === "darwin" ? "macOS" : "Linux");
     await expect(page.getByTestId("account-devices")).toContainText("This PC");
+
+    await page.getByTestId("account-sign-out").click();
+    await expect(page.getByTestId("account-email")).toBeVisible();
+  } finally {
+    await app.close();
+  }
+});
+
+test("a player creates a Discord-only account in the browser, adds an email, and the last way in stays", async () => {
+  const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: apiUrl, TAVORA_DISCORD_AUTHORIZE_URL: `${discordUrl}/oauth2/authorize` } });
+  try {
+    await page.getByTestId("rail-settings").click();
+    await page.getByTestId("settings-nav-account").click();
+
+    await page.getByTestId("account-discord-sign-in").click();
+    // A new Discord login: the app asks, with the age tick box.
+    await expect(page.getByTestId("account")).toContainText("@pretend_player");
+    await page.getByTestId("account-age").check();
+    await page.getByTestId("account-create").click();
+    await expect(page.getByTestId("account-discord")).toContainText("@pretend_player");
+    await expect(page.getByTestId("account-discord-disconnect")).toHaveCount(0);
+
+    // Add an email with a code; then Discord may be disconnected.
+    await page.getByTestId("account-change-email").click();
+    await page.getByTestId("account-new-email").fill("discord@example.com");
+    await page.getByTestId("account-email-code").click();
+    await page.getByTestId("account-code").fill(await codeFor("discord@example.com"));
+    await page.getByTestId("account-confirm-email").click();
+    await expect(page.getByTestId("account")).toContainText("discord@example.com");
+    await page.getByTestId("account-discord-disconnect").click();
+    await expect(page.getByTestId("account-discord-connect")).toBeVisible();
 
     await page.getByTestId("account-sign-out").click();
     await expect(page.getByTestId("account-email")).toBeVisible();

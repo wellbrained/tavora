@@ -39,7 +39,7 @@ interface Stored {
 }
 
 /**
- * What version 1 of ai-usage.json kept for the built-in panel (before 0.16.9): handed to the AI
+ * What version 1 of ai-usage.json kept for the built-in panel (before 0.16.10): handed to the AI
  * Usage module's settings once, then dropped from the file.
  */
 export interface LegacyPanelData {
