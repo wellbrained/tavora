@@ -132,7 +132,7 @@ Method: read the main-process side (`module-view.ts`, `bridge.ts`, `assets.ts`, 
 | S2 | Medium | **A module could fill the player's disk.** The quotas covered only bridge storage; a module's own IndexedDB and origin-private file system took 192 MB each with no error, and Chromium reported a 23 GB quota (about 60 % of the disk). An in-memory session does not help (it moves the problem to RAM, 5 GB). | Fixed (0.7.2): the host measures the session folder every second and clears it past 256 MB (G11). A module can still write for up to one second first; accepted. |
 | S3 | Low–Medium | **No Electron fuses were set**, although this model counted on them. With `RunAsNode` on, one environment variable turns the signed `Tavora.exe` into a Node interpreter. ASAR integrity cannot apply because the app ships with `asar: false`. | Fixed (no version change): fuses set and read back from a packaged exe. The ASAR point is accepted. |
 | S4 | Low | **Dev-only switches worked in packaged builds**: `TAVORA_USER_DATA`, `TAVORA_MODULE_DIRS`, `TAVORA_OFFICIAL_MODULE_DIRS`, `TAVORA_OFFICIAL_THEME_DIRS`. The `OFFICIAL` one could list any module as Official. Needs control of the environment Tavora starts in, so local malware, which is out of scope. | Fixed with S3. |
-| S5 | Medium | **A module id is a claim, not an identity.** Data is keyed by the manifest's `id`, and removing a module keeps its data (a decision, so adding it back brings it back). A different module that later claims the same id inherits that module's documents, settings and web storage. It needs the player to install it, and two modules with one id cannot run together. | Accepted until the catalogue. A zip installer or the catalogue must bind data to who published the module (see the requirements below). |
+| S5 | Medium | **A module id is a claim, not an identity.** Data is keyed by the manifest's `id`, and removing a module keeps its data (a decision, so adding it back brings it back). A different module that later claims the same id inherits that module's documents, settings and web storage. It needs the player to install it, and two modules with one id cannot run together. | Decided 2026-10-16, not built: data is keyed by owner (a signing key, `local` or `official`) and id; see "Publisher binding" below and decisions.md. Until it is built, accepted as before: install modules only from a source the player trusts. |
 
 ### What held
 
@@ -156,12 +156,24 @@ There is no installer today; modules are folders in `modules` in the data folder
 1. Read the manifest from the archive and validate it with `validateManifest` before extracting anything.
 2. Extract only regular files: refuse links, absolute paths, `..`, drive letters, reserved Windows names and duplicate paths that differ only in case.
 3. Cap the archive size, the unpacked size, the number of files and the compression ratio.
-4. Refuse an id that starts with `tavora.`, and an id already installed (an update replaces it only from the same publisher).
-5. When the id has saved data from a module that was removed, say so and ask before the new module sees it (S5), until publisher identity exists.
+4. Check the signature before extracting and record the owner (the key, or `local` for an unsigned zip) in the host's own list. Refuse an id that starts with `tavora.`, and an id already installed unless the zip is signed by the same owner (an update).
+5. Key data by owner and id, so a module from a different owner starts empty and never sees data another owner left under its id (S5; "Publisher binding" below). Never ask at install whether to hand data over.
 6. Install into a temporary folder and rename it into place, so a half-extracted module is never loaded.
 7. Never run anything from the archive.
 
 The existing folder loading already meets the manifest, path and id rules (`validateManifest`, `resolveAsset`, `discoverModules`).
+
+### Publisher binding (S5, decided 2026-10-16)
+
+The owner of a module's data is who signed it, not the id it claims. Decided with Nik; the full rules are the 2026-10-16 publisher row in decisions.md.
+
+- Owners: `official` (Tavora's own folder), `local` (unsigned folder modules and zips) or an Ed25519 key's fingerprint. Documents, settings and web storage are keyed by owner and id, so the S5 attack (claim a removed module's id) gets an empty store.
+- The secret key stays on the developer's PC. Tavora's servers hold only public keys, so a break-in there cannot sign a module.
+- Data moves between owners only by (a) the player clicking "Move data from the local copy" in Settings > Modules, from `local` to a signed module of the same id, or (b) a key succession statement signed by Tavora's catalogue key after an account replaced a lost key. Never by a prompt at install.
+- The owner is checked at install and stored by the host, outside the module's folder. Someone who can edit the data folder can already act as the player (accepted limit above).
+- The catalogue accepts `<prefix>.*` only from keys of the account that reserved the prefix. Zips shared by hand get no such check; the player sees the key's fingerprint, or the profile name once the key is linked to an account.
+- Grants (Milestone F) are recorded for owner, id and version, using the same owner.
+- Open risk: a stolen secret key lets the thief publish updates as that developer until the account replaces the key. Revoking a key needs the catalogue and is part of its design.
 
 ### What module grants must not break
 
