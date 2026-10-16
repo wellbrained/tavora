@@ -134,6 +134,9 @@ export interface Methods {
   "ui.getLanguage": { params: undefined; result: string };
   /** Opens a web address in the game's Browser panel. Only right after a click or key press in the panel; http and https only. */
   "links.open": { params: { url: string }; result: null };
+  "blobs.list": { params: undefined; result: BlobInfo[] };
+  "blobs.usage": { params: undefined; result: BlobUsage };
+  "blobs.delete": { params: { id: string }; result: null };
 }
 
 export type MethodName = keyof Methods;
@@ -232,7 +235,42 @@ export const LIMITS = {
   maxTitleLength: 200,
   /** UI state for one panel. */
   maxPanelStateBytes: 256 * 1024,
+  /** One stored file (see Blobs). */
+  maxBlobBytes: 50 * 1024 * 1024,
+  /** All stored files of one module in one game. */
+  maxBlobsBytes: 500 * 1024 * 1024,
 } as const;
+
+/** The kinds of file a module can keep with blobs.put, found by looking at the file itself. */
+export const BLOB_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+export type BlobType = (typeof BLOB_TYPES)[number];
+
+/** A stored file. */
+export interface BlobInfo {
+  /** 32 lowercase hex characters, chosen by the host. */
+  id: string;
+  bytes: number;
+  type: BlobType;
+  createdAt: string;
+}
+
+/** How much of the limits a module's files in the current game use. */
+export interface BlobUsage {
+  bytes: number;
+  count: number;
+  /** All files together. */
+  maxBytes: number;
+  /** One file. */
+  maxFileBytes: number;
+}
+
+/**
+ * Files are sent to and shown from the module's own address, not over the
+ * bridge: POST /_blobs/ stores the request body and answers with a BlobInfo,
+ * GET /_blobs/<id> serves a file. Both only work from the module's own page.
+ */
+export const BLOB_PATH = "/_blobs/";
+export const BLOB_ID = /^[a-f0-9]{32}$/;
 
 /** Document ids: host-generated UUIDs or module-chosen slugs. */
 export const DOCUMENT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
