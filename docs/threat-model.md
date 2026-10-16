@@ -105,6 +105,19 @@ The Discord panel shows who is in the player's voice channel. The main process r
 | D6 | Nothing happens until the player asks | the connection only runs while a Discord panel is open, and Discord's approval is only asked for when the player presses Connect; closing the last panel disconnects | unit: `discord.test.ts`; e2e: no command before Connect |
 | D7 | Only the main process and the host window talk about Discord | `host:get-discord` and the `discord-*` actions answer only the host window's main frame, like every `host:*` call; the actions are checked by `parseAction` | unit: `actions.test.ts` |
 
+## Links from modules (0.11.0)
+
+A module can ask the host to open a web address in the Browser (`links.open`, used by Notes). This is the first call that lets a module cause something outside its own panel, so it gets its own guarantees.
+
+| # | Guarantee | Mechanism | Test |
+| --- | --- | --- | --- |
+| K1 | A module cannot open a link on its own | the module preload reports clicks and key presses only when `event.isTrusted` (a script cannot make an event trusted); the host refuses `links.open` unless one came within 2 s, and uses it up: one click opens one link | unit: the bridge passes the host's refusal on (`bridge.test.ts`); the gesture check is in `module-view.ts`, reviewed by hand |
+| K2 | Only web addresses open | the main process checks the address is `http` or `https` with a host and at most 2048 characters; `file:`, `javascript:`, `data:`, `mailto:` and custom schemes are refused | unit: `bridge.test.ts` (types and length); `browser-url.test.ts` (`isWebUrl`) |
+| K3 | The module learns nothing from opening a link | the answer is `null`; no panel id, no page content, no address back | unit: `bridge.test.ts` |
+| K4 | The page opens like any link in the Browser | it uses the Browser panel's own sessions (private addresses get their own kind), its blocking and its permissions; a full workspace shows the usual notice | the Browser panel guarantees B1–B7 |
+
+Accepted: a module can still show a fake button and get the player to click it, which opens a link in the Browser. That is the same as any web page's link, the player sees the new tab, and the Browser is sandboxed.
+
 ## Known limits and open risks
 
 - **Webview isolation is not proven safe by this spike.** It relies on Chromium site isolation and the OS sandbox. A Chromium renderer exploit would break G1–G4. Mitigation: keep Electron current, enable the OS sandbox everywhere, Electron fuses are set at packaging time (`electronFuses` in `apps/desktop/package.json`, checked 2026-10-16 with `@electron/fuses read` on a packaged build): `RunAsNode`, `NODE_OPTIONS`, `--inspect` and extra `file://` privileges are off, cookie encryption is on. ASAR integrity is not used because the app ships unpacked (`"asar": false`); someone who can edit Tavora's files can already act as the player, so this is accepted.

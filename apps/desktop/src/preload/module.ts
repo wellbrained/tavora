@@ -21,4 +21,19 @@ ipcRenderer.on("tavora:port", (event) => {
   window.postMessage({ type: PORT_MESSAGE, v: PROTOCOL_VERSION }, window.location.origin, [port2]);
 });
 
+// Real clicks and key presses only (a script cannot make an event trusted). The host lets a
+// module open a link only right after one, so a page cannot open links on its own.
+let lastGesture = 0;
+for (const type of ["pointerdown", "keydown"]) {
+  window.addEventListener(
+    type,
+    (event) => {
+      if (!event.isTrusted || event.timeStamp - lastGesture < 100) return;
+      lastGesture = event.timeStamp;
+      ipcRenderer.send("tavora:gesture");
+    },
+    true,
+  );
+}
+
 ipcRenderer.on("tavora:ping", () => ipcRenderer.send("tavora:pong"));
