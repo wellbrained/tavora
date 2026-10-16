@@ -1,4 +1,4 @@
-# Started by tracker (project "Tavora Icon Review") as: start-server.ps1 -Port <prod port>.
+# Started by tracker (project "Tavora-IconReview") as: start-server.ps1 -Port <prod port>.
 param([Parameter(Mandatory)][int]$Port)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot
