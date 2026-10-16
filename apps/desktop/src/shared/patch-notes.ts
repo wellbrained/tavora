@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.14.4",
+    date: "2026-10-16",
+    title: "Deleting a game with a missing pictures folder",
+    notes: ["If you delete a game while the folder you chose for module pictures cannot be found (an unplugged drive, say), Tavora now tells you that its pictures may still be in that folder, so you can delete them yourself."],
+  },
+  {
     version: "0.14.3",
     date: "2026-10-16",
     title: "Safer picture cleanup and link fixes",

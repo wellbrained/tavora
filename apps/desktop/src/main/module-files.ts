@@ -5,13 +5,16 @@
 import { copyFile, mkdir, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isGameId, isModuleId } from "@tavora/module-schema";
-import { BLOB_ID } from "@tavora/sdk/protocol";
+import { parseBlobFileName } from "./blobs";
 
 /** Inside the place the player picks, the files go into a folder of their own with this name. */
 export const FILES_FOLDER_NAME = "Tavora module files";
 
+/** The default files folder's name inside the app's data folder. */
+export const FILES_DIR = "module-blobs";
+
 export function defaultFilesRoot(userData: string): string {
-  return path.join(userData, "module-blobs");
+  return path.join(userData, FILES_DIR);
 }
 
 /** Why a place cannot be used. The host words these for the player. */
@@ -63,7 +66,7 @@ export async function listStoredFiles(root: string): Promise<StoredFile[]> {
     for (const game of await names(path.join(root, module))) {
       if (!isGameId(game)) continue;
       for (const name of await names(path.join(root, module, game))) {
-        if (!/^[a-f0-9]{32}\.(png|jpg|gif|webp)$/.test(name) || !BLOB_ID.test(name.slice(0, 32))) continue;
+        if (!parseBlobFileName(name)) continue;
         try {
           const info = await stat(path.join(root, module, game, name));
           if (info.isFile()) files.push({ module, game, name, bytes: info.size });
