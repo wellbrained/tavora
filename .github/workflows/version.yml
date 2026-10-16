@@ -1,0 +1,32 @@
+name: Version
+
+# Work in progress raises only the patch number. A pull request that raises the
+# minor or major number of the app needs the `feature-complete` label, which
+# only wellbrained adds (docs/decisions.md, 2026-10-16). Runs again when labels change.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check the version change
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          LABELED: ${{ contains(github.event.pull_request.labels.*.name, 'feature-complete') }}
+        run: |
+          base=$(git show "$BASE_SHA:apps/desktop/package.json" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')
+          head=$(node -p 'require("./apps/desktop/package.json").version')
+          node apps/desktop/scripts/version-bump.mjs "$base" "$head" "$LABELED"
