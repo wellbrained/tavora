@@ -163,7 +163,7 @@ Accepted: WebAssembly widens what a bug in the browser engine could be reached w
 
 ## Accounts (service, decided 2026-10-16)
 
-Optional accounts live in Tavora's service (`apps/api`, `/v1/account`): an email address, signed into with a code mailed to it. They are the first player data the service keeps. The attacker is anyone on the internet who can call the service, someone who has an address but not its mailbox, and someone who copied a PC's files. The app side (where the sign-in is kept, the Account page) gets its rows when it is built.
+Optional accounts live in Tavora's service (`apps/api`, `/v1/account`): an email address, signed into with a code mailed to it. They are the first player data the service keeps. The attacker is anyone on the internet who can call the service, someone who has an address but not its mailbox, and someone who copied a PC's files. The app side (0.15.1) is A11 to A14.
 
 | # | Guarantee | Mechanism | Test |
 | --- | --- | --- | --- |
@@ -177,6 +177,10 @@ Optional accounts live in Tavora's service (`apps/api`, `/v1/account`): an email
 | A8 | Deleting an account removes it from the service at once | account, sign-ins and waiting codes are deleted in one transaction; the server's daily snapshots (14 kept) still hold it for up to 14 days, which the privacy page says | unit: `accounts.test.ts` |
 | A9 | No account works until mail can be sent, and the test inbox never runs in production | without a mailer every account route answers 503 and no account file is opened; `TAVORA_TEST_INBOX_PORT` is ignored when `NODE_ENV=production`, and the inbox listens on 127.0.0.1 only, shows mail as text under a strict content security policy | unit: `accounts.test.ts` (503, escaping) |
 | A10 | A web page cannot use a player's sign-in | the token is sent in a header, never a cookie; bodies must be JSON (a preflight this service refuses); there is no CORS | unit: `accounts.test.ts` (415) |
+| A11 | The sign-in token stays in the main process and is kept encrypted | `account.json` holds only safeStorage-encrypted data (like the Discord sign-in, D3); where only Linux's plain-text fallback exists nothing is saved and the sign-in lasts until Tavora quits, with a notice; the host UI gets the address, the devices and the step, never the token; the file is not in backups or diagnostic info | unit: `account.test.ts` (the view never holds the token, encrypted file, nothing written without encryption) |
+| A12 | Modules learn nothing about the account | no SDK call, bridge message or module view carries the address, the token or whether the player is signed in; only `host:*` IPC from the host window reaches the account actions, which `parseAction` checks (6-digit codes, short device ids) | unit: `actions.test.ts`; review: nothing in `bridge.ts` or the module preload names the account |
+| A13 | Nothing is sent before the player asks, and nothing in a release build until accounts go live | the client loads and talks only when `accounts` is on, which only a development run sets; it asks the service only when the player sends a code, signs in, opens Settings > Account while signed in, or presses a button there | unit: `account.test.ts` (switched off: no request) |
+| A14 | Signing out or a sign-in the service no longer knows leaves the PC's data alone | sign-out forgets the token here even when the service cannot be reached; a 401 forgets it too; profile, library and modules are not touched | unit: `account.test.ts`; e2e: `accounts.spec.ts` |
 
 Open: the mail provider and its records on `mytavora.app` (SPF, DKIM, DMARC) are chosen before accounts go live, and the privacy page must describe accounts first.
 

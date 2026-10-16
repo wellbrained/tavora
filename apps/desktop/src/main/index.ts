@@ -126,6 +126,8 @@ if (!app.requestSingleInstanceLock()) {
         devServer,
         // A packaged app only ever talks to api.mytavora.app.
         apiUrl: !app.isPackaged ? process.env.TAVORA_API_URL : undefined,
+        // Accounts go live with a release that turns this on (decided 2026-10-16); until then only development runs have them.
+        accounts: !app.isPackaged,
         // Likewise, a packaged app only ever uses Steam's own icon address.
         steamIcons: !app.isPackaged ? process.env.TAVORA_STEAM_ICONS_URL : undefined,
         // And only ever the real Discord app and discord.com.
