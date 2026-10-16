@@ -172,6 +172,10 @@ describe("Steam icons", () => {
     expect(emptyLibrary().moduleIcons).toBe(true);
     expect(sanitizeLibrary({ moduleIcons: false }).moduleIcons).toBe(false);
     expect(sanitizeLibrary({ moduleIcons: "no" }).moduleIcons).toBe(true);
+    expect(emptyLibrary().moduleFilesFolder).toBeNull();
+    const folder = process.platform === "win32" ? "D:\\Pictures\\Tavora module files" : "/mnt/pictures/Tavora module files";
+    expect(sanitizeLibrary({ moduleFilesFolder: folder }).moduleFilesFolder).toBe(folder);
+    for (const bad of ["relative/folder", "", 4, null, "x".repeat(501)]) expect(sanitizeLibrary({ moduleFilesFolder: bad }).moduleFilesFolder).toBeNull();
     expect(emptyLibrary().steamProfile).toBeNull();
     expect(sanitizeLibrary({ steamProfile: "  https://steamcommunity.com/id/me " }).steamProfile).toBe("https://steamcommunity.com/id/me");
     for (const bad of ["", "   ", 5, "x".repeat(201)]) expect(sanitizeLibrary({ steamProfile: bad }).steamProfile).toBeNull();

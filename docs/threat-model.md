@@ -132,7 +132,11 @@ A module can keep pictures in a folder Tavora manages (`blobs` in the SDK, used 
 | F5 | Files go with the game | deleting a game from the Trash removes its folder under every module; daily backups include the files unless the snapshot would be too big, as with pictures | unit: `gamedata.test.ts`; `backup.test.ts` |
 | F6 | No other page can read or write them | only the module's session handles `/_blobs/`; the Browser and the host UI use other sessions, and the answers are same-origin only | no test; reviewed by hand |
 
-Accepted: a module can use its whole 500 MB share, and the player cannot yet see per game how much that is; the Notes screen will show it. Changing the folder is not part of this release.
+| F7 | Only the player decides where the files go | the folder is picked in the system's own dialog, opened by the host when the host window asks (`module-files-change`, parsed by `parseAction` with no fields); a module cannot trigger it, name a place or learn the path | unit: `actions.test.ts` |
+| F8 | Moving never loses or mixes up a picture | the files are copied and each copy's size checked before the setting is switched, the old files are removed only after that, a cut-off move can be run again, and nothing new is accepted while it runs | unit: `module-files.test.ts` (copy, checks, resume, lock) |
+| F9 | A move cannot be pointed at something it should not touch | the files go into a folder of their own inside the place picked; places inside the current folder or around it, the same folder, Tavora's own data folder and folders that can't be written to are refused; only files named like ours (`<module>/<game>/<32 hex>.<png/jpg/gif/webp>`) are copied or removed | unit: `module-files.test.ts` (`filesTarget`, listing) |
+
+Accepted: a module can use its whole 500 MB share; Notes shows the usage. A folder the player moved is not part of the daily backup, and one on a drive that is unplugged shows the pictures as missing, with a notice, until it is back; nothing is deleted or re-pointed meanwhile.
 
 ## Known limits and open risks
 

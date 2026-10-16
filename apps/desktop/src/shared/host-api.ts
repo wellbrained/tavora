@@ -366,6 +366,8 @@ export interface HostViewState {
   layout: SavedLayout | null;
   /** Changes whenever `layout` was replaced by the main process, e.g. by applying a snapshot. */
   layoutEpoch: number;
+  /** Where modules keep their pictures, and how that stands. */
+  moduleFiles: { folder: string; custom: boolean; /** The folder is there (a custom one on a drive that is unplugged is not). */ available: boolean; moving: boolean };
   /** A web address a module asked to open while the game has no Browser panel; the host UI asks where it should open (link-choice). */
   pendingLink: string | null;
   snapshots: SnapshotView[];
@@ -388,6 +390,11 @@ export type HostAction =
   | { type: "show-welcome" }
   /** The answer to pendingLink: a new Browser panel, the system browser, or nothing. */
   | { type: "link-choice"; choice: "panel" | "system" | "cancel" }
+  /** Opens the system dialog to pick the place for the pictures of modules, then moves them there. */
+  | { type: "module-files-change" }
+  /** Moves the pictures of modules back to the default folder. */
+  | { type: "module-files-reset" }
+  | { type: "module-files-open" }
   | { type: "restart" }
   | { type: "open-game"; gameId: string }
   | { type: "add-game"; catalogId: string }
