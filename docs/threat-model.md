@@ -150,7 +150,7 @@ A module can put a PNG on the system clipboard (`clipboard.writeImage` in the SD
 
 Accepted: a module can label a button misleadingly ("Save") and replace what is on the clipboard when the player clicks it. The player pasted nothing yet and the module learns nothing, so this is a nuisance, not a leak.
 
-## WebAssembly for Tavora's own modules (0.14.3)
+## WebAssembly for Tavora's own modules (0.14.6)
 
 Excalidraw, which the Whiteboard is built on, resizes pictures with WebAssembly. Every module page has the policy `script-src 'self'`, which blocks that, so a module can now ask for `permissions.webAssembly`.
 
