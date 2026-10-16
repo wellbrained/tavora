@@ -427,10 +427,19 @@ export class ModuleView {
     this.view.webContents.reload();
   }
 
-  /** Ends a hung or misbehaving module. Its data stays; Reload starts it again. */
-  stop(): void {
+  /**
+   * Ends a hung or misbehaving module. Its data stays; Reload starts it again.
+   * Resolves once the renderer is gone, so a reload after it is not undone by
+   * the crash arriving late.
+   */
+  stop(): Promise<void> {
     const contents = this.view.webContents;
-    if (contents.isDestroyed()) return;
+    if (contents.isDestroyed()) return Promise.resolve();
+    const gone = new Promise<void>((resolve) => {
+      contents.once("render-process-gone", () => resolve());
+      contents.once("destroyed", () => resolve());
+      setTimeout(resolve, 5_000);
+    });
     const pid = contents.getOSProcessId();
     contents.forcefullyCrashRenderer();
     // Chromium has been seen to leave a busy renderer running; make sure.
@@ -442,6 +451,7 @@ export class ModuleView {
         // Already gone.
       }
     }, 2_000);
+    return gone;
   }
 
   dispose(): void {

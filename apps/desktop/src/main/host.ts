@@ -1676,7 +1676,9 @@ export class Host {
     try {
       const views = [...this.views.values()].filter((view): view is ModuleView => view instanceof ModuleView && view.moduleId === moduleId);
       const ses = views[0]?.view.webContents.session;
-      for (const view of views) view.stop();
+      // The renderers must be gone first: one still writing would fill the storage
+      // again, and a crash reported after the reload would leave the panel crashed.
+      await Promise.all(views.map((view) => view.stop()));
       await ses?.clearStorageData();
       const name = this.modules.get(moduleId)?.manifest.name ?? moduleId;
       this.notice = translate(this.language, "modules.storageCleared", { name });
