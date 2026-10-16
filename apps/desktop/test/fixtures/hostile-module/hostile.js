@@ -148,6 +148,63 @@ window.tryNavigate = (url) => {
 
 // ── Sandbox review probes (docs/threat-model.md, "Sandbox review 2026-10-16") ──
 
+const random = (bytes) => {
+  const data = new Uint8Array(bytes);
+  for (let at = 0; at < bytes; at += 65536) crypto.getRandomValues(data.subarray(at, Math.min(bytes, at + 65536)));
+  return data;
+};
+
+// Writes random data into the module's own browser storage until it hits an error or `maxMB`.
+window.fillStorage = async (kind, chunkMB, maxMB) => {
+  const result = { kind, writtenMB: 0, error: null };
+  try {
+    if (kind === "indexeddb") {
+      const db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open("fill", 1);
+        request.onupgradeneeded = () => request.result.createObjectStore("b", { autoIncrement: true });
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      while (result.writtenMB < maxMB) {
+        const chunk = random(chunkMB * 1024 * 1024);
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction("b", "readwrite");
+          tx.objectStore("b").add(chunk);
+          tx.oncomplete = resolve;
+          tx.onerror = () => reject(tx.error);
+          tx.onabort = () => reject(tx.error);
+        });
+        result.writtenMB += chunkMB;
+      }
+    } else if (kind === "opfs") {
+      const root = await navigator.storage.getDirectory();
+      for (let n = 0; result.writtenMB < maxMB; n++) {
+        const handle = await root.getFileHandle("f" + n, { create: true });
+        const stream = await handle.createWritable();
+        await stream.write(random(chunkMB * 1024 * 1024));
+        await stream.close();
+        result.writtenMB += chunkMB;
+      }
+    } else if (kind === "cache") {
+      const cache = await caches.open("fill");
+      for (let n = 0; result.writtenMB < maxMB; n++) {
+        await cache.put("/f" + n, new Response(random(chunkMB * 1024 * 1024)));
+        result.writtenMB += chunkMB;
+      }
+    } else if (kind === "localstorage") {
+      const text = "x".repeat(1024 * 1024);
+      for (let n = 0; result.writtenMB < maxMB; n++) {
+        localStorage.setItem("f" + n, text);
+        result.writtenMB += 1;
+      }
+    }
+  } catch (error) {
+    result.error = String(error?.name ?? error);
+  }
+  result.estimate = await navigator.storage.estimate().catch(() => null);
+  return result;
+};
+
 // Posts `count` messages of about `bytes` each without waiting for answers, as fast as it can.
 window.flood = async (count, bytes) => {
   const port = await getPort();

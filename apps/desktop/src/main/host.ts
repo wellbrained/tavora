@@ -177,6 +177,8 @@ export interface HostOptions {
   systemTheme?: "dark" | "light" | undefined;
   /** Development and tests only: what the system's language is taken to be, instead of the real one. */
   systemLocale?: string | undefined;
+  /** Tests only: what a module may keep in its browser storage, in bytes, instead of the usual limit. */
+  moduleStorageLimit?: number | undefined;
   /**
    * Development only: the Vite dev server that serves the host UI with hot
    * reload, instead of the built files in `rendererDir`.
@@ -1440,6 +1442,8 @@ export class Host {
       getTheme: () => this.currentTheme,
       getLanguage: () => this.language,
       baseCss: (moduleCss ??= moduleBaseCss(MODULE_FONTS)),
+      ...(this.options.moduleStorageLimit === undefined ? {} : { storageLimit: this.options.moduleStorageLimit }),
+      onStorageOver: () => void this.purgeModuleStorage(module.manifest.id, game.id),
       onStatus: (status) => {
         if (!measured && status === "ready") {
           measured = true;
@@ -1522,6 +1526,33 @@ export class Host {
       if (contents !== this.window.webContents) this.window.webContents.focus();
       this.window.webContents.send("host:shortcut", shortcut);
     });
+  }
+
+  /** Modules being cleared right now, so several panels of one module do it once. */
+  private readonly purging = new Set<string>();
+
+  /**
+   * A module's browser storage grew past the limit (storage-guard.ts): stop its
+   * panels, clear the storage and start the panels again, and say so.
+   */
+  private async purgeModuleStorage(moduleId: string, gameId: string): Promise<void> {
+    const key = `${moduleId}@${gameId}`;
+    if (this.purging.has(key)) return;
+    this.purging.add(key);
+    try {
+      const views = [...this.views.values()].filter((view): view is ModuleView => view instanceof ModuleView && view.moduleId === moduleId);
+      const ses = views[0]?.view.webContents.session;
+      for (const view of views) view.stop();
+      await ses?.clearStorageData();
+      const name = this.modules.get(moduleId)?.manifest.name ?? moduleId;
+      this.notice = translate(this.language, "modules.storageCleared", { name });
+      for (const view of views) view.reload();
+    } catch (error) {
+      console.error("[tavora] clearing a module's storage failed", error);
+    } finally {
+      this.purging.delete(key);
+      this.pushState();
+    }
   }
 
   private destroyView(instanceId: string): void {

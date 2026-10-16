@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.7.2",
+    date: "2026-10-16",
+    title: "Modules can't fill your disk",
+    notes: [
+      "A module can keep at most 256 MB in its own browser storage for each game. If one goes past that, Tavora clears that storage, restarts its panel and tells you. Notes and settings a module saved through Tavora are not touched.",
+    ],
+  },
+  {
     version: "0.7.1",
     date: "2026-10-16",
     title: "Safer modules",
