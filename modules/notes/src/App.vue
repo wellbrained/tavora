@@ -34,10 +34,10 @@ const width = ref(window.innerWidth);
 const narrow = computed(() => width.value < NARROW_PX);
 /** In a narrow panel: whether the list or the editor is showing. */
 const showList = ref(false);
-/** The last delete or clear, which the player can still undo for a few seconds. */
 /** A short message to the player, such as a picture that could not be added. */
 const notice = ref<{ id: number; message: string } | null>(null);
 let noticeCount = 0;
+/** The last delete or clear, which the player can still undo for a few seconds. */
 const undo = ref<{ id: number; message: string; run: () => Promise<void> } | null>(null);
 let undoCount = 0;
 const editor = ref<InstanceType<typeof NoteEditor> | null>(null);

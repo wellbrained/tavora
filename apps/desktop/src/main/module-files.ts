@@ -85,8 +85,7 @@ const fileAt = (root: string, file: StoredFile) => path.join(root, file.module, 
  * Copies every file to the new folder and checks each copy's size. A file already there with the same size is
  * kept, so a move that was cut off can be run again. Throws on the first problem; the old files are untouched.
  */
-export async function copyStoredFiles(from: string, to: string, files: readonly StoredFile[], onProgress?: (done: number) => void): Promise<void> {
-  let done = 0;
+export async function copyStoredFiles(from: string, to: string, files: readonly StoredFile[]): Promise<void> {
   for (const file of files) {
     const target = fileAt(to, file);
     const existing = await stat(target).then((info) => info.size, () => -1);
@@ -97,7 +96,6 @@ export async function copyStoredFiles(from: string, to: string, files: readonly 
       if ((await stat(part)).size !== file.bytes) throw new Error(`copy of ${file.name} is not the same size`);
       await rename(part, target);
     }
-    onProgress?.(++done);
   }
 }
 
