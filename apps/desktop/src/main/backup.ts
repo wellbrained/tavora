@@ -16,8 +16,8 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 /** The player's own data: games and layout, profile, and every module's settings and documents. */
 const DATA_FILES = ["library.json", "workspace.json", "profile.json"];
 const DATA_DIRS = ["module-data"];
-/** Pictures: the player's own images and profile picture. */
-const PICTURE_DIRS = ["game-icons", "profile"];
+/** Pictures: the player's own images and profile picture, and the pictures modules keep. Left out of a snapshot that would be too big. */
+const PICTURE_DIRS = ["game-icons", "profile", "module-blobs"];
 
 export function backupsDir(userData: string): string {
   return path.join(userData, "backups");

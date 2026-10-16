@@ -3,7 +3,10 @@ import { MessageChannelMain, session, WebContentsView, type Session } from "elec
 import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, MODULE_CSP, MODULE_SCHEME, resolveAsset } from "./assets";
+import { BLOB_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession } from "./bridge";
+import type { BlobStore } from "./blobs";
+import { serveBlobs } from "./blob-http";
 import { isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
 import type { InstalledModule } from "./registry";
@@ -52,7 +55,7 @@ const hardened = new WeakSet<Session>();
  * Every module gets its own session per game: separate cookies, web storage,
  * cache and a separate renderer process from the host and other modules.
  */
-function moduleSession(module: InstalledModule, game: TavoraGame): Session {
+function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobStore): Session {
   const ses = session.fromPartition(`persist:module:${module.manifest.id}@${game.id}`);
   if (hardened.has(ses)) return ses;
   hardened.add(ses);
@@ -63,6 +66,7 @@ function moduleSession(module: InstalledModule, game: TavoraGame): Session {
     // URL.origin is "null" for custom schemes in Node, so compare the host.
     const url = new URL(request.url);
     if (url.host !== module.manifest.id) return new Response("Not found", { status: 404 });
+    if (url.pathname.startsWith(BLOB_PATH)) return serveBlobs(blobs, request, url);
     if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
     const file = await resolveAsset(module.root, url.pathname);
     if (!file) return new Response("Not found", { status: 404 });
@@ -132,7 +136,7 @@ export class ModuleView {
     const { module, game } = options;
     this.view = new WebContentsView({
       webPreferences: {
-        session: moduleSession(module, game),
+        session: moduleSession(module, game, options.data.blobs),
         preload: options.preload,
         sandbox: true,
         contextIsolation: true,
