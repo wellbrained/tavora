@@ -1,3 +1,5 @@
+import { readdir } from "node:fs/promises";
+import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
 import { expectModuleText, inModule, launch, NOTES, openGame, openModule, panels, PLAYGROUND, TODOS, typeInModule, VUE } from "./harness";
 
@@ -194,6 +196,74 @@ test("notes: two panels show the same notes and follow each other's changes", as
   await expect.poll(() => inModule(app, NOTES, `!!${q("undo-toast")}`, 0)).toBe(true);
   await expect.poll(() => noteTitles(app, 1)).toEqual(["Scratchpad"]);
   await expect.poll(() => editorText(app, 1)).toBe("Shared between panels");
+  await app.close();
+});
+
+test("notes: a pasted picture is stored by the host, shown, resized and removed", async () => {
+  const { app, page, userData } = await launch();
+  await openModule(page, NOTES);
+  await ready(app, NOTES, "editor");
+  await inModule(app, NOTES, `${q("editor")}.focus()`);
+
+  // A 2000 x 1000 picture is pasted like a screenshot; Optimized shrinks it to 1600 wide.
+  await inModule(
+    app,
+    NOTES,
+    `(async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 2000;
+      canvas.height = 1000;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#c00";
+      context.fillRect(0, 0, 2000, 1000);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      const data = new DataTransfer();
+      data.items.add(new File([blob], "shot.png", { type: "image/png" }));
+      ${q("editor")}.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+    })()`,
+  );
+  const picture = `${q("editor")}.querySelector("img[data-blob-id]")`;
+  await expect
+    .poll(() => inModule(app, NOTES, `(() => { const img = ${picture}; return !!img && img.complete && img.naturalWidth; })()`), { timeout: 15_000 })
+    .toBe(1600);
+  expect(await inModule<string>(app, NOTES, `${picture}.src`)).toMatch(/^tavora-module:\/\/tavora\.notes\/_blobs\/[a-f0-9]{32}$/);
+
+  // The host keeps the file in its own folder, named by id, as a WebP.
+  const stored = await readdir(path.join(userData, "module-blobs", NOTES), { recursive: true });
+  expect(stored.filter((name) => /^[a-f0-9]{32}\.webp$/.test(path.basename(name)))).toHaveLength(1);
+
+  // Selecting it shows the bar; Small puts it on its own line at a quarter of the width.
+  await inModule(
+    app,
+    NOTES,
+    `(() => { const img = ${picture}; const box = img.getBoundingClientRect(); const at = { bubbles: true, cancelable: true, button: 0, detail: 1, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 }; for (const type of ["mousedown", "mouseup", "click"]) img.dispatchEvent(new MouseEvent(type, at)); })()`,
+  );
+  await expect.poll(() => inModule(app, NOTES, `!!${q("image-bar")}`)).toBe(true);
+  await click(app, NOTES, `[data-testid="image-small"]`);
+  await expect.poll(() => inModule(app, NOTES, `${q("editor")}.querySelector(".note-image").style.width`)).toBe("25%");
+
+  // Open larger shows it big; Escape closes that and leaves the picture selected.
+  await click(app, NOTES, `[data-testid="image-open"]`);
+  await expect.poll(() => inModule(app, NOTES, `!!${q("image-lightbox")}`)).toBe(true);
+  await inModule(app, NOTES, `window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
+  await expect.poll(() => inModule(app, NOTES, `!${q("image-lightbox")}`)).toBe(true);
+
+  expect(await inModule(app, NOTES, `!!${q("image-bar")}`)).toBe(true);
+  // Removing it takes it out of the note.
+  await click(app, NOTES, `[data-testid="image-remove"]`);
+  await expect.poll(() => inModule(app, NOTES, `!${picture}`)).toBe(true);
+
+  // Something that is not a picture is refused with a message and nothing is stored.
+  await inModule(
+    app,
+    NOTES,
+    `(() => {
+      const data = new DataTransfer();
+      data.items.add(new File(["BM not really"], "old.bmp", { type: "image/bmp" }));
+      ${q("editor")}.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+    })()`,
+  );
+  await expect.poll(() => inModule(app, NOTES, `${q("undo-toast")}?.innerText ?? ""`)).toContain("not a PNG, JPEG, GIF or WebP");
   await app.close();
 });
 

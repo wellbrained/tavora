@@ -2,9 +2,24 @@
 // by every Notes panel of this game; the list keeps a light copy of each.
 
 import { readDocument, serial, updateDocument, type Versioned } from "@tavora/official-ui";
-import type { DocumentSummary, TavoraSDK } from "@tavora/sdk";
+import { TavoraError, type DocumentSummary, type TavoraSDK } from "@tavora/sdk";
 import { ref, triggerRef } from "vue";
-import { cleanTitle, ORDER_ID, parseAppearance, parseNote, parseOrder, titleFor, UNTITLED, type Appearance, type NoteData, type NoteEntry, type RichText, type TextStyle } from "./notes";
+import { ACCEPT_ATTRIBUTE, isAcceptedType, prepareImage, type ImageQuality } from "./images";
+import { cleanTitle, collectImageIds, ORDER_ID, parseAppearance, parseNote, parseOrder, titleFor, UNTITLED, type Appearance, type NoteData, type NoteEntry, type RichText, type TextStyle } from "./notes";
+
+/** A picture that was not stored, and why: the kind of file, its size, or the host (with its message). */
+export class ImageProblem extends Error {
+  constructor(
+    readonly kind: "type" | "size" | "store",
+    message: string,
+    readonly file = "",
+  ) {
+    super(message);
+  }
+}
+
+/** A stored picture that no note uses is only removed when it is this old, so one that is being added is never taken. */
+const UNUSED_AFTER_MS = 60 * 60 * 1000;
 
 /** Requests the SDK may have open at once is 64; stay well below it. */
 const BATCH = 16;
@@ -23,6 +38,8 @@ export function createNotesStore(sdk: TavoraSDK) {
   const appearance = ref<Appearance>(parseAppearance(null));
   /** The order the player put the notes in; notes not in it follow by age. */
   const order = ref<string[]>([]);
+  /** How pictures are stored: shrunk (Optimized) or exactly as the file (Original). */
+  const imageQuality = ref<ImageQuality>("optimized");
   const queue = serial();
 
   function remember(id: string, data: NoteData, summary: Pick<DocumentSummary, "title" | "updatedAt" | "revision">) {
@@ -31,6 +48,7 @@ export function createNotesStore(sdk: TavoraSDK) {
       title: summary.title,
       text: data.text,
       fixedTitle: data.title,
+      images: data.images,
       pinned: data.pinned,
       createdAt: data.createdAt,
       updatedAt: summary.updatedAt,
@@ -59,6 +77,31 @@ export function createNotesStore(sdk: TavoraSDK) {
     appearance.value = parseAppearance(await sdk.storage.get("appearance"));
   }
 
+  async function loadImageQuality(): Promise<void> {
+    imageQuality.value = (await sdk.storage.get("imageQuality")) === "original" ? "original" : "optimized";
+  }
+
+  /** Stores a picture the player picked, pasted or dropped, at the chosen quality, and returns its id. */
+  async function addImage(file: File): Promise<string> {
+    if (!isAcceptedType(file.type)) throw new ImageProblem("type", "type", file.name);
+    const usage = await sdk.blobs.usage();
+    if (file.size > usage.maxFileBytes) throw new ImageProblem("size", String(usage.maxFileBytes), file.name);
+    try {
+      return (await sdk.blobs.put(await prepareImage(file, imageQuality.value))).id;
+    } catch (error) {
+      throw new ImageProblem("store", error instanceof TavoraError || error instanceof Error ? error.message : String(error), file.name);
+    }
+  }
+
+  /** Deletes stored pictures that no note refers to any more (and are not new). Run once the notes are loaded. */
+  async function removeUnusedImages(): Promise<void> {
+    const used = new Set([...entries.value.values()].flatMap((entry) => entry.images));
+    const now = Date.now();
+    for (const blob of await sdk.blobs.list()) {
+      if (!used.has(blob.id) && now - Date.parse(blob.createdAt) > UNUSED_AFTER_MS) await sdk.blobs.delete(blob.id);
+    }
+  }
+
   async function load(): Promise<void> {
     const all = await sdk.documents.list();
     const summaries = all.filter((summary) => summary.id !== ORDER_ID);
@@ -84,7 +127,18 @@ export function createNotesStore(sdk: TavoraSDK) {
     entries,
     appearance,
     order,
+    imageQuality,
     load,
+    loadImageQuality,
+    addImage,
+    removeUnusedImages,
+    acceptAttribute: ACCEPT_ATTRIBUTE,
+    blobUrl: (id: string) => sdk.blobs.url(id),
+    imageUsage: () => sdk.blobs.usage(),
+    setImageQuality: async (quality: ImageQuality) => {
+      imageQuality.value = quality;
+      await sdk.storage.set("imageQuality", quality);
+    },
     /** Stores a new order of the notes; other panels follow. */
     setOrder: (ids: string[]) =>
       queue(async () => {
@@ -109,13 +163,17 @@ export function createNotesStore(sdk: TavoraSDK) {
     /** The editor's text and title win over a save another panel made in between. */
     save: (id: string, patch: NotePatch) =>
       update(id, (data) => {
-        if (patch.content !== undefined) data.content = patch.content;
+        if (patch.content !== undefined) {
+          data.content = patch.content;
+          data.images = collectImageIds(patch.content);
+        }
         if (patch.text !== undefined) data.text = patch.text;
         if (patch.title !== undefined) data.title = cleanTitle(patch.title);
       }),
     saveContent: (id: string, content: RichText, text: string) =>
       update(id, (data) => {
         data.content = content;
+        data.images = collectImageIds(content);
         data.text = text;
       }),
     setPinned: (id: string, pinned: boolean) => update(id, (data) => void (data.pinned = pinned)),
@@ -126,6 +184,7 @@ export function createNotesStore(sdk: TavoraSDK) {
         const data = parseNote(null);
         if (initial) {
           data.content = initial.content;
+          data.images = collectImageIds(initial.content);
           data.text = initial.text;
         }
         const saved = await sdk.documents.put({ id, title: initial ? titleFor(id, data.text) : UNTITLED, data, ifRevision: 0 });
