@@ -676,4 +676,5 @@ export const en = {
   "aiUsage.panel.resetsHint": "Manual resets you can still use.",
   "aiUsage.panel.resetsHintDate": "Manual resets you can still use. The first expires {date}.",
   "aiUsage.panel.signedInAs": "Signed in as {email}",
+  "modules.storageCleared": "{name} stored more in its own browser storage than a module may, so Tavora cleared that storage and restarted the panel. What it saved through Tavora is untouched.",
 } as const;

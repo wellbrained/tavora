@@ -7,6 +7,7 @@ import { BridgeSession } from "./bridge";
 import type { InstalledModule } from "./registry";
 import type { InstanceStatus } from "../shared/host-api";
 import type { ModuleData, PanelStateStore } from "./storage";
+import { MODULE_STORAGE_LIMIT, overStorageLimit, STORAGE_CHECK_MS } from "./storage-guard";
 
 export type { InstanceStatus } from "../shared/host-api";
 
@@ -24,6 +25,10 @@ export interface ModuleViewOptions {
   /** Tavora's default look for the page, below the module's own styles (module-style.ts). Colours come from the theme stylesheet. */
   baseCss: string;
   onStatus(status: InstanceStatus): void;
+  /** The module's own browser storage grew past the limit; the host clears it (see storage-guard.ts). */
+  onStorageOver(): void;
+  /** What a module may keep in its browser storage, in bytes. */
+  storageLimit?: number;
 }
 
 /** How often the host checks that a module's page still runs. */
@@ -98,6 +103,8 @@ export class ModuleView {
   private themeCssQueue: Promise<void> = Promise.resolve();
   private heartbeat: ReturnType<typeof setInterval> | undefined;
   private lastPong = 0;
+  private storageWatch: ReturnType<typeof setInterval> | undefined;
+  private measuring = false;
   status: InstanceStatus = "loading";
 
   constructor(private readonly options: ModuleViewOptions) {
@@ -170,6 +177,7 @@ export class ModuleView {
       if (this.status !== "loading") return;
       this.setStatus("ready");
       this.startHeartbeat();
+      this.startStorageWatch();
     });
     contents.on("did-fail-load", (_event, errorCode, description, url, isMainFrame) => {
       // -3 is ERR_ABORTED: a navigation replaced by another, not a failure.
@@ -309,6 +317,30 @@ export class ModuleView {
     }, HEARTBEAT_MS);
   }
 
+  /** Measures the module's browser storage now and then; a module cannot be left to fill the player's disk. */
+  private startStorageWatch(): void {
+    this.stopStorageWatch();
+    const limit = this.options.storageLimit ?? MODULE_STORAGE_LIMIT;
+    this.storageWatch = setInterval(() => {
+      const contents = this.view.webContents;
+      if (contents.isDestroyed()) return this.stopStorageWatch();
+      const folder = contents.session.storagePath;
+      if (!folder || this.measuring) return;
+      this.measuring = true;
+      overStorageLimit(folder, limit)
+        .then((over) => {
+          if (over) this.options.onStorageOver();
+        })
+        .catch(() => undefined)
+        .finally(() => (this.measuring = false));
+    }, STORAGE_CHECK_MS);
+  }
+
+  private stopStorageWatch(): void {
+    clearInterval(this.storageWatch);
+    this.storageWatch = undefined;
+  }
+
   private stopHeartbeat(): void {
     clearInterval(this.heartbeat);
     this.heartbeat = undefined;
@@ -338,6 +370,7 @@ export class ModuleView {
 
   dispose(): void {
     this.stopHeartbeat();
+    this.stopStorageWatch();
     this.bridge?.emit("lifecycle.dispose", null);
     this.disconnect();
     if (!this.view.webContents.isDestroyed()) this.view.webContents.close();

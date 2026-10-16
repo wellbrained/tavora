@@ -678,4 +678,5 @@ export const de: Record<keyof typeof en, string> = {
   "aiUsage.panel.resetsHint": "Manuelle Resets, die du noch nutzen kannst.",
   "aiUsage.panel.resetsHintDate": "Manuelle Resets, die du noch nutzen kannst. Der erste läuft am {date} ab.",
   "aiUsage.panel.signedInAs": "Angemeldet als {email}",
+  "modules.storageCleared": "{name} hat mehr in seinem eigenen Browser-Speicher abgelegt, als ein Modul darf. Tavora hat diesen Speicher geleert und das Panel neu gestartet. Was es über Tavora gespeichert hat, ist unverändert.",
 };
