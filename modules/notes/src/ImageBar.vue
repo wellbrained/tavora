@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// The bar above a selected picture: inline with the text or on its own line at a chosen width,
-// larger view, remove. Dragging the corner of a picture on its own line resizes it freely.
+// The bar above a selected picture: on its own line at a chosen width, or at the left or right with
+// the text flowing around it at the size it has; larger view; remove. Dragging a corner resizes it freely.
 import { Maximize2, Trash2 } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -11,16 +11,17 @@ import type { ImageMode } from "./ImageNode";
 const props = defineProps<{ mode: ImageMode; width: number | null; left: number; top: number }>();
 const emit = defineEmits<{ set: [patch: { mode: ImageMode; width: number | null }]; open: []; remove: [] }>();
 
-/** The sizes on offer; a width dragged by hand matches none of them. */
+/** The sizes on offer; a width dragged by hand matches none of them. Left and right keep the size the picture has. */
 const choices = computed(() => [
-  { id: "inline", label: t("image.inline"), active: props.mode === "inline", patch: { mode: "inline" as const, width: null } },
-  { id: "small", label: t("image.small"), active: props.mode === "block" && props.width === 25, patch: { mode: "block" as const, width: 25 } },
-  { id: "medium", label: t("image.medium"), active: props.mode === "block" && props.width === 50, patch: { mode: "block" as const, width: 50 } },
-  { id: "full", label: t("image.full"), active: props.mode === "block" && props.width === null, patch: { mode: "block" as const, width: null } },
+  { id: "left", label: t("image.left"), hint: t("image.leftHint"), active: props.mode === "left", patch: { mode: "left" as const, width: props.width ?? 50 } },
+  { id: "right", label: t("image.right"), hint: t("image.rightHint"), active: props.mode === "right", patch: { mode: "right" as const, width: props.width ?? 50 } },
+  { id: "small", label: t("image.small"), hint: "", active: props.mode === "block" && props.width === 25, patch: { mode: "block" as const, width: 25 } },
+  { id: "medium", label: t("image.medium"), hint: "", active: props.mode === "block" && props.width === 50, patch: { mode: "block" as const, width: 50 } },
+  { id: "full", label: t("image.full"), hint: "", active: props.mode === "block" && props.width === null, patch: { mode: "block" as const, width: null } },
 ]);
 
 /** Keeps the bar inside the panel. */
-const style = computed(() => ({ left: `${Math.max(8, Math.min(props.left, window.innerWidth - 330))}px`, top: `${Math.max(8, props.top)}px` }));
+const style = computed(() => ({ left: `${Math.max(8, Math.min(props.left, window.innerWidth - 400))}px`, top: `${Math.max(8, props.top)}px` }));
 </script>
 
 <template>
@@ -40,6 +41,7 @@ const style = computed(() => ({ left: `${Math.max(8, Math.min(props.left, window
       size="sm"
       :class="cn('h-7 flex-none px-2 text-xs', choice.active && 'bg-accent text-foreground')"
       :aria-pressed="choice.active"
+      :title="choice.hint || undefined"
       :data-testid="`image-${choice.id}`"
       @click="emit('set', choice.patch)"
     >

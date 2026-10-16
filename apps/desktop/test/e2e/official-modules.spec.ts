@@ -242,6 +242,12 @@ test("notes: a pasted picture is stored by the host, shown, resized and removed"
   await click(app, NOTES, `[data-testid="image-small"]`);
   await expect.poll(() => inModule(app, NOTES, `${q("editor")}.querySelector(".note-image").style.width`)).toBe("25%");
 
+  // Left lets the text flow around it and keeps its size; Small puts it back on its own line.
+  await click(app, NOTES, `[data-testid="image-left"]`);
+  await expect.poll(() => inModule(app, NOTES, `(() => { const el = ${q("editor")}.querySelector(".note-image"); return el.dataset.mode + " " + getComputedStyle(el).float + " " + el.style.width; })()`)).toBe("left left 25%");
+  await click(app, NOTES, `[data-testid="image-small"]`);
+  await expect.poll(() => inModule(app, NOTES, `${q("editor")}.querySelector(".note-image").dataset.mode`)).toBe("block");
+
   // Open larger shows it big; Escape closes that and leaves the picture selected.
   await click(app, NOTES, `[data-testid="image-open"]`);
   await expect.poll(() => inModule(app, NOTES, `!!${q("image-lightbox")}`)).toBe(true);
