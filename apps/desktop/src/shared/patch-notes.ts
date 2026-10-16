@@ -19,39 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.16.3",
+    version: "0.16.4",
     date: "2026-10-16",
-    title: "Sign-in emails",
-    notes: ["For accounts (still switched off): when Tavora has sent all the emails it can for the day, Settings > Account says from when you can try again."],
-  },
-  {
-    version: "0.16.2",
-    date: "2026-10-16",
-    title: "Install modules from a zip",
+    title: "Tavora accounts and modules from a zip",
     notes: [
-      "Settings > Modules has Install from zip. Tavora checks the zip before it unpacks anything, and a module from someone else can never replace one you have or read its data, even with the same name.",
-      "Modules signed by their maker show a publisher tag. Module makers create signed zips with the new pack command.",
-      "What a module saves now belongs to whoever made it, not just to the module's name. Your existing notes, pictures, to-dos and module settings are moved over once at start; nothing changes for you.",
-      "Data from modules you removed is listed in Settings > Modules, where you can delete it. If you used a local copy of a module before installing its signed version, you can move the local copy's data over.",
+      "New, optional Tavora account in Settings > Account: enter your email, type in the 6-digit code Tavora sends you, and you are signed in. No password. A new address is asked once before an account is made. Tavora keeps working fully without an account, and everything stays on your PC.",
+      "Signed in, your name, initials and picture go with your account to every PC you sign in on. The first time a PC has a different profile, Tavora asks which one to keep; after that the newest change wins.",
+      "Settings > Account lists the PCs you are signed in on, and you can sign any of them out. You can change your email (with a code to the new address) or delete your account; deleting removes it from Tavora's service at once, and nothing on your PCs is touched.",
+      "Install modules from a zip in Settings > Modules. Tavora checks the zip before it unpacks anything, and a module from someone else can never replace one you have or read its data, even with the same name. Modules signed by their maker show a publisher tag.",
+      "What a module saves now belongs to whoever made it, not just to the module's name. Your existing notes, pictures, to-dos and module settings are moved over once at start; nothing changes for you. Data from modules you removed is listed in Settings > Modules, where you can delete it.",
     ],
-  },
-  {
-    version: "0.16.1",
-    date: "2026-10-16",
-    title: "Accounts in development runs",
-    notes: ["For development: Settings > Account signs in to a local Tavora service by default, and says clearly when accounts are not available instead of showing a general error."],
-  },
-  {
-    version: "0.16.0",
-    date: "2026-10-16",
-    title: "Tavora accounts, ready to switch on",
-    notes: ["Optional Tavora accounts are built: sign in with a code sent to your email (no password), see and sign out the PCs you are signed in on, change your email or delete your account in Settings > Account. Your name, initials and picture go with your account to every PC. They are not switched on yet; Tavora keeps working fully without an account."],
-  },
-  {
-    version: "0.15.1",
-    date: "2026-10-16",
-    title: "Groundwork for Tavora accounts",
-    notes: ["Behind the scenes: the first part of optional Tavora accounts (sign in with an emailed code, no password). It is not switched on yet, and Tavora keeps working fully without an account."],
   },
   {
     version: "0.15.0",

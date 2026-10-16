@@ -5,9 +5,6 @@ import { HOST_SCHEME, MODULE_SCHEME } from "./assets";
 import { errorLog } from "./diagnostics";
 import { Host } from "./host";
 
-/** Where a development run finds the local account service (apps/api: TAVORA_TEST_INBOX_PORT=4012 pnpm --filter @tavora/api dev). */
-const DEV_ACCOUNT_URL = "http://127.0.0.1:4010";
-
 // The last errors of this run, for Settings > Copy diagnostic info.
 errorLog.capture();
 
@@ -129,11 +126,10 @@ if (!app.requestSingleInstanceLock()) {
         devServer,
         // A packaged app only ever talks to api.mytavora.app.
         apiUrl: !app.isPackaged ? process.env.TAVORA_API_URL : undefined,
-        // Accounts go live with a release that turns this on (decided 2026-10-16); until then only development runs have them.
-        accounts: !app.isPackaged,
-        // The live service has no accounts yet, so a development run signs in to the local one
-        // (apps/api with TAVORA_TEST_INBOX_PORT) unless TAVORA_ACCOUNT_URL or TAVORA_API_URL says otherwise.
-        accountUrl: !app.isPackaged ? (process.env.TAVORA_ACCOUNT_URL ?? process.env.TAVORA_API_URL ?? DEV_ACCOUNT_URL) : undefined,
+        // Accounts are on for everyone since 0.16.4 (Nik, 2026-10-16: testers try them in the installed app).
+        accounts: true,
+        // Development only: another account service, such as a local apps/api with TAVORA_TEST_INBOX_PORT (its codes show on that inbox page).
+        accountUrl: !app.isPackaged ? process.env.TAVORA_ACCOUNT_URL : undefined,
         // Likewise, a packaged app only ever uses Steam's own icon address.
         steamIcons: !app.isPackaged ? process.env.TAVORA_STEAM_ICONS_URL : undefined,
         // And only ever the real Discord app and discord.com.
