@@ -138,6 +138,19 @@ A module can keep pictures in a folder Tavora manages (`blobs` in the SDK, used 
 
 Accepted: a module can use its whole 500 MB share; Notes shows the usage. A folder the player moved is not part of the daily backup, and one on a drive that is unplugged shows the pictures as missing, with a notice, until it is back; nothing is deleted or re-pointed meanwhile.
 
+## Clipboard from modules (0.14.1)
+
+A module can put a PNG on the system clipboard (`clipboard.writeImage` in the SDK, used by the Whiteboard for Copy as picture). This changes something outside the module, so it gets its own guarantees. It cannot read the clipboard.
+
+| # | Guarantee | Mechanism | Test |
+| --- | --- | --- | --- |
+| C1 | A module cannot change the clipboard on its own | the same click and key press check as links (K1): the preload reports real input only, the host accepts a write within 2 s of one and uses it up, so one press writes one picture | e2e: refused without a key press, accepted after one, refused again straight after (`official-modules.spec.ts`); unit: `clipboard-http.test.ts` |
+| C2 | A hostile file cannot reach an image decoder in the main process | the body is a PNG only if every chunk has a right checksum, the header comes first, there is picture data, the end marker is last with nothing after it, and the size is within 16384 px a side and 100 million pixels; it is read with a hard limit of 20 MB; nothing is decoded by the main process, the checked bytes go to the clipboard as `image/png` | unit: `clipboard-http.test.ts` (`checkPng`: cut off, damaged, padded, too large, not a PNG) |
+| C3 | A module cannot read the clipboard | there is no read call; the route only accepts POST | none needed; reviewed by hand |
+| C4 | Only the module's own page can use it | the address is answered inside the module's own session; the Browser and the host UI use other sessions | no test; reviewed by hand |
+
+Accepted: a module can label a button misleadingly ("Save") and replace what is on the clipboard when the player clicks it. The player pasted nothing yet and the module learns nothing, so this is a nuisance, not a leak.
+
 ## Known limits and open risks
 
 - **Webview isolation is not proven safe by this spike.** It relies on Chromium site isolation and the OS sandbox. A Chromium renderer exploit would break G1–G4. Mitigation: keep Electron current, enable the OS sandbox everywhere, Electron fuses are set at packaging time (`electronFuses` in `apps/desktop/package.json`, checked 2026-10-16 with `@electron/fuses read` on a packaged build): `RunAsNode`, `NODE_OPTIONS`, `--inspect` and extra `file://` privileges are off, cookie encryption is on. ASAR integrity is not used because the app ships unpacked (`"asar": false`); someone who can edit Tavora's files can already act as the player, so this is accepted.

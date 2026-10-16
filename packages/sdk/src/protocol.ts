@@ -239,6 +239,8 @@ export const LIMITS = {
   maxBlobBytes: 50 * 1024 * 1024,
   /** All stored files of one module in one game. */
   maxBlobsBytes: 500 * 1024 * 1024,
+  /** A PNG a module puts on the clipboard. */
+  maxClipboardImageBytes: 20 * 1024 * 1024,
 } as const;
 
 /** The kinds of file a module can keep with blobs.put, found by looking at the file itself. */
@@ -271,6 +273,9 @@ export interface BlobUsage {
  */
 export const BLOB_PATH = "/_blobs/";
 export const BLOB_ID = /^[a-f0-9]{32}$/;
+
+/** POST a PNG here, from the module's own page, to put it on the clipboard (see clipboard.writeImage). */
+export const CLIPBOARD_PATH = "/_clipboard/";
 
 /** Document ids: host-generated UUIDs or module-chosen slugs. */
 export const DOCUMENT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
