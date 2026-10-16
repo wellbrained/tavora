@@ -4,6 +4,8 @@ import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavor
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, MODULE_CSP, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BridgeSession } from "./bridge";
+import { isWebUrl } from "./browser-url";
+import { HostError } from "./errors";
 import type { InstalledModule } from "./registry";
 import type { InstanceStatus } from "../shared/host-api";
 import type { ModuleData, PanelStateStore } from "./storage";
@@ -31,6 +33,8 @@ export interface ModuleViewOptions {
   storageLimit?: number;
   /** The page has its data and may be shown (see ModuleView.revealed). */
   onReveal?(): void;
+  /** The player opened a web address from the module (links.open); it was checked to be one. */
+  onOpenLink(url: string): void;
 }
 
 /** How often the host checks that a module's page still runs. */
@@ -95,6 +99,8 @@ function moduleSession(module: InstalledModule, game: TavoraGame): Session {
  * when its requests have been answered and none has followed for SETTLE_MS; a page that never
  * connects is shown after NO_BRIDGE_MS, and no page is held back longer than REVEAL_CAP_MS.
  */
+/** How long after a click or key press a link may be opened. */
+export const GESTURE_MS = 2_000;
 export const SETTLE_MS = 150;
 export const NO_BRIDGE_MS = 400;
 export const REVEAL_CAP_MS = 2_000;
@@ -221,6 +227,24 @@ export class ModuleView {
     });
   }
 
+  /** When the player last clicked or pressed a key in the page (reported by the preload from real input only). */
+  private gestureAt = 0;
+
+  noteGesture(): void {
+    this.gestureAt = Date.now();
+  }
+
+  /** links.open: only a web address, and only right after the player did something in the page. */
+  private openLink(url: string): void {
+    if (Date.now() - this.gestureAt > GESTURE_MS) {
+      throw new HostError("PERMISSION_DENIED", "links.open must be called right after a click or key press");
+    }
+    if (!isWebUrl(url)) throw new HostError("INVALID_PARAMS", "params.url must be an http or https address");
+    // One click opens one link, so a script cannot open a pile of them.
+    this.gestureAt = 0;
+    this.options.onOpenLink(url);
+  }
+
   /** Starts counting for a new page: it is hidden until it settles or the cap runs out. */
   private hideUntilSettled(): void {
     this.revealed = false;
@@ -286,6 +310,7 @@ export class ModuleView {
         getTheme: this.options.getTheme,
         getLanguage: this.options.getLanguage,
         onBusy: (busy, served) => this.onBridgeBusy(busy, served),
+        openLink: (url) => this.openLink(url),
       },
       () => {
         if (this.bridge === bridge) this.bridge = undefined;

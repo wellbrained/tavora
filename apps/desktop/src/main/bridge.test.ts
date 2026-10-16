@@ -5,6 +5,7 @@ import path from "node:path";
 import { LIMITS } from "@tavora/sdk/protocol";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BridgeSession, type BridgeContext } from "./bridge";
+import { HostError } from "./errors";
 import { THEME } from "./games";
 import { DataRegistry } from "./storage";
 
@@ -47,6 +48,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     getTheme: () => THEME,
     getLanguage: () => "de",
     isSuspended: () => false,
+    openLink: () => {},
   };
 }
 
@@ -298,5 +300,33 @@ describe("onBusy", () => {
       [true, 0],
       [false, 1],
     ]);
+  });
+});
+
+describe("links.open", () => {
+  it("hands a web address to the host and answers with null", async () => {
+    const opened: string[] = [];
+    const p = await connected({ ...makeContext(), openLink: (url) => void opened.push(url) });
+    expect(await call(p, "links.open", { url: "https://poe2db.tw/us" })).toMatchObject({ ok: true, result: null });
+    expect(opened).toEqual(["https://poe2db.tw/us"]);
+  });
+
+  it("refuses anything but a non-empty string of reasonable length", async () => {
+    const opened: string[] = [];
+    const p = await connected({ ...makeContext(), openLink: (url) => void opened.push(url) });
+    for (const params of [undefined, {}, { url: 4 }, { url: "" }, { url: "x".repeat(2049) }]) {
+      expect(await call(p, "links.open", params)).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    }
+    expect(opened).toEqual([]);
+  });
+
+  it("passes on the host's refusal", async () => {
+    const p = await connected({
+      ...makeContext(),
+      openLink: () => {
+        throw new HostError("PERMISSION_DENIED", "no click");
+      },
+    });
+    expect(await call(p, "links.open", { url: "https://example.com" })).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED" } });
   });
 });

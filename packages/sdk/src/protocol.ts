@@ -132,6 +132,8 @@ export interface Methods {
   "ui.getTheme": { params: undefined; result: TavoraTheme };
   /** The language of Tavora's own texts, as a code such as "en" or "de". */
   "ui.getLanguage": { params: undefined; result: string };
+  /** Opens a web address in the game's Browser panel. Only right after a click or key press in the panel; http and https only. */
+  "links.open": { params: { url: string }; result: null };
 }
 
 export type MethodName = keyof Methods;

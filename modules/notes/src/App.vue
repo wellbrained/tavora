@@ -222,6 +222,11 @@ async function removeNote(entry: NoteEntry) {
   });
 }
 
+/** Opens a link in the Browser; the host only allows it right after the click that asked. */
+function openLink(href: string) {
+  void sdk.value?.links.open(href).catch(() => undefined);
+}
+
 async function reorder(id: string, target: string, after: boolean) {
   const next = reordered(entries.value.values(), order.value, id, target, after);
   if (next) await store.value!.setOrder(next).catch(() => undefined);
@@ -294,6 +299,7 @@ async function move(id: string, delta: -1 | 1) {
         @toggle-pin="togglePin(selectedId)"
         @clear="removeNote(entries.get(SCRATCHPAD_ID) ?? scratchpadEntry)"
         @save-as-note="saveAsNote"
+        @open-link="openLink"
       />
     </main>
     <UndoToast v-if="undo" :key="undo.id" :message="undo.message" @undo="runUndo" @dismiss="undo = null" />
