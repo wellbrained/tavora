@@ -1,4 +1,4 @@
-import { connect, THEME_TOKENS, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
+import { connect, TavoraError, THEME_TOKENS, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cleanName, formatMegabytes, MAX_BOARD_BYTES, nextBoardName, sizeLevel, type BoardData, type BoardSummary } from "./boards";
 import { unusedFiles } from "./pictures";
@@ -55,6 +55,9 @@ export default function App() {
   const [undo, setUndo] = useState<Undo | null>(null);
   const [pictures, setPictures] = useState<Pictures>({ count: 0, allLocked: false });
   const [picturesLoaded, setPicturesLoaded] = useState(0);
+  const [empty, setEmpty] = useState(true);
+  const [copying, setCopying] = useState(false);
+  const copyRunning = useRef(false);
   const [notice, setNotice] = useState<{ id: number; message: string } | null>(null);
   const controls = useRef<Controls | null>(null);
   const noticeCount = useRef(0);
@@ -234,6 +237,26 @@ export default function App() {
     [boards, refreshList],
   );
 
+  /** Copy as picture, from the header button or Shift+Alt+C; the host only takes it right after that press. */
+  const copyAsPicture = useCallback(async () => {
+    const board = controls.current;
+    if (!board || copyRunning.current) return;
+    copyRunning.current = true;
+    setCopying(true);
+    try {
+      const copied = await board.copyAsPicture();
+      setNotice({ id: ++noticeCount.current, message: t(copied === "selection" ? "copy.selection" : "copy.board") });
+    } catch (reason: unknown) {
+      const code = reason instanceof TavoraError ? reason.code : undefined;
+      const message =
+        code === "PERMISSION_DENIED" ? t("copy.slow") : code === "QUOTA_EXCEEDED" ? t("copy.tooBig") : t("copy.failed", { error: reason instanceof Error ? reason.message : String(reason) });
+      setNotice({ id: ++noticeCount.current, message });
+    } finally {
+      copyRunning.current = false;
+      setCopying(false);
+    }
+  }, []);
+
   const remove = useCallback(
     async (id: string) => {
       if (!boards) return;
@@ -292,6 +315,16 @@ export default function App() {
             {t(pictures.allLocked ? "image.unlock" : "image.lock")}
           </button>
         ) : null}
+        <button
+          type="button"
+          className="button copy-picture"
+          title={t("copy.hint")}
+          data-testid="copy-picture"
+          disabled={empty || copying}
+          onClick={() => void copyAsPicture()}
+        >
+          {t("copy.button")}
+        </button>
         {level !== "ok" ? (
           <span className={level === "full" ? "size size-full" : "size"} role="status" data-testid="board-size">
             {t(level === "full" ? "size.full" : "size.warn", { used: formatMegabytes(bytes), max: formatMegabytes(MAX_BOARD_BYTES) })}
@@ -316,6 +349,8 @@ export default function App() {
             onSize={setBytes}
             onDirty={(value) => (dirty.current = value)}
             onPictures={setPictures}
+            onEmpty={setEmpty}
+            onCopyShortcut={() => void copyAsPicture()}
             onPicturesLoaded={setPicturesLoaded}
             onNotice={(message) => setNotice({ id: ++noticeCount.current, message })}
             onControls={(value) => (controls.current = value)}

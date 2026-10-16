@@ -24,8 +24,9 @@ export interface PngInfo {
  * icon limits: signature, a first IHDR chunk, every chunk's checksum right,
  * data present, and an IEND chunk at the very end.
  */
-export function inspectPng(bytes: Uint8Array): PngInfo | null {
-  if (bytes.byteLength < 45 || bytes.byteLength > MAX_ICON_BYTES) return null;
+/** `maxBytes` is the icon limit unless a caller (a profile picture) allows more; the pixel limit stays. */
+export function inspectPng(bytes: Uint8Array, maxBytes = MAX_ICON_BYTES): PngInfo | null {
+  if (bytes.byteLength < 45 || bytes.byteLength > maxBytes) return null;
   if (!SIGNATURE.every((byte, i) => bytes[i] === byte)) return null;
   const v = view(bytes);
   let at = 8;
@@ -71,8 +72,8 @@ const KEEP = new Set(["IHDR", "PLTE", "tRNS", "IDAT", "IEND"]);
  * other chunks is gone and not one pixel changes. Null when the file is not a
  * well-formed small PNG.
  */
-export function stripPng(bytes: Uint8Array): Uint8Array | null {
-  if (!inspectPng(bytes)) return null;
+export function stripPng(bytes: Uint8Array, maxBytes = MAX_ICON_BYTES): Uint8Array | null {
+  if (!inspectPng(bytes, maxBytes)) return null;
   const v = view(bytes);
   const kept: Uint8Array[] = [SIGNATURE];
   for (let at = 8; at < bytes.byteLength; ) {

@@ -23,7 +23,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { ActionResult, AiUsageView, AppearanceView, BrowserCommand, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
 import { resolveLanguage, translate, type Language } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -87,7 +87,8 @@ import { findSteamDir, removeSteamIcon } from "./steam-icons";
 import { ModuleView } from "./module-view";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { isWebUrl, siteOfUrl } from "./browser-url";
-import { copyStoredFiles, defaultFilesRoot, filesTarget, listStoredFiles, removeStoredFiles } from "./module-files";
+import { defaultFilesRoot } from "./module-files";
+import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
 import { AI_USAGE_MODULE_ID, aiUsageModule, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, discordModule, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
@@ -95,6 +96,7 @@ import { AiUsage } from "./ai-usage";
 import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnection, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
+import { AccountClient, deviceOs, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
 import {
   DEFAULT_THEME,
@@ -179,6 +181,10 @@ export interface HostOptions {
    * storage, which test machines have. A packaged app never sets this.
    */
   discord?: { ipcPath: string; tokenUrl: string } | undefined;
+  /** Settings > Account and the account service: on in development, off in release builds until accounts go live. */
+  accounts?: boolean;
+  /** Development only: where accounts are, when not the same service as the rest (the local one by default). */
+  accountUrl?: string | undefined;
   /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
   hidden?: boolean;
   /** Tests only: pretend the system is in this mode, so a test does not depend on the PC it runs on. */
@@ -223,16 +229,16 @@ export class Host {
   /** Open AI usage panels. Like Discord panels they have no view of their own. */
   private readonly aiUsagePanels = new Set<string>();
   private readonly aiUsage: AiUsage;
+  /** The player's Tavora account; the sign-in never leaves the main process. */
+  private readonly account: AccountClient;
   private screen: Screen = "welcome";
   private notice: string | null = null;
   /** Every (owner, module) with saved settings or documents, for Settings > Modules. */
   private moduleData: { owner: string; moduleId: string }[] = [];
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
   private pendingLink: string | null = null;
-  /** The pictures of modules are being copied to another folder. */
-  private moduleFilesMoving = false;
-  /** The folder with the pictures of modules was there when last looked at. */
-  private moduleFilesAvailable = true;
+  /** Where modules keep their pictures. */
+  private readonly files: ModuleFilesFolder;
   /** Where the host UI shows each visible panel, in window content coordinates. */
   private panelBounds = new Map<string, Rect>();
   /** True while the host UI shows a menu, dialog or drag that module views would cover. */
@@ -265,13 +271,28 @@ export class Host {
     private themeProblems: ThemeProblem[],
   ) {
     this.currentTheme = moduleTheme(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation);
-    this.data = new DataRegistry(options.userData, () => this.moduleFilesRoot(), () => this.moduleFilesMoving);
+    this.files = new ModuleFilesFolder({
+      userData: options.userData,
+      window: () => this.window,
+      language: () => this.language,
+      chosenFolder: () => this.library.moduleFilesFolder ?? null,
+      setChosenFolder: (folder) => {
+        this.library.moduleFilesFolder = folder;
+        this.saveLibrary();
+      },
+      notify: (message) => (this.notice = message),
+      changed: () => this.pushState(),
+    });
+    this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.discord = Host.discordConnection(options, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:discord", view);
     });
     this.aiUsage = Host.aiUsageService(options, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:ai-usage", view);
+    });
+    this.account = Host.accountClient(options, () => this.language, { get: () => this.profileData(), apply: (remote) => this.applyProfile(remote) }, (view) => {
+      if (!this.window.isDestroyed()) this.window.webContents.send("host:account", view);
     });
     this.window = new BrowserWindow({
       ...windowState.bounds,
@@ -353,9 +374,10 @@ export class Host {
     );
 
     const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
-    host.moduleData = await listModuleData(userData, host.moduleFilesRoot());
+    host.moduleData = await listModuleData(userData, host.files.root());
     // Native menus, dialogs and scrollbars follow the theme's mode.
     host.syncNativeTheme();
+    await host.account.init();
     // The system's light or dark setting changed (or Tavora's own native theme did, which applyTheme ignores).
     nativeTheme.on("updated", () => {
       if (host.library.followSystem) host.applyTheme();
@@ -379,7 +401,7 @@ export class Host {
     host.window.once("ready-to-show", () => timings.record("startup", process.uptime() * 1000));
     await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
     if (host.screen === "game") host.openCurrentGame();
-    void host.checkModuleFiles();
+    void host.files.check();
     // Icons of games that have none yet are looked for quietly in the background.
     host.fetchIconsSoon();
     host.backupSoon();
@@ -431,7 +453,7 @@ export class Host {
     this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
     this.moduleProblems = problems;
     this.modules = modules;
-    this.moduleData = await listModuleData(this.options.userData, this.moduleFilesRoot());
+    this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
   }
 
@@ -443,12 +465,12 @@ export class Host {
   private async deleteLeftoverData(owner: string, moduleId: string): Promise<void> {
     if (this.modules.get(moduleId)?.owner === owner) throw new LibraryError("error.dataInUse");
     this.data.forgetModule(owner, moduleId);
-    for (const partition of await deleteModuleDataOf(this.options.userData, owner, moduleId, this.moduleFilesRoot())) {
+    for (const partition of await deleteModuleDataOf(this.options.userData, owner, moduleId, this.files.root())) {
       const ses = session.fromPartition(partition);
       await ses.clearStorageData();
       await ses.clearCache();
     }
-    this.moduleData = await listModuleData(this.options.userData, this.moduleFilesRoot());
+    this.moduleData = await listModuleData(this.options.userData, this.files.root());
   }
 
   /**
@@ -490,71 +512,6 @@ export class Host {
   }
 
   // ── Pictures of modules ──────────────────────────────────────────────
-
-  /** Where modules keep their pictures: the folder the player chose, or the default one. */
-  private moduleFilesRoot(): string {
-    return this.library.moduleFilesFolder ?? defaultFilesRoot(this.options.userData);
-  }
-
-  /** Looks whether the folder is there, and tells the player when a folder they chose is gone. */
-  private async checkModuleFiles(): Promise<void> {
-    const root = this.moduleFilesRoot();
-    this.moduleFilesAvailable = await stat(root).then((info) => info.isDirectory(), () => false);
-    // The default folder appears with the first picture; only one the player chose can be missing.
-    if (!this.moduleFilesAvailable && this.library.moduleFilesFolder === null) this.moduleFilesAvailable = true;
-    if (!this.moduleFilesAvailable) this.notice = translate(this.language, "notice.moduleFilesMissing", { folder: root });
-    this.pushState();
-  }
-
-  private async changeModuleFiles(): Promise<void> {
-    const picked = await dialog.showOpenDialog(this.window, {
-      title: translate(this.language, "dialog.chooseModuleFiles"),
-      properties: ["openDirectory", "createDirectory"],
-    });
-    const folder = picked.filePaths[0];
-    if (picked.canceled || !folder) return;
-    const target = await filesTarget(folder, this.moduleFilesRoot(), this.options.userData);
-    if ("problem" in target) {
-      const key = { same: "error.moduleFilesSame", nested: "error.moduleFilesNested", "inside-data": "error.moduleFilesInsideData", "not-writable": "error.moduleFilesNotWritable" } as const;
-      throw new LibraryError(key[target.problem]);
-    }
-    return this.moveModuleFiles(target.root);
-  }
-
-  /**
-   * Copies every picture to `target`, checks the copies, switches to the new folder, and only then removes the old
-   * files. If anything fails the old folder and the setting stay as they were. New pictures wait while it runs.
-   */
-  private async moveModuleFiles(target: string): Promise<void> {
-    if (this.moduleFilesMoving) throw new LibraryError("error.moduleFilesBusy");
-    const from = this.moduleFilesRoot();
-    if (path.resolve(from) === path.resolve(target)) return;
-    this.moduleFilesMoving = true;
-    this.pushState();
-    try {
-      const files = await listStoredFiles(from);
-      try {
-        await copyStoredFiles(from, target, files);
-      } catch (error) {
-        throw new LibraryError("error.moduleFilesFailed", { problem: error instanceof Error ? error.message : String(error) });
-      }
-      this.library.moduleFilesFolder = path.resolve(target) === path.resolve(defaultFilesRoot(this.options.userData)) ? null : path.resolve(target);
-      this.saveLibrary();
-      this.moduleFilesAvailable = true;
-      this.notice = translate(this.language, "notice.moduleFilesMoved", { count: files.length, folder: target });
-      await removeStoredFiles(from, files);
-    } finally {
-      this.moduleFilesMoving = false;
-      this.pushState();
-    }
-  }
-
-  private async openModuleFiles(): Promise<void> {
-    const root = this.moduleFilesRoot();
-    if (this.library.moduleFilesFolder === null) await mkdir(root, { recursive: true });
-    const error = await shell.openPath(root);
-    if (error) throw new LibraryError("error.openModuleFiles", { problem: error });
-  }
 
   private async openModulesFolder(): Promise<void> {
     const dir = userModulesDir(this.options);
@@ -766,6 +723,7 @@ export class Host {
     });
     ipcMain.handle("host:get-discord", (event) => (fromHost(event) ? this.discord.view() : null));
     ipcMain.handle("host:get-ai-usage", (event) => (fromHost(event) ? this.aiUsage.view() : null));
+    ipcMain.handle("host:get-account", (event) => (fromHost(event) ? this.account.view() : null));
     ipcMain.handle("host:search-catalog", (event, query: unknown) =>
       fromHost(event) && typeof query === "string" && query.length <= 100
         ? searchCatalog(this.library, query).map(({ id, name }) => ({ id, name }))
@@ -824,11 +782,11 @@ export class Host {
       case "link-choice":
         return this.chooseLink(action.choice);
       case "module-files-change":
-        return this.changeModuleFiles();
+        return this.files.change();
       case "module-files-reset":
-        return this.moveModuleFiles(defaultFilesRoot(this.options.userData));
+        return this.files.reset();
       case "module-files-open":
-        return this.openModuleFiles();
+        return this.files.open();
       case "show-welcome":
         return this.showScreen("welcome");
       case "restart":
@@ -1005,8 +963,11 @@ export class Host {
       case "save-profile":
         this.profile.name = clipName(action.name);
         this.profile.initials = clipInitials(action.initials);
-        // Resolves once it is on disk, so the host UI can say "Saved".
-        return this.saveProfile();
+        this.profile.updatedAt = new Date().toISOString();
+        // Resolves once it is on disk, so the host UI can say "Saved"; the account gets it after.
+        await this.saveProfile();
+        void this.account.profileChanged();
+        return;
       case "set-profile-picture":
         return this.setProfilePicture(await savePicture(this.profileDir, action.png));
       case "remove-profile-picture":
@@ -1043,6 +1004,30 @@ export class Host {
         break;
       case "clear-browser-data":
         return this.clearBrowserData(action.scope);
+      case "account-send-code":
+        return this.account.sendCode(action.email);
+      case "account-verify":
+        return this.account.verify(action.code);
+      case "account-create":
+        return this.account.create();
+      case "account-cancel":
+        return this.account.cancel();
+      case "account-refresh":
+        return this.account.refresh();
+      case "account-sign-out":
+        return this.account.signOut();
+      case "account-sign-out-device":
+        return this.account.signOutDevice(action.deviceId);
+      case "account-email-code":
+        return this.account.sendEmailCode(action.email);
+      case "account-change-email":
+        return this.account.changeEmail(action.code);
+      case "account-delete-code":
+        return this.account.sendDeleteCode();
+      case "account-delete":
+        return this.account.deleteAccount(action.code);
+      case "account-profile-choice":
+        return this.account.chooseProfile(action.keep);
       case "ai-usage-refresh":
         return this.aiUsage.refreshNow();
       case "ai-usage-add":
@@ -1133,8 +1118,29 @@ export class Host {
   private async setProfilePicture(file: string | null): Promise<void> {
     const previous = this.profile.picture;
     this.profile.picture = file;
+    this.profile.updatedAt = new Date().toISOString();
     await this.saveProfile();
     await removePicture(this.profileDir, previous);
+    void this.account.profileChanged();
+  }
+
+  /** The profile as it goes to the account: the picture as a base64 PNG. */
+  private async profileData(): Promise<ProfileData> {
+    const picture = this.profile.picture ? await readFile(path.join(this.profileDir, this.profile.picture)).then((bytes) => bytes.toString("base64"), () => null) : null;
+    return { name: this.profile.name, initials: this.profile.initials, picture, updatedAt: this.profile.updatedAt };
+  }
+
+  /** Puts the account's profile in place of this PC's (checked like a picture the player picked). */
+  private async applyProfile(remote: ProfileData & { updatedAt: string }): Promise<void> {
+    const previous = this.profile.picture;
+    const picture = remote.picture ? await savePicture(this.profileDir, remote.picture) : null;
+    this.profile.name = clipName(remote.name);
+    this.profile.initials = clipInitials(remote.initials);
+    this.profile.picture = picture;
+    this.profile.updatedAt = remote.updatedAt;
+    await this.saveProfile();
+    if (previous !== picture) await removePicture(this.profileDir, previous);
+    this.pushState();
   }
 
   private get iconDir(): string {
@@ -1287,11 +1293,8 @@ export class Host {
     this.saveWorkspace();
     await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
     this.data.forgetGame(game.id);
-    const filesRoot = this.moduleFilesRoot();
     // A folder the player chose can be gone (an unplugged drive): the game still goes, and they are told where its pictures may remain.
-    const filesGone = this.library.moduleFilesFolder !== null && !(await stat(filesRoot).then((info) => info.isDirectory(), () => false));
-    await deleteModuleData(this.options.userData, game.id, filesRoot);
-    if (filesGone) this.notice = translate(this.language, "notice.moduleFilesLeft", { name: game.name, folder: filesRoot });
+    await this.files.noteGameDeleted(game.name, (root) => deleteModuleData(this.options.userData, game.id, root));
     await this.dropIconFile(game.icon);
     if (game.iconFile && !iconFileShared(this.library, game.iconFile, game.id)) await removeSteamIcon(this.steamIconDir, game.iconFile);
     // Sessions may already be open in this run, so clear them; their
@@ -1474,20 +1477,45 @@ export class Host {
     });
   }
 
-  // ── Discord ──────────────────────────────────────────────────────────
-
-  private static discordConnection(options: HostOptions, onChange: (view: ReturnType<DiscordConnection["view"]>) => void): DiscordConnection {
-    const file = path.join(options.userData, "discord.json");
+  /** The operating system's key store, for the sign-ins Tavora keeps (Discord, the Tavora account). */
+  private static encryptor(options: HostOptions): Encryptor {
     const test = options.discord;
     // Test machines have no keyring; Linux's plain-text fallback stands in there (and only there).
     if (test && process.platform === "linux") safeStorage.setUsePlainTextEncryption(true);
-    const encryptor: Encryptor = {
+    return {
       // Linux without a keyring falls back to a fixed key, which protects nothing; Tavora then saves no sign-in.
       isAvailable: () =>
         safeStorage.isEncryptionAvailable() && (process.platform !== "linux" || test !== undefined || safeStorage.getSelectedStorageBackend() !== "basic_text"),
       encrypt: (text) => safeStorage.encryptString(text),
       decrypt: (data) => safeStorage.decryptString(data),
     };
+  }
+
+  // ── Account ──────────────────────────────────────────────────────────
+
+  private static accountClient(options: HostOptions, language: () => Language, profile: AccountClientOptions["profile"], onChange: (view: AccountView) => void): AccountClient {
+    const file = path.join(options.userData, "account.json");
+    const encryptor = Host.encryptor(options);
+    return new AccountClient({
+      enabled: options.accounts === true,
+      baseUrl: options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL,
+      fetch: (input, init) => fetch(input, init),
+      os: deviceOs(process.platform),
+      language,
+      canKeepSignIn: () => encryptor.isAvailable(),
+      load: () => loadAccount(file, encryptor),
+      save: (account) => saveAccount(file, encryptor, account),
+      profile,
+      onChange,
+    });
+  }
+
+  // ── Discord ──────────────────────────────────────────────────────────
+
+  private static discordConnection(options: HostOptions, onChange: (view: ReturnType<DiscordConnection["view"]>) => void): DiscordConnection {
+    const file = path.join(options.userData, "discord.json");
+    const test = options.discord;
+    const encryptor = Host.encryptor(options);
     return new DiscordConnection({
       clientId: DISCORD_CLIENT_ID,
       connect: (events) => RpcClient.connect(DISCORD_CLIENT_ID, events, test ? [test.ipcPath] : undefined),
@@ -1969,7 +1997,7 @@ export class Host {
       layout: workspace.layout,
       layoutEpoch: this.layoutEpoch,
       pendingLink: this.pendingLink,
-      moduleFiles: { folder: this.moduleFilesRoot(), custom: this.library.moduleFilesFolder !== null, available: this.moduleFilesAvailable, moving: this.moduleFilesMoving },
+      moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
       notice: this.notice,
       profile: {

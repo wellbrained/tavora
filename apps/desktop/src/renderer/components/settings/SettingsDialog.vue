@@ -9,10 +9,11 @@ import { cn } from "@/lib/utils";
 import type { RootSort, Startup } from "../../../shared/host-api";
 import type { LanguageSetting } from "../../../shared/i18n";
 import { PATCH_NOTES } from "../../../shared/patch-notes";
-import { act, confirmAction, dialog, settingsOpen, settingsTarget, state, submitAction } from "../../host";
+import { act, confirmAction, dialog, hiddenSettings, settingsOpen, settingsTarget, state, submitAction } from "../../host";
 import { formatDate, language, t } from "../../i18n";
 import { MOD, shortcutGroups } from "../../shortcuts";
 import GameIcon from "../GameIcon.vue";
+import AccountSection from "./AccountSection.vue";
 import AppearanceSection from "./AppearanceSection.vue";
 import LanguagePicker from "./LanguagePicker.vue";
 import ModulesSection from "./ModulesSection.vue";
@@ -73,7 +74,7 @@ const results = computed<Result[]>(() => {
     description: t("settings.results.trashUntil", { date: formatDate(entry.purgeAt) }),
     keywords: [],
   }));
-  return rank([...settingEntries(), ...trashed], query.value, (item) => ({
+  return rank([...settingEntries(hiddenSettings.value), ...trashed], query.value, (item) => ({
     name: item.label,
     extra: [item.description, sectionLabel(item.section), ...item.keywords],
   }));
@@ -192,7 +193,7 @@ function deleteNow(gameId: string, name: string) {
         <div v-for="group in GROUPS" :key="group.id" class="flex flex-col gap-0.5">
           <h3 class="text-muted-foreground px-3 pb-1 text-xs font-medium">{{ groupLabel(group.id) }}</h3>
           <button
-            v-for="item in group.sections"
+            v-for="item in group.sections.filter((entry) => !hiddenSettings.has(entry.id))"
             :key="item.id"
             type="button"
             :class="
@@ -262,6 +263,10 @@ function deleteNow(gameId: string, name: string) {
                 </button>
               </li>
             </ul>
+          </template>
+
+          <template v-else-if="section === 'account'">
+            <AccountSection :highlight="highlight" />
           </template>
 
           <template v-else-if="section === 'general'">

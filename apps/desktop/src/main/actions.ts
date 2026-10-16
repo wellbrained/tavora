@@ -247,6 +247,23 @@ export function parseAction(raw: unknown): HostAction | null {
     case "discord-connect":
     case "discord-sign-out":
       return only() ? { type: a.type } : null;
+    case "account-create":
+    case "account-cancel":
+    case "account-refresh":
+    case "account-sign-out":
+    case "account-delete-code":
+      return only() ? { type: a.type } : null;
+    case "account-send-code":
+    case "account-email-code":
+      return only("email") && text(a.email, 254) ? { type: a.type, email: a.email } : null;
+    case "account-verify":
+    case "account-change-email":
+    case "account-delete":
+      return only("code") && typeof a.code === "string" && /^\d{6}$/.test(a.code) ? { type: a.type, code: a.code } : null;
+    case "account-profile-choice":
+      return only("keep") && (a.keep === "account" || a.keep === "pc") ? { type: a.type, keep: a.keep } : null;
+    case "account-sign-out-device":
+      return only("deviceId") && typeof a.deviceId === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(a.deviceId) ? { type: a.type, deviceId: a.deviceId } : null;
     case "ai-usage-refresh":
       return only() ? { type: a.type } : null;
     case "ai-usage-add":

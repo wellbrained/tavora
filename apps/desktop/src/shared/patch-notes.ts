@@ -19,7 +19,7 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.14.7",
+    version: "0.16.2",
     date: "2026-10-16",
     title: "Install modules from a zip",
     notes: [
@@ -30,180 +30,38 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
-    version: "0.14.6",
+    version: "0.16.1",
     date: "2026-10-16",
-    title: "Pictures on the Whiteboard",
+    title: "Accounts in development runs",
+    notes: ["For development: Settings > Account signs in to a local Tavora service by default, and says clearly when accounts are not available instead of showing a general error."],
+  },
+  {
+    version: "0.16.0",
+    date: "2026-10-16",
+    title: "Tavora accounts, ready to switch on",
+    notes: ["Optional Tavora accounts are built: sign in with a code sent to your email (no password), see and sign out the PCs you are signed in on, change your email or delete your account in Settings > Account. Your name, initials and picture go with your account to every PC. They are not switched on yet; Tavora keeps working fully without an account."],
+  },
+  {
+    version: "0.15.1",
+    date: "2026-10-16",
+    title: "Groundwork for Tavora accounts",
+    notes: ["Behind the scenes: the first part of optional Tavora accounts (sign in with an emailed code, no password). It is not switched on yet, and Tavora keeps working fully without an account."],
+  },
+  {
+    version: "0.15.0",
+    date: "2026-10-16",
+    title: "Whiteboard, pictures in Notes and AI Usage",
     notes: [
-      "Paste a screenshot (Ctrl+V), drop a picture or use the image tool, and scribble on top of it. A new picture is locked so your drawing does not drag it around; the Unlock pictures button in the header lets you move or resize it.",
-      "Pictures are kept in the module pictures folder, not inside the board, so boards stay small. Pictures that no board uses any more are cleaned up when a Whiteboard opens.",
-    ],
-  },
-  {
-    version: "0.14.5",
-    date: "2026-10-16",
-    title: "Tidy-ups",
-    notes: ["Small clean-ups behind the scenes after a code review; nothing changes in how Tavora looks or works."],
-  },
-  {
-    version: "0.14.4",
-    date: "2026-10-16",
-    title: "Deleting a game with a missing pictures folder",
-    notes: ["If you delete a game while the folder you chose for module pictures cannot be found (an unplugged drive, say), Tavora now tells you that its pictures may still be in that folder, so you can delete them yourself."],
-  },
-  {
-    version: "0.14.3",
-    date: "2026-10-16",
-    title: "Safer picture cleanup and link fixes",
-    notes: [
-      "Notes no longer clears out unused pictures while another panel has changed a note it has not read yet.",
-      "Ctrl+click on an email link in Notes shows the link bar instead of doing nothing, and a link that cannot be opened now says so.",
-      "Two quick clicks in a row each count as a click when a module opens a link.",
-    ],
-  },
-  {
-    version: "0.14.2",
-    date: "2026-10-16",
-    title: "Whiteboard (first part)",
-    notes: [
-      "A new Whiteboard module: draw, add shapes, arrows and text on a board of your own for each game. Make as many boards as you like, switch between them from the menu in the header, rename them, and delete one with an Undo notice. Everything saves as you draw and works offline, in English and German, in light or dark.",
-      "Pictures and screenshots, and Copy as picture, follow in the next versions.",
-    ],
-  },
-  {
-    version: "0.14.1",
-    date: "2026-10-16",
-    title: "Modules can copy a picture",
-    notes: [
-      "A module can now put a picture on your clipboard when you press one of its buttons, so you can paste it anywhere. Nothing uses this yet: the Whiteboard will, next. A module cannot touch your clipboard on its own.",
-    ],
-  },
-  {
-    version: "0.14.0",
-    date: "2026-10-16",
-    title: "Choose where module pictures are kept",
-    notes: [
-      "Settings > Modules has a new Module pictures folder setting: move the pictures of Notes (and other modules) to another drive, open the folder, or go back to the default. Tavora copies the pictures, checks them, and only then switches over, so nothing is lost if something goes wrong.",
-      "If a folder you chose is not there when Tavora starts (an unplugged drive, say), you get a notice, the pictures show as missing, and nothing is deleted.",
-    ],
-  },
-  {
-    version: "0.13.1",
-    date: "2026-10-16",
-    title: "Pictures: text flows around them",
-    notes: [
-      "A picture can now sit at the left or right with the text flowing around it, at the size it has. This replaces \"Inline\", which shrank the picture to the height of a line. Dragging the corner resizes any picture.",
-    ],
-  },
-  {
-    version: "0.13.0",
-    date: "2026-10-16",
-    title: "Pictures in Notes",
-    notes: [
-      "Paste a screenshot, drop a picture file into a note, or use the Insert image button (PNG, JPEG, GIF, WebP). Click a picture to put it inline with the text or on its own line as Small, Medium or Full width, drag its corner to resize it freely, open it larger, or remove it.",
-      "Choose Optimized (shrunk to at most 1600 px, smaller files) or Original (the file exactly as it is) under the Insert image button. The menu also shows how much picture space the game has used.",
-      "Pictures of deleted notes are cleaned up the next time Notes opens.",
-    ],
-  },
-  {
-    version: "0.12.0",
-    date: "2026-10-16",
-    title: "Modules can keep pictures",
-    notes: [
-      "Modules can now store pictures (PNG, JPEG, GIF, WebP, up to 50 MB each and 500 MB per game) in a folder Tavora manages. Nothing uses it yet: Notes will, next. The pictures are removed with the game and are part of the daily backup unless it would get too big.",
-    ],
-  },
-  {
-    version: "0.11.1",
-    date: "2026-10-16",
-    title: "Links: hand cursor and a choice",
-    notes: [
-      "In Notes, links show a hand cursor while you hold Ctrl, so you can tell a click will open them.",
-      "When a link is opened and the game has no Browser panel, Tavora now asks whether to use a new Browser panel or your system browser.",
-    ],
-  },
-  {
-    version: "0.11.0",
-    date: "2026-10-16",
-    title: "Links in Notes open in the Browser",
-    notes: [
-      "Click a link in a note to see its address with Open, Edit and Remove. Ctrl+click opens it straight away, as a new tab in your Browser panel (or in a new Browser panel if you have none).",
-      "Modules can now ask Tavora to open a web address, but only right after you click or press a key in them.",
-    ],
-  },
-  {
-    version: "0.10.0",
-    date: "2026-10-16",
-    title: "Notes: reorder and undo",
-    notes: [
-      "Drag notes in the list to put them in your own order (Alt+Up and Alt+Down work too). Pinned notes and the rest keep their own groups, and new notes still come last.",
-      "Deleting a note or clearing the scratchpad no longer asks first. It happens at once, and an Undo notice stays for 10 seconds (it waits while the pointer is on it).",
-    ],
-  },
-  {
-    version: "0.9.1",
-    date: "2026-10-16",
-    title: "Cleaner folders",
-    notes: ["Folders in the sidebar no longer show a number badge."],
-  },
-  {
-    version: "0.9.0",
-    date: "2026-10-16",
-    title: "Notes: fonts and sizes",
-    notes: [
-      "Pick a font and a size for the text in Notes (the Aa button in the toolbar): Inter, Open Sans, Lora, Merriweather or JetBrains Mono, from Small to Extra large. The scratchpad has its own setting, and both work offline.",
-      "New notes now come last in the list, and editing a note no longer moves it.",
-    ],
-  },
-  {
-    version: "0.8.1",
-    date: "2026-10-16",
-    title: "Notes: roomier collapsed sidebar",
-    notes: ["In the collapsed Notes sidebar the icons have more room, so the selected one is no longer cut off at the top."],
-  },
-  {
-    version: "0.8.0",
-    date: "2026-10-16",
-    title: "Notes: titles, a resizable sidebar and a handier scratchpad",
-    notes: [
-      "Give a note a title of your own: type it above the text, or double-click the note in the list (F2 also works). Leave it empty and the first line stays the title.",
-      "The notes list can be dragged wider or narrower, and collapsed to a thin strip of icons. Each Notes panel remembers its own.",
-      "The scratchpad has two new buttons: Save as note moves its text into a note of its own, and Clear empties it.",
-      "Headers and headings in Notes now use the theme's accent colour.",
-      "Switching games no longer shows panels building themselves: a panel appears once it has its content.",
-    ],
-  },
-  {
-    version: "0.7.2",
-    date: "2026-10-16",
-    title: "Modules can't fill your disk",
-    notes: [
-      "A module can keep at most 256 MB in its own browser storage for each game. If one goes past that, Tavora clears that storage, restarts its panel and tells you. Notes and settings a module saved through Tavora are not touched.",
-    ],
-  },
-  {
-    version: "0.7.1",
-    date: "2026-10-16",
-    title: "Safer modules",
-    notes: [
-      "A misbehaving module can no longer crash Tavora by sending it huge amounts of data. Such a module now only slows itself down.",
-    ],
-  },
-  {
-    version: "0.7.0",
-    date: "2026-10-16",
-    title: "AI Usage panel",
-    notes: [
-      "New panel: AI Usage. It shows how much of your Claude and Codex subscription allowance is left for each of your accounts, with a bar for the 5-hour and weekly windows and a countdown to the reset. Open it from the module list like any other panel.",
-      "Add your accounts in Settings > Integrations > AI usage, by the folder of each login (such as .claude or .codex in your user folder). Tavora offers the ones it finds on this PC the first time. Tavora reads the allowance only while a panel is open, never saves or shows your logins, and a reading that is old or failed is marked Last known.",
-      "Settings > Integrations > AI usage can show the numbers as what is left or what is used. A Codex account also shows how many manual resets you have left, and its signed-in email when you hover its name.",
-    ],
-  },
-  {
-    version: "0.6.1",
-    date: "2026-10-16",
-    title: "Discord connects without a secret",
-    notes: [
-      "Discord no longer asks you to paste a Client Secret. Open a Discord panel, press Connect and approve Tavora in Discord. Nothing secret is kept on your PC anymore. For now Discord lets only approved testers of Tavora do this; if Discord refuses, ask to be added as a tester.",
+      "New Whiteboard module: draw, add shapes, arrows and text on as many boards of your own for each game as you like. Switch between them, rename them, or delete one with an Undo notice. It saves as you draw and works offline, in English and German, in light or dark.",
+      "On the Whiteboard, paste a screenshot (Ctrl+V), drop a picture or use the image tool, and scribble on top of it. A new picture is locked so your drawing does not drag it around; the Unlock pictures button in the header lets you move or resize it. Copy as picture (or Shift+Alt+C) puts the board, or just what you selected, on the clipboard so you can paste it into Notes, Discord or any other app.",
+      "Pictures in Notes: paste a screenshot, drop a picture file into a note, or use the Insert image button (PNG, JPEG, GIF, WebP). Put a picture on its own line as Small, Medium or Full width, or at the left or right with the text flowing around it. Drag its corner to resize it, open it larger, or remove it. Choose Optimized (smaller files) or Original under the Insert image button.",
+      "Settings > Modules has a new Module pictures folder setting: keep the pictures of Notes and the Whiteboard on another drive. Tavora copies the pictures, checks them, and only then switches over. If the folder is not there when Tavora starts (an unplugged drive, say), you get a notice and nothing is deleted. Pictures that nothing uses any more are cleaned up.",
+      "New AI Usage panel: it shows how much of your Claude and Codex subscription allowance is left for each of your accounts, with a bar for the 5-hour and weekly windows and a countdown to the reset. Add your accounts in Settings > Integrations > AI usage. Tavora never saves or shows your logins.",
+      "Notes: give a note a title of your own (type it above the text, double-click the note in the list, or press F2), drag notes into your own order (Alt+Up and Alt+Down work too), and pick a font and size with the Aa button. The notes list can be dragged wider or collapsed to a strip of icons. The scratchpad has Save as note and Clear. Deleting a note now happens at once, with an Undo notice for 10 seconds.",
+      "Links in Notes: click a link to see its address with Open, Edit and Remove. Ctrl+click opens it in your Browser panel (links show a hand cursor while you hold Ctrl). If the game has no Browser panel, Tavora asks whether to use a new one or your system browser.",
+      "Discord no longer asks you to paste a Client Secret: press Connect and approve Tavora in Discord. For now Discord lets only approved testers of Tavora do this; if Discord refuses, ask to be added as a tester.",
+      "Safer modules: a misbehaving module can no longer crash Tavora, and a module can keep at most 256 MB in its own browser storage for each game. A module can only open a link or copy a picture right after you click or press a key in it.",
+      "Smaller fixes: folders in the sidebar no longer show a number badge, switching games no longer shows panels building themselves, headings in Notes use the theme's accent colour, and more.",
     ],
   },
   {

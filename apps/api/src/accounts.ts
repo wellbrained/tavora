@@ -1,0 +1,243 @@
+import { Hono, type Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { DEVICE_OS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
+import { codeMail, emailChangedMail, mailLanguage, type Mail, type Mailer } from "./mail.ts";
+import { inspectPng } from "./png.ts";
+import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+
+/**
+ * The account routes under /v1/account. Every answer that could tell whether
+ * an address has an account is the same either way until the code for it was
+ * right, which only the owner of the address can know. Errors carry a `reason`
+ * the app translates.
+ */
+
+export interface AccountOptions {
+  store: AccountStore;
+  mailer: Mailer;
+  /** Requests for a code per client: 10 an hour by default. */
+  codeRateLimiter?: RateLimiter;
+  /** Code checks per client: 20 in 15 minutes by default. */
+  verifyRateLimiter?: RateLimiter;
+  now?: () => number;
+}
+
+type Env = { Variables: { session: Session; account: Account } };
+
+const CODE = /^\d{6}$/;
+/** The profile's limits, the same as the app's: a name of 32 characters, 3 initials, a 256 px PNG of at most 512 KB. */
+const MAX_NAME = 32;
+const MAX_INITIALS = 3;
+const MAX_PICTURE_BYTES = 512 * 1024;
+const PICTURE_SIZE = 256;
+const PROFILE_BODY = Math.ceil((MAX_PICTURE_BYTES * 4) / 3) + 2000;
+
+/** A profile the app sent, or null when any part of it is off. Its time is never later than now. */
+function parseProfile(input: Record<string, unknown>, now: number): StoredProfile | null {
+  const { name, initials, picture, updatedAt } = input;
+  if (typeof name !== "string" || [...name].length > MAX_NAME || /[\u0000-\u001f\u007f]/.test(name)) return null;
+  if (typeof initials !== "string" || [...initials].length > MAX_INITIALS || /\s/.test(initials)) return null;
+  const at = typeof updatedAt === "string" ? Date.parse(updatedAt) : Number.NaN;
+  if (!Number.isFinite(at)) return null;
+  let bytes: Uint8Array | null = null;
+  if (picture !== null) {
+    if (typeof picture !== "string" || picture.length > PROFILE_BODY || !/^[A-Za-z0-9+/]+={0,2}$/.test(picture)) return null;
+    bytes = new Uint8Array(Buffer.from(picture, "base64"));
+    const size = inspectPng(bytes, MAX_PICTURE_BYTES);
+    if (size?.width !== PICTURE_SIZE || size.height !== PICTURE_SIZE) return null;
+  }
+  return { name, initials, picture: bytes, updatedAt: Math.min(at, now) };
+}
+
+const profileAnswer = (profile: StoredProfile | null) =>
+  profile
+    ? { name: profile.name, initials: profile.initials, picture: profile.picture ? Buffer.from(profile.picture).toString("base64") : null, updatedAt: new Date(profile.updatedAt).toISOString() }
+    : null;
+const deviceOs = (input: unknown): DeviceOs => (DEVICE_OS.includes(input as DeviceOs) ? (input as DeviceOs) : "other");
+const tooMany = (context: Context, wait: number) => {
+  context.header("Retry-After", String(wait));
+  return context.json({ error: "Too many requests.", reason: "too-many" }, 429);
+};
+const wrongCode = (context: Context) => context.json({ error: "That code is wrong or has expired.", reason: "wrong-code" }, 400);
+
+export function accountRoutes(options: AccountOptions, limiter: RateLimiter, clientKey: (request: Request) => string) {
+  const { store, mailer } = options;
+  const now = options.now ?? Date.now;
+  const codeLimiter = options.codeRateLimiter ?? createRateLimiter({ limit: 10, windowMs: 3_600_000 });
+  const verifyLimiter = options.verifyRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 15 * 60_000 });
+  const app = new Hono<Env>();
+
+  const send = async (context: Context, mail: Mail) => {
+    try {
+      await mailer.send(mail);
+      return null;
+    } catch {
+      return context.json({ error: "The email could not be sent. Try again later.", reason: "mail-failed" }, 502);
+    }
+  };
+
+  // Every account call: the general limit per client, and JSON only for a body,
+  // which a web page on another site cannot send without a preflight this
+  // service refuses. A body is small: an address, a code and a language.
+  app.use("*", async (context, next) => {
+    const wait = limiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    if ((context.req.method === "POST" || context.req.method === "PUT") && !(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) {
+      return context.json({ error: "Send JSON.", reason: "bad-request" }, 415);
+    }
+    await next();
+  });
+  const small = bodyLimit({ maxSize: 2000, onError: (context) => context.json({ error: "Too big.", reason: "bad-request" }, 413) });
+  const profileSize = bodyLimit({ maxSize: PROFILE_BODY, onError: (context) => context.json({ error: "Too big.", reason: "bad-request" }, 413) });
+  // A body is small (an address, a code and a language), except a profile with its picture.
+  app.use("*", (context, next) => (context.req.path.endsWith("/profile") ? profileSize(context, next) : small(context, next)));
+
+  const body = async (context: Context): Promise<Record<string, unknown>> => {
+    try {
+      const parsed: unknown = JSON.parse(await context.req.text());
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  // ── Signed out: a code, then sign in or create ───────────────────────
+
+  app.post("/code", async (context) => {
+    const wait = codeLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const input = await body(context);
+    const email = normalizeEmail(input.email);
+    if (!email) return context.json({ error: "Send { email, language }.", reason: "bad-email" }, 400);
+    const request = store.requestCode(email, "sign-in", null, now());
+    if (!request.ok) return tooMany(context, request.retryAfter);
+    // The mail differs for a new address, but only its owner reads it; the answer is the same.
+    const kind = store.accountByEmail(email) ? "sign-in" : "create";
+    return (await send(context, codeMail(kind, email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
+  });
+
+  app.post("/verify", async (context) => {
+    const wait = verifyLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const input = await body(context);
+    const email = normalizeEmail(input.email);
+    if (!email || typeof input.code !== "string" || !CODE.test(input.code)) {
+      return context.json({ error: "Send { email, code, os, create }.", reason: "bad-request" }, 400);
+    }
+    const at = now();
+    const existing = store.accountByEmail(email);
+    const create = input.create === true;
+    // A new address keeps its code until the player said yes to an account.
+    if (!store.checkCode(email, "sign-in", null, input.code, at, Boolean(existing) || create)) return wrongCode(context);
+    if (!existing && !create) return context.json({ status: "no-account" });
+    let account = existing;
+    if (!account) {
+      try {
+        account = store.createAccount(email, at);
+      } catch {
+        // Created a moment ago by another sign-in with the same address.
+        account = store.accountByEmail(email);
+        if (!account) throw new Error("account could not be created");
+      }
+    }
+    const { token, session } = store.createSession(account.id, deviceOs(input.os), at);
+    return context.json({ status: existing ? "signed-in" : "created", token, device: session.id, account: { email: account.email, createdAt: account.createdAt } });
+  });
+
+  // ── Signed in ─────────────────────────────────────────────────────────
+
+  const signedIn = new Hono<Env>();
+  signedIn.use("*", async (context, next) => {
+    const match = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "");
+    const session = match ? store.sessionByToken(match[1]!, now()) : null;
+    const account = session ? store.account(session.accountId) : null;
+    if (!session || !account) return context.json({ error: "Sign in again.", reason: "signed-out" }, 401);
+    context.set("session", session);
+    context.set("account", account);
+    await next();
+  });
+
+  signedIn.get("/", (context) => {
+    const { email, createdAt, id } = context.get("account");
+    const current = context.get("session").id;
+    return context.json({ account: { email, createdAt }, devices: store.devices(id).map((device) => ({ ...device, current: device.id === current })) });
+  });
+
+  signedIn.post("/sign-out", (context) => {
+    store.deleteSession(context.get("account").id, context.get("session").id);
+    return context.body(null, 204);
+  });
+
+  signedIn.delete("/devices/:id", (context) => {
+    if (!store.deleteSession(context.get("account").id, context.req.param("id") ?? "")) return context.json({ error: "Not found.", reason: "not-found" }, 404);
+    return context.body(null, 204);
+  });
+
+  // The profile: private to the account's owner. The newest change wins, so
+  // two PCs that changed it while offline end with the later one.
+  signedIn.get("/profile", (context) => context.json({ profile: profileAnswer(store.profile(context.get("account").id)) }));
+
+  signedIn.put("/profile", async (context) => {
+    const profile = parseProfile(await body(context), now());
+    if (!profile) return context.json({ error: "Send { name, initials, picture, updatedAt }.", reason: "bad-request" }, 400);
+    return context.json({ profile: profileAnswer(store.setProfile(context.get("account").id, profile)) });
+  });
+
+  // Change the address: a code to the new one. Whether it already has an account
+  // is only said once its code was right.
+  signedIn.post("/email/code", async (context) => {
+    const wait = codeLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const input = await body(context);
+    const email = normalizeEmail(input.email);
+    const account = context.get("account");
+    if (!email) return context.json({ error: "Send { email, language }.", reason: "bad-email" }, 400);
+    if (email === account.email) return context.json({ error: "That is the address the account has.", reason: "same-email" }, 400);
+    const request = store.requestCode(email, "change-email", account.id, now());
+    if (!request.ok) return tooMany(context, request.retryAfter);
+    return (await send(context, codeMail("change-email", email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
+  });
+
+  signedIn.post("/email", async (context) => {
+    const wait = verifyLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const input = await body(context);
+    const email = normalizeEmail(input.email);
+    const account = context.get("account");
+    if (!email || typeof input.code !== "string" || !CODE.test(input.code)) {
+      return context.json({ error: "Send { email, code, language }.", reason: "bad-request" }, 400);
+    }
+    if (!store.checkCode(email, "change-email", account.id, input.code, now(), true)) return wrongCode(context);
+    if (store.changeEmail(account.id, email) === "taken") {
+      return context.json({ error: "That address already has a Tavora account.", reason: "email-taken" }, 409);
+    }
+    // The old address hears about it, so a stolen sign-in cannot quietly take the account.
+    await send(context, emailChangedMail(account.email, email, mailLanguage(input.language)));
+    return context.json({ account: { email, createdAt: account.createdAt } });
+  });
+
+  // Delete the account: a fresh code to its address, then everything on the server goes at once.
+  signedIn.post("/delete/code", async (context) => {
+    const wait = codeLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const input = await body(context);
+    const account = context.get("account");
+    const request = store.requestCode(account.email, "delete", account.id, now());
+    if (!request.ok) return tooMany(context, request.retryAfter);
+    return (await send(context, codeMail("delete", account.email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
+  });
+
+  signedIn.post("/delete", async (context) => {
+    const wait = verifyLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const input = await body(context);
+    const account = context.get("account");
+    if (typeof input.code !== "string" || !CODE.test(input.code)) return context.json({ error: "Send { code }.", reason: "bad-request" }, 400);
+    if (!store.checkCode(account.email, "delete", account.id, input.code, now(), true)) return wrongCode(context);
+    store.deleteAccount(account.id);
+    return context.body(null, 204);
+  });
+
+  app.route("/", signedIn);
+  return app;
+}
