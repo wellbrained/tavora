@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.16.5",
+    date: "2026-10-16",
+    title: "Whiteboard fix for development runs",
+    notes: ["The Whiteboard no longer stays blank when Tavora runs from the source code with pnpm dev. The installed app was not affected."],
+  },
+  {
     version: "0.16.4",
     date: "2026-10-16",
     title: "Tavora accounts and modules from a zip",

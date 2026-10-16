@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
-import { defineConfig, type Plugin } from "vite";
+import { defaultClientConditions, defineConfig, type Plugin } from "vite";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -47,9 +47,13 @@ export default defineConfig({
   base: "./",
   plugins: [react(), trimExcalidraw()],
   resolve: {
+    // The SDK from its source, like the other official modules, so a stale packages/sdk/dist never breaks the build.
+    conditions: ["source", ...defaultClientConditions],
     alias: { "@excalidraw/mermaid-to-excalidraw": path.join(here, "stubs", "mermaid.ts") },
   },
-  define: { "process.env.NODE_ENV": JSON.stringify("production") },
+  // React must match the JSX the plugin writes: `pnpm dev` runs this build with NODE_ENV=development (its Vite
+  // server sets it), and production React has no jsxDEV, so a fixed "production" left a blank panel there.
+  define: { "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV === "development" ? "development" : "production") },
   build: {
     outDir: "../dist",
     emptyOutDir: true,
