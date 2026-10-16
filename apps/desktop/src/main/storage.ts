@@ -168,6 +168,14 @@ export class DataRegistry {
     return data;
   }
 
+  /** Drops cached stores of one owner's module whose data is being deleted. */
+  forgetModule(owner: string, moduleId: string): void {
+    const prefix = path.join(this.dataDir, "module-data", owner, moduleId) + path.sep;
+    for (const key of [...this.data.keys()]) {
+      if (key.startsWith(prefix)) this.data.delete(key);
+    }
+  }
+
   /** Drops cached stores for a game whose data is being deleted. */
   forgetGame(gameId: string): void {
     for (const key of [...this.data.keys()]) {

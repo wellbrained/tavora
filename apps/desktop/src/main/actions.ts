@@ -1,4 +1,4 @@
-import { isGameId, isModuleId } from "@tavora/module-schema";
+import { isGameId, isModuleId, isOwnerId } from "@tavora/module-schema";
 import type { BrowserCommand, HostAction, SteamImportGame } from "../shared/host-api";
 import { isSite, MAX_ADDRESS } from "./browser-url";
 import { isSnowflake } from "./discord-voice";
@@ -51,7 +51,10 @@ export function parseAction(raw: unknown): HostAction | null {
     case "install-module":
       return only() ? { type: a.type } : null;
     case "remove-module":
+    case "move-local-data":
       return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
+    case "delete-module-data":
+      return only("owner", "moduleId") && isOwnerId(a.owner) && isModuleId(a.moduleId) ? { type: a.type, owner: a.owner, moduleId: a.moduleId } : null;
     case "record-timing":
       return only("name", "ms") && a.name === "game-switch" && typeof a.ms === "number" && Number.isFinite(a.ms) && a.ms >= 0 && a.ms < 600_000
         ? { type: a.type, name: a.name, ms: a.ms }

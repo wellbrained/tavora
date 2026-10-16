@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.12.0",
+    date: "2026-10-16",
+    title: "Install modules from a zip",
+    notes: [
+      "Settings > Modules has Install from zip. Tavora checks the zip before it unpacks anything, and a module from someone else can never replace one you have or read its data, even with the same name.",
+      "Modules signed by their maker show a publisher tag. Module makers create signed zips with the new pack command.",
+      "Data from modules you removed is listed in Settings > Modules, where you can delete it. If you used a local copy of a module before installing its signed version, you can move the local copy's data over.",
+    ],
+  },
+  {
     version: "0.11.1",
     date: "2026-10-16",
     title: "Module data gets an owner",

@@ -32,7 +32,7 @@ import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, type SavedLay
 import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
-import { deleteModuleData, migrateModuleData, orphanedPartitions } from "./gamedata";
+import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
 import { applyOwners, forgetOwner, installZip, readOwnerRecords } from "./installer";
 import { shortcutFor } from "./shortcuts";
 import { IconError, importIcon, removeIcon } from "./icons";
@@ -224,6 +224,8 @@ export class Host {
   private readonly aiUsage: AiUsage;
   private screen: Screen = "welcome";
   private notice: string | null = null;
+  /** Every (owner, module) with saved settings or documents, for Settings > Modules. */
+  private moduleData: { owner: string; moduleId: string }[] = [];
   /** Where the host UI shows each visible panel, in window content coordinates. */
   private panelBounds = new Map<string, Rect>();
   /** True while the host UI shows a menu, dialog or drag that module views would cover. */
@@ -342,6 +344,7 @@ export class Host {
     );
 
     const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
+    host.moduleData = await listModuleData(userData);
     // Native menus, dialogs and scrollbars follow the theme's mode.
     host.syncNativeTheme();
     // The system's light or dark setting changed (or Tavora's own native theme did, which applyTheme ignores).
@@ -418,7 +421,45 @@ export class Host {
     this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
     this.moduleProblems = problems;
     this.modules = modules;
+    this.moduleData = await listModuleData(this.options.userData);
     this.dropPanelsOfMissingModules();
+  }
+
+  /**
+   * Deletes what a module that is not installed left behind: its settings and
+   * documents in every game now, its browser storage cleared now and its
+   * folders removed at the next start. An installed module's data is not deleted here.
+   */
+  private async deleteLeftoverData(owner: string, moduleId: string): Promise<void> {
+    if (this.modules.get(moduleId)?.owner === owner) throw new LibraryError("error.dataInUse");
+    this.data.forgetModule(owner, moduleId);
+    for (const partition of await deleteModuleDataOf(this.options.userData, owner, moduleId)) {
+      const ses = session.fromPartition(partition);
+      await ses.clearStorageData();
+      await ses.clearCache();
+    }
+    this.moduleData = await listModuleData(this.options.userData);
+  }
+
+  /**
+   * Hands a module's local data (from an unsigned copy used before) to its
+   * signed version: Tavora restarts and moves it before any module opens.
+   */
+  private async moveLocalData(moduleId: string): Promise<void> {
+    const module = this.modules.get(moduleId);
+    if (!module || !this.localDataWaiting(module)) throw new LibraryError("error.noLocalData");
+    await queueLocalDataMove(this.options.userData, moduleId, module.owner);
+    this.options.restart();
+  }
+
+  /** A signed module whose id has data from an unsigned local copy. */
+  private localDataWaiting(module: InstalledModule): boolean {
+    return this.publisherOf(module) !== null && this.moduleData.some((entry) => entry.owner === LOCAL_OWNER && entry.moduleId === module.manifest.id);
+  }
+
+  /** The key fingerprint of a module from a signed zip, or null. */
+  private publisherOf(module: InstalledModule): string | null {
+    return isOwnerId(module.owner) && module.owner !== OFFICIAL_OWNER && module.owner !== LOCAL_OWNER ? module.owner : null;
   }
 
   /** Closes and forgets every panel whose module is not installed any more, in every game. Module data stays. */
@@ -863,6 +904,10 @@ export class Host {
         return this.removeModule(action.moduleId);
       case "install-module":
         return this.installModule();
+      case "delete-module-data":
+        return this.deleteLeftoverData(action.owner, action.moduleId);
+      case "move-local-data":
+        return this.moveLocalData(action.moduleId);
       case "reload-themes":
         return this.reloadThemes();
       case "open-themes-folder":
@@ -1794,10 +1839,14 @@ export class Host {
         version: module.manifest.version,
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
-        publisher: isOwnerId(module.owner) && module.owner !== OFFICIAL_OWNER && module.owner !== LOCAL_OWNER ? module.owner : null,
+        publisher: this.publisherOf(module),
+        localDataWaiting: this.localDataWaiting(module),
         icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null,
       })),
       moduleProblems: this.moduleProblems.map((problem) => ({ ...problem })),
+      leftoverModuleData: this.moduleData
+        .filter((entry) => this.modules.get(entry.moduleId)?.owner !== entry.owner)
+        .map((entry) => ({ ...entry, publisher: entry.owner === LOCAL_OWNER || entry.owner === OFFICIAL_OWNER ? null : entry.owner })),
       panels: workspace.instances.map((record) => {
         const view = this.views.get(record.instanceId);
         const name = this.modules.get(record.moduleId)!.manifest.name;

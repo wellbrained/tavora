@@ -145,7 +145,7 @@ Method: read the main-process side (`module-view.ts`, `bridge.ts`, `assets.ts`, 
 | S2 | Medium | **A module could fill the player's disk.** The quotas covered only bridge storage; a module's own IndexedDB and origin-private file system took 192 MB each with no error, and Chromium reported a 23 GB quota (about 60 % of the disk). An in-memory session does not help (it moves the problem to RAM, 5 GB). | Fixed (0.7.2): the host measures the session folder every second and clears it past 256 MB (G11). A module can still write for up to one second first; accepted. |
 | S3 | Low–Medium | **No Electron fuses were set**, although this model counted on them. With `RunAsNode` on, one environment variable turns the signed `Tavora.exe` into a Node interpreter. ASAR integrity cannot apply because the app ships with `asar: false`. | Fixed (no version change): fuses set and read back from a packaged exe. The ASAR point is accepted. |
 | S4 | Low | **Dev-only switches worked in packaged builds**: `TAVORA_USER_DATA`, `TAVORA_MODULE_DIRS`, `TAVORA_OFFICIAL_MODULE_DIRS`, `TAVORA_OFFICIAL_THEME_DIRS`. The `OFFICIAL` one could list any module as Official. Needs control of the environment Tavora starts in, so local malware, which is out of scope. | Fixed with S3. |
-| S5 | Medium | **A module id is a claim, not an identity.** Data is keyed by the manifest's `id`, and removing a module keeps its data (a decision, so adding it back brings it back). A different module that later claims the same id inherits that module's documents, settings and web storage. It needs the player to install it, and two modules with one id cannot run together. | Decided 2026-10-16; storage keyed by owner since 0.11.1, signing and the installer not built yet: data is keyed by owner (a signing key, `local` or `official`) and id; see "Publisher binding" below and decisions.md. Until it is built, accepted as before: install modules only from a source the player trusts. |
+| S5 | Medium | **A module id is a claim, not an identity.** Data is keyed by the manifest's `id`, and removing a module keeps its data (a decision, so adding it back brings it back). A different module that later claims the same id inherits that module's documents, settings and web storage. It needs the player to install it, and two modules with one id cannot run together. | Fixed: data is keyed by owner (a signing key, `local` or `official`) and id; see "Publisher binding" below and decisions.md. Storage keyed by owner since 0.11.1; signed zips, the installer and the Settings controls since 0.12.0. The catalogue's name prefixes and key revocation wait for accounts. |
 
 ### What held
 
@@ -160,11 +160,11 @@ All of G1–G10 passed on a clean `main` (`isolation.spec.ts`), and these new pr
 
 ### Verdict for the SDK
 
-No finding met the blocking rule agreed for this review (a hostile module reading or writing outside its own module and game, running code outside its sandbox, or sending data off the PC). S1 was fixed anyway because it broke a stated guarantee and let a module take down the whole app. The SDK can go to a first outside developer once the fixes for S1 to S3 are released. S5 is the reason modules must still be installed from a source the player trusts until the catalogue has publisher identity.
+No finding met the blocking rule agreed for this review (a hostile module reading or writing outside its own module and game, running code outside its sandbox, or sending data off the PC). S1 was fixed anyway because it broke a stated guarantee and let a module take down the whole app. The SDK can go to a first outside developer once the fixes for S1 to S3 are released. S5 is fixed for data (0.12.0); until the catalogue has publisher names, a key's fingerprint is all a player sees of who made a zip.
 
-### Rules for a future zip installer
+### Rules for the zip installer
 
-There is no installer today; modules are folders in `modules` in the data folder. When one is built, it must:
+Built in 0.12.0 (`main/installer.ts`, Settings > Modules > Install from zip; the zip reader is `readZip` in `packages/pack`). It must:
 
 1. Read the manifest from the archive and validate it with `validateManifest` before extracting anything.
 2. Extract only regular files: refuse links, absolute paths, `..`, drive letters, reserved Windows names and duplicate paths that differ only in case.
@@ -174,7 +174,7 @@ There is no installer today; modules are folders in `modules` in the data folder
 6. Install into a temporary folder and rename it into place, so a half-extracted module is never loaded.
 7. Never run anything from the archive.
 
-The existing folder loading already meets the manifest, path and id rules (`validateManifest`, `resolveAsset`, `discoverModules`).
+The folder loading meets the manifest, path and id rules too (`validateManifest`, `resolveAsset`, `discoverModules`). The owner list is `module-owners.json` in the data folder; a folder there whose module id no longer matches its record, or a folder put in by hand, is `local`.
 
 ### Publisher binding (S5, decided 2026-10-16)
 

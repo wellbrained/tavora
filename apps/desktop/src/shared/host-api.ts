@@ -357,11 +357,15 @@ export interface HostViewState {
     removable: boolean;
     /** The fingerprint of the key that signed it, for a module installed from a signed zip; null otherwise. */
     publisher: string | null;
+    /** Signed, and an unsigned local copy of the same id left data that can be moved to it. */
+    localDataWaiting: boolean;
     /** The icon from the module's manifest as a data address (PNG or WebP), or null. */
     icon: string | null;
   }[];
   /** Folders in the modules folder that could not be loaded, and why, for module authors. */
   moduleProblems: { folder: string; message: string }[];
+  /** Saved data of modules that are not installed (or of another publisher than the installed one), kept until deleted. */
+  leftoverModuleData: { owner: string; moduleId: string; publisher: string | null }[];
   /** Panels of the current game, in the order they were opened. */
   panels: PanelView[];
   /** The current game's saved layout; panels missing from it are placed by the host UI. */
@@ -450,6 +454,10 @@ export type HostAction =
   | { type: "remove-module"; moduleId: string }
   /** Asks for a module zip and installs it into the player's modules folder; answers with the module's id. */
   | { type: "install-module" }
+  /** Deletes the data a module that is not installed left behind (owner as in leftoverModuleData). */
+  | { type: "delete-module-data"; owner: string; moduleId: string }
+  /** Moves a signed module's data from its unsigned local copy to it; Tavora restarts to do it. */
+  | { type: "move-local-data"; moduleId: string }
   /** Copies the Tavora theme into the themes folder as a new theme to change; answers with its id. */
   | { type: "create-starter-theme" }
   /** Done ends the first-run welcome; false shows it again. */

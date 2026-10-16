@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { deleteModuleData, migrateModuleData, modulePartition, orphanedPartitions } from "./gamedata";
+import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, modulePartition, orphanedPartitions, queueLocalDataMove } from "./gamedata";
 import { IconError, imageType, importIcon, MAX_ICON_BYTES } from "./icons";
 import { initialBounds } from "./window-state";
 
@@ -156,5 +156,59 @@ describe("migrateModuleData", () => {
 
   it("does nothing on a fresh data folder", async () => {
     await expect(migrateModuleData(await tempDir())).resolves.toBeUndefined();
+  });
+});
+
+describe("leftover module data", () => {
+  const KEY = "0123456789abcdef0123456789abcdef";
+
+  async function seed(userData: string, owner: string, id: string, game: string, body: string) {
+    await mkdir(path.join(userData, "module-data", owner, id, game), { recursive: true });
+    await writeFile(path.join(userData, "module-data", owner, id, game, "storage.json"), body);
+    await mkdir(path.join(userData, "Partitions", `module%3A${owner}%3A${id}@${game}`), { recursive: true });
+  }
+
+  it("lists what each owner's modules saved", async () => {
+    const userData = await tempDir();
+    await seed(userData, "local", "nik.tracker", "poe2", "l");
+    await seed(userData, KEY, "nik.tracker", "poe2", "k");
+    const found = await listModuleData(userData);
+    expect(found.sort((a, b) => a.owner.localeCompare(b.owner))).toEqual([
+      { owner: KEY, moduleId: "nik.tracker" },
+      { owner: "local", moduleId: "nik.tracker" },
+    ]);
+  });
+
+  it("deletes one owner's data now and its browser storage at the next start", async () => {
+    const userData = await tempDir();
+    await seed(userData, "local", "nik.tracker", "poe2", "l");
+    await seed(userData, KEY, "nik.tracker", "poe2", "k");
+    expect(await deleteModuleDataOf(userData, "local", "nik.tracker")).toEqual([modulePartition("local", "nik.tracker", "poe2")]);
+    expect(await listModuleData(userData)).toEqual([{ owner: KEY, moduleId: "nik.tracker" }]);
+    await migrateModuleData(userData);
+    expect(await readdir(path.join(userData, "Partitions"))).toEqual([`module%3A${KEY}%3Anik.tracker@poe2`]);
+    await expect(deleteModuleDataOf(userData, "..", "nik.tracker")).rejects.toThrow();
+  });
+
+  it("moves local data to the signed owner at the next start, keeping a game the signed module already has", async () => {
+    const userData = await tempDir();
+    await seed(userData, "local", "nik.tracker", "poe2", "local poe2");
+    await seed(userData, "local", "nik.tracker", "satisfactory", "local satisfactory");
+    await seed(userData, KEY, "nik.tracker", "satisfactory", "signed satisfactory");
+    await queueLocalDataMove(userData, "nik.tracker", KEY);
+    await expect(queueLocalDataMove(userData, "nik.tracker", "local")).rejects.toThrow();
+    await migrateModuleData(userData);
+
+    const read = (owner: string, game: string) => readFile(path.join(userData, "module-data", owner, "nik.tracker", game, "storage.json"), "utf8");
+    expect(await read(KEY, "poe2")).toBe("local poe2");
+    expect(await read(KEY, "satisfactory")).toBe("signed satisfactory");
+    expect(await read("local", "satisfactory")).toBe("local satisfactory");
+    expect((await readdir(path.join(userData, "Partitions"))).sort()).toEqual([
+      `module%3A${KEY}%3Anik.tracker@poe2`,
+      `module%3A${KEY}%3Anik.tracker@satisfactory`,
+      "module%3Alocal%3Anik.tracker@satisfactory",
+    ]);
+    // Done once: the queue is empty afterwards.
+    expect(await readdir(userData)).not.toContain("module-data-pending.json");
   });
 });
