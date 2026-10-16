@@ -22,7 +22,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { ActionResult, AiUsageView, AppearanceView, BrowserCommand, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
 import { resolveLanguage, translate, type Language } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -93,6 +93,7 @@ import { AiUsage } from "./ai-usage";
 import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnection, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
+import { AccountClient, deviceOs, loadAccount, saveAccount } from "./account";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
 import {
   DEFAULT_THEME,
@@ -172,6 +173,8 @@ export interface HostOptions {
    * storage, which test machines have. A packaged app never sets this.
    */
   discord?: { ipcPath: string; tokenUrl: string } | undefined;
+  /** Settings > Account and the account service: on in development, off in release builds until accounts go live. */
+  accounts?: boolean;
   /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
   hidden?: boolean;
   /** Tests only: pretend the system is in this mode, so a test does not depend on the PC it runs on. */
@@ -216,6 +219,8 @@ export class Host {
   /** Open AI usage panels. Like Discord panels they have no view of their own. */
   private readonly aiUsagePanels = new Set<string>();
   private readonly aiUsage: AiUsage;
+  /** The player's Tavora account; the sign-in never leaves the main process. */
+  private readonly account: AccountClient;
   private screen: Screen = "welcome";
   private notice: string | null = null;
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
@@ -273,6 +278,9 @@ export class Host {
     });
     this.aiUsage = Host.aiUsageService(options, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:ai-usage", view);
+    });
+    this.account = Host.accountClient(options, () => this.language, (view) => {
+      if (!this.window.isDestroyed()) this.window.webContents.send("host:account", view);
     });
     this.window = new BrowserWindow({
       ...windowState.bounds,
@@ -351,6 +359,7 @@ export class Host {
     const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
     // Native menus, dialogs and scrollbars follow the theme's mode.
     host.syncNativeTheme();
+    await host.account.init();
     // The system's light or dark setting changed (or Tavora's own native theme did, which applyTheme ignores).
     nativeTheme.on("updated", () => {
       if (host.library.followSystem) host.applyTheme();
@@ -634,6 +643,7 @@ export class Host {
     });
     ipcMain.handle("host:get-discord", (event) => (fromHost(event) ? this.discord.view() : null));
     ipcMain.handle("host:get-ai-usage", (event) => (fromHost(event) ? this.aiUsage.view() : null));
+    ipcMain.handle("host:get-account", (event) => (fromHost(event) ? this.account.view() : null));
     ipcMain.handle("host:search-catalog", (event, query: unknown) =>
       fromHost(event) && typeof query === "string" && query.length <= 100
         ? searchCatalog(this.library, query).map(({ id, name }) => ({ id, name }))
@@ -905,6 +915,28 @@ export class Host {
         break;
       case "clear-browser-data":
         return this.clearBrowserData(action.scope);
+      case "account-send-code":
+        return this.account.sendCode(action.email);
+      case "account-verify":
+        return this.account.verify(action.code);
+      case "account-create":
+        return this.account.create();
+      case "account-cancel":
+        return this.account.cancel();
+      case "account-refresh":
+        return this.account.refresh();
+      case "account-sign-out":
+        return this.account.signOut();
+      case "account-sign-out-device":
+        return this.account.signOutDevice(action.deviceId);
+      case "account-email-code":
+        return this.account.sendEmailCode(action.email);
+      case "account-change-email":
+        return this.account.changeEmail(action.code);
+      case "account-delete-code":
+        return this.account.sendDeleteCode();
+      case "account-delete":
+        return this.account.deleteAccount(action.code);
       case "ai-usage-refresh":
         return this.aiUsage.refreshNow();
       case "ai-usage-add":
@@ -1333,20 +1365,44 @@ export class Host {
     });
   }
 
-  // ── Discord ──────────────────────────────────────────────────────────
-
-  private static discordConnection(options: HostOptions, onChange: (view: ReturnType<DiscordConnection["view"]>) => void): DiscordConnection {
-    const file = path.join(options.userData, "discord.json");
+  /** The operating system's key store, for the sign-ins Tavora keeps (Discord, the Tavora account). */
+  private static encryptor(options: HostOptions): Encryptor {
     const test = options.discord;
     // Test machines have no keyring; Linux's plain-text fallback stands in there (and only there).
     if (test && process.platform === "linux") safeStorage.setUsePlainTextEncryption(true);
-    const encryptor: Encryptor = {
+    return {
       // Linux without a keyring falls back to a fixed key, which protects nothing; Tavora then saves no sign-in.
       isAvailable: () =>
         safeStorage.isEncryptionAvailable() && (process.platform !== "linux" || test !== undefined || safeStorage.getSelectedStorageBackend() !== "basic_text"),
       encrypt: (text) => safeStorage.encryptString(text),
       decrypt: (data) => safeStorage.decryptString(data),
     };
+  }
+
+  // ── Account ──────────────────────────────────────────────────────────
+
+  private static accountClient(options: HostOptions, language: () => Language, onChange: (view: AccountView) => void): AccountClient {
+    const file = path.join(options.userData, "account.json");
+    const encryptor = Host.encryptor(options);
+    return new AccountClient({
+      enabled: options.accounts === true,
+      baseUrl: options.apiUrl ?? DEFAULT_API_URL,
+      fetch: (input, init) => fetch(input, init),
+      os: deviceOs(process.platform),
+      language,
+      canKeepSignIn: () => encryptor.isAvailable(),
+      load: () => loadAccount(file, encryptor),
+      save: (account) => saveAccount(file, encryptor, account),
+      onChange,
+    });
+  }
+
+  // ── Discord ──────────────────────────────────────────────────────────
+
+  private static discordConnection(options: HostOptions, onChange: (view: ReturnType<DiscordConnection["view"]>) => void): DiscordConnection {
+    const file = path.join(options.userData, "discord.json");
+    const test = options.discord;
+    const encryptor = Host.encryptor(options);
     return new DiscordConnection({
       clientId: DISCORD_CLIENT_ID,
       connect: (events) => RpcClient.connect(DISCORD_CLIENT_ID, events, test ? [test.ipcPath] : undefined),

@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.15.1",
+    date: "2026-10-16",
+    title: "Groundwork for Tavora accounts",
+    notes: ["Behind the scenes: the first part of optional Tavora accounts (sign in with an emailed code, no password). It is not switched on yet, and Tavora keeps working fully without an account."],
+  },
+  {
     version: "0.15.0",
     date: "2026-10-16",
     title: "Whiteboard, pictures in Notes and AI Usage",

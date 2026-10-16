@@ -9,7 +9,7 @@ import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { CatalogMatch, GameView, OnlineGame } from "../../shared/host-api";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
-import { act, api, dialog, openSettings, searchOpen, state } from "../host";
+import { act, api, dialog, hiddenSettings, openSettings, searchOpen, state } from "../host";
 import { t, templateName } from "../i18n";
 
 import GameIcon from "./GameIcon.vue";
@@ -187,7 +187,7 @@ const groups = computed<Group[]>(() => {
   all.push({
     id: "settings",
     label: t("rail.settings"),
-    items: settingEntries().map((setting) => ({
+    items: settingEntries(hiddenSettings.value).map((setting) => ({
       id: `setting-${setting.id}`,
       label: setting.label,
       hint: sectionLabel(setting.section),

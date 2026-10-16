@@ -123,6 +123,33 @@ export interface DiscordChannel {
  */
 export type DiscordStatus = "off" | "signed-out" | "connecting" | "not-running" | "approving" | "connected" | "error";
 
+export type DeviceOs = "windows" | "linux" | "macos" | "other";
+
+/** A Tavora install signed into the account, as the service lists it. */
+export interface AccountDevice {
+  id: string;
+  os: DeviceOs;
+  createdAt: string;
+  lastUsedAt: string;
+  /** This PC. */
+  current: boolean;
+}
+
+/** Where a code is waiting: signing in (and, for a new address, asking to create the account), changing the email, deleting. */
+export type AccountPending = { kind: "sign-in"; email: string; step: "code" | "create" } | { kind: "change-email"; email: string } | { kind: "delete" };
+
+/** Settings > Account. Sent on its own channel; the sign-in token never leaves the main process. */
+export interface AccountView {
+  /** False in release builds until accounts go live. */
+  enabled: boolean;
+  /** False where the sign-in cannot be kept encrypted: it lasts until Tavora quits. */
+  canKeepSignIn: boolean;
+  account: { email: string; createdAt: string } | null;
+  /** Null until read from the service. */
+  devices: AccountDevice[] | null;
+  pending: AccountPending | null;
+}
+
 /** The Discord panel and Settings > Discord. Sent on its own channel, because speaking changes often. */
 export interface DiscordView {
   status: DiscordStatus;
@@ -502,6 +529,22 @@ export type HostAction =
   | { type: "discord-game-server"; gameId: string; guildId: string }
   /** Forgets Tavora's Discord sign-in on this PC. */
   | { type: "discord-sign-out" }
+  /** Mails a sign-in code to an address. */
+  | { type: "account-send-code"; email: string }
+  /** The code typed in; for an address without an account the view then asks to create one. */
+  | { type: "account-verify"; code: string }
+  /** Yes to "Create a Tavora account". */
+  | { type: "account-create" }
+  /** Leaves a waiting code (sign-in, email change or delete). */
+  | { type: "account-cancel" }
+  /** Reads the account and its devices from the service again. */
+  | { type: "account-refresh" }
+  | { type: "account-sign-out" }
+  | { type: "account-sign-out-device"; deviceId: string }
+  | { type: "account-email-code"; email: string }
+  | { type: "account-change-email"; code: string }
+  | { type: "account-delete-code" }
+  | { type: "account-delete"; code: string }
   /** Reads every account's allowance now (a provider's own wait time still applies). */
   | { type: "ai-usage-refresh" }
   /** Adds an account for a CLI profile folder. */
@@ -593,6 +636,8 @@ export interface TavoraHostApi {
   onDiscord(listener: (view: DiscordView) => void): void;
   getAiUsage(): Promise<AiUsageView | null>;
   onAiUsage(listener: (view: AiUsageView) => void): void;
+  getAccount(): Promise<AccountView | null>;
+  onAccount(listener: (view: AccountView) => void): void;
 }
 
 /** `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). */
