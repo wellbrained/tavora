@@ -5,8 +5,8 @@ import { writeFileAtomic } from "./fsutil";
 import { IconError, imageType } from "./icons";
 
 /**
- * The player's local profile: no account and no sign-in. The id never
- * changes, so a later account or sync can take this profile and its data over.
+ * The player's profile on this PC. The id never changes. When the player is
+ * signed in, the account keeps a copy (main/account.ts), so it follows them.
  */
 export interface Profile {
   version: 1;
@@ -16,6 +16,8 @@ export interface Profile {
   initials: string;
   /** File name in the profile folder, or null for initials or the person icon. */
   picture: string | null;
+  /** When the player last changed it (ISO), so the newest change wins between PCs; null if never. */
+  updatedAt: string | null;
 }
 
 export const MAX_PROFILE_NAME = 32;
@@ -35,6 +37,7 @@ export function sanitizeProfile(saved: unknown): Profile {
     name: typeof value.name === "string" ? clipName(value.name) : "",
     initials: typeof value.initials === "string" ? clipInitials(value.initials) : "",
     picture: typeof value.picture === "string" && PICTURE_FILE.test(value.picture) ? value.picture : null,
+    updatedAt: typeof value.updatedAt === "string" && Number.isFinite(Date.parse(value.updatedAt)) ? value.updatedAt : null,
   };
 }
 

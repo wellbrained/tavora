@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AccountView } from "../shared/host-api";
-import { AccountClient, deviceOs, loadAccount, saveAccount, type SavedAccount } from "./account";
+import { AccountClient, deviceOs, loadAccount, saveAccount, type ProfileData, type SavedAccount } from "./account";
 import type { Encryptor } from "./discord-store";
 import { PlayerError } from "./messages";
 
@@ -32,8 +32,11 @@ function service(answers: Record<string, (body: Record<string, unknown> | undefi
     const url = String(input);
     const method = init?.method ?? "GET";
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined;
+    const key = `${method} ${url.replace("https://api.test/v1/account", "") || "/"}`;
+    // The profile read at every start, unless a test asks about it: none, and not recorded.
+    if (key === "GET /profile" && !answers[key]) return json({ profile: null });
     calls.push({ method, url, body, auth: new Headers(init?.headers).get("authorization") });
-    const answer = answers[`${method} ${url.replace("https://api.test/v1/account", "") || "/"}`];
+    const answer = answers[key];
     return answer ? answer(body) : json({ error: "Not found." }, 404);
   }) as typeof fetch;
   return { calls, fetchImpl };
@@ -42,9 +45,13 @@ function service(answers: Record<string, (body: Record<string, unknown> | undefi
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 
-function client(fetchImpl: typeof fetch, options: { saved?: SavedAccount | null; enabled?: boolean; canKeep?: boolean } = {}) {
+const EMPTY_PROFILE: ProfileData = { name: "", initials: "", picture: null, updatedAt: null };
+
+function client(fetchImpl: typeof fetch, options: { saved?: SavedAccount | null; enabled?: boolean; canKeep?: boolean; profile?: ProfileData } = {}) {
   const views: AccountView[] = [];
   const kept: (SavedAccount | null)[] = [];
+  /** This PC's profile, and every profile the account put in its place. */
+  const local = { profile: options.profile ?? EMPTY_PROFILE, applied: [] as ProfileData[] };
   const account = new AccountClient({
     enabled: options.enabled ?? true,
     baseUrl: "https://api.test/",
@@ -55,8 +62,15 @@ function client(fetchImpl: typeof fetch, options: { saved?: SavedAccount | null;
     load: async () => options.saved ?? null,
     save: async (value) => void kept.push(value),
     onChange: (view) => views.push(view),
+    profile: {
+      get: async () => local.profile,
+      apply: async (profile) => {
+        local.profile = profile;
+        local.applied.push(profile);
+      },
+    },
   });
-  return { account, views, kept };
+  return { account, views, kept, local };
 }
 
 const signedInAnswer = (status: "signed-in" | "created") => () =>
@@ -68,6 +82,7 @@ describe("signing in", () => {
       "POST /code": () => json({ status: "sent" }, 202),
       "POST /verify": signedInAnswer("signed-in"),
       "GET /": () => json({ account: { email: "me@example.com", createdAt: SAVED.createdAt }, devices: [DEVICE, { id: 5 }] }),
+      "GET /profile": () => json({ profile: null }),
     });
     const { account, kept } = client(fetchImpl);
     await account.init();
@@ -78,6 +93,7 @@ describe("signing in", () => {
       "POST https://api.test/v1/account/code",
       "POST https://api.test/v1/account/verify",
       "GET https://api.test/v1/account",
+      "GET https://api.test/v1/account/profile",
     ]);
     expect(calls[0]!.body).toEqual({ email: "me@example.com", language: "de" });
     expect(calls[1]!.body).toEqual({ email: "me@example.com", code: "123456", os: "windows" });
@@ -86,7 +102,7 @@ describe("signing in", () => {
     // The token never reaches the host UI; a malformed device is dropped.
     const view = account.view();
     expect(JSON.stringify(view)).not.toContain(TOKEN);
-    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", createdAt: SAVED.createdAt }, devices: [DEVICE], pending: null });
+    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", createdAt: SAVED.createdAt }, devices: [DEVICE], pending: null, profileChoice: null });
   });
 
   it("asks before creating an account for a new address, then creates it with the same code", async () => {
@@ -233,5 +249,80 @@ describe("the sign-in on disk", () => {
 
   it("names the operating system only", () => {
     expect([deviceOs("win32"), deviceOs("linux"), deviceOs("darwin"), deviceOs("freebsd")]).toEqual(["windows", "linux", "macos", "other"]);
+  });
+});
+
+describe("the profile in the account", () => {
+  const NIK: ProfileData = { name: "Nik", initials: "NK", picture: "cGlj", updatedAt: "2026-10-16T10:00:00.000Z" };
+  const OTHER = { name: "Dominik", initials: "DK", picture: null, updatedAt: "2026-10-16T11:00:00.000Z" };
+  const signInWith = (answers: Record<string, (body: Record<string, unknown> | undefined) => Response>) =>
+    service({ "POST /code": () => json({}, 202), "POST /verify": signedInAnswer("signed-in"), "GET /": () => json({ devices: [] }), ...answers });
+
+  it("a new account takes this PC's profile", async () => {
+    const { calls, fetchImpl } = signInWith({ "GET /profile": () => json({ profile: null }), "PUT /profile": (body) => json({ profile: body }) });
+    const { account, local } = client(fetchImpl, { profile: NIK });
+    await account.sendCode("me@example.com");
+    await account.verify("123456");
+    expect(calls.find((call) => call.method === "PUT")?.body).toEqual(NIK);
+    expect(local.applied).toEqual([]);
+  });
+
+  it("a PC with the empty default takes the account's quietly", async () => {
+    const { fetchImpl } = signInWith({ "GET /profile": () => json({ profile: NIK }) });
+    const { account, local } = client(fetchImpl);
+    await account.sendCode("me@example.com");
+    await account.verify("123456");
+    expect(local.applied).toEqual([NIK]);
+    expect(account.view().profileChoice).toBeNull();
+  });
+
+  it("asks once when both have a different profile, and keeps the answer", async () => {
+    const { calls, fetchImpl } = signInWith({ "GET /profile": () => json({ profile: OTHER }), "PUT /profile": (body) => json({ profile: body }) });
+    const first = client(fetchImpl, { profile: NIK });
+    await first.account.sendCode("me@example.com");
+    await first.account.verify("123456");
+    expect(first.account.view().profileChoice).toEqual({ name: "Dominik", initials: "DK", picture: false });
+    expect(first.local.applied).toEqual([]);
+    await first.account.chooseProfile("account");
+    expect(first.local.applied).toEqual([OTHER]);
+    expect(first.account.view().profileChoice).toBeNull();
+
+    const second = client(fetchImpl, { profile: NIK });
+    await second.account.sendCode("me@example.com");
+    await second.account.verify("123456");
+    await second.account.chooseProfile("pc");
+    const put = calls.filter((call) => call.method === "PUT").at(-1)!;
+    // This PC's profile, made the newest so every other PC takes it.
+    expect(put.body).toMatchObject({ name: "Nik", initials: "NK", picture: "cGlj" });
+    expect(Date.parse(String(put.body!.updatedAt))).toBeGreaterThan(Date.parse(OTHER.updatedAt));
+  });
+
+  it("at a start, the newer one wins", async () => {
+    const newer = service({ "GET /profile": () => json({ profile: OTHER }) });
+    const pcOlder = client(newer.fetchImpl, { saved: SAVED, profile: NIK });
+    await pcOlder.account.init();
+    await expect.poll(() => pcOlder.local.applied).toEqual([OTHER]);
+
+    const older = service({ "GET /profile": () => json({ profile: { ...OTHER, updatedAt: "2026-10-16T09:00:00.000Z" } }), "PUT /profile": (body) => json({ profile: body }) });
+    const pcNewer = client(older.fetchImpl, { saved: SAVED, profile: NIK });
+    await pcNewer.account.init();
+    await expect.poll(() => older.calls.some((call) => call.method === "PUT")).toBe(true);
+    expect(pcNewer.local.applied).toEqual([]);
+  });
+
+  it("sends a change up, and takes a newer one the account already had", async () => {
+    const { calls, fetchImpl } = service({ "PUT /profile": () => json({ profile: OTHER }) });
+    const { account, local } = client(fetchImpl, { saved: SAVED, profile: NIK });
+    (account as unknown as { saved: SavedAccount }).saved = SAVED;
+    await account.profileChanged();
+    expect(calls.map((call) => call.method)).toEqual(["PUT"]);
+    expect(local.applied).toEqual([OTHER]);
+  });
+
+  it("sends nothing while signed out", async () => {
+    const { calls, fetchImpl } = service({});
+    const { account } = client(fetchImpl, { profile: NIK });
+    await account.profileChanged();
+    expect(calls).toEqual([]);
   });
 });

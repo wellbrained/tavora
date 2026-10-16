@@ -3,6 +3,7 @@ import { AccountStore, CODE_TTL_MS, normalizeEmail, SESSION_IDLE_MS } from "./ac
 import { createApp } from "./app.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox, createTestInboxApp, maskEmail, type Mailer } from "./mail.ts";
+import { encodePng } from "./png.ts";
 import { createRateLimiter } from "./rate-limit.ts";
 
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
@@ -249,5 +250,56 @@ describe("test inbox page", () => {
     expect(page).not.toContain("<script>");
     expect(page).toContain("&#60;script&#62;");
     expect(await (await createTestInboxApp(inbox).request("http://inbox.test/mails")).json()).toMatchObject({ mails: [{ to: "a@b.de" }] });
+  });
+});
+
+describe("profile", () => {
+  const picture = Buffer.from(encodePng(256, 256, new Uint8Array(256 * 256 * 4).fill(200))).toString("base64");
+  const profile = (updatedAt: string, extra: Record<string, unknown> = {}) => ({ name: "Nik", initials: "NK", picture: null, updatedAt, ...extra });
+
+  it("starts empty, keeps what is sent, and keeps the newer of two", async () => {
+    const { call, signIn } = setup();
+    const token = await signIn("me@example.com");
+    expect(await (await call("GET", "/profile", undefined, token)).json()).toEqual({ profile: null });
+    const put = await call("PUT", "/profile", profile("2026-10-16T10:00:00.000Z", { picture }), token);
+    expect(await put.json()).toEqual({ profile: { name: "Nik", initials: "NK", picture, updatedAt: "2026-10-16T10:00:00.000Z" } });
+    // An older change (a PC that was offline) loses, and the answer says what the account has.
+    const older = await call("PUT", "/profile", profile("2026-10-16T09:00:00.000Z", { name: "Old" }), token);
+    expect(await older.json()).toMatchObject({ profile: { name: "Nik", picture } });
+    await call("PUT", "/profile", profile("2026-10-16T11:00:00.000Z", { name: "Dominik", picture: null }), token);
+    expect(await (await call("GET", "/profile", undefined, token)).json()).toMatchObject({ profile: { name: "Dominik", picture: null } });
+  });
+
+  it("never takes a time later than now", async () => {
+    const { call, signIn } = setup();
+    const token = await signIn("me@example.com");
+    expect(await (await call("PUT", "/profile", profile("2030-01-01T00:00:00.000Z"), token)).json()).toMatchObject({ profile: { updatedAt: "2026-10-16T12:00:00.000Z" } });
+  });
+
+  it.each([
+    ["a long name", { name: "x".repeat(33) }],
+    ["a line break", { name: "a\nb" }],
+    ["four initials", { initials: "ABCD" }],
+    ["no time", { updatedAt: "yesterday" }],
+    ["not a PNG", { picture: Buffer.from("<svg/>").toString("base64") }],
+    ["the wrong size", { picture: Buffer.from(encodePng(64, 64, new Uint8Array(64 * 64 * 4))).toString("base64") }],
+  ])("refuses %s", async (_label, extra) => {
+    const { call, signIn } = setup();
+    const token = await signIn("me@example.com");
+    expect((await call("PUT", "/profile", profile("2026-10-16T10:00:00.000Z", extra), token)).status).toBe(400);
+  });
+
+  it("is only the owner's, and goes with the account", async () => {
+    const { call, signIn, lastCode, clock } = setup();
+    const mine = await signIn("me@example.com");
+    const theirs = await signIn("them@example.com");
+    await call("PUT", "/profile", profile("2026-10-16T10:00:00.000Z"), mine);
+    expect(await (await call("GET", "/profile", undefined, theirs)).json()).toEqual({ profile: null });
+    expect((await call("GET", "/profile")).status).toBe(401);
+    await call("POST", "/delete/code", {}, mine);
+    await call("POST", "/delete", { code: lastCode() }, mine);
+    clock.now += 15 * 60_000;
+    const again = await signIn("me@example.com");
+    expect(await (await call("GET", "/profile", undefined, again)).json()).toEqual({ profile: null });
   });
 });

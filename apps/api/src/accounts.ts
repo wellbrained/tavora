@@ -1,7 +1,8 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { DEVICE_OS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type Session } from "./account-store.ts";
+import { DEVICE_OS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
 import { codeMail, emailChangedMail, mailLanguage, type Mail, type Mailer } from "./mail.ts";
+import { inspectPng } from "./png.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 
 /**
@@ -24,6 +25,34 @@ export interface AccountOptions {
 type Env = { Variables: { session: Session; account: Account } };
 
 const CODE = /^\d{6}$/;
+/** The profile's limits, the same as the app's: a name of 32 characters, 3 initials, a 256 px PNG of at most 512 KB. */
+const MAX_NAME = 32;
+const MAX_INITIALS = 3;
+const MAX_PICTURE_BYTES = 512 * 1024;
+const PICTURE_SIZE = 256;
+const PROFILE_BODY = Math.ceil((MAX_PICTURE_BYTES * 4) / 3) + 2000;
+
+/** A profile the app sent, or null when any part of it is off. Its time is never later than now. */
+function parseProfile(input: Record<string, unknown>, now: number): StoredProfile | null {
+  const { name, initials, picture, updatedAt } = input;
+  if (typeof name !== "string" || [...name].length > MAX_NAME || /[\u0000-\u001f\u007f]/.test(name)) return null;
+  if (typeof initials !== "string" || [...initials].length > MAX_INITIALS || /\s/.test(initials)) return null;
+  const at = typeof updatedAt === "string" ? Date.parse(updatedAt) : Number.NaN;
+  if (!Number.isFinite(at)) return null;
+  let bytes: Uint8Array | null = null;
+  if (picture !== null) {
+    if (typeof picture !== "string" || picture.length > PROFILE_BODY || !/^[A-Za-z0-9+/]+={0,2}$/.test(picture)) return null;
+    bytes = new Uint8Array(Buffer.from(picture, "base64"));
+    const size = inspectPng(bytes, MAX_PICTURE_BYTES);
+    if (size?.width !== PICTURE_SIZE || size.height !== PICTURE_SIZE) return null;
+  }
+  return { name, initials, picture: bytes, updatedAt: Math.min(at, now) };
+}
+
+const profileAnswer = (profile: StoredProfile | null) =>
+  profile
+    ? { name: profile.name, initials: profile.initials, picture: profile.picture ? Buffer.from(profile.picture).toString("base64") : null, updatedAt: new Date(profile.updatedAt).toISOString() }
+    : null;
 const deviceOs = (input: unknown): DeviceOs => (DEVICE_OS.includes(input as DeviceOs) ? (input as DeviceOs) : "other");
 const tooMany = (context: Context, wait: number) => {
   context.header("Retry-After", String(wait));
@@ -53,12 +82,15 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   app.use("*", async (context, next) => {
     const wait = limiter.check(clientKey(context.req.raw));
     if (wait > 0) return tooMany(context, wait);
-    if (context.req.method === "POST" && !(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) {
+    if ((context.req.method === "POST" || context.req.method === "PUT") && !(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) {
       return context.json({ error: "Send JSON.", reason: "bad-request" }, 415);
     }
     await next();
   });
-  app.use("*", bodyLimit({ maxSize: 2000, onError: (context) => context.json({ error: "Too big.", reason: "bad-request" }, 413) }));
+  const small = bodyLimit({ maxSize: 2000, onError: (context) => context.json({ error: "Too big.", reason: "bad-request" }, 413) });
+  const profileSize = bodyLimit({ maxSize: PROFILE_BODY, onError: (context) => context.json({ error: "Too big.", reason: "bad-request" }, 413) });
+  // A body is small (an address, a code and a language), except a profile with its picture.
+  app.use("*", (context, next) => (context.req.path.endsWith("/profile") ? profileSize(context, next) : small(context, next)));
 
   const body = async (context: Context): Promise<Record<string, unknown>> => {
     try {
@@ -139,6 +171,16 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   signedIn.delete("/devices/:id", (context) => {
     if (!store.deleteSession(context.get("account").id, context.req.param("id") ?? "")) return context.json({ error: "Not found.", reason: "not-found" }, 404);
     return context.body(null, 204);
+  });
+
+  // The profile: private to the account's owner. The newest change wins, so
+  // two PCs that changed it while offline end with the later one.
+  signedIn.get("/profile", (context) => context.json({ profile: profileAnswer(store.profile(context.get("account").id)) }));
+
+  signedIn.put("/profile", async (context) => {
+    const profile = parseProfile(await body(context), now());
+    if (!profile) return context.json({ error: "Send { name, initials, picture, updatedAt }.", reason: "bad-request" }, 400);
+    return context.json({ profile: profileAnswer(store.setProfile(context.get("account").id, profile)) });
   });
 
   // Change the address: a code to the new one. Whether it already has an account

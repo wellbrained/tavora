@@ -53,6 +53,26 @@ export function deviceOs(platform: NodeJS.Platform): DeviceOs {
   return platform === "win32" ? "windows" : platform === "linux" ? "linux" : platform === "darwin" ? "macos" : "other";
 }
 
+/** The player's profile as it travels between the PC and the account. `picture` is a base64 PNG. */
+export interface ProfileData {
+  name: string;
+  initials: string;
+  picture: string | null;
+  /** When it was last changed; null for a profile never changed on this PC. */
+  updatedAt: string | null;
+}
+
+const isEmptyProfile = (profile: ProfileData) => !profile.name && !profile.initials && !profile.picture;
+const sameProfile = (a: ProfileData, b: ProfileData) => a.name === b.name && a.initials === b.initials && a.picture === b.picture;
+const timeOf = (profile: ProfileData) => (profile.updatedAt ? Date.parse(profile.updatedAt) || 0 : 0);
+
+function remoteProfile(value: unknown): (ProfileData & { updatedAt: string }) | null {
+  const raw = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
+  if (typeof raw.name !== "string" || typeof raw.initials !== "string" || !isText(raw.updatedAt, 40)) return null;
+  if (raw.picture !== null && typeof raw.picture !== "string") return null;
+  return { name: raw.name, initials: raw.initials, picture: raw.picture, updatedAt: raw.updatedAt };
+}
+
 export interface AccountClientOptions {
   /** False in release builds until accounts go live: nothing is loaded or sent. */
   enabled: boolean;
@@ -64,6 +84,11 @@ export interface AccountClientOptions {
   load: () => Promise<SavedAccount | null>;
   save: (account: SavedAccount | null) => Promise<void>;
   onChange: (view: AccountView) => void;
+  /** The profile on this PC, and how the account's profile is put in its place. */
+  profile: {
+    get: () => Promise<ProfileData>;
+    apply: (profile: ProfileData & { updatedAt: string }) => Promise<void>;
+  };
   timeoutMs?: number;
 }
 
@@ -91,6 +116,8 @@ export class AccountClient {
   private pending: AccountPending | null = null;
   /** The right code for an address with no account yet, kept until the player says yes or no. */
   private pendingCode: string | null = null;
+  /** The account's profile when it differs from this PC's on the first sign-in here: the player chooses once. */
+  private profileChoice: (ProfileData & { updatedAt: string }) | null = null;
   private readonly baseUrl: string;
 
   constructor(private readonly options: AccountClientOptions) {
@@ -101,6 +128,8 @@ export class AccountClient {
     if (!this.options.enabled) return;
     this.saved = await this.options.load();
     this.changed();
+    // Once at each start: the profile comes down or goes up, whichever is newer. Quietly; offline is fine.
+    if (this.saved) void this.syncProfile(false).catch(() => undefined);
   }
 
   view(): AccountView {
@@ -110,6 +139,7 @@ export class AccountClient {
       account: this.saved ? { email: this.saved.email, createdAt: this.saved.createdAt } : null,
       devices: this.saved ? this.devices : null,
       pending: this.pending,
+      profileChoice: this.saved && this.profileChoice ? { name: this.profileChoice.name, initials: this.profileChoice.initials, picture: this.profileChoice.picture !== null } : null,
     };
   }
 
@@ -211,6 +241,57 @@ export class AccountClient {
     await this.forget();
   }
 
+  // ── Profile ────────────────────────────────────────────────────────────
+
+  /** The player changed the profile on this PC: send it up. A failure is caught up at the next start. */
+  async profileChanged(): Promise<void> {
+    if (!this.options.enabled || !this.saved) return;
+    this.profileChoice = null;
+    await this.push(await this.options.profile.get()).catch(() => undefined);
+  }
+
+  /** The answer to the one question on a first sign-in: the account's profile, or this PC's. */
+  async chooseProfile(keep: "account" | "pc"): Promise<void> {
+    this.ensure(true);
+    const choice = this.profileChoice;
+    this.profileChoice = null;
+    if (choice && keep === "account") await this.options.profile.apply(choice);
+    // This PC's profile becomes the newest, so every other PC takes it.
+    else await this.push({ ...(await this.options.profile.get()), updatedAt: new Date().toISOString() });
+    this.changed();
+  }
+
+  /**
+   * Brings the profile on this PC and the account's together. A new account
+   * takes this PC's; a PC with the empty default takes the account's; on a first
+   * sign-in here with two different profiles the player is asked; otherwise
+   * the newer one wins.
+   */
+  private async syncProfile(firstSignIn: boolean): Promise<void> {
+    const remote = remoteProfile((await this.call("GET", "/profile", undefined, true)).profile);
+    const local = await this.options.profile.get();
+    if (!remote) {
+      if (!isEmptyProfile(local)) await this.push(local);
+      return;
+    }
+    if (sameProfile(local, remote)) return;
+    if (isEmptyProfile(local)) return this.options.profile.apply(remote);
+    if (firstSignIn) {
+      this.profileChoice = remote;
+      this.changed();
+      return;
+    }
+    if (timeOf(remote) > timeOf(local)) await this.options.profile.apply(remote);
+    else await this.push(local);
+  }
+
+  private async push(local: ProfileData): Promise<void> {
+    const body = { name: local.name, initials: local.initials, picture: local.picture, updatedAt: local.updatedAt ?? new Date().toISOString() };
+    const kept = remoteProfile((await this.call("PUT", "/profile", body, true)).profile);
+    // The account had a newer one (changed on another PC meanwhile): that one wins here too.
+    if (kept && !sameProfile(kept, local)) await this.options.profile.apply(kept);
+  }
+
   // ── Inside ─────────────────────────────────────────────────────────────
 
   private ensure(signedIn: boolean): void {
@@ -229,6 +310,7 @@ export class AccountClient {
     await this.keep();
     this.changed();
     await this.refresh().catch(() => undefined);
+    await this.syncProfile(true).catch(() => undefined);
   }
 
   private async keep(): Promise<void> {
@@ -240,6 +322,7 @@ export class AccountClient {
     this.devices = null;
     this.pending = null;
     this.pendingCode = null;
+    this.profileChoice = null;
     await this.options.save(null);
     this.changed();
   }

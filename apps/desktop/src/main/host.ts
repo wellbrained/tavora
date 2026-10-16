@@ -93,7 +93,7 @@ import { AiUsage } from "./ai-usage";
 import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnection, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
-import { AccountClient, deviceOs, loadAccount, saveAccount } from "./account";
+import { AccountClient, deviceOs, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
 import {
   DEFAULT_THEME,
@@ -279,7 +279,7 @@ export class Host {
     this.aiUsage = Host.aiUsageService(options, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:ai-usage", view);
     });
-    this.account = Host.accountClient(options, () => this.language, (view) => {
+    this.account = Host.accountClient(options, () => this.language, { get: () => this.profileData(), apply: (remote) => this.applyProfile(remote) }, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:account", view);
     });
     this.window = new BrowserWindow({
@@ -877,8 +877,11 @@ export class Host {
       case "save-profile":
         this.profile.name = clipName(action.name);
         this.profile.initials = clipInitials(action.initials);
-        // Resolves once it is on disk, so the host UI can say "Saved".
-        return this.saveProfile();
+        this.profile.updatedAt = new Date().toISOString();
+        // Resolves once it is on disk, so the host UI can say "Saved"; the account gets it after.
+        await this.saveProfile();
+        void this.account.profileChanged();
+        return;
       case "set-profile-picture":
         return this.setProfilePicture(await savePicture(this.profileDir, action.png));
       case "remove-profile-picture":
@@ -937,6 +940,8 @@ export class Host {
         return this.account.sendDeleteCode();
       case "account-delete":
         return this.account.deleteAccount(action.code);
+      case "account-profile-choice":
+        return this.account.chooseProfile(action.keep);
       case "ai-usage-refresh":
         return this.aiUsage.refreshNow();
       case "ai-usage-add":
@@ -1027,8 +1032,29 @@ export class Host {
   private async setProfilePicture(file: string | null): Promise<void> {
     const previous = this.profile.picture;
     this.profile.picture = file;
+    this.profile.updatedAt = new Date().toISOString();
     await this.saveProfile();
     await removePicture(this.profileDir, previous);
+    void this.account.profileChanged();
+  }
+
+  /** The profile as it goes to the account: the picture as a base64 PNG. */
+  private async profileData(): Promise<ProfileData> {
+    const picture = this.profile.picture ? await readFile(path.join(this.profileDir, this.profile.picture)).then((bytes) => bytes.toString("base64"), () => null) : null;
+    return { name: this.profile.name, initials: this.profile.initials, picture, updatedAt: this.profile.updatedAt };
+  }
+
+  /** Puts the account's profile in place of this PC's (checked like a picture the player picked). */
+  private async applyProfile(remote: ProfileData & { updatedAt: string }): Promise<void> {
+    const previous = this.profile.picture;
+    const picture = remote.picture ? await savePicture(this.profileDir, remote.picture) : null;
+    this.profile.name = clipName(remote.name);
+    this.profile.initials = clipInitials(remote.initials);
+    this.profile.picture = picture;
+    this.profile.updatedAt = remote.updatedAt;
+    await this.saveProfile();
+    if (previous !== picture) await removePicture(this.profileDir, previous);
+    this.pushState();
   }
 
   private get iconDir(): string {
@@ -1381,7 +1407,7 @@ export class Host {
 
   // ── Account ──────────────────────────────────────────────────────────
 
-  private static accountClient(options: HostOptions, language: () => Language, onChange: (view: AccountView) => void): AccountClient {
+  private static accountClient(options: HostOptions, language: () => Language, profile: AccountClientOptions["profile"], onChange: (view: AccountView) => void): AccountClient {
     const file = path.join(options.userData, "account.json");
     const encryptor = Host.encryptor(options);
     return new AccountClient({
@@ -1393,6 +1419,7 @@ export class Host {
       canKeepSignIn: () => encryptor.isAvailable(),
       load: () => loadAccount(file, encryptor),
       save: (account) => saveAccount(file, encryptor, account),
+      profile,
       onChange,
     });
   }
