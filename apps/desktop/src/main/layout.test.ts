@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { gridTemplate, layoutTemplate } from "../shared/layout-templates";
-import { layoutPanels, parseLayout, pruneLayout, templateLayout, type LayoutNode, type SavedLayout } from "./layout";
+import { layoutPanels, parseLayout, pruneLayout, templateLayout, vacateLayout, type LayoutNode, type SavedLayout } from "./layout";
 
 const A = "00000000-0000-4000-8000-00000000000a";
 const B = "00000000-0000-4000-8000-00000000000b";
@@ -60,6 +60,27 @@ describe("empty slots", () => {
     const pruned = pruneLayout(layout(group(400, A), slot(300), group(300, B)), (id) => id !== B);
     expect(pruned).toEqual(layout(group(400, A), slot(300)));
     expect(pruneLayout(layout(slot(500), slot(500)), () => false)).toEqual(layout(slot(500), slot(500)));
+  });
+});
+
+describe("vacateLayout", () => {
+  const slot = (size: number): LayoutNode => ({ kind: "group", size, panels: [], active: null });
+
+  it("takes panels out and leaves an empty slot where nothing else was", () => {
+    // A | (B over C+D); taking out B and D leaves A | (slot over C).
+    const vacated = vacateLayout(sample, (id) => id === B || id === D);
+    expect(vacated).toEqual(layout(group(400, A), split(600, slot(300), group(300, C))));
+    expect(parseLayout(vacated)).toEqual(vacated);
+  });
+
+  it("picks another active tab when the active one goes", () => {
+    const vacated = vacateLayout(layout({ kind: "group", size: 600, panels: [C, D], active: D }), (id) => id === D);
+    expect(vacated).toEqual(layout(group(600, C)));
+  });
+
+  it("keeps the arrangement even when every panel goes", () => {
+    expect(vacateLayout(sample, () => true)).toEqual(layout(slot(400), split(600, slot(300), slot(300))));
+    expect(vacateLayout(null, () => true)).toBeNull();
   });
 });
 

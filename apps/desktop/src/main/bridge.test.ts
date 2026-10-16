@@ -42,13 +42,16 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     instanceId,
     game: { id: "poe2", displayName: "Path of Exile 2" },
     data: registry.get("local", moduleId, "poe2"),
+    appSettings: registry.appSettings("local", moduleId),
+    aiUsage: { accounts: () => Promise.reject(new Error("no AI accounts in this test")), read: () => Promise.reject(new Error("no AI accounts in this test")) },
     panelState: registry.panelState,
-    capabilities: new Set(),
+    capabilities: () => new Set(),
     getViewport: () => ({ width: 400, height: 300 }),
     getTheme: () => THEME,
     getLanguage: () => "de",
     isSuspended: () => false,
     openLink: () => {},
+    fetch: () => Promise.reject(new Error("no network in this test")),
   };
 }
 
@@ -328,6 +331,110 @@ describe("links.open", () => {
       },
     });
     expect(await call(p, "links.open", { url: "https://example.com" })).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED" } });
+  });
+});
+
+describe("network.fetch", () => {
+  const ANSWER = { status: 200, url: "https://api.example.com/", headers: {}, body: "ok" };
+
+  it("reports the network capability in the handshake once a host is granted", async () => {
+    const p = new FakePort();
+    new BridgeSession(p, { ...makeContext(), capabilities: () => new Set(["network"] as const) });
+    expect(await call(p, "bridge.handshake", { protocol: 1, sdkVersion: "0.1.0" })).toMatchObject({ ok: true, result: { capabilities: ["network"] } });
+  });
+
+  it("hands the request to the host and answers with what came back", async () => {
+    const asked: unknown[] = [];
+    const p = await connected({ ...makeContext(), capabilities: () => new Set(["network"] as const), fetch: async (params) => (asked.push(params), ANSWER) });
+    expect(await call(p, "network.fetch", { url: "https://api.example.com/" })).toMatchObject({ ok: true, result: ANSWER });
+    expect(asked).toEqual([{ url: "https://api.example.com/" }]);
+  });
+
+  it("asks for the grant on every call, so a revoke takes effect at once", async () => {
+    let granted = true;
+    const p = await connected({ ...makeContext(), capabilities: () => new Set(granted ? (["network"] as const) : []), fetch: async () => ANSWER });
+    expect(await call(p, "network.fetch", { url: "https://api.example.com/" })).toMatchObject({ ok: true });
+    granted = false;
+    expect(await call(p, "network.fetch", { url: "https://api.example.com/" })).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "network" } });
+  });
+
+  it("passes on the host's refusals and failures", async () => {
+    const p = await connected({
+      ...makeContext(),
+      capabilities: () => new Set(["network"] as const),
+      fetch: async () => {
+        throw new HostError("NETWORK_ERROR", "could not reach api.example.com");
+      },
+    });
+    expect(await call(p, "network.fetch", { url: "https://api.example.com/" })).toMatchObject({ ok: false, error: { code: "NETWORK_ERROR", message: "could not reach api.example.com" } });
+  });
+
+  it("lets one panel run only a few requests at once", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const p = await connected({ ...makeContext(), capabilities: () => new Set(["network"] as const), fetch: async () => (await gate, ANSWER) });
+    const first = nextId;
+    for (let i = 0; i <= LIMITS.maxNetworkInFlight; i++) p.receive({ v: 1, id: nextId++, method: "network.fetch", params: { url: "https://api.example.com/" } });
+    await flush();
+    const response = (id: number) => p.sent.find((m) => (m as { id?: number }).id === id);
+    expect(response(first + LIMITS.maxNetworkInFlight)).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
+    release();
+    await flush();
+    expect(response(first)).toMatchObject({ ok: true });
+    // The slots are free again.
+    expect(await call(p, "network.fetch", { url: "https://api.example.com/" })).toMatchObject({ ok: true });
+  });
+});
+
+describe("storage.app", () => {
+  it("shares a module's settings across games, apart from each game's own", async () => {
+    expect(await call(port, "storage.app.set", { key: "style", value: "used" })).toMatchObject({ ok: true, result: null });
+    expect(await call(port, "storage.get", { key: "style" })).toMatchObject({ ok: true, result: null });
+    const otherGame = await connected({ ...makeContext(OTHER_INSTANCE), game: { id: "wow", displayName: "World of Warcraft" }, data: registry.get("local", "local.example.a", "wow") });
+    expect(await call(otherGame, "storage.app.get", { key: "style" })).toMatchObject({ ok: true, result: "used" });
+    expect(await call(otherGame, "storage.app.keys")).toMatchObject({ ok: true, result: ["style"] });
+    expect(await call(otherGame, "storage.app.delete", { key: "style" })).toMatchObject({ ok: true, result: null });
+    expect(await call(port, "storage.app.get", { key: "style" })).toMatchObject({ ok: true, result: null });
+  });
+
+  it("keeps another module's settings apart", async () => {
+    await call(port, "storage.app.set", { key: "style", value: "used" });
+    const other = await connected(makeContext(OTHER_INSTANCE, "local.example.b"));
+    expect(await call(other, "storage.app.get", { key: "style" })).toMatchObject({ ok: true, result: null });
+  });
+
+  it("checks keys and values like storage.set", async () => {
+    expect(await call(port, "storage.app.set", { key: 7, value: 1 })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(await call(port, "storage.app.set", { key: "k" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+});
+
+describe("aiUsage", () => {
+  const ACCOUNT = { id: "a1", provider: "claude" as const, label: "Work", plan: "Max 5×" };
+  const READING = { status: "ok" as const, retryAfterMs: null, answer: { limits: [] }, email: "me@example.com", plan: "Max 5×", readAt: "2026-10-17T10:00:00.000Z" };
+  const granted = (extra: Partial<BridgeContext> = {}) =>
+    connected({ ...makeContext(), capabilities: () => new Set(["aiUsage"] as const), aiUsage: { accounts: async () => [ACCOUNT], read: async () => READING }, ...extra });
+
+  it.each(["aiUsage.accounts", "aiUsage.read"])("denies %s without the ai-usage connector", async (method) => {
+    expect(await call(port, method, method === "aiUsage.read" ? { accountId: "a1" } : undefined)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "aiUsage" } });
+  });
+
+  it("lists the accounts and reads one for a granted module", async () => {
+    const asked: string[] = [];
+    const p = await granted({ aiUsage: { accounts: async () => [ACCOUNT], read: async (id) => (asked.push(id), READING) } });
+    expect(await call(p, "aiUsage.accounts")).toMatchObject({ ok: true, result: [ACCOUNT] });
+    expect(await call(p, "aiUsage.read", { accountId: "a1" })).toMatchObject({ ok: true, result: READING });
+    expect(asked).toEqual(["a1"]);
+  });
+
+  it.each([{}, { accountId: 7 }, { accountId: "" }, { accountId: "x".repeat(65) }])("refuses %j as an account id", async (params) => {
+    const p = await granted();
+    expect(await call(p, "aiUsage.read", params)).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+
+  it("passes on that an account does not exist", async () => {
+    const p = await granted({ aiUsage: { accounts: async () => [], read: async () => Promise.reject(new HostError("INVALID_PARAMS", "there is no AI account with that id")) } });
+    expect(await call(p, "aiUsage.read", { accountId: "gone" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
   });
 });
 

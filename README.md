@@ -87,9 +87,9 @@ The e2e tests must run as a normal user, not root: Chromium refuses to start its
 ## How a module runs
 
 1. The host discovers packages with a `tavora.module.json` and validates the manifest. Modules shipped with Tavora (`modules/`) are shown as Official, everything else found on disk as Local; ids starting with `tavora.` are refused outside the official folder.
-2. Each panel is a sandboxed `WebContentsView` with its own session per module and game, served from `tavora-module://<module-id>/` with a strict CSP. All network requests are cancelled.
+2. Each panel is a sandboxed `WebContentsView` with its own session per module and game, served from `tavora-module://<module-id>/` with a strict CSP. All network requests from the page are cancelled; hosts the player granted are reached only through `network.fetch`, made by the main process.
 3. The module's SDK posts a hello; the host creates a `MessagePort` bound to that view's module, game and panel, and relays it through a preload that exposes nothing else. The SDK then sends a versioned handshake.
-4. Every request is validated by the host. Identity never comes from the message. Capabilities beyond the core (network, files, clipboard, shared data) are refused until grants exist.
+4. Every request is validated by the host. Identity never comes from the message. Capabilities beyond the core need the player's grant, checked on every call (`grants.ts`); network is the first that can be granted, files, clipboard reading and shared data are still refused.
 5. The host watches each panel: a page that fails to load, stops answering its heartbeat or crashes is shown as such in the panel header, with Reload or Stop. Module data is kept.
 
 ## License

@@ -19,6 +19,35 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.16.10",
+    date: "2026-10-17",
+    title: "AI Usage is a module",
+    notes: [
+      "AI Usage is now a module like Notes and To-Dos. The first time you open it, Tavora asks whether it may read the usage of your AI accounts. It never sees your logins: Tavora reads each account and hands it only the answer.",
+      "Put your accounts in the order you like: press the cog in the AI Usage panel. Whether it shows % left or % used and how often it refreshes moved there too, and they are the same in every game. Your settings and last readings come along.",
+      "Claude accounts now show who is signed in when you point at the name, like Codex accounts already did.",
+      "Settings > Integrations > AI usage lists which modules may read your accounts, and you can take it back there.",
+    ],
+  },
+  {
+    version: "0.16.9",
+    date: "2026-10-17",
+    title: "You decide what modules may reach",
+    notes: [
+      "A module that wants to reach websites now asks you the first time you add it, and shows which websites and who made it. Once you allow it, you can add it anywhere without being asked again. Cancel, and nothing is added.",
+      "If an update of a module wants more, it keeps working as before and its panels show a Review bar until you decide.",
+      "Settings > Integrations lists which modules may reach which websites. Take it back there at any time: Tavora first tells you which games use the module, then removes its panels and leaves an empty slot where nothing else was. Its data stays. Removing a module in Settings > Modules works the same way.",
+    ],
+  },
+  {
+    version: "0.16.8",
+    date: "2026-10-17",
+    title: "Groundwork for module permissions",
+    notes: [
+      "Behind the scenes, Tavora can now let a module reach websites you allowed for it, and only those, with Tavora making each request so the module never gets your cookies or sign-ins. Nothing changes for you yet: the dialog that asks you comes in the next version, and until then no module can reach the internet.",
+    ],
+  },
+  {
     version: "0.16.7",
     date: "2026-10-17",
     title: "Sign in with Discord",

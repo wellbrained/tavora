@@ -4,6 +4,7 @@ import { app, protocol } from "electron";
 import { HOST_SCHEME, MODULE_SCHEME } from "./assets";
 import { errorLog } from "./diagnostics";
 import { Host } from "./host";
+import { parseTestHosts } from "./network";
 
 // The last errors of this run, for Settings > Copy diagnostic info.
 errorLog.capture();
@@ -121,6 +122,10 @@ if (!app.requestSingleInstanceLock()) {
         restart,
         hidden: !app.isPackaged && process.env.TAVORA_HIDDEN === "1",
         moduleStorageLimit: !app.isPackaged && process.env.TAVORA_MODULE_STORAGE_LIMIT_MB ? Number(process.env.TAVORA_MODULE_STORAGE_LIMIT_MB) * 1024 * 1024 : undefined,
+        // Tests only: network.fetch reaches these names on a local server over plain http; a packaged app never does.
+        testNetworkHosts: !app.isPackaged && process.env.TAVORA_TEST_NETWORK_HOSTS ? parseTestHosts(process.env.TAVORA_TEST_NETWORK_HOSTS) : undefined,
+        // Tests only: Claude's usage is asked from a local server; a packaged app always asks Anthropic.
+        aiUsageUrl: !app.isPackaged && /^http:\/\/127\.0\.0\.1:\d+\//.test(process.env.TAVORA_TEST_AI_USAGE_URL ?? "") ? process.env.TAVORA_TEST_AI_USAGE_URL : undefined,
         systemLocale: !app.isPackaged ? process.env.TAVORA_LOCALE : undefined,
         systemTheme: !app.isPackaged && (process.env.TAVORA_SYSTEM_THEME === "dark" || process.env.TAVORA_SYSTEM_THEME === "light") ? process.env.TAVORA_SYSTEM_THEME : undefined,
         devServer,

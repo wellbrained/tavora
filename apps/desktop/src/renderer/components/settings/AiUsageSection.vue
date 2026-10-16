@@ -1,14 +1,15 @@
 <script setup lang="ts">
-// Settings > Integrations > AI usage: the Claude and Codex accounts the AI
-// Usage panel shows, by the folder of the CLI profile that holds each login,
-// and how often the panel reads them. Logins stay in those folders; the main
-// process reads them and none of it comes to this page.
+// Settings > Integrations > AI usage: the AI Usage connector. The Claude and Codex accounts, by
+// the folder of the CLI profile that holds each login, and the modules allowed to read them, each
+// revocable (decisions.md, module grants row of 2026-10-16). Logins stay in those folders; the main
+// process reads them and none of it comes to this page or to a module.
 import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { AiProvider, AiUsageAccount, AiUsageStyle } from "../../../shared/host-api";
-import { act, aiUsage } from "../../host";
+import type { AiProvider, AiUsageAccount } from "../../../shared/host-api";
+import { act, aiUsage, confirmAction, gamesUsing, listOf, state, submitAction } from "../../host";
 import { t } from "../../i18n";
+import ModuleIcon from "../ModuleIcon.vue";
 import SegmentedControl from "./SegmentedControl.vue";
 import SettingRow from "./SettingRow.vue";
 
@@ -49,17 +50,23 @@ async function save() {
   }
 }
 
-const style = computed<AiUsageStyle>({
-  get: () => view.value?.style ?? "remaining",
-  set: (value) => void act({ type: "ai-usage-set-style", style: value }),
-});
+type ModuleView = NonNullable<typeof state.value>["modules"][number];
 
-const INTERVALS =[1, 5, 15, 30, 60];
-const intervalOptions = computed(() => INTERVALS.map((minutes) => ({ value: String(minutes), label: t("aiUsage.settings.every", { minutes }), testid: `ai-usage-every-${minutes}` })));
-const interval = computed({
-  get: () => String(view.value?.refreshMinutes ?? 5),
-  set: (value: string) => void act({ type: "ai-usage-set-interval", minutes: Number(value) }),
-});
+/** Modules the player allowed to read these accounts. */
+const readers = computed(() => (state.value?.modules ?? []).filter((module) => module.permissions.granted.connectors.includes("ai-usage")));
+
+function revoke(module: ModuleView) {
+  const games = gamesUsing(module);
+  confirmAction({
+    title: t("integrations.grants.revokeTitle", { name: module.name }),
+    message: games.length
+      ? t("integrations.grants.revokeUsed", { name: module.name, games: listOf(games) })
+      : t("integrations.aiUsage.revokeUnused", { name: module.name }),
+    confirm: t("integrations.grants.revoke"),
+    danger: true,
+    run: () => submitAction({ type: "revoke-module", moduleId: module.id }),
+  });
+}
 </script>
 
 <template>
@@ -110,19 +117,23 @@ const interval = computed({
       </div>
     </form>
 
-    <SettingRow class="mt-2" :label="t('settings.ai-usage-style.label')" :description="t('settings.ai-usage-style.description')" setting="ai-usage-style" :highlighted="highlight === 'ai-usage-style'">
-      <SegmentedControl
-        v-model="style"
-        :label="t('settings.ai-usage-style.label')"
-        :options="[
-          { value: 'remaining', label: t('aiUsage.settings.styleRemaining'), testid: 'ai-usage-style-remaining' },
-          { value: 'used', label: t('aiUsage.settings.styleUsed'), testid: 'ai-usage-style-used' },
-        ]"
-      />
-    </SettingRow>
-
-    <SettingRow :label="t('settings.ai-usage-interval.label')" :description="t('settings.ai-usage-interval.description')" setting="ai-usage-interval" :highlighted="highlight === 'ai-usage-interval'">
-      <SegmentedControl v-model="interval" :label="t('settings.ai-usage-interval.label')" :options="intervalOptions" />
-    </SettingRow>
+    <h4 class="mt-6 font-medium">{{ t("integrations.aiUsage.modules") }}</h4>
+    <p v-if="!readers.length" class="text-muted-foreground py-2 text-sm" data-testid="ai-usage-readers-none">{{ t("integrations.aiUsage.noModules") }}</p>
+    <ul v-else class="flex flex-col" data-testid="ai-usage-readers">
+      <li v-for="module in readers" :key="module.id" class="flex items-center gap-3 border-b py-2 last:border-b-0" :data-testid="`ai-usage-reader-${module.id}`">
+        <span class="bg-background text-primary flex size-8 flex-none items-center justify-center rounded-lg border" aria-hidden="true">
+          <ModuleIcon :module-id="module.id" size="size-4" />
+        </span>
+        <span class="min-w-0 flex-1 truncate font-medium">{{ module.name }}</span>
+        <Button
+          variant="secondary"
+          :aria-label="t('integrations.aiUsage.revokeLabel', { name: module.name })"
+          :data-testid="`ai-usage-revoke-${module.id}`"
+          @click="revoke(module)"
+        >
+          {{ t("integrations.grants.revoke") }}
+        </Button>
+      </li>
+    </ul>
   </section>
 </template>

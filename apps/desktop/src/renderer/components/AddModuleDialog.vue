@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The module library: every installed module, to open in the current game.
 import { computed, ref } from "vue";
-import { act, dialog, nextPanelSlot, state, type AddModuleRequest } from "../host";
+import { addModule, dialog, state, type AddModuleRequest } from "../host";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -46,10 +46,9 @@ function openCount(moduleId: string): number {
   return state.value!.panels.filter((panel) => panel.moduleId === moduleId).length;
 }
 
+/** Adds it, or asks for what it needs first (the consent dialog takes this dialog's place). */
 function add(moduleId: string) {
-  nextPanelSlot.value = (dialog.value as AddModuleRequest).slot ?? null;
-  dialog.value = null;
-  void act({ type: "open-module", moduleId });
+  addModule(moduleId, (dialog.value as AddModuleRequest).slot ?? null);
 }
 
 /** Enter opens the first module that can run in this game. */

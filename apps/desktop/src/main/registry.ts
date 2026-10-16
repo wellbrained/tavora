@@ -37,7 +37,7 @@ export const BROWSER_MODULE_ID = "tavora.browser";
 /** The Discord voice panel, built into the host like the Browser. */
 export const DISCORD_MODULE_ID = "tavora.discord";
 
-/** The AI usage panel, built into the host like Discord. */
+/** The official AI Usage module (modules/ai-usage), which Tavora moves the built-in panel's settings to. */
 export const AI_USAGE_MODULE_ID = "tavora.ai-usage";
 
 /**
@@ -217,31 +217,6 @@ export function discordModule(version: string): InstalledModule {
       entry: "",
       games: [],
       viewport: { minWidth: 220, minHeight: 200, preferredWidth: 320, preferredHeight: 520 },
-      permissions: { network: [] },
-    },
-    root: "",
-    provenance: "official",
-    owner: OFFICIAL_OWNER,
-    builtIn: true,
-  };
-}
-
-/**
- * The AI usage panel is drawn by the host UI from readings the main process
- * takes (main/ai-usage.ts): modules have no network or files yet. Like Discord
- * it has no files; when module grants exist it moves into a package of its own.
- */
-export function aiUsageModule(version: string): InstalledModule {
-  return {
-    manifest: {
-      id: AI_USAGE_MODULE_ID,
-      name: "AI Usage",
-      description: "How much of your Claude and Codex subscription allowance is left, for each of your accounts, and when it resets.",
-      version,
-      apiVersion: "1",
-      entry: "",
-      games: [],
-      viewport: { minWidth: 260, minHeight: 160, preferredWidth: 360, preferredHeight: 320 },
       permissions: { network: [] },
     },
     root: "",

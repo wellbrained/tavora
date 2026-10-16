@@ -3,14 +3,15 @@
 // so this only shows while the view is hidden: a still image of the module
 // during menus and drags, or the module's name and state. A Browser panel
 // also gets its toolbar here, above the page, and its start and error pages.
-// Discord and AI usage panels have no native view: they are drawn here in full.
+// Discord panels have no native view: they are drawn here in full.
+// A module whose update asks for more gets a bar above its view to review it.
 import type { IDockviewPanelProps } from "dockview-vue";
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
-import { act, frozen, state } from "../../host";
+import { ShieldAlert } from "@lucide/vue";
+import { act, dialog, frozen, needsGrant, state } from "../../host";
 import { t } from "../../i18n";
 import BrowserToolbar from "./BrowserToolbar.vue";
-import AiUsagePanel from "./AiUsagePanel.vue";
 import DiscordPanel from "./DiscordPanel.vue";
 import { DOCK } from "./dock-context";
 
@@ -20,6 +21,11 @@ const id = props.params.api.id;
 const element = ref<HTMLElement | null>(null);
 const panel = computed(() => state.value?.panels.find((item) => item.instanceId === id));
 const image = computed(() => frozen.value[id]);
+/** The module's update asks for something not granted yet (or its grant was lost): the bar offers to review it. */
+const reviewNeeded = computed(() => {
+  const module = state.value?.modules.find((item) => item.id === panel.value?.moduleId);
+  return module !== undefined && needsGrant(module);
+});
 
 // The still image is shown at the size it was taken (its pixels over the
 // screen's pixel ratio), so resizing a split crops or reveals it instead of
@@ -38,9 +44,20 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
 <template>
   <div class="flex size-full flex-col">
   <BrowserToolbar v-if="panel?.browser" :instance-id="id" :browser="panel.browser" />
+  <div
+    v-if="panel && reviewNeeded"
+    class="bg-warning/10 flex flex-none items-center gap-2 border-b px-3 py-1.5 text-sm"
+    role="status"
+    :data-testid="`grant-review-${id}`"
+  >
+    <ShieldAlert :stroke-width="1.5" class="text-warning size-4 flex-none" aria-hidden="true" />
+    <span class="min-w-0 flex-1 truncate">{{ t("grant.reviewBar", { name: panel.name }) }}</span>
+    <Button size="sm" variant="outline" class="h-7" :data-testid="`grant-review-open-${id}`" @click="dialog = { kind: 'grant', moduleId: panel.moduleId, slot: null, review: true }">
+      {{ t("grant.review") }}
+    </Button>
+  </div>
   <div ref="element" class="relative min-h-0 w-full flex-1 overflow-hidden" :data-testid="`panel-content-${id}`">
     <DiscordPanel v-if="panel?.moduleId === 'tavora.discord'" />
-    <AiUsagePanel v-else-if="panel?.moduleId === 'tavora.ai-usage'" />
     <img
       v-else-if="image"
       :src="image"

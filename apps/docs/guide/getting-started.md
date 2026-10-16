@@ -66,7 +66,7 @@ Nothing is shared between games or between modules. See [Where data lives](../re
 
 ## Build the module
 
-- Bundle everything. Modules have no network access, so no CDN scripts, web fonts or remote images.
+- Bundle everything. A module's page has no network access, so no CDN scripts, web fonts or remote images. To reach a web API, name its host in `permissions.network` and call [`network.fetch`](../reference/protocol.md#network) once the player has granted it.
 - Use relative asset paths (Vite: `base: "./"`). The page is served from `tavora-module://<module-id>/`.
 - Don't use Ctrl+K (Cmd+K on macOS) as a shortcut. Tavora takes it for its own search before your page sees the key.
 - Point the manifest's `entry` at the built HTML file.
