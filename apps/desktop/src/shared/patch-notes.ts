@@ -19,7 +19,7 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.14.1",
+    version: "0.14.7",
     date: "2026-10-16",
     title: "Install modules from a zip",
     notes: [
@@ -27,6 +27,54 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "Modules signed by their maker show a publisher tag. Module makers create signed zips with the new pack command.",
       "What a module saves now belongs to whoever made it, not just to the module's name. Your existing notes, pictures, to-dos and module settings are moved over once at start; nothing changes for you.",
       "Data from modules you removed is listed in Settings > Modules, where you can delete it. If you used a local copy of a module before installing its signed version, you can move the local copy's data over.",
+    ],
+  },
+  {
+    version: "0.14.6",
+    date: "2026-10-16",
+    title: "Pictures on the Whiteboard",
+    notes: [
+      "Paste a screenshot (Ctrl+V), drop a picture or use the image tool, and scribble on top of it. A new picture is locked so your drawing does not drag it around; the Unlock pictures button in the header lets you move or resize it.",
+      "Pictures are kept in the module pictures folder, not inside the board, so boards stay small. Pictures that no board uses any more are cleaned up when a Whiteboard opens.",
+    ],
+  },
+  {
+    version: "0.14.5",
+    date: "2026-10-16",
+    title: "Tidy-ups",
+    notes: ["Small clean-ups behind the scenes after a code review; nothing changes in how Tavora looks or works."],
+  },
+  {
+    version: "0.14.4",
+    date: "2026-10-16",
+    title: "Deleting a game with a missing pictures folder",
+    notes: ["If you delete a game while the folder you chose for module pictures cannot be found (an unplugged drive, say), Tavora now tells you that its pictures may still be in that folder, so you can delete them yourself."],
+  },
+  {
+    version: "0.14.3",
+    date: "2026-10-16",
+    title: "Safer picture cleanup and link fixes",
+    notes: [
+      "Notes no longer clears out unused pictures while another panel has changed a note it has not read yet.",
+      "Ctrl+click on an email link in Notes shows the link bar instead of doing nothing, and a link that cannot be opened now says so.",
+      "Two quick clicks in a row each count as a click when a module opens a link.",
+    ],
+  },
+  {
+    version: "0.14.2",
+    date: "2026-10-16",
+    title: "Whiteboard (first part)",
+    notes: [
+      "A new Whiteboard module: draw, add shapes, arrows and text on a board of your own for each game. Make as many boards as you like, switch between them from the menu in the header, rename them, and delete one with an Undo notice. Everything saves as you draw and works offline, in English and German, in light or dark.",
+      "Pictures and screenshots, and Copy as picture, follow in the next versions.",
+    ],
+  },
+  {
+    version: "0.14.1",
+    date: "2026-10-16",
+    title: "Modules can copy a picture",
+    notes: [
+      "A module can now put a picture on your clipboard when you press one of its buttons, so you can paste it anywhere. Nothing uses this yet: the Whiteboard will, next. A module cannot touch your clipboard on its own.",
     ],
   },
   {

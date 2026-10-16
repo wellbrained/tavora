@@ -1,13 +1,14 @@
 import { readFile } from "node:fs/promises";
-import { MessageChannelMain, session, WebContentsView, type Session } from "electron";
+import { clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
 import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
 import { modulePartition } from "./gamedata";
 import { moduleThemeCss } from "./module-style";
-import { contentTypeFor, MODULE_CSP, MODULE_SCHEME, resolveAsset } from "./assets";
-import { BLOB_PATH } from "@tavora/sdk/protocol";
+import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
+import { BLOB_PATH, CLIPBOARD_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession } from "./bridge";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
+import { serveClipboard } from "./clipboard-http";
 import { isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
 import type { InstalledModule } from "./registry";
@@ -53,6 +54,23 @@ export function moduleOrigin(moduleId: string): string {
 const hardened = new WeakSet<Session>();
 
 /**
+ * When the player last clicked or pressed a key in a page of this session (one module in one game). The clipboard
+ * address is answered by the session, which cannot tell its panels apart, so this is kept per session; all of its
+ * panels are the same module.
+ */
+const sessionGestures = new WeakMap<Session, { at: number }>();
+
+function gestureOf(ses: Session): { at: number } {
+  let gesture = sessionGestures.get(ses);
+  if (!gesture) sessionGestures.set(ses, (gesture = { at: 0 }));
+  return gesture;
+}
+
+async function writeClipboardPicture(png: Buffer): Promise<void> {
+  await clipboard.write([new ClipboardItem({ "image/png": new Blob([new Uint8Array(png)], { type: "image/png" }) })]);
+}
+
+/**
  * Every module gets its own session per game: separate cookies, web storage,
  * cache and a separate renderer process from the host and other modules.
  */
@@ -62,19 +80,25 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
   hardened.add(ses);
 
   const origin = moduleOrigin(module.manifest.id);
+  // WebAssembly only for a module of Tavora's own that asked for it (the registry refuses the request from any other).
+  const csp = moduleCsp(module.provenance === "official" && module.manifest.permissions.webAssembly === true);
 
   ses.protocol.handle(MODULE_SCHEME, async (request) => {
     // URL.origin is "null" for custom schemes in Node, so compare the host.
     const url = new URL(request.url);
     if (url.host !== module.manifest.id) return new Response("Not found", { status: 404 });
     if (url.pathname.startsWith(BLOB_PATH)) return serveBlobs(blobs, request, url);
+    if (url.pathname === CLIPBOARD_PATH) {
+      const gesture = gestureOf(ses);
+      return serveClipboard(request, { allowed: () => Date.now() - gesture.at <= GESTURE_MS, consume: () => void (gesture.at = 0), write: writeClipboardPicture });
+    }
     if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
     const file = await resolveAsset(module.root, url.pathname);
     if (!file) return new Response("Not found", { status: 404 });
     return new Response(request.method === "HEAD" ? null : await readFile(file), {
       headers: {
         "Content-Type": contentTypeFor(file),
-        "Content-Security-Policy": MODULE_CSP,
+        "Content-Security-Policy": csp,
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": "no-store",
       },
@@ -104,11 +128,11 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
  * when its requests have been answered and none has followed for SETTLE_MS; a page that never
  * connects is shown after NO_BRIDGE_MS, and no page is held back longer than REVEAL_CAP_MS.
  */
-/** How long after a click or key press a link may be opened. */
-export const GESTURE_MS = 2_000;
 export const SETTLE_MS = 150;
 export const NO_BRIDGE_MS = 400;
 export const REVEAL_CAP_MS = 2_000;
+/** How long after a click or key press a link may be opened. */
+export const GESTURE_MS = 2_000;
 
 /** Corner radius of a panel card in the host UI (dock.css), in px. */
 const PANEL_RADIUS = 10;
@@ -237,6 +261,7 @@ export class ModuleView {
 
   noteGesture(): void {
     this.gestureAt = Date.now();
+    gestureOf(this.view.webContents.session).at = this.gestureAt;
   }
 
   /** links.open: only a web address, and only right after the player did something in the page. */

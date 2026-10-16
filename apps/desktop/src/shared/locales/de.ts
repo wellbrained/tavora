@@ -725,5 +725,6 @@ export const de: Record<keyof typeof en, string> = {
   "aiUsage.panel.signedInAs": "Angemeldet als {email}",
   "notice.moduleFilesMoved": "{count} Bilder nach {folder} verschoben.",
   "notice.moduleFilesMissing": "Der Ordner mit den Bildern deiner Module wurde nicht gefunden: {folder}. Bilder werden als fehlend angezeigt, bis er wieder da ist; unter Einstellungen > Module kannst du einen anderen Ordner wählen.",
+  "notice.moduleFilesLeft": "{name} wurde gelöscht, aber der Ordner mit den Bildern deiner Module wurde nicht gefunden: {folder}. Bilder von {name} können dort noch liegen; lösche sie selbst, wenn du sie nicht brauchst.",
   "modules.storageCleared": "{name} hat mehr in seinem eigenen Browser-Speicher abgelegt, als ein Modul darf. Tavora hat diesen Speicher geleert und das Panel neu gestartet. Was es über Tavora gespeichert hat, ist unverändert.",
 };

@@ -95,6 +95,9 @@ export function createNotesStore(sdk: TavoraSDK) {
 
   /** Deletes stored pictures that no note refers to any more (and are not new). Run once the notes are loaded. */
   async function removeUnusedImages(): Promise<void> {
+    // Another panel may have saved or added a note since this one loaded; its pictures are not in the list below, so wait for the next start.
+    const current = (await sdk.documents.list()).filter((summary) => summary.id !== ORDER_ID);
+    if (current.some((summary) => entries.value.get(summary.id)?.revision !== summary.revision)) return;
     const used = new Set([...entries.value.values()].flatMap((entry) => entry.images));
     const now = Date.now();
     for (const blob of await sdk.blobs.list()) {

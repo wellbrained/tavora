@@ -426,3 +426,51 @@ test("to-dos: a group gets a color from its menu, and keeps it after a restart",
   await expect.poll(() => inModule<string | null>(again.app, TODOS, `${header}.getAttribute("data-tint")`)).toBe("blue");
   await again.app.close();
 });
+
+test("clipboard: a module copies a PNG only right after a key press, once, and only a real PNG", async () => {
+  const { app, page } = await launch();
+  await openModule(page, NOTES);
+  await ready(app, NOTES, "editor");
+
+  /** A real key press in the module's page, the way the player would make one. */
+  const pressKey = () =>
+    app.evaluate(
+      async ({ webContents }, moduleId) => {
+        const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
+        if (!target) throw new Error("no panel");
+        target.sendInputEvent({ type: "keyDown", keyCode: "Shift" });
+        target.sendInputEvent({ type: "keyUp", keyCode: "Shift" });
+      },
+      NOTES,
+    );
+  const copy = (picture: "png" | "text") =>
+    inModule<number>(
+      app,
+      NOTES,
+      `(async () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 20;
+        canvas.height = 20;
+        canvas.getContext("2d").fillRect(0, 0, 20, 20);
+        const body = ${picture === "png" ? `await new Promise((resolve) => canvas.toBlob(resolve, "image/png"))` : `new Blob(["not a picture, only words"])`};
+        const response = await fetch(new URL("/_clipboard/", location.href), { method: "POST", body });
+        return response.status;
+      })()`,
+    );
+  const clipboardTypes = () => app.evaluate(async ({ clipboard }) => (await clipboard.read()).flatMap((item) => item.types));
+
+  // Without a key press the module is refused, and the clipboard is untouched.
+  expect(await copy("png")).toBe(403);
+  expect(await clipboardTypes()).not.toContain("image/png");
+
+  // Right after one it works, and the press is used up.
+  await pressKey();
+  await expect.poll(() => copy("png")).toBe(200);
+  expect(await clipboardTypes()).toContain("image/png");
+  expect(await copy("png")).toBe(403);
+
+  // Something that is not a PNG is turned away.
+  await pressKey();
+  await expect.poll(() => copy("text")).toBe(415);
+  await app.close();
+});

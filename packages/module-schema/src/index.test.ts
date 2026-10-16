@@ -38,6 +38,12 @@ describe("validateManifest", () => {
     expect(result).toEqual({ ok: false, errors: ["permissions.network is not supported yet and must be empty"] });
   });
 
+  it("accepts the WebAssembly permission as a true or false, and nothing else in its place", () => {
+    expect(validateManifest({ ...valid, permissions: { network: [], webAssembly: true } }).ok).toBe(true);
+    expect(validateManifest({ ...valid, permissions: { network: [], webAssembly: false } }).ok).toBe(true);
+    expect(validateManifest({ ...valid, permissions: { network: [], webAssembly: "yes" } })).toEqual({ ok: false, errors: ["permissions.webAssembly must be true or false"] });
+  });
+
   it("rejects unknown fields and permissions instead of ignoring them", () => {
     expect(validateManifest({ ...valid, nodeIntegration: true }).ok).toBe(false);
     expect(validateManifest({ ...valid, permissions: { network: [], filesystem: ["/"] } }).ok).toBe(false);

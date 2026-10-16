@@ -5,13 +5,16 @@
 import { copyFile, mkdir, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isGameId, isModuleId, isOwnerId } from "@tavora/module-schema";
-import { BLOB_ID } from "@tavora/sdk/protocol";
+import { parseBlobFileName } from "./blobs";
 
 /** Inside the place the player picks, the files go into a folder of their own with this name. */
 export const FILES_FOLDER_NAME = "Tavora module files";
 
+/** The default files folder's name inside the app's data folder. */
+export const FILES_DIR = "module-blobs";
+
 export function defaultFilesRoot(userData: string): string {
-  return path.join(userData, "module-blobs");
+  return path.join(userData, FILES_DIR);
 }
 
 /** Why a place cannot be used. The host words these for the player. */
@@ -67,7 +70,7 @@ export async function listStoredFiles(root: string): Promise<StoredFile[]> {
       for (const game of await names(path.join(root, owner, module))) {
         if (!isGameId(game)) continue;
         for (const name of await names(path.join(root, owner, module, game))) {
-          if (!/^[a-f0-9]{32}\.(png|jpg|gif|webp)$/.test(name) || !BLOB_ID.test(name.slice(0, 32))) continue;
+          if (!parseBlobFileName(name)) continue;
           try {
             const info = await stat(path.join(root, owner, module, game, name));
             if (info.isFile()) files.push({ owner, module, game, name, bytes: info.size });
@@ -87,8 +90,7 @@ const fileAt = (root: string, file: StoredFile) => path.join(root, file.owner, f
  * Copies every file to the new folder and checks each copy's size. A file already there with the same size is
  * kept, so a move that was cut off can be run again. Throws on the first problem; the old files are untouched.
  */
-export async function copyStoredFiles(from: string, to: string, files: readonly StoredFile[], onProgress?: (done: number) => void): Promise<void> {
-  let done = 0;
+export async function copyStoredFiles(from: string, to: string, files: readonly StoredFile[]): Promise<void> {
   for (const file of files) {
     const target = fileAt(to, file);
     const existing = await stat(target).then((info) => info.size, () => -1);
@@ -99,7 +101,6 @@ export async function copyStoredFiles(from: string, to: string, files: readonly 
       if ((await stat(part)).size !== file.bytes) throw new Error(`copy of ${file.name} is not the same size`);
       await rename(part, target);
     }
-    onProgress?.(++done);
   }
 }
 

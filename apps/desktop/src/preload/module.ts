@@ -23,13 +23,12 @@ ipcRenderer.on("tavora:port", (event) => {
 
 // Real clicks and key presses only (a script cannot make an event trusted). The host lets a
 // module open a link only right after one, so a page cannot open links on its own.
-let lastGesture = 0;
+// Every real event is reported (no throttle): a fast second click must count as its own gesture.
 for (const type of ["pointerdown", "keydown"]) {
   window.addEventListener(
     type,
     (event) => {
-      if (!event.isTrusted || event.timeStamp - lastGesture < 100) return;
-      lastGesture = event.timeStamp;
+      if (!event.isTrusted) return;
       ipcRenderer.send("tavora:gesture");
     },
     true,

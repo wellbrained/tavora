@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { describeModules, discoverModules, type ModuleProblem } from "./registry";
 
-async function makeModule(root: string, folder: string, id: string, name = id): Promise<string> {
+async function makeModule(root: string, folder: string, id: string, name = id, permissions: Record<string, unknown> = { network: [] }): Promise<string> {
   const dir = path.join(root, folder);
   await mkdir(dir, { recursive: true });
   await writeFile(
@@ -17,7 +17,7 @@ async function makeModule(root: string, folder: string, id: string, name = id): 
       entry: "index.html",
       games: [],
       viewport: { minWidth: 100, minHeight: 100 },
-      permissions: { network: [] },
+      permissions,
     }),
   );
   await writeFile(path.join(dir, "index.html"), "<!doctype html>");
@@ -35,6 +35,19 @@ describe("discoverModules", () => {
     expect(modules.get("local.me.tracker")?.provenance).toBe("local");
     expect(modules.get("tavora.notes")?.owner).toBe("official");
     expect(modules.get("local.me.tracker")?.owner).toBe("local");
+  });
+
+  it("lets only Tavora's own modules ask for WebAssembly", async () => {
+    const official = await mkdtemp(path.join(tmpdir(), "tavora-official-"));
+    const local = await mkdtemp(path.join(tmpdir(), "tavora-local-"));
+    await makeModule(official, "board", "tavora.board", "Board", { network: [], webAssembly: true });
+    await makeModule(local, "greedy", "community.example.greedy", "Greedy", { network: [], webAssembly: true });
+    await makeModule(local, "plain", "community.example.plain");
+    const problems: ModuleProblem[] = [];
+    const modules = await discoverModules({ official: [official], local: [local] }, problems);
+    expect([...modules.keys()].sort()).toEqual(["community.example.plain", "tavora.board"]);
+    expect(modules.get("tavora.board")?.manifest.permissions.webAssembly).toBe(true);
+    expect(problems).toEqual([{ folder: "greedy", message: "permissions.webAssembly is only for Tavora's own modules" }]);
   });
 
   it("refuses the tavora publisher outside the official folder", async () => {

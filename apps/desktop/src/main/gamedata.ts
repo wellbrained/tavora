@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, rename, rm, rmdir, stat } from "node:fs/promi
 import path from "node:path";
 import { isGameId, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
 import { writeFileAtomic } from "./fsutil";
+import { defaultFilesRoot } from "./module-files";
 import { OFFICIAL_PREFIX } from "./registry";
 
 /**
@@ -24,7 +25,7 @@ function partitionDirName(partition: string): string {
  * settings and documents, and files (pictures, see blobs.ts). The files can
  * sit in a folder the player chose (module-files.ts); callers pass it.
  */
-function dataRoots(userData: string, blobRoot = path.join(userData, "module-blobs")): string[] {
+function dataRoots(userData: string, blobRoot = defaultFilesRoot(userData)): string[] {
   return [path.join(userData, "module-data"), blobRoot];
 }
 

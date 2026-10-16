@@ -1287,7 +1287,11 @@ export class Host {
     this.saveWorkspace();
     await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
     this.data.forgetGame(game.id);
-    await deleteModuleData(this.options.userData, game.id, this.moduleFilesRoot());
+    const filesRoot = this.moduleFilesRoot();
+    // A folder the player chose can be gone (an unplugged drive): the game still goes, and they are told where its pictures may remain.
+    const filesGone = this.library.moduleFilesFolder !== null && !(await stat(filesRoot).then((info) => info.isDirectory(), () => false));
+    await deleteModuleData(this.options.userData, game.id, filesRoot);
+    if (filesGone) this.notice = translate(this.language, "notice.moduleFilesLeft", { name: game.name, folder: filesRoot });
     await this.dropIconFile(game.icon);
     if (game.iconFile && !iconFileShared(this.library, game.iconFile, game.id)) await removeSteamIcon(this.steamIconDir, game.iconFile);
     // Sessions may already be open in this run, so clear them; their

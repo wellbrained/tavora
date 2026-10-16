@@ -4,6 +4,7 @@
 
 import {
   BLOB_PATH,
+  CLIPBOARD_PATH,
   HELLO_MESSAGE,
   PORT_MESSAGE,
   PROTOCOL_VERSION,
@@ -126,6 +127,14 @@ export interface TavoraSDK {
     usage(): Promise<BlobUsage>;
     /** Deletes a file; nothing happens when it does not exist. */
     delete(id: string): Promise<void>;
+  };
+  clipboard: {
+    /**
+     * Puts a picture on the system clipboard, so the player can paste it anywhere. Call it from the click or key
+     * press that asked for it: the host refuses it otherwise (PERMISSION_DENIED), and one press copies one
+     * picture. PNG only, a complete one, at most 20 MB and 16384 pixels on a side (INVALID_PARAMS, QUOTA_EXCEEDED).
+     */
+    writeImage(png: Blob): Promise<void>;
   };
   links: {
     /**
@@ -321,6 +330,20 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       usage: () => call("blobs.usage"),
       delete: async (id) => {
         await call("blobs.delete", { id });
+      },
+    },
+    clipboard: {
+      writeImage: async (png) => {
+        if (png.type !== "image/png") throw new TavoraError({ code: "INVALID_PARAMS", message: "only a PNG picture can be copied" });
+        let response: Response;
+        try {
+          response = await fetch(new URL(CLIPBOARD_PATH, window.location.href), { method: "POST", body: png, headers: { "Content-Type": "image/png" } });
+        } catch {
+          throw new TavoraError({ code: "INTERNAL", message: "could not copy the picture" });
+        }
+        if (response.ok) return;
+        const body = (await response.json().catch(() => null)) as { error?: ErrorPayload } | null;
+        throw new TavoraError(body?.error ?? { code: "INTERNAL", message: `could not copy the picture (${response.status})` });
       },
     },
     links: {
