@@ -159,6 +159,7 @@ They are reserved now so a module can feature-detect them safely: the error shap
 | --- | --- |
 | Request size (serialized) | 8 MiB |
 | Requests in flight per panel | 64 |
+| Bytes of requests in flight per panel | 16 MiB |
 | Storage key length | 256 characters |
 | Storage per module and game | 5 MiB (keys + serialized values) |
 | One document's `data` | 4 MiB |
@@ -166,6 +167,8 @@ They are reserved now so a module can feature-detect them safely: the error shap
 | Document title | 200 characters |
 | Panel state | 256 KiB |
 | JSON nesting depth | 64 |
+
+These limits are checked first inside your own page, by the preload Tavora gives it, before a message reaches the host. A request over a limit is answered with `BAD_REQUEST` (`INVALID_PARAMS` for data that is not plain JSON) and never sent on, so a module that sends something huge can only slow itself down. A request id cannot be reused while its answer is pending.
 
 Values must be JSON: `null`, booleans, finite numbers, strings, arrays and plain objects. `undefined`, `Date`, `Map`, typed arrays, `NaN` and similar are rejected with `INVALID_PARAMS`, not converted.
 
