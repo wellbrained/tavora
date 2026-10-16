@@ -1,6 +1,6 @@
 {
   "name": "@tavora/module-notes",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Official Tavora Notes module.",
@@ -9,6 +9,10 @@
     "typecheck": "vue-tsc --noEmit -p ."
   },
   "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
+    "@fontsource-variable/lora": "5.3.0",
+    "@fontsource-variable/merriweather": "5.3.0",
+    "@fontsource-variable/open-sans": "5.3.0",
     "@lucide/vue": "1.57.0",
     "@tavora/official-ui": "workspace:*",
     "@tavora/sdk": "workspace:*",
