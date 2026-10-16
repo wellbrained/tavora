@@ -3,7 +3,7 @@
   "id": "tavora.notes",
   "name": "Notes",
   "description": "Notes for this game, with a scratchpad, pins and search. Saved as you type.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "apiVersion": "1",
   "entry": "dist/index.html",
   "games": [],
