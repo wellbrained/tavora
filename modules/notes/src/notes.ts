@@ -38,6 +38,8 @@ export interface NoteEntry {
   /** The title set by hand, empty when the title comes from the first line. */
   fixedTitle: string;
   pinned: boolean;
+  /** When the note was made; the list keeps notes in this order, oldest first. */
+  createdAt: string;
   updatedAt: string;
   revision: number;
 }
@@ -115,7 +117,8 @@ export interface NoteSections {
 
 /**
  * Splits notes for the list: the scratchpad first, then pinned notes, then
- * the rest, each newest first. The scratchpad is always there, saved or not.
+ * the rest, each in the order the notes were made, so a new note comes last and
+ * editing never moves one. The scratchpad is always there, saved or not.
  */
 export function sections(entries: Iterable<NoteEntry>): NoteSections {
   let scratchpad: NoteEntry = {
@@ -126,6 +129,7 @@ export function sections(entries: Iterable<NoteEntry>): NoteSections {
     pinned: false,
     updatedAt: "",
     revision: 0,
+    createdAt: "",
   };
   const pinned: NoteEntry[] = [];
   const others: NoteEntry[] = [];
@@ -133,8 +137,8 @@ export function sections(entries: Iterable<NoteEntry>): NoteSections {
     if (entry.id === SCRATCHPAD_ID) scratchpad = entry;
     else (entry.pinned ? pinned : others).push(entry);
   }
-  const newestFirst = (a: NoteEntry, b: NoteEntry) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id);
-  return { scratchpad, pinned: pinned.sort(newestFirst), others: others.sort(newestFirst) };
+  const oldestFirst = (a: NoteEntry, b: NoteEntry) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+  return { scratchpad, pinned: pinned.sort(oldestFirst), others: others.sort(oldestFirst) };
 }
 
 /** The words relativeTime uses, and the locale for dates and times. */
@@ -177,4 +181,60 @@ export function normalizeLink(input: string): string | null {
   } catch {
     return null;
   }
+}
+
+// ── Text appearance ──────────────────────────────────────────────────
+
+/** The fonts for note text, all bundled with the module so they work offline. */
+export const FONTS = [
+  { id: "inter", name: "Inter", stack: '"Inter Variable", system-ui, sans-serif' },
+  { id: "open-sans", name: "Open Sans", stack: '"Open Sans Variable", system-ui, sans-serif' },
+  { id: "lora", name: "Lora", stack: '"Lora Variable", Georgia, serif' },
+  { id: "merriweather", name: "Merriweather", stack: '"Merriweather Variable", Georgia, serif' },
+  { id: "jetbrains-mono", name: "JetBrains Mono", stack: '"JetBrains Mono Variable", ui-monospace, monospace' },
+] as const;
+export type FontId = (typeof FONTS)[number]["id"];
+
+/** Text sizes in CSS pixels; Medium is the size notes always had. */
+export const SIZES = [
+  { id: "small", px: 13 },
+  { id: "medium", px: 14 },
+  { id: "large", px: 16 },
+  { id: "xlarge", px: 19 },
+] as const;
+export type SizeId = (typeof SIZES)[number]["id"];
+
+export interface TextStyle {
+  font: FontId;
+  size: SizeId;
+}
+
+/** The look of the text in notes, and separately in the scratchpad. */
+export interface Appearance {
+  notes: TextStyle;
+  scratchpad: TextStyle;
+}
+
+export const DEFAULT_STYLE: TextStyle = { font: "inter", size: "medium" };
+
+export function fontStack(id: FontId): string {
+  return FONTS.find((font) => font.id === id)?.stack ?? FONTS[0].stack;
+}
+
+export function sizePx(id: SizeId): number {
+  return SIZES.find((size) => size.id === id)?.px ?? 14;
+}
+
+function parseStyle(raw: JsonValue | undefined): TextStyle {
+  const value = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  return {
+    font: FONTS.find((font) => font.id === value.font)?.id ?? DEFAULT_STYLE.font,
+    size: SIZES.find((size) => size.id === value.size)?.id ?? DEFAULT_STYLE.size,
+  };
+}
+
+/** Turns what was stored into a valid appearance; unknown fonts and sizes fall back to the defaults. */
+export function parseAppearance(raw: JsonValue | null): Appearance {
+  const value = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  return { notes: parseStyle(value.notes), scratchpad: parseStyle(value.scratchpad) };
 }

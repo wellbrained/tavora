@@ -20,6 +20,7 @@ import {
   Quote,
   SquareCode,
   Strikethrough,
+  Type,
 } from "@lucide/vue";
 import { cn, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -27,6 +28,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
 import type { JSONContent } from "@tiptap/core";
@@ -37,11 +40,25 @@ import { EditorContent, useEditor } from "@tiptap/vue-3";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import LinkDialog from "./LinkDialog.vue";
 import { t } from "./i18n";
-import { contentFromText, MAX_FIXED_TITLE, SCRATCHPAD_ID, titleFor, UNTITLED, type NoteData, type NoteEntry, type RichText } from "./notes";
+import {
+  contentFromText,
+  FONTS,
+  fontStack,
+  MAX_FIXED_TITLE,
+  SCRATCHPAD_ID,
+  SIZES,
+  sizePx,
+  titleFor,
+  UNTITLED,
+  type NoteData,
+  type NoteEntry,
+  type RichText,
+  type TextStyle,
+} from "./notes";
 import type { NotePatch, NotesStore } from "./store";
 
-const props = defineProps<{ store: NotesStore; noteId: string; entry: NoteEntry | undefined; narrow: boolean }>();
-const emit = defineEmits<{ back: []; togglePin: []; clear: []; saveAsNote: [] }>();
+const props = defineProps<{ store: NotesStore; noteId: string; entry: NoteEntry | undefined; narrow: boolean; look: TextStyle }>();
+const emit = defineEmits<{ back: []; togglePin: []; clear: []; saveAsNote: []; setStyle: [patch: Partial<TextStyle>] }>();
 
 /** How long typing must pause before the note is saved. */
 const SAVE_DELAY_MS = 400;
@@ -324,7 +341,9 @@ const toolGroups = computed((): Tool[][] => {
 });
 
 /** The back button takes room from the tools in a narrow panel. */
-const room = computed(() => width.value - (props.narrow ? 40 : 0) - (props.noteId === SCRATCHPAD_ID ? 64 : 0));
+const room = computed(() => width.value - (props.narrow ? 40 : 0) - (props.noteId === SCRATCHPAD_ID ? 64 : 0) - 32);
+
+const lookVars = computed(() => ({ "--note-font": fontStack(props.look.font), "--note-size": `${sizePx(props.look.size)}px` }));
 const shownGroups = computed(() =>
   toolGroups.value.map((group) => group.filter((tool) => tool.minWidth <= room.value)).filter((group) => group.length),
 );
@@ -361,6 +380,28 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
             <DropdownMenuItem v-for="style in textStyles" :key="style.level" @select="setTextStyle(style.level)">
               {{ style.label }}
             </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="appearance" :aria-label="t('editor.appearance')" :title="t('editor.appearance')">
+              <Type :stroke-width="1.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>{{ t("editor.font") }}</DropdownMenuLabel>
+            <DropdownMenuItem v-for="font in FONTS" :key="font.id" :data-testid="`font-${font.id}`" @select.prevent="emit('setStyle', { font: font.id })">
+              <span :style="{ fontFamily: font.stack }">{{ font.name }}</span>
+              <Check v-if="look.font === font.id" class="ml-auto" :stroke-width="1.5" :aria-label="t('editor.on')" />
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>{{ t("editor.size") }}</DropdownMenuLabel>
+            <DropdownMenuItem v-for="size in SIZES" :key="size.id" :data-testid="`size-${size.id}`" @select.prevent="emit('setStyle', { size: size.id })">
+              {{ t(`size.${size.id}`) }}
+              <Check v-if="look.size === size.id" class="ml-auto" :stroke-width="1.5" :aria-label="t('editor.on')" />
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <p class="text-muted-foreground px-2 py-1.5 text-xs">{{ noteId === SCRATCHPAD_ID ? t("editor.appliesScratchpad") : t("editor.appliesNotes") }}</p>
           </DropdownMenuContent>
         </DropdownMenu>
         <template v-for="(group, index) in shownGroups" :key="index">
@@ -443,7 +484,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         <Pin v-else :stroke-width="1.5" />
       </Button>
     </header>
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <div class="min-h-0 flex-1 overflow-y-auto" :style="lookVars">
       <div class="mx-auto max-w-[760px] px-4 py-3">
         <input
           v-if="noteId !== SCRATCHPAD_ID"
@@ -470,6 +511,8 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
 
 <style>
 .note-content {
+  font-family: var(--note-font, inherit);
+  font-size: var(--note-size, 14px);
   min-height: 60vh;
   outline: none;
   overflow-wrap: anywhere;
@@ -482,21 +525,21 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
 }
 .note-content h1 {
   color: var(--primary);
-  font-size: 20px;
-  line-height: 26px;
+  font-size: 1.43em;
+  line-height: 1.3;
   font-weight: 600;
   margin-top: 16px;
 }
 .note-content h2 {
   color: var(--primary);
-  font-size: 16px;
-  line-height: 22px;
+  font-size: 1.14em;
+  line-height: 1.375;
   font-weight: 600;
   margin-top: 16px;
 }
 .note-content h3 {
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 1em;
+  line-height: 1.43;
   font-weight: 600;
   margin-top: 12px;
 }
@@ -548,7 +591,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
 }
 .note-content code {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.93em;
   background: var(--muted);
   border-radius: 4px;
   padding: 1px 4px;

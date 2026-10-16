@@ -19,6 +19,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.9.0",
+    date: "2026-10-16",
+    title: "Notes: fonts and sizes",
+    notes: [
+      "Pick a font and a size for the text in Notes (the Aa button in the toolbar): Inter, Open Sans, Lora, Merriweather or JetBrains Mono, from Small to Extra large. The scratchpad has its own setting, and both work offline.",
+      "New notes now come last in the list, and editing a note no longer moves it.",
+    ],
+  },
+  {
+    version: "0.8.1",
+    date: "2026-10-16",
+    title: "Notes: roomier collapsed sidebar",
+    notes: ["In the collapsed Notes sidebar the icons have more room, so the selected one is no longer cut off at the top."],
+  },
+  {
     version: "0.8.0",
     date: "2026-10-16",
     title: "Notes: titles, a resizable sidebar and a handier scratchpad",

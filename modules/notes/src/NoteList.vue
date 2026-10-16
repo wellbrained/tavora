@@ -58,10 +58,10 @@ function onSearchKey(event: KeyboardEvent) {
         <PanelLeftOpen :stroke-width="1.5" />
       </Button>
     </div>
-    <Button variant="ghost" size="icon-sm" class="mt-1 flex-none" data-testid="new-note" :aria-label="t('list.new')" :title="t('list.new')" @click="emit('create')">
+    <Button variant="ghost" size="icon-sm" class="mt-2 flex-none" data-testid="new-note" :aria-label="t('list.new')" :title="t('list.new')" @click="emit('create')">
       <Plus :stroke-width="1.5" />
     </Button>
-    <ul role="list" class="mt-1 flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto pb-2">
+    <ul role="list" class="mt-2 flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto p-1.5">
       <li v-for="entry in railNotes" :key="entry.id">
         <button
           type="button"
