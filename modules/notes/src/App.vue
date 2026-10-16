@@ -101,7 +101,7 @@ onMounted(async () => {
   try {
     const connected = await connectModule(setLanguage);
     const notes = createNotesStore(connected);
-    const [state] = await Promise.all([connected.panel.getState<PanelState>(), notes.load()]);
+    const [state] = await Promise.all([connected.panel.getState<PanelState>(), notes.load(), notes.loadAppearance()]);
     const saved = state?.selected;
     if (typeof saved === "string" && notes.entries.value.has(saved)) selectedId.value = saved;
     if (typeof state?.sidebarWidth === "number" && Number.isFinite(state.sidebarWidth)) sidebarWidth.value = clampSidebar(state.sidebarWidth);
@@ -246,6 +246,8 @@ async function confirmRemove() {
         :note-id="selectedId"
         :entry="selected"
         :narrow="narrow"
+        :look="selectedId === SCRATCHPAD_ID ? store.appearance.value.scratchpad : store.appearance.value.notes"
+        @set-style="(patch) => store!.setStyle(selectedId === SCRATCHPAD_ID ? 'scratchpad' : 'notes', patch)"
         @back="showList = true"
         @toggle-pin="togglePin(selectedId)"
         @clear="pendingRemove = entries.get(SCRATCHPAD_ID) ?? scratchpadEntry"
