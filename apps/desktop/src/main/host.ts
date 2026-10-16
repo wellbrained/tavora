@@ -579,6 +579,10 @@ export class Host {
       if (!view || !event.senderFrame || event.senderFrame.parent !== null) return;
       view.connect();
     });
+    ipcMain.on("tavora:gesture", (event: IpcMainEvent) => {
+      if (event.senderFrame?.parent !== null) return;
+      this.viewsByContents.get(event.sender.id)?.noteGesture();
+    });
     ipcMain.on("tavora:pong", (event: IpcMainEvent) => {
       if (event.senderFrame?.parent !== null) return;
       this.viewsByContents.get(event.sender.id)?.pong();
@@ -1155,6 +1159,35 @@ export class Host {
     else setTimeout(() => this.window.webContents.send("host:shortcut", `address:${id}`), 100);
   }
 
+  /**
+   * A module asked to open a web address (links.open, already checked): a new tab in the game's
+   * newest Browser panel, or in that panel itself while it is still empty, or in a new Browser panel.
+   */
+  private openLinkFromModule(url: string): void {
+    const game = this.game;
+    if (!game) return;
+    try {
+      const browserId = this.records(game.id)
+        .map((record) => record.instanceId)
+        .reverse()
+        .find((id) => this.views.get(id) instanceof BrowserPanel);
+      if (browserId) {
+        const panel = this.browser(browserId);
+        if (panel.blank) panel.restore(url);
+        else this.openBrowserTab(browserId, url, false);
+      } else {
+        const id = this.openModule(BROWSER_MODULE_ID);
+        if (id) this.browser(id).restore(url);
+      }
+    } catch (error) {
+      // The workspace is full; the player is told, as for Add module.
+      if (error instanceof WorkspaceError) this.notice = error.message;
+      else throw error;
+    } finally {
+      this.pushState();
+    }
+  }
+
   private closePanel(instanceId: string): void {
     const game = this.game;
     if (!game) return;
@@ -1445,6 +1478,7 @@ export class Host {
       ...(this.options.moduleStorageLimit === undefined ? {} : { storageLimit: this.options.moduleStorageLimit }),
       onStorageOver: () => void this.purgeModuleStorage(module.manifest.id, game.id),
       onReveal: () => this.applyBounds(),
+      onOpenLink: (url) => this.openLinkFromModule(url),
       onStatus: (status) => {
         if (!measured && status === "ready") {
           measured = true;

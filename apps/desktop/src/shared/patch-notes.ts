@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.11.0",
+    date: "2026-10-16",
+    title: "Links in Notes open in the Browser",
+    notes: [
+      "Click a link in a note to see its address with Open, Edit and Remove. Ctrl+click opens it straight away, as a new tab in your Browser panel (or in a new Browser panel if you have none).",
+      "Modules can now ask Tavora to open a web address, but only right after you click or press a key in them.",
+    ],
+  },
+  {
     version: "0.10.0",
     date: "2026-10-16",
     title: "Notes: reorder and undo",
