@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily backup of the Tavora service's data
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

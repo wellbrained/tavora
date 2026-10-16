@@ -36,7 +36,7 @@ try {
   & tar.exe -czf $archive -C $staging .
   if ($LASTEXITCODE -ne 0) { throw 'Archive failed.' }
   $deploy = Join-Path $api 'deploy'
-  & scp.exe -i $key -o BatchMode=yes -o StrictHostKeyChecking=yes $archive (Join-Path $deploy 'tavora-api.service') (Join-Path $deploy 'tavora-api.caddy') (Join-Path $deploy 'tavora-api-activate.sh') (Join-Path $deploy 'tavora-api-set-steam-key.sh') (Join-Path $deploy 'tavora-api-set-setting.sh') "${remote}:/tmp/"
+  & scp.exe -i $key -o BatchMode=yes -o StrictHostKeyChecking=yes $archive (Join-Path $deploy 'tavora-api.service') (Join-Path $deploy 'tavora-api.caddy') (Join-Path $deploy 'tavora-api-activate.sh') (Join-Path $deploy 'tavora-api-set-steam-key.sh') (Join-Path $deploy 'tavora-api-set-setting.sh') (Join-Path $deploy 'tavora-api-backup.sh') (Join-Path $deploy 'tavora-api-backup.service') (Join-Path $deploy 'tavora-api-backup.timer') "${remote}:/tmp/"
   if ($LASTEXITCODE -ne 0) { throw 'Upload failed.' }
   & ssh.exe -i $key -o BatchMode=yes -o StrictHostKeyChecking=yes $remote "bash /tmp/tavora-api-activate.sh $release"
   if ($LASTEXITCODE -ne 0) { throw 'Deployment failed; inspect the server output. The previous release is kept.' }

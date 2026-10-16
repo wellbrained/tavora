@@ -1,0 +1,6 @@
+[Unit]
+Description=Consistent backup of the Tavora service's accounts and icons
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/tavora-api-backup

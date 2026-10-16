@@ -83,6 +83,10 @@ The everyday way in is `https://tavora-iconreview.taile00b16.ts.net`, from any d
 The page has two tabs, **Needs review** (the default) and **Hosted** (with a search box, and its pictures load only when opened). The first shows each offered icon the way the app shows it (on a tile, small, and on a light background), the game it is offered for, how often the same file was offered and where it came from, with **Approve**, **Deny** and **Deny and block** (the same file is refused for ever). Approving publishes the icon at once under the game's name and the name it was offered under, and drops the other offers for that game. The page's second list shows the hosted icons with **Take down** (a publisher's request, effective at once; a release icon also has to be removed with `pnpm --filter @tavora/api icon remove <id>` and deployed) and **Take down and block**. An approved icon wins over a release icon of the same game, and a takedown of a release icon stays in force until it is deployed away.
 
 Set where publishers send removal requests with `ssh -t root@100.64.0.1 tavora-api-set-setting takedown`; hosted icons are only served while it is set.
+## Backups
+
+`tavora-api-backup.timer` (daily, 03:15 UTC) runs `/usr/local/sbin/tavora-api-backup`: consistent copies of `accounts.sqlite` and `icons.sqlite` (SQLite's backup, safe while the service runs) packed into `/srv/tavora-api/backups/tavora-api-<time>.tar.gz`, 14 days kept, no secrets (`production.env` is not in it). `Deploy-Api.ps1` installs the script and the timer with every release. The PC downloads the backups into `D:\Server\Backup\Tavora` with tracker's `sync-server-backup.ps1`, and tracker's /server page shows their age. To restore: stop `tavora-api`, unpack a backup into `/var/lib/tavora-api` (owner `tavora-api`, mode 600), start it again.
+
 ## Tests
 
 `pnpm test` at the repository root. The tests use in-memory datasets and need no network.
