@@ -3,7 +3,7 @@
   "id": "tavora.whiteboard",
   "name": "Whiteboard",
   "description": "Sketch, annotate and plan on a board per game: draw, add shapes and text, and scribble on screenshots. Saved as you draw.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "apiVersion": "1",
   "entry": "dist/index.html",
   "games": [],

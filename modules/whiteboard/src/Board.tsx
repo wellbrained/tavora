@@ -2,13 +2,14 @@
 // another board is opened. Remounted (key) for every board, so each starts with fresh undo history.
 // Pictures (pasted, dropped or inserted) are kept in the file store and come back when the board is opened.
 
-import { CaptureUpdateAction, Excalidraw, MainMenu } from "@excalidraw/excalidraw";
+import { CaptureUpdateAction, Excalidraw, exportToBlob, MainMenu } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import type { ExcalidrawElement, ExcalidrawImageElement, OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { AppState, BinaryFiles, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { JsonValue, TavoraSDK } from "@tavora/sdk";
 import { useEffect, useMemo, useRef } from "react";
 import { MAX_BOARD_BYTES, sceneSignature, type BoardData } from "./boards";
+import { COPY_PADDING, copyScale, elementsToCopy } from "./copy";
 import { t, type Language } from "./i18n";
 import { createPictures, pictureFileIds } from "./pictures";
 
@@ -26,6 +27,8 @@ export type SaveState = "idle" | "saving" | "saved" | "error";
 /** What the page can ask of the board it shows. */
 export interface Controls {
   setPicturesLocked(locked: boolean): void;
+  /** Puts the selection, or the whole board when nothing is selected, on the clipboard as a PNG. Call it from a click or key press. */
+  copyAsPicture(): Promise<"selection" | "board">;
 }
 
 /** The pictures on the board: how many, and whether they are all locked. */
@@ -49,13 +52,17 @@ interface Props {
   /** Whether there are changes that are not stored yet, so a change made in another panel is not taken over them. */
   onDirty(dirty: boolean): void;
   onPictures(pictures: Pictures): void;
+  /** Whether the board has anything on it (Copy as picture needs something). */
+  onEmpty(empty: boolean): void;
+  /** Shift+Alt+C, Excalidraw's own shortcut for copying as PNG, which asks the page to copy. */
+  onCopyShortcut(): void;
   /** How many of the board's stored pictures have been read back (for the page and its tests). */
   onPicturesLoaded(count: number): void;
   onNotice(message: string): void;
   onControls(controls: Controls | null): void;
 }
 
-export default function Board({ sdk, data, view, mode, language, onSave, onView, onState, onSize, onDirty, onPictures, onPicturesLoaded, onNotice, onControls }: Props) {
+export default function Board({ sdk, data, view, mode, language, onSave, onView, onState, onSize, onDirty, onPictures, onEmpty, onCopyShortcut, onPicturesLoaded, onNotice, onControls }: Props) {
   // The newest drawing, and what was last stored, kept outside React's render so drawing never waits for it.
   const latest = useRef<{ elements: readonly OrderedExcalidrawElement[]; background: string; files: BinaryFiles } | null>(null);
   const pictures = useMemo(() => createPictures(sdk, data.files), [sdk, data.files]);
@@ -71,12 +78,15 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
   const queued = useRef(first);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const saving = useRef<Promise<void>>(Promise.resolve());
-  const props = useRef({ data, onSave, onState, onSize, onDirty, onNotice });
-  props.current = { data, onSave, onState, onSize, onDirty, onNotice };
+  const props = useRef({ data, onSave, onState, onSize, onDirty, onNotice, onCopyShortcut });
+  props.current = { data, onSave, onState, onSize, onDirty, onNotice, onCopyShortcut };
   const api = useRef<ExcalidrawImperativeAPI | null>(null);
   /** Pictures already on the board when it opened or seen once since; only a new one is locked. */
   const seen = useRef(new Set<string>((data.elements as unknown as ExcalidrawElement[]).filter((element) => element.type === "image").map((element) => element.id)));
   const summary = useRef("");
+  const empty = useRef<boolean | null>(null);
+  const theme = useRef(mode);
+  theme.current = mode;
 
   function flush(): Promise<void> {
     clearTimeout(timer.current);
@@ -149,6 +159,11 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
       summary.current = description;
       onPictures({ count: live.length, allLocked: live.length > 0 && live.every((element) => element.locked) });
     }
+    const nothing = !elements.some((element) => !element.isDeleted);
+    if (nothing !== empty.current) {
+      empty.current = nothing;
+      onEmpty(nothing);
+    }
 
     if (signatureOf(elements, appState.viewBackgroundColor, files) === queued.current) return;
     props.current.onDirty(true);
@@ -165,6 +180,25 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
           elements: instance.getSceneElements().map((element) => (element.type === "image" ? { ...element, locked, version: element.version + 1, versionNonce: Math.floor(Math.random() * 2 ** 31), updated: Date.now() } : element)),
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         }),
+      copyAsPicture: async () => {
+        const appState = instance.getAppState();
+        const elements = elementsToCopy(instance.getSceneElements(), appState.selectedElementIds);
+        if (elements.length === 0) throw new Error("the board is empty");
+        // As the board looks in the panel: its background, and dark when the panel is dark.
+        const png = await exportToBlob({
+          elements,
+          files: instance.getFiles(),
+          appState: { exportBackground: true, viewBackgroundColor: appState.viewBackgroundColor, exportWithDarkMode: theme.current === "dark" },
+          mimeType: "image/png",
+          exportPadding: COPY_PADDING,
+          getDimensions: (width: number, height: number) => {
+            const scale = copyScale(width, height);
+            return { width: Math.round(width * scale), height: Math.round(height * scale), scale };
+          },
+        });
+        await sdk.clipboard.writeImage(png);
+        return elements.length < instance.getSceneElements().length ? "selection" : "board";
+      },
     });
     const needed = pictureFileIds(data.elements as unknown as ExcalidrawElement[]);
     void pictures.load(needed).then((loaded) => {
@@ -176,9 +210,19 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
   // Saves when the panel goes away, is hidden or the window closes.
   useEffect(() => {
     const flushNow = () => void flush();
+    // Excalidraw's own copy as PNG uses the browser clipboard, which module pages cannot write; its shortcut copies
+    // through Tavora instead (its menu item is hidden in style.css). Before Excalidraw sees the key.
+    const copyKey = (event: KeyboardEvent) => {
+      if (event.code !== "KeyC" || !event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      props.current.onCopyShortcut();
+    };
+    addEventListener("keydown", copyKey, true);
     addEventListener("pagehide", flushNow);
     document.addEventListener("visibilitychange", flushNow);
     return () => {
+      removeEventListener("keydown", copyKey, true);
       removeEventListener("pagehide", flushNow);
       document.removeEventListener("visibilitychange", flushNow);
       void flush();
