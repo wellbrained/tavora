@@ -208,6 +208,7 @@ export async function onWindow(app: ElectronApplication, action: "hide" | "show"
 export const NOTES = "tavora.notes";
 export const TODOS = "tavora.todos";
 export const PLAYGROUND = "tavora.playground";
+export const WHITEBOARD = "tavora.whiteboard";
 
 /** Types text into whatever has focus in the nth panel of a module, as a player would. */
 export async function typeInModule(app: ElectronApplication, moduleId: string, text: string, index = 0): Promise<void> {
@@ -230,4 +231,22 @@ export async function typeInModule(app: ElectronApplication, moduleId: string, t
     },
     { moduleId, text, index },
   );
+}
+
+/** Waits until a module's page is shown: its view stays hidden until the page has its data (see ModuleView.revealed). */
+export async function waitForShown(app: ElectronApplication, moduleId: string): Promise<void> {
+  await expect
+    .poll(() =>
+      app.evaluate(
+        ({ BrowserWindow }, id) =>
+          BrowserWindow.getAllWindows().some((window) =>
+            window.contentView.children.some((view) => {
+              const contents = (view as unknown as { webContents?: { getURL(): string } }).webContents;
+              return !!contents && contents.getURL().startsWith(`tavora-module://${id}/`) && (view as unknown as { getVisible(): boolean }).getVisible();
+            }),
+          ),
+        moduleId,
+      ),
+    )
+    .toBe(true);
 }

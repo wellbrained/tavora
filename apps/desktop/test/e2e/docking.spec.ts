@@ -11,6 +11,7 @@ import {
   setContentSize,
   VANILLA,
   VUE,
+  waitForShown,
 } from "./harness";
 
 const groups = (page: Page) => page.locator(".dv-groupview");
@@ -139,6 +140,8 @@ test("module views are replaced by still images while a menu is open", async () 
   const { app, page } = await launch();
   await openModule(page, VANILLA);
   await expectModuleText(app, VANILLA, "status", "Connected");
+  // A page is only shown once it has settled; before that there is nothing to replace with an image.
+  await waitForShown(app, VANILLA);
   const image = page.locator("[data-testid^='panel-content-'] img");
   await expect(image).toHaveCount(0);
   await page.getByTestId("layouts").click();
