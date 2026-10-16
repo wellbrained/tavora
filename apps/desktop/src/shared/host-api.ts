@@ -152,6 +152,64 @@ export interface DiscordView {
   self: { mute: boolean; deaf: boolean } | null;
 }
 
+/** Which subscription an AI usage account belongs to. */
+export type AiProvider = "claude" | "codex";
+
+/**
+ * One allowance window of a subscription. `five-hour` and `weekly` are worded by
+ * the host UI; `other` windows (an odd duration) use `name` as their whole label.
+ */
+export interface AiUsageWindow {
+  kind: "five-hour" | "weekly" | "other";
+  /** The model or limit the window is for, such as "Sonnet"; null for the plain window. */
+  name: string | null;
+  /** 0 to 100, as the provider reported it. */
+  usedPercent: number;
+  /** Milliseconds since 1970, or null when the provider gave no reset time. */
+  resetsAt: number | null;
+}
+
+/**
+ * waiting: not read yet. ready: a reading. sign-in: the profile has no usable
+ * login. rate-limited: the provider asked Tavora to slow down. unavailable: the
+ * provider answered with nothing usable. cli-missing: the Codex command was not found.
+ */
+export type AiUsageState = "waiting" | "ready" | "sign-in" | "rate-limited" | "unavailable" | "cli-missing";
+
+/** An account of the AI usage panel and the last thing known about its allowance. */
+export interface AiUsageAccount {
+  id: string;
+  provider: AiProvider;
+  label: string;
+  /** The CLI profile folder, such as C:\Users\you\.claude. */
+  directory: string;
+  /** The plan from the saved login, such as "Pro" or "Max 5×"; null when unknown. */
+  plan: string | null;
+  state: AiUsageState;
+  /** Milliseconds since 1970 of the last successful reading, or null. */
+  fetchedAt: number | null;
+  /** The windows shown are older than they should be, or the newest attempt failed. */
+  stale: boolean;
+  windows: AiUsageWindow[];
+  /** The signed-in email the provider reports, kept in memory only; null when unknown. */
+  email: string | null;
+  /** Codex's manual resets: how many are available and when the first expires. Null when unknown, which is not the same as 0. */
+  resets: { available: number; earliestExpiry: number | null } | null;
+}
+
+/** The AI usage panel and its settings. Tokens never leave the main process. */
+export interface AiUsageView {
+  accounts: AiUsageAccount[];
+  /** Minutes between readings, 1 to 60. */
+  refreshMinutes: number;
+  /** A reading is under way. */
+  refreshing: boolean;
+  /** Whether bars and numbers show what is left or what is used. */
+  style: AiUsageStyle;
+}
+
+export type AiUsageStyle = "remaining" | "used";
+
 /** Toolbar buttons of a Browser panel. */
 export type BrowserCommand = "back" | "forward" | "reload" | "stop" | "open-external" | "mute" | "unmute" | "exit-fullscreen";
 
@@ -433,6 +491,15 @@ export type HostAction =
   | { type: "discord-game-server"; gameId: string; guildId: string }
   /** Forgets Tavora's Discord sign-in on this PC. */
   | { type: "discord-sign-out" }
+  /** Reads every account's allowance now (a provider's own wait time still applies). */
+  | { type: "ai-usage-refresh" }
+  /** Adds an account for a CLI profile folder. */
+  | { type: "ai-usage-add"; provider: AiProvider; label: string; directory: string }
+  /** Renames an account or points it at another profile folder. */
+  | { type: "ai-usage-update"; accountId: string; label: string; directory: string }
+  | { type: "ai-usage-remove"; accountId: string }
+  | { type: "ai-usage-set-interval"; minutes: number }
+  | { type: "ai-usage-set-style"; style: AiUsageStyle }
   /** Null when nothing is docked any more. */
   | { type: "save-layout"; layout: SavedLayout | null }
   /** Rearranges the workspace into empty slots of a layout template; open panels fill the first ones. */
@@ -513,6 +580,8 @@ export interface TavoraHostApi {
   onShortcut(listener: (shortcut: HostShortcut) => void): void;
   getDiscord(): Promise<DiscordView | null>;
   onDiscord(listener: (view: DiscordView) => void): void;
+  getAiUsage(): Promise<AiUsageView | null>;
+  onAiUsage(listener: (view: AiUsageView) => void): void;
 }
 
 /** `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). */
