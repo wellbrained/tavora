@@ -58,25 +58,26 @@ describe("filesTarget", () => {
 
 describe("moving the files", () => {
   it("lists only the pictures the host stores", async () => {
-    await put(root, "tavora.notes", "poe2", `${ID("a")}.png`, "one");
-    await put(root, "tavora.notes", "poe2", `${ID("b")}.webp`, "two");
-    await put(root, "tavora.notes", "poe2", "notes.txt", "not ours");
-    await put(root, "tavora.notes", "poe2", `${ID("c")}.tmp`, "half");
-    await put(root, "Not A Module!", "poe2", `${ID("d")}.png`, "wrong folder");
+    await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("a")}.png`, "one");
+    await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("b")}.webp`, "two");
+    await put(root, path.join("official", "tavora.notes"), "poe2", "notes.txt", "not ours");
+    await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("c")}.tmp`, "half");
+    await put(root, path.join("local", "Not A Module!"), "poe2", `${ID("d")}.png`, "wrong folder");
+    await put(root, path.join("someone", "tavora.notes"), "poe2", `${ID("e")}.png`, "not an owner");
     const files = await listStoredFiles(root);
     expect(files.map((file) => file.name).sort()).toEqual([`${ID("a")}.png`, `${ID("b")}.webp`]);
     expect(await listStoredFiles(path.join(base, "missing"))).toEqual([]);
   });
 
   it("copies every file, checks the copies, and keeps the old ones until they are removed", async () => {
-    await put(root, "tavora.notes", "poe2", `${ID("a")}.png`, "one");
-    await put(root, "tavora.notes", "satisfactory", `${ID("b")}.jpg`, "two!");
+    await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("a")}.png`, "one");
+    await put(root, path.join("official", "tavora.notes"), "satisfactory", `${ID("b")}.jpg`, "two!");
     const to = path.join(base, "new", FILES_FOLDER_NAME);
     const files = await listStoredFiles(root);
     await copyStoredFiles(root, to, files);
-    expect(await readFile(path.join(to, "tavora.notes", "poe2", `${ID("a")}.png`), "utf8")).toBe("one");
-    expect(await readFile(path.join(to, "tavora.notes", "satisfactory", `${ID("b")}.jpg`), "utf8")).toBe("two!");
-    expect(await readFile(path.join(root, "tavora.notes", "poe2", `${ID("a")}.png`), "utf8")).toBe("one");
+    expect(await readFile(path.join(to, path.join("official", "tavora.notes"), "poe2", `${ID("a")}.png`), "utf8")).toBe("one");
+    expect(await readFile(path.join(to, path.join("official", "tavora.notes"), "satisfactory", `${ID("b")}.jpg`), "utf8")).toBe("two!");
+    expect(await readFile(path.join(root, path.join("official", "tavora.notes"), "poe2", `${ID("a")}.png`), "utf8")).toBe("one");
     expect(await listStoredFiles(to)).toHaveLength(2);
 
     await removeStoredFiles(root, files);
@@ -84,18 +85,18 @@ describe("moving the files", () => {
   });
 
   it("can be run again after being cut off, and leaves no half copies", async () => {
-    await put(root, "tavora.notes", "poe2", `${ID("a")}.png`, "one");
-    await put(root, "tavora.notes", "poe2", `${ID("b")}.png`, "two");
+    await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("a")}.png`, "one");
+    await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("b")}.png`, "two");
     const to = path.join(base, "new");
     const files = await listStoredFiles(root);
     await copyStoredFiles(root, to, files.slice(0, 1));
-    await put(to, "tavora.notes", "poe2", `${files[1]!.name}.part`, "cut off");
+    await put(to, path.join("official", "tavora.notes"), "poe2", `${files[1]!.name}.part`, "cut off");
     await copyStoredFiles(root, to, files);
     expect(await listStoredFiles(to)).toHaveLength(2);
   });
 
   it("stops with an error when a file cannot be copied, leaving the old files alone", async () => {
-    await put(root, "tavora.notes", "poe2", `${ID("a")}.png`, "one");
+    await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("a")}.png`, "one");
     const files = await listStoredFiles(root);
     await expect(copyStoredFiles(path.join(base, "gone"), path.join(base, "new"), files)).rejects.toThrow();
     expect(await listStoredFiles(root)).toHaveLength(1);
@@ -105,7 +106,7 @@ describe("moving the files", () => {
 describe("a store while its files are being moved", () => {
   it("takes nothing new, and works again afterwards", async () => {
     let moving = true;
-    const store = new BlobStore(() => path.join(root, "tavora.notes", "poe2"), undefined, () => moving);
+    const store = new BlobStore(() => path.join(root, path.join("official", "tavora.notes"), "poe2"), undefined, () => moving);
     const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
     async function* body() {
       yield png;

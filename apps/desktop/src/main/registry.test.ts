@@ -33,6 +33,8 @@ describe("discoverModules", () => {
     const modules = await discoverModules({ official: [official], local: [local] });
     expect(modules.get("tavora.notes")?.provenance).toBe("official");
     expect(modules.get("local.me.tracker")?.provenance).toBe("local");
+    expect(modules.get("tavora.notes")?.owner).toBe("official");
+    expect(modules.get("local.me.tracker")?.owner).toBe("local");
   });
 
   it("lets only Tavora's own modules ask for WebAssembly", async () => {

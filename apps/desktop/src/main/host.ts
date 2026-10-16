@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -31,7 +32,8 @@ import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, type SavedLay
 import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
-import { deleteModuleData, orphanedPartitions } from "./gamedata";
+import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
+import { applyOwners, forgetOwner, installZip, readOwnerRecords } from "./installer";
 import { shortcutFor } from "./shortcuts";
 import { IconError, importIcon, removeIcon } from "./icons";
 import { readJsonOrSetAside } from "./json";
@@ -85,6 +87,7 @@ import { findSteamDir, removeSteamIcon } from "./steam-icons";
 import { ModuleView } from "./module-view";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { isWebUrl, siteOfUrl } from "./browser-url";
+import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
 import { AI_USAGE_MODULE_ID, aiUsageModule, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, discordModule, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
@@ -136,6 +139,11 @@ const FREEZE_TIMEOUT_MS = 250;
 /** The player's own modules, next to the themes folder in their data folder. */
 function userModulesDir(options: HostOptions): string {
   return path.join(options.userData, "modules");
+}
+
+/** The modules folder as module roots name it (they are real paths). */
+async function realUserModulesDir(options: HostOptions): Promise<string> {
+  return realpath(userModulesDir(options)).catch(() => path.resolve(userModulesDir(options)));
 }
 
 /** Leaves the workspace header's bottom border visible below the window controls. */
@@ -225,6 +233,8 @@ export class Host {
   private readonly account: AccountClient;
   private screen: Screen = "welcome";
   private notice: string | null = null;
+  /** Every (owner, module) with saved settings or documents, for Settings > Modules. */
+  private moduleData: { owner: string; moduleId: string }[] = [];
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
   private pendingLink: string | null = null;
   /** Where modules keep their pictures. */
@@ -328,12 +338,17 @@ export class Host {
     }
     const moduleProblems: ModuleProblem[] = [];
     const modules = await discoverModules(Host.moduleSources(options), moduleProblems);
+    applyOwners(modules, await realUserModulesDir(options), await readOwnerRecords(userData));
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     modules.set(DISCORD_MODULE_ID, discordModule(app.getVersion()));
     modules.set(AI_USAGE_MODULE_ID, aiUsageModule(app.getVersion()));
     const moduleInfo = await describeModules(userModulesDir(options), modules);
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
+    // Before any module session or store is opened (S5: data is keyed by owner and id).
+    await migrateModuleData(userData, (line) => console.warn(`[tavora] ${line}`), library.moduleFilesFolder ?? defaultFilesRoot(userData)).catch((error: unknown) =>
+      console.error("[tavora] moving module data under its owner failed", error),
+    );
     const expired = purgeExpired(library, new Date());
     const workspace = await loadWorkspace(
       path.join(userData, "workspace.json"),
@@ -359,6 +374,7 @@ export class Host {
     );
 
     const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
+    host.moduleData = await listModuleData(userData, host.files.root());
     // Native menus, dialogs and scrollbars follow the theme's mode.
     host.syncNativeTheme();
     await host.account.init();
@@ -430,13 +446,52 @@ export class Host {
   private async reloadModules(): Promise<void> {
     const problems: ModuleProblem[] = [];
     const modules = await discoverModules(Host.moduleSources(this.options), problems);
+    applyOwners(modules, await realUserModulesDir(this.options), await readOwnerRecords(this.options.userData));
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     modules.set(DISCORD_MODULE_ID, discordModule(app.getVersion()));
     modules.set(AI_USAGE_MODULE_ID, aiUsageModule(app.getVersion()));
     this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
     this.moduleProblems = problems;
     this.modules = modules;
+    this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
+  }
+
+  /**
+   * Deletes what a module that is not installed left behind: its settings and
+   * documents in every game now, its browser storage cleared now and its
+   * folders removed at the next start. An installed module's data is not deleted here.
+   */
+  private async deleteLeftoverData(owner: string, moduleId: string): Promise<void> {
+    if (this.modules.get(moduleId)?.owner === owner) throw new LibraryError("error.dataInUse");
+    this.data.forgetModule(owner, moduleId);
+    for (const partition of await deleteModuleDataOf(this.options.userData, owner, moduleId, this.files.root())) {
+      const ses = session.fromPartition(partition);
+      await ses.clearStorageData();
+      await ses.clearCache();
+    }
+    this.moduleData = await listModuleData(this.options.userData, this.files.root());
+  }
+
+  /**
+   * Hands a module's local data (from an unsigned copy used before) to its
+   * signed version: Tavora restarts and moves it before any module opens.
+   */
+  private async moveLocalData(moduleId: string): Promise<void> {
+    const module = this.modules.get(moduleId);
+    if (!module || !this.localDataWaiting(module)) throw new LibraryError("error.noLocalData");
+    await queueLocalDataMove(this.options.userData, moduleId, module.owner);
+    this.options.restart();
+  }
+
+  /** A signed module whose id has data from an unsigned local copy. */
+  private localDataWaiting(module: InstalledModule): boolean {
+    return this.publisherOf(module) !== null && this.moduleData.some((entry) => entry.owner === LOCAL_OWNER && entry.moduleId === module.manifest.id);
+  }
+
+  /** The key fingerprint of a module from a signed zip, or null. */
+  private publisherOf(module: InstalledModule): string | null {
+    return isOwnerId(module.owner) && module.owner !== OFFICIAL_OWNER && module.owner !== LOCAL_OWNER ? module.owner : null;
   }
 
   /** Closes and forgets every panel whose module is not installed any more, in every game. Module data stays. */
@@ -478,7 +533,30 @@ export class Host {
     } catch {
       throw new LibraryError("error.removeFailed");
     }
+    // Its data stays under its owner, so the same publisher's module finds it again.
+    await forgetOwner(this.options.userData, path.basename(module.root));
     await this.reloadModules();
+  }
+
+  /**
+   * Installs a module from a zip the player picks (installer.ts). An update
+   * from the same publisher replaces the folder and reloads its open panels.
+   * Answers with the module's id, or nothing when the player cancelled.
+   */
+  private async installModule(): Promise<string | void> {
+    const picked = await dialog.showOpenDialog(this.window, {
+      title: translate(this.language, "dialog.installModule"),
+      properties: ["openFile"],
+      filters: [{ name: translate(this.language, "dialog.moduleZip"), extensions: ["zip"] }],
+    });
+    const file = picked.filePaths[0];
+    if (picked.canceled || !file) return;
+    const installed = await installZip(file, { userData: this.options.userData, userModules: await realUserModulesDir(this.options), modules: this.modules });
+    await this.reloadModules();
+    if (installed.updated) {
+      for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === installed.manifest.id) view.reload();
+    }
+    return installed.manifest.id;
   }
 
   private static themeSources(options: HostOptions) {
@@ -867,6 +945,12 @@ export class Host {
         return this.openModulesFolder();
       case "remove-module":
         return this.removeModule(action.moduleId);
+      case "install-module":
+        return this.installModule();
+      case "delete-module-data":
+        return this.deleteLeftoverData(action.owner, action.moduleId);
+      case "move-local-data":
+        return this.moveLocalData(action.moduleId);
       case "reload-themes":
         return this.reloadThemes();
       case "open-themes-folder":
@@ -1595,7 +1679,7 @@ export class Host {
       instanceId: record.instanceId,
       module,
       game,
-      data: this.data.get(module.manifest.id, game.id),
+      data: this.data.get(module.owner, module.manifest.id, game.id),
       panelState: this.data.panelState,
       hostVersion: app.getVersion(),
       preload: this.options.modulePreload,
@@ -1705,10 +1789,14 @@ export class Host {
     try {
       const views = [...this.views.values()].filter((view): view is ModuleView => view instanceof ModuleView && view.moduleId === moduleId);
       const ses = views[0]?.view.webContents.session;
-      for (const view of views) view.stop();
-      await ses?.clearStorageData();
+      // The renderers must be gone first: one still writing would fill the storage
+      // again, and a crash reported after the reload would leave the panel crashed.
+      await Promise.all(views.map((view) => view.stop()));
+      // Said before the clearing, which can take a few seconds; the panels already show they stopped.
       const name = this.modules.get(moduleId)?.manifest.name ?? moduleId;
       this.notice = translate(this.language, "modules.storageCleared", { name });
+      this.pushState();
+      await ses?.clearStorageData();
       for (const view of views) view.reload();
     } catch (error) {
       console.error("[tavora] clearing a module's storage failed", error);
@@ -1886,9 +1974,14 @@ export class Host {
         version: module.manifest.version,
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
+        publisher: this.publisherOf(module),
+        localDataWaiting: this.localDataWaiting(module),
         icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null,
       })),
       moduleProblems: this.moduleProblems.map((problem) => ({ ...problem })),
+      leftoverModuleData: this.moduleData
+        .filter((entry) => this.modules.get(entry.moduleId)?.owner !== entry.owner)
+        .map((entry) => ({ ...entry, publisher: entry.owner === LOCAL_OWNER || entry.owner === OFFICIAL_OWNER ? null : entry.owner })),
       panels: workspace.instances.map((record) => {
         const view = this.views.get(record.instanceId);
         const name = this.modules.get(record.moduleId)!.manifest.name;

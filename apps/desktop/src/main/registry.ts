@@ -1,6 +1,6 @@
 import { readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import { validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { LOCAL_OWNER, OFFICIAL_OWNER, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { resolveAsset } from "./assets";
 import { moduleIconUrl } from "./module-icon";
 
@@ -16,6 +16,12 @@ export interface InstalledModule {
   /** Real path of the package root; nothing outside it is ever served. */
   root: string;
   provenance: Provenance;
+  /**
+   * Who owns the module's data and browser storage: `official`, `local`, or
+   * a publisher key's fingerprint (isOwnerId). Data is keyed by owner and id,
+   * so a module that only claims another's id never sees its data (S5).
+   */
+  owner: string;
   /** Part of the host (the Browser, Discord, AI usage), not a package on disk. */
   builtIn?: true;
 }
@@ -144,7 +150,7 @@ async function loadModule(dir: string, provenance: Provenance, problem: (message
     problem(`the icon file ${result.manifest.icon} is missing`);
     return undefined;
   }
-  return { manifest: result.manifest, root, provenance };
+  return { manifest: result.manifest, root, provenance, owner: provenance === "official" ? OFFICIAL_OWNER : LOCAL_OWNER };
 }
 
 export interface ModuleInfo {
@@ -191,6 +197,7 @@ export function browserModule(version: string): InstalledModule {
     },
     root: "",
     provenance: "official",
+    owner: OFFICIAL_OWNER,
     builtIn: true,
   };
 }
@@ -214,6 +221,7 @@ export function discordModule(version: string): InstalledModule {
     },
     root: "",
     provenance: "official",
+    owner: OFFICIAL_OWNER,
     builtIn: true,
   };
 }
@@ -238,6 +246,7 @@ export function aiUsageModule(version: string): InstalledModule {
     },
     root: "",
     provenance: "official",
+    owner: OFFICIAL_OWNER,
     builtIn: true,
   };
 }

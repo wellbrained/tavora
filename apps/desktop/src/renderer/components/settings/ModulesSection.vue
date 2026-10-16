@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // Settings > Modules: what is installed and where it came from, and the
-// player's own modules folder, the same way themes have theirs. Dropping a
-// module package into the folder and pressing Reload adds it; Remove moves it
+// player's own modules folder, the same way themes have theirs. Install from
+// zip checks and unpacks a module zip into the folder; dropping a module
+// package into the folder and pressing Reload adds it too. Remove moves it
 // to the recycle bin. A module's data stays, so adding it again finds it.
-import { FolderInput, FolderOpen, RefreshCw, Trash2 } from "@lucide/vue";
+import { ArrowRightLeft, FileArchive, FolderInput, FolderOpen, RefreshCw, Trash2 } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { act, confirmAction, state, submitAction } from "../../host";
+import { act, confirmAction, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 import SettingRow from "./SettingRow.vue";
@@ -18,6 +19,7 @@ type ModuleView = NonNullable<typeof state.value>["modules"][number];
 
 const modules = computed(() => state.value!.modules);
 const problems = computed(() => state.value!.moduleProblems);
+const leftover = computed(() => state.value!.leftoverModuleData);
 const files = computed(() => state.value!.moduleFiles);
 
 // Modules for players first (Tavora's own, then the player's), examples last.
@@ -29,6 +31,32 @@ const sorted = computed(() => {
 /** Panels of a module that are open in the current game, so Remove can say what closes. */
 function openCount(moduleId: string): number {
   return state.value!.panels.filter((panel) => panel.moduleId === moduleId).length;
+}
+
+async function install() {
+  const result = await act({ type: "install-module" });
+  if (!result.ok || !result.id) return;
+  const module = modules.value.find((item) => item.id === result.id);
+  if (module) showToast(t("settings.modules.installed", { name: module.name, version: module.version }));
+}
+
+function moveLocal(module: ModuleView) {
+  confirmAction({
+    title: t("settings.modules.moveLocalTitle", { name: module.name }),
+    message: t("settings.modules.moveLocalMessage", { name: module.name }),
+    confirm: t("settings.modules.moveLocalConfirm"),
+    run: () => submitAction({ type: "move-local-data", moduleId: module.id }),
+  });
+}
+
+function deleteData(entry: { owner: string; moduleId: string }) {
+  confirmAction({
+    title: t("settings.modules.deleteDataTitle", { id: entry.moduleId }),
+    message: t("settings.modules.deleteDataMessage"),
+    confirm: t("settings.modules.deleteData"),
+    danger: true,
+    run: () => submitAction({ type: "delete-module-data", owner: entry.owner, moduleId: entry.moduleId }),
+  });
 }
 
 function remove(module: ModuleView) {
@@ -50,6 +78,9 @@ function remove(module: ModuleView) {
     :highlighted="highlight === 'own-modules'"
   >
     <span class="flex flex-none flex-wrap justify-end gap-2">
+      <Button variant="secondary" data-testid="install-module" @click="install">
+        <FileArchive :stroke-width="1.5" /> {{ t("settings.modules.install") }}
+      </Button>
       <Button variant="secondary" data-testid="open-modules-folder" @click="act({ type: 'open-modules-folder' })">
         <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
       </Button>
@@ -106,10 +137,25 @@ function remove(module: ModuleView) {
               :class="cn('flex-none rounded-sm border px-1.5 text-xs', module.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
               >{{ module.provenance === "official" ? t("common.official") : t("common.local") }}</span
             >
+            <span
+              v-if="module.publisher"
+              class="text-muted-foreground flex-none rounded-sm border px-1.5 font-mono text-xs"
+              :title="t('settings.modules.publisherHint', { key: module.publisher })"
+              :data-testid="`module-publisher-${module.id}`"
+              >{{ t("settings.modules.publisher", { short: module.publisher.slice(0, 8) }) }}</span
+            >
           </span>
           <span v-if="module.description" class="text-muted-foreground line-clamp-2 text-sm">{{ module.description }}</span>
           <span class="text-muted-foreground text-xs" :data-testid="`module-origin-${module.id}`">{{ t(`modules.origin.${module.origin.kind}`, { folder: module.origin.folder }) }}</span>
         </div>
+        <Button
+          v-if="module.localDataWaiting"
+          variant="secondary"
+          :data-testid="`move-local-data-${module.id}`"
+          @click="moveLocal(module)"
+        >
+          <ArrowRightLeft :stroke-width="1.5" /> {{ t("settings.modules.moveLocal") }}
+        </Button>
         <Button
           v-if="module.removable"
           variant="secondary"
@@ -119,6 +165,29 @@ function remove(module: ModuleView) {
           @click="remove(module)"
         >
           <Trash2 :stroke-width="1.5" /> {{ t("common.remove") }}
+        </Button>
+      </li>
+    </ul>
+  </div>
+
+  <div v-if="leftover.length" class="pt-4" data-testid="leftover-data">
+    <p class="font-medium">{{ t("settings.modules.leftover") }}</p>
+    <p class="text-muted-foreground text-sm">{{ t("settings.modules.leftoverHint") }}</p>
+    <ul class="mt-2 flex flex-col" :aria-label="t('settings.modules.leftover')">
+      <li
+        v-for="entry in leftover"
+        :key="`${entry.owner}/${entry.moduleId}`"
+        class="flex items-center gap-4 border-b py-3 last:border-b-0"
+        :data-testid="`leftover-${entry.owner}-${entry.moduleId}`"
+      >
+        <span class="flex min-w-0 flex-1 items-center gap-2">
+          <span class="truncate font-mono text-sm">{{ entry.moduleId }}</span>
+          <span class="text-muted-foreground flex-none rounded-sm border px-1.5 text-xs" :class="entry.publisher && 'font-mono'" :title="entry.publisher ? t('settings.modules.publisherHint', { key: entry.publisher }) : undefined">
+            {{ entry.publisher ? t("settings.modules.publisher", { short: entry.publisher.slice(0, 8) }) : t(`settings.modules.leftoverOwner.${entry.owner as "local" | "official"}`) }}
+          </span>
+        </span>
+        <Button variant="secondary" :aria-label="t('settings.modules.deleteDataLabel', { id: entry.moduleId })" :data-testid="`delete-data-${entry.owner}-${entry.moduleId}`" @click="deleteData(entry)">
+          <Trash2 :stroke-width="1.5" /> {{ t("settings.modules.deleteData") }}
         </Button>
       </li>
     </ul>

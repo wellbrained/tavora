@@ -123,22 +123,30 @@ describe("isJsonValue", () => {
 describe("DataRegistry", () => {
   it("keeps modules and games apart on disk", async () => {
     const registry = new DataRegistry(dir);
-    await registry.get("local.example.a", "poe2").settings.set("count", 1);
-    await registry.get("local.example.b", "poe2").settings.set("count", 2);
-    await registry.get("local.example.a", "satisfactory").settings.set("count", 3);
-    await registry.get("local.example.a", "poe2").documents.put({ id: "d", title: "d", data: 1 });
+    await registry.get("local", "local.example.a", "poe2").settings.set("count", 1);
+    await registry.get("local", "local.example.b", "poe2").settings.set("count", 2);
+    await registry.get("local", "local.example.a", "satisfactory").settings.set("count", 3);
+    await registry.get("local", "local.example.a", "poe2").documents.put({ id: "d", title: "d", data: 1 });
 
-    expect(await registry.get("local.example.a", "poe2").settings.get("count")).toBe(1);
-    expect(await registry.get("local.example.b", "poe2").settings.get("count")).toBe(2);
-    expect(await registry.get("local.example.a", "satisfactory").settings.get("count")).toBe(3);
-    expect(await registry.get("local.example.b", "poe2").documents.list()).toEqual([]);
-    expect(registry.get("local.example.a", "poe2")).toBe(registry.get("local.example.a", "poe2"));
+    expect(await registry.get("local", "local.example.a", "poe2").settings.get("count")).toBe(1);
+    expect(await registry.get("local", "local.example.b", "poe2").settings.get("count")).toBe(2);
+    expect(await registry.get("local", "local.example.a", "satisfactory").settings.get("count")).toBe(3);
+    expect(await registry.get("local", "local.example.b", "poe2").documents.list()).toEqual([]);
+    expect(registry.get("local", "local.example.a", "poe2")).toBe(registry.get("local", "local.example.a", "poe2"));
   });
 
   it("refuses ids that could form a path", async () => {
     const registry = new DataRegistry(dir);
     await mkdir(path.join(dir, "module-data"), { recursive: true });
-    expect(() => registry.get("../../etc", "poe2")).toThrow();
-    expect(() => registry.get("local.example.a", "../x")).toThrow();
+    expect(() => registry.get("local", "../../etc", "poe2")).toThrow();
+    expect(() => registry.get("local", "local.example.a", "../x")).toThrow();
+    expect(() => registry.get("..", "local.example.a", "poe2")).toThrow();
+  });
+
+  it("keeps the same id of different owners apart (S5)", async () => {
+    const registry = new DataRegistry(dir);
+    const other = "0123456789abcdef0123456789abcdef";
+    await registry.get("local", "local.example.a", "poe2").settings.set("secret", 1);
+    expect(await registry.get(other, "local.example.a", "poe2").settings.get("secret")).toBeNull();
   });
 });

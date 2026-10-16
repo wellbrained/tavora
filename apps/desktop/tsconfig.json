@@ -1,6 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // @tavora/pack imports its own files with .ts, so pnpm pack-module runs straight in Node.
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "types": [
       "node"
     ]

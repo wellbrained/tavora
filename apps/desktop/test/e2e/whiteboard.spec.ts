@@ -140,7 +140,7 @@ test("whiteboard: a pasted picture is kept in the file store, locked, and comes 
   expect(picture.locked).toBe(true);
   const stored = board.files[picture.fileId!]!;
   expect(stored.blobId).toMatch(/^[a-f0-9]{32}$/);
-  const folder = path.join(userData, "module-blobs", WHITEBOARD);
+  const folder = path.join(userData, "module-blobs", "official", WHITEBOARD);
   const files = (await readdir(folder, { recursive: true })).map((name) => path.basename(name));
   expect(files).toContain(`${stored.blobId}.png`);
   expect(JSON.stringify(board)).not.toContain("data:image");

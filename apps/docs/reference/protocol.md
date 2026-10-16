@@ -77,7 +77,7 @@ Methods without params must be sent with `params` left out.
 | `blobs` (pictures) | module + game, shared by all its panels | the game is deleted from the Trash; never by closing panels |
 | `panel` state | one panel instance | the panel is closed |
 
-A module never sees another module's data, or its own data for another game.
+A module never sees another module's data, or its own data for another game. Data belongs to the module's id together with who published it (the key that signed its zip, or "local" for an unsigned folder), so a module from another publisher with the same id starts with nothing.
 
 ### Files (blobs)
 
