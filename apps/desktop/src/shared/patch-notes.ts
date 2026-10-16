@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.14.6",
+    date: "2026-10-16",
+    title: "Pictures on the Whiteboard",
+    notes: [
+      "Paste a screenshot (Ctrl+V), drop a picture or use the image tool, and scribble on top of it. A new picture is locked so your drawing does not drag it around; the Unlock pictures button in the header lets you move or resize it.",
+      "Pictures are kept in the module pictures folder, not inside the board, so boards stay small. Pictures that no board uses any more are cleaned up when a Whiteboard opens.",
+    ],
+  },
+  {
     version: "0.14.5",
     date: "2026-10-16",
     title: "Tidy-ups",

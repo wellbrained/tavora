@@ -1,7 +1,8 @@
 import { connect, THEME_TOKENS, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cleanName, formatMegabytes, MAX_BOARD_BYTES, nextBoardName, sizeLevel, type BoardData, type BoardSummary } from "./boards";
-import type { SaveState, View } from "./Board";
+import { unusedFiles } from "./pictures";
+import type { Controls, Pictures, SaveState, View } from "./Board";
 import BoardMenu from "./BoardMenu";
 import { currentLanguage, setLanguage, t, type Language } from "./i18n";
 import { createBoards, type Boards } from "./store";
@@ -52,6 +53,11 @@ export default function App() {
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [bytes, setBytes] = useState(0);
   const [undo, setUndo] = useState<Undo | null>(null);
+  const [pictures, setPictures] = useState<Pictures>({ count: 0, allLocked: false });
+  const [picturesLoaded, setPicturesLoaded] = useState(0);
+  const [notice, setNotice] = useState<{ id: number; message: string } | null>(null);
+  const controls = useRef<Controls | null>(null);
+  const noticeCount = useRef(0);
 
   const boards = useMemo<Boards | null>(() => (sdk ? createBoards(sdk) : null), [sdk]);
   const revision = useRef(0);
@@ -85,6 +91,8 @@ export default function App() {
       revision.current = opened.revision;
       dirty.current = false;
       setSaveState("idle");
+      setPictures({ count: 0, allLocked: false });
+      setPicturesLoaded(0);
       setBytes(JSON.stringify(opened.data).length);
       setShown((previous) => ({ id, name: names.current.get(id) ?? "", data: opened.data, nonce: (previous?.nonce ?? 0) + 1 }));
       saveSelection();
@@ -163,6 +171,29 @@ export default function App() {
       })();
     });
   }, [sdk, boards, refreshList, show, createBoard]);
+
+  // Pictures that no board uses any more (of a deleted board, or taken off a board) are cleared out when a panel opens.
+  useEffect(() => {
+    if (!sdk || !boards || !shown) return;
+    let cancelled = false;
+    void (async () => {
+      const used = await boards.usedFiles();
+      if (cancelled) return;
+      for (const file of unusedFiles(await sdk.blobs.list(), used)) await sdk.blobs.delete(file.id);
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // Once per panel, when the first board has been shown.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sdk, boards, shown === null]);
+
+  // A notice (for example a picture that cannot be kept) goes away on its own too.
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), UNDO_MS);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   // The Undo notice goes away on its own.
   useEffect(() => {
@@ -249,6 +280,18 @@ export default function App() {
           onDelete={() => void remove(shown.id)}
         />
         <span className="grow" />
+        {pictures.count > 0 ? (
+          <button
+            type="button"
+            className="button picture-lock"
+            title={t(pictures.allLocked ? "image.unlockHint" : "image.lockHint")}
+            data-testid="picture-lock"
+            data-locked={pictures.allLocked}
+            onClick={() => controls.current?.setPicturesLocked(!pictures.allLocked)}
+          >
+            {t(pictures.allLocked ? "image.unlock" : "image.lock")}
+          </button>
+        ) : null}
         {level !== "ok" ? (
           <span className={level === "full" ? "size size-full" : "size"} role="status" data-testid="board-size">
             {t(level === "full" ? "size.full" : "size.warn", { used: formatMegabytes(bytes), max: formatMegabytes(MAX_BOARD_BYTES) })}
@@ -258,10 +301,11 @@ export default function App() {
           {saveState === "idle" ? "" : t(`save.${saveState}` as "save.saved")}
         </span>
       </header>
-      <main className="board" data-board={shown.id} data-testid="board">
+      <main className="board" data-board={shown.id} data-pictures={picturesLoaded} data-testid="board">
         <Suspense fallback={<p className="status">{t("loading")}</p>}>
           <Board
             key={`${shown.id}:${shown.nonce}`}
+            sdk={sdk}
             data={shown.data}
             view={views.current[shown.id]}
             mode={mode}
@@ -271,9 +315,21 @@ export default function App() {
             onState={setSaveState}
             onSize={setBytes}
             onDirty={(value) => (dirty.current = value)}
+            onPictures={setPictures}
+            onPicturesLoaded={setPicturesLoaded}
+            onNotice={(message) => setNotice({ id: ++noticeCount.current, message })}
+            onControls={(value) => (controls.current = value)}
           />
         </Suspense>
       </main>
+      {notice && !undo ? (
+        <div className="toast" role="status" data-testid="notice-toast" key={`n${notice.id}`}>
+          <span className="toast-message">{notice.message}</span>
+          <button type="button" className="icon-button" aria-label={t("undo.dismiss")} title={t("undo.dismiss")} onClick={() => setNotice(null)}>
+            ×
+          </button>
+        </div>
+      ) : null}
       {undo ? (
         <div className="toast" role="status" data-testid="undo-toast">
           <span className="toast-message">{undo.message}</span>

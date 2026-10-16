@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
 import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
 import { moduleThemeCss } from "./module-style";
-import { contentTypeFor, MODULE_CSP, MODULE_SCHEME, resolveAsset } from "./assets";
+import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BLOB_PATH, CLIPBOARD_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession } from "./bridge";
 import type { BlobStore } from "./blobs";
@@ -79,6 +79,8 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
   hardened.add(ses);
 
   const origin = moduleOrigin(module.manifest.id);
+  // WebAssembly only for a module of Tavora's own that asked for it (the registry refuses the request from any other).
+  const csp = moduleCsp(module.provenance === "official" && module.manifest.permissions.webAssembly === true);
 
   ses.protocol.handle(MODULE_SCHEME, async (request) => {
     // URL.origin is "null" for custom schemes in Node, so compare the host.
@@ -95,7 +97,7 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
     return new Response(request.method === "HEAD" ? null : await readFile(file), {
       headers: {
         "Content-Type": contentTypeFor(file),
-        "Content-Security-Policy": MODULE_CSP,
+        "Content-Security-Policy": csp,
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": "no-store",
       },
