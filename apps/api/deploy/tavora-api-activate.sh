@@ -80,9 +80,15 @@ fi
 rm -f /tmp/tavora-api.caddy
 
 # The helper scripts Nik runs by hand (ssh -t root@... tavora-api-set-setting takedown), kept next to the other server tools.
-for helper in set-steam-key set-setting; do
+for helper in set-steam-key set-setting backup; do
   if [[ -f "/tmp/tavora-api-$helper.sh" ]]; then install -m 750 -o root -g root "/tmp/tavora-api-$helper.sh" "/usr/local/sbin/tavora-api-$helper"; rm -f "/tmp/tavora-api-$helper.sh"; fi
 done
+
+# The daily backup of accounts and icons (14 days kept in /srv/tavora-api/backups; the PC downloads them).
+for unit in tavora-api-backup.service tavora-api-backup.timer; do
+  if [[ -f "/tmp/$unit" ]]; then install -m 644 "/tmp/$unit" "/etc/systemd/system/$unit"; rm -f "/tmp/$unit"; fi
+done
+if [[ -f /etc/systemd/system/tavora-api-backup.timer ]]; then systemctl daemon-reload; systemctl enable --now tavora-api-backup.timer >/dev/null; fi
 
 # Keep the five newest releases for rollback.
 ls -1dt "$root"/releases/*/ | tail -n +6 | xargs -r rm -rf
