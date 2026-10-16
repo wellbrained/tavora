@@ -34,3 +34,13 @@ _Avoid_: magic link, OTP, password
 
 **Signed-in device**: One Tavora install that is signed into an account, shown by its operating system and since when. The player can sign any of them out from another.
 _Avoid_: session (in player-facing text), client, PC name
+
+**Permission**: What a module asks for in the `permissions` of its manifest, such as network to named hosts or a connector. Only a wish: it does nothing until the player grants it.
+
+**Grant**: The player's stored, revocable yes to a module's permission, recorded by the host for the module's publisher, id and version. Every gated call is checked against it. Asked for when the player first adds the module.
+_Avoid_: permission (for the player's yes), consent (for the stored record)
+
+**Connector**: A part of Tavora that holds a sign-in to another app or service and lets granted modules use it without seeing the token: Discord and AI Usage.
+_Avoid_: integration (for the code), plugin, bridge
+
+**Integrations**: The settings page for connectors and grants: each connection's sign-in or accounts, the modules allowed to use it, and every other module grant, each revocable.

@@ -269,3 +269,9 @@ For the Milestone F design (backlog):
 - Commands: a named command with fixed arguments, no shell, a time limit and an output cap (the Codex case).
 - Where a login is involved (AI Usage), prefer a purpose-built capability, such as "read my usage", over a raw file-read grant, so the module never holds the token.
 - Updates that ask for more re-ask. Revoking a grant takes effect at once, and data already given cannot be recalled (listed above).
+Design agreed on 2026-10-16 (decisions.md), with what it adds to the list above:
+
+- The consent dialog is drawn by the host, never by the module, so a module cannot fake or hide what it asks for. It opens when the player first adds the module; preinstalled modules get no pre-approved grants.
+- Connectors (Discord, AI Usage) are the purpose-built capabilities: the host holds the pipe, the sign-in and the token, and a module only reaches a fixed list of commands and answers. Joining a Discord voice channel still needs a real click in the panel. Network is the first general grant; files and commands as general grants are not in the three planned PRs, and the Codex command runs inside the AI Usage connector.
+- Network grants name exact hosts, HTTPS only, no wildcards.
+- Revoking removes the module's panels in every game (after showing the player where) instead of leaving a panel that fails, and keeps its data.
