@@ -547,8 +547,8 @@ export type HostAction =
   | { type: "account-send-code"; email: string }
   /** The code typed in; for an address without an account the view then asks to create one. */
   | { type: "account-verify"; code: string }
-  /** Yes to "Create a Tavora account". */
-  | { type: "account-create" }
+  /** Yes to "Create a Tavora account", with the age tick box (an account is only made when it is ticked). */
+  | { type: "account-create"; ageConfirmed: boolean }
   /** Leaves a waiting code (sign-in, email change or delete). */
   | { type: "account-cancel" }
   /** Reads the account and its devices from the service again. */

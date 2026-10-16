@@ -116,7 +116,10 @@ describe("signing in", () => {
     await account.verify("654321");
     expect(account.view().pending).toEqual({ kind: "sign-in", email: "me@example.com", step: "create" });
     expect(account.view().account).toBeNull();
-    await account.create();
+    // Not without the age confirmation, and nothing is sent then.
+    await expect(account.create(false)).rejects.toMatchObject({ key: "account.error.ageRequired" });
+    expect(calls).toHaveLength(2);
+    await account.create(true);
     expect(calls[2]!.body).toEqual({ email: "me@example.com", code: "654321", os: "windows", create: true });
     expect(account.view().account?.email).toBe("me@example.com");
   });

@@ -168,9 +168,11 @@ export class AccountClient {
     await this.signedIn(answer);
   }
 
-  async create(): Promise<void> {
+  /** Makes the account, only once the player confirmed the minimum age (13, and 16 or a parent's permission; decided 2026-10-16). Nothing about the age is kept. */
+  async create(ageConfirmed: boolean): Promise<void> {
     const pending = this.pending;
     if (pending?.kind !== "sign-in" || pending.step !== "create" || !this.pendingCode) throw new PlayerError("account.error.noCode");
+    if (!ageConfirmed) throw new PlayerError("account.error.ageRequired");
     await this.signedIn(await this.call("POST", "/verify", { email: pending.email, code: this.pendingCode, os: this.options.os, create: true }));
   }
 

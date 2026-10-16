@@ -73,6 +73,8 @@ test("a player creates an account with an emailed code, sees this PC, and signs 
     await page.getByTestId("account-code").fill(await codeFor("player@example.com"));
     await page.getByTestId("account-verify").click();
     // A new address: the app asks before it makes the account.
+    await expect(page.getByTestId("account-create")).toBeDisabled();
+    await page.getByTestId("account-age").check();
     await page.getByTestId("account-create").click();
 
     await expect(page.getByTestId("account")).toContainText("player@example.com");

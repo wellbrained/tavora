@@ -248,6 +248,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "discord-sign-out":
       return only() ? { type: a.type } : null;
     case "account-create":
+      return only("ageConfirmed") && typeof a.ageConfirmed === "boolean" ? { type: a.type, ageConfirmed: a.ageConfirmed } : null;
     case "account-cancel":
     case "account-refresh":
     case "account-sign-out":
