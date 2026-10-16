@@ -2,6 +2,7 @@ import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { isGameId, isModuleId } from "@tavora/module-schema";
 import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
+import { BlobStore } from "./blobs";
 import { DocumentStore } from "./documents";
 import { HostError } from "./errors";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
@@ -144,6 +145,8 @@ export class PanelStateStore {
 export interface ModuleData {
   settings: ModuleStore;
   documents: DocumentStore;
+  /** Pictures kept in a folder of their own, which can sit elsewhere than the rest of the data. */
+  blobs: BlobStore;
 }
 
 /** One settings store and one document store per (module, game), shared by all its panels. */
@@ -151,7 +154,11 @@ export class DataRegistry {
   private readonly data = new Map<string, ModuleData>();
   readonly panelState: PanelStateStore;
 
-  constructor(private readonly dataDir: string) {
+  constructor(
+    private readonly dataDir: string,
+    /** The folder every module's files are kept under, by module and game. */
+    private readonly blobRoot: () => string = () => path.join(dataDir, "module-blobs"),
+  ) {
     this.panelState = new PanelStateStore(path.join(dataDir, "panel-state"));
   }
 
@@ -162,7 +169,11 @@ export class DataRegistry {
     const dir = path.join(this.dataDir, "module-data", moduleId, gameId);
     let data = this.data.get(dir);
     if (!data) {
-      data = { settings: new ModuleStore(path.join(dir, "storage.json")), documents: new DocumentStore(path.join(dir, "documents")) };
+      data = {
+        settings: new ModuleStore(path.join(dir, "storage.json")),
+        documents: new DocumentStore(path.join(dir, "documents")),
+        blobs: new BlobStore(() => path.join(this.blobRoot(), moduleId, gameId)),
+      };
       this.data.set(dir, data);
     }
     return data;

@@ -3,9 +3,12 @@
 // Protocol reference: apps/docs/reference/protocol.md.
 
 import {
+  BLOB_PATH,
   HELLO_MESSAGE,
   PORT_MESSAGE,
   PROTOCOL_VERSION,
+  type BlobInfo,
+  type BlobUsage,
   type Capability,
   type DocumentChange,
   type DocumentSummary,
@@ -26,6 +29,9 @@ import {
 } from "./protocol.js";
 
 export type {
+  BlobInfo,
+  BlobType,
+  BlobUsage,
   Capability,
   DocumentChange,
   DocumentSummary,
@@ -39,7 +45,7 @@ export type {
   TavoraViewport,
   ThemeToken,
 } from "./protocol.js";
-export { LIMITS, PROTOCOL_VERSION, THEME_TOKENS } from "./protocol.js";
+export { BLOB_TYPES, LIMITS, PROTOCOL_VERSION, THEME_TOKENS } from "./protocol.js";
 
 /** Version of this SDK package, sent to the host during the handshake. */
 export const SDK_VERSION = "0.1.0";
@@ -105,6 +111,21 @@ export interface TavoraSDK {
     getLanguage(): Promise<string>;
     /** Fires when the player changes the language. */
     onLanguageChange(fn: (language: string) => void): Unsubscribe;
+  };
+  /**
+   * Files (pictures) this module keeps in the current game, shared by all of its panels. They live
+   * in a folder Tavora manages, not in a document, so they can be large: up to 50 MB each and
+   * 500 MB together. Only PNG, JPEG, GIF and WebP are accepted, judged by the file itself.
+   */
+  blobs: {
+    /** Stores a file and returns its id. Rejects with QUOTA_EXCEEDED, or INVALID_PARAMS for another kind of file. */
+    put(file: Blob): Promise<BlobInfo>;
+    /** The address to show a stored file from, for example as an image source. */
+    url(id: string): string;
+    list(): Promise<BlobInfo[]>;
+    usage(): Promise<BlobUsage>;
+    /** Deletes a file; nothing happens when it does not exist. */
+    delete(id: string): Promise<void>;
   };
   links: {
     /**
@@ -276,6 +297,31 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       onThemeChange: (fn) => on("ui.theme", fn),
       getLanguage: () => call("ui.getLanguage"),
       onLanguageChange: (fn) => on("ui.language", fn),
+    },
+    blobs: {
+      put: async (file) => {
+        let response: Response;
+        try {
+          response = await fetch(new URL(BLOB_PATH, window.location.href), {
+            method: "POST",
+            body: file,
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+          });
+        } catch {
+          throw new TavoraError({ code: "INTERNAL", message: "could not store the file" });
+        }
+        const body = (await response.json().catch(() => null)) as (BlobInfo & { error?: ErrorPayload }) | null;
+        if (!response.ok || !body || body.error) {
+          throw new TavoraError(body?.error ?? { code: "INTERNAL", message: `could not store the file (${response.status})` });
+        }
+        return body;
+      },
+      url: (id) => new URL(`${BLOB_PATH}${encodeURIComponent(id)}`, window.location.href).href,
+      list: () => call("blobs.list"),
+      usage: () => call("blobs.usage"),
+      delete: async (id) => {
+        await call("blobs.delete", { id });
+      },
     },
     links: {
       open: async (url) => {

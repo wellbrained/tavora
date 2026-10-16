@@ -3,13 +3,18 @@ import path from "node:path";
 import { isGameId } from "@tavora/module-schema";
 
 /**
- * Deletes what modules stored on disk for one game: settings and documents
- * of every module, installed or not. Web storage in each module's browser
+ * Deletes what modules stored on disk for one game: settings, documents and
+ * files of every module, installed or not. Web storage in each module's browser
  * session is cleared separately by the host.
  */
-export async function deleteModuleData(userData: string, gameId: string): Promise<void> {
+export async function deleteModuleData(userData: string, gameId: string, blobRoot: string = path.join(userData, "module-blobs")): Promise<void> {
   if (!isGameId(gameId)) throw new Error("invalid game id");
-  const root = path.join(userData, "module-data");
+  await deleteUnder(blobRoot, gameId);
+  await deleteUnder(path.join(userData, "module-data"), gameId);
+}
+
+/** Removes `<root>/<module>/<game>` for every module. */
+async function deleteUnder(root: string, gameId: string): Promise<void> {
   let modules: string[];
   try {
     modules = await readdir(root);

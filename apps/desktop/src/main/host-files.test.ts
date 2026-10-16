@@ -27,6 +27,21 @@ describe("deleteModuleData", () => {
     }
   });
 
+  it("deletes the files modules keep for the game too", async () => {
+    const userData = await tempDir();
+    for (const game of ["poe2", "satisfactory"]) {
+      await mkdir(path.join(userData, "module-blobs", "local.a", game), { recursive: true });
+      await writeFile(path.join(userData, "module-blobs", "local.a", game, "0".repeat(32) + ".png"), "x");
+    }
+    await deleteModuleData(userData, "poe2");
+    expect(await readdir(path.join(userData, "module-blobs", "local.a"))).toEqual(["satisfactory"]);
+    // A folder moved elsewhere is cleaned the same way.
+    const elsewhere = await tempDir();
+    await mkdir(path.join(elsewhere, "local.a", "poe2"), { recursive: true });
+    await deleteModuleData(userData, "poe2", elsewhere);
+    expect(await readdir(path.join(elsewhere, "local.a"))).toEqual([]);
+  });
+
   it("does nothing without module data and refuses unsafe ids", async () => {
     const userData = await tempDir();
     await expect(deleteModuleData(userData, "poe2")).resolves.toBeUndefined();

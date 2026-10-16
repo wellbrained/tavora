@@ -119,6 +119,21 @@ A module can ask the host to open a web address in the Browser (`links.open`, us
 
 Accepted: a module can still show a fake button and get the player to click it, which opens a link in the Browser. That is the same as any web page's link, the player sees the new tab, and the Browser is sandboxed.
 
+## Module files (0.12.0)
+
+A module can keep pictures in a folder Tavora manages (`blobs` in the SDK, used by Notes for images). Files are written by the main process from a request body, never by the module.
+
+| # | Guarantee | Mechanism | Test |
+| --- | --- | --- | --- |
+| F1 | A module reaches only its own files, for the current game | the files are served and stored inside the module's own session (one per module and game), which answers only to its own address; the folder is `<root>/<module id>/<game id>` from ids the host validated | unit: the bridge and `blobs.test.ts` use one store per module and game; the session wiring is reviewed by hand |
+| F2 | A module cannot choose where a file goes or read anything else | the module never gives a name or a path: the host makes a random 128-bit id, and every id it receives must match 32 lowercase hex characters before it touches a path | unit: `blobs.test.ts` ("refuses ids that are not ours"); `bridge.test.ts` |
+| F3 | Only pictures are stored, and a picture cannot run | the kind is judged from the first bytes (PNG, JPEG, GIF, WebP); SVG, BMP and everything else are refused; files are served with their own type, `nosniff`, `Content-Security-Policy: default-src 'none'; sandbox` and `Cross-Origin-Resource-Policy: same-origin` | unit: `blobs.test.ts` (sniffing, serving headers) |
+| F4 | A module cannot fill the disk | 50 MB per file and 500 MB per module and game, checked while the body streams in; a refused or cut-off write removes its temp file, and leftovers are cleaned up on the next listing | unit: `blobs.test.ts` (limits, leftovers) |
+| F5 | Files go with the game | deleting a game from the Trash removes its folder under every module; daily backups include the files unless the snapshot would be too big, as with pictures | unit: `gamedata.test.ts`; `backup.test.ts` |
+| F6 | No other page can read or write them | only the module's session handles `/_blobs/`; the Browser and the host UI use other sessions, and the answers are same-origin only | no test; reviewed by hand |
+
+Accepted: a module can use its whole 500 MB share, and the player cannot yet see per game how much that is; the Notes screen will show it. Changing the folder is not part of this release.
+
 ## Known limits and open risks
 
 - **Webview isolation is not proven safe by this spike.** It relies on Chromium site isolation and the OS sandbox. A Chromium renderer exploit would break G1–G4. Mitigation: keep Electron current, enable the OS sandbox everywhere, Electron fuses are set at packaging time (`electronFuses` in `apps/desktop/package.json`, checked 2026-10-16 with `@electron/fuses read` on a packaged build): `RunAsNode`, `NODE_OPTIONS`, `--inspect` and extra `file://` privileges are off, cookie encryption is on. ASAR integrity is not used because the app ships unpacked (`"asar": false`); someone who can edit Tavora's files can already act as the player, so this is accepted.

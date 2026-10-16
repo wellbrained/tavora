@@ -330,3 +330,18 @@ describe("links.open", () => {
     expect(await call(p, "links.open", { url: "https://example.com" })).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED" } });
   });
 });
+
+describe("blobs", () => {
+  it("lists nothing, reports the limits, and ignores a missing file", async () => {
+    expect(await call(port, "blobs.list")).toMatchObject({ ok: true, result: [] });
+    expect(await call(port, "blobs.usage")).toMatchObject({ ok: true, result: { bytes: 0, count: 0, maxBytes: LIMITS.maxBlobsBytes, maxFileBytes: LIMITS.maxBlobBytes } });
+    expect(await call(port, "blobs.delete", { id: "0".repeat(32) })).toMatchObject({ ok: true, result: null });
+  });
+
+  it("refuses ids that are not ones the host made, and params where none belong", async () => {
+    for (const params of [undefined, {}, { id: 4 }, { id: "../etc/passwd" }, { id: "A".repeat(32) }]) {
+      expect(await call(port, "blobs.delete", params)).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    }
+    expect(await call(port, "blobs.list", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+});

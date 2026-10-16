@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.12.0",
+    date: "2026-10-16",
+    title: "Modules can keep pictures",
+    notes: [
+      "Modules can now store pictures (PNG, JPEG, GIF, WebP, up to 50 MB each and 500 MB per game) in a folder Tavora manages. Nothing uses it yet: Notes will, next. The pictures are removed with the game and are part of the daily backup unless it would get too big.",
+    ],
+  },
+  {
     version: "0.11.1",
     date: "2026-10-16",
     title: "Links: hand cursor and a choice",
