@@ -190,8 +190,8 @@ test("notes: two panels show the same notes and follow each other's changes", as
 
   // Deleting asks first, then removes the note everywhere.
   await pickFromMenu(app, NOTES, `${noteRow("Made in the second panel")}.querySelector('[data-testid="note-menu"]')`, "menu-delete", 0);
-  await expect.poll(() => inModule(app, NOTES, `!!${q("confirm")}`, 0)).toBe(true);
-  await click(app, NOTES, `[data-testid="confirm-submit"]`, 0);
+  // Deleting needs no confirmation; an Undo notice shows instead.
+  await expect.poll(() => inModule(app, NOTES, `!!${q("undo-toast")}`, 0)).toBe(true);
   await expect.poll(() => noteTitles(app, 1)).toEqual(["Scratchpad"]);
   await expect.poll(() => editorText(app, 1)).toBe("Shared between panels");
   await app.close();

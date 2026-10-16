@@ -10,12 +10,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { locale, plural, t } from "./i18n";
 import { MAX_FIXED_TITLE, previewFor, relativeTime, SCRATCHPAD_ID, UNTITLED, type NoteEntry } from "./notes";
 
 const props = defineProps<{ entry: NoteEntry; selected: boolean }>();
-const emit = defineEmits<{ select: []; togglePin: []; remove: []; rename: [title: string] }>();
+const emit = defineEmits<{ select: []; togglePin: []; remove: []; rename: [title: string]; move: [delta: -1 | 1]; renaming: [on: boolean] }>();
 
 const menuOpen = ref(false);
 const scratchpad = computed(() => props.entry.id === SCRATCHPAD_ID);
@@ -36,6 +36,9 @@ const draft = ref("");
 /** What the input started with, so an untouched Enter does not turn the first line into a fixed title. */
 let initial = "";
 const input = ref<HTMLInputElement | null>(null);
+
+// The list stops dragging this row while its title is edited, so text can be selected.
+watch(renaming, (on) => emit("renaming", on));
 
 async function startRename() {
   if (scratchpad.value) return;
@@ -85,6 +88,7 @@ defineExpose({ startRename });
         class="bg-background border-ring placeholder:text-muted-foreground h-6 w-full min-w-0 rounded-sm border px-1 text-sm font-medium outline-none"
         @keydown.enter.prevent="finishRename(true)"
         @keydown.esc.stop.prevent="finishRename(false)"
+        @dragstart.stop.prevent
         @blur="finishRename(true)"
       />
     </div>
@@ -96,6 +100,8 @@ defineExpose({ startRename });
       @click="emit('select')"
       @dblclick="startRename"
       @keydown.f2.prevent="startRename"
+      @keydown.alt.up.prevent="emit('move', -1)"
+      @keydown.alt.down.prevent="emit('move', 1)"
     >
       <span class="flex w-full min-w-0 items-center gap-1.5 text-sm font-medium">
         <NotebookPen v-if="scratchpad" class="text-muted-foreground size-3.5 flex-none" :stroke-width="1.5" aria-hidden="true" />
