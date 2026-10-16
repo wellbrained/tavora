@@ -36,13 +36,12 @@ import {
 import type { JSONContent } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
-import { NodeSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import ImageBar from "./ImageBar.vue";
 import ImageLightbox from "./ImageLightbox.vue";
-import { ImageNode, type ImageAttrs } from "./ImageNode";
+import { ImageNode } from "./ImageNode";
 import LinkDialog from "./LinkDialog.vue";
 import LinkPopover from "./LinkPopover.vue";
 import { t } from "./i18n";
@@ -62,7 +61,8 @@ import {
   type RichText,
   type TextStyle,
 } from "./notes";
-import { ImageProblem, type NotePatch, type NotesStore } from "./store";
+import { useNoteImages } from "./noteImages";
+import { type NotePatch, type NotesStore } from "./store";
 
 const props = defineProps<{ store: NotesStore; noteId: string; entry: NoteEntry | undefined; narrow: boolean; look: TextStyle }>();
 const emit = defineEmits<{ back: []; togglePin: []; clear: []; saveAsNote: []; setStyle: [patch: Partial<TextStyle>]; openLink: [href: string]; notice: [message: string] }>();
@@ -87,6 +87,13 @@ let titleDirty = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let saving: Promise<void> = Promise.resolve();
 let loading: Promise<void> = Promise.resolve();
+
+const { adding, lightbox, fileInput, imageUsage, imageBar, onFiles, onFilePicked, refreshImageUsage, updateImageBar, setImage, openSelectedImage, removeSelectedImage } = useNoteImages({
+  store: () => props.store,
+  editor: () => editor.value,
+  loadedNote: () => loadedId,
+  notice: (message) => emit("notice", message),
+});
 
 const editor = useEditor({
   extensions: [
@@ -269,109 +276,6 @@ onBeforeUnmount(() => {
   void flush();
   editor.value?.destroy();
 });
-
-// ── Pictures ─────────────────────────────────────────────────────────
-
-/** Pictures being stored right now. */
-const adding = ref(0);
-const lightbox = ref<string | null>(null);
-const fileInput = ref<HTMLInputElement | null>(null);
-const imageUsage = ref<{ bytes: number; maxBytes: number } | null>(null);
-/** The bar over the selected picture. */
-const imageBar = ref<{ mode: ImageAttrs["mode"]; width: number | null; left: number; top: number } | null>(null);
-
-function reportImageProblem(error: unknown) {
-  if (!(error instanceof ImageProblem)) return emit("notice", t("image.error", { error: errorMessage(error) }));
-  if (error.kind === "type") emit("notice", t("image.notSupported", { name: error.file }));
-  else if (error.kind === "size") emit("notice", t("image.tooBig", { name: error.file, max: formatMegabytes(Number(error.message)) }));
-  else emit("notice", t("image.error", { error: error.message }));
-}
-
-/** Stores pictures and puts them in the note, one after the other, at `pos` or where the cursor is. */
-async function addImages(files: File[], pos?: number) {
-  const instance = editor.value;
-  if (!instance || loadedId === null) return;
-  const forNote = loadedId;
-  let at = pos ?? instance.state.selection.to;
-  adding.value += files.length;
-  try {
-    for (const file of files) {
-      try {
-        const blobId = await props.store.addImage(file);
-        // The player may have gone to another note meanwhile; the picture then stays unused and is cleaned up later.
-        if (loadedId !== forNote) continue;
-        const size = instance.state.doc.content.size;
-        at = Math.min(at, size);
-        instance.chain().focus().insertContentAt(at, { type: "image", attrs: { blobId, mode: "block", width: null } satisfies ImageAttrs }).run();
-        at = instance.state.selection.to;
-      } catch (error) {
-        reportImageProblem(error);
-      } finally {
-        adding.value--;
-      }
-    }
-  } finally {
-    adding.value = Math.max(0, adding.value);
-  }
-}
-
-/** Pasted or dropped files: handles the pictures among them, and tells the editor whether it did. */
-function onFiles(list: FileList | null | undefined, event: Event, pos?: number): boolean {
-  const files = [...(list ?? [])].filter((file) => file.type.startsWith("image/"));
-  if (!files.length) return false;
-  event.preventDefault();
-  void addImages(files, pos);
-  return true;
-}
-
-function onFilePicked(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const files = [...(input.files ?? [])];
-  input.value = "";
-  if (files.length) void addImages(files);
-}
-
-async function refreshImageUsage(open: boolean) {
-  if (!open) return;
-  try {
-    imageUsage.value = await props.store.imageUsage();
-  } catch {
-    imageUsage.value = null;
-  }
-}
-
-function updateImageBar() {
-  const instance = editor.value;
-  const selection = instance?.state.selection;
-  if (!instance || !(selection instanceof NodeSelection) || selection.node.type.name !== "image") {
-    imageBar.value = null;
-    return;
-  }
-  const dom = instance.view.nodeDOM(selection.from);
-  if (!(dom instanceof HTMLElement)) {
-    imageBar.value = null;
-    return;
-  }
-  const rect = dom.getBoundingClientRect();
-  const attrs = selection.node.attrs as ImageAttrs;
-  imageBar.value = { mode: attrs.mode, width: attrs.width, left: rect.left, top: rect.top - 40 < 8 ? rect.bottom + 6 : rect.top - 40 };
-}
-
-function setImage(patch: Partial<ImageAttrs>) {
-  const selection = editor.value?.state.selection;
-  if (!(selection instanceof NodeSelection)) return;
-  // Replacing the picture drops the selection, so it is selected again for the next change.
-  editor.value?.chain().focus().updateAttributes("image", patch).setNodeSelection(selection.from).run();
-}
-
-function openSelectedImage() {
-  const selection = editor.value?.state.selection;
-  if (selection instanceof NodeSelection && selection.node.type.name === "image") lightbox.value = (selection.node.attrs as ImageAttrs).blobId;
-}
-
-function removeSelectedImage() {
-  editor.value?.chain().focus().deleteSelection().run();
-}
 
 // ── Links ────────────────────────────────────────────────────────────
 

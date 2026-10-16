@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.14.7",
+    date: "2026-10-16",
+    title: "Tidy-ups",
+    notes: ["The module pictures folder and the pictures in Notes now have code of their own behind the scenes; nothing changes in how Tavora looks or works."],
+  },
+  {
     version: "0.14.6",
     date: "2026-10-16",
     title: "Pictures on the Whiteboard",
