@@ -77,10 +77,14 @@ body {
   padding: 0 10px;
   font-weight: 500;
 }
-.button:hover,
+.button:hover:not(:disabled),
 .item:hover,
 .icon-button:hover {
   background: var(--accent);
+}
+.button:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 .button:focus-visible,
 .item:focus-visible,
@@ -166,7 +170,13 @@ body {
   color: var(--foreground);
 }
 
-.picture-lock {
+/* Excalidraw's own copy as PNG writes the browser clipboard, which module pages cannot; Copy as picture replaces it. */
+.excalidraw .context-menu li[data-testid="copyAsPng"] {
+  display: none;
+}
+
+.picture-lock,
+.copy-picture {
   height: 26px;
   font-size: 12px;
   font-weight: 400;
