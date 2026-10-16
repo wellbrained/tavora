@@ -15,6 +15,13 @@ defineProps<{ highlight: string | null }>();
 const view = computed(() => account.value);
 const signedIn = computed(() => view.value?.account ?? null);
 const pending = computed(() => view.value?.pending ?? null);
+/** How the account's profile is described when it differs from this PC's. */
+const accountProfile = computed(() => {
+  const choice = view.value?.profileChoice;
+  if (!choice) return "";
+  const name = choice.name || choice.initials || t("account.profileChoice.noName");
+  return choice.picture ? t("account.profileChoice.withPicture", { name }) : name;
+});
 
 const email = ref("");
 const code = ref("");
@@ -120,6 +127,13 @@ function startDelete() {
 
     <!-- Signed in. -->
     <template v-else>
+      <SettingRow v-if="view?.profileChoice" :label="t('account.profileChoice.label')" :description="t('account.profileChoice.description', { profile: accountProfile })" data-testid="account-profile-choice">
+        <div class="flex flex-none gap-2">
+          <Button variant="secondary" :disabled="busy" data-testid="account-keep-pc" @click="run({ type: 'account-profile-choice', keep: 'pc' })">{{ t("account.profileChoice.keepPc") }}</Button>
+          <Button :disabled="busy" data-testid="account-keep-account" @click="run({ type: 'account-profile-choice', keep: 'account' })">{{ t("account.profileChoice.useAccount") }}</Button>
+        </div>
+      </SettingRow>
+
       <SettingRow :label="t('account.email.label')" :description="signedIn.email" setting="account" :highlighted="highlight === 'account'">
         <Button v-if="!changing && pending?.kind !== 'change-email'" variant="secondary" data-testid="account-change-email" @click="(changing = true), (newEmail = '')">{{ t("account.email.change") }}</Button>
       </SettingRow>

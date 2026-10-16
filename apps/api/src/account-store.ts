@@ -41,6 +41,16 @@ export interface Device {
   lastUsedAt: string;
 }
 
+/** The player's profile as the account keeps it: private to its owner (decided 2026-10-16). */
+export interface StoredProfile {
+  name: string;
+  initials: string;
+  /** A 256 px PNG, or null for initials. */
+  picture: Uint8Array | null;
+  /** When the player last changed it, in ms; the newest change wins. */
+  updatedAt: number;
+}
+
 export interface Session {
   id: string;
   accountId: string;
@@ -82,6 +92,10 @@ export class AccountStore {
         os text not null, created_at integer not null, last_used_at integer not null
       );
       create index if not exists sessions_account on sessions (account_id);
+      create table if not exists profiles (
+        account_id text primary key references accounts (id) on delete cascade,
+        name text not null, initials text not null, picture blob, updated_at integer not null
+      );
     `);
   }
 
@@ -117,12 +131,32 @@ export class AccountStore {
     try {
       this.db.prepare("delete from codes where account_id = ?").run(id);
       this.db.prepare("delete from sessions where account_id = ?").run(id);
+      this.db.prepare("delete from profiles where account_id = ?").run(id);
       this.db.prepare("delete from accounts where id = ?").run(id);
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
       throw error;
     }
+  }
+
+  // ── Profile ────────────────────────────────────────────────────────────
+
+  profile(accountId: string): StoredProfile | null {
+    const row = this.db.prepare("select name, initials, picture, updated_at from profiles where account_id = ?").get(accountId) as
+      | { name: string; initials: string; picture: Uint8Array | null; updated_at: number }
+      | undefined;
+    return row ? { name: row.name, initials: row.initials, picture: row.picture ? new Uint8Array(row.picture) : null, updatedAt: row.updated_at } : null;
+  }
+
+  /** Keeps a profile unless the account already has a newer one; returns what the account has now. */
+  setProfile(accountId: string, profile: StoredProfile): StoredProfile {
+    const current = this.profile(accountId);
+    if (current && current.updatedAt >= profile.updatedAt) return current;
+    this.db
+      .prepare("insert or replace into profiles (account_id, name, initials, picture, updated_at) values (?, ?, ?, ?, ?)")
+      .run(accountId, profile.name, profile.initials, profile.picture, profile.updatedAt);
+    return profile;
   }
 
   // ── Codes ──────────────────────────────────────────────────────────────

@@ -256,6 +256,8 @@ export function parseAction(raw: unknown): HostAction | null {
     case "account-change-email":
     case "account-delete":
       return only("code") && typeof a.code === "string" && /^\d{6}$/.test(a.code) ? { type: a.type, code: a.code } : null;
+    case "account-profile-choice":
+      return only("keep") && (a.keep === "account" || a.keep === "pc") ? { type: a.type, keep: a.keep } : null;
     case "account-sign-out-device":
       return only("deviceId") && typeof a.deviceId === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(a.deviceId) ? { type: a.type, deviceId: a.deviceId } : null;
     case "ai-usage-refresh":

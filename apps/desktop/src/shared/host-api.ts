@@ -148,6 +148,8 @@ export interface AccountView {
   /** Null until read from the service. */
   devices: AccountDevice[] | null;
   pending: AccountPending | null;
+  /** On a first sign-in here, the account's profile when it differs from this PC's: the player picks one, once. */
+  profileChoice: { name: string; initials: string; picture: boolean } | null;
 }
 
 /** The Discord panel and Settings > Discord. Sent on its own channel, because speaking changes often. */
@@ -545,6 +547,8 @@ export type HostAction =
   | { type: "account-change-email"; code: string }
   | { type: "account-delete-code" }
   | { type: "account-delete"; code: string }
+  /** The answer to "Which profile?" on a first sign-in. */
+  | { type: "account-profile-choice"; keep: "account" | "pc" }
   /** Reads every account's allowance now (a provider's own wait time still applies). */
   | { type: "ai-usage-refresh" }
   /** Adds an account for a CLI profile folder. */
