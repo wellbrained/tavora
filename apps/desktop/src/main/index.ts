@@ -21,7 +21,9 @@ app.enableSandbox();
 // The data folder is fixed, not derived from the app's name: it has always been
 // %APPDATA%\@tavora\desktop (the package name), and the installed app is named
 // Tavora, which would otherwise move everyone's games and settings.
-if (process.env.TAVORA_USER_DATA) app.setPath("userData", path.resolve(process.env.TAVORA_USER_DATA));
+// Like every switch below, only a development run honours the environment: whoever can set it for a packaged Tavora
+// could otherwise point it at their own data folder or modules, or have a module listed as Official.
+if (!app.isPackaged && process.env.TAVORA_USER_DATA) app.setPath("userData", path.resolve(process.env.TAVORA_USER_DATA));
 else app.setPath("userData", path.join(app.getPath("appData"), "@tavora", "desktop"));
 
 // OLED panels don't use the RGB subpixel layout ClearType assumes, so small
@@ -71,18 +73,18 @@ function restart(): void {
 
 const repoRoot = path.resolve(__dirname, "../../../..");
 const dirList = (value: string) => value.split(path.delimiter).filter(Boolean);
-const moduleDirs = process.env.TAVORA_MODULE_DIRS
+const moduleDirs = !app.isPackaged && process.env.TAVORA_MODULE_DIRS
   ? dirList(process.env.TAVORA_MODULE_DIRS)
   : [app.isPackaged ? path.join(process.resourcesPath, "modules") : path.join(repoRoot, "examples")];
 // Official modules (Notes, To-Dos) ship inside a packaged build and are
 // loaded from the repo's modules/ folder in a dev run.
-const officialModuleDirs = process.env.TAVORA_OFFICIAL_MODULE_DIRS
+const officialModuleDirs = !app.isPackaged && process.env.TAVORA_OFFICIAL_MODULE_DIRS
   ? dirList(process.env.TAVORA_OFFICIAL_MODULE_DIRS)
   : [app.isPackaged ? path.join(process.resourcesPath, "official-modules") : path.join(repoRoot, "modules")];
 
 // Themes work the same way: Tavora's own ship inside the app, and the
 // player's own live in the themes folder of their data folder.
-const officialThemeDirs = process.env.TAVORA_OFFICIAL_THEME_DIRS
+const officialThemeDirs = !app.isPackaged && process.env.TAVORA_OFFICIAL_THEME_DIRS
   ? dirList(process.env.TAVORA_OFFICIAL_THEME_DIRS)
   : [app.isPackaged ? path.join(process.resourcesPath, "official-themes") : path.join(repoRoot, "themes")];
 const themeDirs = !app.isPackaged && process.env.TAVORA_THEME_DIRS ? dirList(process.env.TAVORA_THEME_DIRS) : [];
