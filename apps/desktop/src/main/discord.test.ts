@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import { DiscordConnection, DiscordError, OTHERS_MS, SCOPES, type DiscordSecrets } from "./discord";
+import { DiscordConnection, OTHERS_MS, SCOPES, type DiscordSecrets } from "./discord";
 import { RpcClient } from "./discord-rpc";
 import { fakeDiscord, until, type FakeDiscord } from "./discord-fake.test-helper";
 
@@ -26,7 +27,7 @@ interface Setup {
   tokenStatus?: number;
 }
 
-async function setup({ secrets = { secret: "s3cret_value", token: null }, running = true, tokenStatus = 200 }: Setup = {}) {
+async function setup({ secrets = { token: null }, running = true, tokenStatus = 200 }: Setup = {}) {
   connection?.dispose();
   await fake?.close();
   fake = await fakeDiscord();
@@ -60,7 +61,7 @@ async function setup({ secrets = { secret: "s3cret_value", token: null }, runnin
     }) as typeof fetch,
     load: async () => secrets,
     save: async (next) => void saved.push(next),
-    canSaveSecret: true,
+    canSaveSignIn: true,
     onChange: (view) => views.push(view.status),
     setTimer: (fn) => {
       timers.push(fn);
@@ -73,16 +74,16 @@ async function setup({ secrets = { secret: "s3cret_value", token: null }, runnin
 
 describe("DiscordConnection", () => {
   it("does nothing until a Discord panel is open", async () => {
-    const { connection, fake } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    const { connection, fake } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
     expect(connection.view().status).toBe("off");
     expect(fake.commands).toEqual([]);
   });
 
-  it("asks for the Client Secret first", async () => {
-    const { connection } = await setup({ secrets: { secret: null, token: null } });
+  it("needs no secret: a first start only waits for Connect", async () => {
+    const { connection } = await setup({ secrets: { token: null } });
     await connection.setWanted(true);
-    expect(connection.view()).toMatchObject({ status: "no-secret", secretSaved: false });
-    await expect(connection.connectNow()).rejects.toBeInstanceOf(DiscordError);
+    expect(connection.view()).toMatchObject({ status: "signed-out", canSaveSignIn: true });
+    await expect(connection.connectNow()).resolves.toBeUndefined();
   });
 
   it("waits for Connect before asking Discord for approval, then shows the voice channel", async () => {
@@ -93,10 +94,17 @@ describe("DiscordConnection", () => {
 
     await connection.connectNow();
     await until(() => connection.view().status === "connected" && connection.view().channels.length === 2);
-    expect(fake.commands.find((c) => c.cmd === "AUTHORIZE")?.args).toEqual({ client_id: "99", scopes: ["rpc", "rpc.voice.read", "rpc.voice.write", "identify"] });
-    // The secret goes to Discord's token address and nowhere else.
-    const tokenRequests = requests.filter((r) => r.body.includes("s3cret_value"));
+    // PKCE: the challenge goes to the Discord app, the verifier only to Discord's token address, and no secret exists.
+    const authorize = fake.commands.find((c) => c.cmd === "AUTHORIZE")?.args as Record<string, unknown>;
+    expect(authorize).toEqual({ client_id: "99", scopes: ["rpc", "rpc.voice.read", "rpc.voice.write", "identify"], code_challenge: expect.any(String), code_challenge_method: "S256" });
+    const tokenRequests = requests.filter((r) => r.body.includes("grant_type"));
     expect(tokenRequests.map((r) => r.url)).toEqual(["https://discord.com/api/oauth2/token"]);
+    const body = new URLSearchParams(tokenRequests[0]!.body);
+    expect(body.get("grant_type")).toBe("authorization_code");
+    expect(body.get("code")).toBe("code123");
+    expect(createHash("sha256").update(body.get("code_verifier")!).digest("base64url")).toBe(authorize.code_challenge);
+    expect(body.get("code_verifier")!.length).toBeGreaterThanOrEqual(43);
+    expect(requests.every((r) => !r.body.includes("client_secret"))).toBe(true);
     expect(saved.at(-1)?.token).toMatchObject({ accessToken: "good", refreshToken: "r1" });
 
     const view = connection.view();
@@ -116,7 +124,7 @@ describe("DiscordConnection", () => {
   });
 
   it("follows talking, joining, leaving and muting", async () => {
-    const { connection, fake } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    const { connection, fake } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
     await connection.setWanted(true);
     await until(() => connection.view().status === "connected" && connection.view().call !== null);
     const members = () => connection.view().call!.members;
@@ -143,7 +151,7 @@ describe("DiscordConnection", () => {
   });
 
   it("switches channels and shows a direct call without a server", async () => {
-    const { connection, fake } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    const { connection, fake } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
     await connection.setWanted(true);
     await until(() => connection.view().call?.id === "10");
     fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "30", name: null, voice_states: [person("1", "Brain"), person("5", "Kira")] } }));
@@ -159,7 +167,7 @@ describe("DiscordConnection", () => {
   });
 
   it("remembers the last server channel, and joins it or another listed one when asked", async () => {
-    const { connection, fake, saved } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    const { connection, fake, saved } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
     await connection.setWanted(true);
     await until(() => connection.view().status === "connected" && connection.view().channels.length === 2);
     const last = { channelId: "10", guildId: "20", name: "Factory Floor", serverName: "Wellbrained Crew" };
@@ -198,7 +206,7 @@ describe("DiscordConnection", () => {
   });
 
   it("remembers a server for each game, browses it without a call, and reads it every 5 minutes", async () => {
-    const { connection, fake, saved, timers } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    const { connection, fake, saved, timers } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
     fake.answers.set("GET_GUILD", (args) => ({ data: { id: args.guild_id, name: args.guild_id === "21" ? "Other Crew" : "Wellbrained Crew", icon_url: null } }));
     fake.answers.set("GET_GUILDS", () => ({ data: { guilds: [{ id: "20", name: "Wellbrained Crew" }, { id: "21", name: "Other Crew" }] } }));
     connection.setGame("poe2");
@@ -244,7 +252,7 @@ describe("DiscordConnection", () => {
   });
 
   it("leaves, mutes and deafens, and asks for the new permission first when the sign-in lacks it", async () => {
-    const { connection, fake } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    const { connection, fake } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
     await connection.setWanted(true);
     await until(() => connection.view().status === "connected" && connection.view().call !== null);
     expect(connection.view()).toMatchObject({ canControl: true, self: { mute: false, deaf: false } });
@@ -261,7 +269,7 @@ describe("DiscordConnection", () => {
     await expect(connection.setVoice({ mute: false })).rejects.toMatchObject({ key: "discord.error.voiceFailed" });
 
     // A sign-in made before the write scope existed can read, but must be approved again to mute.
-    const old = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    const old = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
     old.fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "brain", global_name: "Brain" }, scopes: ["rpc", "rpc.voice.read", "identify"] } }));
     await old.connection.setWanted(true);
     await until(() => old.connection.view().status === "connected");
@@ -275,7 +283,7 @@ describe("DiscordConnection", () => {
   });
 
   it("shows the volume and mute for me of each person, and changes them for the player only", async () => {
-    const { connection, fake } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    const { connection, fake } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
     fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({
       data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain"), { ...person("2", "Lena"), volume: 150, mute: true }, { ...person("3", "Tobi"), volume: 999 }] },
     }));
@@ -305,7 +313,7 @@ describe("DiscordConnection", () => {
   });
 
   it("leaves at once, and comes back when Discord refuses", async () => {
-    const { connection, fake } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    const { connection, fake } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
     await connection.setWanted(true);
     await until(() => connection.view().status === "connected" && connection.view().call !== null);
     fake.answers.set("SELECT_VOICE_CHANNEL", () => ({ error: { code: 4000, message: "No" } }));
@@ -319,35 +327,51 @@ describe("DiscordConnection", () => {
   });
 
   it("refreshes an expired sign-in, and asks again when Discord refuses it", async () => {
-    const expired = { secret: "s3cret_value", token: { accessToken: "old", refreshToken: "r", expiresAt: 0 } };
+    const expired = { token: { accessToken: "old", refreshToken: "r", expiresAt: 0 } };
     const first = await setup({ secrets: expired });
     await first.connection.setWanted(true);
     await until(() => first.connection.view().status === "connected");
     expect(first.requests.some((r) => r.body.includes("grant_type=refresh_token"))).toBe(true);
+    // Refreshing needs no secret either.
+    expect(first.requests.every((r) => !r.body.includes("client_secret"))).toBe(true);
 
     // The token is refused and refreshing fails too: Tavora is signed out and waits for Connect.
-    const second = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "old", refreshToken: "r", expiresAt: Date.now() + 1e9 } }, tokenStatus: 401 });
+    const second = await setup({ secrets: { token: { accessToken: "old", refreshToken: "r", expiresAt: Date.now() + 1e9 } }, tokenStatus: 401 });
     await second.connection.setWanted(true);
     await until(() => second.connection.view().status === "signed-out");
     expect(second.saved.at(-1)?.token).toBeNull();
     expect(second.fake.commands.some((c) => c.cmd === "AUTHORIZE")).toBe(false);
   });
 
-  it("says so when Discord does not accept the Client Secret", async () => {
+  it("says so when Discord does not sign Tavora in", async () => {
     const { connection } = await setup({ tokenStatus: 401 });
     await connection.setWanted(true);
     await connection.connectNow();
     await until(() => connection.view().status === "error");
-    expect(connection.view().error).toBe("discord.error.badSecret");
+    expect(connection.view().error).toBe("discord.error.noSignIn");
+  });
+
+  it("uses a new verifier for each sign-in", async () => {
+    const { connection, requests, fake } = await setup();
+    await connection.setWanted(true);
+    await connection.connectNow();
+    await until(() => connection.view().status === "connected");
+    await connection.signOut();
+    await connection.connectNow();
+    await until(() => connection.view().status === "connected");
+    const verifiers = requests.filter((r) => r.body.includes("code_verifier")).map((r) => new URLSearchParams(r.body).get("code_verifier"));
+    expect(verifiers).toHaveLength(2);
+    expect(verifiers[0]).not.toBe(verifiers[1]);
+    expect(fake.commands.filter((c) => c.cmd === "AUTHORIZE")).toHaveLength(2);
   });
 
   it("keeps looking while Discord isn't running, and notices when it quits", async () => {
-    const { connection, timers } = await setup({ running: false, secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    const { connection, timers } = await setup({ running: false, secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
     await connection.setWanted(true);
     await until(() => connection.view().status === "not-running");
     expect(timers.length).toBeGreaterThan(0);
 
-    const running = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    const running = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
     await running.connection.setWanted(true);
     await until(() => running.connection.view().status === "connected");
     running.fake.drop();
@@ -356,14 +380,12 @@ describe("DiscordConnection", () => {
   });
 
   it("disconnects when the last panel closes, and forgets the sign-in on Sign out", async () => {
-    const { connection, saved } = await setup({ secrets: { secret: "s3cret_value", token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
+    const { connection, saved } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
     await connection.setWanted(true);
     await until(() => connection.view().status === "connected");
     await connection.setWanted(false);
     expect(connection.view()).toMatchObject({ status: "off", call: null });
     await connection.signOut();
-    expect(saved.at(-1)).toEqual({ secret: "s3cret_value", token: null, last: null, games: {} });
-    await connection.setSecret(null);
-    expect(saved.at(-1)).toEqual({ secret: null, token: null, last: null, games: {} });
+    expect(saved.at(-1)).toEqual({ token: null, last: null, games: {} });
   });
 });

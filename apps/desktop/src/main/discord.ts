@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import type { MessageKey } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import type { DiscordChannel, DiscordMember, DiscordStatus, DiscordView } from "../shared/host-api";
@@ -26,7 +27,11 @@ import {
 // talking and who is muted. Nothing goes through Tavora's service; audio
 // never goes through Tavora at all. See docs/threat-model.md (D1–D7).
 
-/** Tavora's application in the Discord Developer Portal. Its id is public; its secret is not. */
+/**
+ * Tavora's application in the Discord Developer Portal. Its id is public. The
+ * application is a public client: sign-in uses PKCE (a one-time code verifier
+ * made on this PC for each sign-in), so no Client Secret exists on any PC.
+ */
 export const DISCORD_CLIENT_ID = "1560388687370387610";
 const TOKEN_URL = "https://discord.com/api/oauth2/token";
 const REDIRECT_URI = "http://localhost";
@@ -69,7 +74,6 @@ export interface DiscordGame {
 }
 
 export interface DiscordSecrets {
-  secret: string | null;
   token: DiscordToken | null;
   last?: DiscordLast | null;
   /** By game id; a game with an entry has "Remember the server on this game" ticked. */
@@ -84,7 +88,8 @@ export interface DiscordDeps {
   fetch: typeof fetch;
   load(): Promise<DiscordSecrets>;
   save(secrets: DiscordSecrets): Promise<void>;
-  canSaveSecret: boolean;
+  /** False where this PC can't encrypt, so the sign-in lasts only until Tavora closes. */
+  canSaveSignIn: boolean;
   onChange(view: DiscordView): void;
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
@@ -94,7 +99,7 @@ export interface DiscordDeps {
 export class DiscordError extends PlayerError {}
 
 export class DiscordConnection {
-  private secrets: DiscordSecrets = { secret: null, token: null };
+  private secrets: DiscordSecrets = { token: null };
   private loaded: Promise<void>;
   private client: RpcClient | null = null;
   private wanted = false;
@@ -158,8 +163,7 @@ export class DiscordConnection {
     return {
       status: this.status,
       error: this.error,
-      secretSaved: this.secrets.secret !== null,
-      canSaveSecret: this.deps.canSaveSecret,
+      canSaveSignIn: this.deps.canSaveSignIn,
       user: this.user,
       server: connected ? server(this.call?.guildId, null) : null,
       browseServer: connected ? server(this.browseGuildId, game?.guildId === this.browseGuildId ? game?.serverName ?? null : null) : null,
@@ -188,18 +192,7 @@ export class DiscordConnection {
   /** The player pressed Connect: approval in Discord may be asked for. */
   async connectNow(): Promise<void> {
     await this.loaded;
-    if (!this.secrets.secret) throw new DiscordError("discord.error.noSecret");
     void this.start(true);
-  }
-
-  async setSecret(secret: string | null): Promise<void> {
-    await this.loaded;
-    if (secret !== null && !this.deps.canSaveSecret) throw new DiscordError("discord.error.cantSave");
-    this.secrets = secret === null ? { secret, token: null, last: null, games: {} } : { ...this.secrets, secret };
-    await this.deps.save(this.secrets);
-    if (secret === null) this.stop(this.wanted ? "no-secret" : "off");
-    else if (this.wanted && (this.status === "no-secret" || this.status === "error" || this.status === "off")) void this.start(false);
-    this.emitNow();
   }
 
   async signOut(): Promise<void> {
@@ -207,7 +200,7 @@ export class DiscordConnection {
     this.secrets = { ...this.secrets, token: null, last: null, games: {} };
     await this.deps.save(this.secrets);
     this.user = null;
-    this.stop(this.wanted ? (this.secrets.secret ? "signed-out" : "no-secret") : "off");
+    this.stop(this.wanted ? "signed-out" : "off");
   }
 
   /**
@@ -304,7 +297,6 @@ export class DiscordConnection {
   /** The player pressed Allow muting: Discord is asked to approve the new permission. */
   async allowControl(): Promise<void> {
     await this.loaded;
-    if (!this.secrets.secret) throw new DiscordError("discord.error.noSecret");
     void this.start(true, true);
   }
 
@@ -392,7 +384,6 @@ export class DiscordConnection {
     const attempt = this.attempt;
     const live = () => attempt === this.attempt && this.wanted;
     if (!this.wanted) return;
-    if (!this.secrets.secret) return this.set("no-secret", null);
     if (!this.secrets.token && !interactive) return this.set("signed-out", null);
     this.set("connecting", null);
     const client = await this.deps.connect({
@@ -453,15 +444,18 @@ export class DiscordConnection {
     }
     if (!interactive || !live()) throw new SignedOut();
     this.set("approving", null);
+    // PKCE: Discord keeps the challenge and gives a token only to whoever shows the verifier.
+    const verifier = randomBytes(48).toString("base64url");
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
     let code: unknown;
     try {
-      ({ code } = (await client.command("AUTHORIZE", { client_id: this.deps.clientId, scopes: SCOPES }, undefined, AUTHORIZE_TIMEOUT_MS)) as { code?: unknown });
+      ({ code } = (await client.command("AUTHORIZE", { client_id: this.deps.clientId, scopes: SCOPES, code_challenge: challenge, code_challenge_method: "S256" }, undefined, AUTHORIZE_TIMEOUT_MS)) as { code?: unknown });
     } catch (error) {
       if (error instanceof RpcError && error.code !== 0) throw new DiscordError("discord.error.notApproved");
       throw error;
     }
     if (typeof code !== "string" || !code || code.length > 200) throw new DiscordError("discord.error.noCode");
-    const fresh = await this.exchange({ grant_type: "authorization_code", code, redirect_uri: REDIRECT_URI });
+    const fresh = await this.exchange({ grant_type: "authorization_code", code, redirect_uri: REDIRECT_URI, code_verifier: verifier });
     if (!live()) throw new SignedOut();
     return await this.authenticate(client, fresh.accessToken);
   }
@@ -476,16 +470,14 @@ export class DiscordConnection {
     return this.exchange({ grant_type: "refresh_token", refresh_token: token.refreshToken });
   }
 
-  /** Asks Discord for a token with the Client Secret. Only discord.com is ever sent the secret. */
+  /** Asks Discord for a token. Only discord.com is ever sent the code, the verifier or a refresh token. */
   private async exchange(grant: Record<string, string>): Promise<DiscordToken> {
-    const secret = this.secrets.secret;
-    if (!secret) throw new DiscordError("discord.error.noSecret");
     let response: Response;
     try {
       response = await this.deps.fetch(this.deps.tokenUrl ?? TOKEN_URL, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ client_id: this.deps.clientId, client_secret: secret, ...grant }),
+        body: new URLSearchParams({ client_id: this.deps.clientId, ...grant }),
         redirect: "error",
         signal: AbortSignal.timeout(15_000),
       });
@@ -493,7 +485,6 @@ export class DiscordConnection {
       throw new DiscordError("discord.error.offline");
     }
     const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-    if (response.status === 401 || body.error === "invalid_client") throw new DiscordError("discord.error.badSecret");
     const { access_token: access, refresh_token: refresh, expires_in: expires } = body;
     if (!response.ok || typeof access !== "string" || typeof refresh !== "string" || access.length > 500 || refresh.length > 500) {
       throw new DiscordError("discord.error.noSignIn");

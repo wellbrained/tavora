@@ -4,10 +4,12 @@ import type { DiscordGame, DiscordLast, DiscordSecrets, DiscordToken } from "./d
 import { isSnowflake } from "./discord-voice";
 import { writeFileAtomic } from "./fsutil";
 
-// The Discord Client Secret and sign-in, kept in discord.json in the user
-// data folder and encrypted with the operating system's key store (Electron's
-// safeStorage: DPAPI on Windows, the Keychain on macOS, the secret service on
-// Linux). Where that is not available nothing is saved.
+// The Discord sign-in (token), the voice channel last joined and the server each
+// game remembers, kept in discord.json in the user data folder and encrypted
+// with the operating system's key store (Electron's safeStorage: DPAPI on
+// Windows, the Keychain on macOS, the secret service on Linux). Where that is
+// not available nothing is saved. Before 0.6.1 the file also held a Client
+// Secret; it is dropped when the file is read and the file is written again.
 
 export interface Encryptor {
   isAvailable(): boolean;
@@ -15,10 +17,7 @@ export interface Encryptor {
   decrypt(data: Buffer): string;
 }
 
-const EMPTY: DiscordSecrets = { secret: null, token: null, last: null, games: {} };
-const MAX_SECRET = 200;
-
-export const isClientSecret = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{8,200}$/.test(value);
+const EMPTY: DiscordSecrets = { token: null, last: null, games: {} };
 
 function token(value: unknown): DiscordToken | null {
   const raw = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
@@ -61,8 +60,10 @@ export async function loadDiscordSecrets(file: string, encryptor: Encryptor): Pr
     const saved = JSON.parse(await readFile(file, "utf8")) as { v?: unknown; data?: unknown };
     if (saved.v !== 1 || typeof saved.data !== "string") return EMPTY;
     const raw = JSON.parse(encryptor.decrypt(Buffer.from(saved.data, "base64"))) as Record<string, unknown>;
-    const secret = isClientSecret(raw.secret) && raw.secret.length <= MAX_SECRET ? raw.secret : null;
-    return { secret, token: secret ? token(raw.token) : null, last: secret ? last(raw.last) : null, games: secret ? games(raw.games) : {} };
+    const secrets = { token: token(raw.token), last: last(raw.last), games: games(raw.games) };
+    // A file from before 0.6.1 holds a Client Secret: write it again without.
+    if ("secret" in raw) await saveDiscordSecrets(file, encryptor, secrets).catch(() => undefined);
+    return secrets;
   } catch {
     // Missing, damaged, or encrypted by another user or PC: start without.
     return EMPTY;
@@ -70,7 +71,7 @@ export async function loadDiscordSecrets(file: string, encryptor: Encryptor): Pr
 }
 
 export async function saveDiscordSecrets(file: string, encryptor: Encryptor, secrets: DiscordSecrets): Promise<void> {
-  if (!secrets.secret && !secrets.token && !secrets.last && Object.keys(secrets.games ?? {}).length === 0) {
+  if (!secrets.token && !secrets.last && Object.keys(secrets.games ?? {}).length === 0) {
     await rm(file, { force: true });
     return;
   }
