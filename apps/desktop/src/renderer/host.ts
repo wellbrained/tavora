@@ -1,7 +1,7 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import type { ActionResult, AiUsageView, DiscordView, HostAction, HostShortcut, HostViewState } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, DiscordView, HostAction, HostShortcut, HostViewState } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
 import type { SettingsSection } from "./components/settings/settings-index";
 import { numberedGames } from "./shortcuts";
@@ -34,6 +34,16 @@ api.onAiUsage((next) => (aiUsage.value = next));
 void api.getAiUsage().then((initial) => {
   if (initial && !aiUsage.value) aiUsage.value = initial;
 });
+
+/** Settings > Account: the address, the devices and where a sign-in is. */
+export const account = shallowRef<AccountView | null>(null);
+api.onAccount((next) => (account.value = next));
+void api.getAccount().then((initial) => {
+  if (initial && !account.value) account.value = initial;
+});
+
+/** Settings sections not shown on this run: Account until accounts are on. */
+export const hiddenSettings = computed<ReadonlySet<SettingsSection>>(() => new Set(account.value?.enabled ? [] : ["account"]));
 
 export const toast = ref<string | null>(null);
 let toastTimer: ReturnType<typeof setTimeout> | undefined;

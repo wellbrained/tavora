@@ -1,4 +1,4 @@
-import { Blocks, Globe, Keyboard, Palette, Plug, SlidersHorizontal, Trash2 } from "@lucide/vue";
+import { Blocks, Globe, Keyboard, Palette, Plug, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
 import type { MessageKey } from "../../../shared/i18n";
 import { t } from "../../i18n";
 
@@ -9,6 +9,7 @@ export const GROUPS = [
   {
     id: "tavora",
     sections: [
+      { id: "account", icon: UserRound },
       { id: "general", icon: SlidersHorizontal },
       { id: "appearance", icon: Palette },
       { id: "modules", icon: Blocks },
@@ -40,6 +41,7 @@ export const groupLabel = (group: (typeof GROUPS)[number]["id"]): string => t(`s
  * to the locale files.
  */
 export const SETTING_SECTIONS: readonly (readonly [id: string, section: SettingsSection])[] = [
+  ["account", "account"],
   ["startup", "general"],
   ["sort", "general"],
   ["language", "general"],
@@ -83,9 +85,9 @@ export interface SettingEntry {
   keywords: string[];
 }
 
-/** The searchable settings, worded in the current language. */
-export function settingEntries(): SettingEntry[] {
-  return SETTING_SECTIONS.map(([id, section]) => ({
+/** The searchable settings, worded in the current language, leaving out sections that are hidden here. */
+export function settingEntries(hidden: ReadonlySet<SettingsSection> = new Set()): SettingEntry[] {
+  return SETTING_SECTIONS.filter(([, section]) => !hidden.has(section)).map(([id, section]) => ({
     id,
     section,
     label: t(`settings.${id}.label` as MessageKey),
