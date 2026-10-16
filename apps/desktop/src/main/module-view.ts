@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { MessageChannelMain, session, WebContentsView, type Session } from "electron";
 import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
+import { modulePartition } from "./gamedata";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, MODULE_CSP, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BridgeSession } from "./bridge";
@@ -49,7 +50,7 @@ const hardened = new WeakSet<Session>();
  * cache and a separate renderer process from the host and other modules.
  */
 function moduleSession(module: InstalledModule, game: TavoraGame): Session {
-  const ses = session.fromPartition(`persist:module:${module.manifest.id}@${game.id}`);
+  const ses = session.fromPartition(modulePartition(module.owner, module.manifest.id, game.id));
   if (hardened.has(ses)) return ses;
   hardened.add(ses);
 

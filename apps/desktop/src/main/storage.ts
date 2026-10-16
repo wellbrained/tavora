@@ -1,6 +1,6 @@
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { isGameId, isModuleId } from "@tavora/module-schema";
+import { isGameId, isModuleId, isOwnerId } from "@tavora/module-schema";
 import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
 import { DocumentStore } from "./documents";
 import { HostError } from "./errors";
@@ -146,7 +146,7 @@ export interface ModuleData {
   documents: DocumentStore;
 }
 
-/** One settings store and one document store per (module, game), shared by all its panels. */
+/** One settings store and one document store per (owner, module, game), shared by all its panels. */
 export class DataRegistry {
   private readonly data = new Map<string, ModuleData>();
   readonly panelState: PanelStateStore;
@@ -155,11 +155,11 @@ export class DataRegistry {
     this.panelState = new PanelStateStore(path.join(dataDir, "panel-state"));
   }
 
-  get(moduleId: string, gameId: string): ModuleData {
+  get(owner: string, moduleId: string, gameId: string): ModuleData {
     // Ids were validated when the module and game were registered; checking
     // again here keeps them from ever forming a path outside dataDir.
-    if (!isModuleId(moduleId) || !isGameId(gameId)) throw new Error("invalid module or game id");
-    const dir = path.join(this.dataDir, "module-data", moduleId, gameId);
+    if (!isOwnerId(owner) || !isModuleId(moduleId) || !isGameId(gameId)) throw new Error("invalid owner, module or game id");
+    const dir = path.join(this.dataDir, "module-data", owner, moduleId, gameId);
     let data = this.data.get(dir);
     if (!data) {
       data = { settings: new ModuleStore(path.join(dir, "storage.json")), documents: new DocumentStore(path.join(dir, "documents")) };

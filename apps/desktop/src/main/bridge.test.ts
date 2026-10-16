@@ -40,7 +40,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     moduleVersion: "1.2.3",
     instanceId,
     game: { id: "poe2", displayName: "Path of Exile 2" },
-    data: registry.get(moduleId, "poe2"),
+    data: registry.get("local", moduleId, "poe2"),
     panelState: registry.panelState,
     capabilities: new Set(),
     getViewport: () => ({ width: 400, height: 300 }),
@@ -144,7 +144,7 @@ describe("identity", () => {
     expect(await call(port, "storage.set", { key: "n", value: [1, 2] })).toMatchObject({ ok: true, result: null });
     expect(await call(port, "storage.set", { key: "n" })).toMatchObject({ error: { code: "INVALID_PARAMS" } });
     expect(await call(port, "storage.keys")).toMatchObject({ result: ["count", "n"] });
-    expect(await registry.get("local.example.b", "poe2").settings.get("n")).toBeNull();
+    expect(await registry.get("local", "local.example.b", "poe2").settings.get("n")).toBeNull();
   });
 
   it("keeps panel state per panel", async () => {

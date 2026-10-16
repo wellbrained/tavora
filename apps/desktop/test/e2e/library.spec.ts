@@ -243,13 +243,13 @@ test("a game in Trash is deleted for good after 30 days or when the player says 
   await expect(page.getByTestId("trash-satisfactory")).toBeVisible();
   await running.app.close();
 
-  const dataDir = path.join(userData, "module-data", VANILLA, "satisfactory");
+  const dataDir = path.join(userData, "module-data", "local", VANILLA, "satisfactory");
   expect(await exists(dataDir)).toBe(true);
   const gamePartitions = async () =>
     (await readdir(path.join(userData, "Partitions")).catch(() => [] as string[]))
       .map((name) => decodeURIComponent(name).toLowerCase())
       .filter((name) => name.endsWith("@satisfactory"));
-  expect(await gamePartitions()).toEqual([`module:${VANILLA}@satisfactory`]);
+  expect(await gamePartitions()).toEqual([`module:local:${VANILLA}@satisfactory`]);
 
   // Thirty-one days later.
   const libraryFile = path.join(userData, "library.json");

@@ -31,7 +31,7 @@ import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, type SavedLay
 import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
-import { deleteModuleData, orphanedPartitions } from "./gamedata";
+import { deleteModuleData, migrateModuleData, orphanedPartitions } from "./gamedata";
 import { shortcutFor } from "./shortcuts";
 import { IconError, importIcon, removeIcon } from "./icons";
 import { readJsonOrSetAside } from "./json";
@@ -299,6 +299,8 @@ export class Host {
     for (const [name, version] of Object.entries(SUPPORTED_VERSIONS)) {
       await keepNewerFile(path.join(userData, name), version).catch(() => null);
     }
+    // Before any module session or store is opened (S5: data is keyed by owner and id).
+    await migrateModuleData(userData, (line) => console.warn(`[tavora] ${line}`)).catch((error: unknown) => console.error("[tavora] moving module data under its owner failed", error));
     const moduleProblems: ModuleProblem[] = [];
     const modules = await discoverModules(Host.moduleSources(options), moduleProblems);
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
@@ -1434,7 +1436,7 @@ export class Host {
       instanceId: record.instanceId,
       module,
       game,
-      data: this.data.get(module.manifest.id, game.id),
+      data: this.data.get(module.owner, module.manifest.id, game.id),
       panelState: this.data.panelState,
       hostVersion: app.getVersion(),
       preload: this.options.modulePreload,

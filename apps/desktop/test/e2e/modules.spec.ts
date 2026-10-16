@@ -1,10 +1,10 @@
 // Settings > Modules: the list says where each module came from, Reload picks
 // up a module put into the player's modules folder and explains one that
 // cannot be loaded, and Remove takes a module away together with its panels.
-import { access, mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { launch, newUserData, openGame, openModule, panels } from "./harness";
+import { expectModuleText, inModule, launch, newUserData, openGame, openModule, panels, VANILLA } from "./harness";
 
 async function addModule(userData: string, folder: string, id: string): Promise<string> {
   const dir = path.join(userData, "modules", folder);
@@ -63,4 +63,29 @@ test("the modules page lists where modules came from, reloads, and removes one w
   await expect(panels(page, "local.test.mini")).toHaveCount(0);
   await expect(access(mini)).rejects.toThrow();
   await app.close();
+});
+
+test("data saved before modules had owners is moved under its owner and still found (S5)", async () => {
+  const { app, page, userData } = await launch();
+  await openModule(page, VANILLA);
+  await expectModuleText(app, VANILLA, "status", "Connected");
+  await inModule(app, VANILLA, `document.querySelector('[data-testid="increment"]').click()`);
+  await expectModuleText(app, VANILLA, "count", "1");
+  await inModule(app, VANILLA, "localStorage.setItem('kept', 'yes')");
+  await app.close();
+
+  // Put both back the way older versions saved them: keyed by the id alone.
+  const data = path.join(userData, "module-data");
+  expect(await readdir(data)).toEqual(["local"]);
+  await rename(path.join(data, "local", VANILLA), path.join(data, VANILLA));
+  const partitions = path.join(userData, "Partitions");
+  const owned = (await readdir(partitions)).filter((name) => name.startsWith(`module%3Alocal%3A${VANILLA}@`));
+  expect(owned).toHaveLength(1);
+  await rename(path.join(partitions, owned[0]!), path.join(partitions, owned[0]!.replace("%3Alocal%3A", "%3A")));
+
+  const again = await launch(userData);
+  await expectModuleText(again.app, VANILLA, "count", "1");
+  expect(await inModule(again.app, VANILLA, "localStorage.getItem('kept')")).toBe("yes");
+  expect(await readdir(data)).toEqual(["local"]);
+  await again.app.close();
 });

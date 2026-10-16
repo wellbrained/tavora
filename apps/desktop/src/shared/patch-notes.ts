@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.9.1",
+    date: "2026-10-16",
+    title: "Module data gets an owner",
+    notes: [
+      "What a module saves now belongs to whoever made it, not just to the module's name, so a different module that takes the same name later can never read it. Your existing notes, to-dos and module settings are moved over once at start; nothing changes for you.",
+    ],
+  },
+  {
     version: "0.9.0",
     date: "2026-10-16",
     title: "Notes: fonts and sizes",

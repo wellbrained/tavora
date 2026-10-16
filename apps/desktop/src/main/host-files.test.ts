@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { deleteModuleData, orphanedPartitions } from "./gamedata";
+import { deleteModuleData, migrateModuleData, modulePartition, orphanedPartitions } from "./gamedata";
 import { IconError, imageType, importIcon, MAX_ICON_BYTES } from "./icons";
 import { initialBounds } from "./window-state";
 
@@ -13,16 +13,17 @@ async function tempDir() {
 }
 
 describe("deleteModuleData", () => {
-  it("deletes one game's data for every module and keeps other games", async () => {
+  it("deletes one game's data for every module of every owner and keeps other games", async () => {
     const userData = await tempDir();
-    for (const module of ["local.a", "local.b"]) {
+    const modules = ["local/local.a", "local/local.b", "official/tavora.notes", "0123456789abcdef0123456789abcdef/local.a"];
+    for (const module of modules) {
       for (const game of ["poe2", "satisfactory"]) {
         await mkdir(path.join(userData, "module-data", module, game), { recursive: true });
         await writeFile(path.join(userData, "module-data", module, game, "storage.json"), "{}");
       }
     }
     await deleteModuleData(userData, "poe2");
-    for (const module of ["local.a", "local.b"]) {
+    for (const module of modules) {
       expect(await readdir(path.join(userData, "module-data", module))).toEqual(["satisfactory"]);
     }
   });
@@ -42,6 +43,8 @@ describe("orphanedPartitions", () => {
     const names = [
       "module%3Alocal.example.a%40poe2",
       "module%3alocal.example.a%40gone-game",
+      "module%3Alocal%3Alocal.example.a@poe2",
+      "module%3Alocal%3Alocal.example.a@gone-game",
       ...rawPartition,
       "browser%40poe2",
       "browser%40gone-game",
@@ -53,6 +56,7 @@ describe("orphanedPartitions", () => {
     const found = await orphanedPartitions(userData, new Set(["poe2"]));
     expect(found.map((dir) => path.basename(dir)).sort()).toEqual([
       "browser%40gone-game",
+      "module%3Alocal%3Alocal.example.a@gone-game",
       "module%3alocal.example.a%40gone-game",
       ...rawPartition,
     ]);
@@ -107,5 +111,50 @@ describe("initialBounds", () => {
     expect(initialBounds(null, [small], small).bounds).toEqual({ x: 0, y: 0, width: 1024, height: 600 });
     expect(initialBounds({ bounds: { x: 0, y: 0, width: 10, height: 10 } }, [primary], primary).bounds.width).toBe(1280);
     expect(initialBounds({ bounds: { x: "a" } }, [primary], primary).bounds.width).toBe(1280);
+  });
+});
+
+describe("migrateModuleData", () => {
+  it("moves data and browser storage keyed by id alone under its owner", async () => {
+    const userData = await tempDir();
+    for (const id of ["tavora.notes", "local.me.tracker"]) {
+      await mkdir(path.join(userData, "module-data", id, "poe2"), { recursive: true });
+      await writeFile(path.join(userData, "module-data", id, "poe2", "storage.json"), id);
+      await mkdir(path.join(userData, "Partitions", `module%3A${id}@poe2`, "Local Storage"), { recursive: true });
+    }
+    await mkdir(path.join(userData, "Partitions", "browser@poe2"), { recursive: true });
+
+    await migrateModuleData(userData);
+
+    expect((await readdir(path.join(userData, "module-data"))).sort()).toEqual(["local", "official"]);
+    expect(await readFile(path.join(userData, "module-data", "official", "tavora.notes", "poe2", "storage.json"), "utf8")).toBe("tavora.notes");
+    expect(await readFile(path.join(userData, "module-data", "local", "local.me.tracker", "poe2", "storage.json"), "utf8")).toBe("local.me.tracker");
+    // The names Electron gives these partitions on disk (checked against Electron 44).
+    expect((await readdir(path.join(userData, "Partitions"))).sort()).toEqual([
+      "browser@poe2",
+      "module%3Alocal%3Alocal.me.tracker@poe2",
+      "module%3Aofficial%3Atavora.notes@poe2",
+    ]);
+    expect(modulePartition("local", "local.me.tracker", "poe2")).toBe("persist:module:local:local.me.tracker@poe2");
+
+    // A second start finds nothing left to move.
+    await migrateModuleData(userData);
+    expect((await readdir(path.join(userData, "module-data"))).sort()).toEqual(["local", "official"]);
+  });
+
+  it("never overwrites data already under an owner", async () => {
+    const userData = await tempDir();
+    await mkdir(path.join(userData, "module-data", "local.me.tracker", "poe2"), { recursive: true });
+    await mkdir(path.join(userData, "module-data", "local", "local.me.tracker", "poe2"), { recursive: true });
+    await writeFile(path.join(userData, "module-data", "local", "local.me.tracker", "poe2", "storage.json"), "new");
+    const lines: string[] = [];
+    await migrateModuleData(userData, (line) => lines.push(line));
+    expect(await readFile(path.join(userData, "module-data", "local", "local.me.tracker", "poe2", "storage.json"), "utf8")).toBe("new");
+    expect(await readdir(path.join(userData, "module-data", "local.me.tracker"))).toEqual(["poe2"]);
+    expect(lines).toHaveLength(1);
+  });
+
+  it("does nothing on a fresh data folder", async () => {
+    await expect(migrateModuleData(await tempDir())).resolves.toBeUndefined();
   });
 });

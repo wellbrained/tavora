@@ -41,6 +41,20 @@ export function isModuleId(value: unknown): value is string {
   return typeof value === "string" && value.length <= 128 && MODULE_ID.test(value);
 }
 
+/**
+ * Who owns a module's data (docs/decisions.md, publisher row of 2026-10-16):
+ * Tavora's own modules, unsigned local ones, or a publisher's signing key,
+ * named by the hex fingerprint of the publisher's first key. Owners end up in
+ * paths and session partitions, so no dots or other separators.
+ */
+export const OFFICIAL_OWNER = "official";
+export const LOCAL_OWNER = "local";
+const KEY_FINGERPRINT = /^[0-9a-f]{32}$/;
+
+export function isOwnerId(value: unknown): value is string {
+  return value === OFFICIAL_OWNER || value === LOCAL_OWNER || (typeof value === "string" && KEY_FINGERPRINT.test(value));
+}
+
 export function isGameId(value: unknown): value is string {
   return typeof value === "string" && GAME_ID.test(value);
 }

@@ -29,7 +29,7 @@
 
 - **Main process:** trusted. Only place with Node/OS access. Validates every bridge message.
 - **Host UI renderer:** trusted code, still sandboxed with no Node. Talks to main only through a small preload API; main checks the sender is the host window.
-- **Module renderers:** untrusted. Each module (per game) gets its own Electron session (`persist:module:<moduleId>@<gameId>`), its own origin (`tavora-module://<moduleId>/`), a separate renderer process from the host and from other modules, `sandbox: true`, `contextIsolation: true`, no Node, no `<webview>`.
+- **Module renderers:** untrusted. Each module (per game) gets its own Electron session (`persist:module:<owner>:<moduleId>@<gameId>`), its own origin (`tavora-module://<moduleId>/`), a separate renderer process from the host and from other modules, `sandbox: true`, `contextIsolation: true`, no Node, no `<webview>`.
 
 ## Attacker
 
@@ -132,7 +132,7 @@ Method: read the main-process side (`module-view.ts`, `bridge.ts`, `assets.ts`, 
 | S2 | Medium | **A module could fill the player's disk.** The quotas covered only bridge storage; a module's own IndexedDB and origin-private file system took 192 MB each with no error, and Chromium reported a 23 GB quota (about 60 % of the disk). An in-memory session does not help (it moves the problem to RAM, 5 GB). | Fixed (0.7.2): the host measures the session folder every second and clears it past 256 MB (G11). A module can still write for up to one second first; accepted. |
 | S3 | Low–Medium | **No Electron fuses were set**, although this model counted on them. With `RunAsNode` on, one environment variable turns the signed `Tavora.exe` into a Node interpreter. ASAR integrity cannot apply because the app ships with `asar: false`. | Fixed (no version change): fuses set and read back from a packaged exe. The ASAR point is accepted. |
 | S4 | Low | **Dev-only switches worked in packaged builds**: `TAVORA_USER_DATA`, `TAVORA_MODULE_DIRS`, `TAVORA_OFFICIAL_MODULE_DIRS`, `TAVORA_OFFICIAL_THEME_DIRS`. The `OFFICIAL` one could list any module as Official. Needs control of the environment Tavora starts in, so local malware, which is out of scope. | Fixed with S3. |
-| S5 | Medium | **A module id is a claim, not an identity.** Data is keyed by the manifest's `id`, and removing a module keeps its data (a decision, so adding it back brings it back). A different module that later claims the same id inherits that module's documents, settings and web storage. It needs the player to install it, and two modules with one id cannot run together. | Decided 2026-10-16, not built: data is keyed by owner (a signing key, `local` or `official`) and id; see "Publisher binding" below and decisions.md. Until it is built, accepted as before: install modules only from a source the player trusts. |
+| S5 | Medium | **A module id is a claim, not an identity.** Data is keyed by the manifest's `id`, and removing a module keeps its data (a decision, so adding it back brings it back). A different module that later claims the same id inherits that module's documents, settings and web storage. It needs the player to install it, and two modules with one id cannot run together. | Decided 2026-10-16; storage keyed by owner since 0.9.1, signing and the installer not built yet: data is keyed by owner (a signing key, `local` or `official`) and id; see "Publisher binding" below and decisions.md. Until it is built, accepted as before: install modules only from a source the player trusts. |
 
 ### What held
 
