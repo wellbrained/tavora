@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { accountRoutes, type AccountOptions } from "./accounts.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { MAX_UPLOAD_BODY, type Submissions } from "./submissions.ts";
@@ -25,9 +26,11 @@ export interface AppOptions {
   /** Icons offered by players. Absent: the offer route answers 503. */
   submissions?: Submissions;
   submitRateLimiter?: RateLimiter;
+  /** Accounts, only when the service can send email. Absent: the account routes answer 503. */
+  accounts?: AccountOptions;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 10, windowMs: 3_600_000 });
   const steamLimiter = steamRateLimiter ?? createRateLimiter({ limit: 6, windowMs: 60_000 });
@@ -168,6 +171,10 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
       throw error;
     }
   });
+
+  // Accounts: the only player data the service keeps, and only once it can send email.
+  if (accounts) app.route("/v1/account", accountRoutes(accounts, limiter, (request) => (clientKey ? clientKey(request) : "local")));
+  else app.all("/v1/account/*", (context) => context.json({ error: "Accounts are not available right now.", reason: "unavailable" }, 503));
 
   app.notFound((context) => context.json({ error: "Not found." }, 404));
   app.onError((error, context) => {

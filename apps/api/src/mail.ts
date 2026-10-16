@@ -1,0 +1,121 @@
+import { Hono } from "hono";
+
+/**
+ * How the service sends email. A provider is chosen just before accounts go
+ * live (decided 2026-10-16); until then development and tests use the test
+ * inbox below, and a service without a mailer keeps accounts off.
+ */
+
+export interface Mail {
+  to: string;
+  subject: string;
+  text: string;
+}
+
+export interface Mailer {
+  send(mail: Mail): Promise<void>;
+}
+
+export type MailLanguage = "en" | "de";
+
+export const mailLanguage = (input: unknown): MailLanguage => (input === "de" ? "de" : "en");
+
+export type CodeMailKind = "sign-in" | "create" | "change-email" | "delete";
+
+const CODE_TEXTS: Record<MailLanguage, Record<CodeMailKind, { subject: string; lead: string }>> = {
+  en: {
+    "sign-in": { subject: "Your Tavora sign-in code", lead: "Here is your code to sign in to Tavora:" },
+    create: { subject: "Your Tavora code", lead: "Here is your code to create a Tavora account:" },
+    "change-email": { subject: "Confirm your new email for Tavora", lead: "Here is your code to use this address for your Tavora account:" },
+    delete: { subject: "Confirm deleting your Tavora account", lead: "Here is your code to delete your Tavora account:" },
+  },
+  de: {
+    "sign-in": { subject: "Dein Tavora-Anmeldecode", lead: "Hier ist dein Code für die Anmeldung bei Tavora:" },
+    create: { subject: "Dein Tavora-Code", lead: "Hier ist dein Code, um ein Tavora-Konto zu erstellen:" },
+    "change-email": { subject: "Bestätige deine neue E-Mail für Tavora", lead: "Hier ist dein Code, um diese Adresse für dein Tavora-Konto zu verwenden:" },
+    delete: { subject: "Bestätige das Löschen deines Tavora-Kontos", lead: "Hier ist dein Code, um dein Tavora-Konto zu löschen:" },
+  },
+};
+
+const CODE_FOOTER: Record<MailLanguage, string> = {
+  en: "It works for 10 minutes. If you did not ask for it, ignore this email: nothing happens without the code.",
+  de: "Er gilt 10 Minuten. Wenn du ihn nicht angefordert hast, ignoriere diese E-Mail: Ohne den Code passiert nichts.",
+};
+
+export function codeMail(kind: CodeMailKind, to: string, code: string, language: MailLanguage): Mail {
+  const { subject, lead } = CODE_TEXTS[language][kind];
+  return { to, subject, text: `${lead}\n\n    ${code}\n\n${CODE_FOOTER[language]}\n\nTavora\n` };
+}
+
+/** Shows enough of an address to recognise it, not enough to learn it: n•••@example.com. */
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf("@");
+  return `${email.slice(0, 1)}•••${email.slice(at)}`;
+}
+
+/** Sent to the old address after the email of an account was changed. */
+export function emailChangedMail(to: string, newEmail: string, language: MailLanguage): Mail {
+  return language === "de"
+    ? {
+        to,
+        subject: "Die E-Mail deines Tavora-Kontos wurde geändert",
+        text: `Dein Tavora-Konto verwendet jetzt ${maskEmail(newEmail)} statt dieser Adresse.\n\nWenn du das nicht warst, schreib uns an tavora.app@gmail.com.\n\nTavora\n`,
+      }
+    : {
+        to,
+        subject: "The email of your Tavora account was changed",
+        text: `Your Tavora account now uses ${maskEmail(newEmail)} instead of this address.\n\nIf this was not you, write to tavora.app@gmail.com.\n\nTavora\n`,
+      };
+}
+
+// ── Test inbox ───────────────────────────────────────────────────────────
+
+export interface TestInbox extends Mailer {
+  mails(): (Mail & { at: string })[];
+  clear(): void;
+}
+
+/** Keeps "sent" mail in memory, newest first, for development and tests. Never used in production. */
+export function createTestInbox(limit = 100): TestInbox {
+  const mails: (Mail & { at: string })[] = [];
+  return {
+    async send(mail) {
+      mails.unshift({ ...mail, at: new Date().toISOString() });
+      mails.length = Math.min(mails.length, limit);
+    },
+    mails: () => mails.map((mail) => ({ ...mail })),
+    clear: () => {
+      mails.length = 0;
+    },
+  };
+}
+
+const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+
+/** The test inbox as a page (`/`) and as JSON (`/mails`, DELETE empties it) on its own local port. */
+export function createTestInboxApp(inbox: TestInbox) {
+  const app = new Hono();
+  app.use("*", async (context, next) => {
+    await next();
+    context.header("Cache-Control", "no-store");
+    context.header("X-Content-Type-Options", "nosniff");
+  });
+  app.get("/mails", (context) => context.json({ mails: inbox.mails() }));
+  app.delete("/mails", (context) => {
+    inbox.clear();
+    return context.body(null, 204);
+  });
+  app.get("/", (context) => {
+    const items = inbox
+      .mails()
+      .map((mail) => `<article><p><b>${escapeHtml(mail.subject)}</b><br>to ${escapeHtml(mail.to)} · ${escapeHtml(mail.at)}</p><pre>${escapeHtml(mail.text)}</pre></article>`)
+      .join("");
+    context.header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
+    return context.html(
+      `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="5"><title>Tavora test inbox</title>` +
+        `<style>body{font:15px system-ui;max-width:720px;margin:24px auto;padding:0 16px}article{border:1px solid #8884;border-radius:8px;padding:8px 16px;margin:12px 0}pre{font-size:15px;white-space:pre-wrap}</style>` +
+        `<h1>Tavora test inbox</h1><p>Mail the local service "sent". Nothing here leaves this PC.</p>${items || "<p>No mail yet.</p>"}`,
+    );
+  });
+  return app;
+}
