@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import os from "node:os";
-import { appendFile, mkdir, readFile, realpath, rm } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   app,
@@ -22,7 +22,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { ActionResult, AppearanceView, BrowserCommand, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
+import type { ActionResult, AiUsageView, AppearanceView, BrowserCommand, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
 import { resolveLanguage, translate, type Language } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -86,8 +86,10 @@ import { ModuleView } from "./module-view";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { siteOfUrl } from "./browser-url";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, discordModule, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { AI_USAGE_MODULE_ID, aiUsageModule, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, discordModule, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
+import { AiUsage } from "./ai-usage";
+import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnection, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
@@ -208,6 +210,9 @@ export class Host {
   /** Open Discord panels. They have no view of their own: the host UI draws them. */
   private readonly discordPanels = new Set<string>();
   private readonly discord: DiscordConnection;
+  /** Open AI usage panels. Like Discord panels they have no view of their own. */
+  private readonly aiUsagePanels = new Set<string>();
+  private readonly aiUsage: AiUsage;
   private screen: Screen = "welcome";
   private notice: string | null = null;
   /** Where the host UI shows each visible panel, in window content coordinates. */
@@ -246,6 +251,9 @@ export class Host {
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.discord = Host.discordConnection(options, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:discord", view);
+    });
+    this.aiUsage = Host.aiUsageService(options, (view) => {
+      if (!this.window.isDestroyed()) this.window.webContents.send("host:ai-usage", view);
     });
     this.window = new BrowserWindow({
       ...windowState.bounds,
@@ -293,6 +301,7 @@ export class Host {
     const modules = await discoverModules(Host.moduleSources(options), moduleProblems);
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     modules.set(DISCORD_MODULE_ID, discordModule(app.getVersion()));
+    modules.set(AI_USAGE_MODULE_ID, aiUsageModule(app.getVersion()));
     const moduleInfo = await describeModules(userModulesDir(options), modules);
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
@@ -392,6 +401,7 @@ export class Host {
     const modules = await discoverModules(Host.moduleSources(this.options), problems);
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     modules.set(DISCORD_MODULE_ID, discordModule(app.getVersion()));
+    modules.set(AI_USAGE_MODULE_ID, aiUsageModule(app.getVersion()));
     this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
     this.moduleProblems = problems;
     this.modules = modules;
@@ -597,6 +607,7 @@ export class Host {
       }
     });
     ipcMain.handle("host:get-discord", (event) => (fromHost(event) ? this.discord.view() : null));
+    ipcMain.handle("host:get-ai-usage", (event) => (fromHost(event) ? this.aiUsage.view() : null));
     ipcMain.handle("host:search-catalog", (event, query: unknown) =>
       fromHost(event) && typeof query === "string" && query.length <= 100
         ? searchCatalog(this.library, query).map(({ id, name }) => ({ id, name }))
@@ -641,6 +652,8 @@ export class Host {
       this.viewsByContents.clear();
       this.browsersByContents.clear();
       this.discordPanels.clear();
+      this.aiUsagePanels.clear();
+      this.aiUsage.dispose();
       this.discord.dispose();
     });
   }
@@ -858,6 +871,16 @@ export class Host {
         break;
       case "clear-browser-data":
         return this.clearBrowserData(action.scope);
+      case "ai-usage-refresh":
+        return this.aiUsage.refreshNow();
+      case "ai-usage-add":
+        return this.aiUsage.add(action.provider, action.label, action.directory);
+      case "ai-usage-update":
+        return this.aiUsage.update(action.accountId, action.label, action.directory);
+      case "ai-usage-remove":
+        return this.aiUsage.remove(action.accountId);
+      case "ai-usage-set-interval":
+        return this.aiUsage.setInterval(action.minutes);
       case "discord-connect":
         return this.discord.connectNow();
       case "discord-sign-out":
@@ -1202,6 +1225,34 @@ export class Host {
     });
   }
 
+  // ── AI usage ─────────────────────────────────────────────────────────
+
+  private static aiUsageService(options: HostOptions, onChange: (view: AiUsageView) => void): AiUsage {
+    const home = os.homedir();
+    return new AiUsage({
+      file: path.join(options.userData, "ai-usage.json"),
+      version: app.getVersion(),
+      fetch: (input, init) => fetch(input, init),
+      readText: (file) => readFile(file, "utf8").catch(() => null),
+      isDirectory: (directory) => stat(directory).then((info) => info.isDirectory(), () => false),
+      writeText: (file, text) => writeFileAtomic(file, text),
+      readCodex: (directory, signal) => readCodexUsage(directory, app.getVersion(), signal),
+      // Profile folders next to the defaults, such as ~/.claude and ~/.claude-work; only their names are looked at.
+      detect: async () => {
+        const found: { provider: "claude" | "codex"; directory: string }[] = [];
+        for (const entry of await readdir(home, { withFileTypes: true }).catch(() => [])) {
+          if (!entry.isDirectory()) continue;
+          const directory = path.join(home, entry.name);
+          if (/^\.claude(-[\w.-]+)?$/.test(entry.name) && existsSync(path.join(directory, ".credentials.json"))) found.push({ provider: "claude", directory });
+          if (/^\.codex(-[\w.-]+)?$/.test(entry.name) && existsSync(path.join(directory, "auth.json"))) found.push({ provider: "codex", directory });
+        }
+        return found;
+      },
+      now: () => Date.now(),
+      onChange,
+    });
+  }
+
   // ── Discord ──────────────────────────────────────────────────────────
 
   private static discordConnection(options: HostOptions, onChange: (view: ReturnType<DiscordConnection["view"]>) => void): DiscordConnection {
@@ -1368,6 +1419,11 @@ export class Host {
       void this.discord.setWanted(true);
       return;
     }
+    if (record.moduleId === AI_USAGE_MODULE_ID) {
+      this.aiUsagePanels.add(record.instanceId);
+      void this.aiUsage.setWanted(true);
+      return;
+    }
     let measured = openedAt === undefined;
     const module = this.modules.get(record.moduleId)!;
     const view = new ModuleView({
@@ -1471,6 +1527,10 @@ export class Host {
       if (this.discordPanels.size === 0) void this.discord.setWanted(false);
       return;
     }
+    if (this.aiUsagePanels.delete(instanceId)) {
+      if (this.aiUsagePanels.size === 0) void this.aiUsage.setWanted(false);
+      return;
+    }
     const view = this.views.get(instanceId);
     if (!view) return;
     this.views.delete(instanceId);
@@ -1481,7 +1541,7 @@ export class Host {
   }
 
   private closeAllViews(): void {
-    for (const instanceId of [...this.views.keys(), ...this.discordPanels]) this.destroyView(instanceId);
+    for (const instanceId of [...this.views.keys(), ...this.discordPanels, ...this.aiUsagePanels]) this.destroyView(instanceId);
     this.panelBounds.clear();
   }
 
@@ -1636,7 +1696,7 @@ export class Host {
         const view = this.views.get(record.instanceId);
         const name = this.modules.get(record.moduleId)!.manifest.name;
         // A Discord panel is drawn by the host UI itself, so it is ready at once.
-        if (this.discordPanels.has(record.instanceId)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: "ready" as const };
+        if (this.discordPanels.has(record.instanceId) || this.aiUsagePanels.has(record.instanceId)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: "ready" as const };
         const openedFrom = this.openedFrom.get(record.instanceId);
         if (!(view instanceof BrowserPanel)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: view?.status ?? "loading" };
         const browser = view.state;
