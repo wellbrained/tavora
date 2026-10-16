@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.7.1",
+    date: "2026-10-16",
+    title: "Safer modules",
+    notes: [
+      "A misbehaving module can no longer crash Tavora by sending it huge amounts of data. Such a module now only slows itself down.",
+    ],
+  },
+  {
     version: "0.7.0",
     date: "2026-10-16",
     title: "AI Usage panel",
