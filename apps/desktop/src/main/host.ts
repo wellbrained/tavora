@@ -858,8 +858,6 @@ export class Host {
         break;
       case "clear-browser-data":
         return this.clearBrowserData(action.scope);
-      case "discord-set-secret":
-        return this.discord.setSecret(action.secret);
       case "discord-connect":
         return this.discord.connectNow();
       case "discord-sign-out":
@@ -1212,7 +1210,7 @@ export class Host {
     // Test machines have no keyring; Linux's plain-text fallback stands in there (and only there).
     if (test && process.platform === "linux") safeStorage.setUsePlainTextEncryption(true);
     const encryptor: Encryptor = {
-      // Linux without a keyring falls back to a fixed key, which protects nothing; Tavora then saves no secret.
+      // Linux without a keyring falls back to a fixed key, which protects nothing; Tavora then saves no sign-in.
       isAvailable: () =>
         safeStorage.isEncryptionAvailable() && (process.platform !== "linux" || test !== undefined || safeStorage.getSelectedStorageBackend() !== "basic_text"),
       encrypt: (text) => safeStorage.encryptString(text),
@@ -1225,7 +1223,7 @@ export class Host {
       fetch: (input, init) => fetch(input, init),
       load: () => loadDiscordSecrets(file, encryptor),
       save: (secrets) => saveDiscordSecrets(file, encryptor, secrets),
-      get canSaveSecret() {
+      get canSaveSignIn() {
         return encryptor.isAvailable();
       },
       onChange,

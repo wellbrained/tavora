@@ -4,6 +4,7 @@
 
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
@@ -11,7 +12,6 @@ import { fakeDiscord, type FakeDiscord } from "../../src/main/discord-fake.test-
 import { launch, openModule } from "./harness";
 
 const DISCORD = "tavora.discord";
-const SECRET = "test_Client-Secret_1234567890abc";
 
 let fake: FakeDiscord;
 let tokens: Server;
@@ -66,17 +66,9 @@ test("the Discord panel connects once approved and shows who is in the voice cha
   try {
     await openModule(page, DISCORD);
     const panel = page.getByTestId("discord-panel");
-    await expect(panel).toContainText("Connect Discord");
+    await expect(panel).toContainText("See who is in your voice channel");
     // Nothing is asked of Discord before the player connects.
     expect(fake.commands).toEqual([]);
-
-    await panel.getByRole("button", { name: "Open Settings" }).click();
-    await page.getByTestId("discord-secret").fill(SECRET);
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByTestId("discord-secret-saved")).toBeVisible();
-    // D3: kept encrypted, never in plain text on disk.
-    expect(await readFile(path.join(userData, "discord.json"), "utf8")).not.toContain(SECRET);
-    await page.keyboard.press("Escape");
 
     await panel.getByTestId("discord-connect").click();
     await expect(page.getByTestId("discord-server")).toHaveText("Wellbrained Crew");
@@ -85,8 +77,18 @@ test("the Discord panel connects once approved and shows who is in the voice cha
     await expect(panel).toContainText("Lobby");
     // D2: only voice is read.
     expect(fake.commands.find((c) => c.cmd === "AUTHORIZE")?.args.scopes).toEqual(["rpc", "rpc.voice.read", "rpc.voice.write", "identify"]);
-    // D1: the secret only goes to the token address.
-    expect(tokenBodies.every((body) => body.includes(`client_secret=${SECRET}`))).toBe(true);
+    // D1: no secret exists; the one-time verifier only goes to the token address, and it matches the challenge the Discord app got.
+    const authorize = fake.commands.find((c) => c.cmd === "AUTHORIZE")?.args as { code_challenge: string; code_challenge_method: string };
+    expect(authorize.code_challenge_method).toBe("S256");
+    expect(tokenBodies).toHaveLength(1);
+    const body = new URLSearchParams(tokenBodies[0]);
+    expect(body.has("client_secret")).toBe(false);
+    expect(createHash("sha256").update(body.get("code_verifier") ?? "").digest("base64url")).toBe(authorize.code_challenge);
+    // D3: the sign-in is kept encrypted, never in plain text on disk.
+    await expect.poll(async () => readFile(path.join(userData, "discord.json"), "utf8").catch(() => "")).not.toBe("");
+    const onDisk = await readFile(path.join(userData, "discord.json"), "utf8");
+    expect(onDisk).not.toContain("access");
+    expect(onDisk).not.toContain("refresh");
 
     fake.dispatch("SPEAKING_START", { user_id: "2", channel_id: "10" });
     await expect(page.getByTestId("discord-member-2")).toHaveAttribute("data-speaking", "true");

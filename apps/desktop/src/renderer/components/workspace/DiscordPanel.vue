@@ -10,7 +10,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DiscordChannel } from "../../../shared/host-api";
-import { act, discord, openSettings, state } from "../../host";
+import { act, discord, state } from "../../host";
 import { t } from "../../i18n";
 import DiscordMemberRow from "./DiscordMemberRow.vue";
 import { initials } from "./discord-ui";
@@ -21,8 +21,6 @@ const gameId = computed(() => (state.value?.screen === "game" ? state.value.curr
 /** What the panel says while it is not showing a channel. */
 const notice = computed(() => {
   switch (view.value?.status ?? "off") {
-    case "no-secret":
-      return { title: t("discord.panel.connectTitle"), text: t("discord.panel.connectText"), action: "settings" as const };
     case "signed-out":
       return { title: t("discord.panel.signedOutTitle"), text: t("discord.panel.signedOutText"), action: "connect" as const };
     case "approving":
@@ -107,9 +105,6 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", closeOutside))
       <p class="font-medium">{{ notice.title }}</p>
       <p v-if="notice.text" class="text-muted-foreground max-w-xs">{{ notice.text }}</p>
       <Button v-if="notice.action === 'connect'" class="mt-2" size="sm" data-testid="discord-connect" @click="act({ type: 'discord-connect' })">{{ t("discord.panel.connect") }}</Button>
-      <Button v-else-if="notice.action === 'settings'" class="mt-2" size="sm" variant="secondary" @click="openSettings({ section: 'integrations', setting: 'discord-secret' })">
-        {{ t("discord.panel.openSettings") }}
-      </Button>
     </div>
 
     <template v-else>

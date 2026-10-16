@@ -116,22 +116,20 @@ export interface DiscordChannel {
 }
 
 /**
- * off: no Discord panel is open. no-secret: Settings has no Client Secret yet.
- * signed-out: Tavora was never approved, or the player signed out. not-running:
+ * off: no Discord panel is open. signed-out: Tavora was never approved, or the
+ * player signed out. not-running:
  * the Discord app was not found (Tavora keeps looking). approving: Discord shows
  * its pop-up. error: `error` says what went wrong.
  */
-export type DiscordStatus = "off" | "no-secret" | "signed-out" | "connecting" | "not-running" | "approving" | "connected" | "error";
+export type DiscordStatus = "off" | "signed-out" | "connecting" | "not-running" | "approving" | "connected" | "error";
 
 /** The Discord panel and Settings > Discord. Sent on its own channel, because speaking changes often. */
 export interface DiscordView {
   status: DiscordStatus;
   /** The key of the text that says what went wrong; the host UI words it. */
   error: MessageKey | null;
-  /** A Client Secret is saved (it is never sent to the host UI). */
-  secretSaved: boolean;
-  /** False where this PC can't encrypt secrets, so none can be saved. */
-  canSaveSecret: boolean;
+  /** False where this PC can't encrypt, so the sign-in lasts only until Tavora closes. */
+  canSaveSignIn: boolean;
   /** Who Tavora is signed in to Discord as. */
   user: { id: string; name: string } | null;
   /** The server of the voice channel the player is in; null in a direct or group call. */
@@ -415,8 +413,6 @@ export type HostAction =
   | { type: "browser-forget-site"; list: "shared" | "adblock-off"; site: string }
   /** Deletes cookies, logins and caches: the current game's, or the ones shared by all games. */
   | { type: "clear-browser-data"; scope: "game" | "shared" }
-  /** Saves the Discord application's Client Secret on this PC, encrypted; null removes it and signs out. */
-  | { type: "discord-set-secret"; secret: string | null }
   /** Connects to the Discord app, asking for approval in Discord if Tavora was never approved. */
   | { type: "discord-connect" }
   /** Join a voice channel in the Discord app: the last one, or one of the server's listed channels. */
