@@ -19,10 +19,10 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.15.2",
+    version: "0.16.0",
     date: "2026-10-16",
-    title: "Your profile in your Tavora account",
-    notes: ["Behind the scenes: once Tavora accounts are switched on, your name, initials and picture go with your account to every PC you sign in on. Still not switched on, and Tavora keeps working fully without an account."],
+    title: "Tavora accounts, ready to switch on",
+    notes: ["Optional Tavora accounts are built: sign in with a code sent to your email (no password), see and sign out the PCs you are signed in on, change your email or delete your account in Settings > Account. Your name, initials and picture go with your account to every PC. They are not switched on yet; Tavora keeps working fully without an account."],
   },
   {
     version: "0.15.1",
