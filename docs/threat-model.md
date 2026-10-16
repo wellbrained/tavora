@@ -161,6 +161,25 @@ Excalidraw, which the Whiteboard is built on, resizes pictures with WebAssembly.
 
 Accepted: WebAssembly widens what a bug in the browser engine could be reached with, for the one official module that needs it. Community modules do not get it until there is a reviewed way to grant it.
 
+## Accounts (service, decided 2026-10-16)
+
+Optional accounts live in Tavora's service (`apps/api`, `/v1/account`): an email address, signed into with a code mailed to it. They are the first player data the service keeps. The attacker is anyone on the internet who can call the service, someone who has an address but not its mailbox, and someone who copied a PC's files. The app side (where the sign-in is kept, the Account page) gets its rows when it is built.
+
+| # | Guarantee | Mechanism | Test |
+| --- | --- | --- | --- |
+| A1 | Nobody can learn whether an address has an account without its mailbox | asking for a code answers `202 sent` either way, and the mail is sent either way (only the text differs, which only the mailbox owner reads); "no account yet" and "address taken" are said only after that address's code was right | unit: `accounts.test.ts` (same answer, taken only after the code) |
+| A2 | A code cannot be guessed | 6 random digits from `crypto.randomInt`, valid 10 minutes, spent after 5 wrong tries, replaced by a new one; one address gets at most 3 codes in 15 minutes and 10 a day (all purposes together), so at most 50 guesses a day per address (about 1 in 20,000); per client 20 checks in 15 minutes; codes are compared in constant time and stored only as a hash | unit: `accounts.test.ts` (tries, expiry, replacement, limits) |
+| A3 | An inbox cannot be flooded through Tavora | the same per-address limits apply to every purpose (sign-in, change email, delete), plus 10 code requests an hour per client | unit: `accounts.test.ts` |
+| A4 | A code only does what it was sent for | codes are kept per address and purpose, and a change-email or delete code also names the account that asked; a sign-in code cannot change or delete anything | unit: `accounts.test.ts` |
+| A5 | A copy of the account database does not let anyone sign in | session tokens are 32 random bytes, kept only as a SHA-256 hash; codes only as a hash (a 6-digit code's hash can be reversed, but it is gone within 10 minutes) | unit: the token is not in any answer but the sign-in |
+| A6 | A stolen sign-in cannot quietly take the account | changing the address needs a code sent to the new address and mails a notice to the old one; deleting needs a fresh code to the account's address; every device is listed and can be signed out from another | unit: `accounts.test.ts` |
+| A7 | The service keeps as little as it can | the address, when the account was made, and per sign-in the token hash, the operating system and two dates; no connection address (the rate limits are in memory, as before), no PC name, no request log; codes and per-address counters are kept under a hash of the address and are deleted within a day; a sign-in unused for a year is deleted | unit: `accounts.test.ts`; review of `account-store.ts` |
+| A8 | Deleting an account removes it from the service at once | account, sign-ins and waiting codes are deleted in one transaction; the server's daily snapshots (14 kept) still hold it for up to 14 days, which the privacy page says | unit: `accounts.test.ts` |
+| A9 | No account works until mail can be sent, and the test inbox never runs in production | without a mailer every account route answers 503 and no account file is opened; `TAVORA_TEST_INBOX_PORT` is ignored when `NODE_ENV=production`, and the inbox listens on 127.0.0.1 only, shows mail as text under a strict content security policy | unit: `accounts.test.ts` (503, escaping) |
+| A10 | A web page cannot use a player's sign-in | the token is sent in a header, never a cookie; bodies must be JSON (a preflight this service refuses); there is no CORS | unit: `accounts.test.ts` (415) |
+
+Open: the mail provider and its records on `mytavora.app` (SPF, DKIM, DMARC) are chosen before accounts go live, and the privacy page must describe accounts first.
+
 ## Known limits and open risks
 
 - **Webview isolation is not proven safe by this spike.** It relies on Chromium site isolation and the OS sandbox. A Chromium renderer exploit would break G1–G4. Mitigation: keep Electron current, enable the OS sandbox everywhere, Electron fuses are set at packaging time (`electronFuses` in `apps/desktop/package.json`, checked 2026-10-16 with `@electron/fuses read` on a packaged build): `RunAsNode`, `NODE_OPTIONS`, `--inspect` and extra `file://` privileges are off, cookie encryption is on. ASAR integrity is not used because the app ships unpacked (`"asar": false`); someone who can edit Tavora's files can already act as the player, so this is accepted.

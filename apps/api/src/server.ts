@@ -2,11 +2,13 @@ import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { serve } from "@hono/node-server";
+import { AccountStore } from "./account-store.ts";
 import { createAdminApp } from "./admin-app.ts";
 import { createApp } from "./app.ts";
 import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
 import { loadIconStore } from "./icons.ts";
+import { createTestInbox, createTestInboxApp, type Mailer } from "./mail.ts";
 import { createSteamClient } from "./steam.ts";
 import { createSubmissions } from "./submissions.ts";
 
@@ -44,10 +46,28 @@ const submissions = createSubmissions({
   gameName: (id) => (gameNameStatement.get(id) as { name: string } | undefined)?.name ?? null,
 });
 
+// Accounts need a way to send email. No provider is set up yet (it is chosen
+// before accounts go live); for development, TAVORA_TEST_INBOX_PORT keeps the
+// mail in memory and shows it on a local page. Never in production.
+let mailer: Mailer | undefined;
+const inboxPort = process.env.TAVORA_TEST_INBOX_PORT?.trim();
+if (inboxPort && process.env.NODE_ENV === "production") {
+  console.warn("[tavora-api] TAVORA_TEST_INBOX_PORT is ignored in production.");
+} else if (inboxPort) {
+  const inbox = createTestInbox();
+  mailer = inbox;
+  serve({ fetch: createTestInboxApp(inbox).fetch, port: Number(inboxPort), hostname: "127.0.0.1" }, (info) => {
+    console.log(`[tavora-api] test inbox on http://127.0.0.1:${info.port} (local only, mail is never sent)`);
+  });
+}
+if (!mailer) console.log("[tavora-api] No way to send email: accounts are off.");
+const accountStore = mailer ? new AccountStore(path.join(stateDir, "accounts.sqlite")) : undefined;
+
 const app = createApp({
   db,
   icons,
   submissions,
+  ...(mailer && accountStore ? { accounts: { store: accountStore, mailer } } : {}),
   ...(takedownContact ? { takedownContact } : {}),
   ...(steamKey ? { steam: createSteamClient({ key: steamKey }) } : {}),
   clientKey: (request) =>
