@@ -161,7 +161,7 @@ Excalidraw, which the Whiteboard is built on, resizes pictures with WebAssembly.
 
 Accepted: WebAssembly widens what a bug in the browser engine could be reached with, for the one official module that needs it. Community modules do not get it until there is a reviewed way to grant it.
 
-## Network grants (0.16.7)
+## Network grants (0.16.8)
 
 The first grant of Milestone F (decisions.md, module grants row of 2026-10-16). A module names exact hosts in `permissions.network`; once the player grants them, `network.fetch` reaches them. The attacker is a module author who wants to reach more than the player agreed to, or to use Tavora to reach the player's own PC or network. Since 0.16.8 the player is asked when they first add a module (N8–N10).
 
@@ -180,7 +180,7 @@ The first grant of Milestone F (decisions.md, module grants row of 2026-10-16). 
 
 Accepted: a granted host can answer with anything, including content meant to mislead the player; the module shows it in its own sandboxed page, which still cannot load remote code (`script-src 'self'`). Data a module sends to a granted host cannot be recalled after a revoke (listed below). An unsigned local module is known only by its id, so another local module put in the same folder under the same id gets its grant; anyone who can put files there can already act as the player (accepted limit above).
 
-## AI Usage connector (0.16.9)
+## AI Usage connector (0.16.10)
 
 The AI Usage panel was built into the host (0.7.0); it is now the official module `tavora.ai-usage`, and the host keeps only the logins as the `ai-usage` connector (`main/ai-usage.ts`). A granted module can list the accounts and ask for one account's usage; everything that touches a login stays in the main process.
 
@@ -219,6 +219,10 @@ Optional accounts live in Tavora's service (`apps/api`, `/v1/account`): an email
 | A15 | The profile in the account is only its owner's, and only a small picture | `GET` and `PUT /profile` need the account's sign-in and answer only its own profile; no route shows it to anyone else; the name is checked (32 characters, no control characters), the initials (3, no spaces), the picture must be a well-formed 256 px PNG of at most 512 KB, and the app checks it again before it writes it (`savePicture`, as for a picture the player picks); deleting the account deletes it | unit: `accounts.test.ts` (owner only, limits, deleted with the account), `account.test.ts` |
 | A16 | One PC cannot quietly overwrite a newer profile | the newest change wins by `updatedAt`, which the service never takes later than its own clock; on a first sign-in with two different profiles the player is asked which to keep, and the answer is only applied after they pick | unit: `accounts.test.ts` (older loses, no future time), `account.test.ts` (ask once, newer wins at a start) |
 | A17 | The mail provider learns only what it must, and cannot be used to flood anyone | Brevo (EU) gets the address, the subject and the plain-text body with the code, nothing else; open and click tracking are off in the account; its key is only in `production.env` (typed by Nik with `tavora-api-set-setting brevo-key`) and never in a log line or error, and Brevo accepts it only from the server's two addresses (authorised IPs), so a leaked key is useless elsewhere; the service counts its own emails per day and stops at `MAIL_DAILY_LIMIT` (sign-ins already 20 earlier), so a flood of requests empties the day's allowance, not anyone's inbox (A3 still limits each address) | unit: `accounts.test.ts` (Brevo request, used-up allowance, key not in errors, daily limit and reserve) |
+| A18 | A Discord login cannot take over an account | an account is found only by the Discord user id, never by email (Discord is not asked for it); Discord is connected only from a signed-in account and refused when another account has it, so nothing is ever merged; a new Discord login makes a new account only after the player's yes, from a 10-minute ticket kept as a hash | unit: `accounts.test.ts` (no merge, taken, ticket expiry and reuse) |
+| A19 | Only the player who approved on Discord can use the code | PKCE: the verifier never leaves the app until the service exchanges the code; the app accepts one return on 127.0.0.1 with its own `state`; codes and verifiers are checked for shape before anything is sent to Discord | unit: `accounts.test.ts` (shape), the app's own tests |
+| A20 | Tavora keeps no Discord token and learns as little as it can | scope `identify` only; the service reads the user id and username and revokes the token at once; the answers show the username to the owner, never the id; Discord's username is kept as plain text of at most 32 characters | unit: `accounts.test.ts` (Discord client: no secret, revoke, no email kept) |
+| A21 | An account never loses its last way in | removing the email or Discord is refused for the last method (`last-method`), and the database requires at least one (a CHECK); the change of the accounts table to an optional email ran once in one transaction, checked counts and links, and was tried on a copy of the live backup first | unit: `account-store.test.ts` (migration, CHECK) |
 
 Open: the privacy page must describe accounts (and Brevo as the processor that sends the emails) before accounts go live in the installed app.
 

@@ -38,10 +38,10 @@ async function movePointer(app: ElectronApplication, to: { x: number; y: number 
 
 /** The elements stored in every board document, by board name. */
 async function storedBoards(userData: string): Promise<Record<string, { type: string }[]>> {
-  const files = (await readdir(path.join(userData, "module-data", WHITEBOARD), { recursive: true })).filter((name) => /board-[a-z0-9-]+\.json$/.test(name));
+  const files = (await readdir(path.join(userData, "module-data", "official", WHITEBOARD), { recursive: true })).filter((name) => /board-[a-z0-9-]+\.json$/.test(name));
   const boards: Record<string, { type: string }[]> = {};
   for (const file of files) {
-    const document = JSON.parse(await readFile(path.join(userData, "module-data", WHITEBOARD, file), "utf8")) as { title?: string; data?: { elements?: { type: string }[] } };
+    const document = JSON.parse(await readFile(path.join(userData, "module-data", "official", WHITEBOARD, file), "utf8")) as { title?: string; data?: { elements?: { type: string }[] } };
     boards[document.title ?? file] = document.data?.elements ?? [];
   }
   return boards;
@@ -95,7 +95,7 @@ test("whiteboard: draw on a board, keep it, switch boards, delete one and bring 
 
 /** The data stored for the board with this name. */
 async function storedBoard(userData: string, name: string): Promise<{ elements: { type: string; locked?: boolean; fileId?: string }[]; files: Record<string, { blobId: string; mimeType: string }> } | undefined> {
-  const root = path.join(userData, "module-data", WHITEBOARD);
+  const root = path.join(userData, "module-data", "official", WHITEBOARD);
   for (const file of (await readdir(root, { recursive: true })).filter((entry) => /board-[a-z0-9-]+\.json$/.test(entry))) {
     const document = JSON.parse(await readFile(path.join(root, file), "utf8")) as { title?: string; data?: never };
     if (document.title === name) return document.data;

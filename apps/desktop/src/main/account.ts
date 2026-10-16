@@ -1,12 +1,13 @@
 import { readFile, rm } from "node:fs/promises";
 import type { AccountDevice, AccountPending, AccountView, DeviceOs } from "../shared/host-api";
-import type { Language } from "../shared/i18n";
+import type { Language, MessageKey } from "../shared/i18n";
 import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
+import type { DiscordLoginResult } from "./discord-login";
 import { PlayerError } from "./messages";
 
-// The player's Tavora account (decided 2026-10-16): an email address, signed
-// into with a code mailed to it. The main process talks to the service; the
+// The player's Tavora account (decided 2026-10-16): signed into with an email
+// code, a Discord login (the browser, see discord-login.ts) or both. The main process talks to the service; the
 // host UI only sees the address, the devices and what step a sign-in is at.
 // The sign-in token is kept in account.json, encrypted like the Discord sign-in;
 // where that is not possible it is kept in memory until Tavora quits. It is not
@@ -16,7 +17,10 @@ export const ACCOUNT_TIMEOUT_MS = 10_000;
 
 export interface SavedAccount {
   token: string;
-  email: string;
+  /** Null for an account that signs in with Discord only. */
+  email: string | null;
+  /** The Discord username shown as "connected as @name", or null without a Discord login. */
+  discord: string | null;
   createdAt: string;
 }
 
@@ -25,7 +29,10 @@ const isToken = (value: unknown): value is string => typeof value === "string" &
 
 function savedAccount(value: unknown): SavedAccount | null {
   const raw = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
-  return isToken(raw.token) && isText(raw.email, 254) && isText(raw.createdAt, 40) ? { token: raw.token, email: raw.email, createdAt: raw.createdAt } : null;
+  const email = isText(raw.email, 254) ? raw.email : null;
+  // A file from 0.16.x has no Discord field; it reads as none.
+  const discord = isText(raw.discord, 32) ? raw.discord : null;
+  return isToken(raw.token) && isText(raw.createdAt, 40) && (email || discord) ? { token: raw.token, email, discord, createdAt: raw.createdAt } : null;
 }
 
 export async function loadAccount(file: string, encryptor: Encryptor): Promise<SavedAccount | null> {
@@ -89,11 +96,21 @@ export interface AccountClientOptions {
     get: () => Promise<ProfileData>;
     apply: (profile: ProfileData & { updatedAt: string }) => Promise<void>;
   };
+  /** Runs Discord's browser sign-in (discord-login.ts); absent where Discord login is not offered. */
+  discordLogin?: () => Promise<DiscordLoginResult>;
   timeoutMs?: number;
 }
 
 /** What the service said went wrong, as a message for the player. */
-const REASONS: Record<string, "account.error.badEmail" | "account.error.wrongCode" | "account.error.mailFailed" | "account.error.unavailable" | "account.error.emailTaken" | "account.error.sameEmail"> = {
+const REASONS: Record<string, MessageKey> = {
+  "discord-refused": "account.error.discordRefused",
+  "discord-unreachable": "account.error.discordUnreachable",
+  "discord-taken": "account.error.discordTaken",
+  "discord-expired": "account.error.discordExpired",
+  "discord-mismatch": "account.error.discordMismatch",
+  "last-method": "account.error.lastMethod",
+  "no-email": "account.error.noEmail",
+  "no-discord": "account.error.noDiscord",
   "bad-email": "account.error.badEmail",
   "wrong-code": "account.error.wrongCode",
   "mail-failed": "account.error.mailFailed",
@@ -116,6 +133,8 @@ export class AccountClient {
   private pending: AccountPending | null = null;
   /** The right code for an address with no account yet, kept until the player says yes or no. */
   private pendingCode: string | null = null;
+  /** The service's ticket for a checked Discord login with no account yet, kept until the player says yes or no. */
+  private pendingTicket: string | null = null;
   /** The account's profile when it differs from this PC's on the first sign-in here: the player chooses once. */
   private profileChoice: (ProfileData & { updatedAt: string }) | null = null;
   private readonly baseUrl: string;
@@ -136,7 +155,8 @@ export class AccountClient {
     return {
       enabled: this.options.enabled,
       canKeepSignIn: this.options.canKeepSignIn(),
-      account: this.saved ? { email: this.saved.email, createdAt: this.saved.createdAt } : null,
+      account: this.saved ? { email: this.saved.email, discord: this.saved.discord ? { name: this.saved.discord } : null, createdAt: this.saved.createdAt } : null,
+      discordLogin: Boolean(this.options.discordLogin),
       devices: this.saved ? this.devices : null,
       pending: this.pending,
       profileChoice: this.saved && this.profileChoice ? { name: this.profileChoice.name, initials: this.profileChoice.initials, picture: this.profileChoice.picture !== null } : null,
@@ -171,6 +191,11 @@ export class AccountClient {
   /** Makes the account, only once the player confirmed the minimum age (13, and 16 or a parent's permission; decided 2026-10-16). Nothing about the age is kept. */
   async create(ageConfirmed: boolean): Promise<void> {
     const pending = this.pending;
+    if (pending?.kind === "discord-create" && this.pendingTicket) {
+      if (!ageConfirmed) throw new PlayerError("account.error.ageRequired");
+      await this.signedIn(await this.call("POST", "/discord/create", { ticket: this.pendingTicket, os: this.options.os }));
+      return;
+    }
     if (pending?.kind !== "sign-in" || pending.step !== "create" || !this.pendingCode) throw new PlayerError("account.error.noCode");
     if (!ageConfirmed) throw new PlayerError("account.error.ageRequired");
     await this.signedIn(await this.call("POST", "/verify", { email: pending.email, code: this.pendingCode, os: this.options.os, create: true }));
@@ -179,6 +204,68 @@ export class AccountClient {
   cancel(): void {
     this.pending = null;
     this.pendingCode = null;
+    this.pendingTicket = null;
+    this.changed();
+  }
+
+  // ── Discord login ──────────────────────────────────────────────────────
+
+  /** Signs in with Discord in the browser; a Discord login with no account yet asks first, like a new address. */
+  async discordSignIn(): Promise<void> {
+    this.ensure(false);
+    const answer = await this.call("POST", "/discord/sign-in", { ...(await this.discord()), os: this.options.os });
+    if (answer.status === "no-account" && typeof answer.ticket === "string") {
+      const name = (answer.discord as Record<string, unknown> | undefined)?.name;
+      this.pending = { kind: "discord-create", name: isText(name, 32) ? name : "" };
+      this.pendingTicket = answer.ticket;
+      this.pendingCode = null;
+      this.changed();
+      return;
+    }
+    await this.signedIn(answer);
+  }
+
+  /** Connects Discord to the signed-in account (a fresh Discord sign-in in the browser). */
+  async connectDiscord(): Promise<void> {
+    this.ensure(true);
+    const login = await this.discord();
+    await this.updated(await this.call("POST", "/discord", login, true));
+  }
+
+  async disconnectDiscord(): Promise<void> {
+    this.ensure(true);
+    await this.updated(await this.call("DELETE", "/discord", undefined, true));
+  }
+
+  async removeEmail(): Promise<void> {
+    this.ensure(true);
+    await this.updated(await this.call("DELETE", "/email", undefined, true));
+  }
+
+  /** Deletes the account by a fresh sign-in with its Discord login. Everything on the PC stays. */
+  async deleteWithDiscord(): Promise<void> {
+    this.ensure(true);
+    const login = await this.discord();
+    await this.call("POST", "/delete/discord", login, true);
+    await this.forget();
+  }
+
+  private async discord(): Promise<DiscordLoginResult> {
+    if (!this.options.discordLogin) throw new PlayerError("account.error.unavailable");
+    return this.options.discordLogin();
+  }
+
+  /** Takes the sign-in methods the service now reports for the account. */
+  private async updated(answer: Record<string, unknown>): Promise<void> {
+    if (!this.saved) return;
+    const account = (answer.account ?? {}) as Record<string, unknown>;
+    const discord = account.discord as Record<string, unknown> | null | undefined;
+    const email = account.email === null ? null : isText(account.email, 254) ? account.email : this.saved.email;
+    const name = discord === null ? null : isText(discord?.name, 32) ? discord.name : this.saved.discord;
+    if (email !== this.saved.email || name !== this.saved.discord) {
+      this.saved = { ...this.saved, email, discord: name };
+      await this.keep();
+    }
     this.changed();
   }
 
@@ -188,13 +275,9 @@ export class AccountClient {
   async refresh(): Promise<void> {
     if (!this.options.enabled || !this.saved) return;
     const answer = await this.call("GET", "/", undefined, true);
-    const account = (answer.account ?? {}) as Record<string, unknown>;
-    if (isText(account.email, 254) && account.email !== this.saved.email) {
-      this.saved = { ...this.saved, email: account.email };
-      await this.keep();
-    }
     this.devices = Array.isArray(answer.devices) ? answer.devices.map(device).filter((item): item is AccountDevice => item !== null) : [];
-    this.changed();
+    // The email or Discord may have changed on another PC.
+    await this.updated(answer);
   }
 
   /** Signs this PC out. Everything on the PC stays; if the service cannot be reached the sign-in is still forgotten here. */
@@ -222,11 +305,8 @@ export class AccountClient {
     const pending = this.pending;
     if (pending?.kind !== "change-email" || !this.saved) throw new PlayerError("account.error.noCode");
     const answer = await this.call("POST", "/email", { email: pending.email, code, language: this.options.language() }, true);
-    const email = (answer.account as Record<string, unknown> | undefined)?.email;
-    this.saved = { ...this.saved, email: isText(email, 254) ? email : pending.email };
     this.pending = null;
-    await this.keep();
-    this.changed();
+    await this.updated({ account: { email: pending.email, ...(answer.account as Record<string, unknown> | undefined) } });
   }
 
   async sendDeleteCode(): Promise<void> {
@@ -303,11 +383,12 @@ export class AccountClient {
 
   private async signedIn(answer: Record<string, unknown>): Promise<void> {
     const account = (answer.account ?? {}) as Record<string, unknown>;
-    const saved = savedAccount({ token: answer.token, email: account.email, createdAt: account.createdAt });
+    const saved = savedAccount({ token: answer.token, email: account.email, discord: (account.discord as Record<string, unknown> | null | undefined)?.name, createdAt: account.createdAt });
     if (!saved) throw new PlayerError("error.generic");
     this.saved = saved;
     this.pending = null;
     this.pendingCode = null;
+    this.pendingTicket = null;
     this.devices = null;
     await this.keep();
     this.changed();
@@ -324,6 +405,7 @@ export class AccountClient {
     this.devices = null;
     this.pending = null;
     this.pendingCode = null;
+    this.pendingTicket = null;
     this.profileChoice = null;
     await this.options.save(null);
     this.changed();

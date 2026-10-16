@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { DEVICE_OS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
+import { DiscordError, isDiscordCode, isPkceVerifier, type DiscordClient, type DiscordIdentity } from "./discord.ts";
 import { codeMail, emailChangedMail, MailLimitError, mailLanguage, type Mail, type Mailer } from "./mail.ts";
 import { inspectPng } from "./png.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
@@ -22,6 +23,8 @@ export interface AccountOptions {
   now?: () => number;
   /** The provider's emails a day (Brevo's free plan: 300). Unset: no limit (the test inbox). */
   mailDailyLimit?: number;
+  /** Discord login. Absent: its routes answer 503 and email sign-in works as before. */
+  discord?: DiscordClient;
 }
 
 /** Of the day's emails, the last ones are kept for changing the address and deleting the account. */
@@ -68,6 +71,9 @@ const tooMany = (context: Context, wait: number) => {
   context.header("Retry-After", String(wait));
   return context.json({ error: "Too many requests.", reason: "too-many" }, 429);
 };
+/** What the owner sees of their account: never the Discord id, only its username as a label. */
+const accountAnswer = (account: Account) => ({ email: account.email, discord: account.discord ? { name: account.discord.name } : null, createdAt: account.createdAt });
+const lastMethod = (context: Context) => context.json({ error: "An account keeps at least one way to sign in.", reason: "last-method" }, 409);
 const wrongCode = (context: Context) => context.json({ error: "That code is wrong or has expired.", reason: "wrong-code" }, 400);
 
 export function accountRoutes(options: AccountOptions, limiter: RateLimiter, clientKey: (request: Request) => string) {
@@ -152,7 +158,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     let account = existing;
     if (!account) {
       try {
-        account = store.createAccount(email, at);
+        account = store.createAccount({ email }, at);
       } catch {
         // Created a moment ago by another sign-in with the same address.
         account = store.accountByEmail(email);
@@ -160,7 +166,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
       }
     }
     const { token, session } = store.createSession(account.id, deviceOs(input.os), at);
-    return context.json({ status: existing ? "signed-in" : "created", token, device: session.id, account: { email: account.email, createdAt: account.createdAt } });
+    return context.json({ status: existing ? "signed-in" : "created", token, device: session.id, account: accountAnswer(account) });
   });
 
   // ── Signed in ─────────────────────────────────────────────────────────
@@ -177,9 +183,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   });
 
   signedIn.get("/", (context) => {
-    const { email, createdAt, id } = context.get("account");
+    const account = context.get("account");
     const current = context.get("session").id;
-    return context.json({ account: { email, createdAt }, devices: store.devices(id).map((device) => ({ ...device, current: device.id === current })) });
+    return context.json({ account: accountAnswer(account), devices: store.devices(account.id).map((device) => ({ ...device, current: device.id === current })) });
   });
 
   signedIn.post("/sign-out", (context) => {
@@ -232,8 +238,16 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
       return context.json({ error: "That address already has a Tavora account.", reason: "email-taken" }, 409);
     }
     // The old address hears about it, so a stolen sign-in cannot quietly take the account.
-    await send(context, emailChangedMail(account.email, email, mailLanguage(input.language)));
-    return context.json({ account: { email, createdAt: account.createdAt } });
+    if (account.email) await send(context, emailChangedMail(account.email, email, mailLanguage(input.language)));
+    return context.json({ account: accountAnswer({ ...account, email }) });
+  });
+
+  // Remove the email address: only while a Discord login remains, so the account can still be reached.
+  signedIn.delete("/email", (context) => {
+    const account = context.get("account");
+    if (!account.email) return context.json({ error: "This account has no email address.", reason: "no-email" }, 409);
+    if (store.removeEmail(account.id) === "last-method") return lastMethod(context);
+    return context.json({ account: accountAnswer({ ...account, email: null }) });
   });
 
   // Delete the account: a fresh code to its address, then everything on the server goes at once.
@@ -242,6 +256,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (wait > 0) return tooMany(context, wait);
     const input = await body(context);
     const account = context.get("account");
+    // A Discord-only account confirms with a fresh Discord sign-in instead (/delete/discord).
+    if (!account.email) return context.json({ error: "This account has no email address; confirm with Discord.", reason: "no-email" }, 409);
     if (usedUp(true)) return usedUpAnswer(context);
     const request = store.requestCode(account.email, "delete", account.id, now());
     if (!request.ok) return tooMany(context, request.retryAfter);
@@ -254,7 +270,88 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const input = await body(context);
     const account = context.get("account");
     if (typeof input.code !== "string" || !CODE.test(input.code)) return context.json({ error: "Send { code }.", reason: "bad-request" }, 400);
-    if (!store.checkCode(account.email, "delete", account.id, input.code, now(), true)) return wrongCode(context);
+    if (!account.email || !store.checkCode(account.email, "delete", account.id, input.code, now(), true)) return wrongCode(context);
+    store.deleteAccount(account.id);
+    return context.body(null, 204);
+  });
+
+  // ── Discord login ─────────────────────────────────────────────────────
+  // The app sends the code Discord handed back and the PKCE verifier only it
+  // knew; the service asks Discord who this is and keeps the user id and
+  // username, never the token. Nothing is ever linked by email address.
+
+  /** Who the player is on Discord, or an answer to send instead. */
+  const identify = async (context: Context, input: Record<string, unknown>): Promise<DiscordIdentity | Response> => {
+    if (!options.discord) return context.json({ error: "Discord sign-in is not available right now.", reason: "unavailable" }, 503);
+    if (!isDiscordCode(input.code) || !isPkceVerifier(input.verifier)) return context.json({ error: "Send { code, verifier }.", reason: "bad-request" }, 400);
+    try {
+      return await options.discord.identify(input.code, input.verifier);
+    } catch (error) {
+      if (error instanceof DiscordError) return context.json({ error: error.message, reason: error.reason }, error.reason === "discord-refused" ? 400 : 502);
+      throw error;
+    }
+  };
+
+  // Signed out: a known Discord login signs in (its username is refreshed); an
+  // unknown one is held for 10 minutes while the app asks "Create a Tavora account?".
+  app.post("/discord/sign-in", async (context) => {
+    const wait = verifyLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const input = await body(context);
+    const who = await identify(context, input);
+    if (who instanceof Response) return who;
+    const at = now();
+    const existing = store.accountByDiscord(who.id);
+    if (!existing) return context.json({ status: "no-account", ticket: store.holdDiscord(who, at), discord: { name: who.name } });
+    store.setDiscord(existing.id, who);
+    const { token, session } = store.createSession(existing.id, deviceOs(input.os), at);
+    return context.json({ status: "signed-in", token, device: session.id, account: accountAnswer({ ...existing, discord: who }) });
+  });
+
+  app.post("/discord/create", async (context) => {
+    const wait = verifyLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const input = await body(context);
+    if (typeof input.ticket !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(input.ticket)) return context.json({ error: "Send { ticket, os }.", reason: "bad-request" }, 400);
+    const at = now();
+    const who = store.takeDiscord(input.ticket, at);
+    if (!who) return context.json({ error: "That Discord sign-in has expired. Sign in with Discord again.", reason: "discord-expired" }, 400);
+    // Made a moment ago by another sign-in with the same Discord login: sign in to that one.
+    const account = store.accountByDiscord(who.id) ?? store.createAccount({ discord: who }, at);
+    const { token, session } = store.createSession(account.id, deviceOs(input.os), at);
+    return context.json({ status: "created", token, device: session.id, account: accountAnswer(account) });
+  });
+
+  // Signed in: connect Discord (a fresh Discord sign-in), never taking it from another account.
+  signedIn.post("/discord", async (context) => {
+    const wait = verifyLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const who = await identify(context, await body(context));
+    if (who instanceof Response) return who;
+    const account = context.get("account");
+    if (store.setDiscord(account.id, who) === "taken") {
+      return context.json({ error: "That Discord login belongs to another Tavora account.", reason: "discord-taken" }, 409);
+    }
+    return context.json({ account: accountAnswer({ ...account, discord: who }) });
+  });
+
+  signedIn.delete("/discord", (context) => {
+    const account = context.get("account");
+    if (!account.discord) return context.json({ error: "This account has no Discord login.", reason: "no-discord" }, 409);
+    if (store.removeDiscord(account.id) === "last-method") return lastMethod(context);
+    return context.json({ account: accountAnswer({ ...account, discord: null }) });
+  });
+
+  // Delete the account by a fresh Discord sign-in with the login it has.
+  signedIn.post("/delete/discord", async (context) => {
+    const wait = verifyLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const who = await identify(context, await body(context));
+    if (who instanceof Response) return who;
+    const account = context.get("account");
+    if (!account.discord || account.discord.id !== who.id) {
+      return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
+    }
     store.deleteAccount(account.id);
     return context.body(null, 204);
   });

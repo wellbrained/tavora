@@ -260,6 +260,12 @@ export function parseAction(raw: unknown): HostAction | null {
     case "discord-connect":
     case "discord-sign-out":
       return only() ? { type: a.type } : null;
+    case "account-discord-sign-in":
+    case "account-discord-connect":
+    case "account-discord-disconnect":
+    case "account-email-remove":
+    case "account-delete-discord":
+      return only() ? { type: a.type } : null;
     case "account-create":
       return only("ageConfirmed") && typeof a.ageConfirmed === "boolean" ? { type: a.type, ageConfirmed: a.ageConfirmed } : null;
     case "account-cancel":

@@ -19,7 +19,7 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.16.9",
+    version: "0.16.10",
     date: "2026-10-17",
     title: "AI Usage is a module",
     notes: [
@@ -30,7 +30,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
-    version: "0.16.8",
+    version: "0.16.9",
     date: "2026-10-17",
     title: "You decide what modules may reach",
     notes: [
@@ -40,12 +40,18 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
-    version: "0.16.7",
-    date: "2026-10-16",
+    version: "0.16.8",
+    date: "2026-10-17",
     title: "Groundwork for module permissions",
     notes: [
       "Behind the scenes, Tavora can now let a module reach websites you allowed for it, and only those, with Tavora making each request so the module never gets your cookies or sign-ins. Nothing changes for you yet: the dialog that asks you comes in the next version, and until then no module can reach the internet.",
     ],
+  },
+  {
+    version: "0.16.7",
+    date: "2026-10-17",
+    title: "Sign in with Discord",
+    notes: ["Settings > Account: sign in with Discord in your browser, no email needed. Signed in, you can connect Discord to your account as a second way in, add or remove your email, and see both under Sign-in methods. Tavora keeps only your Discord user id and username, never a Discord token, and never links accounts by themselves."],
   },
   {
     version: "0.16.6",
