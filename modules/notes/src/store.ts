@@ -4,7 +4,7 @@
 import { readDocument, serial, updateDocument, type Versioned } from "@tavora/official-ui";
 import type { DocumentSummary, TavoraSDK } from "@tavora/sdk";
 import { ref, triggerRef } from "vue";
-import { cleanTitle, parseAppearance, parseNote, titleFor, UNTITLED, type Appearance, type NoteData, type NoteEntry, type RichText, type TextStyle } from "./notes";
+import { cleanTitle, ORDER_ID, parseAppearance, parseNote, parseOrder, titleFor, UNTITLED, type Appearance, type NoteData, type NoteEntry, type RichText, type TextStyle } from "./notes";
 
 /** Requests the SDK may have open at once is 64; stay well below it. */
 const BATCH = 16;
@@ -21,6 +21,8 @@ export interface NotePatch {
 export function createNotesStore(sdk: TavoraSDK) {
   const entries = ref(new Map<string, NoteEntry>());
   const appearance = ref<Appearance>(parseAppearance(null));
+  /** The order the player put the notes in; notes not in it follow by age. */
+  const order = ref<string[]>([]);
   const queue = serial();
 
   function remember(id: string, data: NoteData, summary: Pick<DocumentSummary, "title" | "updatedAt" | "revision">) {
@@ -43,6 +45,10 @@ export function createNotesStore(sdk: TavoraSDK) {
 
   /** Reads one note again, after another panel changed it. */
   async function refresh(id: string): Promise<void> {
+    if (id === ORDER_ID) {
+      order.value = (await readDocument(sdk, ORDER_ID, parseOrder)).data;
+      return;
+    }
     const doc = await sdk.documents.get(id);
     if (doc) remember(id, parseNote(doc.data), doc);
     else forget(id);
@@ -54,7 +60,9 @@ export function createNotesStore(sdk: TavoraSDK) {
   }
 
   async function load(): Promise<void> {
-    const summaries = await sdk.documents.list();
+    const all = await sdk.documents.list();
+    const summaries = all.filter((summary) => summary.id !== ORDER_ID);
+    if (summaries.length !== all.length) await refresh(ORDER_ID);
     for (let start = 0; start < summaries.length; start += BATCH) {
       await Promise.all(summaries.slice(start, start + BATCH).map((summary) => refresh(summary.id)));
     }
@@ -75,7 +83,20 @@ export function createNotesStore(sdk: TavoraSDK) {
   return {
     entries,
     appearance,
+    order,
     load,
+    /** Stores a new order of the notes; other panels follow. */
+    setOrder: (ids: string[]) =>
+      queue(async () => {
+        order.value = ids;
+        await updateDocument(sdk, ORDER_ID, { parse: (raw) => ({ ids: parseOrder(raw) }), change: (data) => void (data.ids = ids), title: () => "Order" });
+      }),
+    /** Puts a deleted note back as it was (Undo). */
+    restore: (id: string, data: NoteData) =>
+      queue(async () => {
+        const saved = await sdk.documents.put({ id, title: titleFor(id, data.text, data.title), data, ifRevision: 0 });
+        remember(id, data, saved);
+      }),
     loadAppearance,
     /** Changes the text look of the notes or of the scratchpad and stores it. */
     setStyle: async (kind: keyof Appearance, patch: Partial<TextStyle>) => {

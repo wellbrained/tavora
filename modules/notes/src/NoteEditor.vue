@@ -37,8 +37,9 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import LinkDialog from "./LinkDialog.vue";
+import LinkPopover from "./LinkPopover.vue";
 import { t } from "./i18n";
 import {
   contentFromText,
@@ -58,7 +59,7 @@ import {
 import type { NotePatch, NotesStore } from "./store";
 
 const props = defineProps<{ store: NotesStore; noteId: string; entry: NoteEntry | undefined; narrow: boolean; look: TextStyle }>();
-const emit = defineEmits<{ back: []; togglePin: []; clear: []; saveAsNote: []; setStyle: [patch: Partial<TextStyle>] }>();
+const emit = defineEmits<{ back: []; togglePin: []; clear: []; saveAsNote: []; setStyle: [patch: Partial<TextStyle>]; openLink: [href: string] }>();
 
 /** How long typing must pause before the note is saved. */
 const SAVE_DELAY_MS = 400;
@@ -85,7 +86,7 @@ const editor = useEditor({
   extensions: [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
-      // Module panels cannot open pages yet; links are kept and shown.
+      // Links are kept and shown; clicking one shows a bar, and Ctrl+click opens it in the Browser.
       link: { openOnClick: false, autolink: true, defaultProtocol: "https", protocols: ["mailto"] },
     }),
     TaskList,
@@ -100,9 +101,11 @@ const editor = useEditor({
     }),
   ],
   editorProps: {
+    handleClick: (_view, _pos, event) => onEditorClick(event),
     attributes: { class: "note-content", "data-testid": "editor", "aria-label": t("editor.text"), spellcheck: "true" },
   },
   onUpdate: () => {
+    linkPopover.value = null;
     if (loadedId === null) return;
     contentDirty = true;
     saveState.value = "pending";
@@ -255,6 +258,66 @@ onBeforeUnmount(() => {
   void flush();
   editor.value?.destroy();
 });
+
+// ── Links ────────────────────────────────────────────────────────────
+
+/** The bar shown under a clicked link. */
+const linkPopover = ref<{ href: string; left: number; top: number } | null>(null);
+
+/** Ctrl+click opens a link at once; a plain click puts the cursor in it and shows the bar. */
+function onEditorClick(event: MouseEvent): boolean {
+  const link = (event.target as HTMLElement | null)?.closest("a");
+  const href = link?.getAttribute("href");
+  if (!link || !href) {
+    linkPopover.value = null;
+    return false;
+  }
+  if (event.ctrlKey || event.metaKey) {
+    linkPopover.value = null;
+    emit("openLink", href);
+    return true;
+  }
+  const rect = link.getBoundingClientRect();
+  linkPopover.value = { href, left: rect.left, top: rect.bottom + 4 };
+  return false;
+}
+
+function closeLinkPopover(event: Event) {
+  if (!linkPopover.value) return;
+  if (event.target instanceof Element && event.target.closest("[data-link-popover]")) return;
+  linkPopover.value = null;
+}
+
+function onLinkKey(event: KeyboardEvent) {
+  if (event.key === "Escape" && linkPopover.value) {
+    event.stopPropagation();
+    linkPopover.value = null;
+  }
+}
+
+onMounted(() => {
+  addEventListener("pointerdown", closeLinkPopover, true);
+  addEventListener("keydown", onLinkKey, true);
+});
+onBeforeUnmount(() => {
+  removeEventListener("pointerdown", closeLinkPopover, true);
+  removeEventListener("keydown", onLinkKey, true);
+});
+
+function popoverOpen() {
+  if (linkPopover.value) emit("openLink", linkPopover.value.href);
+  linkPopover.value = null;
+}
+
+function popoverEdit() {
+  linkPopover.value = null;
+  openLinkDialog();
+}
+
+function popoverRemove() {
+  linkPopover.value = null;
+  applyLink(null);
+}
 
 // ── Toolbar ──────────────────────────────────────────────────────────
 
@@ -484,7 +547,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         <Pin v-else :stroke-width="1.5" />
       </Button>
     </header>
-    <div class="min-h-0 flex-1 overflow-y-auto" :style="lookVars">
+    <div class="min-h-0 flex-1 overflow-y-auto" :style="lookVars" @scroll.passive="linkPopover = null">
       <div class="mx-auto max-w-[760px] px-4 py-3">
         <input
           v-if="noteId !== SCRATCHPAD_ID"
@@ -505,6 +568,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         <EditorContent :editor="editor" />
       </div>
     </div>
+    <LinkPopover v-if="linkPopover" v-bind="linkPopover" @open="popoverOpen" @edit="popoverEdit" @remove="popoverRemove" />
     <LinkDialog v-if="linkOpen" :initial="currentLink" @apply="applyLink" @cancel="linkOpen = false" />
   </section>
 </template>

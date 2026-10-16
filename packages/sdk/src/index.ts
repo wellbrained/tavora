@@ -106,6 +106,14 @@ export interface TavoraSDK {
     /** Fires when the player changes the language. */
     onLanguageChange(fn: (language: string) => void): Unsubscribe;
   };
+  links: {
+    /**
+     * Opens a web address (http or https) in a Browser panel of this game, as a new tab or in a new
+     * panel. Call it from the click or key press that asked for it: the host refuses it otherwise
+     * (PERMISSION_DENIED). The module learns nothing about the page.
+     */
+    open(url: string): Promise<void>;
+  };
   lifecycle: {
     /** The panel is hidden; pause timers and animations. Called immediately if already suspended. */
     onSuspend(fn: () => void): Unsubscribe;
@@ -268,6 +276,11 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       onThemeChange: (fn) => on("ui.theme", fn),
       getLanguage: () => call("ui.getLanguage"),
       onLanguageChange: (fn) => on("ui.language", fn),
+    },
+    links: {
+      open: async (url) => {
+        await call("links.open", { url });
+      },
     },
     lifecycle: {
       onSuspend: (fn) => on("lifecycle.suspend", fn),

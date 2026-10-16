@@ -19,12 +19,36 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.9.1",
+    version: "0.11.1",
     date: "2026-10-16",
     title: "Module data gets an owner",
     notes: [
       "What a module saves now belongs to whoever made it, not just to the module's name, so a different module that takes the same name later can never read it. Your existing notes, to-dos and module settings are moved over once at start; nothing changes for you.",
     ],
+  },
+  {
+    version: "0.11.0",
+    date: "2026-10-16",
+    title: "Links in Notes open in the Browser",
+    notes: [
+      "Click a link in a note to see its address with Open, Edit and Remove. Ctrl+click opens it straight away, as a new tab in your Browser panel (or in a new Browser panel if you have none).",
+      "Modules can now ask Tavora to open a web address, but only right after you click or press a key in them.",
+    ],
+  },
+  {
+    version: "0.10.0",
+    date: "2026-10-16",
+    title: "Notes: reorder and undo",
+    notes: [
+      "Drag notes in the list to put them in your own order (Alt+Up and Alt+Down work too). Pinned notes and the rest keep their own groups, and new notes still come last.",
+      "Deleting a note or clearing the scratchpad no longer asks first. It happens at once, and an Undo notice stays for 10 seconds (it waits while the pointer is on it).",
+    ],
+  },
+  {
+    version: "0.9.1",
+    date: "2026-10-16",
+    title: "Cleaner folders",
+    notes: ["Folders in the sidebar no longer show a number badge."],
   },
   {
     version: "0.9.0",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanTitle, contentFromText, fontStack, matches, normalizeLink, parseAppearance, parseNote, previewFor, relativeTime, sections, titleFor, type NoteEntry } from "./notes";
+import { cleanTitle, contentFromText, fontStack, matches, normalizeLink, nudged, parseAppearance, parseNote, parseOrder, reordered, previewFor, relativeTime, sections, titleFor, type NoteEntry } from "./notes";
 
 function entry(id: string, patch: Partial<NoteEntry> = {}): NoteEntry {
   return { id, title: id, text: "", fixedTitle: "", pinned: false, createdAt: "2026-10-14T10:00:00.000Z", updatedAt: "2026-10-14T10:00:00.000Z", revision: 1, ...patch };
@@ -146,5 +146,47 @@ describe("parseAppearance", () => {
 
   it("finds the CSS stack of a font", () => {
     expect(fontStack("lora")).toContain("Lora Variable");
+  });
+});
+
+describe("a hand-made order", () => {
+  const notes = [
+    entry("a", { createdAt: "2026-10-01T00:00:00.000Z" }),
+    entry("b", { createdAt: "2026-10-02T00:00:00.000Z" }),
+    entry("c", { createdAt: "2026-10-03T00:00:00.000Z" }),
+    entry("p", { pinned: true, createdAt: "2026-10-04T00:00:00.000Z" }),
+    entry("q", { pinned: true, createdAt: "2026-10-05T00:00:00.000Z" }),
+  ];
+  const ids = (list: NoteEntry[]) => list.map((note) => note.id);
+
+  it("puts ordered notes first, then the rest by age, so a new note comes last", () => {
+    expect(ids(sections(notes, ["c", "a"]).others)).toEqual(["c", "a", "b"]);
+    expect(ids(sections(notes, ["gone", "b"]).others)).toEqual(["b", "a", "c"]);
+  });
+
+  it("drops a note before or after another within its group", () => {
+    expect(reordered(notes, [], "c", "a", false)).toEqual(["p", "q", "c", "a", "b"]);
+    expect(reordered(notes, [], "a", "b", true)).toEqual(["p", "q", "b", "a", "c"]);
+    expect(reordered(notes, [], "q", "p", false)).toEqual(["q", "p", "a", "b", "c"]);
+  });
+
+  it("changes nothing across groups, onto itself or to the same place", () => {
+    expect(reordered(notes, [], "a", "p", false)).toBeNull();
+    expect(reordered(notes, [], "a", "a", true)).toBeNull();
+    expect(reordered(notes, [], "a", "b", false)).toBeNull();
+    expect(reordered(notes, [], "scratchpad", "a", false)).toBeNull();
+  });
+
+  it("moves one place up or down, and stops at the ends", () => {
+    expect(nudged(notes, [], "b", -1)).toEqual(["p", "q", "b", "a", "c"]);
+    expect(nudged(notes, [], "b", 1)).toEqual(["p", "q", "a", "c", "b"]);
+    expect(nudged(notes, [], "a", -1)).toBeNull();
+    expect(nudged(notes, [], "c", 1)).toBeNull();
+  });
+
+  it("reads a stored order and ignores anything else", () => {
+    expect(parseOrder({ ids: ["a", 3, "b"] })).toEqual(["a", "b"]);
+    expect(parseOrder(null)).toEqual([]);
+    expect(parseOrder({ ids: "a" })).toEqual([]);
   });
 });

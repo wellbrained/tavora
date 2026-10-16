@@ -417,7 +417,6 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 >
                   <FolderTile
                     :games="folderGames(entry.id).slice(0, 4).map(game)"
-                    :count="folderGames(entry.id).length"
                     :label="folder(entry.id).label"
                     :open="openFolders.has(entry.id)"
                   />

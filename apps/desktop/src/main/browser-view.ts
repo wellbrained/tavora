@@ -144,6 +144,11 @@ export class BrowserPanel {
     this.options.swap(null, this.view);
   }
 
+  /** Whether nothing has been opened in this panel yet. */
+  get blank(): boolean {
+    return this.committedUrl === null && this.requestedUrl === null;
+  }
+
   /** Opens the address the panel showed last time, unless the player already went somewhere. */
   restore(url: unknown): void {
     if (typeof url !== "string" || !isWebUrl(url) || this.committedUrl !== null || this.requestedUrl !== null) return;

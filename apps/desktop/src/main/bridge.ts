@@ -41,6 +41,8 @@ export interface BridgeContext {
   getLanguage(): string;
   /** Whether the panel is hidden right now. */
   isSuspended(): boolean;
+  /** Opens a web address in a Browser panel. Throws a HostError when the panel did not just get a click or key press, or the address is not a web address. */
+  openLink(url: string): void;
   /**
    * The module started (true) or finished (false) having requests answered; `served` counts the
    * answered ones apart from the handshake. The host uses it to tell when a page has its data.
@@ -65,6 +67,9 @@ function required(params: Record<string, unknown>, name: string): unknown {
   if (!(name in params)) throw new HostError("INVALID_PARAMS", `params.${name} is required`);
   return params[name];
 }
+
+/** Longest address links.open accepts. */
+const LINK_MAX = 2048;
 
 const handlers = new Map<string, Handler>([
   ["game.getCurrent", (s, params) => (noParams(params), { ...s.context.game })],
@@ -95,6 +100,16 @@ const handlers = new Map<string, Handler>([
     async (s, params) => {
       const p = object(params);
       await s.context.data.documents.delete(p.id, p.ifRevision, s);
+      return null;
+    },
+  ],
+
+  [
+    "links.open",
+    (s, params) => {
+      const url = required(object(params), "url");
+      if (typeof url !== "string" || url.length === 0 || url.length > LINK_MAX) throw new HostError("INVALID_PARAMS", "params.url must be a web address");
+      s.context.openLink(url);
       return null;
     },
   ],
