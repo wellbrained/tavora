@@ -26,6 +26,8 @@ const accountProfile = computed(() => {
 const email = ref("");
 const code = ref("");
 const newEmail = ref("");
+/** The minimum-age tick box when creating an account; nothing about it is kept. */
+const ageConfirmed = ref(false);
 const changing = ref(false);
 const busy = ref(false);
 
@@ -85,18 +87,18 @@ function startDelete() {
 
     <!-- Signed out: an address, then its code, then (for a new address) yes to an account. -->
     <template v-if="!signedIn">
-      <SettingRow
-        v-if="pending?.kind === 'sign-in' && pending.step === 'create'"
-        :label="t('account.create.label')"
-        :description="t('account.create.description', { email: pending.email })"
-        setting="account"
-        :highlighted="highlight === 'account'"
-      >
-        <div class="flex flex-none gap-2">
+      <div v-if="pending?.kind === 'sign-in' && pending.step === 'create'" class="flex flex-col gap-3 border-b pb-4" data-setting="account">
+        <span class="font-medium">{{ t("account.create.label") }}</span>
+        <span class="text-muted-foreground">{{ t("account.create.description", { email: pending.email }) }}</span>
+        <label class="flex items-start gap-3">
+          <input v-model="ageConfirmed" type="checkbox" class="accent-primary mt-1 size-4 flex-none" data-testid="account-age" />
+          <span>{{ t("account.create.age") }}</span>
+        </label>
+        <div class="flex gap-2">
+          <Button :disabled="busy || !ageConfirmed" data-testid="account-create" @click="run({ type: 'account-create', ageConfirmed })">{{ t("account.create.confirm") }}</Button>
           <Button variant="ghost" :disabled="busy" data-testid="account-cancel" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
-          <Button :disabled="busy" data-testid="account-create" @click="run({ type: 'account-create' })">{{ t("account.create.confirm") }}</Button>
         </div>
-      </SettingRow>
+      </div>
 
       <form
         v-else-if="pending?.kind === 'sign-in'"

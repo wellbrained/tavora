@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.16.6",
+    date: "2026-10-16",
+    title: "Minimum age for accounts",
+    notes: ["Creating a Tavora account now asks you to confirm that you are 16 or older, or at least 13 with your parent's permission. Tavora keeps nothing about your age."],
+  },
+  {
     version: "0.16.5",
     date: "2026-10-16",
     title: "Tavora accounts and modules from a zip",

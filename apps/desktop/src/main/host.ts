@@ -1009,7 +1009,7 @@ export class Host {
       case "account-verify":
         return this.account.verify(action.code);
       case "account-create":
-        return this.account.create();
+        return this.account.create(action.ageConfirmed);
       case "account-cancel":
         return this.account.cancel();
       case "account-refresh":
