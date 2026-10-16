@@ -25,6 +25,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     notes: [
       "Settings > Modules has a new Module pictures folder setting: move the pictures of Notes (and other modules) to another drive, open the folder, or go back to the default. Tavora copies the pictures, checks them, and only then switches over, so nothing is lost if something goes wrong.",
       "If a folder you chose is not there when Tavora starts (an unplugged drive, say), you get a notice, the pictures show as missing, and nothing is deleted.",
+    ],
   },
   {
     version: "0.13.1",
