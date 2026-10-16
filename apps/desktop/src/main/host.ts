@@ -181,9 +181,9 @@ export interface HostOptions {
    * storage, which test machines have. A packaged app never sets this.
    */
   discord?: { ipcPath: string; tokenUrl: string } | undefined;
-  /** Settings > Account and the account service: on in development, off in release builds until accounts go live. */
+  /** Settings > Account and the account service (on since 0.16.4; off only in tests that leave it out). */
   accounts?: boolean;
-  /** Development only: where accounts are, when not the same service as the rest (the local one by default). */
+  /** Development only: where accounts are, when not the same service as the rest. */
   accountUrl?: string | undefined;
   /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
   hidden?: boolean;
