@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.15.0",
+    date: "2026-10-16",
+    title: "The Whiteboard is complete",
+    notes: [
+      "The Whiteboard module is finished: draw, add shapes, arrows and text on as many boards per game as you like, paste or drop screenshots and scribble on top of them, and copy a board or part of it as a picture to paste anywhere. It saves as you draw, works offline, in English and German, in light or dark.",
+    ],
+  },
+  {
     version: "0.14.8",
     date: "2026-10-16",
     title: "Copy a whiteboard as a picture",
