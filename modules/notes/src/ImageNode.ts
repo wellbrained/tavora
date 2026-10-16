@@ -1,11 +1,17 @@
-// The picture node of a note. A picture is the id of a stored file (see blobs), shown either inline
-// with the text, at the height of a line, or on a line of its own at a chosen width. A picture on its
-// own line can be resized by dragging its corner.
+// The picture node of a note. A picture is the id of a stored file (see blobs), shown on a line of its
+// own or at the left or right with the text flowing around it, always at a width the player chose
+// (or its real size). Dragging its corner resizes it.
 
 import { Node } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 
-export type ImageMode = "inline" | "block";
+/** On its own line, or at the left or right with the text flowing around it. */
+export type ImageMode = "block" | "left" | "right";
+
+/** Older notes say "inline" for a picture the text flows around; it sits at the left. */
+export function normalizeMode(value: unknown): ImageMode {
+  return value === "right" ? "right" : value === "left" || value === "inline" ? "left" : "block";
+}
 
 export interface ImageAttrs {
   blobId: string;
@@ -52,7 +58,7 @@ export const ImageNode = Node.create<ImageOptions>({
       },
       mode: {
         default: "block",
-        parseHTML: (element) => (element.getAttribute("data-mode") === "inline" ? "inline" : "block"),
+        parseHTML: (element) => normalizeMode(element.getAttribute("data-mode")),
         renderHTML: (attributes) => ({ "data-mode": attributes.mode as string }),
       },
       width: {
@@ -87,7 +93,8 @@ export const ImageNode = Node.create<ImageOptions>({
 
       const show = () => {
         const attrs = current.attrs as ImageAttrs;
-        dom.dataset.mode = attrs.mode;
+        const mode = normalizeMode(attrs.mode);
+        dom.dataset.mode = mode;
         img.alt = "";
         if (img.dataset.blobId !== attrs.blobId) {
           img.dataset.blobId = attrs.blobId;
@@ -95,8 +102,9 @@ export const ImageNode = Node.create<ImageOptions>({
           img.src = this.options.url(attrs.blobId);
         }
         // A picture is never shown larger than it really is.
-        dom.style.width = attrs.mode === "block" && attrs.width !== null ? `${attrs.width}%` : "";
-        dom.style.maxWidth = attrs.mode === "block" && dom.dataset.natural ? `${dom.dataset.natural}px` : "";
+        // Text can only flow around a picture that leaves room, so one without a width of its own takes half.
+        dom.style.width = attrs.width !== null ? `${attrs.width}%` : mode === "block" ? "" : "50%";
+        dom.style.maxWidth = dom.dataset.natural ? `${dom.dataset.natural}px` : "";
       };
       img.addEventListener("load", () => {
         dom.dataset.natural = String(img.naturalWidth);

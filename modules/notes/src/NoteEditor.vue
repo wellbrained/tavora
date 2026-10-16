@@ -739,6 +739,8 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
 
 <style>
 .note-content {
+  /* Contains the pictures the text flows around. */
+  display: flow-root;
   font-family: var(--note-font, inherit);
   font-size: var(--note-size, 14px);
   min-height: 60vh;
@@ -857,16 +859,13 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
   height: auto;
   border-radius: 6px;
 }
-.note-image[data-mode="inline"] {
-  display: inline-block;
-  width: auto !important;
-  max-width: none !important;
-  margin: 0 2px;
-  vertical-align: text-bottom;
+.note-image[data-mode="left"] {
+  float: left;
+  margin: 4px 14px 8px 0;
 }
-.note-image[data-mode="inline"] img {
-  width: auto;
-  height: 1.5em;
+.note-image[data-mode="right"] {
+  float: right;
+  margin: 4px 0 8px 14px;
 }
 .note-image-selected {
   outline: 2px solid var(--primary);
@@ -884,7 +883,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
   cursor: nwse-resize;
   touch-action: none;
 }
-.note-image-selected[data-mode="block"] .note-image-handle {
+.note-image-selected .note-image-handle {
   display: block;
 }
 .note-image-missing {
