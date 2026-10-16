@@ -136,7 +136,12 @@ export interface AccountDevice {
 }
 
 /** Where a code is waiting: signing in (and, for a new address, asking to create the account), changing the email, deleting. */
-export type AccountPending = { kind: "sign-in"; email: string; step: "code" | "create" } | { kind: "change-email"; email: string } | { kind: "delete" };
+export type AccountPending =
+  | { kind: "sign-in"; email: string; step: "code" | "create" }
+  /** A Discord login with no account yet: the player is asked before one is made. */
+  | { kind: "discord-create"; name: string }
+  | { kind: "change-email"; email: string }
+  | { kind: "delete" };
 
 /** Settings > Account. Sent on its own channel; the sign-in token never leaves the main process. */
 export interface AccountView {
@@ -144,7 +149,10 @@ export interface AccountView {
   enabled: boolean;
   /** False where the sign-in cannot be kept encrypted: it lasts until Tavora quits. */
   canKeepSignIn: boolean;
-  account: { email: string; createdAt: string } | null;
+  /** The sign-in methods: an email address, a Discord login (its username), or both. */
+  account: { email: string | null; discord: { name: string } | null; createdAt: string } | null;
+  /** Whether this build offers Discord login. */
+  discordLogin: boolean;
   /** Null until read from the service. */
   devices: AccountDevice[] | null;
   pending: AccountPending | null;
@@ -559,6 +567,13 @@ export type HostAction =
   | { type: "account-change-email"; code: string }
   | { type: "account-delete-code" }
   | { type: "account-delete"; code: string }
+  /** Discord login in the browser: sign in (or create), connect to the signed-in account, disconnect. */
+  | { type: "account-discord-sign-in" }
+  | { type: "account-discord-connect" }
+  | { type: "account-discord-disconnect" }
+  | { type: "account-email-remove" }
+  /** Deletes the account by a fresh Discord sign-in (an account without an email address). */
+  | { type: "account-delete-discord" }
   /** The answer to "Which profile?" on a first sign-in. */
   | { type: "account-profile-choice"; keep: "account" | "pc" }
   /** Reads every account's allowance now (a provider's own wait time still applies). */

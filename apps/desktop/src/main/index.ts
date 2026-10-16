@@ -130,6 +130,7 @@ if (!app.requestSingleInstanceLock()) {
         accounts: true,
         // Development only: another account service, such as a local apps/api with TAVORA_TEST_INBOX_PORT (its codes show on that inbox page).
         accountUrl: !app.isPackaged ? process.env.TAVORA_ACCOUNT_URL : undefined,
+        discordAuthorizeUrl: !app.isPackaged ? process.env.TAVORA_DISCORD_AUTHORIZE_URL : undefined,
         // Likewise, a packaged app only ever uses Steam's own icon address.
         steamIcons: !app.isPackaged ? process.env.TAVORA_STEAM_ICONS_URL : undefined,
         // And only ever the real Discord app and discord.com.
