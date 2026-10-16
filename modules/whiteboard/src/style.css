@@ -1,0 +1,201 @@
+/* The header and menus use the host's colours (--background, --border, ...), set by applyTheme in App.tsx. */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  overflow: hidden;
+}
+
+.app {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.status {
+  margin: 0;
+  padding: 16px;
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+
+.bar {
+  display: flex;
+  height: 40px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-bottom: 1px solid color-mix(in oklab, var(--primary) 25%, transparent);
+  background: color-mix(in oklab, var(--primary) 5%, transparent);
+  font-size: 13px;
+}
+
+.grow {
+  flex: 1;
+}
+
+.board {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+}
+
+/* Excalidraw fills the board. Its Library button is hidden: Tavora does not use shared libraries. */
+.board .excalidraw {
+  --ui-pointerEvents: auto;
+}
+.board .sidebar-trigger,
+.board .layer-ui__library {
+  display: none !important;
+}
+
+.button,
+.item,
+.icon-button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius, 8px) - 2px);
+  background: transparent;
+}
+
+.button {
+  display: inline-flex;
+  max-width: 280px;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-weight: 500;
+}
+.button:hover,
+.item:hover,
+.icon-button:hover {
+  background: var(--accent);
+}
+.button:focus-visible,
+.item:focus-visible,
+.icon-button:focus-visible,
+.rename:focus-visible {
+  outline: 2px solid var(--ring, var(--primary));
+  outline-offset: 1px;
+}
+
+.name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu {
+  position: relative;
+}
+
+.rename {
+  height: 28px;
+  width: 220px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  font: inherit;
+  color: inherit;
+  border: 1px solid var(--ring, var(--primary));
+  border-radius: calc(var(--radius, 8px) - 2px);
+  background: var(--background);
+}
+
+.popover {
+  position: absolute;
+  z-index: 50;
+  top: 32px;
+  left: 0;
+  display: flex;
+  min-width: 220px;
+  max-height: 60vh;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  background: var(--popover, var(--background));
+  color: var(--popover-foreground, var(--foreground));
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+
+.item {
+  display: block;
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item.current {
+  background: var(--accent);
+  font-weight: 600;
+}
+.item.danger {
+  color: var(--destructive);
+}
+
+.separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
+}
+
+.save,
+.size {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.save-error,
+.size-full {
+  color: var(--destructive);
+}
+.size {
+  color: var(--foreground);
+}
+
+.toast {
+  position: absolute;
+  z-index: 60;
+  bottom: 12px;
+  left: 50%;
+  display: flex;
+  max-width: calc(100% - 24px);
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  font-size: 13px;
+  transform: translateX(-50%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  background: var(--popover, var(--background));
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.3);
+}
+.toast-message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.toast .button {
+  border-color: var(--border);
+  background: var(--secondary, transparent);
+}
+.icon-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}

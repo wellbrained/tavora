@@ -12,6 +12,7 @@ Local-first, second-monitor gaming companion for Windows and Linux. Each game ge
 | `packages/sdk` | `@tavora/sdk`, the typed client modules use to talk to the host, plus the wire protocol types ([README](packages/sdk/README.md)) |
 | `packages/module-schema` | `tavora.module.json` types, validation, JSON Schema, module and game id rules |
 | `modules/notes`, `modules/todos`, `modules/playground` | Official Notes, To-Dos and UI Playground modules (Vue), built on `@tavora/sdk` like any other module ([README](modules/README.md)) |
+| `modules/whiteboard` | Official Whiteboard module (React, on Excalidraw), also built on `@tavora/sdk` |
 | `themes/` | Official theme packages (Tavora, Nightfall, Hearthwood), data only ([format](apps/docs/reference/theme.md)) |
 | `modules/shared` | `@tavora/official-ui`: theme, shadcn-vue components and save helpers bundled into the official modules |
 | `examples/vanilla-module` | Example module with no framework |
