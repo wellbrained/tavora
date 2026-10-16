@@ -229,7 +229,7 @@ async function removeNote(entry: NoteEntry) {
 
 /** Opens a link in the Browser; the host only allows it right after the click that asked. */
 function openLink(href: string) {
-  void sdk.value?.links.open(href).catch(() => undefined);
+  void sdk.value?.links.open(href).catch(() => (notice.value = { id: ++noticeCount, message: t("link.openFailed") }));
 }
 
 async function reorder(id: string, target: string, after: boolean) {
