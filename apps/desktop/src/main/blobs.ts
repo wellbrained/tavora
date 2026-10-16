@@ -45,6 +45,8 @@ export class BlobStore {
   constructor(
     private readonly dir: () => string,
     private readonly limits: BlobLimits = BLOB_LIMITS,
+    /** True while the files are being moved to another folder, when nothing new may be added. */
+    private readonly locked: () => boolean = () => false,
   ) {}
 
   list(): Promise<BlobInfo[]> {
@@ -68,6 +70,7 @@ export class BlobStore {
    * one file may be, would take the module past its total, or is not a picture of a kind we accept.
    */
   put(body: AsyncIterable<Uint8Array>, declaredBytes?: number): Promise<BlobInfo> {
+    if (this.locked()) return Promise.reject(new HostError("INTERNAL", "pictures are being moved to another folder; try again in a moment"));
     if (declaredBytes !== undefined && declaredBytes > this.limits.maxFileBytes) {
       return Promise.reject(this.tooLarge());
     }

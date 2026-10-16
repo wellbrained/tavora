@@ -81,7 +81,7 @@ A module never sees another module's data, or its own data for another game.
 
 ### Files (blobs)
 
-A module can keep pictures that are too big for a document: up to 50 MB each and 500 MB together per module and game. They live in a folder Tavora manages (`module-blobs` in its data folder by default), shared by all of the module's panels, and are removed with the game.
+A module can keep pictures that are too big for a document: up to 50 MB each and 500 MB together per module and game. They live in a folder Tavora manages (`module-blobs` in its data folder by default; the player can move it in Settings > Modules), shared by all of the module's panels, and are removed with the game.
 
 - **Storing:** `sdk.blobs.put(file)` sends the file to the module's own address, `POST /_blobs/`, as the request body, so it is streamed to disk and never held in memory whole. The answer is a `BlobInfo`: `id` (32 lowercase hex characters chosen by the host), `bytes`, `type` and `createdAt`. A module never names a file.
 - **Showing:** `sdk.blobs.url(id)` is the address to use as an image source (`GET /_blobs/<id>`). It only works from the module's own page.
