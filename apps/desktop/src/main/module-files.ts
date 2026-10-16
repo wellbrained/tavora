@@ -4,7 +4,7 @@
 
 import { copyFile, mkdir, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isGameId, isModuleId } from "@tavora/module-schema";
+import { isGameId, isModuleId, isOwnerId } from "@tavora/module-schema";
 import { parseBlobFileName } from "./blobs";
 
 /** Inside the place the player picks, the files go into a folder of their own with this name. */
@@ -51,27 +51,32 @@ export async function filesTarget(picked: string, currentRoot: string, userData:
 }
 
 export interface StoredFile {
+  /** Whose module it is (S5): `official`, `local` or a publisher key. */
+  owner: string;
   module: string;
   game: string;
   name: string;
   bytes: number;
 }
 
-/** The pictures under a files folder: `<module>/<game>/<id>.<ext>`, nothing else. */
+/** The pictures under a files folder: `<owner>/<module>/<game>/<id>.<ext>`, nothing else. */
 export async function listStoredFiles(root: string): Promise<StoredFile[]> {
   const files: StoredFile[] = [];
   const names = async (dir: string) => readdir(dir).catch(() => [] as string[]);
-  for (const module of await names(root)) {
-    if (!isModuleId(module)) continue;
-    for (const game of await names(path.join(root, module))) {
-      if (!isGameId(game)) continue;
-      for (const name of await names(path.join(root, module, game))) {
-        if (!parseBlobFileName(name)) continue;
-        try {
-          const info = await stat(path.join(root, module, game, name));
-          if (info.isFile()) files.push({ module, game, name, bytes: info.size });
-        } catch {
-          // Gone while we looked.
+  for (const owner of await names(root)) {
+    if (!isOwnerId(owner)) continue;
+    for (const module of await names(path.join(root, owner))) {
+      if (!isModuleId(module)) continue;
+      for (const game of await names(path.join(root, owner, module))) {
+        if (!isGameId(game)) continue;
+        for (const name of await names(path.join(root, owner, module, game))) {
+          if (!parseBlobFileName(name)) continue;
+          try {
+            const info = await stat(path.join(root, owner, module, game, name));
+            if (info.isFile()) files.push({ owner, module, game, name, bytes: info.size });
+          } catch {
+            // Gone while we looked.
+          }
         }
       }
     }
@@ -79,7 +84,7 @@ export async function listStoredFiles(root: string): Promise<StoredFile[]> {
   return files;
 }
 
-const fileAt = (root: string, file: StoredFile) => path.join(root, file.module, file.game, file.name);
+const fileAt = (root: string, file: StoredFile) => path.join(root, file.owner, file.module, file.game, file.name);
 
 /**
  * Copies every file to the new folder and checks each copy's size. A file already there with the same size is
@@ -103,7 +108,8 @@ export async function copyStoredFiles(from: string, to: string, files: readonly 
 export async function removeStoredFiles(root: string, files: readonly StoredFile[]): Promise<void> {
   for (const file of files) await rm(fileAt(root, file), { force: true }).catch(() => undefined);
   for (const file of files) {
-    await rmdir(path.join(root, file.module, file.game)).catch(() => undefined);
-    await rmdir(path.join(root, file.module)).catch(() => undefined);
+    await rmdir(path.join(root, file.owner, file.module, file.game)).catch(() => undefined);
+    await rmdir(path.join(root, file.owner, file.module)).catch(() => undefined);
+    await rmdir(path.join(root, file.owner)).catch(() => undefined);
   }
 }

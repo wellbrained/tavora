@@ -225,7 +225,10 @@ export class BrowserPanel {
       if (!url || !["http:", "https:", "about:", "data:", "blob:"].includes(url.protocol)) event.preventDefault();
     });
     contents.on("did-start-navigation", (event) => {
-      if (event.isMainFrame && !event.isSameDocument) this.hopUrl = event.url;
+      if (!event.isMainFrame || event.isSameDocument) return;
+      this.hopUrl = event.url;
+      // Counted from here: the new page's first requests can be blocked before did-navigate arrives.
+      if (current()) this.blocked = 0;
     });
     contents.on("will-redirect", (event) => {
       if (!event.isMainFrame) return;
@@ -238,7 +241,6 @@ export class BrowserPanel {
       this.committedUrl = url;
       this.error = null;
       this.requestedUrl = null;
-      this.blocked = 0;
       this.applyVisibility();
       if (isWebUrl(url)) this.options.onAddress(url);
       this.changed();

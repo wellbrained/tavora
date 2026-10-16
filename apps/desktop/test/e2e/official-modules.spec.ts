@@ -229,7 +229,7 @@ test("notes: a pasted picture is stored by the host, shown, resized and removed"
   expect(await inModule<string>(app, NOTES, `${picture}.src`)).toMatch(/^tavora-module:\/\/tavora\.notes\/_blobs\/[a-f0-9]{32}$/);
 
   // The host keeps the file in its own folder, named by id, as a WebP.
-  const stored = await readdir(path.join(userData, "module-blobs", NOTES), { recursive: true });
+  const stored = await readdir(path.join(userData, "module-blobs", "official", NOTES), { recursive: true });
   expect(stored.filter((name) => /^[a-f0-9]{32}\.webp$/.test(path.basename(name)))).toHaveLength(1);
 
   // Selecting it shows the bar; Small puts it on its own line at a quarter of the width.

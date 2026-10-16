@@ -1,6 +1,6 @@
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { isGameId, isModuleId } from "@tavora/module-schema";
+import { isGameId, isModuleId, isOwnerId } from "@tavora/module-schema";
 import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
 import { BlobStore } from "./blobs";
 import { DocumentStore } from "./documents";
@@ -150,14 +150,14 @@ export interface ModuleData {
   blobs: BlobStore;
 }
 
-/** One settings store and one document store per (module, game), shared by all its panels. */
+/** One settings store and one document store per (owner, module, game), shared by all its panels. */
 export class DataRegistry {
   private readonly data = new Map<string, ModuleData>();
   readonly panelState: PanelStateStore;
 
   constructor(
     private readonly dataDir: string,
-    /** The folder every module's files are kept under, by module and game. */
+    /** The folder every module's files are kept under, by owner, module and game. */
     private readonly blobRoot: () => string = () => defaultFilesRoot(dataDir),
     /** True while that folder is being moved. */
     private readonly blobsLocked: () => boolean = () => false,
@@ -165,21 +165,29 @@ export class DataRegistry {
     this.panelState = new PanelStateStore(path.join(dataDir, "panel-state"));
   }
 
-  get(moduleId: string, gameId: string): ModuleData {
+  get(owner: string, moduleId: string, gameId: string): ModuleData {
     // Ids were validated when the module and game were registered; checking
     // again here keeps them from ever forming a path outside dataDir.
-    if (!isModuleId(moduleId) || !isGameId(gameId)) throw new Error("invalid module or game id");
-    const dir = path.join(this.dataDir, "module-data", moduleId, gameId);
+    if (!isOwnerId(owner) || !isModuleId(moduleId) || !isGameId(gameId)) throw new Error("invalid owner, module or game id");
+    const dir = path.join(this.dataDir, "module-data", owner, moduleId, gameId);
     let data = this.data.get(dir);
     if (!data) {
       data = {
         settings: new ModuleStore(path.join(dir, "storage.json")),
         documents: new DocumentStore(path.join(dir, "documents")),
-        blobs: new BlobStore(() => path.join(this.blobRoot(), moduleId, gameId), undefined, this.blobsLocked),
+        blobs: new BlobStore(() => path.join(this.blobRoot(), owner, moduleId, gameId), undefined, this.blobsLocked),
       };
       this.data.set(dir, data);
     }
     return data;
+  }
+
+  /** Drops cached stores of one owner's module whose data is being deleted. */
+  forgetModule(owner: string, moduleId: string): void {
+    const prefix = path.join(this.dataDir, "module-data", owner, moduleId) + path.sep;
+    for (const key of [...this.data.keys()]) {
+      if (key.startsWith(prefix)) this.data.delete(key);
+    }
   }
 
   /** Drops cached stores for a game whose data is being deleted. */

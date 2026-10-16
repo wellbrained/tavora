@@ -39,7 +39,7 @@ host, the toolbar, modules, or other games' browser data.
 
 | | Browser page | Host UI | Module views |
 | --- | --- | --- | --- |
-| Session | `persist:browser@<gameId>` | default | `persist:module:<id>@<gameId>` |
+| Session | `persist:browser@<gameId>` | default | `persist:module:<owner>:<id>@<gameId>` |
 | Preload / IPC | **none** | host preload | bridge port only |
 | Node, Electron APIs | no (`sandbox`, `contextIsolation`, no node integration, no `<webview>`) | no | no |
 | Renderer process | own, per site (Chromium site isolation) | own | own |

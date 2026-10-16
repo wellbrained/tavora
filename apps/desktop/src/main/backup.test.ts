@@ -28,7 +28,7 @@ async function seed() {
   await write("module-data/tavora.notes/poe2/documents/plan.json", '{"text":"keep me"}');
   await write("game-icons/poe2-1234abcd.png", "png");
   await write("profile/avatar.png", "png");
-  await write("module-blobs/tavora.notes/poe2/0123456789abcdef0123456789abcdef.png", "png");
+  await write("module-blobs/official/tavora.notes/poe2/0123456789abcdef0123456789abcdef.png", "png");
   await write("window.json", "{}");
   await write("module-data/tavora.notes/poe2/storage.json.tmp", "half written");
 }

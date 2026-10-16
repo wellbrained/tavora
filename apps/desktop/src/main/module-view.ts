@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
 import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
+import { modulePartition } from "./gamedata";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BLOB_PATH, CLIPBOARD_PATH } from "@tavora/sdk/protocol";
@@ -74,7 +75,7 @@ async function writeClipboardPicture(png: Buffer): Promise<void> {
  * cache and a separate renderer process from the host and other modules.
  */
 function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobStore): Session {
-  const ses = session.fromPartition(`persist:module:${module.manifest.id}@${game.id}`);
+  const ses = session.fromPartition(modulePartition(module.owner, module.manifest.id, game.id));
   if (hardened.has(ses)) return ses;
   hardened.add(ses);
 
@@ -455,10 +456,19 @@ export class ModuleView {
     this.view.webContents.reload();
   }
 
-  /** Ends a hung or misbehaving module. Its data stays; Reload starts it again. */
-  stop(): void {
+  /**
+   * Ends a hung or misbehaving module. Its data stays; Reload starts it again.
+   * Resolves once the renderer is gone, so a reload after it is not undone by
+   * the crash arriving late.
+   */
+  stop(): Promise<void> {
     const contents = this.view.webContents;
-    if (contents.isDestroyed()) return;
+    if (contents.isDestroyed()) return Promise.resolve();
+    const gone = new Promise<void>((resolve) => {
+      contents.once("render-process-gone", () => resolve());
+      contents.once("destroyed", () => resolve());
+      setTimeout(resolve, 5_000);
+    });
     const pid = contents.getOSProcessId();
     contents.forcefullyCrashRenderer();
     // Chromium has been seen to leave a busy renderer running; make sure.
@@ -470,6 +480,7 @@ export class ModuleView {
         // Already gone.
       }
     }, 2_000);
+    return gone;
   }
 
   dispose(): void {

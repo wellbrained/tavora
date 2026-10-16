@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { isGameId, isModuleId, validateManifest } from "./index";
+import { isGameId, isModuleId, isOwnerId, validateManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -166,4 +166,16 @@ describe("ids", () => {
   it.each(["", "../poe2", "PoE2", "poe 2", "-x", "a".repeat(65)])("rejects game id %s", (id) =>
     expect(isGameId(id)).toBe(false),
   );
+});
+
+describe("isOwnerId", () => {
+  it("accepts official, local and a key fingerprint", () => {
+    expect(isOwnerId("official")).toBe(true);
+    expect(isOwnerId("local")).toBe(true);
+    expect(isOwnerId("0123456789abcdef0123456789abcdef")).toBe(true);
+  });
+
+  it.each(["", "Local", "tavora.notes", "0123456789ABCDEF0123456789ABCDEF", "0123456789abcdef", "../x", 7])("refuses %j", (value) => {
+    expect(isOwnerId(value)).toBe(false);
+  });
 });
