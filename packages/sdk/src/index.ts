@@ -6,8 +6,11 @@ import {
   BLOB_PATH,
   CLIPBOARD_PATH,
   HELLO_MESSAGE,
+  LIMITS,
   PORT_MESSAGE,
   PROTOCOL_VERSION,
+  type AiUsageAccountInfo,
+  type AiUsageReading,
   type BlobInfo,
   type BlobUsage,
   type Capability,
@@ -22,6 +25,8 @@ import {
   type JsonValue,
   type MethodName,
   type Methods,
+  type NetworkRequest,
+  type NetworkResponse,
   type PutDocumentParams,
   type TavoraDocument,
   type TavoraGame,
@@ -30,6 +35,8 @@ import {
 } from "./protocol.js";
 
 export type {
+  AiUsageAccountInfo,
+  AiUsageReading,
   BlobInfo,
   BlobType,
   BlobUsage,
@@ -39,6 +46,8 @@ export type {
   ErrorCode,
   HandshakeResult,
   JsonValue,
+  NetworkRequest,
+  NetworkResponse,
   PutDocumentParams,
   TavoraDocument,
   TavoraGame,
@@ -69,6 +78,15 @@ export class TavoraError extends Error {
 
 type Unsubscribe = () => void;
 
+/** Small key/value settings: at most 5 MB of keys and values together, values plain JSON. */
+export interface KeyValueStore {
+  /** T is not checked at runtime; the host only guarantees the value is JSON. */
+  get<T = JsonValue>(key: string): Promise<T | null>;
+  set(key: string, value: JsonValue): Promise<void>;
+  delete(key: string): Promise<void>;
+  keys(): Promise<string[]>;
+}
+
 export interface TavoraSDK {
   /** What the host reported when this module connected. */
   readonly host: HandshakeResult;
@@ -76,12 +94,9 @@ export interface TavoraSDK {
     getCurrent(): Promise<TavoraGame>;
   };
   /** Small key/value settings, private to this module in the current game. */
-  storage: {
-    /** T is not checked at runtime; the host only guarantees the value is JSON. */
-    get<T = JsonValue>(key: string): Promise<T | null>;
-    set(key: string, value: JsonValue): Promise<void>;
-    delete(key: string): Promise<void>;
-    keys(): Promise<string[]>;
+  storage: KeyValueStore & {
+    /** The same, shared by every game: settings that should not change from game to game. */
+    app: KeyValueStore;
   };
   /**
    * Named documents (builds, plans, checklists), private to this module in
@@ -143,6 +158,25 @@ export interface TavoraSDK {
      * (PERMISSION_DENIED). The module learns nothing about the page.
      */
     open(url: string): Promise<void>;
+  };
+  network: {
+    /**
+     * Makes a web request through Tavora, to a host listed in `permissions.network` that the player
+     * granted (PERMISSION_DENIED otherwise). HTTPS only, no cookies, at most 5 MB back and 15 seconds.
+     * Error statuses such as 404 are answers, not errors; NETWORK_ERROR means no answer came.
+     */
+    fetch(url: string, init?: Omit<NetworkRequest, "url">): Promise<NetworkResponse>;
+  };
+  /** Parts of Tavora that hold a sign-in, used without seeing it. Each needs its connector in `permissions.connectors` and the player's grant (PERMISSION_DENIED otherwise). */
+  connectors: {
+    /** `ai-usage`: the usage of the Claude and Codex accounts the player set up in Settings > Integrations > AI usage. */
+    aiUsage: {
+      accounts(): Promise<AiUsageAccountInfo[]>;
+      /** Reads one account. Tavora reads each account at most once a minute; asking sooner gives the last reading. */
+      read(accountId: string): Promise<AiUsageReading>;
+      /** Fires when the player adds, renames or removes an account. */
+      onAccountsChange(fn: () => void): Unsubscribe;
+    };
   };
   lifecycle: {
     /** The panel is hidden; pause timers and animations. Called immediately if already suspended. */
@@ -236,13 +270,13 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
   };
   port.start();
 
-  function call<M extends MethodName>(method: M, params?: Methods[M]["params"]): Promise<Methods[M]["result"]> {
+  function call<M extends MethodName>(method: M, params?: Methods[M]["params"], timeoutMs = requestTimeoutMs): Promise<Methods[M]["result"]> {
     const id = nextId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(id);
         reject(new TavoraError({ code: "TIMEOUT", message: `${method} timed out` }));
-      }, requestTimeoutMs);
+      }, Math.max(timeoutMs, requestTimeoutMs));
       pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
       port.postMessage({ v: PROTOCOL_VERSION, id, method, params });
     });
@@ -280,6 +314,16 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         await call("storage.delete", { key });
       },
       keys: () => call("storage.keys"),
+      app: {
+        get: <T = JsonValue>(key: string) => call("storage.app.get", { key }) as Promise<T | null>,
+        set: async (key, value) => {
+          await call("storage.app.set", { key, value });
+        },
+        delete: async (key) => {
+          await call("storage.app.delete", { key });
+        },
+        keys: () => call("storage.app.keys"),
+      },
     },
     documents: {
       list: () => call("documents.list"),
@@ -349,6 +393,17 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
     links: {
       open: async (url) => {
         await call("links.open", { url });
+      },
+    },
+    network: {
+      // The host gives up after its own limit; this waits a little longer so its answer arrives first.
+      fetch: (url, init = {}) => call("network.fetch", { ...init, url }, LIMITS.networkTimeoutMs + 5000),
+    },
+    connectors: {
+      aiUsage: {
+        accounts: () => call("aiUsage.accounts"),
+        read: (accountId) => call("aiUsage.read", { accountId }, LIMITS.aiUsageTimeoutMs + 5000),
+        onAccountsChange: (fn) => on("aiUsage.accountsChanged", () => fn()),
       },
     },
     lifecycle: {

@@ -4,6 +4,7 @@ import { isGameId, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@t
 import { writeFileAtomic } from "./fsutil";
 import { defaultFilesRoot } from "./module-files";
 import { OFFICIAL_PREFIX } from "./registry";
+import { APP_DATA_DIR } from "./storage";
 
 /**
  * The browser session of one module in one game. The owner is part of the
@@ -193,7 +194,8 @@ async function applyPending(userData: string, log: (line: string) => void, blobR
     for (const root of dataRoots(userData, blobRoot)) {
       const from = path.join(root, LOCAL_OWNER, moduleId);
       for (const game of await readdir(from).catch(() => [] as string[])) {
-        if (!isGameId(game)) continue;
+        // The settings shared by every game (storage.app) move like a game's.
+        if (!isGameId(game) && game !== APP_DATA_DIR) continue;
         const target = path.join(root, to, moduleId, game);
         if (await exists(target)) {
           log(`${moduleId} already has data in ${game}; its local data there stays`);

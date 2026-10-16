@@ -6,7 +6,7 @@ import { FILES_DIR } from "./module-files";
  * The file versions this Tavora understands (the "version" inside each file). A test keeps these
  * equal to what the code writes; raise one when its format changes in a way an older Tavora could misread.
  */
-export const SUPPORTED_VERSIONS = { "library.json": 1, "workspace.json": 2, "profile.json": 1 } as const;
+export const SUPPORTED_VERSIONS = { "library.json": 1, "workspace.json": 2, "profile.json": 1, "grants.json": 1 } as const;
 
 /** How many daily snapshots are kept. */
 export const BACKUP_KEEP = 7;

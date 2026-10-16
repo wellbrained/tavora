@@ -102,6 +102,71 @@ export interface PutDocumentParams {
   ifRevision?: number;
 }
 
+/**
+ * A web request the host makes for the module (network.fetch). Only to a host the module names in
+ * `permissions.network` and the player granted, only over HTTPS; the host sends no cookies and
+ * follows redirects only to granted hosts.
+ */
+export interface NetworkRequest {
+  url: string;
+  /** Default GET. */
+  method?: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE";
+  /** Cookie, Host, Origin, Referer, Proxy-*, Sec-* and the transfer headers are set by the host and refused here. */
+  headers?: Record<string, string>;
+  /** Text only; send binary data as base64 or JSON. */
+  body?: string;
+  /** "base64" for pictures and other binary answers. Default "text" (read as UTF-8). */
+  responseType?: "text" | "base64";
+}
+
+export interface NetworkResponse {
+  status: number;
+  /** The address that answered, after any redirects. */
+  url: string;
+  /** Lowercase names; Set-Cookie is left out. */
+  headers: Record<string, string>;
+  /** The answer as text, or base64 when the request asked for it. */
+  body: string;
+}
+
+/** An AI account the player set up in Settings > Integrations > AI usage, as the ai-usage connector shows it. */
+export interface AiUsageAccountInfo {
+  /** Chosen by Tavora; stays the same while the account exists. */
+  id: string;
+  provider: "claude" | "codex";
+  /** The player's name for it. */
+  label: string;
+  /** The subscription plan from the profile's saved login, from a fixed list of names (Pro, Max 5×, Plus, ...), or null. */
+  plan: string | null;
+}
+
+/**
+ * One reading of an account's usage through the ai-usage connector. Tavora reads the login itself
+ * and hands over only the provider's answer, never the token. An account is read at most once a
+ * minute (LIMITS.aiUsageMinReadMs); asking sooner gives the last reading again.
+ */
+export interface AiUsageReading {
+  /**
+   * ok: `answer` holds the provider's answer. sign-in: the profile has no usable subscription login.
+   * rate-limited: the provider asked to wait (`retryAfterMs`). api-key: the login is an API key,
+   * which has no subscription allowance. cli-missing: the Codex command line is not installed.
+   * unavailable: anything else.
+   */
+  status: "ok" | "sign-in" | "rate-limited" | "api-key" | "cli-missing" | "unavailable";
+  /** For rate-limited: how long to wait at least, in milliseconds; otherwise null. */
+  retryAfterMs: number | null;
+  /**
+   * The provider's answer as it came, for status ok: Claude's usage answer (undocumented, may change)
+   * or the Codex app-server's `account/rateLimits/read` result. Null otherwise.
+   */
+  answer: JsonValue | null;
+  /** The signed-in email the provider reports, or null. */
+  email: string | null;
+  plan: string | null;
+  /** When Tavora took this reading (ISO 8601). */
+  readAt: string;
+}
+
 export interface DocumentChange {
   id: string;
   revision: number;
@@ -109,10 +174,13 @@ export interface DocumentChange {
 }
 
 /**
- * Capabilities gate methods beyond the always-available core. None of the
- * gated ones can be granted yet; calling them fails with PERMISSION_DENIED.
+ * Capabilities gate methods beyond the always-available core. A module has a
+ * capability once the player granted one of its permissions for it (`network`:
+ * a host in `permissions.network`; `aiUsage`: the `ai-usage` connector); calling
+ * a gated method without it fails with PERMISSION_DENIED. The others cannot be
+ * granted yet.
  */
-export type Capability = "network" | "files" | "clipboard" | "sharedData";
+export type Capability = "network" | "aiUsage" | "files" | "clipboard" | "sharedData";
 
 /** Request methods and their params/result types. */
 export interface Methods {
@@ -122,6 +190,11 @@ export interface Methods {
   "storage.set": { params: { key: string; value: JsonValue }; result: null };
   "storage.delete": { params: { key: string }; result: null };
   "storage.keys": { params: undefined; result: string[] };
+  /** The same calls for settings shared by every game: this module's own, in all games. */
+  "storage.app.get": { params: { key: string }; result: JsonValue | null };
+  "storage.app.set": { params: { key: string; value: JsonValue }; result: null };
+  "storage.app.delete": { params: { key: string }; result: null };
+  "storage.app.keys": { params: undefined; result: string[] };
   "documents.list": { params: undefined; result: DocumentSummary[] };
   "documents.get": { params: { id: string }; result: TavoraDocument | null };
   "documents.put": { params: PutDocumentParams; result: DocumentSummary };
@@ -137,13 +210,18 @@ export interface Methods {
   "blobs.list": { params: undefined; result: BlobInfo[] };
   "blobs.usage": { params: undefined; result: BlobUsage };
   "blobs.delete": { params: { id: string }; result: null };
+  /** A web request to a granted host (capability `network`). */
+  "network.fetch": { params: NetworkRequest; result: NetworkResponse };
+  /** The AI accounts the player set up, in their order (capability `aiUsage`). */
+  "aiUsage.accounts": { params: undefined; result: AiUsageAccountInfo[] };
+  /** Reads one account's usage (capability `aiUsage`). */
+  "aiUsage.read": { params: { accountId: string }; result: AiUsageReading };
 }
 
 export type MethodName = keyof Methods;
 
 /** Methods reserved for later milestones, and the capability each needs. */
 export const RESERVED_METHODS: Readonly<Record<string, Capability>> = {
-  "network.fetch": "network",
   "files.open": "files",
   "files.save": "files",
   "clipboard.writeText": "clipboard",
@@ -159,6 +237,8 @@ export interface Events {
   "ui.theme": TavoraTheme;
   "ui.language": string;
   "documents.changed": DocumentChange;
+  /** The player added, renamed or removed an AI account; ask aiUsage.accounts again. Only with capability `aiUsage`. */
+  "aiUsage.accountsChanged": null;
   "lifecycle.suspend": null;
   "lifecycle.resume": null;
   "lifecycle.dispose": null;
@@ -175,8 +255,10 @@ export type ErrorCode =
   | "INVALID_PARAMS"
   /** The method exists but this module has not been granted its capability. */
   | "PERMISSION_DENIED"
-  /** A storage, document or panel-state limit would be exceeded. */
+  /** A storage, document or panel-state limit would be exceeded, or a network answer was too large. */
   | "QUOTA_EXCEEDED"
+  /** network.fetch got no answer: the host could not be found or reached, the connection failed or it took too long. An answer with an error status (404, 500) is not this; it is returned. */
+  | "NETWORK_ERROR"
   /** `ifRevision` did not match the stored revision. */
   | "CONFLICT"
   /** The SDK and host speak different protocol versions. */
@@ -241,6 +323,18 @@ export const LIMITS = {
   maxBlobsBytes: 500 * 1024 * 1024,
   /** A PNG a module puts on the clipboard. */
   maxClipboardImageBytes: 20 * 1024 * 1024,
+  /** The body of one network.fetch answer, before any base64. A longer answer fails with QUOTA_EXCEEDED. */
+  maxNetworkResponseBytes: 5 * 1024 * 1024,
+  /** How long one network.fetch may take, redirects included. */
+  networkTimeoutMs: 15_000,
+  /** Redirects one network.fetch follows; each must go to a granted host. */
+  maxNetworkRedirects: 5,
+  /** network.fetch calls one panel may have running at once; more fail with BAD_REQUEST. */
+  maxNetworkInFlight: 6,
+  /** How often Tavora reads one AI account at most, for every module together; asking sooner gives the last reading. */
+  aiUsageMinReadMs: 60_000,
+  /** How long one aiUsage.read may take; the Codex command line can be slow to start. */
+  aiUsageTimeoutMs: 40_000,
 } as const;
 
 /** The kinds of file a module can keep with blobs.put, found by looking at the file itself. */

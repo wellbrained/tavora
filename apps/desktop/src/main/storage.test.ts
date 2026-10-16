@@ -149,4 +149,23 @@ describe("DataRegistry", () => {
     await registry.get("local", "local.example.a", "poe2").settings.set("secret", 1);
     expect(await registry.get(other, "local.example.a", "poe2").settings.get("secret")).toBeNull();
   });
+
+  it("keeps the settings shared by every game next to the games, apart from each game's own", async () => {
+    const registry = new DataRegistry(dir);
+    await registry.appSettings("local", "local.example.a").set("style", "used");
+    expect(await registry.get("local", "local.example.a", "poe2").settings.get("style")).toBeNull();
+    expect(await registry.appSettings("local", "local.example.b").get("style")).toBeNull();
+    expect(await registry.appSettings("0123456789abcdef0123456789abcdef", "local.example.a").get("style")).toBeNull();
+    expect(registry.appSettings("local", "local.example.a")).toBe(registry.appSettings("local", "local.example.a"));
+    expect(await readdir(path.join(dir, "module-data", "local", "local.example.a"))).toEqual(["_app"]);
+    expect(() => registry.appSettings("..", "local.example.a")).toThrow();
+    expect(() => registry.appSettings("local", "../x")).toThrow();
+  });
+
+  it("reads the shared settings from disk again once a module's data is forgotten", async () => {
+    const registry = new DataRegistry(dir);
+    const store = registry.appSettings("local", "local.example.a");
+    registry.forgetModule("local", "local.example.a");
+    expect(registry.appSettings("local", "local.example.a")).not.toBe(store);
+  });
 });

@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
+import { isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, type Connector } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -28,12 +28,14 @@ import { resolveLanguage, translate, type Language } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
-import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, type SavedLayout } from "./layout";
+import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, vacateLayout, type SavedLayout } from "./layout";
 import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
 import { applyOwners, forgetOwner, installZip, readOwnerRecords } from "./installer";
+import { GrantStore } from "./grants";
+import type { TestHosts } from "./network";
 import { shortcutFor } from "./shortcuts";
 import { IconError, importIcon, removeIcon } from "./icons";
 import { readJsonOrSetAside } from "./json";
@@ -90,9 +92,10 @@ import { isWebUrl, siteOfUrl } from "./browser-url";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { AI_USAGE_MODULE_ID, aiUsageModule, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, discordModule, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, discordModule, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
-import { AiUsage } from "./ai-usage";
+import { AiUsageConnector } from "./ai-usage";
+import { readClaudeEmail } from "./ai-usage-claude";
 import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnection, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
@@ -199,6 +202,10 @@ export interface HostOptions {
   systemLocale?: string | undefined;
   /** Tests only: what a module may keep in its browser storage, in bytes, instead of the usual limit. */
   moduleStorageLimit?: number | undefined;
+  /** Tests only: host names network.fetch reaches on a local server, over plain http (network.ts). */
+  testNetworkHosts?: TestHosts | undefined;
+  /** Tests only: a local server that answers in place of Anthropic's usage address (ai-usage.ts). */
+  aiUsageUrl?: string | undefined;
   /**
    * Development only: the Vite dev server that serves the host UI with hot
    * reload, instead of the built files in `rendererDir`.
@@ -232,15 +239,16 @@ export class Host {
   /** Open Discord panels. They have no view of their own: the host UI draws them. */
   private readonly discordPanels = new Set<string>();
   private readonly discord: DiscordConnection;
-  /** Open AI usage panels. Like Discord panels they have no view of their own. */
-  private readonly aiUsagePanels = new Set<string>();
-  private readonly aiUsage: AiUsage;
+  /** The AI Usage connector: the AI accounts, read for modules granted it. */
+  private readonly aiUsage: AiUsageConnector;
   /** The player's Tavora account; the sign-in never leaves the main process. */
   private readonly account: AccountClient;
   private screen: Screen = "welcome";
   private notice: string | null = null;
   /** Every (owner, module) with saved settings or documents, for Settings > Modules. */
   private moduleData: { owner: string; moduleId: string }[] = [];
+  /** What the player granted each module (grants.ts); loaded before any module panel opens. */
+  private grants!: GrantStore;
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
   private pendingLink: string | null = null;
   /** Where modules keep their pictures. */
@@ -296,6 +304,7 @@ export class Host {
     });
     this.aiUsage = Host.aiUsageService(options, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:ai-usage", view);
+      for (const panel of this.views.values()) if (panel instanceof ModuleView) panel.notifyAiUsageAccounts();
     });
     this.account = Host.accountClient(options, () => this.language, { get: () => this.profileData(), apply: (remote) => this.applyProfile(remote) }, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:account", view);
@@ -347,7 +356,6 @@ export class Host {
     applyOwners(modules, await realUserModulesDir(options), await readOwnerRecords(userData));
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     modules.set(DISCORD_MODULE_ID, discordModule(app.getVersion()));
-    modules.set(AI_USAGE_MODULE_ID, aiUsageModule(app.getVersion()));
     const moduleInfo = await describeModules(userModulesDir(options), modules);
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
@@ -381,6 +389,8 @@ export class Host {
 
     const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
     host.moduleData = await listModuleData(userData, host.files.root());
+    host.grants = await GrantStore.load(userData);
+    await host.moveAiUsagePanelData();
     // Native menus, dialogs and scrollbars follow the theme's mode.
     host.syncNativeTheme();
     await host.account.init();
@@ -413,6 +423,24 @@ export class Host {
     host.backupSoon();
     await host.startUpdates();
     return host;
+  }
+
+  /**
+   * The built-in AI usage panel (before 0.16.10) kept its interval, style and last readings in
+   * ai-usage.json. They go to the AI Usage module's settings shared by every game, once, without
+   * replacing anything the module saved itself; then the file keeps only the accounts.
+   */
+  private async moveAiUsagePanelData(): Promise<void> {
+    try {
+      const legacy = await this.aiUsage.legacyPanelData();
+      if (!legacy) return;
+      const settings = this.data.appSettings(OFFICIAL_OWNER, AI_USAGE_MODULE_ID);
+      if ((await settings.get("settings")) === null) await settings.set("settings", { refreshMinutes: legacy.refreshMinutes, style: legacy.style });
+      if ((await settings.get("readings")) === null) await settings.set("readings", legacy.readings);
+      await this.aiUsage.forgetLegacyPanelData();
+    } catch (error) {
+      console.error("[tavora] moving the AI usage panel's settings failed", error);
+    }
   }
 
   /** The daily copy of the player's data, made a little after start so it never slows it. */
@@ -455,7 +483,6 @@ export class Host {
     applyOwners(modules, await realUserModulesDir(this.options), await readOwnerRecords(this.options.userData));
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     modules.set(DISCORD_MODULE_ID, discordModule(app.getVersion()));
-    modules.set(AI_USAGE_MODULE_ID, aiUsageModule(app.getVersion()));
     this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
     this.moduleProblems = problems;
     this.modules = modules;
@@ -539,9 +566,56 @@ export class Host {
     } catch {
       throw new LibraryError("error.removeFailed");
     }
-    // Its data stays under its owner, so the same publisher's module finds it again.
+    this.removeModulePanels(moduleId);
+    // Its data stays under its owner, so the same publisher's module finds it again. Its grants go:
+    // whatever is installed next under this id is asked again.
     await forgetOwner(this.options.userData, path.basename(module.root));
+    await this.grants.revoke(module.owner, moduleId);
     await this.reloadModules();
+  }
+
+  /**
+   * The player allowed what the consent dialog showed. Only hosts the module asks for are granted
+   * (grants.ts), so a module updated while the dialog was open gets nothing it did not show. Open
+   * panels of the module start again, so they connect with the new grant.
+   */
+  private async grantModule(moduleId: string, network: string[], connectors: Connector[]): Promise<void> {
+    const module = this.modules.get(moduleId);
+    if (!module || module.builtIn) throw new LibraryError("error.moduleMissing");
+    await this.grants.grant(module, { network, connectors });
+    for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === moduleId) view.reload();
+  }
+
+  /** Takes back everything granted to a module, after its panels are removed in every game. Its data stays. */
+  private async revokeModule(moduleId: string): Promise<void> {
+    const module = this.modules.get(moduleId);
+    if (!module) throw new LibraryError("error.moduleMissing");
+    this.removeModulePanels(moduleId);
+    await this.grants.revoke(module.owner, moduleId);
+  }
+
+  /** The games, by id in the library, with a panel of this module. */
+  private gamesUsing(moduleId: string): string[] {
+    return Object.entries(this.workspace.games)
+      .filter(([gameId, workspace]) => gameId in this.library.games && workspace.instances.some((record) => record.moduleId === moduleId))
+      .map(([gameId]) => gameId);
+  }
+
+  /** Removes a module's panels in every game; a slot left with nothing stays as an empty slot. */
+  private removeModulePanels(moduleId: string): void {
+    let changed = false;
+    for (const workspace of Object.values(this.workspace.games)) {
+      const gone = new Set(workspace.instances.filter((record) => record.moduleId === moduleId).map((record) => record.instanceId));
+      if (gone.size === 0) continue;
+      changed = true;
+      workspace.instances = workspace.instances.filter((record) => !gone.has(record.instanceId));
+      workspace.layout = vacateLayout(workspace.layout, (id) => gone.has(id));
+      for (const instanceId of gone) this.closeView(instanceId);
+    }
+    if (changed) {
+      this.layoutEpoch++;
+      this.saveWorkspace();
+    }
   }
 
   /**
@@ -774,8 +848,6 @@ export class Host {
       this.viewsByContents.clear();
       this.browsersByContents.clear();
       this.discordPanels.clear();
-      this.aiUsagePanels.clear();
-      this.aiUsage.dispose();
       this.discord.dispose();
     });
   }
@@ -951,6 +1023,10 @@ export class Host {
         return this.openModulesFolder();
       case "remove-module":
         return this.removeModule(action.moduleId);
+      case "grant-module":
+        return this.grantModule(action.moduleId, action.network, action.connectors);
+      case "revoke-module":
+        return this.revokeModule(action.moduleId);
       case "install-module":
         return this.installModule();
       case "delete-module-data":
@@ -1044,18 +1120,12 @@ export class Host {
         return this.account.deleteWithDiscord();
       case "account-profile-choice":
         return this.account.chooseProfile(action.keep);
-      case "ai-usage-refresh":
-        return this.aiUsage.refreshNow();
       case "ai-usage-add":
         return this.aiUsage.add(action.provider, action.label, action.directory);
       case "ai-usage-update":
         return this.aiUsage.update(action.accountId, action.label, action.directory);
       case "ai-usage-remove":
         return this.aiUsage.remove(action.accountId);
-      case "ai-usage-set-interval":
-        return this.aiUsage.setInterval(action.minutes);
-      case "ai-usage-set-style":
-        return this.aiUsage.setStyle(action.style);
       case "discord-connect":
         return this.discord.connectNow();
       case "discord-sign-out":
@@ -1467,11 +1537,13 @@ export class Host {
 
   // ── AI usage ─────────────────────────────────────────────────────────
 
-  private static aiUsageService(options: HostOptions, onChange: (view: AiUsageView) => void): AiUsage {
+  private static aiUsageService(options: HostOptions, onChange: (view: AiUsageView) => void): AiUsageConnector {
     const home = os.homedir();
-    return new AiUsage({
+    return new AiUsageConnector({
       file: path.join(options.userData, "ai-usage.json"),
       version: app.getVersion(),
+      ...(options.aiUsageUrl ? { usageUrl: options.aiUsageUrl } : {}),
+      readClaudeEmail: (directory) => readClaudeEmail(directory),
       fetch: (input, init) => fetch(input, init),
       readText: (file) => readFile(file, "utf8").catch(() => null),
       isDirectory: (directory) => stat(directory).then((info) => info.isDirectory(), () => false),
@@ -1691,11 +1763,6 @@ export class Host {
       void this.discord.setWanted(true);
       return;
     }
-    if (record.moduleId === AI_USAGE_MODULE_ID) {
-      this.aiUsagePanels.add(record.instanceId);
-      void this.aiUsage.setWanted(true);
-      return;
-    }
     let measured = openedAt === undefined;
     const module = this.modules.get(record.moduleId)!;
     const view = new ModuleView({
@@ -1714,6 +1781,11 @@ export class Host {
       onStorageOver: () => void this.purgeModuleStorage(module.manifest.id, game.id),
       onReveal: () => this.applyBounds(),
       onOpenLink: (url) => this.openLinkFromModule(url),
+      networkHosts: () => this.networkHostsOf(record.moduleId),
+      connectors: () => this.connectorsOf(record.moduleId),
+      appSettings: this.data.appSettings(module.owner, module.manifest.id),
+      aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
+      ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
       onStatus: (status) => {
         if (!measured && status === "ready") {
           measured = true;
@@ -1731,6 +1803,18 @@ export class Host {
     view.view.setVisible(false);
     view.suspend();
     this.window.contentView.addChildView(view.view);
+  }
+
+  /** Connectors a module may use now: its grant, as far as the module installed now still asks for them. */
+  private connectorsOf(moduleId: string): ReadonlySet<string> {
+    const module = this.modules.get(moduleId);
+    return new Set(module ? this.grants.allowed(module).connectors : []);
+  }
+
+  /** Hosts a module may reach now: its grant, as far as the module installed now still asks for them. */
+  private networkHostsOf(moduleId: string): ReadonlySet<string> {
+    const module = this.modules.get(moduleId);
+    return new Set(module ? this.grants.allowed(module).network : []);
   }
 
   private createBrowser(record: InstanceRecord, game: TavoraGame): void {
@@ -1834,10 +1918,6 @@ export class Host {
       if (this.discordPanels.size === 0) void this.discord.setWanted(false);
       return;
     }
-    if (this.aiUsagePanels.delete(instanceId)) {
-      if (this.aiUsagePanels.size === 0) void this.aiUsage.setWanted(false);
-      return;
-    }
     const view = this.views.get(instanceId);
     if (!view) return;
     this.views.delete(instanceId);
@@ -1848,7 +1928,7 @@ export class Host {
   }
 
   private closeAllViews(): void {
-    for (const instanceId of [...this.views.keys(), ...this.discordPanels, ...this.aiUsagePanels]) this.destroyView(instanceId);
+    for (const instanceId of [...this.views.keys(), ...this.discordPanels]) this.destroyView(instanceId);
     this.panelBounds.clear();
   }
 
@@ -2000,6 +2080,12 @@ export class Host {
         publisher: this.publisherOf(module),
         localDataWaiting: this.localDataWaiting(module),
         icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null,
+        permissions: {
+          asks: { network: [...module.manifest.permissions.network], connectors: [...(module.manifest.permissions.connectors ?? [])] },
+          granted: this.grants.allowed(module),
+          missing: this.grants.missing(module),
+        },
+        usedIn: this.gamesUsing(module.manifest.id),
       })),
       moduleProblems: this.moduleProblems.map((problem) => ({ ...problem })),
       leftoverModuleData: this.moduleData
@@ -2009,7 +2095,7 @@ export class Host {
         const view = this.views.get(record.instanceId);
         const name = this.modules.get(record.moduleId)!.manifest.name;
         // A Discord panel is drawn by the host UI itself, so it is ready at once.
-        if (this.discordPanels.has(record.instanceId) || this.aiUsagePanels.has(record.instanceId)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: "ready" as const };
+        if (this.discordPanels.has(record.instanceId)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: "ready" as const };
         const openedFrom = this.openedFrom.get(record.instanceId);
         if (!(view instanceof BrowserPanel)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: view?.status ?? "loading" };
         const browser = view.state;

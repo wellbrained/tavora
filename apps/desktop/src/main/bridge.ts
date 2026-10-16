@@ -6,13 +6,16 @@ import {
   type DocumentChange,
   type EventName,
   type Events,
+  type AiUsageAccountInfo,
+  type AiUsageReading,
   type HandshakeResult,
+  type NetworkResponse,
   type TavoraGame,
   type TavoraTheme,
   type TavoraViewport,
 } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
-import type { ModuleData, PanelStateStore } from "./storage";
+import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
 
 /** The parts of Electron's MessagePortMain the bridge uses. */
 export interface BridgePort {
@@ -34,8 +37,13 @@ export interface BridgeContext {
   instanceId: string;
   game: TavoraGame;
   data: ModuleData;
+  /** The module's settings shared by every game (storage.app). */
+  appSettings: ModuleStore;
+  /** The ai-usage connector (ai-usage.ts); only reached with the `aiUsage` capability. */
+  aiUsage: { accounts(): Promise<AiUsageAccountInfo[]>; read(accountId: string): Promise<AiUsageReading> };
   panelState: PanelStateStore;
-  capabilities: ReadonlySet<Capability>;
+  /** What the player has granted this module right now; asked on every gated call, so a revoke takes effect at once. */
+  capabilities(): ReadonlySet<Capability>;
   getViewport(): TavoraViewport;
   getTheme(): TavoraTheme;
   getLanguage(): string;
@@ -43,6 +51,8 @@ export interface BridgeContext {
   isSuspended(): boolean;
   /** Opens a web address in a Browser panel. Throws a HostError when the panel did not just get a click or key press, or the address is not a web address. */
   openLink(url: string): void;
+  /** network.fetch: checks the grant on every hop and makes the request (network.ts). Throws HostErrors. */
+  fetch(params: unknown): Promise<NetworkResponse>;
   /**
    * The module started (true) or finished (false) having requests answered; `served` counts the
    * answered ones apart from the handshake. The host uses it to tell when a page has its data.
@@ -68,6 +78,11 @@ function required(params: Record<string, unknown>, name: string): unknown {
   return params[name];
 }
 
+/** Refuses a gated method when the player has not granted its capability (G9), before anything else is looked at. */
+function needs(s: BridgeSession, capability: Capability, method: string): void {
+  if (!s.context.capabilities().has(capability)) throw new HostError("PERMISSION_DENIED", `${method} needs the "${capability}" permission`, { capability });
+}
+
 /** Longest address links.open accepts. */
 const LINK_MAX = 2048;
 
@@ -88,6 +103,24 @@ const handlers = new Map<string, Handler>([
     "storage.delete",
     async (s, params) => {
       await s.context.data.settings.delete(object(params).key);
+      return null;
+    },
+  ],
+
+  ["storage.app.get", (s, params) => s.context.appSettings.get(object(params).key)],
+  ["storage.app.keys", (s, params) => (noParams(params), s.context.appSettings.keys())],
+  [
+    "storage.app.set",
+    async (s, params) => {
+      const p = object(params);
+      await s.context.appSettings.set(p.key, required(p, "value"));
+      return null;
+    },
+  ],
+  [
+    "storage.app.delete",
+    async (s, params) => {
+      await s.context.appSettings.delete(object(params).key);
       return null;
     },
   ],
@@ -124,6 +157,32 @@ const handlers = new Map<string, Handler>([
     },
   ],
 
+  [
+    "network.fetch",
+    async (s, params) => {
+      // Without any granted host the answer is the same as for every other capability not granted (G9).
+      needs(s, "network", "network.fetch");
+      if (s.networkInFlight >= LIMITS.maxNetworkInFlight) throw new HostError("BAD_REQUEST", `at most ${LIMITS.maxNetworkInFlight} network requests at once`);
+      s.networkInFlight++;
+      try {
+        return await s.context.fetch(params);
+      } finally {
+        s.networkInFlight--;
+      }
+    },
+  ],
+
+  ["aiUsage.accounts", (s, params) => (needs(s, "aiUsage", "aiUsage.accounts"), noParams(params), s.context.aiUsage.accounts())],
+  [
+    "aiUsage.read",
+    (s, params) => {
+      needs(s, "aiUsage", "aiUsage.read");
+      const accountId = required(object(params), "accountId");
+      if (typeof accountId !== "string" || accountId.length === 0 || accountId.length > 64) throw new HostError("INVALID_PARAMS", "params.accountId must be an account id");
+      return s.context.aiUsage.read(accountId);
+    },
+  ],
+
   ["panel.getState", (s, params) => (noParams(params), s.context.panelState.get(s.context.instanceId))],
   [
     "panel.setState",
@@ -144,6 +203,8 @@ export class BridgeSession {
   private served = 0;
   private closed = false;
   private handshakeDone = false;
+  /** network.fetch calls of this panel still running. */
+  networkInFlight = 0;
 
   constructor(
     private readonly port: BridgePort,
@@ -193,7 +254,7 @@ export class BridgeSession {
       protocol: PROTOCOL_VERSION,
       host: { name: "tavora-desktop", version: this.context.hostVersion },
       module: { id: this.context.moduleId, version: this.context.moduleVersion },
-      capabilities: [...this.context.capabilities],
+      capabilities: [...this.context.capabilities()],
     };
   }
 
@@ -234,7 +295,7 @@ export class BridgeSession {
         const capability = RESERVED_METHODS[method]!;
         // Nothing can grant these yet; the check is here so the error shape
         // stays the same once something can.
-        if (!this.context.capabilities.has(capability)) {
+        if (!this.context.capabilities().has(capability)) {
           throw new HostError("PERMISSION_DENIED", `${method} needs the "${capability}" permission`, { capability });
         }
         throw new HostError("UNKNOWN_METHOD", `${method} is not available in this host version`);

@@ -33,9 +33,17 @@ describe("validateManifest", () => {
     expect(validateManifest({ ...valid, entry }).ok).toBe(false);
   });
 
-  it("rejects network permissions until mediation exists", () => {
-    const result = validateManifest({ ...valid, permissions: { network: ["api.example.com"] } });
-    expect(result).toEqual({ ok: false, errors: ["permissions.network is not supported yet and must be empty"] });
+  it("accepts exact public hosts as network permissions", () => {
+    const manifest = { ...valid, permissions: { network: ["api.example.com", "cdn.discordapp.com", "xn--mller-kva.de"] } };
+    expect(validateManifest(manifest)).toEqual({ ok: true, manifest });
+  });
+
+  it("names the hosts it refuses", () => {
+    expect(validateManifest({ ...valid, permissions: { network: ["https://api.example.com", "*.example.com"] } })).toEqual({
+      ok: false,
+      errors: ["permissions.network must list exact public host names such as api.example.com (lowercase, no scheme, port or wildcard): https://api.example.com, *.example.com"],
+    });
+    expect(validateManifest({ ...valid, permissions: { network: ["a.example", "a.example"] } })).toEqual({ ok: false, errors: ["permissions.network lists a host twice"] });
   });
 
   it("accepts the WebAssembly permission as a true or false, and nothing else in its place", () => {
@@ -119,7 +127,31 @@ const cases: [string, unknown, boolean][] = [
   ["bad preferred size", { ...valid, viewport: { minWidth: 320, minHeight: 240, preferredHeight: -1 } }, false],
   ["unknown viewport field", { ...valid, viewport: { minWidth: 320, minHeight: 240, x: 1 } }, false],
   ["missing permissions", { ...valid, permissions: undefined }, false],
-  ["network hosts", { ...valid, permissions: { network: ["api.example.com"] } }, false],
+  ["network host", { ...valid, permissions: { network: ["api.example.com"] } }, true],
+  ["32 network hosts", { ...valid, permissions: { network: Array.from({ length: 32 }, (_, i) => `h${i}.example.com`) } }, true],
+  ["33 network hosts", { ...valid, permissions: { network: Array.from({ length: 33 }, (_, i) => `h${i}.example.com`) } }, false],
+  ["host twice", { ...valid, permissions: { network: ["api.example.com", "api.example.com"] } }, false],
+  ["host with scheme", { ...valid, permissions: { network: ["https://api.example.com"] } }, false],
+  ["host with port", { ...valid, permissions: { network: ["api.example.com:443"] } }, false],
+  ["host with path", { ...valid, permissions: { network: ["api.example.com/v1"] } }, false],
+  ["wildcard host", { ...valid, permissions: { network: ["*.example.com"] } }, false],
+  ["uppercase host", { ...valid, permissions: { network: ["API.example.com"] } }, false],
+  ["single-label host", { ...valid, permissions: { network: ["intranet"] } }, false],
+  ["trailing dot host", { ...valid, permissions: { network: ["api.example.com."] } }, false],
+  ["ipv4 host", { ...valid, permissions: { network: ["93.184.216.34"] } }, false],
+  ["ipv6 host", { ...valid, permissions: { network: ["[::1]"] } }, false],
+  ["localhost", { ...valid, permissions: { network: ["localhost"] } }, false],
+  ["dev.localhost", { ...valid, permissions: { network: ["dev.localhost"] } }, false],
+  [".local host", { ...valid, permissions: { network: ["printer.local"] } }, false],
+  ["hyphen-edged label", { ...valid, permissions: { network: ["-api.example.com"] } }, false],
+  ["long label", { ...valid, permissions: { network: [`${"a".repeat(64)}.example.com`] } }, false],
+  ["unicode host", { ...valid, permissions: { network: ["müller.de"] } }, false],
+  ["non-string host", { ...valid, permissions: { network: [7] } }, false],
+  ["ai-usage connector", { ...valid, permissions: { network: [], connectors: ["ai-usage"] } }, true],
+  ["no connectors", { ...valid, permissions: { network: [], connectors: [] } }, true],
+  ["unknown connector", { ...valid, permissions: { network: [], connectors: ["discord"] } }, false],
+  ["connector twice", { ...valid, permissions: { network: [], connectors: ["ai-usage", "ai-usage"] } }, false],
+  ["connectors not a list", { ...valid, permissions: { network: [], connectors: "ai-usage" } }, false],
   ["shared data permission", { ...valid, permissions: { network: [], sharedData: { consume: [] } } }, false],
   ["unknown field", { ...valid, nodeIntegration: true }, false],
 ];

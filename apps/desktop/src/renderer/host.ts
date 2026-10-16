@@ -124,7 +124,27 @@ export interface LinkChoiceRequest {
   url: string;
 }
 
-export type DialogRequest = PromptRequest | ConfirmRequest | ShareIconsRequest | LinkChoiceRequest | { kind: "add-game" } | { kind: "steam-import" } | AddModuleRequest;
+/**
+ * The consent dialog: what a module asks for that the player has not granted. Drawn by Tavora,
+ * never by the module. `slot` is where the module goes once allowed; a review (an update that asks
+ * for more, from the bar on its panels) opens nothing.
+ */
+export interface GrantRequest {
+  kind: "grant";
+  moduleId: string;
+  slot: string | null;
+  review: boolean;
+}
+
+export type DialogRequest =
+  | PromptRequest
+  | ConfirmRequest
+  | ShareIconsRequest
+  | LinkChoiceRequest
+  | { kind: "add-game" }
+  | { kind: "steam-import" }
+  | AddModuleRequest
+  | GrantRequest;
 
 export const dialog = shallowRef<DialogRequest | null>(null);
 
@@ -190,6 +210,40 @@ export function prompt(request: Omit<PromptRequest, "kind" | "value" | "maxLengt
 
 export function confirmAction(request: Omit<ConfirmRequest, "kind" | "danger"> & { danger?: boolean }) {
   dialog.value = { kind: "confirm", danger: false, ...request };
+}
+
+type ModuleState = HostViewState["modules"][number];
+
+/** Whether the module asks for something the player has not granted yet. */
+export function needsGrant(module: ModuleState): boolean {
+  return module.permissions.missing.network.length > 0 || module.permissions.missing.connectors.length > 0;
+}
+
+/**
+ * Adds a module to the current game, into `slot` if given. A module that asks for something not
+ * granted yet goes through the consent dialog first; once granted, it is added without asking.
+ */
+export function addModule(moduleId: string, slot: string | null = null): void {
+  const module = state.value?.modules.find((item) => item.id === moduleId);
+  if (!module) return;
+  if (needsGrant(module)) {
+    dialog.value = { kind: "grant", moduleId, slot, review: false };
+    return;
+  }
+  dialog.value = null;
+  nextPanelSlot.value = slot;
+  void act({ type: "open-module", moduleId });
+}
+
+/** Names joined as a sentence in Tavora's language: "A, B and C". */
+export function listOf(names: string[]): string {
+  return new Intl.ListFormat(state.value?.language.resolved ?? "en", { type: "conjunction" }).format(names);
+}
+
+/** The names of the games a module is used in, for the dialogs that remove its panels. */
+export function gamesUsing(module: ModuleState): string[] {
+  const games = state.value?.library.games ?? {};
+  return module.usedIn.flatMap((gameId) => (games[gameId] ? [games[gameId].name] : []));
 }
 
 /** Prompt submit helper: runs the action and reports its error inline. */

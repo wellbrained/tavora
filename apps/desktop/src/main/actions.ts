@@ -1,4 +1,4 @@
-import { isGameId, isModuleId, isOwnerId } from "@tavora/module-schema";
+import { isConnector, isGameId, isModuleId, isNetworkHost, isOwnerId, MAX_NETWORK_HOSTS, type Connector } from "@tavora/module-schema";
 import type { BrowserCommand, HostAction, SteamImportGame } from "../shared/host-api";
 import { isSite, MAX_ADDRESS } from "./browser-url";
 import { isSnowflake } from "./discord-voice";
@@ -58,7 +58,20 @@ export function parseAction(raw: unknown): HostAction | null {
       return only() ? { type: a.type } : null;
     case "remove-module":
     case "move-local-data":
+    case "revoke-module":
       return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
+    case "grant-module":
+      return only("moduleId", "network", "connectors") &&
+        isModuleId(a.moduleId) &&
+        Array.isArray(a.network) &&
+        a.network.length <= MAX_NETWORK_HOSTS &&
+        a.network.every(isNetworkHost) &&
+        new Set(a.network).size === a.network.length &&
+        Array.isArray(a.connectors) &&
+        a.connectors.every(isConnector) &&
+        new Set(a.connectors).size === a.connectors.length
+        ? { type: a.type, moduleId: a.moduleId, network: [...(a.network as string[])], connectors: [...(a.connectors as Connector[])] }
+        : null;
     case "delete-module-data":
       return only("owner", "moduleId") && isOwnerId(a.owner) && isModuleId(a.moduleId) ? { type: a.type, owner: a.owner, moduleId: a.moduleId } : null;
     case "record-timing":
@@ -271,8 +284,6 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("keep") && (a.keep === "account" || a.keep === "pc") ? { type: a.type, keep: a.keep } : null;
     case "account-sign-out-device":
       return only("deviceId") && typeof a.deviceId === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(a.deviceId) ? { type: a.type, deviceId: a.deviceId } : null;
-    case "ai-usage-refresh":
-      return only() ? { type: a.type } : null;
     case "ai-usage-add":
       return only("provider", "label", "directory") && (a.provider === "claude" || a.provider === "codex") && text(a.label, 60) && text(a.directory, 500)
         ? { type: a.type, provider: a.provider, label: a.label, directory: a.directory }
@@ -283,10 +294,6 @@ export function parseAction(raw: unknown): HostAction | null {
         : null;
     case "ai-usage-remove":
       return only("accountId") && uuid(a.accountId) ? { type: a.type, accountId: a.accountId } : null;
-    case "ai-usage-set-interval":
-      return only("minutes") && typeof a.minutes === "number" && Number.isInteger(a.minutes) && a.minutes >= 1 && a.minutes <= 60 ? { type: a.type, minutes: a.minutes } : null;
-    case "ai-usage-set-style":
-      return only("style") && (a.style === "remaining" || a.style === "used") ? { type: a.type, style: a.style } : null;
     case "open-module":
       return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
     case "close-panel":
