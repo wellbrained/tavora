@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.14.1",
+    date: "2026-10-16",
+    title: "Modules can copy a picture",
+    notes: [
+      "A module can now put a picture on your clipboard when you press one of its buttons, so you can paste it anywhere. Nothing uses this yet: the Whiteboard will, next. A module cannot touch your clipboard on its own.",
+    ],
+  },
+  {
     version: "0.14.0",
     date: "2026-10-16",
     title: "Choose where module pictures are kept",
