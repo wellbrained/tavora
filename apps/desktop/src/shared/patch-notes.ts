@@ -25,15 +25,17 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     notes: [
       "Settings > Modules has Install from zip. Tavora checks the zip before it unpacks anything, and a module from someone else can never replace one you have or read its data, even with the same name.",
       "Modules signed by their maker show a publisher tag. Module makers create signed zips with the new pack command.",
+      "What a module saves now belongs to whoever made it, not just to the module's name. Your existing notes, to-dos and module settings are moved over once at start; nothing changes for you.",
       "Data from modules you removed is listed in Settings > Modules, where you can delete it. If you used a local copy of a module before installing its signed version, you can move the local copy's data over.",
     ],
   },
   {
     version: "0.11.1",
     date: "2026-10-16",
-    title: "Module data gets an owner",
+    title: "Links: hand cursor and a choice",
     notes: [
-      "What a module saves now belongs to whoever made it, not just to the module's name, so a different module that takes the same name later can never read it. Your existing notes, to-dos and module settings are moved over once at start; nothing changes for you.",
+      "In Notes, links show a hand cursor while you hold Ctrl, so you can tell a click will open them.",
+      "When a link is opened and the game has no Browser panel, Tavora now asks whether to use a new Browser panel or your system browser.",
     ],
   },
   {

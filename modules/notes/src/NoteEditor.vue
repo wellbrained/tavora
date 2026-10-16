@@ -295,13 +295,30 @@ function onLinkKey(event: KeyboardEvent) {
   }
 }
 
+// While Ctrl (or Cmd) is held, links show the hand cursor: a click opens them.
+const ctrlHeld = ref(false);
+
+function onModifierKey(event: KeyboardEvent) {
+  ctrlHeld.value = event.ctrlKey || event.metaKey;
+}
+
+function onWindowBlur() {
+  ctrlHeld.value = false;
+}
+
 onMounted(() => {
   addEventListener("pointerdown", closeLinkPopover, true);
   addEventListener("keydown", onLinkKey, true);
+  addEventListener("keydown", onModifierKey);
+  addEventListener("keyup", onModifierKey);
+  addEventListener("blur", onWindowBlur);
 });
 onBeforeUnmount(() => {
   removeEventListener("pointerdown", closeLinkPopover, true);
   removeEventListener("keydown", onLinkKey, true);
+  removeEventListener("keydown", onModifierKey);
+  removeEventListener("keyup", onModifierKey);
+  removeEventListener("blur", onWindowBlur);
 });
 
 function popoverOpen() {
@@ -418,7 +435,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
 </script>
 
 <template>
-  <section ref="root" class="flex h-full min-w-0 flex-col" :aria-label="t('editor.note')" data-testid="note-editor" :data-loaded="loadedNote ?? ''">
+  <section ref="root" class="flex h-full min-w-0 flex-col" :data-ctrl="ctrlHeld" :aria-label="t('editor.note')" data-testid="note-editor" :data-loaded="loadedNote ?? ''">
     <header class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2">
       <Button
         v-if="narrow"
@@ -670,6 +687,9 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
 .note-content pre code {
   background: none;
   padding: 0;
+}
+[data-ctrl="true"] .note-content a {
+  cursor: pointer;
 }
 .note-content a {
   color: var(--primary);

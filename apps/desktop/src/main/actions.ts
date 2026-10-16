@@ -35,6 +35,8 @@ export function parseAction(raw: unknown): HostAction | null {
   const only = (...keys: string[]) => Object.keys(a).every((key) => key === "type" || keys.includes(key));
 
   switch (a.type) {
+    case "link-choice":
+      return only("choice") && (a.choice === "panel" || a.choice === "system" || a.choice === "cancel") ? { type: "link-choice", choice: a.choice } : null;
     case "show-welcome":
     case "restart":
     case "download-update":

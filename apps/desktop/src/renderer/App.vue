@@ -3,6 +3,7 @@ import { TooltipProvider } from "reka-ui";
 import AddGameDialog from "./components/AddGameDialog.vue";
 import AddModuleDialog from "./components/AddModuleDialog.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
+import LinkChoiceDialog from "./components/LinkChoiceDialog.vue";
 import GameRail from "./components/GameRail.vue";
 import PromptDialog from "./components/PromptDialog.vue";
 import SearchDialog from "./components/SearchDialog.vue";
@@ -37,6 +38,7 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <AddModuleDialog v-else-if="dialog?.kind === 'add-module'" />
     <ShareIconsDialog v-else-if="dialog?.kind === 'share-icons'" :request="dialog" />
     <PromptDialog v-else-if="dialog?.kind === 'prompt'" :key="dialog.title" :request="dialog" />
+    <LinkChoiceDialog v-else-if="dialog?.kind === 'link-choice'" :url="dialog.url" />
     <ConfirmDialog v-else-if="dialog?.kind === 'confirm'" :key="dialog.title" :request="dialog" />
 
     <!-- Over the toolbar: module panels are native views drawn above this
