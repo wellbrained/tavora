@@ -132,7 +132,8 @@ test("notes: write, pin and search notes, and find them again after a restart", 
 
   await newNote(app);
   await typeInModule(app, NOTES, "Atlas plan");
-  await expect.poll(() => noteTitles(app)).toEqual(["Scratchpad", "Atlas plan", "Count Geonor"]);
+  // Notes stay in the order they were made: a new one comes last.
+  await expect.poll(() => noteTitles(app)).toEqual(["Scratchpad", "Count Geonor", "Atlas plan"]);
 
   // Pinned notes come before the others.
   await inModule(app, NOTES, `${noteRow("Count Geonor")}.querySelector("button").click()`);

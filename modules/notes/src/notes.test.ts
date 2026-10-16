@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { cleanTitle, contentFromText, matches, normalizeLink, parseNote, previewFor, relativeTime, sections, titleFor, type NoteEntry } from "./notes";
+import { cleanTitle, contentFromText, fontStack, matches, normalizeLink, parseAppearance, parseNote, previewFor, relativeTime, sections, titleFor, type NoteEntry } from "./notes";
 
 function entry(id: string, patch: Partial<NoteEntry> = {}): NoteEntry {
-  return { id, title: id, text: "", fixedTitle: "", pinned: false, updatedAt: "2026-10-14T10:00:00.000Z", revision: 1, ...patch };
+  return { id, title: id, text: "", fixedTitle: "", pinned: false, createdAt: "2026-10-14T10:00:00.000Z", updatedAt: "2026-10-14T10:00:00.000Z", revision: 1, ...patch };
 }
 
 describe("parseNote", () => {
@@ -93,16 +93,17 @@ describe("matches", () => {
 });
 
 describe("sections", () => {
-  it("puts the scratchpad first, then pinned and other notes newest first", () => {
+  it("puts the scratchpad first, then pinned and other notes in the order they were made", () => {
     const result = sections([
-      entry("old", { updatedAt: "2026-10-01T00:00:00.000Z" }),
+      entry("new", { createdAt: "2026-10-14T12:00:00.000Z" }),
       entry("pin", { pinned: true }),
-      entry("new", { updatedAt: "2026-10-14T12:00:00.000Z" }),
+      entry("old", { createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-15T00:00:00.000Z" }),
       entry("scratchpad", { text: "x" }),
     ]);
     expect(result.scratchpad.text).toBe("x");
     expect(result.pinned.map((note) => note.id)).toEqual(["pin"]);
-    expect(result.others.map((note) => note.id)).toEqual(["new", "old"]);
+    // A note edited later stays where it was; a new note comes last.
+    expect(result.others.map((note) => note.id)).toEqual(["old", "new"]);
   });
 
   it("always has a scratchpad, saved or not", () => {
@@ -127,5 +128,23 @@ describe("normalizeLink", () => {
     expect(normalizeLink("javascript:alert(1)")).toBeNull();
     expect(normalizeLink("file:///etc/passwd")).toBeNull();
     expect(normalizeLink("  ")).toBeNull();
+  });
+});
+
+describe("parseAppearance", () => {
+  it("gives every part a valid font and size, with defaults for anything unknown", () => {
+    expect(parseAppearance(null)).toEqual({
+      notes: { font: "inter", size: "medium" },
+      scratchpad: { font: "inter", size: "medium" },
+    });
+    expect(parseAppearance({ notes: { font: "lora", size: "large" }, scratchpad: { font: "comic", size: 4 } })).toEqual({
+      notes: { font: "lora", size: "large" },
+      scratchpad: { font: "inter", size: "medium" },
+    });
+    expect(parseAppearance([1] as never).notes.font).toBe("inter");
+  });
+
+  it("finds the CSS stack of a font", () => {
+    expect(fontStack("lora")).toContain("Lora Variable");
   });
 });

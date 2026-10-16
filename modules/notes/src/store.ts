@@ -4,7 +4,7 @@
 import { readDocument, serial, updateDocument, type Versioned } from "@tavora/official-ui";
 import type { DocumentSummary, TavoraSDK } from "@tavora/sdk";
 import { ref, triggerRef } from "vue";
-import { cleanTitle, parseNote, titleFor, UNTITLED, type NoteData, type NoteEntry, type RichText } from "./notes";
+import { cleanTitle, parseAppearance, parseNote, titleFor, UNTITLED, type Appearance, type NoteData, type NoteEntry, type RichText, type TextStyle } from "./notes";
 
 /** Requests the SDK may have open at once is 64; stay well below it. */
 const BATCH = 16;
@@ -20,6 +20,7 @@ export interface NotePatch {
 
 export function createNotesStore(sdk: TavoraSDK) {
   const entries = ref(new Map<string, NoteEntry>());
+  const appearance = ref<Appearance>(parseAppearance(null));
   const queue = serial();
 
   function remember(id: string, data: NoteData, summary: Pick<DocumentSummary, "title" | "updatedAt" | "revision">) {
@@ -29,6 +30,7 @@ export function createNotesStore(sdk: TavoraSDK) {
       text: data.text,
       fixedTitle: data.title,
       pinned: data.pinned,
+      createdAt: data.createdAt,
       updatedAt: summary.updatedAt,
       revision: summary.revision,
     });
@@ -44,6 +46,11 @@ export function createNotesStore(sdk: TavoraSDK) {
     const doc = await sdk.documents.get(id);
     if (doc) remember(id, parseNote(doc.data), doc);
     else forget(id);
+  }
+
+  /** The text look chosen for this game, kept in the module's own storage. */
+  async function loadAppearance(): Promise<void> {
+    appearance.value = parseAppearance(await sdk.storage.get("appearance"));
   }
 
   async function load(): Promise<void> {
@@ -67,7 +74,14 @@ export function createNotesStore(sdk: TavoraSDK) {
 
   return {
     entries,
+    appearance,
     load,
+    loadAppearance,
+    /** Changes the text look of the notes or of the scratchpad and stores it. */
+    setStyle: async (kind: keyof Appearance, patch: Partial<TextStyle>) => {
+      appearance.value = { ...appearance.value, [kind]: { ...appearance.value[kind], ...patch } };
+      await sdk.storage.set("appearance", appearance.value);
+    },
     refresh,
     forget,
     open,
