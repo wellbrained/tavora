@@ -1,0 +1,299 @@
+import { connect, THEME_TOKENS, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { cleanName, formatMegabytes, MAX_BOARD_BYTES, nextBoardName, sizeLevel, type BoardData, type BoardSummary } from "./boards";
+import type { SaveState, View } from "./Board";
+import BoardMenu from "./BoardMenu";
+import { currentLanguage, setLanguage, t, type Language } from "./i18n";
+import { createBoards, type Boards } from "./store";
+
+// Excalidraw is large; the page shows the header first and the board when it has loaded.
+const Board = lazy(() => import("./Board"));
+
+interface PanelState {
+  selected?: string;
+  views?: Record<string, View>;
+}
+
+interface Shown {
+  id: string;
+  name: string;
+  data: BoardData;
+  /** Bumped to show the board again from what is stored (another panel changed it). */
+  nonce: number;
+}
+
+interface Undo {
+  id: number;
+  message: string;
+  run(): Promise<void>;
+}
+
+/** How long the Undo notice stays when left alone. */
+const UNDO_MS = 10_000;
+
+/** Sets the host's colours as CSS variables, like the other official modules. */
+function applyTheme(theme: TavoraTheme): void {
+  const root = document.documentElement;
+  for (const name of THEME_TOKENS) {
+    const value = theme.tokens?.[name];
+    if (typeof value === "string" && value) root.style.setProperty(`--${name}`, value);
+  }
+  if (typeof theme.radius === "number" && Number.isFinite(theme.radius)) root.style.setProperty("--radius", `${theme.radius}px`);
+  root.style.colorScheme = theme.mode === "light" ? "light" : "dark";
+}
+
+export default function App() {
+  const [sdk, setSdk] = useState<TavoraSDK | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"light" | "dark">("dark");
+  const [language, setLanguageState] = useState<Language>(currentLanguage());
+  const [list, setList] = useState<BoardSummary[]>([]);
+  const [shown, setShown] = useState<Shown | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [bytes, setBytes] = useState(0);
+  const [undo, setUndo] = useState<Undo | null>(null);
+
+  const boards = useMemo<Boards | null>(() => (sdk ? createBoards(sdk) : null), [sdk]);
+  const revision = useRef(0);
+  const dirty = useRef(false);
+  const selectedId = useRef<string | null>(null);
+  const names = useRef<Map<string, string>>(new Map());
+  const views = useRef<Record<string, View>>({});
+  const viewTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const undoCount = useRef(0);
+
+  const saveSelection = useCallback(() => {
+    if (!sdk) return;
+    void sdk.panel.setState({ selected: selectedId.current, views: views.current } as unknown as PanelState as never).catch(() => undefined);
+  }, [sdk]);
+
+  const refreshList = useCallback(async () => {
+    if (!boards) return [];
+    const next = await boards.list();
+    names.current = new Map(next.map((board) => [board.id, board.name]));
+    setList(next);
+    return next;
+  }, [boards]);
+
+  /** Shows a board; what the current one has unsaved is stored first, when its panel closes. */
+  const show = useCallback(
+    async (id: string) => {
+      if (!boards) return;
+      const opened = await boards.open(id);
+      if (!opened) return;
+      selectedId.current = id;
+      revision.current = opened.revision;
+      dirty.current = false;
+      setSaveState("idle");
+      setBytes(JSON.stringify(opened.data).length);
+      setShown((previous) => ({ id, name: names.current.get(id) ?? "", data: opened.data, nonce: (previous?.nonce ?? 0) + 1 }));
+      saveSelection();
+    },
+    [boards, saveSelection],
+  );
+
+  const createBoard = useCallback(async () => {
+    if (!boards) return;
+    const created = await boards.create(nextBoardName([...names.current.values()], t("boardWord")));
+    await refreshList();
+    await show(created.id);
+  }, [boards, refreshList, show]);
+
+  // Connect, then show the board this panel had open, or the first one (made when there is none).
+  useEffect(() => {
+    let cancelled = false;
+    connect()
+      .then(async (connected) => {
+        const theme = await connected.ui.getTheme();
+        applyTheme(theme);
+        setMode(theme.mode === "light" ? "light" : "dark");
+        setLanguage(await connected.ui.getLanguage());
+        setLanguageState(currentLanguage());
+        connected.ui.onThemeChange((next) => {
+          applyTheme(next);
+          setMode(next.mode === "light" ? "light" : "dark");
+        });
+        connected.ui.onLanguageChange((code) => {
+          setLanguage(code);
+          setLanguageState(currentLanguage());
+        });
+        if (!cancelled) setSdk(connected);
+      })
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!sdk || !boards) return;
+    let cancelled = false;
+    void (async () => {
+      const [state, existing] = await Promise.all([sdk.panel.getState<PanelState>(), refreshList()]);
+      if (cancelled) return;
+      views.current = state?.views && typeof state.views === "object" ? state.views : {};
+      let id = existing.find((board) => board.id === state?.selected)?.id ?? existing[0]?.id;
+      if (!id) {
+        const created = await boards.create(`${t("boardWord")} 1`);
+        await refreshList();
+        id = created.id;
+      }
+      await show(id);
+    })().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
+    return () => {
+      cancelled = true;
+    };
+  }, [sdk, boards, refreshList, show]);
+
+  // Another panel changed, renamed or deleted a board.
+  useEffect(() => {
+    if (!sdk || !boards) return;
+    return sdk.documents.onChange((change) => {
+      void (async () => {
+        const next = await refreshList();
+        if (change.id !== selectedId.current) return;
+        if (change.deleted) {
+          const fallback = next[0]?.id;
+          if (fallback) await show(fallback);
+          else await createBoard();
+        } else if (!dirty.current) {
+          // This panel has nothing unsaved, so it takes over what the other panel saved.
+          await show(change.id);
+        }
+      })();
+    });
+  }, [sdk, boards, refreshList, show, createBoard]);
+
+  // The Undo notice goes away on its own.
+  useEffect(() => {
+    if (!undo) return;
+    const timer = setTimeout(() => setUndo(null), UNDO_MS);
+    return () => clearTimeout(timer);
+  }, [undo]);
+
+  const save = useCallback(
+    async (data: BoardData) => {
+      const id = selectedId.current;
+      if (!boards || !id) return;
+      revision.current = await boards.save(id, names.current.get(id) ?? "", data, revision.current);
+    },
+    [boards],
+  );
+
+  const rememberView = useCallback(
+    (view: View) => {
+      const id = selectedId.current;
+      if (!id) return;
+      views.current[id] = view;
+      clearTimeout(viewTimer.current);
+      viewTimer.current = setTimeout(saveSelection, 500);
+    },
+    [saveSelection],
+  );
+
+  const rename = useCallback(
+    async (id: string, value: string) => {
+      const name = cleanName(value);
+      if (!boards || !name || name === names.current.get(id)) return;
+      names.current.set(id, name);
+      setShown((previous) => (previous && previous.id === id ? { ...previous, name } : previous));
+      await boards.rename(id, name);
+      await refreshList();
+    },
+    [boards, refreshList],
+  );
+
+  const remove = useCallback(
+    async (id: string) => {
+      if (!boards) return;
+      const opened = await boards.open(id);
+      const name = names.current.get(id) ?? "";
+      await boards.remove(id);
+      delete views.current[id];
+      const next = await refreshList();
+      if (id === selectedId.current) {
+        dirty.current = false;
+        const fallback = next[0]?.id;
+        if (fallback) await show(fallback);
+        else await createBoard();
+      }
+      if (opened) {
+        setUndo({
+          id: ++undoCount.current,
+          message: t("undo.deleted", { name }),
+          run: async () => {
+            await boards.restore(id, name, opened.data);
+            await refreshList();
+            await show(id);
+          },
+        });
+      }
+    },
+    [boards, refreshList, show, createBoard],
+  );
+
+  if (error) return <p className="status">{t("connectError", { error })}</p>;
+  if (!sdk || !shown) return <p className="status">{t("loading")}</p>;
+
+  const level = sizeLevel(bytes);
+  return (
+    <div className="app" data-testid="whiteboard-app">
+      <header className="bar">
+        <BoardMenu
+          boards={list}
+          currentId={shown.id}
+          currentName={shown.name}
+          onSelect={(id) => void show(id)}
+          onCreate={() => void createBoard()}
+          onRename={(value) => void rename(shown.id, value)}
+          onDelete={() => void remove(shown.id)}
+        />
+        <span className="grow" />
+        {level !== "ok" ? (
+          <span className={level === "full" ? "size size-full" : "size"} role="status" data-testid="board-size">
+            {t(level === "full" ? "size.full" : "size.warn", { used: formatMegabytes(bytes), max: formatMegabytes(MAX_BOARD_BYTES) })}
+          </span>
+        ) : null}
+        <span className={saveState === "error" ? "save save-error" : "save"} role="status" data-testid="save-state" data-state={saveState}>
+          {saveState === "idle" ? "" : t(`save.${saveState}` as "save.saved")}
+        </span>
+      </header>
+      <main className="board" data-board={shown.id} data-testid="board">
+        <Suspense fallback={<p className="status">{t("loading")}</p>}>
+          <Board
+            key={`${shown.id}:${shown.nonce}`}
+            data={shown.data}
+            view={views.current[shown.id]}
+            mode={mode}
+            language={language}
+            onSave={save}
+            onView={rememberView}
+            onState={setSaveState}
+            onSize={setBytes}
+            onDirty={(value) => (dirty.current = value)}
+          />
+        </Suspense>
+      </main>
+      {undo ? (
+        <div className="toast" role="status" data-testid="undo-toast">
+          <span className="toast-message">{undo.message}</span>
+          <button
+            type="button"
+            className="button"
+            data-testid="undo"
+            onClick={() => {
+              const offer = undo;
+              setUndo(null);
+              void offer.run().catch(() => undefined);
+            }}
+          >
+            {t("undo.undo")}
+          </button>
+          <button type="button" className="icon-button" aria-label={t("undo.dismiss")} title={t("undo.dismiss")} onClick={() => setUndo(null)}>
+            ×
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
