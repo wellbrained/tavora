@@ -84,7 +84,7 @@ import { isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, subm
 import { findSteamDir, removeSteamIcon } from "./steam-icons";
 import { ModuleView } from "./module-view";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
-import { siteOfUrl } from "./browser-url";
+import { isWebUrl, siteOfUrl } from "./browser-url";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
 import { AI_USAGE_MODULE_ID, aiUsageModule, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, discordModule, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
@@ -217,6 +217,8 @@ export class Host {
   private readonly aiUsage: AiUsage;
   private screen: Screen = "welcome";
   private notice: string | null = null;
+  /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
+  private pendingLink: string | null = null;
   /** Where the host UI shows each visible panel, in window content coordinates. */
   private panelBounds = new Map<string, Rect>();
   /** True while the host UI shows a menu, dialog or drag that module views would cover. */
@@ -669,6 +671,8 @@ export class Host {
   private async perform(action: HostAction): Promise<string | void> {
     const library = this.library;
     switch (action.type) {
+      case "link-choice":
+        return this.chooseLink(action.choice);
       case "show-welcome":
         return this.showScreen("welcome");
       case "restart":
@@ -932,6 +936,7 @@ export class Host {
   private showScreen(next: Screen): void {
     if (this.screen === next && next !== "game") return;
     this.notice = null;
+    this.pendingLink = null;
     this.closeAllViews();
     this.screen = next;
   }
@@ -1176,8 +1181,8 @@ export class Host {
         if (panel.blank) panel.restore(url);
         else this.openBrowserTab(browserId, url, false);
       } else {
-        const id = this.openModule(BROWSER_MODULE_ID);
-        if (id) this.browser(id).restore(url);
+        // Nothing to open it in yet: the player picks a new Browser panel or the system browser.
+        this.pendingLink = url;
       }
     } catch (error) {
       // The workspace is full; the player is told, as for Add module.
@@ -1186,6 +1191,19 @@ export class Host {
     } finally {
       this.pushState();
     }
+  }
+
+  /** The player's answer to pendingLink. The address is the one the host kept, never one sent with the answer. */
+  private chooseLink(choice: "panel" | "system" | "cancel"): void {
+    const url = this.pendingLink;
+    this.pendingLink = null;
+    if (!url || choice === "cancel" || !isWebUrl(url)) return;
+    if (choice === "system") {
+      void shell.openExternal(url).catch((error: unknown) => console.error("[tavora]", error));
+      return;
+    }
+    const id = this.openModule(BROWSER_MODULE_ID);
+    if (id) this.browser(id).restore(url);
   }
 
   private closePanel(instanceId: string): void {
@@ -1775,6 +1793,7 @@ export class Host {
       }),
       layout: workspace.layout,
       layoutEpoch: this.layoutEpoch,
+      pendingLink: this.pendingLink,
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
       notice: this.notice,
       profile: {

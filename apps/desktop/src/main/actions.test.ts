@@ -12,6 +12,9 @@ const LAYOUT = {
 describe("parseAction", () => {
   it.each([
     [{ type: "show-welcome" }],
+    [{ type: "link-choice", choice: "panel" }],
+    [{ type: "link-choice", choice: "system" }],
+    [{ type: "link-choice", choice: "cancel" }],
     [{ type: "open-game", gameId: "poe2" }],
     [{ type: "add-game", catalogId: "elden-ring" }],
     [{ type: "add-game", name: "My Game" }],
@@ -109,6 +112,9 @@ describe("parseAction", () => {
     ["show-welcome"],
     [{ type: "nope" }],
     [{ type: "show-welcome", extra: 1 }],
+    [{ type: "link-choice" }],
+    [{ type: "link-choice", choice: "other" }],
+    [{ type: "link-choice", choice: "system", url: "https://example.com" }],
     [{ type: "open-game", gameId: "../poe2" }],
     [{ type: "open-game" }],
     [{ type: "add-game", catalogId: "poe2", name: "x" }],

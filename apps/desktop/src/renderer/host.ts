@@ -108,9 +108,23 @@ export interface AddModuleRequest {
   slot?: string;
 }
 
-export type DialogRequest = PromptRequest | ConfirmRequest | ShareIconsRequest | { kind: "add-game" } | { kind: "steam-import" } | AddModuleRequest;
+/** Asking where a link from a module should open (HostViewState.pendingLink). */
+export interface LinkChoiceRequest {
+  kind: "link-choice";
+  url: string;
+}
+
+export type DialogRequest = PromptRequest | ConfirmRequest | ShareIconsRequest | LinkChoiceRequest | { kind: "add-game" } | { kind: "steam-import" } | AddModuleRequest;
 
 export const dialog = shallowRef<DialogRequest | null>(null);
+
+// A module asked to open a link and no Browser panel is open: ask where.
+watch(
+  () => state.value?.pendingLink ?? null,
+  (url) => {
+    if (url && dialog.value?.kind !== "link-choice") dialog.value = { kind: "link-choice", url };
+  },
+);
 
 /** Settings is its own dialog, so a confirmation can open on top of it. */
 export const settingsOpen = ref(false);

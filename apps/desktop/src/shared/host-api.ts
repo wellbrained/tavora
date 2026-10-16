@@ -366,6 +366,8 @@ export interface HostViewState {
   layout: SavedLayout | null;
   /** Changes whenever `layout` was replaced by the main process, e.g. by applying a snapshot. */
   layoutEpoch: number;
+  /** A web address a module asked to open while the game has no Browser panel; the host UI asks where it should open (link-choice). */
+  pendingLink: string | null;
   snapshots: SnapshotView[];
   notice: string | null;
   /** The player's local profile. */
@@ -384,6 +386,8 @@ export interface HostViewState {
 /** Everything the host UI can ask the main process to do. Parsed strictly in main. */
 export type HostAction =
   | { type: "show-welcome" }
+  /** The answer to pendingLink: a new Browser panel, the system browser, or nothing. */
+  | { type: "link-choice"; choice: "panel" | "system" | "cancel" }
   | { type: "restart" }
   | { type: "open-game"; gameId: string }
   | { type: "add-game"; catalogId: string }
