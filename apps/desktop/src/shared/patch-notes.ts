@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.16.3",
+    date: "2026-10-16",
+    title: "Sign-in emails",
+    notes: ["For accounts (still switched off): when Tavora has sent all the emails it can for the day, Settings > Account says from when you can try again."],
+  },
+  {
     version: "0.16.2",
     date: "2026-10-16",
     title: "Install modules from a zip",

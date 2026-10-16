@@ -2,21 +2,21 @@ import { describe, expect, it } from "vitest";
 import { AccountStore, CODE_TTL_MS, normalizeEmail, SESSION_IDLE_MS } from "./account-store.ts";
 import { createApp } from "./app.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
-import { createTestInbox, createTestInboxApp, maskEmail, type Mailer } from "./mail.ts";
+import { BREVO_URL, createBrevoMailer, createTestInbox, createTestInboxApp, MailLimitError, maskEmail, type Mailer } from "./mail.ts";
 import { encodePng } from "./png.ts";
 import { createRateLimiter } from "./rate-limit.ts";
 
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
 const roomy = () => createRateLimiter({ limit: 1000, windowMs: 60_000 });
 
-function setup(options: { mailer?: Mailer } = {}) {
+function setup(options: { mailer?: Mailer; mailDailyLimit?: number } = {}) {
   const store = new AccountStore(":memory:");
   const inbox = createTestInbox();
   const clock = { now: Date.parse("2026-10-16T12:00:00Z") };
   const app = createApp({
     db,
     rateLimiter: roomy(),
-    accounts: { store, mailer: options.mailer ?? inbox, codeRateLimiter: roomy(), verifyRateLimiter: roomy(), now: () => clock.now },
+    accounts: { store, mailer: options.mailer ?? inbox, codeRateLimiter: roomy(), verifyRateLimiter: roomy(), now: () => clock.now, ...(options.mailDailyLimit === undefined ? {} : { mailDailyLimit: options.mailDailyLimit }) },
   });
   const call = (method: string, path: string, body?: unknown, token?: string) =>
     app.request(`http://tavora.test/v1/account${path}`, {
@@ -301,5 +301,53 @@ describe("profile", () => {
     clock.now += 15 * 60_000;
     const again = await signIn("me@example.com");
     expect(await (await call("GET", "/profile", undefined, again)).json()).toEqual({ profile: null });
+  });
+});
+
+describe("the day's emails", () => {
+  it("stops sign-ins when only the reserved emails are left, and keeps those for changes and deletes", async () => {
+    const { call, signIn, inbox, clock } = setup({ mailDailyLimit: 23 });
+    const token = await signIn("me@example.com");
+    for (let i = 0; i < 2; i++) expect((await call("POST", "/code", { email: `p${i}@example.com` })).status).toBe(202);
+    // 3 sent: 23 - 20 reserved = 3 for sign-ins.
+    const refused = await call("POST", "/code", { email: "late@example.com" });
+    expect(refused.status).toBe(503);
+    expect(await refused.json()).toMatchObject({ reason: "daily-limit", retryAt: "2026-10-17T00:00:00.000Z" });
+    expect(inbox.mails().some((mail) => mail.to === "late@example.com")).toBe(false);
+    expect((await call("POST", "/delete/code", {}, token)).status).toBe(202);
+    // The next day (UTC) starts again.
+    clock.now = Date.parse("2026-10-17T00:00:01Z");
+    expect((await call("POST", "/code", { email: "late@example.com" })).status).toBe(202);
+  });
+
+  it("says the same when the provider refuses because its allowance is used up", async () => {
+    const { call } = setup({ mailer: { send: () => Promise.reject(new MailLimitError()) } });
+    expect(await (await call("POST", "/code", { email: "me@example.com" })).json()).toMatchObject({ reason: "daily-limit" });
+  });
+});
+
+describe("Brevo", () => {
+  const mail = { to: "me@example.com", subject: "Your Tavora code", text: "123456" };
+
+  it("sends plain text from Tavora's address with the key in a header", async () => {
+    const sent: { url: string; init: RequestInit }[] = [];
+    const mailer = createBrevoMailer({ apiKey: "xkeysib-test", from: "signin@mytavora.app", fetch: (async (url: string, init: RequestInit) => {
+      sent.push({ url, init });
+      return new Response('{"messageId":"1"}', { status: 201 });
+    }) as unknown as typeof fetch });
+    await mailer.send(mail);
+    expect(sent[0]!.url).toBe(BREVO_URL);
+    expect(new Headers(sent[0]!.init.headers).get("api-key")).toBe("xkeysib-test");
+    expect(JSON.parse(String(sent[0]!.init.body))).toEqual({ sender: { name: "Tavora", email: "signin@mytavora.app" }, to: [{ email: "me@example.com" }], subject: "Your Tavora code", textContent: "123456" });
+  });
+
+  it("tells a used-up allowance apart from other failures, and never puts the key in the error", async () => {
+    const answer = (status: number, body: string) =>
+      createBrevoMailer({ apiKey: "xkeysib-secret", from: "signin@mytavora.app", fetch: (async () => new Response(body, { status })) as unknown as typeof fetch });
+    await expect(answer(402, "{}").send(mail)).rejects.toBeInstanceOf(MailLimitError);
+    await expect(answer(400, '{"code":"not_enough_credits","message":"Not enough credits"}').send(mail)).rejects.toBeInstanceOf(MailLimitError);
+    const other = answer(401, '{"code":"unauthorized"}').send(mail);
+    await expect(other).rejects.toThrow("Brevo answered 401");
+    await expect(other).rejects.not.toThrow(/secret/);
   });
 });

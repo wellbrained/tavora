@@ -92,6 +92,7 @@ export class AccountStore {
         os text not null, created_at integer not null, last_used_at integer not null
       );
       create index if not exists sessions_account on sessions (account_id);
+      create table if not exists mail_days (day text primary key, sent integer not null);
       create table if not exists profiles (
         account_id text primary key references accounts (id) on delete cascade,
         name text not null, initials text not null, picture blob, updated_at integer not null
@@ -138,6 +139,18 @@ export class AccountStore {
       this.db.exec("rollback");
       throw error;
     }
+  }
+
+  // ── Mail sent per day ──────────────────────────────────────────────────
+
+  /** How many emails went out on a day (YYYY-MM-DD, UTC): a number only, no addresses. */
+  mailsSent(day: string): number {
+    return (this.db.prepare("select sent from mail_days where day = ?").get(day) as { sent: number } | undefined)?.sent ?? 0;
+  }
+
+  countMail(day: string): void {
+    this.db.prepare("insert into mail_days (day, sent) values (?, 1) on conflict (day) do update set sent = sent + 1").run(day);
+    this.db.prepare("delete from mail_days where day < ?").run(new Date(Date.parse(`${day}T00:00:00Z`) - 7 * DAY_MS).toISOString().slice(0, 10));
   }
 
   // ── Profile ────────────────────────────────────────────────────────────

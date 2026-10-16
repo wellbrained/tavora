@@ -16,6 +16,43 @@ export interface Mailer {
   send(mail: Mail): Promise<void>;
 }
 
+/** The provider refused because the day's allowance is used up. */
+export class MailLimitError extends Error {
+  constructor() {
+    super("The daily email allowance is used up.");
+    this.name = "MailLimitError";
+  }
+}
+
+// ── Brevo ────────────────────────────────────────────────────────────────
+
+export const BREVO_URL = "https://api.brevo.com/v3/smtp/email";
+
+/**
+ * Sends through Brevo's transactional API (decided 2026-10-16: the free plan,
+ * about 300 a day). Plain text only, no tracking (switched off in the Brevo
+ * account), nothing about the player but the address and the mail itself.
+ */
+export function createBrevoMailer(options: { apiKey: string; from: string; fetch?: typeof fetch; timeoutMs?: number }): Mailer {
+  const fetchImpl = options.fetch ?? fetch;
+  return {
+    async send(mail) {
+      const response = await fetchImpl(BREVO_URL, {
+        method: "POST",
+        signal: AbortSignal.timeout(options.timeoutMs ?? 10_000),
+        headers: { "api-key": options.apiKey, "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ sender: { name: "Tavora", email: options.from }, to: [{ email: mail.to }], subject: mail.subject, textContent: mail.text }),
+      });
+      if (response.ok) return;
+      const text = await response.text().catch(() => "");
+      // Brevo says "not enough credits" (or answers 402/429) when the plan's allowance is used up.
+      if (response.status === 402 || response.status === 429 || /credit|limit|quota/i.test(text)) throw new MailLimitError();
+      // Never the key or the address in a log line: only the status.
+      throw new Error(`Brevo answered ${response.status}`);
+    },
+  };
+}
+
 export type MailLanguage = "en" | "de";
 
 export const mailLanguage = (input: unknown): MailLanguage => (input === "de" ? "de" : "en");

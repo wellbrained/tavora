@@ -187,6 +187,8 @@ export const en = {
   "account.error.sameEmail": "That is the address your account already has.",
   "account.error.signedOut": "You were signed out. Sign in again.",
   "account.error.tooMany": "Too many tries. Try again in {minutes} min.",
+  "account.error.dailyLimit": "Tavora has sent as many emails as it can today. Please try again from {time}.",
+  "account.error.dailyLimitSoon": "Tavora has sent as many emails as it can today. Please try again tomorrow.",
   "account.error.noCode": "Ask for a new code first.",
   "settings.section.general": "General",
   "settings.section.appearance": "Appearance",

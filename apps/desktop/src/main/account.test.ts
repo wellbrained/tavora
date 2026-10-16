@@ -141,6 +141,11 @@ describe("signing in", () => {
     const off = client(service({ "POST /code": () => json({ reason: "unavailable" }, 503) }).fetchImpl);
     await expect(off.account.sendCode("me@example.com")).rejects.toBeInstanceOf(PlayerError);
     await expect(off.account.sendCode("me@example.com")).rejects.toMatchObject({ key: "account.error.unavailable" });
+    // The day's emails are used up: when it works again, in the player's language.
+    const full = client(service({ "POST /code": () => json({ reason: "daily-limit", retryAt: "2026-10-17T00:00:00.000Z" }, 503) }).fetchImpl);
+    await expect(full.account.sendCode("me@example.com")).rejects.toMatchObject({ key: "account.error.dailyLimit" });
+    const fullNoTime = client(service({ "POST /code": () => json({ reason: "daily-limit" }, 503) }).fetchImpl);
+    await expect(fullNoTime.account.sendCode("me@example.com")).rejects.toMatchObject({ key: "account.error.dailyLimitSoon" });
     // A service from before accounts answers 404.
     const old = client(service({}).fetchImpl);
     await expect(old.account.sendCode("me@example.com")).rejects.toMatchObject({ key: "account.error.unavailable" });

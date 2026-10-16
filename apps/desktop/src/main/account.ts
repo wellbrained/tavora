@@ -369,6 +369,12 @@ export class AccountClient {
       const seconds = Number(response.headers.get("retry-after"));
       throw new PlayerError("account.error.tooMany", { minutes: Math.max(1, Math.ceil((Number.isFinite(seconds) ? seconds : 60) / 60)) });
     }
+    if (json.reason === "daily-limit") {
+      // The service's emails for today are used up: say when sending works again, in the player's own time.
+      const at = typeof json.retryAt === "string" ? new Date(json.retryAt) : null;
+      if (at && Number.isFinite(at.getTime())) throw new PlayerError("account.error.dailyLimit", { time: new Intl.DateTimeFormat(this.options.language(), { weekday: "long", hour: "2-digit", minute: "2-digit" }).format(at) });
+      throw new PlayerError("account.error.dailyLimitSoon");
+    }
     const key = typeof json.reason === "string" ? REASONS[json.reason] : undefined;
     if (key) throw new PlayerError(key);
     // 503: switched off on the service; 404: a service that has no accounts at all yet.
