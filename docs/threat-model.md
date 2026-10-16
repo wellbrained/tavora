@@ -115,6 +115,7 @@ A module can ask the host to open a web address in the Browser (`links.open`, us
 | K2 | Only web addresses open | the main process checks the address is `http` or `https` with a host and at most 2048 characters; `file:`, `javascript:`, `data:`, `mailto:` and custom schemes are refused | unit: `bridge.test.ts` (types and length); `browser-url.test.ts` (`isWebUrl`) |
 | K3 | The module learns nothing from opening a link | the answer is `null`; no panel id, no page content, no address back | unit: `bridge.test.ts` |
 | K4 | The page opens like any link in the Browser | it uses the Browser panel's own sessions (private addresses get their own kind), its blocking and its permissions; a full workspace shows the usual notice | the Browser panel guarantees B1–B7 |
+| K5 | Opening in the system browser cannot be forced or redirected by a module | the module only asks (`links.open`); when the game has no Browser panel the host keeps the address itself and asks the player in its own dialog (`pendingLink`); the answer (`link-choice`: panel, system or cancel) carries no address, so the host UI cannot swap it; the address is checked as a web address again before `shell.openExternal` | unit: `actions.test.ts` (`link-choice` parsing); the dialog and the `openExternal` call are reviewed by hand |
 
 Accepted: a module can still show a fake button and get the player to click it, which opens a link in the Browser. That is the same as any web page's link, the player sees the new tab, and the Browser is sandboxed.
 
