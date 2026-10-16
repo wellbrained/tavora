@@ -150,6 +150,17 @@ A module can put a PNG on the system clipboard (`clipboard.writeImage` in the SD
 
 Accepted: a module can label a button misleadingly ("Save") and replace what is on the clipboard when the player clicks it. The player pasted nothing yet and the module learns nothing, so this is a nuisance, not a leak.
 
+## WebAssembly for Tavora's own modules (0.14.6)
+
+Excalidraw, which the Whiteboard is built on, resizes pictures with WebAssembly. Every module page has the policy `script-src 'self'`, which blocks that, so a module can now ask for `permissions.webAssembly`.
+
+| # | Guarantee | Mechanism | Test |
+| --- | --- | --- | --- |
+| W1 | Only Tavora's own modules can run WebAssembly | the manifest field is accepted but the registry refuses to load a module from the player's folder that sets it (with a message on the Modules page); the policy gets `'wasm-unsafe-eval'` only when the module is official and asked for it | unit: `registry.test.ts`, `assets.test.ts` (`moduleCsp`), `module-schema` |
+| W2 | The relaxation is as narrow as the policy allows | `'wasm-unsafe-eval'` allows compiling WebAssembly and nothing else: no `eval` of strings, no inline script, no remote code (`script-src` stays `'self'`, `connect-src 'self'`); the module is still sandboxed, with no network and no host access beyond the SDK | unit: `assets.test.ts` (policy is otherwise unchanged) |
+
+Accepted: WebAssembly widens what a bug in the browser engine could be reached with, for the one official module that needs it. Community modules do not get it until there is a reviewed way to grant it.
+
 ## Known limits and open risks
 
 - **Webview isolation is not proven safe by this spike.** It relies on Chromium site isolation and the OS sandbox. A Chromium renderer exploit would break G1–G4. Mitigation: keep Electron current, enable the OS sandbox everywhere, Electron fuses are set at packaging time (`electronFuses` in `apps/desktop/package.json`, checked 2026-10-16 with `@electron/fuses read` on a packaged build): `RunAsNode`, `NODE_OPTIONS`, `--inspect` and extra `file://` privileges are off, cookie encryption is on. ASAR integrity is not used because the app ships unpacked (`"asar": false`); someone who can edit Tavora's files can already act as the player, so this is accepted.

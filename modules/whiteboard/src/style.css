@@ -166,6 +166,13 @@ body {
   color: var(--foreground);
 }
 
+.picture-lock {
+  height: 26px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+
 .toast {
   position: absolute;
   z-index: 60;

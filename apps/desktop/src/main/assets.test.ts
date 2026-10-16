@@ -2,7 +2,18 @@ import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { contentTypeFor, resolveAsset } from "./assets";
+import { contentTypeFor, MODULE_CSP, moduleCsp, resolveAsset } from "./assets";
+
+describe("moduleCsp", () => {
+  it("adds WebAssembly to script-src and changes nothing else", () => {
+    expect(moduleCsp(false)).toBe(MODULE_CSP);
+    const withWasm = moduleCsp(true);
+    expect(withWasm).toContain("script-src 'self' 'wasm-unsafe-eval';");
+    expect(withWasm.replace(" 'wasm-unsafe-eval'", "")).toBe(MODULE_CSP);
+    expect(withWasm).not.toContain("'unsafe-eval'");
+    expect(MODULE_CSP).not.toContain("wasm");
+  });
+});
 
 let root: string;
 let outside: string;

@@ -45,6 +45,17 @@ export function createBoards(sdk: TavoraSDK) {
       }
     },
 
+    /** The ids of every stored file that a board uses, to find the ones nobody uses any more. */
+    async usedFiles(): Promise<Set<string>> {
+      const used = new Set<string>();
+      for (const document of await sdk.documents.list()) {
+        if (!isBoardId(document.id)) continue;
+        const board = await sdk.documents.get(document.id);
+        if (board) for (const file of Object.values(parseBoard(board.data).files)) used.add(file.blobId);
+      }
+      return used;
+    },
+
     async rename(id: string, name: string): Promise<void> {
       const document = await sdk.documents.get(id);
       if (document) await sdk.documents.put({ id, title: name, data: document.data, ifRevision: document.revision });

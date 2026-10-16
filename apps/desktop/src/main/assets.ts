@@ -24,6 +24,15 @@ export const MODULE_CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
+/**
+ * The policy for one module. WebAssembly may be compiled only when the module asked for it and is one of Tavora's own
+ * (the registry refuses the request from any other); that adds `'wasm-unsafe-eval'`, which allows WebAssembly and nothing else
+ * (no eval of strings, no inline script).
+ */
+export function moduleCsp(webAssembly: boolean): string {
+  return webAssembly ? MODULE_CSP.replace("script-src 'self'", "script-src 'self' 'wasm-unsafe-eval'") : MODULE_CSP;
+}
+
 export const HOST_CSP = [
   "default-src 'none'",
   "script-src 'self'",
