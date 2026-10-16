@@ -3,8 +3,9 @@ import { DatabaseSync } from "node:sqlite";
 
 /**
  * Accounts: the only player data the service keeps (decided 2026-10-16). An
- * account is an email address; a player signs in with a code sent to it, never
- * a password. It lives in its own SQLite file, apart from the icons. Nothing
+ * account has one or two sign-in methods: an email address (a code sent to it,
+ * never a password) and a Discord login (known by the Discord user id; the
+ * username is only a label). It lives in its own SQLite file, apart from the icons. Nothing
  * here records a connection address or a PC's name: a signed-in device is its
  * operating system and two dates.
  */
@@ -28,9 +29,17 @@ export type DeviceOs = (typeof DEVICE_OS)[number];
 /** What a code is for. A sign-in code also creates the account when the address has none. */
 export type CodePurpose = "sign-in" | "change-email" | "delete";
 
+/** A Discord login: the user id is the identity, the username only a label shown to the owner. */
+export interface DiscordLogin {
+  id: string;
+  name: string;
+}
+
 export interface Account {
   id: string;
-  email: string;
+  /** Null for an account that signs in with Discord only. */
+  email: string | null;
+  discord: DiscordLogin | null;
   createdAt: string;
 }
 
@@ -58,6 +67,9 @@ export interface Session {
 
 export type CodeRequest = { ok: true; code: string } | { ok: false; retryAfter: number };
 
+/** How long a checked Discord login waits for the player's yes to a new account. */
+export const DISCORD_TICKET_TTL_MS = 10 * 60_000;
+
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 // Codes and counters are kept by a hash of the address, so an address that
 // never became an account is not written down in the clear.
@@ -79,7 +91,10 @@ export class AccountStore {
     this.db = new DatabaseSync(path);
     this.db.exec(`
       pragma foreign_keys = on;
-      create table if not exists accounts (id text primary key, email text not null unique, created_at integer not null);
+      create table if not exists accounts (
+        id text primary key, email text unique, discord_id text unique, discord_name text, created_at integer not null,
+        check (email is not null or discord_id is not null)
+      );
       create table if not exists codes (
         address text not null, purpose text not null, account_id text, code_hash text not null,
         expires_at integer not null, tries integer not null default 0, primary key (address, purpose)
@@ -97,7 +112,45 @@ export class AccountStore {
         account_id text primary key references accounts (id) on delete cascade,
         name text not null, initials text not null, picture blob, updated_at integer not null
       );
+      create table if not exists discord_tickets (ticket_hash text primary key, discord_id text not null, discord_name text not null, expires_at integer not null);
     `);
+    this.migrate();
+  }
+
+  /**
+   * Accounts from before Discord logins required an email. SQLite cannot drop a
+   * NOT NULL, so the table is rebuilt once: in one transaction, keeping every
+   * id, so sign-ins and profiles stay attached; it checks the result and rolls
+   * everything back on any problem.
+   */
+  private migrate(): void {
+    const columns = (this.db.prepare("pragma table_info(accounts)").all() as unknown as { name: string }[]).map((column) => column.name);
+    if (columns.includes("discord_id")) return;
+    const before = (this.db.prepare("select count(*) as n from accounts").get() as { n: number }).n;
+    this.db.exec("pragma foreign_keys = off");
+    try {
+      this.db.exec("begin");
+      try {
+        this.db.exec(`
+          create table accounts_new (
+            id text primary key, email text unique, discord_id text unique, discord_name text, created_at integer not null,
+            check (email is not null or discord_id is not null)
+          );
+          insert into accounts_new (id, email, created_at) select id, email, created_at from accounts;
+          drop table accounts;
+          alter table accounts_new rename to accounts;
+        `);
+        const after = (this.db.prepare("select count(*) as n from accounts").get() as { n: number }).n;
+        const broken = this.db.prepare("pragma foreign_key_check").all();
+        if (after !== before || broken.length > 0) throw new Error(`accounts migration check failed (${before} -> ${after}, ${broken.length} broken links)`);
+        this.db.exec("commit");
+      } catch (error) {
+        this.db.exec("rollback");
+        throw error;
+      }
+    } finally {
+      this.db.exec("pragma foreign_keys = on");
+    }
   }
 
   close(): void {
@@ -107,23 +160,70 @@ export class AccountStore {
   // ── Accounts ───────────────────────────────────────────────────────────
 
   accountByEmail(email: string): Account | null {
-    return toAccount(this.db.prepare("select id, email, created_at from accounts where email = ?").get(email));
+    return toAccount(this.db.prepare(`select ${ACCOUNT_COLUMNS} from accounts where email = ?`).get(email));
+  }
+
+  accountByDiscord(discordId: string): Account | null {
+    return toAccount(this.db.prepare(`select ${ACCOUNT_COLUMNS} from accounts where discord_id = ?`).get(discordId));
   }
 
   account(id: string): Account | null {
-    return toAccount(this.db.prepare("select id, email, created_at from accounts where id = ?").get(id));
+    return toAccount(this.db.prepare(`select ${ACCOUNT_COLUMNS} from accounts where id = ?`).get(id));
   }
 
-  createAccount(email: string, now: number): Account {
+  /** A new account with an email address, a Discord login or both (at least one). */
+  createAccount(methods: { email?: string; discord?: DiscordLogin }, now: number): Account {
+    if (!methods.email && !methods.discord) throw new Error("an account needs a sign-in method");
     const id = randomBytes(16).toString("base64url");
-    this.db.prepare("insert into accounts (id, email, created_at) values (?, ?, ?)").run(id, email, now);
-    return { id, email, createdAt: new Date(now).toISOString() };
+    this.db
+      .prepare("insert into accounts (id, email, discord_id, discord_name, created_at) values (?, ?, ?, ?, ?)")
+      .run(id, methods.email ?? null, methods.discord?.id ?? null, methods.discord?.name ?? null, now);
+    return { id, email: methods.email ?? null, discord: methods.discord ?? null, createdAt: new Date(now).toISOString() };
   }
 
+  /** Sets or changes the email address (a Discord-only account gets its first one this way). */
   changeEmail(id: string, email: string): "ok" | "taken" {
     if (this.accountByEmail(email)) return "taken";
     this.db.prepare("update accounts set email = ? where id = ?").run(email, id);
     return "ok";
+  }
+
+  /** Removes the email address, only while a Discord login remains. */
+  removeEmail(id: string): "ok" | "last-method" {
+    return Number(this.db.prepare("update accounts set email = null where id = ? and email is not null and discord_id is not null").run(id).changes) > 0 ? "ok" : "last-method";
+  }
+
+  /** Connects a Discord login, unless another account has it. Never merges accounts. */
+  setDiscord(id: string, discord: DiscordLogin): "ok" | "taken" {
+    const owner = this.accountByDiscord(discord.id);
+    if (owner && owner.id !== id) return "taken";
+    this.db.prepare("update accounts set discord_id = ?, discord_name = ? where id = ?").run(discord.id, discord.name, id);
+    return "ok";
+  }
+
+  /** Disconnects Discord, only while an email address remains. */
+  removeDiscord(id: string): "ok" | "last-method" {
+    return Number(this.db.prepare("update accounts set discord_id = null, discord_name = null where id = ? and discord_id is not null and email is not null").run(id).changes) > 0 ? "ok" : "last-method";
+  }
+
+  // ── Discord logins waiting for a new account ───────────────────────────
+
+  /** Holds a checked Discord login for 10 minutes while the app asks the player; the ticket goes to the app once, only its hash is kept. */
+  holdDiscord(discord: DiscordLogin, now: number): string {
+    this.db.prepare("delete from discord_tickets where expires_at <= ?").run(now);
+    const ticket = randomBytes(32).toString("base64url");
+    this.db.prepare("insert into discord_tickets (ticket_hash, discord_id, discord_name, expires_at) values (?, ?, ?, ?)").run(sha256(`ticket:${ticket}`), discord.id, discord.name, now + DISCORD_TICKET_TTL_MS);
+    return ticket;
+  }
+
+  /** The Discord login a ticket holds, used up by taking it; null when unknown or expired. */
+  takeDiscord(ticket: string, now: number): DiscordLogin | null {
+    const hash = sha256(`ticket:${ticket}`);
+    const row = this.db.prepare("select discord_id, discord_name, expires_at from discord_tickets where ticket_hash = ?").get(hash) as
+      | { discord_id: string; discord_name: string; expires_at: number }
+      | undefined;
+    this.db.prepare("delete from discord_tickets where ticket_hash = ?").run(hash);
+    return row && row.expires_at > now ? { id: row.discord_id, name: row.discord_name } : null;
   }
 
   /** Removes the account, every sign-in and every code waiting for it. */
@@ -264,14 +364,17 @@ export class AccountStore {
   private sweep(now: number): void {
     this.db.prepare("delete from codes where expires_at <= ?").run(now);
     this.db.prepare("delete from code_requests where at <= ?").run(now - DAY_MS);
+    this.db.prepare("delete from discord_tickets where expires_at <= ?").run(now);
     this.db.prepare("delete from sessions where last_used_at <= ?").run(now - SESSION_IDLE_MS);
   }
 }
 
+const ACCOUNT_COLUMNS = "id, email, discord_id, discord_name, created_at";
+
 function toAccount(row: unknown): Account | null {
   if (!row) return null;
-  const { id, email, created_at } = row as { id: string; email: string; created_at: number };
-  return { id, email, createdAt: new Date(created_at).toISOString() };
+  const { id, email, discord_id, discord_name, created_at } = row as { id: string; email: string | null; discord_id: string | null; discord_name: string | null; created_at: number };
+  return { id, email, discord: discord_id ? { id: discord_id, name: discord_name ?? "" } : null, createdAt: new Date(created_at).toISOString() };
 }
 
 const secondsUntil = (at: number, now: number) => Math.max(1, Math.ceil((at - now) / 1000));
