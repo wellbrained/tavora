@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.16.1",
+    date: "2026-10-16",
+    title: "Accounts in development runs",
+    notes: ["For development: Settings > Account signs in to a local Tavora service by default, and says clearly when accounts are not available instead of showing a general error."],
+  },
+  {
     version: "0.16.0",
     date: "2026-10-16",
     title: "Tavora accounts, ready to switch on",

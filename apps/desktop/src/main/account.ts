@@ -371,7 +371,8 @@ export class AccountClient {
     }
     const key = typeof json.reason === "string" ? REASONS[json.reason] : undefined;
     if (key) throw new PlayerError(key);
-    if (response.status === 503) throw new PlayerError("account.error.unavailable");
+    // 503: switched off on the service; 404: a service that has no accounts at all yet.
+    if (response.status === 503 || response.status === 404) throw new PlayerError("account.error.unavailable");
     throw new PlayerError("error.generic");
   }
 }
