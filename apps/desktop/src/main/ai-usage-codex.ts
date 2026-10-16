@@ -22,6 +22,8 @@ export interface CodexReading {
   signedIn: boolean;
   /** The login is an API key, which has no subscription allowance. */
   apiKey: boolean;
+  /** The signed-in email as Codex reports it (unchecked; parseEmail cleans it), or null. */
+  email: string | null;
   /** The `account/rateLimits/read` answer; parsed by ai-usage-parse. */
   limits: unknown;
 }
@@ -110,9 +112,10 @@ export async function readCodexUsage(directory: string, version: string, signal:
     send({ method: "initialized", params: {} });
     const identity = await call("account/read", { refreshToken: false });
     const account = typeof identity === "object" && identity !== null ? (identity as { account?: unknown }).account : null;
-    if (typeof account !== "object" || account === null) return { signedIn: false, apiKey: false, limits: null };
-    if ((account as { type?: unknown }).type === "apiKey") return { signedIn: true, apiKey: true, limits: null };
-    return { signedIn: true, apiKey: false, limits: await call("account/rateLimits/read", null) };
+    if (typeof account !== "object" || account === null) return { signedIn: false, apiKey: false, email: null, limits: null };
+    const email = (account as { email?: unknown }).email;
+    if ((account as { type?: unknown }).type === "apiKey") return { signedIn: true, apiKey: true, email: null, limits: null };
+    return { signedIn: true, apiKey: false, email: typeof email === "string" ? email : null, limits: await call("account/rateLimits/read", null) };
   } finally {
     signal.removeEventListener("abort", onAbort);
     lines.close();

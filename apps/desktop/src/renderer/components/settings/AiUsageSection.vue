@@ -6,7 +6,7 @@
 import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { AiProvider, AiUsageAccount } from "../../../shared/host-api";
+import type { AiProvider, AiUsageAccount, AiUsageStyle } from "../../../shared/host-api";
 import { act, aiUsage } from "../../host";
 import { t } from "../../i18n";
 import SegmentedControl from "./SegmentedControl.vue";
@@ -49,7 +49,12 @@ async function save() {
   }
 }
 
-const INTERVALS = [1, 5, 15, 30, 60];
+const style = computed<AiUsageStyle>({
+  get: () => view.value?.style ?? "remaining",
+  set: (value) => void act({ type: "ai-usage-set-style", style: value }),
+});
+
+const INTERVALS =[1, 5, 15, 30, 60];
 const intervalOptions = computed(() => INTERVALS.map((minutes) => ({ value: String(minutes), label: t("aiUsage.settings.every", { minutes }), testid: `ai-usage-every-${minutes}` })));
 const interval = computed({
   get: () => String(view.value?.refreshMinutes ?? 5),
@@ -105,7 +110,18 @@ const interval = computed({
       </div>
     </form>
 
-    <SettingRow class="mt-2" :label="t('settings.ai-usage-interval.label')" :description="t('settings.ai-usage-interval.description')" setting="ai-usage-interval" :highlighted="highlight === 'ai-usage-interval'">
+    <SettingRow class="mt-2" :label="t('settings.ai-usage-style.label')" :description="t('settings.ai-usage-style.description')" setting="ai-usage-style" :highlighted="highlight === 'ai-usage-style'">
+      <SegmentedControl
+        v-model="style"
+        :label="t('settings.ai-usage-style.label')"
+        :options="[
+          { value: 'remaining', label: t('aiUsage.settings.styleRemaining'), testid: 'ai-usage-style-remaining' },
+          { value: 'used', label: t('aiUsage.settings.styleUsed'), testid: 'ai-usage-style-used' },
+        ]"
+      />
+    </SettingRow>
+
+    <SettingRow :label="t('settings.ai-usage-interval.label')" :description="t('settings.ai-usage-interval.description')" setting="ai-usage-interval" :highlighted="highlight === 'ai-usage-interval'">
       <SegmentedControl v-model="interval" :label="t('settings.ai-usage-interval.label')" :options="intervalOptions" />
     </SettingRow>
   </section>

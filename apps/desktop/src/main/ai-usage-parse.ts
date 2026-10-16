@@ -109,6 +109,30 @@ export function parseCodexWindows(root: unknown): AiUsageWindow[] {
   return windows;
 }
 
+/** Codex's manual resets from the rate-limits answer; null when it says nothing usable, so unknown is never shown as zero. */
+export function parseCodexResets(root: unknown): { available: number; earliestExpiry: number | null } | null {
+  const reset = isObject(root) ? root.rateLimitResetCredits : null;
+  if (!isObject(reset)) return null;
+  const count = reset.availableCount;
+  if (typeof count !== "number" || !Number.isInteger(count) || count < 0 || count > 1_000_000) return null;
+  let earliest: number | null = null;
+  if (Array.isArray(reset.credits)) {
+    for (const credit of reset.credits.slice(0, 100)) {
+      if (!isObject(credit) || credit.status !== "available") continue;
+      const seconds = credit.expiresAt;
+      if (typeof seconds !== "number" || !Number.isInteger(seconds) || seconds < 0 || seconds > 253_402_300_799) continue;
+      if (earliest === null || seconds * 1000 < earliest) earliest = seconds * 1000;
+    }
+  }
+  return { available: count, earliestExpiry: earliest };
+}
+
+/** An email the provider reports for the signed-in account: one plain address, no spaces, brackets, quotes or control characters. */
+export function parseEmail(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 254) return null;
+  return /^[A-Za-z0-9._+%'-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(value) ? value : null;
+}
+
 const PLAN_NAMES: Readonly<Record<string, string>> = {
   free: "Free",
   pro: "Pro",

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import type { AiProvider, AiUsageAccount, AiUsageState, AiUsageView, AiUsageWindow } from "../shared/host-api";
-import { claudeAccessToken, claudePlan, codexPlan, parseClaudeWindows, parseCodexWindows } from "./ai-usage-parse";
+import type { AiProvider, AiUsageAccount, AiUsageState, AiUsageStyle, AiUsageView, AiUsageWindow } from "../shared/host-api";
+import { claudeAccessToken, claudePlan, codexPlan, parseClaudeWindows, parseCodexResets, parseCodexWindows, parseEmail } from "./ai-usage-parse";
 import { CodexMissingError, type CodexReading } from "./ai-usage-codex";
 import { PlayerError } from "./messages";
 
@@ -38,6 +38,7 @@ interface StoredReading {
 interface Stored {
   version: 1;
   refreshMinutes: number;
+  style: AiUsageStyle;
   accounts: StoredAccount[];
   readings: Record<string, StoredReading>;
 }
@@ -45,6 +46,9 @@ interface Stored {
 interface Runtime {
   state: AiUsageState;
   plan: string | null;
+  /** Kept in memory only, never saved. */
+  email: string | null;
+  resets: { available: number; earliestExpiry: number | null } | null;
   failures: number;
   /** When the account may be read again on its own. */
   next: number;
@@ -103,7 +107,7 @@ function parseStored(text: string | null): Stored | null {
     const windows = r.windows.filter(isWindow).slice(0, 30);
     readings[account.id] = { fetchedAt: r.fetchedAt, windows };
   }
-  return { version: 1, refreshMinutes: clampMinutes(file.refreshMinutes), accounts, readings };
+  return { version: 1, refreshMinutes: clampMinutes(file.refreshMinutes), style: file.style === "used" ? "used" : "remaining", accounts, readings };
 }
 
 function isWindow(value: unknown): value is AiUsageWindow {
@@ -128,7 +132,7 @@ interface Outcome {
 }
 
 export class AiUsage {
-  private stored: Stored = { version: 1, refreshMinutes: DEFAULT_MINUTES, accounts: [], readings: {} };
+  private stored: Stored = { version: 1, refreshMinutes: DEFAULT_MINUTES, style: "remaining", accounts: [], readings: {} };
   private readonly runtime = new Map<string, Runtime>();
   private loaded: Promise<void> | undefined;
   private wanted = false;
@@ -167,6 +171,7 @@ export class AiUsage {
     return {
       refreshMinutes: this.stored.refreshMinutes,
       refreshing: this.refreshing,
+      style: this.stored.style,
       accounts: this.stored.accounts.map((account): AiUsageAccount => {
         const state = this.runtime.get(account.id);
         const reading = this.stored.readings[account.id];
@@ -182,6 +187,9 @@ export class AiUsage {
           // Last known usage, not a current promise: older than expected, or the newest try failed.
           stale: reading !== undefined && (current !== "ready" || now - reading.fetchedAt > overdue),
           windows: reading?.windows ?? [],
+          email: state?.email ?? null,
+          // Only a fresh reading says how many resets there are; an old one would be a guess.
+          resets: current === "ready" ? (state?.resets ?? null) : null,
         };
       }),
     };
@@ -304,6 +312,9 @@ export class AiUsage {
   private async readCodex(account: StoredAccount, signal: AbortSignal): Promise<Outcome> {
     this.runtimeFor(account.id).plan = codexPlan(await this.credentials(account));
     const reading = await this.deps.readCodex(account.directory, signal);
+    const runtime = this.runtimeFor(account.id);
+    runtime.email = parseEmail(reading.email);
+    runtime.resets = parseCodexResets(reading.limits);
     if (!reading.signedIn) return { state: "sign-in" };
     if (reading.apiKey) return { state: "unavailable" };
     const windows = parseCodexWindows(reading.limits);
@@ -329,7 +340,7 @@ export class AiUsage {
   private runtimeFor(id: string): Runtime {
     let runtime = this.runtime.get(id);
     if (!runtime) {
-      runtime = { state: "waiting", plan: null, failures: 0, next: 0, blockedUntil: 0 };
+      runtime = { state: "waiting", plan: null, email: null, resets: null, failures: 0, next: 0, blockedUntil: 0 };
       this.runtime.set(id, runtime);
     }
     return runtime;
@@ -385,6 +396,13 @@ export class AiUsage {
     if (this.stored.accounts.length === before) throw new PlayerError("aiUsage.error.unknown");
     delete this.stored.readings[id];
     this.runtime.delete(id);
+    await this.save();
+    this.emit();
+  }
+
+  async setStyle(style: AiUsageStyle): Promise<void> {
+    await this.load();
+    this.stored.style = style === "used" ? "used" : "remaining";
     await this.save();
     this.emit();
   }

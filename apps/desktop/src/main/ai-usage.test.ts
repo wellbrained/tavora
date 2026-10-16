@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AiUsageView } from "../shared/host-api";
 import { AiUsage, DEFAULT_MINUTES, USAGE_URL, type AiUsageDeps } from "./ai-usage";
 import type { CodexReading } from "./ai-usage-codex";
-import { claudeAccessToken, claudePlan, codexPlan, parseClaudeWindows, parseCodexWindows } from "./ai-usage-parse";
+import { claudeAccessToken, claudePlan, codexPlan, parseClaudeWindows, parseCodexResets, parseCodexWindows, parseEmail } from "./ai-usage-parse";
 import { PlayerError } from "./messages";
 
 // The credentials in these tests are made up; nothing here reads a real login.
@@ -77,6 +77,38 @@ describe("parseCodexWindows", () => {
   });
 });
 
+describe("manual resets and email", () => {
+  it("reads how many resets Codex offers and when the first expires", () => {
+    expect(
+      parseCodexResets({
+        rateLimitResetCredits: {
+          availableCount: 2,
+          credits: [
+            { status: "available", expiresAt: 1_760_900_000 },
+            { status: "available", expiresAt: 1_760_800_000 },
+            { status: "used", expiresAt: 1_700_000_000 },
+            { status: "available", expiresAt: "soon" },
+          ],
+        },
+      }),
+    ).toEqual({ available: 2, earliestExpiry: 1_760_800_000_000 });
+  });
+
+  it("keeps an explicit zero but treats anything unclear as unknown", () => {
+    expect(parseCodexResets({ rateLimitResetCredits: { availableCount: 0 } })).toEqual({ available: 0, earliestExpiry: null });
+    for (const answer of [null, {}, { rateLimitResetCredits: null }, { rateLimitResetCredits: { availableCount: -1 } }, { rateLimitResetCredits: { availableCount: "2" } }, { rateLimitResetCredits: { availableCount: 1.5 } }]) {
+      expect(parseCodexResets(answer)).toBeNull();
+    }
+  });
+
+  it("accepts one plain address and nothing else", () => {
+    expect(parseEmail("me.name+tag@example.com")).toBe("me.name+tag@example.com");
+    for (const value of ["a@b", "a b@c.de", "<x>@c.de", "a@c.de\nb@c.de", 'a"@c.de', "", null, 5, `${"x".repeat(250)}@c.de`]) {
+      expect(parseEmail(value)).toBeNull();
+    }
+  });
+});
+
 describe("plans and tokens", () => {
   it("reads Claude's plan from a fixed list of names", () => {
     expect(claudePlan({ claudeAiOauth: { subscriptionType: "pro" } })).toBe("Pro");
@@ -111,7 +143,7 @@ function setup(overrides: Partial<AiUsageDeps> = {}, files: Record<string, strin
   const views: AiUsageView[] = [];
   const clock = { now: Date.parse("2026-10-16T12:00:00Z") };
   const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify(USAGE_ANSWER), { status: 200 }));
-  const codex = vi.fn(async (): Promise<CodexReading> => ({ signedIn: true, apiKey: false, limits: { rateLimits: { primary: { usedPercent: 10, windowDurationMins: 300 } } } }));
+  const codex = vi.fn(async (): Promise<CodexReading> => ({ signedIn: true, apiKey: false, email: null, limits: { rateLimits: { primary: { usedPercent: 10, windowDurationMins: 300 } } } }));
   const deps: AiUsageDeps = {
     file: path.join(HOME, "ai-usage.json"),
     version: "9.9.9",
@@ -209,11 +241,11 @@ describe("AiUsage", () => {
     await usage.refreshNow();
     expect((await usage.view()).accounts[0]?.state).toBe("cli-missing");
     clock.now += 10 * 3_600_000;
-    codex.mockResolvedValueOnce({ signedIn: true, apiKey: true, limits: null });
+    codex.mockResolvedValueOnce({ signedIn: true, apiKey: true, email: null, limits: null });
     await usage.refreshNow();
     expect((await usage.view()).accounts[0]?.state).toBe("unavailable");
     clock.now += 10 * 3_600_000;
-    codex.mockResolvedValueOnce({ signedIn: false, apiKey: false, limits: null });
+    codex.mockResolvedValueOnce({ signedIn: false, apiKey: false, email: null, limits: null });
     await usage.refreshNow();
     expect((await usage.view()).accounts[0]?.state).toBe("sign-in");
   });
@@ -315,6 +347,31 @@ describe("AiUsage", () => {
   it("starts empty from a damaged file instead of failing", async () => {
     const { usage } = setup({ detect: async () => [] }, { [path.join(HOME, "ai-usage.json")]: "{not json" });
     expect((await usage.view()).accounts).toEqual([]);
+  });
+
+  it("shows a Codex account's email and resets, the resets only while the reading is fresh, and never saves the email", async () => {
+    const { usage, codex, store, clock } = setup({ detect: async () => [{ provider: "codex", directory: CODEX_DIR }] });
+    codex.mockResolvedValueOnce({
+      signedIn: true,
+      apiKey: false,
+      email: "me@example.com",
+      limits: { rateLimits: { primary: { usedPercent: 10, windowDurationMins: 300 } }, rateLimitResetCredits: { availableCount: 3 } },
+    });
+    await usage.refreshNow();
+    expect((await usage.view()).accounts[0]).toMatchObject({ email: "me@example.com", resets: { available: 3, earliestExpiry: null } });
+    expect(store.get(path.join(HOME, "ai-usage.json"))).not.toContain("me@example.com");
+    codex.mockRejectedValueOnce(new Error("closed"));
+    clock.now += 60 * 60_000;
+    await usage.refreshNow();
+    expect((await usage.view()).accounts[0]).toMatchObject({ state: "unavailable", resets: null });
+  });
+
+  it("keeps the usage style, defaulting to what is left", async () => {
+    const { usage, deps } = setup({ detect: async () => [] });
+    expect((await usage.view()).style).toBe("remaining");
+    await usage.setStyle("used");
+    expect((await new AiUsage(deps).view()).style).toBe("used");
+    expect((await new AiUsage({ ...deps, readText: async () => JSON.stringify({ style: "weird", accounts: [] }) }).view()).style).toBe("remaining");
   });
 
   it("drops saved accounts and readings that are not valid", async () => {

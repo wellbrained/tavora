@@ -7,7 +7,7 @@ import { Info, RefreshCw, Settings } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { AiUsageAccount } from "../../../shared/host-api";
+import type { AiUsageAccount, AiUsageWindow } from "../../../shared/host-api";
 import { act, aiUsage, openSettings } from "../../host";
 import { formatDate, t } from "../../i18n";
 import { barTone, durationWording, leftPercent, STATE_TEXT, windowLabel } from "./ai-usage-ui";
@@ -38,6 +38,20 @@ function updatedText(account: AiUsageAccount): string {
   return ago < 60_000 ? t("aiUsage.panel.updatedNow") : t("aiUsage.panel.updated", { time: wording(ago) });
 }
 
+const style = computed(() => view.value?.style ?? "remaining");
+/** The number the bar and text show: what is left, or what is used, as the player chose. */
+const shown = (window: AiUsageWindow) => (style.value === "used" ? 100 - leftPercent(window) : leftPercent(window));
+
+/** The name's hover text: where the login lives, and who is signed in when the provider said. */
+function identity(account: AiUsageAccount): string {
+  return [account.email ? t("aiUsage.panel.signedInAs", { email: account.email }) : null, account.directory].filter(Boolean).join("\n");
+}
+
+function resetsHint(account: AiUsageAccount): string {
+  const expiry = account.resets?.earliestExpiry;
+  return expiry ? t("aiUsage.panel.resetsHintDate", { date: formatDate(new Date(expiry), { dateStyle: "medium", timeStyle: "short" }) }) : t("aiUsage.panel.resetsHint");
+}
+
 const TONE = { ok: "bg-success", low: "bg-warning", empty: "bg-destructive" } as const;
 </script>
 
@@ -56,8 +70,16 @@ const TONE = { ok: "bg-success", low: "bg-warning", empty: "bg-destructive" } as
         <section v-for="account in accounts" :key="account.id" class="flex flex-col gap-1" :data-testid="`ai-usage-account-${account.id}`">
           <header class="flex items-center gap-2">
             <span class="bg-secondary text-secondary-foreground flex-none rounded-sm px-1.5 py-px text-xs font-medium">{{ t(`aiUsage.provider.${account.provider}`) }}</span>
-            <span class="min-w-0 truncate font-medium" :title="account.directory">{{ account.label }}</span>
+            <span class="min-w-0 truncate font-medium" :title="identity(account)" data-testid="ai-usage-name">{{ account.label }}</span>
             <span v-if="account.plan" class="text-muted-foreground flex-none text-xs" data-testid="ai-usage-plan">{{ account.plan }}</span>
+            <span
+              v-if="account.resets"
+              class="bg-secondary text-secondary-foreground flex-none rounded-sm px-1.5 py-px text-xs"
+              :title="resetsHint(account)"
+              data-testid="ai-usage-resets"
+            >
+              {{ t("aiUsage.panel.resets", { count: account.resets.available }) }}
+            </span>
             <span class="flex-1" />
             <span
               v-if="account.stale"
@@ -74,7 +96,7 @@ const TONE = { ok: "bg-success", low: "bg-warning", empty: "bg-destructive" } as
             <li
               v-for="(window, position) in account.windows"
               :key="position"
-              class="grid grid-cols-[minmax(4.5rem,7rem)_1fr_auto] items-center gap-x-2"
+              class="grid grid-cols-[4.5rem_minmax(2rem,1fr)_5.5rem_7.5rem] items-center gap-x-2"
               :title="window.resetsAt ? t('aiUsage.panel.resetHint', { date: formatDate(new Date(window.resetsAt), { dateStyle: 'medium', timeStyle: 'short' }) }) : undefined"
               data-testid="ai-usage-window"
             >
@@ -84,15 +106,14 @@ const TONE = { ok: "bg-success", low: "bg-warning", empty: "bg-destructive" } as
                 role="progressbar"
                 aria-valuemin="0"
                 aria-valuemax="100"
-                :aria-valuenow="leftPercent(window)"
+                :aria-valuenow="shown(window)"
                 :aria-label="windowLabel(window, t)"
               >
-                <div :class="cn('h-full rounded-full', TONE[barTone(leftPercent(window))])" :style="{ width: `${leftPercent(window)}%` }" />
+                <!-- The bar follows the chosen style; its colour always follows what is left. -->
+                <div :class="cn('h-full rounded-full', TONE[barTone(leftPercent(window))])" :style="{ width: `${shown(window)}%` }" />
               </div>
-              <span class="text-right whitespace-nowrap tabular-nums">
-                {{ t("aiUsage.panel.left", { percent: leftPercent(window) }) }}
-                <span class="text-muted-foreground"> · {{ resetText(window.resetsAt) }}</span>
-              </span>
+              <span class="whitespace-nowrap tabular-nums">{{ t(style === "used" ? "aiUsage.panel.used" : "aiUsage.panel.left", { percent: shown(window) }) }}</span>
+              <span class="text-muted-foreground truncate whitespace-nowrap tabular-nums">{{ resetText(window.resetsAt) }}</span>
             </li>
           </ul>
           <p v-if="account.state !== 'ready'" class="text-muted-foreground text-xs" data-testid="ai-usage-state">{{ t(STATE_TEXT[account.state]) }}</p>

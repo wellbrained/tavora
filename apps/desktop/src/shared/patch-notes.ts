@@ -25,6 +25,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     notes: [
       "New panel: AI Usage. It shows how much of your Claude and Codex subscription allowance is left for each of your accounts, with a bar for the 5-hour and weekly windows and a countdown to the reset. Open it from the module list like any other panel.",
       "Add your accounts in Settings > Integrations > AI usage, by the folder of each login (such as .claude or .codex in your user folder). Tavora offers the ones it finds on this PC the first time. Tavora reads the allowance only while a panel is open, never saves or shows your logins, and a reading that is old or failed is marked Last known.",
+      "Settings > Integrations > AI usage can show the numbers as what is left or what is used. A Codex account also shows how many manual resets you have left, and its signed-in email when you hover its name.",
     ],
   },
   {

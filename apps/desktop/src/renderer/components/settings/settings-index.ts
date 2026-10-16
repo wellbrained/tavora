@@ -67,6 +67,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["discord-connection", "integrations"],
   ["ai-usage-accounts", "integrations"],
   ["ai-usage-interval", "integrations"],
+  ["ai-usage-style", "integrations"],
   ["shortcuts", "shortcuts"],
   ["welcome-tour", "general"],
   ["trash", "trash"],

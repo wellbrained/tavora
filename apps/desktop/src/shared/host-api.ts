@@ -191,6 +191,10 @@ export interface AiUsageAccount {
   /** The windows shown are older than they should be, or the newest attempt failed. */
   stale: boolean;
   windows: AiUsageWindow[];
+  /** The signed-in email the provider reports, kept in memory only; null when unknown. */
+  email: string | null;
+  /** Codex's manual resets: how many are available and when the first expires. Null when unknown, which is not the same as 0. */
+  resets: { available: number; earliestExpiry: number | null } | null;
 }
 
 /** The AI usage panel and its settings. Tokens never leave the main process. */
@@ -200,7 +204,11 @@ export interface AiUsageView {
   refreshMinutes: number;
   /** A reading is under way. */
   refreshing: boolean;
+  /** Whether bars and numbers show what is left or what is used. */
+  style: AiUsageStyle;
 }
+
+export type AiUsageStyle = "remaining" | "used";
 
 /** Toolbar buttons of a Browser panel. */
 export type BrowserCommand = "back" | "forward" | "reload" | "stop" | "open-external" | "mute" | "unmute" | "exit-fullscreen";
@@ -491,6 +499,7 @@ export type HostAction =
   | { type: "ai-usage-update"; accountId: string; label: string; directory: string }
   | { type: "ai-usage-remove"; accountId: string }
   | { type: "ai-usage-set-interval"; minutes: number }
+  | { type: "ai-usage-set-style"; style: AiUsageStyle }
   /** Null when nothing is docked any more. */
   | { type: "save-layout"; layout: SavedLayout | null }
   /** Rearranges the workspace into empty slots of a layout template; open panels fill the first ones. */

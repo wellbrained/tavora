@@ -251,6 +251,8 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("accountId") && uuid(a.accountId) ? { type: a.type, accountId: a.accountId } : null;
     case "ai-usage-set-interval":
       return only("minutes") && typeof a.minutes === "number" && Number.isInteger(a.minutes) && a.minutes >= 1 && a.minutes <= 60 ? { type: a.type, minutes: a.minutes } : null;
+    case "ai-usage-set-style":
+      return only("style") && (a.style === "remaining" || a.style === "used") ? { type: a.type, style: a.style } : null;
     case "open-module":
       return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
     case "close-panel":

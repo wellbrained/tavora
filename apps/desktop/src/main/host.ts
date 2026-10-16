@@ -881,6 +881,8 @@ export class Host {
         return this.aiUsage.remove(action.accountId);
       case "ai-usage-set-interval":
         return this.aiUsage.setInterval(action.minutes);
+      case "ai-usage-set-style":
+        return this.aiUsage.setStyle(action.style);
       case "discord-connect":
         return this.discord.connectNow();
       case "discord-sign-out":
