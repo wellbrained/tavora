@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { ADMIN_CSS, ADMIN_HTML, ADMIN_JS } from "./admin-page.ts";
+import { INTER_WOFF2 } from "./inter-font.ts";
 import type { IconState } from "./icon-state.ts";
 import { isIconId, type IconStore } from "./icons.ts";
 import type { Submissions } from "./submissions.ts";
@@ -33,7 +34,7 @@ export function createAdminApp({ token, submissions, state, store }: AdminOption
     context.header("Referrer-Policy", "no-referrer");
     context.header(
       "Content-Security-Policy",
-      "default-src 'none'; script-src 'self'; style-src 'self'; img-src blob:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "default-src 'none'; script-src 'self'; style-src 'self'; img-src blob:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     );
   });
 
@@ -41,6 +42,7 @@ export function createAdminApp({ token, submissions, state, store }: AdminOption
   app.get("/", (context) => context.html(ADMIN_HTML));
   app.get("/admin.js", (context) => new Response(ADMIN_JS, { headers: { "Content-Type": "text/javascript; charset=utf-8" } }));
   app.get("/admin.css", (context) => new Response(ADMIN_CSS, { headers: { "Content-Type": "text/css; charset=utf-8" } }));
+  app.get("/inter.woff2", () => new Response(INTER_WOFF2, { headers: { "Content-Type": "font/woff2", "Cache-Control": "public, max-age=31536000, immutable" } }));
 
   app.use("/api/*", async (context, next) => {
     const sent = context.req.header("x-admin-token") ?? "";

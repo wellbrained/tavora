@@ -16,14 +16,16 @@ export const ADMIN_HTML = `<!doctype html>
 </head>
 <body>
 <header>
-  <h1>Icon review</h1>
-  <p id="status" role="status"></p>
-  <button id="refresh" type="button">Refresh</button>
+  <div class="bar">
+    <h1>Icon review</h1>
+    <nav role="tablist">
+      <button id="tab-pending" class="tab" type="button" role="tab" data-tab="pending">Needs review</button>
+      <button id="tab-hosted" class="tab" type="button" role="tab" data-tab="hosted">Hosted</button>
+    </nav>
+    <p id="status" role="status"></p>
+    <button id="refresh" type="button">Refresh</button>
+  </div>
 </header>
-<nav role="tablist">
-  <button id="tab-pending" class="tab" type="button" role="tab" data-tab="pending">Needs review</button>
-  <button id="tab-hosted" class="tab" type="button" role="tab" data-tab="hosted">Hosted</button>
-</nav>
 <main>
   <section id="panel-pending" role="tabpanel">
     <p class="hint">Check that each icon really is the game's own, then approve it. Deny and block refuses the same file for ever.</p>
@@ -42,33 +44,35 @@ export const ADMIN_HTML = `<!doctype html>
 
 export const ADMIN_CSS = `
 :root { color-scheme: dark; --bg: #14110f; --card: #1f1a17; --line: #3a312b; --text: #f1e9e1; --muted: #a89a8c; --gold: #e0a84a; --bad: #d9654f; --ok: #6fbf73; }
+@font-face { font-family: "Inter"; src: url(/inter.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
-header { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-h1 { font-size: 18px; margin: 0; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, system-ui, sans-serif; }
+header { border-bottom: 1px solid var(--line); }
+.bar { display: flex; align-items: center; gap: 24px; max-width: 1280px; margin: 0 auto; padding: 12px 16px; flex-wrap: wrap; }
+h1 { font-size: 20px; margin: 0; }
 h2 { font-size: 15px; margin: 0 0 4px; }
 main { padding: 16px; max-width: 1280px; margin: 0 auto; }
 section { margin-bottom: 32px; }
 [hidden] { display: none !important; }
-nav { display: flex; justify-content: center; gap: 4px; padding: 8px 16px 0; border-bottom: 1px solid var(--line); }
-.tab { border-radius: 6px 6px 0 0; border-bottom: none; margin-bottom: -1px; background: transparent; color: var(--muted); }
+nav { display: flex; gap: 6px; }
+.tab { background: transparent; color: var(--muted); }
 .tab[aria-selected="true"] { background: var(--card); color: var(--text); border-color: var(--gold); }
-input[type="search"] { font: inherit; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; width: 100%; max-width: 320px; display: block; margin: 0 auto 12px; }
-.hint, #status { color: var(--muted); margin: 0 0 12px; text-align: center; }
-#status { margin: 0; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 320px)); justify-content: center; gap: 12px; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
-.previews { display: flex; align-items: center; justify-content: center; gap: 10px; }
+input[type="search"] { font: inherit; font-size: 16px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 9px 12px; width: 100%; max-width: 320px; margin: 0 0 12px; }
+.hint, #status { color: var(--muted); margin: 0 0 12px; }
+#status { margin: 0 0 0 auto; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.previews { display: flex; align-items: center; gap: 10px; }
 .tile { width: 96px; height: 96px; border-radius: 24px; background: #6b4a2f; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
 .tile img { width: 88%; height: 88%; object-fit: contain; }
 .tile.small { width: 48px; height: 48px; border-radius: 12px; }
 .light { background: #eee; border-radius: 8px; padding: 4px; }
 .light img { width: 64px; height: 64px; display: block; }
 .name { font-weight: 600; }
-.meta { color: var(--muted); font-size: 12px; word-break: break-all; }
+.meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .warn { color: var(--bad); font-weight: 600; }
-.row { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
-button { font: inherit; background: #2c2420; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+button { font: inherit; font-size: 16px; font-weight: 500; background: #2c2420; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 16px; cursor: pointer; }
 button:hover { border-color: var(--gold); }
 button.ok { border-color: var(--ok); color: var(--ok); }
 button.bad { border-color: var(--bad); color: var(--bad); }
