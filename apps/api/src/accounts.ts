@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { DEVICE_OS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
-import { codeMail, emailChangedMail, mailLanguage, type Mail, type Mailer } from "./mail.ts";
+import { codeMail, emailChangedMail, MailLimitError, mailLanguage, type Mail, type Mailer } from "./mail.ts";
 import { inspectPng } from "./png.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 
@@ -20,7 +20,17 @@ export interface AccountOptions {
   /** Code checks per client: 20 in 15 minutes by default. */
   verifyRateLimiter?: RateLimiter;
   now?: () => number;
+  /** The provider's emails a day (Brevo's free plan: 300). Unset: no limit (the test inbox). */
+  mailDailyLimit?: number;
 }
+
+/** Of the day's emails, the last ones are kept for changing the address and deleting the account. */
+export const MAIL_RESERVED = 20;
+const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
+const nextUtcDay = (at: number) => {
+  const date = new Date(at);
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1);
+};
 
 type Env = { Variables: { session: Session; account: Account } };
 
@@ -67,11 +77,19 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   const verifyLimiter = options.verifyRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 15 * 60_000 });
   const app = new Hono<Env>();
 
+  /** The day's emails are used up (for sign-ins already when only the reserved ones are left). */
+  const usedUp = (important: boolean) =>
+    options.mailDailyLimit !== undefined && store.mailsSent(utcDay(now())) >= (important ? options.mailDailyLimit : Math.max(0, options.mailDailyLimit - MAIL_RESERVED));
+  const usedUpAnswer = (context: Context) =>
+    context.json({ error: "Today's emails are used up. Try again tomorrow.", reason: "daily-limit", retryAt: new Date(nextUtcDay(now())).toISOString() }, 503);
+
   const send = async (context: Context, mail: Mail) => {
     try {
       await mailer.send(mail);
+      store.countMail(utcDay(now()));
       return null;
-    } catch {
+    } catch (error) {
+      if (error instanceof MailLimitError) return usedUpAnswer(context);
       return context.json({ error: "The email could not be sent. Try again later.", reason: "mail-failed" }, 502);
     }
   };
@@ -109,6 +127,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const input = await body(context);
     const email = normalizeEmail(input.email);
     if (!email) return context.json({ error: "Send { email, language }.", reason: "bad-email" }, 400);
+    if (usedUp(false)) return usedUpAnswer(context);
     const request = store.requestCode(email, "sign-in", null, now());
     if (!request.ok) return tooMany(context, request.retryAfter);
     // The mail differs for a new address, but only its owner reads it; the answer is the same.
@@ -193,6 +212,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const account = context.get("account");
     if (!email) return context.json({ error: "Send { email, language }.", reason: "bad-email" }, 400);
     if (email === account.email) return context.json({ error: "That is the address the account has.", reason: "same-email" }, 400);
+    if (usedUp(true)) return usedUpAnswer(context);
     const request = store.requestCode(email, "change-email", account.id, now());
     if (!request.ok) return tooMany(context, request.retryAfter);
     return (await send(context, codeMail("change-email", email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
@@ -222,6 +242,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (wait > 0) return tooMany(context, wait);
     const input = await body(context);
     const account = context.get("account");
+    if (usedUp(true)) return usedUpAnswer(context);
     const request = store.requestCode(account.email, "delete", account.id, now());
     if (!request.ok) return tooMany(context, request.retryAfter);
     return (await send(context, codeMail("delete", account.email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);

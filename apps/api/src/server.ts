@@ -8,7 +8,7 @@ import { createApp } from "./app.ts";
 import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
 import { loadIconStore } from "./icons.ts";
-import { createTestInbox, createTestInboxApp, type Mailer } from "./mail.ts";
+import { createBrevoMailer, createTestInbox, createTestInboxApp, type Mailer } from "./mail.ts";
 import { createSteamClient } from "./steam.ts";
 import { createSubmissions } from "./submissions.ts";
 
@@ -60,6 +60,16 @@ if (inboxPort && process.env.NODE_ENV === "production") {
     console.log(`[tavora-api] test inbox on http://127.0.0.1:${info.port} (local only, mail is never sent)`);
   });
 }
+// Production: Brevo, when its key is in production.env (tavora-api-set-setting brevo-key).
+let mailDailyLimit: number | undefined;
+const brevoKey = process.env.BREVO_API_KEY?.trim();
+if (!mailer && brevoKey) {
+  const from = process.env.MAIL_FROM?.trim() || "signin@mytavora.app";
+  mailer = createBrevoMailer({ apiKey: brevoKey, from });
+  const limit = Number(process.env.MAIL_DAILY_LIMIT ?? 300);
+  mailDailyLimit = Number.isInteger(limit) && limit > 0 ? limit : 300;
+  console.log(`[tavora-api] Accounts are on: email through Brevo from ${from}, at most ${mailDailyLimit} a day.`);
+}
 if (!mailer) console.log("[tavora-api] No way to send email: accounts are off.");
 const accountStore = mailer ? new AccountStore(path.join(stateDir, "accounts.sqlite")) : undefined;
 
@@ -67,7 +77,7 @@ const app = createApp({
   db,
   icons,
   submissions,
-  ...(mailer && accountStore ? { accounts: { store: accountStore, mailer } } : {}),
+  ...(mailer && accountStore ? { accounts: { store: accountStore, mailer, ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }) } } : {}),
   ...(takedownContact ? { takedownContact } : {}),
   ...(steamKey ? { steam: createSteamClient({ key: steamKey }) } : {}),
   clientKey: (request) =>

@@ -189,6 +189,8 @@ export const de: Record<keyof typeof en, string> = {
   "account.error.sameEmail": "Diese Adresse hat dein Konto schon.",
   "account.error.signedOut": "Du wurdest abgemeldet. Melde dich wieder an.",
   "account.error.tooMany": "Zu viele Versuche. Versuch es in {minutes} Min. noch einmal.",
+  "account.error.dailyLimit": "Tavora hat heute so viele E-Mails verschickt, wie es kann. Bitte versuch es ab {time} noch einmal.",
+  "account.error.dailyLimitSoon": "Tavora hat heute so viele E-Mails verschickt, wie es kann. Bitte versuch es morgen noch einmal.",
   "account.error.noCode": "Lass dir zuerst einen neuen Code schicken.",
   "settings.section.general": "Allgemein",
   "settings.section.appearance": "Erscheinungsbild",

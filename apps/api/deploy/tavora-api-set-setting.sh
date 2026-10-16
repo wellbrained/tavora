@@ -9,6 +9,8 @@
 #                                            only served while it is set
 #   tavora-api-set-setting.sh admin-token    makes a new token for the review page and prints
 #                                            it once; it is stored nowhere else, so save it
+#   tavora-api-set-setting.sh brevo-key      asks for the Brevo API key (not shown while typed);
+#                                            the service sends sign-in codes with it
 #
 # Nothing here passes through an assistant.
 set -euo pipefail
@@ -37,13 +39,22 @@ case "${1:-}" in
     set_var TAKEDOWN_CONTACT "$contact"
     shown="$contact"
     ;;
+  brevo-key)
+    read -rsp 'Brevo API key (not shown): ' key; echo
+    key="$(printf '%s' "$key" | LC_ALL=C sed 's/^\xef\xbb\xbf//' | tr -d '[:space:]')"
+    # Brevo's keys are letters, digits and dashes (xkeysib-...); anything else is not saved.
+    case "$key" in *[!A-Za-z0-9-]*) key="" ;; esac
+    (( ${#key} >= 20 && ${#key} <= 200 )) || { echo 'That does not look like a Brevo API key (xkeysib-...). Nothing was saved.'; exit 1; }
+    set_var BREVO_API_KEY "$key"
+    shown='the Brevo API key'
+    ;;
   admin-token)
     token="$(openssl rand -hex 24)"
     set_var ADMIN_TOKEN "$token"
     shown='a new admin token'
     ;;
   *)
-    echo 'Usage: tavora-api-set-setting.sh takedown [address] | admin-token'
+    echo 'Usage: tavora-api-set-setting.sh takedown [address] | admin-token | brevo-key'
     exit 2
     ;;
 esac
@@ -56,4 +67,4 @@ if [[ "${1:-}" == admin-token ]]; then
   echo "Admin token (shown once, save it now):"
   echo "$token"
 fi
-journalctl -u tavora-api -n 8 --no-pager | grep -E 'TAKEDOWN_CONTACT|ADMIN_TOKEN|review page' || true
+journalctl -u tavora-api -n 8 --no-pager | grep -E 'TAKEDOWN_CONTACT|ADMIN_TOKEN|review page|accounts|email' || true
