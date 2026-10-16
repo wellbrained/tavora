@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.14.5",
+    date: "2026-10-16",
+    title: "Tidy-ups",
+    notes: ["Small clean-ups behind the scenes after a code review; nothing changes in how Tavora looks or works."],
+  },
+  {
     version: "0.14.4",
     date: "2026-10-16",
     title: "Deleting a game with a missing pictures folder",

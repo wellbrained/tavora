@@ -16,6 +16,9 @@ _Avoid_: slug (as the concept), game key
 
 **Matching key**: A source's own id for a game (Steam appid, Wikidata item id), stored next to the canonical id and never shown as the id. It links a Steam import or a dataset rebuild to the right game.
 
+**Module files**: The pictures a module keeps for one game, stored by the host in a managed folder (one folder per module and game) that the player can move. Players see "pictures"; the SDK and code call each one a `blob` (`blobs.put`, `blobs.list`), and Notes calls them "images" in its own menus.
+_Avoid_: attachments, assets
+
 **Steam import**: The player gives a Steam profile URL or SteamID64, previews their owned games, selects some and adds them to the library.
 
 **Generated badge**: The automatic icon for a game without a drawn one: a monogram whose colour and pattern come from the game's id.
