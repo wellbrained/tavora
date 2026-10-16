@@ -21,12 +21,6 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.16.5",
     date: "2026-10-16",
-    title: "Whiteboard fix for development runs",
-    notes: ["The Whiteboard no longer stays blank when Tavora runs from the source code with pnpm dev. The installed app was not affected."],
-  },
-  {
-    version: "0.16.4",
-    date: "2026-10-16",
     title: "Tavora accounts and modules from a zip",
     notes: [
       "New, optional Tavora account in Settings > Account: enter your email, type in the 6-digit code Tavora sends you, and you are signed in. No password. A new address is asked once before an account is made. Tavora keeps working fully without an account, and everything stays on your PC.",
