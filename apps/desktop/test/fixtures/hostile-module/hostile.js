@@ -146,6 +146,58 @@ window.tryNavigate = (url) => {
   location.href = url;
 };
 
+// ── Sandbox review probes (docs/threat-model.md, "Sandbox review 2026-10-16") ──
+
+// Posts `count` messages of about `bytes` each without waiting for answers, as fast as it can.
+window.flood = async (count, bytes) => {
+  const port = await getPort();
+  port.start();
+  await rpc(port, { method: "bridge.handshake", params: { protocol: 1, sdkVersion: "0.1.0" } });
+  const value = "x".repeat(bytes);
+  const started = performance.now();
+  for (let n = 0; n < count; n++) port.postMessage({ v: 1, id: 1000000 + n, method: "storage.set", params: { key: "f" + (n % 5), value } });
+  return performance.now() - started;
+};
+
+// Other doors out of the sandbox.
+window.moreEscapes = async ({ serverUrl, stunUrl }) => {
+  const results = {};
+  results.serviceWorker = await settle(navigator.serviceWorker.register("/sw.js"));
+  results.worker = await settle(
+    new Promise((resolve, reject) => {
+      const source = "fetch(" + JSON.stringify(serverUrl + "/worker") + ").then(() => postMessage('reached'), () => postMessage('blocked'))";
+      const worker = new Worker(URL.createObjectURL(new Blob([source])));
+      worker.onmessage = (event) => (event.data === "reached" ? resolve("reached") : reject(new Error("blocked")));
+      worker.onerror = () => reject(new Error("worker error"));
+    }),
+  );
+  results.webrtc = await settle(
+    (async () => {
+      const connection = new RTCPeerConnection({ iceServers: [{ urls: stunUrl }] });
+      connection.createDataChannel("x");
+      await connection.setLocalDescription(await connection.createOffer());
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      connection.close();
+      return "done";
+    })(),
+    6000,
+  );
+  results.webTransport = await settle(
+    typeof WebTransport === "function" ? new WebTransport(serverUrl.replace("http", "https") + "/wt").ready : Promise.reject(new Error("none")),
+  );
+  results.iframeExternal = await settle(
+    new Promise((resolve) => {
+      const frame = document.createElement("iframe");
+      frame.src = serverUrl + "/iframe";
+      frame.onload = () => resolve("loaded");
+      frame.onerror = () => resolve("error");
+      document.body.append(frame);
+      setTimeout(() => resolve("timeout"), 2000);
+    }),
+  );
+  return results;
+};
+
 // Blocks the renderer's main thread for good, like an infinite loop in a module.
 window.hang = () => {
   setTimeout(() => {

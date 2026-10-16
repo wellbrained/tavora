@@ -326,6 +326,10 @@ test("to-dos: a group gets a color from its menu, and keeps it after a restart",
   const tint = () => inModule<string | null>(app, TODOS, `${header}.getAttribute("data-tint")`);
   expect(await tint()).toBeNull();
 
+  // The panel shows a change at once and replaces its list when the save is acknowledged, which closes an open menu.
+  // Let the save settle first, as a person would.
+  await page.waitForTimeout(300);
+
   // Color is a submenu of the group's menu; the keyboard opens both levels.
   const menu = `document.querySelector('[data-slot="dropdown-menu-content"][data-state="open"]')`;
   await inModule(app, TODOS, `${q("group-menu")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
