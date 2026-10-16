@@ -1,0 +1,77 @@
+// Tavora's icon review page on the tailnet (https://tavora-iconreview.<tailnet>.ts.net).
+// The page runs on the server's 127.0.0.1:4011 and is never forwarded by Caddy. This process, started by
+// tracker on this PC, keeps an SSH tunnel to it and answers on 127.0.0.1:<port> (tracker's tailnet proxy
+// forwards the name there), adding the admin token itself so the page needs no password.
+// Nothing on the server changes. Usage: node proxy.mjs <port>
+import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import http from "node:http";
+
+const port = Number(process.argv[2]);
+const tunnelPort = port + 11; // 127.0.0.1 only, never shared
+const key = process.env.ICON_REVIEW_KEY ?? "D:/Server/vpn ssh-key-2026-10-05.key";
+const remote = process.env.ICON_REVIEW_REMOTE ?? "root@100.64.0.1";
+const tokenFile = process.env.ICON_REVIEW_TOKEN_FILE ?? "D:/Server/tavora-icon-admin-token.txt";
+const tailnetName = process.env.ICON_REVIEW_NAME ?? "tavora-iconreview";
+if (!Number.isInteger(port) || port < 1024 || port > 65000) throw new Error("Usage: node proxy.mjs <port>");
+
+const token = readFileSync(tokenFile, "utf8").trim();
+if (token.length < 24) throw new Error("The admin token file is empty or too short.");
+
+// The page reads its token from sessionStorage; give it a placeholder so it never asks. The real token is
+// added below, on the way to the server.
+const PLACEHOLDER = 'try { sessionStorage.setItem("adminToken", "via-proxy"); } catch {}\n';
+
+let tunnel;
+let stopping = false;
+function openTunnel() {
+  tunnel = spawn("ssh.exe", [
+    "-i", key, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ExitOnForwardFailure=yes",
+    "-o", "ServerAliveInterval=30", "-N", "-L", `127.0.0.1:${tunnelPort}:127.0.0.1:4011`, remote,
+  ], { stdio: "ignore", windowsHide: true });
+  tunnel.on("exit", (code) => {
+    if (stopping) return;
+    console.error(`[icon-review] tunnel ended (${code}); retrying in 5 s`);
+    setTimeout(openTunnel, 5000);
+  });
+}
+openTunnel();
+
+// Only this machine and the tailnet name may talk to the proxy: a web page cannot reach the token by
+// pointing another name at 127.0.0.1 (DNS rebinding).
+const hostOk = (host = "") => {
+  const name = host.toLowerCase().replace(/:\d+$/, "");
+  return name === "127.0.0.1" || name === "localhost" || name.startsWith(`${tailnetName}.`) && name.endsWith(".ts.net");
+};
+
+http.createServer((request, response) => {
+  if (!hostOk(request.headers.host)) {
+    response.writeHead(421, { "Content-Type": "text/plain" }).end("Wrong host.");
+    return;
+  }
+  const headers = { ...request.headers, host: `127.0.0.1:${tunnelPort}`, "x-admin-token": token };
+  delete headers["accept-encoding"]; // the page script is edited below, so it has to come uncompressed
+  const upstream = http.request({ host: "127.0.0.1", port: tunnelPort, method: request.method, path: request.url, headers }, (reply) => {
+    if (request.url?.split("?")[0] === "/admin.js" && reply.statusCode === 200) {
+      const parts = [];
+      reply.on("data", (part) => parts.push(part));
+      reply.on("end", () => {
+        const body = Buffer.concat([Buffer.from(PLACEHOLDER), ...parts]);
+        const out = { ...reply.headers, "content-length": String(body.length) };
+        response.writeHead(200, out).end(body);
+      });
+      return;
+    }
+    response.writeHead(reply.statusCode ?? 502, reply.headers);
+    reply.pipe(response);
+  });
+  upstream.on("error", () => {
+    if (!response.headersSent) response.writeHead(502, { "Content-Type": "text/plain" });
+    response.end("The tunnel to the server is not up yet; try again in a few seconds.");
+  });
+  request.pipe(upstream);
+}).listen(port, "127.0.0.1", () => console.log(`[icon-review] listening on 127.0.0.1:${port}`));
+
+const stop = () => { stopping = true; tunnel?.kill(); process.exit(0); };
+process.on("SIGINT", stop);
+process.on("SIGTERM", stop);
