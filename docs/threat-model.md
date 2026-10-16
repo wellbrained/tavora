@@ -173,7 +173,8 @@ The owner of a module's data is who signed it, not the id it claims. Decided wit
 - The owner is checked at install and stored by the host, outside the module's folder. Someone who can edit the data folder can already act as the player (accepted limit above).
 - The catalogue accepts `<prefix>.*` only from keys of the account that reserved the prefix. Zips shared by hand get no such check; the player sees the key's fingerprint, or the profile name once the key is linked to an account.
 - Grants (Milestone F) are recorded for owner, id and version, using the same owner.
-- Open risk: a stolen secret key lets the thief publish updates as that developer until the account replaces the key. Revoking a key needs the catalogue and is part of its design.
+- Revocation: an account can revoke a leaked key. The service publishes a revocation list signed by the catalogue key; the catalogue refuses uploads from a revoked key and notifies the owner, and the app refuses installs and updates from it, with an opt-in Report (module id, key fingerprint and zip hash only).
+- Open risk: a stolen key works until its owner notices and revokes it, and a player who is offline or has online features off does not get the list. A developer without an account cannot revoke at all.
 
 ### What module grants must not break
 
