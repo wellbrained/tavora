@@ -37,10 +37,11 @@ interface Reply {
 
 test("a module reaches only the hosts the player granted, through Tavora", async () => {
   const userData = await newUserData();
-  // The player granted one of the two hosts the module asks for. (Until the consent dialog exists, the grant is written here.)
+  // The player granted both hosts the module asks for (the consent dialog itself is tested in grants.spec.ts,
+  // and a host asked for but not granted with the Review bar there).
   await writeFile(
     path.join(userData, "grants.json"),
-    JSON.stringify({ version: 1, owners: { local: { [NETWORK]: { version: "0.0.0", grantedAt: "2026-10-16T20:00:00.000Z", network: ["api.tavora.test"] } } } }),
+    JSON.stringify({ version: 1, owners: { local: { [NETWORK]: { version: "0.0.0", grantedAt: "2026-10-16T20:00:00.000Z", network: ["api.tavora.test", "cdn.tavora.test"] } } } }),
   );
   const { app, page } = await launch(userData, [FIXTURE], {
     env: { TAVORA_TEST_NETWORK_HOSTS: "api.tavora.test=127.0.0.1,cdn.tavora.test=127.0.0.1,evil.tavora.test=127.0.0.1" },
@@ -59,11 +60,9 @@ test("a module reaches only the hosts the player granted, through Tavora", async
   expect(seen.at(-1)!.headers["user-agent"]).toMatch(/^Tavora\/.+ \(module local\.test\.network-module\)$/);
   expect(seen.at(-1)!.headers.cookie).toBeUndefined();
 
-  // A host the module asks for but the player did not grant, and one it never asked for.
+  // A host the module never asked for is refused before anything leaves the PC.
   const before = seen.length;
-  for (const host of ["cdn.tavora.test", "evil.tavora.test"]) {
-    expect(await request(`http://${host}:${port}/`), host).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "network" } });
-  }
+  expect(await request(`http://evil.tavora.test:${port}/`)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "network" } });
   expect(seen.length).toBe(before);
 
   // The page itself still reaches nothing (G4), granted or not.

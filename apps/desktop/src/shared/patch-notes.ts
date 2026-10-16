@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.16.8",
+    date: "2026-10-17",
+    title: "You decide what modules may reach",
+    notes: [
+      "A module that wants to reach websites now asks you the first time you add it, and shows which websites and who made it. Once you allow it, you can add it anywhere without being asked again. Cancel, and nothing is added.",
+      "If an update of a module wants more, it keeps working as before and its panels show a Review bar until you decide.",
+      "Settings > Integrations lists which modules may reach which websites. Take it back there at any time: Tavora first tells you which games use the module, then removes its panels and leaves an empty slot where nothing else was. Its data stays. Removing a module in Settings > Modules works the same way.",
+    ],
+  },
+  {
     version: "0.16.7",
     date: "2026-10-16",
     title: "Groundwork for module permissions",

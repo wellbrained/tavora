@@ -8,7 +8,7 @@ import { ArrowRightLeft, FileArchive, FolderInput, FolderOpen, RefreshCw, Trash2
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { act, confirmAction, showToast, state, submitAction } from "../../host";
+import { act, confirmAction, gamesUsing, listOf, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 import SettingRow from "./SettingRow.vue";
@@ -60,9 +60,10 @@ function deleteData(entry: { owner: string; moduleId: string }) {
 }
 
 function remove(module: ModuleView) {
+  const games = gamesUsing(module);
   confirmAction({
     title: t("settings.modules.removeTitle", { name: module.name }),
-    message: t("settings.modules.removeMessage"),
+    message: games.length ? t("settings.modules.removeMessageUsed", { games: listOf(games) }) : t("settings.modules.removeMessage"),
     confirm: t("common.remove"),
     danger: true,
     run: () => submitAction({ type: "remove-module", moduleId: module.id }),

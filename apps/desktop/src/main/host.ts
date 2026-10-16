@@ -28,7 +28,7 @@ import { resolveLanguage, translate, type Language } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
-import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, type SavedLayout } from "./layout";
+import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, vacateLayout, type SavedLayout } from "./layout";
 import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
@@ -540,11 +540,56 @@ export class Host {
     } catch {
       throw new LibraryError("error.removeFailed");
     }
+    this.removeModulePanels(moduleId);
     // Its data stays under its owner, so the same publisher's module finds it again. Its grants go:
     // whatever is installed next under this id is asked again.
     await forgetOwner(this.options.userData, path.basename(module.root));
     await this.grants.revoke(module.owner, moduleId);
     await this.reloadModules();
+  }
+
+  /**
+   * The player allowed what the consent dialog showed. Only hosts the module asks for are granted
+   * (grants.ts), so a module updated while the dialog was open gets nothing it did not show. Open
+   * panels of the module start again, so they connect with the new grant.
+   */
+  private async grantModule(moduleId: string, network: string[]): Promise<void> {
+    const module = this.modules.get(moduleId);
+    if (!module || module.builtIn) throw new LibraryError("error.moduleMissing");
+    await this.grants.grant(module, { network });
+    for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === moduleId) view.reload();
+  }
+
+  /** Takes back everything granted to a module, after its panels are removed in every game. Its data stays. */
+  private async revokeModule(moduleId: string): Promise<void> {
+    const module = this.modules.get(moduleId);
+    if (!module) throw new LibraryError("error.moduleMissing");
+    this.removeModulePanels(moduleId);
+    await this.grants.revoke(module.owner, moduleId);
+  }
+
+  /** The games, by id in the library, with a panel of this module. */
+  private gamesUsing(moduleId: string): string[] {
+    return Object.entries(this.workspace.games)
+      .filter(([gameId, workspace]) => gameId in this.library.games && workspace.instances.some((record) => record.moduleId === moduleId))
+      .map(([gameId]) => gameId);
+  }
+
+  /** Removes a module's panels in every game; a slot left with nothing stays as an empty slot. */
+  private removeModulePanels(moduleId: string): void {
+    let changed = false;
+    for (const workspace of Object.values(this.workspace.games)) {
+      const gone = new Set(workspace.instances.filter((record) => record.moduleId === moduleId).map((record) => record.instanceId));
+      if (gone.size === 0) continue;
+      changed = true;
+      workspace.instances = workspace.instances.filter((record) => !gone.has(record.instanceId));
+      workspace.layout = vacateLayout(workspace.layout, (id) => gone.has(id));
+      for (const instanceId of gone) this.closeView(instanceId);
+    }
+    if (changed) {
+      this.layoutEpoch++;
+      this.saveWorkspace();
+    }
   }
 
   /**
@@ -954,6 +999,10 @@ export class Host {
         return this.openModulesFolder();
       case "remove-module":
         return this.removeModule(action.moduleId);
+      case "grant-module":
+        return this.grantModule(action.moduleId, action.network);
+      case "revoke-module":
+        return this.revokeModule(action.moduleId);
       case "install-module":
         return this.installModule();
       case "delete-module-data":
@@ -1994,6 +2043,8 @@ export class Host {
         publisher: this.publisherOf(module),
         localDataWaiting: this.localDataWaiting(module),
         icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null,
+        permissions: { asks: { network: [...module.manifest.permissions.network] }, granted: this.grants.allowed(module), missing: this.grants.missing(module) },
+        usedIn: this.gamesUsing(module.manifest.id),
       })),
       moduleProblems: this.moduleProblems.map((problem) => ({ ...problem })),
       leftoverModuleData: this.moduleData

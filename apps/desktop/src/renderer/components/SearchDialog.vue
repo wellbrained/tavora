@@ -9,7 +9,7 @@ import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { CatalogMatch, GameView, OnlineGame } from "../../shared/host-api";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
-import { act, api, dialog, hiddenSettings, openSettings, searchOpen, state } from "../host";
+import { act, addModule, api, dialog, hiddenSettings, openSettings, searchOpen, state } from "../host";
 import { t, templateName } from "../i18n";
 
 import GameIcon from "./GameIcon.vue";
@@ -147,7 +147,7 @@ const groups = computed<Group[]>(() => {
             hint: t("search.module"),
             keywords: [module.name, module.description ?? "", ...splitWords(t("search.moduleKeywords"))],
             icon: Blocks,
-            run: close(() => act({ type: "open-module", moduleId: module.id })),
+            run: close(() => addModule(module.id)),
           })),
         ...view.value.snapshots.map((snapshot) => ({
           id: `layout-${snapshot.id}`,
