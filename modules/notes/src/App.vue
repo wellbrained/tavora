@@ -2,13 +2,14 @@
 // Notes: a list and an editor side by side, or one at a time when the panel
 // is narrow. Every Notes panel of a game shows the same notes; which note a
 // panel shows is that panel's own state.
-import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
+import { connectModule, errorMessage } from "@tavora/official-ui";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import NoteEditor from "./NoteEditor.vue";
 import NoteList from "./NoteList.vue";
+import UndoToast from "./UndoToast.vue";
 import { setLanguage, t } from "./i18n";
-import { emptyContent, SCRATCHPAD_ID, sections, UNTITLED, type NoteEntry } from "./notes";
+import { emptyContent, nudged, ORDER_ID, reordered, SCRATCHPAD_ID, sections, UNTITLED, type NoteEntry } from "./notes";
 import { createNotesStore, type NotesStore } from "./store";
 
 /** Below this width the list and the editor take turns. */
@@ -33,13 +34,16 @@ const width = ref(window.innerWidth);
 const narrow = computed(() => width.value < NARROW_PX);
 /** In a narrow panel: whether the list or the editor is showing. */
 const showList = ref(false);
-const pendingRemove = ref<NoteEntry | null>(null);
+/** The last delete or clear, which the player can still undo for a few seconds. */
+const undo = ref<{ id: number; message: string; run: () => Promise<void> } | null>(null);
+let undoCount = 0;
 const editor = ref<InstanceType<typeof NoteEditor> | null>(null);
 /** A note made with New note that has no text yet; it is dropped if left empty. */
 let freshId: string | null = null;
 
 const entries = computed(() => store.value?.entries.value ?? new Map<string, NoteEntry>());
 const selected = computed(() => entries.value.get(selectedId.value));
+const order = computed(() => store.value?.order.value ?? []);
 /** The scratchpad as the list shows it before anything has been saved to it. */
 const scratchpadEntry = computed(() => sections(entries.value.values()).scratchpad);
 
@@ -122,6 +126,10 @@ onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
 
 async function onOtherPanel(id: string, deleted: boolean) {
   const notes = store.value!;
+  if (id === ORDER_ID) {
+    await notes.refresh(id);
+    return;
+  }
   if (deleted) {
     notes.forget(id);
     if (id === selectedId.value) {
@@ -177,20 +185,51 @@ async function togglePin(id: string) {
   if (entry) await store.value!.setPinned(id, !entry.pinned);
 }
 
-async function confirmRemove() {
-  const entry = pendingRemove.value!;
-  pendingRemove.value = null;
+function offerUndo(message: string, run: () => Promise<void>) {
+  undo.value = { id: ++undoCount, message, run };
+}
+
+async function runUndo() {
+  const offer = undo.value;
+  undo.value = null;
+  await offer?.run().catch(() => undefined);
+}
+
+/** Deletes a note, or clears the scratchpad, at once; the player can undo it for a few seconds. */
+async function removeNote(entry: NoteEntry) {
   const notes = store.value!;
   const open = entry.id === selectedId.value;
+  // What is typed but not yet saved belongs in the copy that Undo brings back.
+  if (open) await editor.value?.flush();
+  const before = (await notes.open(entry.id)).data;
   if (open) editor.value?.discard();
   if (entry.id === SCRATCHPAD_ID) {
     await notes.saveContent(SCRATCHPAD_ID, emptyContent(), "");
     if (open) await editor.value?.reload();
+    offerUndo(t("undo.cleared"), async () => {
+      await notes.saveContent(SCRATCHPAD_ID, before.content, before.text);
+      if (selectedId.value === SCRATCHPAD_ID) await editor.value?.reload();
+    });
     return;
   }
   await notes.remove(entry.id);
   if (freshId === entry.id) freshId = null;
   if (open) await select(SCRATCHPAD_ID);
+  const title = entry.title === UNTITLED ? t("untitled") : entry.title;
+  offerUndo(t("undo.deleted", { title }), async () => {
+    await notes.restore(entry.id, before);
+    await select(entry.id);
+  });
+}
+
+async function reorder(id: string, target: string, after: boolean) {
+  const next = reordered(entries.value.values(), order.value, id, target, after);
+  if (next) await store.value!.setOrder(next).catch(() => undefined);
+}
+
+async function move(id: string, delta: -1 | 1) {
+  const next = nudged(entries.value.values(), order.value, id, delta);
+  if (next) await store.value!.setOrder(next).catch(() => undefined);
 }
 </script>
 
@@ -210,14 +249,17 @@ async function confirmRemove() {
       <NoteList
         v-model:query="query"
         :entries="entries"
+        :order="order"
         :selected-id="selectedId"
         :collapsed="collapsed"
         :narrow="narrow"
         @select="select"
         @create="create"
         @toggle-pin="togglePin"
-        @remove="(entry) => (pendingRemove = entry)"
+        @remove="removeNote"
         @rename="rename"
+        @reorder="reorder"
+        @move="move"
         @toggle-collapsed="toggleCollapsed"
       />
       <div
@@ -250,22 +292,10 @@ async function confirmRemove() {
         @set-style="(patch) => store!.setStyle(selectedId === SCRATCHPAD_ID ? 'scratchpad' : 'notes', patch)"
         @back="showList = true"
         @toggle-pin="togglePin(selectedId)"
-        @clear="pendingRemove = entries.get(SCRATCHPAD_ID) ?? scratchpadEntry"
+        @clear="removeNote(entries.get(SCRATCHPAD_ID) ?? scratchpadEntry)"
         @save-as-note="saveAsNote"
       />
     </main>
-    <ConfirmDialog
-      v-if="pendingRemove"
-      :title="pendingRemove.id === SCRATCHPAD_ID ? t('remove.clearTitle') : t('remove.deleteTitle', { title: pendingRemove.title === UNTITLED ? t('untitled') : pendingRemove.title })"
-      :description="
-        pendingRemove.id === SCRATCHPAD_ID
-          ? t('remove.clearMessage')
-          : t('remove.deleteMessage')
-      "
-      :confirm="pendingRemove.id === SCRATCHPAD_ID ? t('remove.clearConfirm') : t('remove.deleteConfirm')"
-      :cancel="t('cancel')"
-      @confirm="confirmRemove"
-      @cancel="pendingRemove = null"
-    />
+    <UndoToast v-if="undo" :key="undo.id" :message="undo.message" @undo="runUndo" @dismiss="undo = null" />
   </div>
 </template>

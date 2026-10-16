@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.10.0",
+    date: "2026-10-16",
+    title: "Notes: reorder and undo",
+    notes: [
+      "Drag notes in the list to put them in your own order (Alt+Up and Alt+Down work too). Pinned notes and the rest keep their own groups, and new notes still come last.",
+      "Deleting a note or clearing the scratchpad no longer asks first. It happens at once, and an Undo notice stays for 10 seconds (it waits while the pointer is on it).",
+    ],
+  },
+  {
     version: "0.9.1",
     date: "2026-10-16",
     title: "Cleaner folders",
