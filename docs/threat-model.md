@@ -116,3 +116,60 @@ The Discord panel shows who is in the player's voice channel. The main process r
 - **Browser: no Safe Browsing.** A phishing page still renders; downloads, permissions and external protocols are refused. **DNS rebinding** can still point a public name at a local address, because B7 looks at the name, not the resolved address. **Sign-in popups** that need `window.opener` do not work, because new windows open in the same panel. Ad blocking is network-only, so empty ad boxes can remain and in-video ads are not reliably blocked.
 - **Discord: the local pipe is trusted.** Whatever listens at `discord-ipc-0` gets the Discord access token, and anything already running as the player could listen there. Such a program can read the player's files anyway, so this is accepted. Tavora's application is a public client, so anyone can start a sign-in with its client id; that only asks the person for their own approval in their own Discord app, and Discord's tester limit decides who gets a token. No player handles a secret.
 - **Tauri was not evaluated.** Electron was spiked first for a single Chromium engine on Windows and Linux. Revisit only if memory overhead is unacceptable.
+
+## Sandbox review 2026-10-16
+
+Foundation 1 core list, item 7: review the module sandbox before the first outside developer gets the SDK. Scope, agreed with Nik: the sandbox as it is (G1–G10 and what sits around them), the install path (folders, manifest and id rules), and the electron packaging the model counts on. Module grants (Milestone F) are a separate design; this section only lists what they must not break. The attacker is the one assumed above: a hostile module author or a compromised dependency, with the module delivered to other people's PCs.
+
+Method: read the main-process side (`module-view.ts`, `bridge.ts`, `assets.ts`, `storage.ts`, `documents.ts`, `registry.ts`, the module preload, `module-schema`, `index.ts`), ran the existing isolation gate tests on a clean `main`, then wrote new hostile-module probes (`test/fixtures/hostile-module`, `test/e2e/sandbox-review.spec.ts`) for what the model claimed but no test covered. Each probe printed what a hostile module can do before any fix was written.
+
+### Findings
+
+| # | Severity | Finding | Status |
+| --- | --- | --- | --- |
+| S1 | High | **A module could crash the whole app through the bridge.** Three 400 MB messages killed the main process (`OOM error in V8`). The bridge could only check a message's size after the main process had received it, so G8 did not hold; 40 messages of 8 MiB also grew the main process by about 560 MB. A big `ArrayBuffer` looked tiny to `JSON.stringify`, so the size check would not have seen it either. | Fixed (0.7.1): the module's port ends in its own page, and `preload/relay.ts` measures every message before passing it on. G8 updated. |
+| S2 | Medium | **A module could fill the player's disk.** The quotas covered only bridge storage; a module's own IndexedDB and origin-private file system took 192 MB each with no error, and Chromium reported a 23 GB quota (about 60 % of the disk). An in-memory session does not help (it moves the problem to RAM, 5 GB). | Fixed (0.7.2): the host measures the session folder every second and clears it past 256 MB (G11). A module can still write for up to one second first; accepted. |
+| S3 | Low–Medium | **No Electron fuses were set**, although this model counted on them. With `RunAsNode` on, one environment variable turns the signed `Tavora.exe` into a Node interpreter. ASAR integrity cannot apply because the app ships with `asar: false`. | Fixed (no version change): fuses set and read back from a packaged exe. The ASAR point is accepted. |
+| S4 | Low | **Dev-only switches worked in packaged builds**: `TAVORA_USER_DATA`, `TAVORA_MODULE_DIRS`, `TAVORA_OFFICIAL_MODULE_DIRS`, `TAVORA_OFFICIAL_THEME_DIRS`. The `OFFICIAL` one could list any module as Official. Needs control of the environment Tavora starts in, so local malware, which is out of scope. | Fixed with S3. |
+| S5 | Medium | **A module id is a claim, not an identity.** Data is keyed by the manifest's `id`, and removing a module keeps its data (a decision, so adding it back brings it back). A different module that later claims the same id inherits that module's documents, settings and web storage. It needs the player to install it, and two modules with one id cannot run together. | Accepted until the catalogue. A zip installer or the catalogue must bind data to who published the module (see the requirements below). |
+
+### What held
+
+All of G1–G10 passed on a clean `main` (`isolation.spec.ts`), and these new probes found nothing: service workers (the scheme has no worker privilege), dedicated workers from a blob (blocked by the request filter), WebRTC (a UDP listener heard nothing), WebTransport (CSP), frames to the network, `window.open`, path traversal in assets and manifest paths, the `tavora.` id prefix, duplicate ids, manifest field checks, and spoofing identity through message fields. The new gate tests keep the WebRTC, worker and WebTransport results from regressing.
+
+### Accepted limits
+
+- A module can use all the CPU and memory its own renderer can get. The panel shows "not responding" and the player can Stop it; there is no hard cap. A module that allocates until the PC runs out of RAM is not prevented. (Unchanged from the limits above.)
+- A module's panels of one game share a renderer process (listed above).
+- A module can write browser storage for up to one second (a few hundred MB on a fast disk) before it is cleared.
+- Local files of Tavora are not protected from someone who can edit them: that person can already act as the player.
+
+### Verdict for the SDK
+
+No finding met the blocking rule agreed for this review (a hostile module reading or writing outside its own module and game, running code outside its sandbox, or sending data off the PC). S1 was fixed anyway because it broke a stated guarantee and let a module take down the whole app. The SDK can go to a first outside developer once the fixes for S1 to S3 are released. S5 is the reason modules must still be installed from a source the player trusts until the catalogue has publisher identity.
+
+### Rules for a future zip installer
+
+There is no installer today; modules are folders in `modules` in the data folder. When one is built, it must:
+
+1. Read the manifest from the archive and validate it with `validateManifest` before extracting anything.
+2. Extract only regular files: refuse links, absolute paths, `..`, drive letters, reserved Windows names and duplicate paths that differ only in case.
+3. Cap the archive size, the unpacked size, the number of files and the compression ratio.
+4. Refuse an id that starts with `tavora.`, and an id already installed (an update replaces it only from the same publisher).
+5. When the id has saved data from a module that was removed, say so and ask before the new module sees it (S5), until publisher identity exists.
+6. Install into a temporary folder and rename it into place, so a half-extracted module is never loaded.
+7. Never run anything from the archive.
+
+The existing folder loading already meets the manifest, path and id rules (`validateManifest`, `resolveAsset`, `discoverModules`).
+
+### What module grants must not break
+
+For the Milestone F design (backlog):
+
+- A grant is decided by the host from the player's consent, recorded for a module id, version and publisher. The manifest alone is never enough. Every granted method is checked again on each call in the main process, like G9.
+- The bridge relay and its limits apply to what a grant returns too. A file or network response is capped in size before it reaches the page.
+- Network: the main process makes the request against hosts the player consented to. No raw sockets, no cookies from the player's sessions, size and time limits, and the DNS-rebinding limit of the Browser (B7) applies.
+- Files: only folders the player picked in a host dialog, read-only first, paths made real before use, no links out, size caps.
+- Commands: a named command with fixed arguments, no shell, a time limit and an output cap (the Codex case).
+- Where a login is involved (AI Usage), prefer a purpose-built capability, such as "read my usage", over a raw file-read grant, so the module never holds the token.
+- Updates that ask for more re-ask. Revoking a grant takes effect at once, and data already given cannot be recalled (listed above).
