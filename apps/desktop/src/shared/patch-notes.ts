@@ -19,6 +19,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.8.0",
+    date: "2026-10-16",
+    title: "Notes: titles, a resizable sidebar and a handier scratchpad",
+    notes: [
+      "Give a note a title of your own: type it above the text, or double-click the note in the list (F2 also works). Leave it empty and the first line stays the title.",
+      "The notes list can be dragged wider or narrower, and collapsed to a thin strip of icons. Each Notes panel remembers its own.",
+      "The scratchpad has two new buttons: Save as note moves its text into a note of its own, and Clear empties it.",
+      "Headers and headings in Notes now use the theme's accent colour.",
+      "Switching games no longer shows panels building themselves: a panel appears once it has its content.",
+    ],
+  },
+  {
     version: "0.7.2",
     date: "2026-10-16",
     title: "Modules can't fill your disk",

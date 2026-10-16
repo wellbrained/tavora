@@ -10,6 +10,8 @@ export const SCRATCHPAD_TITLE = "Scratchpad";
 export const UNTITLED = "Untitled note";
 /** Titles are shown in one line; the host allows up to 200 characters. */
 const MAX_TITLE = 80;
+/** The longest title a note can be given by hand. */
+export const MAX_FIXED_TITLE = 120;
 
 /** A Tiptap (ProseMirror) document as JSON. */
 export type RichText = { type: "doc"; content?: JsonValue[] } & { [key: string]: JsonValue };
@@ -21,6 +23,8 @@ export interface NoteData {
   content: RichText;
   /** Plain text of the content, for search and the list preview. */
   text: string;
+  /** A title set by hand; empty means the first line is the title. */
+  title: string;
   pinned: boolean;
   createdAt: string;
 }
@@ -31,6 +35,8 @@ export interface NoteEntry {
   title: string;
   /** Plain text, for search and the preview line. */
   text: string;
+  /** The title set by hand, empty when the title comes from the first line. */
+  fixedTitle: string;
   pinned: boolean;
   updatedAt: string;
   revision: number;
@@ -38,6 +44,11 @@ export interface NoteEntry {
 
 export function emptyContent(): RichText {
   return { type: "doc", content: [{ type: "paragraph" }] };
+}
+
+/** A title typed by hand: one line, trimmed and kept to a sensible length. */
+export function cleanTitle(value: string): string {
+  return value.replace(/\s+/g, " ").trim().slice(0, MAX_FIXED_TITLE).trimEnd();
 }
 
 /** Turns stored data into a valid note, whatever an older version or a bad write left there. */
@@ -51,6 +62,7 @@ export function parseNote(raw: JsonValue | null, now = new Date().toISOString())
         ? (content as RichText)
         : emptyContent(),
     text: typeof value.text === "string" ? value.text : "",
+    title: typeof value.title === "string" ? cleanTitle(value.title) : "",
     pinned: value.pinned === true,
     createdAt: typeof value.createdAt === "string" ? value.createdAt : now,
   };
@@ -65,9 +77,10 @@ export function contentFromText(text: string): RichText {
   };
 }
 
-/** A note's title is its first line, like a paper notebook. */
-export function titleFor(id: string, text: string): string {
+/** A note's title is the one set by hand, or else its first line, like a paper notebook. */
+export function titleFor(id: string, text: string, fixed = ""): string {
   if (id === SCRATCHPAD_ID) return SCRATCHPAD_TITLE;
+  if (fixed) return fixed;
   // Markdown typed or pasted without being turned into formatting is left out.
   const line = text
     .split("\n")
@@ -77,13 +90,13 @@ export function titleFor(id: string, text: string): string {
   return line.length > MAX_TITLE ? `${line.slice(0, MAX_TITLE - 1).trimEnd()}…` : line;
 }
 
-/** The text after the title line, for the second line in the list. */
-export function previewFor(entry: Pick<NoteEntry, "id" | "text">): string {
+/** The text after the title line, for the second line in the list. A title set by hand leaves all the text. */
+export function previewFor(entry: Pick<NoteEntry, "id" | "text" | "fixedTitle">): string {
   const lines = entry.text
     .split("\n")
     .map((part) => part.trim())
     .filter(Boolean);
-  return (entry.id === SCRATCHPAD_ID ? lines : lines.slice(1)).join(" ").slice(0, 160);
+  return (entry.id === SCRATCHPAD_ID || entry.fixedTitle ? lines : lines.slice(1)).join(" ").slice(0, 160);
 }
 
 /** Every word of the query must appear in the title or text, in any order and case. */
@@ -109,6 +122,7 @@ export function sections(entries: Iterable<NoteEntry>): NoteSections {
     id: SCRATCHPAD_ID,
     title: SCRATCHPAD_TITLE,
     text: "",
+    fixedTitle: "",
     pinned: false,
     updatedAt: "",
     revision: 0,

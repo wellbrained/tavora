@@ -29,6 +29,8 @@ export interface ModuleViewOptions {
   onStorageOver(): void;
   /** What a module may keep in its browser storage, in bytes. */
   storageLimit?: number;
+  /** The page has its data and may be shown (see ModuleView.revealed). */
+  onReveal?(): void;
 }
 
 /** How often the host checks that a module's page still runs. */
@@ -88,6 +90,15 @@ function moduleSession(module: InstalledModule, game: TavoraGame): Session {
   return ses;
 }
 
+/**
+ * A page is kept hidden until it has settled, so nobody watches it build itself. It has settled
+ * when its requests have been answered and none has followed for SETTLE_MS; a page that never
+ * connects is shown after NO_BRIDGE_MS, and no page is held back longer than REVEAL_CAP_MS.
+ */
+export const SETTLE_MS = 150;
+export const NO_BRIDGE_MS = 400;
+export const REVEAL_CAP_MS = 2_000;
+
 /** Corner radius of a panel card in the host UI (dock.css), in px. */
 const PANEL_RADIUS = 10;
 
@@ -106,6 +117,10 @@ export class ModuleView {
   private storageWatch: ReturnType<typeof setInterval> | undefined;
   private measuring = false;
   status: InstanceStatus = "loading";
+  /** False while the page is still loading or filling itself with data; the host keeps the view hidden until then. */
+  revealed = false;
+  private revealTimers: ReturnType<typeof setTimeout>[] = [];
+  private settleTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly options: ModuleViewOptions) {
     const { module, game } = options;
@@ -154,6 +169,7 @@ export class ModuleView {
       if (event.isMainFrame && !event.isSameDocument) {
         this.disconnect();
         this.setStatus("loading");
+        this.hideUntilSettled();
       }
     });
     // The module's own files are served by the protocol handler, so an
@@ -178,6 +194,7 @@ export class ModuleView {
       this.setStatus("ready");
       this.startHeartbeat();
       this.startStorageWatch();
+      this.later(NO_BRIDGE_MS, () => this.bridge === undefined && this.reveal());
     });
     contents.on("did-fail-load", (_event, errorCode, description, url, isMainFrame) => {
       // -3 is ERR_ABORTED: a navigation replaced by another, not a failure.
@@ -198,9 +215,41 @@ export class ModuleView {
       this.setStatus("crashed");
     });
 
+    this.hideUntilSettled();
     void contents.loadURL(`${origin}/${module.manifest.entry}`).catch(() => {
       // Load failures surface through did-fail-load / render-process-gone.
     });
+  }
+
+  /** Starts counting for a new page: it is hidden until it settles or the cap runs out. */
+  private hideUntilSettled(): void {
+    this.revealed = false;
+    this.clearRevealTimers();
+    this.later(REVEAL_CAP_MS, () => this.reveal());
+  }
+
+  private later(ms: number, run: () => void): void {
+    this.revealTimers.push(setTimeout(run, ms));
+  }
+
+  private clearRevealTimers(): void {
+    for (const timer of this.revealTimers) clearTimeout(timer);
+    this.revealTimers = [];
+    clearTimeout(this.settleTimer);
+    this.settleTimer = undefined;
+  }
+
+  private onBridgeBusy(busy: boolean, served: number): void {
+    clearTimeout(this.settleTimer);
+    this.settleTimer = undefined;
+    if (!busy && served > 0 && !this.revealed) this.settleTimer = setTimeout(() => this.reveal(), SETTLE_MS);
+  }
+
+  private reveal(): void {
+    if (this.revealed) return;
+    this.revealed = true;
+    this.clearRevealTimers();
+    this.options.onReveal?.();
   }
 
   get webContentsId(): number {
@@ -236,6 +285,7 @@ export class ModuleView {
         isSuspended: () => this.suspended,
         getTheme: this.options.getTheme,
         getLanguage: this.options.getLanguage,
+        onBusy: (busy, served) => this.onBridgeBusy(busy, served),
       },
       () => {
         if (this.bridge === bridge) this.bridge = undefined;
@@ -371,6 +421,7 @@ export class ModuleView {
   dispose(): void {
     this.stopHeartbeat();
     this.stopStorageWatch();
+    this.clearRevealTimers();
     this.bridge?.emit("lifecycle.dispose", null);
     this.disconnect();
     if (!this.view.webContents.isDestroyed()) this.view.webContents.close();
@@ -386,6 +437,8 @@ export class ModuleView {
     // Only a running page is watched; it is restarted when the page loads again.
     if (status !== "ready" && status !== "unresponsive") this.stopHeartbeat();
     this.status = status;
+    // A page that failed has nothing to wait for; show whatever it is.
+    if (status === "failed" || status === "crashed") this.reveal();
     this.options.onStatus(status);
   }
 }
