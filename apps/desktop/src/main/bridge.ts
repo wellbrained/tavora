@@ -41,6 +41,11 @@ export interface BridgeContext {
   getLanguage(): string;
   /** Whether the panel is hidden right now. */
   isSuspended(): boolean;
+  /**
+   * The module started (true) or finished (false) having requests answered; `served` counts the
+   * answered ones apart from the handshake. The host uses it to tell when a page has its data.
+   */
+  onBusy?(busy: boolean, served: number): void;
 }
 
 type Handler = (session: BridgeSession, params: unknown) => Promise<unknown> | unknown;
@@ -111,6 +116,7 @@ const handlers = new Map<string, Handler>([
 /** Serves one module panel over one port. */
 export class BridgeSession {
   private inFlight = 0;
+  private served = 0;
   private closed = false;
   private handshakeDone = false;
 
@@ -176,7 +182,8 @@ export class BridgeSession {
     if (this.inFlight >= LIMITS.maxInFlight) {
       return this.fail(requestId, new HostError("BAD_REQUEST", "too many concurrent requests"));
     }
-    this.inFlight++;
+    if (this.inFlight++ === 0) this.context.onBusy?.(true, this.served);
+    let handshake = false;
     try {
       let size: number;
       try {
@@ -194,6 +201,7 @@ export class BridgeSession {
 
       let result: unknown;
       if (method === "bridge.handshake") {
+        handshake = true;
         result = this.handshake(params);
       } else if (!this.handshakeDone) {
         throw new HostError("BAD_REQUEST", "call bridge.handshake first");
@@ -221,7 +229,8 @@ export class BridgeSession {
         this.fail(requestId, new HostError("INTERNAL", "internal error"));
       }
     } finally {
-      this.inFlight--;
+      if (!handshake) this.served++;
+      if (--this.inFlight === 0) this.context.onBusy?.(false, this.served);
     }
   }
 

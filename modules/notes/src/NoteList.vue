@@ -1,14 +1,22 @@
 <script setup lang="ts">
 // The list of notes: search, the scratchpad, pinned notes, then the rest.
-import { Plus, Search, X } from "@lucide/vue";
+import { NotebookPen, PanelLeftClose, PanelLeftOpen, Pin, Plus, Search, X } from "@lucide/vue";
+import { cn } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { computed } from "vue";
 import { t } from "./i18n";
 import NoteRow from "./NoteRow.vue";
-import { matches, sections, type NoteEntry } from "./notes";
+import { matches, SCRATCHPAD_ID, sections, UNTITLED, type NoteEntry } from "./notes";
 
-const props = defineProps<{ entries: Map<string, NoteEntry>; selectedId: string }>();
-const emit = defineEmits<{ select: [id: string]; create: []; togglePin: [id: string]; remove: [entry: NoteEntry] }>();
+const props = defineProps<{ entries: Map<string, NoteEntry>; selectedId: string; collapsed: boolean; narrow: boolean }>();
+const emit = defineEmits<{
+  select: [id: string];
+  create: [];
+  togglePin: [id: string];
+  remove: [entry: NoteEntry];
+  rename: [id: string, title: string];
+  toggleCollapsed: [];
+}>();
 
 const query = defineModel<string>("query", { required: true });
 
@@ -19,6 +27,22 @@ const results = computed(() => {
   return [scratchpad, ...pinned, ...others].filter((entry) => matches(entry, query.value));
 });
 
+/** The collapsed strip: the scratchpad, pinned notes, then the rest, each as a small icon. */
+const railNotes = computed(() => {
+  const { scratchpad, pinned, others } = grouped.value;
+  return [scratchpad, ...pinned, ...others];
+});
+
+/** The first letter or digit of a note's title, or null for a title without one. */
+function initialOf(entry: NoteEntry): string | null {
+  const first = Array.from(entry.title === UNTITLED ? "" : entry.title).find((char) => /[\p{L}\p{N}]/u.test(char));
+  return first ? first.toLocaleUpperCase() : null;
+}
+
+function railTitle(entry: NoteEntry): string {
+  return entry.id === SCRATCHPAD_ID ? t("scratchpad") : entry.title === UNTITLED ? t("untitled") : entry.title;
+}
+
 function onSearchKey(event: KeyboardEvent) {
   if (event.key === "Escape" && query.value) {
     event.stopPropagation();
@@ -28,8 +52,39 @@ function onSearchKey(event: KeyboardEvent) {
 </script>
 
 <template>
-  <nav class="flex h-full min-w-0 flex-col" :aria-label="t('list.label')">
-    <div class="flex h-10 flex-none items-center gap-1 border-b px-2">
+  <nav v-if="collapsed && !narrow" class="flex h-full min-w-0 flex-col items-center" :aria-label="t('list.label')" data-testid="notes-rail">
+    <div class="border-primary/25 bg-primary/5 flex h-10 w-full flex-none items-center justify-center border-b">
+      <Button variant="ghost" size="icon-sm" data-testid="expand-sidebar" :aria-label="t('list.expand')" :title="t('list.expand')" @click="emit('toggleCollapsed')">
+        <PanelLeftOpen :stroke-width="1.5" />
+      </Button>
+    </div>
+    <Button variant="ghost" size="icon-sm" class="mt-1 flex-none" data-testid="new-note" :aria-label="t('list.new')" :title="t('list.new')" @click="emit('create')">
+      <Plus :stroke-width="1.5" />
+    </Button>
+    <ul role="list" class="mt-1 flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto pb-2">
+      <li v-for="entry in railNotes" :key="entry.id">
+        <button
+          type="button"
+          :class="cn('hover:bg-accent relative flex size-8 items-center justify-center rounded-md', entry.id === selectedId && 'bg-accent ring-primary ring-1')"
+          :aria-label="railTitle(entry)"
+          :aria-current="entry.id === selectedId ? 'true' : undefined"
+          :title="railTitle(entry)"
+          :data-testid="`rail-${entry.id}`"
+          @click="emit('select', entry.id)"
+        >
+          <NotebookPen v-if="entry.id === SCRATCHPAD_ID" class="text-primary size-4" :stroke-width="1.5" aria-hidden="true" />
+          <span
+            v-else
+            :class="cn('flex size-6 items-center justify-center rounded-md text-xs font-semibold', entry.pinned ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground')"
+            aria-hidden="true"
+          >{{ initialOf(entry) ?? "·" }}</span>
+          <Pin v-if="entry.pinned" class="text-primary absolute top-0.5 right-0.5 size-2.5 fill-current" :stroke-width="1.5" aria-hidden="true" />
+        </button>
+      </li>
+    </ul>
+  </nav>
+  <nav v-else class="flex h-full min-w-0 flex-col" :aria-label="t('list.label')">
+    <div class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2">
       <label class="relative flex min-w-0 flex-1 items-center">
         <Search class="text-muted-foreground pointer-events-none absolute left-2 size-4" :stroke-width="1.5" aria-hidden="true" />
         <input
@@ -55,6 +110,9 @@ function onSearchKey(event: KeyboardEvent) {
       <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="new-note" :aria-label="t('list.new')" :title="t('list.new')" @click="emit('create')">
         <Plus :stroke-width="1.5" />
       </Button>
+      <Button v-if="!narrow" variant="ghost" size="icon-sm" class="flex-none" data-testid="collapse-sidebar" :aria-label="t('list.collapse')" :title="t('list.collapse')" @click="emit('toggleCollapsed')">
+        <PanelLeftClose :stroke-width="1.5" />
+      </Button>
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto p-1">
@@ -62,23 +120,23 @@ function onSearchKey(event: KeyboardEvent) {
         <p v-if="!results.length" class="text-muted-foreground px-3 py-6 text-center text-sm" data-testid="no-results">{{ t("list.none", { query: query.trim() }) }}</p>
         <ul v-else role="list" data-testid="results">
           <li v-for="entry in results" :key="entry.id">
-            <NoteRow :entry="entry" :selected="entry.id === selectedId" @select="emit('select', entry.id)" @toggle-pin="emit('togglePin', entry.id)" @remove="emit('remove', entry)" />
+            <NoteRow :entry="entry" :selected="entry.id === selectedId" @select="emit('select', entry.id)" @toggle-pin="emit('togglePin', entry.id)" @remove="emit('remove', entry)" @rename="(title) => emit('rename', entry.id, title)" />
           </li>
         </ul>
       </template>
       <template v-else>
         <ul role="list">
-          <li><NoteRow :entry="grouped.scratchpad" :selected="grouped.scratchpad.id === selectedId" @select="emit('select', grouped.scratchpad.id)" @toggle-pin="emit('togglePin', grouped.scratchpad.id)" @remove="emit('remove', grouped.scratchpad)" /></li>
+          <li><NoteRow :entry="grouped.scratchpad" :selected="grouped.scratchpad.id === selectedId" @select="emit('select', grouped.scratchpad.id)" @toggle-pin="emit('togglePin', grouped.scratchpad.id)" @remove="emit('remove', grouped.scratchpad)" @rename="(title) => emit('rename', grouped.scratchpad.id, title)" /></li>
         </ul>
         <template v-if="grouped.pinned.length">
-          <h2 class="text-muted-foreground px-3 pt-3 pb-1 text-xs font-medium">{{ t("list.pinned") }}</h2>
+          <h2 class="text-primary px-3 pt-3 pb-1 text-xs font-semibold">{{ t("list.pinned") }}</h2>
           <ul role="list" data-testid="pinned">
-            <li v-for="entry in grouped.pinned" :key="entry.id"><NoteRow :entry="entry" :selected="entry.id === selectedId" @select="emit('select', entry.id)" @toggle-pin="emit('togglePin', entry.id)" @remove="emit('remove', entry)" /></li>
+            <li v-for="entry in grouped.pinned" :key="entry.id"><NoteRow :entry="entry" :selected="entry.id === selectedId" @select="emit('select', entry.id)" @toggle-pin="emit('togglePin', entry.id)" @remove="emit('remove', entry)" @rename="(title) => emit('rename', entry.id, title)" /></li>
           </ul>
         </template>
-        <h2 v-if="grouped.others.length" class="text-muted-foreground px-3 pt-3 pb-1 text-xs font-medium">{{ t("list.label") }}</h2>
+        <h2 v-if="grouped.others.length" class="text-primary px-3 pt-3 pb-1 text-xs font-semibold">{{ t("list.label") }}</h2>
         <ul role="list" data-testid="notes">
-          <li v-for="entry in grouped.others" :key="entry.id"><NoteRow :entry="entry" :selected="entry.id === selectedId" @select="emit('select', entry.id)" @toggle-pin="emit('togglePin', entry.id)" @remove="emit('remove', entry)" /></li>
+          <li v-for="entry in grouped.others" :key="entry.id"><NoteRow :entry="entry" :selected="entry.id === selectedId" @select="emit('select', entry.id)" @toggle-pin="emit('togglePin', entry.id)" @remove="emit('remove', entry)" @rename="(title) => emit('rename', entry.id, title)" /></li>
         </ul>
         <div v-if="!grouped.pinned.length && !grouped.others.length" class="px-3 py-6 text-center">
           <p class="text-muted-foreground text-sm">{{ t("list.empty") }}</p>
