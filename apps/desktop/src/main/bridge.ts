@@ -114,6 +114,16 @@ const handlers = new Map<string, Handler>([
     },
   ],
 
+  ["blobs.list", (s, params) => (noParams(params), s.context.data.blobs.list())],
+  ["blobs.usage", (s, params) => (noParams(params), s.context.data.blobs.usage())],
+  [
+    "blobs.delete",
+    async (s, params) => {
+      await s.context.data.blobs.delete(object(params).id);
+      return null;
+    },
+  ],
+
   ["panel.getState", (s, params) => (noParams(params), s.context.panelState.get(s.context.instanceId))],
   [
     "panel.setState",

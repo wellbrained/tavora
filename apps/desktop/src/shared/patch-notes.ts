@@ -19,14 +19,40 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.12.0",
+    version: "0.14.0",
     date: "2026-10-16",
     title: "Install modules from a zip",
     notes: [
       "Settings > Modules has Install from zip. Tavora checks the zip before it unpacks anything, and a module from someone else can never replace one you have or read its data, even with the same name.",
       "Modules signed by their maker show a publisher tag. Module makers create signed zips with the new pack command.",
-      "What a module saves now belongs to whoever made it, not just to the module's name. Your existing notes, to-dos and module settings are moved over once at start; nothing changes for you.",
+      "What a module saves now belongs to whoever made it, not just to the module's name. Your existing notes, pictures, to-dos and module settings are moved over once at start; nothing changes for you.",
       "Data from modules you removed is listed in Settings > Modules, where you can delete it. If you used a local copy of a module before installing its signed version, you can move the local copy's data over.",
+    ],
+  },
+  {
+    version: "0.13.1",
+    date: "2026-10-16",
+    title: "Pictures: text flows around them",
+    notes: [
+      "A picture can now sit at the left or right with the text flowing around it, at the size it has. This replaces \"Inline\", which shrank the picture to the height of a line. Dragging the corner resizes any picture.",
+    ],
+  },
+  {
+    version: "0.13.0",
+    date: "2026-10-16",
+    title: "Pictures in Notes",
+    notes: [
+      "Paste a screenshot, drop a picture file into a note, or use the Insert image button (PNG, JPEG, GIF, WebP). Click a picture to put it inline with the text or on its own line as Small, Medium or Full width, drag its corner to resize it freely, open it larger, or remove it.",
+      "Choose Optimized (shrunk to at most 1600 px, smaller files) or Original (the file exactly as it is) under the Insert image button. The menu also shows how much picture space the game has used.",
+      "Pictures of deleted notes are cleaned up the next time Notes opens.",
+    ],
+  },
+  {
+    version: "0.12.0",
+    date: "2026-10-16",
+    title: "Modules can keep pictures",
+    notes: [
+      "Modules can now store pictures (PNG, JPEG, GIF, WebP, up to 50 MB each and 500 MB per game) in a folder Tavora manages. Nothing uses it yet: Notes will, next. The pictures are removed with the game and are part of the daily backup unless it would get too big.",
     ],
   },
   {

@@ -28,6 +28,7 @@ async function seed() {
   await write("module-data/tavora.notes/poe2/documents/plan.json", '{"text":"keep me"}');
   await write("game-icons/poe2-1234abcd.png", "png");
   await write("profile/avatar.png", "png");
+  await write("module-blobs/official/tavora.notes/poe2/0123456789abcdef0123456789abcdef.png", "png");
   await write("window.json", "{}");
   await write("module-data/tavora.notes/poe2/storage.json.tmp", "half written");
 }
@@ -38,7 +39,7 @@ describe("backupData", () => {
     const result = await backupData({ userData: dir, now: at(2026, 10, 15) });
     expect(result).toMatchObject({ status: "made", withPictures: true });
     const snap = path.join("backups", "2026-10-15");
-    expect(await list(snap)).toEqual(["game-icons", "library.json", "module-data", "profile", "profile.json", "workspace.json"]);
+    expect(await list(snap)).toEqual(["game-icons", "library.json", "module-blobs", "module-data", "profile", "profile.json", "workspace.json"]);
     expect(await readFile(path.join(dir, snap, "module-data/tavora.notes/poe2/documents/plan.json"), "utf8")).toBe('{"text":"keep me"}');
     // Disposable files and half-written temp files are left out.
     expect(await list(snap)).not.toContain("window.json");

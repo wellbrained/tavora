@@ -2,7 +2,7 @@
 // for titles, sorting and search. Kept free of Vue and Tiptap so it can be
 // unit tested.
 
-import type { JsonValue } from "@tavora/sdk";
+import { BLOB_ID, type JsonValue } from "@tavora/sdk";
 
 /** The one note every game has. It cannot be deleted, only cleared. */
 export const SCRATCHPAD_ID = "scratchpad";
@@ -27,6 +27,8 @@ export interface NoteData {
   text: string;
   /** A title set by hand; empty means the first line is the title. */
   title: string;
+  /** Ids of the pictures in the content (see blobs), so unused ones can be found without opening every note. */
+  images: string[];
   pinned: boolean;
   createdAt: string;
 }
@@ -39,6 +41,8 @@ export interface NoteEntry {
   text: string;
   /** The title set by hand, empty when the title comes from the first line. */
   fixedTitle: string;
+  /** Ids of the pictures in the note. */
+  images: string[];
   pinned: boolean;
   /** When the note was made; the list keeps notes in this order, oldest first. */
   createdAt: string;
@@ -55,6 +59,29 @@ export function cleanTitle(value: string): string {
   return value.replace(/\s+/g, " ").trim().slice(0, MAX_FIXED_TITLE).trimEnd();
 }
 
+/** The ids of the pictures in a document, in order and without repeats. */
+export function collectImageIds(content: JsonValue): string[] {
+  const ids = new Set<string>();
+  const visit = (node: JsonValue): void => {
+    if (node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (node.type === "image") {
+      const attrs = node.attrs;
+      const id = attrs !== null && typeof attrs === "object" && !Array.isArray(attrs) ? attrs.blobId : undefined;
+      if (typeof id === "string" && BLOB_ID.test(id)) ids.add(id);
+    }
+    visit(node.content ?? null);
+  };
+  visit(content);
+  return [...ids];
+}
+
+/** Bytes as megabytes for the Images menu: one decimal under 10 MB, none above. */
+export function formatMegabytes(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
+}
+
 /** Turns stored data into a valid note, whatever an older version or a bad write left there. */
 export function parseNote(raw: JsonValue | null, now = new Date().toISOString()): NoteData {
   const value = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
@@ -67,6 +94,7 @@ export function parseNote(raw: JsonValue | null, now = new Date().toISOString())
         : emptyContent(),
     text: typeof value.text === "string" ? value.text : "",
     title: typeof value.title === "string" ? cleanTitle(value.title) : "",
+    images: Array.isArray(value.images) ? value.images.filter((id): id is string => typeof id === "string" && BLOB_ID.test(id)) : [],
     pinned: value.pinned === true,
     createdAt: typeof value.createdAt === "string" ? value.createdAt : now,
   };
@@ -129,6 +157,7 @@ export function sections(entries: Iterable<NoteEntry>, order: readonly string[] 
     title: SCRATCHPAD_TITLE,
     text: "",
     fixedTitle: "",
+    images: [],
     pinned: false,
     updatedAt: "",
     revision: 0,

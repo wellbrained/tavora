@@ -28,6 +28,21 @@ describe("deleteModuleData", () => {
     }
   });
 
+  it("deletes the files modules keep for the game too", async () => {
+    const userData = await tempDir();
+    for (const game of ["poe2", "satisfactory"]) {
+      await mkdir(path.join(userData, "module-blobs", "local", "local.a", game), { recursive: true });
+      await writeFile(path.join(userData, "module-blobs", "local", "local.a", game, "0".repeat(32) + ".png"), "x");
+    }
+    await deleteModuleData(userData, "poe2");
+    expect(await readdir(path.join(userData, "module-blobs", "local", "local.a"))).toEqual(["satisfactory"]);
+    // A folder moved elsewhere is cleaned the same way.
+    const elsewhere = await tempDir();
+    await mkdir(path.join(elsewhere, "local", "local.a", "poe2"), { recursive: true });
+    await deleteModuleData(userData, "poe2", elsewhere);
+    expect(await readdir(path.join(elsewhere, "local", "local.a"))).toEqual([]);
+  });
+
   it("does nothing without module data and refuses unsafe ids", async () => {
     const userData = await tempDir();
     await expect(deleteModuleData(userData, "poe2")).resolves.toBeUndefined();
@@ -210,5 +225,28 @@ describe("leftover module data", () => {
     ]);
     // Done once: the queue is empty afterwards.
     expect(await readdir(userData)).not.toContain("module-data-pending.json");
+  });
+  it("treats a module's files (pictures) like its other data", async () => {
+    const userData = await tempDir();
+    const blob = (...parts: string[]) => path.join(userData, "module-blobs", ...parts);
+    // Saved before modules had owners.
+    await mkdir(blob("tavora.notes", "poe2"), { recursive: true });
+    await writeFile(blob("tavora.notes", "poe2", "a.png"), "official");
+    await mkdir(blob("nik.tracker", "poe2"), { recursive: true });
+    await writeFile(blob("nik.tracker", "poe2", "b.png"), "local");
+    await migrateModuleData(userData);
+    expect(await readFile(blob("official", "tavora.notes", "poe2", "a.png"), "utf8")).toBe("official");
+    expect(await readFile(blob("local", "nik.tracker", "poe2", "b.png"), "utf8")).toBe("local");
+
+    // A module with only files left is listed, and its files move with Move.
+    expect((await listModuleData(userData)).map((found) => `${found.owner}/${found.moduleId}`).sort()).toEqual(["local/nik.tracker", "official/tavora.notes"]);
+    await queueLocalDataMove(userData, "nik.tracker", KEY);
+    await migrateModuleData(userData);
+    expect(await readFile(blob(KEY, "nik.tracker", "poe2", "b.png"), "utf8")).toBe("local");
+    expect(await readdir(blob("local"))).toEqual([]);
+
+    // Delete removes them.
+    await deleteModuleDataOf(userData, KEY, "nik.tracker");
+    expect(await readdir(blob(KEY))).toEqual([]);
   });
 });

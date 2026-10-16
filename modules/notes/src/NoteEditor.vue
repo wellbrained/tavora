@@ -10,6 +10,7 @@ import {
   FilePlus,
   Code,
   Heading,
+  ImagePlus,
   Italic,
   Link2,
   List,
@@ -35,9 +36,13 @@ import {
 import type { JSONContent } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
+import { NodeSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import ImageBar from "./ImageBar.vue";
+import ImageLightbox from "./ImageLightbox.vue";
+import { ImageNode, type ImageAttrs } from "./ImageNode";
 import LinkDialog from "./LinkDialog.vue";
 import LinkPopover from "./LinkPopover.vue";
 import { t } from "./i18n";
@@ -45,6 +50,7 @@ import {
   contentFromText,
   FONTS,
   fontStack,
+  formatMegabytes,
   MAX_FIXED_TITLE,
   SCRATCHPAD_ID,
   SIZES,
@@ -56,10 +62,10 @@ import {
   type RichText,
   type TextStyle,
 } from "./notes";
-import type { NotePatch, NotesStore } from "./store";
+import { ImageProblem, type NotePatch, type NotesStore } from "./store";
 
 const props = defineProps<{ store: NotesStore; noteId: string; entry: NoteEntry | undefined; narrow: boolean; look: TextStyle }>();
-const emit = defineEmits<{ back: []; togglePin: []; clear: []; saveAsNote: []; setStyle: [patch: Partial<TextStyle>]; openLink: [href: string] }>();
+const emit = defineEmits<{ back: []; togglePin: []; clear: []; saveAsNote: []; setStyle: [patch: Partial<TextStyle>]; openLink: [href: string]; notice: [message: string] }>();
 
 /** How long typing must pause before the note is saved. */
 const SAVE_DELAY_MS = 400;
@@ -91,6 +97,7 @@ const editor = useEditor({
     }),
     TaskList,
     TaskItem.configure({ nested: true }),
+    ImageNode.configure({ url: (id) => props.store.blobUrl(id), onOpen: (id) => (lightbox.value = id) }),
     Placeholder.configure({
       placeholder: () =>
         props.noteId === SCRATCHPAD_ID
@@ -102,10 +109,14 @@ const editor = useEditor({
   ],
   editorProps: {
     handleClick: (_view, _pos, event) => onEditorClick(event),
+    handlePaste: (_view, event) => onFiles(event.clipboardData?.files, event),
+    handleDrop: (view, event) => onFiles(event.dataTransfer?.files, event, view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos),
     attributes: { class: "note-content", "data-testid": "editor", "aria-label": t("editor.text"), spellcheck: "true" },
   },
+  onSelectionUpdate: () => updateImageBar(),
   onUpdate: () => {
     linkPopover.value = null;
+    updateImageBar();
     if (loadedId === null) return;
     contentDirty = true;
     saveState.value = "pending";
@@ -259,6 +270,109 @@ onBeforeUnmount(() => {
   editor.value?.destroy();
 });
 
+// ── Pictures ─────────────────────────────────────────────────────────
+
+/** Pictures being stored right now. */
+const adding = ref(0);
+const lightbox = ref<string | null>(null);
+const fileInput = ref<HTMLInputElement | null>(null);
+const imageUsage = ref<{ bytes: number; maxBytes: number } | null>(null);
+/** The bar over the selected picture. */
+const imageBar = ref<{ mode: ImageAttrs["mode"]; width: number | null; left: number; top: number } | null>(null);
+
+function reportImageProblem(error: unknown) {
+  if (!(error instanceof ImageProblem)) return emit("notice", t("image.error", { error: errorMessage(error) }));
+  if (error.kind === "type") emit("notice", t("image.notSupported", { name: error.file }));
+  else if (error.kind === "size") emit("notice", t("image.tooBig", { name: error.file, max: formatMegabytes(Number(error.message)) }));
+  else emit("notice", t("image.error", { error: error.message }));
+}
+
+/** Stores pictures and puts them in the note, one after the other, at `pos` or where the cursor is. */
+async function addImages(files: File[], pos?: number) {
+  const instance = editor.value;
+  if (!instance || loadedId === null) return;
+  const forNote = loadedId;
+  let at = pos ?? instance.state.selection.to;
+  adding.value += files.length;
+  try {
+    for (const file of files) {
+      try {
+        const blobId = await props.store.addImage(file);
+        // The player may have gone to another note meanwhile; the picture then stays unused and is cleaned up later.
+        if (loadedId !== forNote) continue;
+        const size = instance.state.doc.content.size;
+        at = Math.min(at, size);
+        instance.chain().focus().insertContentAt(at, { type: "image", attrs: { blobId, mode: "block", width: null } satisfies ImageAttrs }).run();
+        at = instance.state.selection.to;
+      } catch (error) {
+        reportImageProblem(error);
+      } finally {
+        adding.value--;
+      }
+    }
+  } finally {
+    adding.value = Math.max(0, adding.value);
+  }
+}
+
+/** Pasted or dropped files: handles the pictures among them, and tells the editor whether it did. */
+function onFiles(list: FileList | null | undefined, event: Event, pos?: number): boolean {
+  const files = [...(list ?? [])].filter((file) => file.type.startsWith("image/"));
+  if (!files.length) return false;
+  event.preventDefault();
+  void addImages(files, pos);
+  return true;
+}
+
+function onFilePicked(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = [...(input.files ?? [])];
+  input.value = "";
+  if (files.length) void addImages(files);
+}
+
+async function refreshImageUsage(open: boolean) {
+  if (!open) return;
+  try {
+    imageUsage.value = await props.store.imageUsage();
+  } catch {
+    imageUsage.value = null;
+  }
+}
+
+function updateImageBar() {
+  const instance = editor.value;
+  const selection = instance?.state.selection;
+  if (!instance || !(selection instanceof NodeSelection) || selection.node.type.name !== "image") {
+    imageBar.value = null;
+    return;
+  }
+  const dom = instance.view.nodeDOM(selection.from);
+  if (!(dom instanceof HTMLElement)) {
+    imageBar.value = null;
+    return;
+  }
+  const rect = dom.getBoundingClientRect();
+  const attrs = selection.node.attrs as ImageAttrs;
+  imageBar.value = { mode: attrs.mode, width: attrs.width, left: rect.left, top: rect.top - 40 < 8 ? rect.bottom + 6 : rect.top - 40 };
+}
+
+function setImage(patch: Partial<ImageAttrs>) {
+  const selection = editor.value?.state.selection;
+  if (!(selection instanceof NodeSelection)) return;
+  // Replacing the picture drops the selection, so it is selected again for the next change.
+  editor.value?.chain().focus().updateAttributes("image", patch).setNodeSelection(selection.from).run();
+}
+
+function openSelectedImage() {
+  const selection = editor.value?.state.selection;
+  if (selection instanceof NodeSelection && selection.node.type.name === "image") lightbox.value = (selection.node.attrs as ImageAttrs).blobId;
+}
+
+function removeSelectedImage() {
+  editor.value?.chain().focus().deleteSelection().run();
+}
+
 // ── Links ────────────────────────────────────────────────────────────
 
 /** The bar shown under a clicked link. */
@@ -289,6 +403,13 @@ function closeLinkPopover(event: Event) {
 }
 
 function onLinkKey(event: KeyboardEvent) {
+  // Escape closes the larger picture first, and nothing else.
+  if (lightbox.value) return;
+  if (event.key === "Escape" && imageBar.value) {
+    event.stopPropagation();
+    editor.value?.commands.setTextSelection(editor.value.state.selection.to);
+    return;
+  }
   if (event.key === "Escape" && linkPopover.value) {
     event.stopPropagation();
     linkPopover.value = null;
@@ -421,7 +542,7 @@ const toolGroups = computed((): Tool[][] => {
 });
 
 /** The back button takes room from the tools in a narrow panel. */
-const room = computed(() => width.value - (props.narrow ? 40 : 0) - (props.noteId === SCRATCHPAD_ID ? 64 : 0) - 32);
+const room = computed(() => width.value - (props.narrow ? 40 : 0) - (props.noteId === SCRATCHPAD_ID ? 64 : 0) - 64);
 
 const lookVars = computed(() => ({ "--note-font": fontStack(props.look.font), "--note-size": `${sizePx(props.look.size)}px` }));
 const shownGroups = computed(() =>
@@ -484,6 +605,29 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
             <p class="text-muted-foreground px-2 py-1.5 text-xs">{{ noteId === SCRATCHPAD_ID ? t("editor.appliesScratchpad") : t("editor.appliesNotes") }}</p>
           </DropdownMenuContent>
         </DropdownMenu>
+        <DropdownMenu @update:open="refreshImageUsage">
+          <DropdownMenuTrigger as-child>
+            <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="insert-image" :aria-label="t('image.insert')" :title="t('image.insert')">
+              <ImagePlus :stroke-width="1.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" class="min-w-60">
+            <DropdownMenuItem data-testid="image-choose" @select="fileInput?.click()">{{ t("image.choose") }}</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>{{ t("image.quality") }}</DropdownMenuLabel>
+            <DropdownMenuItem v-for="quality in (['optimized', 'original'] as const)" :key="quality" :data-testid="`quality-${quality}`" @select.prevent="store.setImageQuality(quality)">
+              <span class="flex flex-col">
+                <span>{{ t(`image.${quality}`) }}</span>
+                <span class="text-muted-foreground text-xs">{{ t(`image.${quality}Hint`) }}</span>
+              </span>
+              <Check v-if="store.imageQuality.value === quality" class="ml-auto" :stroke-width="1.5" :aria-label="t('editor.on')" />
+            </DropdownMenuItem>
+            <template v-if="imageUsage">
+              <DropdownMenuSeparator />
+              <p class="text-muted-foreground px-2 py-1.5 text-xs" data-testid="image-usage">{{ t("image.usage", { used: formatMegabytes(imageUsage.bytes), total: formatMegabytes(imageUsage.maxBytes) }) }}</p>
+            </template>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <template v-for="(group, index) in shownGroups" :key="index">
           <span class="bg-border mx-1 h-4 w-px flex-none" aria-hidden="true" />
           <Button
@@ -522,7 +666,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         data-testid="save-state"
         :data-state="saveState"
         :title="saveState === 'error' ? saveError : undefined"
-      >{{ statusText(saveState) }}</span>
+      >{{ adding > 0 ? t("image.adding") : statusText(saveState) }}</span>
       <template v-if="noteId === SCRATCHPAD_ID">
         <Button
           variant="ghost"
@@ -564,7 +708,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         <Pin v-else :stroke-width="1.5" />
       </Button>
     </header>
-    <div class="min-h-0 flex-1 overflow-y-auto" :style="lookVars" @scroll.passive="linkPopover = null">
+    <div class="min-h-0 flex-1 overflow-y-auto" :style="lookVars" @scroll.passive="(linkPopover = null), updateImageBar()">
       <div class="mx-auto max-w-[760px] px-4 py-3">
         <input
           v-if="noteId !== SCRATCHPAD_ID"
@@ -585,6 +729,9 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         <EditorContent :editor="editor" />
       </div>
     </div>
+    <input ref="fileInput" type="file" multiple class="hidden" :accept="store.acceptAttribute" data-testid="image-file" @change="onFilePicked" />
+    <ImageBar v-if="imageBar" v-bind="imageBar" @set="setImage" @open="openSelectedImage" @remove="removeSelectedImage" />
+    <ImageLightbox v-if="lightbox" :src="store.blobUrl(lightbox)" @close="lightbox = null" />
     <LinkPopover v-if="linkPopover" v-bind="linkPopover" @open="popoverOpen" @edit="popoverEdit" @remove="popoverRemove" />
     <LinkDialog v-if="linkOpen" :initial="currentLink" @apply="applyLink" @cancel="linkOpen = false" />
   </section>
@@ -592,6 +739,8 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
 
 <style>
 .note-content {
+  /* Contains the pictures the text flows around. */
+  display: flow-root;
   font-family: var(--note-font, inherit);
   font-size: var(--note-size, 14px);
   min-height: 60vh;
@@ -695,6 +844,59 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
   color: var(--primary);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+.note-image {
+  position: relative;
+  display: block;
+  max-width: 100%;
+  margin: 4px 0;
+  border-radius: 6px;
+  line-height: 0;
+}
+.note-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.note-image[data-mode="left"] {
+  float: left;
+  margin: 4px 14px 8px 0;
+}
+.note-image[data-mode="right"] {
+  float: right;
+  margin: 4px 0 8px 14px;
+}
+.note-image-selected {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.note-image-handle {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--primary);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.note-image-selected .note-image-handle {
+  display: block;
+}
+.note-image-missing {
+  min-width: 96px;
+  min-height: 64px;
+  background: var(--muted);
+}
+.note-image-missing img {
+  visibility: hidden;
+  height: 64px;
+}
+.note-image-missing::after {
+  content: "";
 }
 .note-content hr {
   border: none;

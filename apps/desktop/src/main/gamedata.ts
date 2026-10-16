@@ -20,17 +20,25 @@ function partitionDirName(partition: string): string {
 }
 
 /**
- * Deletes what modules stored on disk for one game: settings and documents
- * of every module of every owner, installed or not. Web storage in each
+ * The folders modules keep data in, each laid out `<owner>/<module>/<game>`:
+ * settings and documents, and files (pictures, see blobs.ts).
+ */
+function dataRoots(userData: string, blobRoot = path.join(userData, "module-blobs")): string[] {
+  return [path.join(userData, "module-data"), blobRoot];
+}
+
+/**
+ * Deletes what modules stored on disk for one game: settings, documents and
+ * files of every module of every owner, installed or not. Web storage in each
  * module's browser session is cleared separately by the host.
  */
-export async function deleteModuleData(userData: string, gameId: string): Promise<void> {
+export async function deleteModuleData(userData: string, gameId: string, blobRoot?: string): Promise<void> {
   if (!isGameId(gameId)) throw new Error("invalid game id");
-  const root = path.join(userData, "module-data");
-  const owners = await readdir(root).catch(() => [] as string[]);
-  for (const owner of owners) {
-    const modules = await readdir(path.join(root, owner)).catch(() => [] as string[]);
-    await Promise.all(modules.map((module) => rm(path.join(root, owner, module, gameId), { recursive: true, force: true })));
+  for (const root of dataRoots(userData, blobRoot)) {
+    for (const owner of await readdir(root).catch(() => [] as string[])) {
+      const modules = await readdir(path.join(root, owner)).catch(() => [] as string[]);
+      await Promise.all(modules.map((module) => rm(path.join(root, owner, module, gameId), { recursive: true, force: true })));
+    }
   }
 }
 
@@ -71,17 +79,18 @@ export async function migrateModuleData(userData: string, log: (line: string) =>
   await applyPending(userData, log);
   const ownerOf = (moduleId: string) => (moduleId.startsWith(OFFICIAL_PREFIX) ? OFFICIAL_OWNER : LOCAL_OWNER);
 
-  const dataRoot = path.join(userData, "module-data");
-  for (const name of await readdir(dataRoot).catch(() => [] as string[])) {
-    // Owners never contain a dot and module ids always do.
-    if (!isModuleId(name)) continue;
-    const target = path.join(dataRoot, ownerOf(name), name);
-    if (await exists(target)) {
-      log(`module data of ${name} is already under its owner; the old copy stays in module-data/${name}`);
-      continue;
+  for (const dataRoot of dataRoots(userData)) {
+    for (const name of await readdir(dataRoot).catch(() => [] as string[])) {
+      // Owners never contain a dot and module ids always do.
+      if (!isModuleId(name)) continue;
+      const target = path.join(dataRoot, ownerOf(name), name);
+      if (await exists(target)) {
+        log(`module data of ${name} is already under its owner; the old copy stays in ${path.basename(dataRoot)}/${name}`);
+        continue;
+      }
+      await mkdir(path.dirname(target), { recursive: true });
+      await rename(path.join(dataRoot, name), target);
     }
-    await mkdir(path.dirname(target), { recursive: true });
-    await rename(path.join(dataRoot, name), target);
   }
 
   const partitions = path.join(userData, "Partitions");
@@ -98,27 +107,28 @@ export async function migrateModuleData(userData: string, log: (line: string) =>
   }
 }
 
-/** Every (owner, module) that has settings or documents saved, in any game. */
+/** Every (owner, module) that has settings, documents or files saved, in any game. */
 export async function listModuleData(userData: string): Promise<{ owner: string; moduleId: string }[]> {
-  const root = path.join(userData, "module-data");
-  const found: { owner: string; moduleId: string }[] = [];
-  for (const owner of await readdir(root).catch(() => [] as string[])) {
-    if (!isOwnerId(owner)) continue;
-    for (const moduleId of await readdir(path.join(root, owner)).catch(() => [] as string[])) {
-      if (isModuleId(moduleId)) found.push({ owner, moduleId });
+  const found = new Map<string, { owner: string; moduleId: string }>();
+  for (const root of dataRoots(userData)) {
+    for (const owner of await readdir(root).catch(() => [] as string[])) {
+      if (!isOwnerId(owner)) continue;
+      for (const moduleId of await readdir(path.join(root, owner)).catch(() => [] as string[])) {
+        if (isModuleId(moduleId)) found.set(`${owner}/${moduleId}`, { owner, moduleId });
+      }
     }
   }
-  return found;
+  return [...found.values()];
 }
 
 /**
- * Deletes the settings and documents one owner's module saved, in every game,
+ * Deletes the settings, documents and files one owner's module saved, in every game,
  * and answers with the browser sessions it had, for the host to clear (their
  * folders go with the next start's cleanup, see applyPending).
  */
 export async function deleteModuleDataOf(userData: string, owner: string, moduleId: string): Promise<string[]> {
   if (!isOwnerId(owner) || !isModuleId(moduleId)) throw new Error("invalid owner or module id");
-  await rm(path.join(userData, "module-data", owner, moduleId), { recursive: true, force: true });
+  for (const root of dataRoots(userData)) await rm(path.join(root, owner, moduleId), { recursive: true, force: true });
   const partitions: string[] = [];
   for (const name of await readdir(path.join(userData, "Partitions")).catch(() => [] as string[])) {
     const match = /^module:([a-z0-9]+):([a-z0-9.-]+)@([a-z0-9-]+)$/.exec(safeDecode(name));
@@ -178,19 +188,21 @@ async function applyPending(userData: string, log: (line: string) => void): Prom
   const pending = await readPending(userData);
   const partitions = path.join(userData, "Partitions");
   for (const { moduleId, to } of pending.moves ?? []) {
-    const from = path.join(userData, "module-data", LOCAL_OWNER, moduleId);
-    for (const game of await readdir(from).catch(() => [] as string[])) {
-      if (!isGameId(game)) continue;
-      const target = path.join(userData, "module-data", to, moduleId, game);
-      if (await exists(target)) {
-        log(`${moduleId} already has data in ${game}; its local data there stays`);
-        continue;
+    for (const root of dataRoots(userData)) {
+      const from = path.join(root, LOCAL_OWNER, moduleId);
+      for (const game of await readdir(from).catch(() => [] as string[])) {
+        if (!isGameId(game)) continue;
+        const target = path.join(root, to, moduleId, game);
+        if (await exists(target)) {
+          log(`${moduleId} already has data in ${game}; its local data there stays`);
+          continue;
+        }
+        await mkdir(path.dirname(target), { recursive: true });
+        await rename(path.join(from, game), target);
       }
-      await mkdir(path.dirname(target), { recursive: true });
-      await rename(path.join(from, game), target);
+      // Gone unless a game kept its local data.
+      await rmdir(from).catch(() => undefined);
     }
-    // Gone unless a game kept its local data.
-    await rmdir(from).catch(() => undefined);
     for (const name of await readdir(partitions).catch(() => [] as string[])) {
       const match = /^module:local:([a-z0-9.-]+)@([a-z0-9-]+)$/.exec(safeDecode(name));
       if (!match || match[1] !== moduleId || !isGameId(match[2])) continue;
