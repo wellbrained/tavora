@@ -1,17 +1,57 @@
 {
   "name": "@tavora/pack",
   "version": "0.1.0",
-  "description": "Packs a Tavora module into a signed zip, and reads and checks such zips for the installer.",
-  "private": true,
+  "description": "Packs a Tavora module into a zip signed with your publisher key, links the key to your Tavora account, and reads and checks such zips.",
   "type": "module",
+  "keywords": [
+    "tavora",
+    "module",
+    "pack",
+    "sign",
+    "ed25519"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wellbrained/tavora.git",
+    "directory": "packages/pack"
+  },
+  "homepage": "https://docs.mytavora.app/guide/getting-started#share-the-module",
+  "bugs": "https://github.com/wellbrained/tavora/issues",
+  "bin": {
+    "tavora-pack": "./dist/cli.js"
+  },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p ."
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.12"
   },
   "dependencies": {
-    "@tavora/module-schema": "workspace:*"
+    "@tavora/module-schema": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^22.20.5"

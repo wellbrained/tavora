@@ -203,7 +203,7 @@ test("a developer chooses a public name and links a publisher key with tavora-pa
 
     // The real pack command signs the code with a key on this PC and sends only its public half.
     const linked = await new Promise<{ status: number | null; out: string }>((resolve) => {
-      const child = spawn(process.execPath, ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", path.resolve(desktopDir, "../../packages/pack/src/cli.ts"), "link", code, "--key", keyFile, "--api", apiUrl]);
+      const child = spawn(process.execPath, ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "--conditions=source", path.resolve(desktopDir, "../../packages/pack/src/cli.ts"), "link", code, "--key", keyFile, "--api", apiUrl]);
       let out = "";
       child.stdout.on("data", (chunk: Buffer) => (out += chunk));
       child.stderr.on("data", (chunk: Buffer) => (out += chunk));

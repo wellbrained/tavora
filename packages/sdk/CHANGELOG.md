@@ -4,6 +4,7 @@ What changed in `@tavora/sdk` and the bridge protocol it speaks, newest first. B
 
 ## 0.2.2
 
+- `MIN_TAVORA`: the oldest Tavora that has everything this SDK version offers, for `minTavora` in your manifest.
 - Panel types: a manifest may list `panels`, named tools such as Inventory and Build planner that players add, dock and copy on their own, all sharing the module's saved content and permissions. `panel.type` says which one a page runs as; the handshake carries it as `panel.type` (Tavora 0.17.12). Set `minTavora` to `0.17.12` or newer when you use them: an older Tavora refuses the `panels` field.
 
 ## 0.2.1

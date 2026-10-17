@@ -2,19 +2,27 @@
 
 A Tavora module is a web page that runs in a sandboxed panel inside Tavora Desktop, next to a game. It talks to the host through `@tavora/sdk`, and it ships as a folder with a [`tavora.module.json`](../reference/manifest.md) manifest and its built files.
 
-::: warning Not released yet
-`@tavora/sdk` 0.2.0 speaks [bridge protocol v1](../reference/protocol.md); see the [changelog](../reference/changelog.md). It is not published to npm yet, and nothing here is a stable API before Tavora's first public release. For now, build modules inside the [Tavora repository](https://github.com/wellbrained/tavora) and depend on the SDK as `"@tavora/sdk": "workspace:*"`.
+::: warning Preview
+`@tavora/sdk` speaks [bridge protocol v1](../reference/protocol.md). Until Tavora's first public release it can still change in ways that break modules; the [changelog](../reference/changelog.md) marks each such change and says which Tavora a version needs.
 :::
 
-## Start from an example
-
-The same small module is built three ways: [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module), [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module) and [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module). A module that offers several panels is shown in the [panel types example](https://github.com/wellbrained/tavora/tree/main/examples/panels-module) (see [Panel types](../reference/manifest.md#panel-types)). Copy one into `examples/`, give it its own `id` in `tavora.module.json`, and run:
+## Make a project
 
 ```sh
-pnpm install
-pnpm build                              # SDK, host and example modules
-pnpm --filter @tavora/desktop start     # opens Tavora with the example modules
+npm create @tavora/module
 ```
+
+It asks for a folder, the module's name, its id (`publisher.module-name`) and a template: vanilla TypeScript, Vue or React. The project builds with Vite and depends on `@tavora/sdk` and `@tavora/pack`; its manifest already sets [`minTavora`](../reference/manifest.md) to the Tavora that SDK needs. pnpm works too: `pnpm create @tavora/module`.
+
+```sh
+cd my-module
+npm install
+npm run dev     # rebuilds on every change
+```
+
+In Tavora, open Settings > Modules, choose **Add a development folder** and pick the project folder. The module appears in Add module, and its panels reload by themselves when `npm run dev` rebuilds.
+
+To add the SDK to a project of your own instead: `npm install @tavora/sdk`, and follow [Build the module](#build-the-module). The same small module is also built three ways in Tavora's repository: [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module), [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module) and [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module). A module that offers several panels is shown in the [panel types example](https://github.com/wellbrained/tavora/tree/main/examples/panels-module) (see [Panel types](../reference/manifest.md#panel-types)).
 
 ## Talk to the host
 
@@ -93,7 +101,8 @@ What needs the player's permission (`permissions.network` and `permissions.conne
 Pack the built module into a zip signed with your publisher key:
 
 ```sh
-pnpm pack-module examples/vanilla-module
+npm run build
+npm run zip     # the same as npx tavora-pack .
 ```
 
 The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`) and the icon, plus `tavora.signature.json`. Your sources and `node_modules` stay out. Use `--out` to choose the file name.
@@ -108,11 +117,13 @@ Players see who signed a module as the key's fingerprint, unless the key is link
 
 1. In Tavora, sign in under Settings > Account and choose a **developer name** under Module developer. It is public, unique (case, spaces, dots, dashes and underscores don't count) and can change once every 30 days.
 2. Press **Link a publisher key**. Tavora shows a one-time code, valid for 10 minutes.
-3. Run the command it shows, with the key you sign with:
+3. Run the command it shows in your module's folder, with the key you sign with:
 
    ```sh
-   pnpm tavora-pack link ABCD-EFGH
+   npx tavora-pack link ABCD-EFGH
    ```
+
+   Outside a module project, `npx @tavora/pack link ABCD-EFGH` does the same.
 
    It signs the code with your publisher key and sends the signature and the key's public half to Tavora's service, which checks the signature before it links the key. The secret key never leaves your PC. Pass `--key` if you sign with another key file.
 

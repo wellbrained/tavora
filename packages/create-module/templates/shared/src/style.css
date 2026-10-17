@@ -1,0 +1,17 @@
+/* Tavora gives the page its fonts and the look of buttons and fields. The colours come from
+   Tavora's theme as CSS variables (main.ts sets them), so the module matches every theme. */
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+}
+main {
+  padding: 16px;
+}
+h1 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+#status {
+  color: var(--muted-foreground);
+}
