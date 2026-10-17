@@ -12,11 +12,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * Tavora's window is a Chromium one, shown only once its page has painted (show: false until
- * ready-to-show). The "could not start" message box is a #32770 dialog, so it never counts.
- * Not the title: on CI .NET's MainWindowTitle read "" while the welcome screen was up.
+ * Tavora's window: a Chromium one titled "Tavora", shown only once its page has painted (show: false
+ * until ready-to-show). The "could not start" message box is a #32770 dialog and never counts, nor
+ * does the untitled Chromium window Tavora also shows. .NET's MainWindowTitle picked that untitled
+ * one on CI, so every window is listed (windows.ps1).
  */
 const APP_WINDOW_CLASS = "Chrome_WidgetWin_1";
+const APP_WINDOW_TITLE = "Tavora";
 
 /** The visible top-level windows of every process with this exe's name: [{ pid, cls, title }] (Windows only). */
 function visibleWindows(exe) {
@@ -63,7 +65,7 @@ export async function checkStart(exe, { allowHandover = false, timeoutMs = 120_0
         throw new Error(`Tavora.exe quit with exit code ${exit} before showing its window.\n${stderr.trim()}`);
       }
       const windows = visibleWindows(exe);
-      if (windows.some((w) => w.cls === APP_WINDOW_CLASS)) {
+      if (windows.some((w) => w.cls === APP_WINDOW_CLASS && w.title === APP_WINDOW_TITLE)) {
         console.log(`Window up after ${Math.round((Date.now() - deadline + timeoutMs) / 1000)} s:\n${describeWindows(windows)}`);
         return "window";
       }
