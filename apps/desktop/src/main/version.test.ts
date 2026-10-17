@@ -17,7 +17,7 @@ describe("app version", () => {
     expect(PATCH_NOTES[0]!.version).toBe(version);
   });
 
-  it("is also the repository's version (tracker shows the root package.json), so a bump changes both", () => {
+  it("is also the repository's version (tools read the root package.json), so a bump changes both", () => {
     const root = JSON.parse(readFileSync(new URL("../../../../package.json", import.meta.url), "utf8")) as { version?: string };
     expect(root.version).toBe(version);
   });

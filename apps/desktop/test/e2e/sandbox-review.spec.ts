@@ -1,4 +1,4 @@
-// Gate tests added by the sandbox review of 2026-10-16 (docs/threat-model.md,
+// Gate tests added by the sandbox review of 2026-10-16 (the threat model,
 // "Sandbox review 2026-10-16"). A hostile module tries to hurt the host in ways
 // isolation.spec.ts does not cover.
 

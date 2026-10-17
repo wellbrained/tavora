@@ -1,4 +1,4 @@
-// Publisher signatures for module zips (docs/decisions.md, publisher row of
+// Publisher signatures for module zips (the decision log, publisher row of
 // 2026-10-16). The publisher is an Ed25519 key; the owner of a module's data
 // is the fingerprint of that key. The zip carries tavora.signature.json with
 // the public key, a SHA-256 of every other file and a signature over them.

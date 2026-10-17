@@ -2,7 +2,7 @@
 
 Local-first, second-monitor gaming companion for Windows and Linux. Each game gets its own dockable workspace; community modules are self-contained web bundles that run inside a permission-checked host.
 
-**Status:** Milestone C, the local player MVP, is done. Next, before Browser: polish the current features and styling, and add an online game database. Milestone C includes: Ctrl+K search and Settings search, the official Notes and To-Dos modules, the game library (built-in list and custom games, favorites, folders, Trash) on a collapsible game rail, plus everything from Milestone B (manifest v1, bridge protocol v1, `@tavora/sdk` 0.1.0, example modules in vanilla TypeScript, React and Vue). Nothing here is a released or stable API yet. See [docs/threat-model.md](docs/threat-model.md) for what the host guarantees and how it is tested.
+**Status:** Milestone C, the local player MVP, is done. Next, before Browser: polish the current features and styling, and add an online game database. Milestone C includes: Ctrl+K search and Settings search, the official Notes and To-Dos modules, the game library (built-in list and custom games, favorites, folders, Trash) on a collapsible game rail, plus everything from Milestone B (manifest v1, bridge protocol v1, `@tavora/sdk` 0.1.0, example modules in vanilla TypeScript, React and Vue). Nothing here is a released or stable API yet. See the [security model](https://docs.mytavora.app/guide/security) for what the host guarantees.
 
 ## Layout
 
@@ -22,8 +22,6 @@ Local-first, second-monitor gaming companion for Windows and Linux. Each game ge
 | `apps/desktop/test/fixtures/hostile-module` | Deliberately hostile module used by the gate tests |
 | `apps/docs` | Developer docs for [docs.mytavora.app](https://docs.mytavora.app/) (VitePress): guide, [manifest](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md), and generated SDK API |
 | `brand/logo` | Vector logo SVGs: master, lockup, emblem, wordmark and flame ([README](brand/logo/README.md)) |
-| `docs/design/` | [Style guide](docs/design/style-guide.md): tokens, type, components, accessibility and theme rules |
-| `docs/` | Threat model, decision log and [backlog](docs/backlog.md) |
 
 The marketing site at [mytavora.app](https://mytavora.app/) lives in its separate `tavora-website` repository.
 
@@ -51,7 +49,7 @@ Output lives in `apps/desktop/release/`. Builds include Notes, To-Dos and the ex
 
 ### Releasing
 
-Installed apps update only when a **minor** version (x.y.0) is released. While a feature is being worked on, PRs raise only the patch number and publish nothing; the minor number goes up once a big feature is complete, in a PR wellbrained marks with the `feature-complete` label (the Version check refuses a minor raise without it), and 1.0.0 is the first public release. To release, raise the minor number in `apps/desktop/package.json` (and the same version in the root `package.json`, which tracker shows; a test keeps them equal), fold the patch-notes entries since the last release into one entry for it (`apps/desktop/src/shared/patch-notes.ts`), merge that through a PR, then on the maintainer's PC:
+Installed apps update only when a **minor** version (x.y.0) is released. While a feature is being worked on, PRs raise only the patch number and publish nothing; the minor number goes up once a big feature is complete, in a PR the maintainer marks with the `feature-complete` label (the Version check refuses a minor raise without it), and 1.0.0 is the first public release. To release, raise the minor number in `apps/desktop/package.json` (and the same version in the root `package.json`; a test keeps them equal), fold the patch-notes entries since the last release into one entry for it (`apps/desktop/src/shared/patch-notes.ts`), merge that through a PR, then on the maintainer's PC:
 
 ```sh
 pnpm release --dry-run   # checks, tests, e2e and the installer build; stops before the upload
@@ -69,13 +67,13 @@ pnpm dev
 
 Opens Tavora without building it. Changes to the host UI (`apps/desktop/src/renderer`) show up instantly with hot reload, keeping the app's state. Changes to the main process or preloads (`src/main`, `src/preload`, `src/shared`) restart Tavora by itself after a second. Closing Tavora or pressing Ctrl+C ends it. The dev server uses port 4000; `pnpm dev --port <n>` picks another.
 
-Development has its own persistent profile (`%APPDATA%\@tavora\desktop-dev` on Windows); the installed app keeps `%APPDATA%\@tavora\desktop`. This also applies when tracker starts dev. The first dev run starts empty; no installed data is copied. `TAVORA_USER_DATA` can still select an explicit development/test profile. Decided 2026-10-17 to keep development and installed state separate.
+Development has its own persistent profile (`%APPDATA%\@tavora\desktop-dev` on Windows); the installed app keeps `%APPDATA%\@tavora\desktop`. The first dev run starts empty; no installed data is copied. `TAVORA_USER_DATA` can still select an explicit development/test profile.
 
 Modules run from their built files, so run `pnpm build` once first; after changing a module, rebuild it and reload its panel. Development mode only works from the source tree: packaged builds never load the dev server.
 
 ## Checks
 
-Tests run locally. GitHub Actions only runs them for release tags (`v*`) or when started by hand. The docs site at docs.mytavora.app is served by Caddy on the Hetzner server; publish it with `pnpm --filter @tavora/docs deploy:server` once `apps/docs` has no uncommitted changes (builds on this PC, uploads the static files, keeps the previous release for rollback). The docs are their own project: the root `pnpm build`, `pnpm typecheck` and `pnpm check` skip `@tavora/docs`, and changes elsewhere in the repo never block a docs deploy.
+Tests run locally. GitHub Actions only runs them for release tags (`v*`) or when started by hand. The docs site at docs.mytavora.app is served by Caddy on the project server; publish it with `pnpm --filter @tavora/docs deploy:server` once `apps/docs` has no uncommitted changes (builds on this PC, uploads the static files, keeps the previous release for rollback). The docs are their own project: the root `pnpm build`, `pnpm typecheck` and `pnpm check` skip `@tavora/docs`, and changes elsewhere in the repo never block a docs deploy.
 
 ```sh
 pnpm check       # everything below, in order

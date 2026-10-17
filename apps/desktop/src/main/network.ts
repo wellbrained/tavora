@@ -1,5 +1,5 @@
 // network.fetch: web requests the main process makes for a module, to hosts the player granted
-// (docs/decisions.md, module grants row of 2026-10-16; N1–N7 in docs/threat-model.md). The module's
+// (the decision log, module grants row of 2026-10-16; N1–N7 in the threat model). The module's
 // own page still has no network at all (G4); this is the only way out, and every hop is checked.
 import { lookup as dnsLookup, type LookupAddress } from "node:dns";
 import http from "node:http";

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs once on the Hetzner server (uploaded with tavora-updates.caddy into a folder only root can write, such as /root/tavora-incoming/setup; never /tmp): adds the
+# Runs once on the server (uploaded with tavora-updates.caddy into a folder only root can write, such as /root/tavora-incoming/setup; never /tmp): adds the
 # updates.mytavora.app DNS record, creates /srv/tavora-updates and installs the Caddy
 # site file. Safe to run again: it only changes what is missing, and restores the
 # previous Caddyfile if the new config does not validate. Prints no secrets.

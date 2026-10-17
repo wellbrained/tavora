@@ -13,7 +13,7 @@ export default defineConfig({
   sitemap: { hostname: "https://docs.mytavora.app" },
   lastUpdated: true,
   vite: { server: { host: "127.0.0.1", port: 4001, strictPort: true } },
-  // Tavora ships one dark theme for now (see docs/design/style-guide.md).
+  // Tavora ships one dark theme for now (see the style guide).
   appearance: "force-dark",
   head: [
     ["meta", { name: "theme-color", content: "#171412" }],
@@ -28,7 +28,13 @@ export default defineConfig({
       { text: "mytavora.app", link: "https://mytavora.app/" },
     ],
     sidebar: [
-      { text: "Guide", items: [{ text: "Getting started", link: "/guide/getting-started" }] },
+      {
+        text: "Guide",
+        items: [
+          { text: "Getting started", link: "/guide/getting-started" },
+          { text: "Security model", link: "/guide/security" },
+        ],
+      },
       {
         text: "Reference",
         items: [

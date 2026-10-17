@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Interactive, for wellbrained to run on the server (ssh -t): sets one of the service's
+# Interactive, for the maintainer to run on the server (ssh -t): sets one of the service's
 # settings in /srv/tavora-api/shared/production.env without touching the others,
 # and restarts the service.
 #

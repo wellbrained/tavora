@@ -1,5 +1,5 @@
 /* Tavora default theme for the official modules, matching the host UI
-   (apps/desktop/src/renderer/styles.css and docs/design/style-guide.md).
+   (apps/desktop/src/renderer/styles.css and the style guide).
    These values are only the starting point: connectModule() replaces them
    with the tokens the host sends through ui.getTheme, so a later theme
    reaches the modules without rebuilding them. */

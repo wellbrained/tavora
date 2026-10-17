@@ -7,13 +7,13 @@ import { AUTHORIZE_TIMEOUT_MS, RpcClient, RpcError, type RpcEvents } from "./dis
 import { imageUrl, isSnowflake, MAX_IMAGE, parseScopes, parseUser, pngDataUrl } from "./discord-parse";
 import type { DiscordGame, DiscordLast, DiscordSecrets, DiscordToken } from "./discord-store";
 
-// The Discord connector (decisions.md, module grants row of 2026-10-16, point 8):
+// The Discord connector (decision log, module grants row of 2026-10-16, point 8):
 // the connection to the Discord desktop app on this PC, Tavora's Discord sign-in
 // (PKCE, no Client Secret) and its token. Modules granted the `discord` connector
 // send a fixed list of RPC commands and subscribe to a fixed list of events
 // through it; what Discord answers goes to them as it came, and they never see
 // the token. Nothing goes through Tavora's service; audio never goes through
-// Tavora at all. See docs/threat-model.md (D1–D9).
+// Tavora at all. See the threat model (D1–D9).
 
 /**
  * Tavora's application in the Discord Developer Portal. Its id is public. The

@@ -4,7 +4,7 @@
  * Every version bump of apps/desktop/package.json adds an entry here; a test
  * keeps the two in step. Write for players, in plain friendly words. At 1.0 these
  * entries are replaced by a "1.0 release catalog" of all features, and a fresh
- * changelog starts (docs/decisions.md).
+ * changelog starts (the decision log).
  */
 export interface PatchNote {
   /** major.minor.patch, as in apps/desktop/package.json. */
@@ -23,7 +23,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     date: "2026-10-17",
     title: "Separate development state and clearer startup errors",
     notes: [
-      "Development runs, including those started through tracker, keep their own games, settings and module data, separate from installed Tavora.",
+      "Development runs keep their own games, settings and module data, separate from installed Tavora.",
       "If Tavora can't start, it now tells you why in a message instead of closing without a word, and writes a small log you can send to whoever helps you.",
     ],
   },

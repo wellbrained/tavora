@@ -239,7 +239,7 @@ describe("email addresses", () => {
   });
 
   it("masks an address in the change notice", () => {
-    expect(maskEmail("nik@example.com")).toBe("n•••@example.com");
+    expect(maskEmail("alex@example.com")).toBe("a•••@example.com");
   });
 });
 
@@ -256,19 +256,19 @@ describe("test inbox page", () => {
 
 describe("profile", () => {
   const picture = Buffer.from(encodePng(256, 256, new Uint8Array(256 * 256 * 4).fill(200))).toString("base64");
-  const profile = (updatedAt: string, extra: Record<string, unknown> = {}) => ({ name: "wellbrained", initials: "NK", picture: null, updatedAt, ...extra });
+  const profile = (updatedAt: string, extra: Record<string, unknown> = {}) => ({ name: "Alex", initials: "AX", picture: null, updatedAt, ...extra });
 
   it("starts empty, keeps what is sent, and keeps the newer of two", async () => {
     const { call, signIn } = setup();
     const token = await signIn("me@example.com");
     expect(await (await call("GET", "/profile", undefined, token)).json()).toEqual({ profile: null });
     const put = await call("PUT", "/profile", profile("2026-10-16T10:00:00.000Z", { picture }), token);
-    expect(await put.json()).toEqual({ profile: { name: "wellbrained", initials: "NK", picture, updatedAt: "2026-10-16T10:00:00.000Z" } });
+    expect(await put.json()).toEqual({ profile: { name: "Alex", initials: "AX", picture, updatedAt: "2026-10-16T10:00:00.000Z" } });
     // An older change (a PC that was offline) loses, and the answer says what the account has.
     const older = await call("PUT", "/profile", profile("2026-10-16T09:00:00.000Z", { name: "Old" }), token);
-    expect(await older.json()).toMatchObject({ profile: { name: "wellbrained", picture } });
-    await call("PUT", "/profile", profile("2026-10-16T11:00:00.000Z", { name: "wellbrained", picture: null }), token);
-    expect(await (await call("GET", "/profile", undefined, token)).json()).toMatchObject({ profile: { name: "wellbrained", picture: null } });
+    expect(await older.json()).toMatchObject({ profile: { name: "Alex", picture } });
+    await call("PUT", "/profile", profile("2026-10-16T11:00:00.000Z", { name: "Sam", picture: null }), token);
+    expect(await (await call("GET", "/profile", undefined, token)).json()).toMatchObject({ profile: { name: "Sam", picture: null } });
   });
 
   it("never takes a time later than now", async () => {
@@ -354,7 +354,7 @@ describe("Brevo", () => {
 });
 
 describe("Discord login", () => {
-  const NIK = { id: "123456789012345678", name: "nik" };
+  const ALEX = { id: "123456789012345678", name: "alex" };
   const OTHER = { id: "223456789012345678", name: "other" };
   const VERIFIER = "v".repeat(43);
   /** A pretend Discord: each code stands for one Discord user; "bad" is refused. */
@@ -366,7 +366,7 @@ describe("Discord login", () => {
     },
   });
   const setupDiscord = () => {
-    const context = setup({ discord: pretend({ codenik00000: NIK, codeother000: OTHER, codenikrenamed: { ...NIK, name: "nik2" } }) });
+    const context = setup({ discord: pretend({ codenik00000: ALEX, codeother000: OTHER, codenikrenamed: { ...ALEX, name: "nik2" } }) });
     /** Connects a Discord login as the app does: a code to the account's address, then a fresh Discord sign-in. */
     const connect = async (token: string, code: string) => {
       await context.call("POST", "/discord/code", {}, token);
@@ -378,15 +378,15 @@ describe("Discord login", () => {
   it("asks before creating a Discord-only account, then signs the same login in again", async () => {
     const { call } = setupDiscord();
     const first = (await (await call("POST", "/discord/sign-in", { code: "codenik00000", verifier: VERIFIER, os: "windows" })).json()) as { status: string; ticket: string };
-    expect(first).toMatchObject({ status: "no-account", discord: { name: "nik" } });
+    expect(first).toMatchObject({ status: "no-account", discord: { name: "alex" } });
     const created = (await (await call("POST", "/discord/create", { ticket: first.ticket, os: "windows" })).json()) as Record<string, unknown>;
-    expect(created).toMatchObject({ status: "created", account: { email: null, discord: { name: "nik" } } });
+    expect(created).toMatchObject({ status: "created", account: { email: null, discord: { name: "alex" } } });
     // The ticket is spent.
     expect(await (await call("POST", "/discord/create", { ticket: first.ticket })).json()).toMatchObject({ reason: "discord-expired" });
     // Signing in again finds it, and a new username is picked up; the id is never shown.
     const again = (await (await call("POST", "/discord/sign-in", { code: "codenikrenamed", verifier: VERIFIER })).json()) as Record<string, unknown>;
     expect(again).toMatchObject({ status: "signed-in", account: { discord: { name: "nik2" } } });
-    expect(JSON.stringify(again)).not.toContain(NIK.id);
+    expect(JSON.stringify(again)).not.toContain(ALEX.id);
   });
 
   it("lets a held Discord login expire after 10 minutes", async () => {
@@ -400,7 +400,7 @@ describe("Discord login", () => {
     const { call, signIn, store, connect } = setupDiscord();
     const mine = await signIn("me@example.com");
     const theirs = await signIn("them@example.com");
-    expect(await (await connect(mine, "codenik00000")).json()).toMatchObject({ account: { email: "me@example.com", discord: { name: "nik" } } });
+    expect(await (await connect(mine, "codenik00000")).json()).toMatchObject({ account: { email: "me@example.com", discord: { name: "alex" } } });
     expect(await (await connect(theirs, "codenik00000")).json()).toMatchObject({ reason: "discord-taken" });
     expect(store.accountByEmail("them@example.com")?.discord).toBeNull();
     // The Discord sign-in now reaches the email account.
@@ -419,7 +419,7 @@ describe("Discord login", () => {
     expect((await call("POST", "/email/remove/code", {}, token)).status).toBe(202);
     const code = lastCode();
     expect(await (await call("POST", "/email/remove", { code: code === "000000" ? "000001" : "000000" }, token)).json()).toMatchObject({ reason: "wrong-code" });
-    expect(await (await call("POST", "/email/remove", { code: lastCode() }, token)).json()).toMatchObject({ account: { email: null, discord: { name: "nik" } } });
+    expect(await (await call("POST", "/email/remove", { code: lastCode() }, token)).json()).toMatchObject({ account: { email: null, discord: { name: "alex" } } });
     expect(await (await call("POST", "/discord/remove/code", {}, token)).json()).toMatchObject({ reason: "last-method" });
     expect(await (await call("POST", "/discord/remove", { code: "123456" }, token)).json()).toMatchObject({ reason: "last-method" });
     expect(await (await call("POST", "/email/remove/code", {}, token)).json()).toMatchObject({ reason: "no-email" });
@@ -437,7 +437,7 @@ describe("Discord login", () => {
     expect(await (await call("POST", "/discord", { code: "codeother000", verifier: VERIFIER, emailCode: sent === "000000" ? "000001" : "000000" }, token)).json()).toMatchObject({ reason: "wrong-code" });
     expect(store.accountByDiscord(OTHER.id)).toBeNull();
     // With it, the owner connects; another Discord login never replaces the connected one.
-    expect(await (await call("POST", "/discord", { code: "codenik00000", verifier: VERIFIER, emailCode: sent }, token)).json()).toMatchObject({ account: { discord: { name: "nik" } } });
+    expect(await (await call("POST", "/discord", { code: "codenik00000", verifier: VERIFIER, emailCode: sent }, token)).json()).toMatchObject({ account: { discord: { name: "alex" } } });
     expect(await (await call("POST", "/discord/code", {}, token)).json()).toMatchObject({ reason: "discord-connected" });
     expect(await (await call("POST", "/discord", { code: "codeother000", verifier: VERIFIER, emailCode: "123456" }, token)).json()).toMatchObject({ reason: "discord-connected" });
     // Disconnecting needs a code to the address, not the Discord login itself: the owner can always remove one
@@ -446,12 +446,12 @@ describe("Discord login", () => {
     expect(inbox.mails()[0]).toMatchObject({ to: "me@example.com", subject: "Confirm disconnecting Discord from Tavora" });
     const removal = lastCode();
     expect(await (await call("POST", "/discord/remove", { code: removal === "000000" ? "000001" : "000000" }, token)).json()).toMatchObject({ reason: "wrong-code" });
-    expect(store.accountByDiscord(NIK.id)?.email).toBe("me@example.com");
+    expect(store.accountByDiscord(ALEX.id)?.email).toBe("me@example.com");
     expect(await (await call("POST", "/discord/remove", { code: removal }, token)).json()).toMatchObject({ account: { email: "me@example.com", discord: null } });
   });
 
   it("does not connect Discord on a day without mail, when no code can reach the owner", async () => {
-    const { call, signIn, store, clock } = setup({ discord: pretend({ codenik00000: NIK }), mailDailyLimit: 21 });
+    const { call, signIn, store, clock } = setup({ discord: pretend({ codenik00000: ALEX }), mailDailyLimit: 21 });
     const token = await signIn("me@example.com");
     // The rest of the day's allowance goes to other players.
     for (let i = 0; i < 20; i++) store.countMail(new Date(clock.now).toISOString().slice(0, 10));
@@ -463,7 +463,7 @@ describe("Discord login", () => {
     const { ticket } = (await (await call("POST", "/discord/sign-in", { code: "codenik00000", verifier: VERIFIER })).json()) as { ticket: string };
     const { token } = (await (await call("POST", "/discord/create", { ticket })).json()) as { token: string };
     await call("POST", "/email/code", { email: "me@example.com" }, token);
-    expect(await (await call("POST", "/email", { email: "me@example.com", code: lastCode() }, token)).json()).toMatchObject({ account: { email: "me@example.com", discord: { name: "nik" } } });
+    expect(await (await call("POST", "/email", { email: "me@example.com", code: lastCode() }, token)).json()).toMatchObject({ account: { email: "me@example.com", discord: { name: "alex" } } });
     expect(inbox.mails()).toHaveLength(1);
   });
 
@@ -474,7 +474,7 @@ describe("Discord login", () => {
     expect(await (await call("POST", "/delete/code", {}, token)).json()).toMatchObject({ reason: "no-email" });
     expect(await (await call("POST", "/delete/discord", { code: "codeother000", verifier: VERIFIER }, token)).json()).toMatchObject({ reason: "discord-mismatch" });
     expect((await call("POST", "/delete/discord", { code: "codenik00000", verifier: VERIFIER }, token)).status).toBe(204);
-    expect(store.accountByDiscord(NIK.id)).toBeNull();
+    expect(store.accountByDiscord(ALEX.id)).toBeNull();
     expect((await call("GET", "", undefined, token)).status).toBe(401);
   });
 
@@ -498,11 +498,11 @@ describe("Discord client", () => {
       fetch: (async (url: string, init: RequestInit) => {
         calls.push({ url, body: String(init.body ?? ""), auth: new Headers(init.headers).get("authorization") });
         if (url.endsWith("/oauth2/token")) return Response.json({ access_token: "tok", scope: "identify" });
-        if (url.endsWith("/users/@me")) return Response.json({ id: "123456789012345678", username: "nik\u202e", email: "never@example.com" });
+        if (url.endsWith("/users/@me")) return Response.json({ id: "123456789012345678", username: "alex\u202e", email: "never@example.com" });
         return new Response(null, { status: 200 });
       }) as unknown as typeof fetch,
     });
-    expect(await client.identify("codenik00000", VERIFIER)).toEqual({ id: "123456789012345678", name: "nik" });
+    expect(await client.identify("codenik00000", VERIFIER)).toEqual({ id: "123456789012345678", name: "alex" });
     expect(calls.map((call) => call.url)).toEqual(["https://discord.test/api/oauth2/token", "https://discord.test/api/users/@me", "https://discord.test/api/oauth2/token/revoke"]);
     const exchange = new URLSearchParams(calls[0]!.body);
     expect(Object.fromEntries(exchange)).toEqual({ client_id: "1560388687370387610", grant_type: "authorization_code", code: "codenik00000", redirect_uri: "http://127.0.0.1:53682/discord", code_verifier: VERIFIER });
