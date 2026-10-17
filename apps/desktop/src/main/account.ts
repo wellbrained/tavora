@@ -106,6 +106,7 @@ const REASONS: Record<string, MessageKey> = {
   "discord-refused": "account.error.discordRefused",
   "discord-unreachable": "account.error.discordUnreachable",
   "discord-taken": "account.error.discordTaken",
+  "discord-connected": "account.error.discordConnected",
   "discord-expired": "account.error.discordExpired",
   "discord-mismatch": "account.error.discordMismatch",
   "last-method": "account.error.lastMethod",
@@ -232,14 +233,26 @@ export class AccountClient {
     await this.updated(await this.call("POST", "/discord", login, true));
   }
 
+  /** Disconnects Discord by a fresh sign-in with that same Discord login, so a stolen sign-in cannot swap in its own. */
   async disconnectDiscord(): Promise<void> {
     this.ensure(true);
-    await this.updated(await this.call("DELETE", "/discord", undefined, true));
+    const login = await this.discord();
+    await this.updated(await this.call("POST", "/discord/remove", login, true));
   }
 
-  async removeEmail(): Promise<void> {
+  /** Removing the email needs a code sent to it, so a stolen sign-in cannot cut the owner out. */
+  async sendRemoveEmailCode(): Promise<void> {
     this.ensure(true);
-    await this.updated(await this.call("DELETE", "/email", undefined, true));
+    await this.call("POST", "/email/remove/code", { language: this.options.language() }, true);
+    this.pending = { kind: "remove-email" };
+    this.changed();
+  }
+
+  async removeEmail(code: string): Promise<void> {
+    if (this.pending?.kind !== "remove-email") throw new PlayerError("account.error.noCode");
+    const answer = await this.call("POST", "/email/remove", { code }, true);
+    this.pending = null;
+    await this.updated(answer);
   }
 
   /** Deletes the account by a fresh sign-in with its Discord login. Everything on the PC stays. */

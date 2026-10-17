@@ -393,8 +393,8 @@ export class ModuleView {
   /**
    * The discord connector as this panel uses it. Any call but image() makes the panel a user, which
    * keeps the connection running until the page goes; what the connector tells reaches only the page
-   * that asked, and only while the grant lasts. Signing in and joining or leaving a channel need a
-   * click or key press in the page first, one per click.
+   * that asked, and only while the grant lasts. Signing in, joining or leaving a channel, and muting or
+   * deafening the player need a click or key press in the page first, one per click.
    */
   private discordFor(bridge: () => BridgeSession): BridgeContext["discord"] {
     const connector = this.options.discord;
@@ -421,7 +421,10 @@ export class ModuleView {
         await connector.allowControl();
       },
       command: async (command, args) => {
-        if (command === "SELECT_VOICE_CHANNEL") this.takeGesture("SELECT_VOICE_CHANNEL");
+        // Joining or leaving, and muting or deafening the player (which can switch their microphone back on),
+        // only follow a click or key press (D8). A person's volume streams while a slider is dragged, and only
+        // changes what the player hears, so it needs none.
+        if (command === "SELECT_VOICE_CHANNEL" || command === "SET_VOICE_SETTINGS") this.takeGesture(command);
         await use();
         return connector.command(command, args);
       },

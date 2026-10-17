@@ -20,10 +20,14 @@ $remote = 'root@100.92.36.114'
 $options = @('-i', $key, '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=15')
 & tar.exe -czf $archive -C $dist .
 if ($LASTEXITCODE -ne 0) { throw 'Static archive failed.' }
+# Staged in root's own home (mode 0700), never in /tmp, so no other user on the server can swap what root runs.
+$incoming = '/root/tavora-incoming/docs'
 try {
-  & scp.exe @options $archive (Join-Path $docs 'deploy\activate-docs.sh') "${remote}:/tmp/"
+  & ssh.exe @options $remote "rm -rf $incoming && install -d -m 700 /root/tavora-incoming $incoming"
+  if ($LASTEXITCODE -ne 0) { throw 'Could not prepare the upload folder.' }
+  & scp.exe @options $archive (Join-Path $docs 'deploy\activate-docs.sh') "${remote}:${incoming}/"
   if ($LASTEXITCODE -ne 0) { throw 'Upload failed.' }
-  & ssh.exe @options $remote "bash /tmp/activate-docs.sh $release"
+  & ssh.exe @options $remote "bash $incoming/activate-docs.sh $release"
   if ($LASTEXITCODE -ne 0) { throw 'Deployment failed; inspect server output. Previous release is retained.' }
 } finally {
   Remove-Item $archive -ErrorAction SilentlyContinue

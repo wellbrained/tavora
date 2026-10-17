@@ -18,13 +18,14 @@ if [[ "$existing" != 0 ]]; then
   exit 0
 fi
 
-code="$(curl -sS -o /tmp/tavora-api-dns-result.json -w '%{http_code}' "${auth[@]}" -X POST "$api/zones/$zone/rrsets" \
+result="$(mktemp)"
+code="$(curl -sS -o "$result" -w '%{http_code}' "${auth[@]}" -X POST "$api/zones/$zone/rrsets" \
   -d '{"name":"api","type":"CNAME","ttl":3600,"records":[{"value":"mytavora.app.","comment":"Tavora game search service"}]}')"
 echo "create status $code"
 if [[ "$code" != 201 && "$code" != 200 ]]; then
-  python3 -c 'import json; d=json.load(open("/tmp/tavora-api-dns-result.json")); print(d.get("error", d))' || true
-  rm -f /tmp/tavora-api-dns-result.json
+  python3 -c 'import json, sys; d=json.load(open(sys.argv[1])); print(d.get("error", d))' "$result" || true
+  rm -f "$result"
   exit 1
 fi
-rm -f /tmp/tavora-api-dns-result.json
+rm -f "$result"
 echo 'Added api.mytavora.app CNAME -> mytavora.app'

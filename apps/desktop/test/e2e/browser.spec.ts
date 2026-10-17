@@ -33,6 +33,9 @@ const PAGES: Record<string, (request: IncomingMessage) => string> = {
   "/opener": () => `<title>Opener</title>
     <a id="blank" href="${publicUrl("/page")}" target="_blank" style="position:fixed;inset:0;display:block">open</a>
     <script>window.openNow = () => window.open(${JSON.stringify(publicUrl("/popup"))}) === null;</script>`,
+  "/burst": () => `<title>Burst</title>
+    <div id="burst" style="position:fixed;inset:0"></div>
+    <script>document.getElementById("burst").addEventListener("click", () => { for (let i = 0; i < 5; i++) window.open(${JSON.stringify(publicUrl("/page"))} + "?n=" + i); });</script>`,
   "/video": () => `<title>Video</title>
     <div id="player" style="position:fixed;inset:0;background:#123"></div>
     <script>document.getElementById("player").addEventListener("click", () => document.getElementById("player").requestFullscreen());</script>`,
@@ -222,6 +225,13 @@ test("new windows open as a Browser tab only after a click, and downloads are re
   // Both are tabs of one group; only the shown tab draws its toolbar.
   await expect(page.locator('[data-panel-tab][data-module-id="tavora.browser"]')).toHaveCount(2);
   expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
+  // One click opens one tab, however many windows the page asks for.
+  await go(page, publicUrl("/burst"));
+  await waitForPage(app, publicUrl("/burst"));
+  await clickPage(app, publicUrl("/burst"));
+  await waitForPage(app, publicUrl("/page?n=0"));
+  await page.waitForTimeout(500);
+  await expect(page.locator('[data-panel-tab][data-module-id="tavora.browser"]')).toHaveCount(3);
 
   // B5: a download is refused and the player is told.
   const downloads = await app.evaluate(({ app }) => app.getPath("downloads"));

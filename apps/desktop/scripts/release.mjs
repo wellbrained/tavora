@@ -133,13 +133,14 @@ if (!dryRun) {
 }
 
 step(`Publishing ${version} to ${feed}`);
-const incoming = "/tmp/tavora-updates-incoming";
+// Staged in root's own home (mode 0700), never in /tmp: another user on the server could otherwise
+// create the folder first and swap the installer or the script root runs (security review, finding 6).
+const incoming = "/root/tavora-incoming/updates";
 const script = path.join(desktop, "deploy", "tavora-updates-publish.sh");
 const ssh = (command) => run("ssh.exe", [...sshOptions, remote, command]);
-ssh(`rm -rf ${incoming} && mkdir -p ${incoming}`);
-run("scp.exe", [...sshOptions, ...files, `${remote}:${incoming}/`]);
-run("scp.exe", [...sshOptions, script, `${remote}:/tmp/`]);
-ssh(`bash /tmp/tavora-updates-publish.sh ${version}${allowPatch ? " allow-patch" : ""}`);
+ssh(`rm -rf ${incoming} && install -d -m 700 /root/tavora-incoming ${incoming}`);
+run("scp.exe", [...sshOptions, ...files, script, `${remote}:${incoming}/`]);
+ssh(`bash ${incoming}/tavora-updates-publish.sh ${version}${allowPatch ? " allow-patch" : ""}`);
 
 step("Tagging");
 git("tag", "-a", `v${version}`, built, "-m", `Tavora ${version}`);

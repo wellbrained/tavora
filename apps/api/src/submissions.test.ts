@@ -155,12 +155,12 @@ describe("submit", () => {
 });
 
 describe("approve, deny and takedown", () => {
-  it("publishes an approved offer under the game's names, at once, and drops the other offers for that game", () => {
+  it("publishes an approved offer under the game's own name only, at once, and drops the other offers for that game", () => {
     offer({ name: "Diablo 4" });
     offer({ icon: b64(png(32, 5)), name: "Diablo 4" });
     const first = state.listPending()[0]!;
     expect(submissions.approve(first.sha256)).toEqual({ ok: true, id: "diablo-iv" });
-    expect(store.list()).toEqual([expect.objectContaining({ id: "diablo-iv", names: ["Diablo IV", "Diablo 4"], sha256: first.sha256 })]);
+    expect(store.list()).toEqual([expect.objectContaining({ id: "diablo-iv", names: ["Diablo IV"], sha256: first.sha256 })]);
     expect(store.file("diablo-iv")).toEqual(state.approvedBytes("diablo-iv"));
     expect(state.pendingCount()).toBe(0);
   });

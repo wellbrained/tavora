@@ -181,8 +181,8 @@ function startDelete() {
         <p class="text-muted-foreground mt-1 text-sm">{{ t("account.methods.hint") }}</p>
       </div>
       <SettingRow :label="t('account.methods.email')" :description="signedIn.email ?? t('account.methods.emailNone')">
-        <div v-if="!changing && pending?.kind !== 'change-email'" class="flex flex-none gap-2">
-          <Button v-if="signedIn.email && signedIn.discord" variant="ghost" :disabled="busy" data-testid="account-remove-email" @click="run({ type: 'account-email-remove' })">{{ t("account.email.remove") }}</Button>
+        <div v-if="!changing && pending?.kind !== 'change-email' && pending?.kind !== 'remove-email'" class="flex flex-none gap-2">
+          <Button v-if="signedIn.email && signedIn.discord" variant="ghost" :disabled="busy" data-testid="account-remove-email" @click="run({ type: 'account-email-remove-code' })">{{ t("account.email.remove") }}</Button>
           <Button variant="secondary" data-testid="account-change-email" @click="(changing = true), (newEmail = '')">{{ signedIn.email ? t("account.email.change") : t("account.email.add") }}</Button>
         </div>
       </SettingRow>
@@ -209,13 +209,27 @@ function startDelete() {
         </div>
       </form>
 
+      <!-- Removing the email needs the code sent to it, so a stolen sign-in cannot cut the owner out. -->
+      <form
+        v-if="pending?.kind === 'remove-email'"
+        class="flex flex-col gap-3 border-b py-4"
+        @submit.prevent="codeReady && run({ type: 'account-email-remove', code: cleanCode })"
+      >
+        <span class="text-muted-foreground">{{ t("account.email.removeCodeSent", { email: signedIn.email ?? "" }) }}</span>
+        <div class="flex gap-2">
+          <Input v-model="code" class="w-40 tracking-widest tabular-nums" inputmode="numeric" autocomplete="one-time-code" maxlength="7" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
+          <Button type="submit" :disabled="busy || !codeReady" data-testid="account-confirm-remove-email">{{ t("account.email.removeConfirm") }}</Button>
+          <Button type="button" variant="ghost" :disabled="busy" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
+        </div>
+      </form>
+
       <SettingRow
         v-if="view?.discordLogin || signedIn.discord"
         :label="t('account.methods.discord')"
         :description="signedIn.discord ? t('account.methods.discordConnected', { name: signedIn.discord.name }) : t('account.methods.discordNone')"
         data-testid="account-discord"
       >
-        <Button v-if="signedIn.discord && signedIn.email" variant="secondary" :disabled="busy" data-testid="account-discord-disconnect" @click="run({ type: 'account-discord-disconnect' })">{{ t("account.discord.disconnect") }}</Button>
+        <Button v-if="signedIn.discord && signedIn.email" variant="secondary" :disabled="busy" data-testid="account-discord-disconnect" @click="runDiscord({ type: 'account-discord-disconnect' })">{{ t("account.discord.disconnect") }}</Button>
         <Button v-else-if="!signedIn.discord" variant="secondary" :disabled="busy" data-testid="account-discord-connect" @click="runDiscord({ type: 'account-discord-connect' })">{{ t("account.discord.connect") }}</Button>
       </SettingRow>
 

@@ -63,13 +63,15 @@ export async function discordLogin(options: DiscordLoginOptions): Promise<Discor
     let settled = false;
     const server = createServer((request, response) => {
       const url = new URL(request.url ?? "/", `http://127.0.0.1:${port}`);
+      // Every answer closes its connection: a browser that kept one open would send the next sign-in's
+      // return to this listener after it stopped, and that sign-in would wait in vain.
       if (request.method !== "GET" || url.pathname !== "/discord") {
-        response.writeHead(404).end();
+        response.writeHead(404, { connection: "close" }).end();
         return;
       }
       const code = url.searchParams.get("code");
       const ok = url.searchParams.get("state") === state && code !== null && /^[A-Za-z0-9]{10,100}$/.test(code);
-      response.writeHead(ok ? 200 : 400, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'" });
+      response.writeHead(ok ? 200 : 400, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'", connection: "close" });
       response.end(page(ok ? PAGE[language].done : PAGE[language].failed, language));
       // A return without our state is someone else's (or an old tab): not ours to act on.
       if (url.searchParams.get("state") !== state) return;
@@ -82,6 +84,7 @@ export async function discordLogin(options: DiscordLoginOptions): Promise<Discor
       settled = true;
       clearTimeout(timer);
       server.close();
+      server.closeIdleConnections();
       if (current?.server === server) current = null;
       if (error) reject(error);
       else resolve(result!);
