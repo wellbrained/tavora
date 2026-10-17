@@ -21,7 +21,7 @@ watch(state, (next) => {
   setLanguage(next.language.resolved);
 });
 
-/** The Discord panel's connection and voice channel; it has its own channel because speaking changes often. */
+/** Settings > Integrations > Discord: the Discord connector's sign-in. */
 export const discord = shallowRef<DiscordView | null>(null);
 api.onDiscord((next) => (discord.value = next));
 void api.getDiscord().then((initial) => {

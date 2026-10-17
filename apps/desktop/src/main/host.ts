@@ -92,12 +92,12 @@ import { isWebUrl, siteOfUrl } from "./browser-url";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, discordModule, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import { AiUsageConnector } from "./ai-usage";
 import { readClaudeEmail } from "./ai-usage-claude";
 import { readCodexUsage } from "./ai-usage-codex";
-import { DiscordConnection, DISCORD_CLIENT_ID } from "./discord";
+import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
 import { AccountClient, deviceOs, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
 import { discordLogin } from "./discord-login";
@@ -236,9 +236,8 @@ export class Host {
   private readonly openedFrom = new Map<string, { instanceId: string; background: boolean }>();
   /** What every browser session is made safe with; built when the first Browser panel opens. */
   private browserHooks: BrowserSessionHooks | undefined;
-  /** Open Discord panels. They have no view of their own: the host UI draws them. */
-  private readonly discordPanels = new Set<string>();
-  private readonly discord: DiscordConnection;
+  /** The Discord connector: Tavora's Discord sign-in and the connection to the Discord app, for modules granted it. */
+  private readonly discord: DiscordConnector;
   /** The AI Usage connector: the AI accounts, read for modules granted it. */
   private readonly aiUsage: AiUsageConnector;
   /** The player's Tavora account; the sign-in never leaves the main process. */
@@ -299,7 +298,7 @@ export class Host {
     });
     this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
-    this.discord = Host.discordConnection(options, (view) => {
+    this.discord = Host.discordConnector(options, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:discord", view);
     });
     this.aiUsage = Host.aiUsageService(options, (view) => {
@@ -355,7 +354,6 @@ export class Host {
     const modules = await discoverModules(Host.moduleSources(options), moduleProblems);
     applyOwners(modules, await realUserModulesDir(options), await readOwnerRecords(userData));
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
-    modules.set(DISCORD_MODULE_ID, discordModule(app.getVersion()));
     const moduleInfo = await describeModules(userModulesDir(options), modules);
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
@@ -391,6 +389,7 @@ export class Host {
     host.moduleData = await listModuleData(userData, host.files.root());
     host.grants = await GrantStore.load(userData);
     await host.moveAiUsagePanelData();
+    await host.moveDiscordPanelData();
     // Native menus, dialogs and scrollbars follow the theme's mode.
     host.syncNativeTheme();
     await host.account.init();
@@ -443,6 +442,29 @@ export class Host {
     }
   }
 
+  /**
+   * The built-in Discord panel (before 0.16.11) kept the channel to rejoin and the server each game
+   * remembers next to the sign-in in discord.json. They go to the Discord module once, without
+   * replacing anything the module saved itself: the channel to its settings shared by every game
+   * (`last`), each game's server to its settings in that game (`server`). The sign-in stays.
+   */
+  private async moveDiscordPanelData(): Promise<void> {
+    try {
+      const legacy = await this.discord.legacyPanelData();
+      if (!legacy) return;
+      const settings = this.data.appSettings(OFFICIAL_OWNER, DISCORD_MODULE_ID);
+      if (legacy.last && (await settings.get("last")) === null) await settings.set("last", { ...legacy.last });
+      for (const [gameId, game] of Object.entries(legacy.games)) {
+        if (!this.library.games[gameId]) continue;
+        const store = this.data.get(OFFICIAL_OWNER, DISCORD_MODULE_ID, gameId).settings;
+        if ((await store.get("server")) === null) await store.set("server", { ...game });
+      }
+      await this.discord.forgetLegacyPanelData();
+    } catch (error) {
+      console.error("[tavora] moving the Discord panel's settings failed", error);
+    }
+  }
+
   /** The daily copy of the player's data, made a little after start so it never slows it. */
   private backupSoon(): void {
     setTimeout(() => {
@@ -482,7 +504,6 @@ export class Host {
     const modules = await discoverModules(Host.moduleSources(this.options), problems);
     applyOwners(modules, await realUserModulesDir(this.options), await readOwnerRecords(this.options.userData));
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
-    modules.set(DISCORD_MODULE_ID, discordModule(app.getVersion()));
     this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
     this.moduleProblems = problems;
     this.modules = modules;
@@ -847,7 +868,6 @@ export class Host {
       this.views.clear();
       this.viewsByContents.clear();
       this.browsersByContents.clear();
-      this.discordPanels.clear();
       this.discord.dispose();
     });
   }
@@ -1130,22 +1150,6 @@ export class Host {
         return this.discord.connectNow();
       case "discord-sign-out":
         return this.discord.signOut();
-      case "discord-join":
-        return this.discord.join(action.channelId);
-      case "discord-leave":
-        return this.discord.leave();
-      case "discord-voice":
-        return this.discord.setVoice({ ...(action.mute === undefined ? {} : { mute: action.mute }), ...(action.deaf === undefined ? {} : { deaf: action.deaf }) });
-      case "discord-user-voice":
-        return this.discord.setUserVoice(action.userId, { ...(action.volume === undefined ? {} : { volume: action.volume }), ...(action.mute === undefined ? {} : { mute: action.mute }) });
-      case "discord-allow-control":
-        return this.discord.allowControl();
-      case "discord-refresh":
-        return this.discord.reload();
-      case "discord-game-remember":
-        return this.discord.rememberGame(action.gameId, action.remember);
-      case "discord-game-server":
-        return this.discord.setGameServer(action.gameId, action.guildId);
       case "save-layout":
         return this.saveLayout(action.layout);
       case "apply-layout-template":
@@ -1607,11 +1611,11 @@ export class Host {
 
   // ── Discord ──────────────────────────────────────────────────────────
 
-  private static discordConnection(options: HostOptions, onChange: (view: ReturnType<DiscordConnection["view"]>) => void): DiscordConnection {
+  private static discordConnector(options: HostOptions, onChange: (view: ReturnType<DiscordConnector["view"]>) => void): DiscordConnector {
     const file = path.join(options.userData, "discord.json");
     const test = options.discord;
     const encryptor = Host.encryptor(options);
-    return new DiscordConnection({
+    return new DiscordConnector({
       clientId: DISCORD_CLIENT_ID,
       connect: (events) => RpcClient.connect(DISCORD_CLIENT_ID, events, test ? [test.ipcPath] : undefined),
       ...(test ? { tokenUrl: test.tokenUrl } : {}),
@@ -1758,11 +1762,6 @@ export class Host {
   /** openedAt is when the player asked for the panel; its time to a loaded page is measured from there. */
   private createView(record: InstanceRecord, game: TavoraGame, openedAt?: number): void {
     if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, game);
-    if (record.moduleId === DISCORD_MODULE_ID) {
-      this.discordPanels.add(record.instanceId);
-      void this.discord.setWanted(true);
-      return;
-    }
     let measured = openedAt === undefined;
     const module = this.modules.get(record.moduleId)!;
     const view = new ModuleView({
@@ -1785,6 +1784,7 @@ export class Host {
       connectors: () => this.connectorsOf(record.moduleId),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
       aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
+      discord: this.discord,
       ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
       onStatus: (status) => {
         if (!measured && status === "ready") {
@@ -1914,10 +1914,6 @@ export class Host {
   }
 
   private destroyView(instanceId: string): void {
-    if (this.discordPanels.delete(instanceId)) {
-      if (this.discordPanels.size === 0) void this.discord.setWanted(false);
-      return;
-    }
     const view = this.views.get(instanceId);
     if (!view) return;
     this.views.delete(instanceId);
@@ -1928,7 +1924,7 @@ export class Host {
   }
 
   private closeAllViews(): void {
-    for (const instanceId of [...this.views.keys(), ...this.discordPanels]) this.destroyView(instanceId);
+    for (const instanceId of [...this.views.keys()]) this.destroyView(instanceId);
     this.panelBounds.clear();
   }
 
@@ -2094,8 +2090,6 @@ export class Host {
       panels: workspace.instances.map((record) => {
         const view = this.views.get(record.instanceId);
         const name = this.modules.get(record.moduleId)!.manifest.name;
-        // A Discord panel is drawn by the host UI itself, so it is ready at once.
-        if (this.discordPanels.has(record.instanceId)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: "ready" as const };
         const openedFrom = this.openedFrom.get(record.instanceId);
         if (!(view instanceof BrowserPanel)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: view?.status ?? "loading" };
         const browser = view.state;
@@ -2150,7 +2144,6 @@ export class Host {
   }
 
   private pushState(): void {
-    this.discord.setGame(this.screen === "game" ? this.gameId : null);
     if (!this.window.isDestroyed()) this.window.webContents.send("host:state", this.viewState());
   }
 

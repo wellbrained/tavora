@@ -1,7 +1,6 @@
 import { isConnector, isGameId, isModuleId, isNetworkHost, isOwnerId, MAX_NETWORK_HOSTS, type Connector } from "@tavora/module-schema";
 import type { BrowserCommand, HostAction, SteamImportGame } from "../shared/host-api";
 import { isSite, MAX_ADDRESS } from "./browser-url";
-import { isSnowflake } from "./discord-voice";
 import { INSTANCE_ID } from "./ids";
 import { parseLayout } from "./layout";
 import { isGridSize, layoutTemplate } from "../shared/layout-templates";
@@ -234,29 +233,6 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("list", "site") && (a.list === "shared" || a.list === "adblock-off") && isSite(a.site) ? { type: a.type, list: a.list, site: a.site } : null;
     case "clear-browser-data":
       return only("scope") && (a.scope === "game" || a.scope === "shared") ? { type: a.type, scope: a.scope } : null;
-    case "discord-leave":
-    case "discord-allow-control":
-    case "discord-refresh":
-      return only() ? { type: a.type } : null;
-    case "discord-voice": {
-      const ok = (value: unknown) => value === undefined || typeof value === "boolean";
-      if (!only("mute", "deaf") || !ok(a.mute) || !ok(a.deaf) || (a.mute === undefined && a.deaf === undefined)) return null;
-      return { type: a.type, ...(a.mute === undefined ? {} : { mute: a.mute as boolean }), ...(a.deaf === undefined ? {} : { deaf: a.deaf as boolean }) };
-    }
-    case "discord-user-voice": {
-      const volume = a.volume;
-      const mute = a.mute;
-      const volumeOk = volume === undefined || (typeof volume === "number" && Number.isInteger(volume) && volume >= 0 && volume <= 200);
-      const muteOk = mute === undefined || typeof mute === "boolean";
-      if (!only("userId", "volume", "mute") || !isSnowflake(a.userId) || !volumeOk || !muteOk || (volume === undefined && mute === undefined)) return null;
-      return { type: a.type, userId: a.userId, ...(volume === undefined ? {} : { volume: volume as number }), ...(mute === undefined ? {} : { mute: mute as boolean }) };
-    }
-    case "discord-game-remember":
-      return only("gameId", "remember") && isGameId(a.gameId) && typeof a.remember === "boolean" ? { type: a.type, gameId: a.gameId, remember: a.remember } : null;
-    case "discord-game-server":
-      return only("gameId", "guildId") && isGameId(a.gameId) && isSnowflake(a.guildId) ? { type: a.type, gameId: a.gameId, guildId: a.guildId } : null;
-    case "discord-join":
-      return only("channelId") && isSnowflake(a.channelId) ? { type: a.type, channelId: a.channelId } : null;
     case "discord-connect":
     case "discord-sign-out":
       return only() ? { type: a.type } : null;

@@ -8,6 +8,10 @@ import {
   type Events,
   type AiUsageAccountInfo,
   type AiUsageReading,
+  type DiscordCommand,
+  type DiscordEventName,
+  type DiscordResult,
+  type DiscordState,
   type HandshakeResult,
   type NetworkResponse,
   type TavoraGame,
@@ -15,6 +19,7 @@ import {
   type TavoraViewport,
 } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
+import { discordCommand, discordSubscription } from "./discord-commands";
 import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
 
 /** The parts of Electron's MessagePortMain the bridge uses. */
@@ -41,6 +46,20 @@ export interface BridgeContext {
   appSettings: ModuleStore;
   /** The ai-usage connector (ai-usage.ts); only reached with the `aiUsage` capability. */
   aiUsage: { accounts(): Promise<AiUsageAccountInfo[]>; read(accountId: string): Promise<AiUsageReading> };
+  /**
+   * The discord connector (discord.ts) for this panel; only reached with the `discord` capability. Commands
+   * and subscriptions arrive checked (discord-commands.ts); connect, allowControl and SELECT_VOICE_CHANNEL
+   * throw PERMISSION_DENIED unless the panel just got a click or key press.
+   */
+  discord: {
+    state(): Promise<DiscordState>;
+    connect(): Promise<void>;
+    allowControl(): Promise<void>;
+    command(command: DiscordCommand, args: Record<string, unknown>): Promise<DiscordResult>;
+    subscribe(event: DiscordEventName, channelId: string | null): Promise<void>;
+    unsubscribe(event: DiscordEventName, channelId: string | null): Promise<void>;
+    image(url: string): Promise<string | null>;
+  };
   panelState: PanelStateStore;
   /** What the player has granted this module right now; asked on every gated call, so a revoke takes effect at once. */
   capabilities(): ReadonlySet<Capability>;
@@ -180,6 +199,45 @@ const handlers = new Map<string, Handler>([
       const accountId = required(object(params), "accountId");
       if (typeof accountId !== "string" || accountId.length === 0 || accountId.length > 64) throw new HostError("INVALID_PARAMS", "params.accountId must be an account id");
       return s.context.aiUsage.read(accountId);
+    },
+  ],
+
+  ["discord.state", (s, params) => (needs(s, "discord", "discord.state"), noParams(params), s.context.discord.state())],
+  ["discord.connect", async (s, params) => (needs(s, "discord", "discord.connect"), noParams(params), await s.context.discord.connect(), null)],
+  ["discord.allowControl", async (s, params) => (needs(s, "discord", "discord.allowControl"), noParams(params), await s.context.discord.allowControl(), null)],
+  [
+    "discord.command",
+    (s, params) => {
+      needs(s, "discord", "discord.command");
+      const { command, args } = discordCommand(object(params));
+      return s.context.discord.command(command, args);
+    },
+  ],
+  [
+    "discord.subscribe",
+    async (s, params) => {
+      needs(s, "discord", "discord.subscribe");
+      const { event, channelId } = discordSubscription(object(params));
+      await s.context.discord.subscribe(event, channelId);
+      return null;
+    },
+  ],
+  [
+    "discord.unsubscribe",
+    async (s, params) => {
+      needs(s, "discord", "discord.unsubscribe");
+      const { event, channelId } = discordSubscription(object(params));
+      await s.context.discord.unsubscribe(event, channelId);
+      return null;
+    },
+  ],
+  [
+    "discord.image",
+    (s, params) => {
+      needs(s, "discord", "discord.image");
+      const url = required(object(params), "url");
+      if (typeof url !== "string" || url.length === 0 || url.length > 300) throw new HostError("INVALID_PARAMS", "params.url must be an address on cdn.discordapp.com");
+      return s.context.discord.image(url);
     },
   ],
 

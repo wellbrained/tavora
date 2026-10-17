@@ -3,7 +3,6 @@
 // so this only shows while the view is hidden: a still image of the module
 // during menus and drags, or the module's name and state. A Browser panel
 // also gets its toolbar here, above the page, and its start and error pages.
-// Discord panels have no native view: they are drawn here in full.
 // A module whose update asks for more gets a bar above its view to review it.
 import type { IDockviewPanelProps } from "dockview-vue";
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -12,7 +11,6 @@ import { ShieldAlert } from "@lucide/vue";
 import { act, dialog, frozen, needsGrant, state } from "../../host";
 import { t } from "../../i18n";
 import BrowserToolbar from "./BrowserToolbar.vue";
-import DiscordPanel from "./DiscordPanel.vue";
 import { DOCK } from "./dock-context";
 
 const props = defineProps<{ params: IDockviewPanelProps }>();
@@ -57,9 +55,8 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
     </Button>
   </div>
   <div ref="element" class="relative min-h-0 w-full flex-1 overflow-hidden" :data-testid="`panel-content-${id}`">
-    <DiscordPanel v-if="panel?.moduleId === 'tavora.discord'" />
     <img
-      v-else-if="image"
+      v-if="image"
       :src="image"
       alt=""
       class="absolute top-0 left-0 max-w-none"
