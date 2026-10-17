@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Settings > Integrations > Discord: the Discord connector. Tavora's sign-in to the Discord app on
-// this PC, and the modules allowed to use it, each revocable (decisions.md, module grants row of
+// this PC, and the modules allowed to use it, each revocable (decision log, module grants row of
 // 2026-10-16). There is no secret to enter: the main process signs in with PKCE and keeps the
 // sign-in encrypted; none of it comes to this page or to a module.
 import { computed } from "vue";

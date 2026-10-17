@@ -1,4 +1,4 @@
-# Builds the game search service on this PC and publishes it to the Hetzner server
+# Builds the game search service on this PC and publishes it to the server
 # (systemd unit tavora-api, 127.0.0.1:4010, behind Caddy at api.mytavora.app).
 # Needs a real dataset: run `pnpm --filter @tavora/api dataset` first. Only apps/api
 # has to be committed; other changes in the repository do not block a deploy.
@@ -24,8 +24,11 @@ if (-not (Test-Path $bundle)) { throw 'Build produced no server.mjs.' }
 $release = "$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))-$revision"
 $staging = Join-Path $env:TEMP "tavora-api-$release"
 $archive = Join-Path $env:TEMP "tavora-api-$release.tar.gz"
-$key = 'D:\Server\vpn ssh-key-2026-10-05.key'
-$remote = 'root@100.64.0.1'
+# The server and SSH key come from the maintainer's environment: TAVORA_DEPLOY_HOST (user@host) and
+# TAVORA_DEPLOY_SSH_KEY (the private key's path).
+$key = $env:TAVORA_DEPLOY_SSH_KEY
+$remote = $env:TAVORA_DEPLOY_HOST
+if (-not $key -or -not $remote) { throw 'Set TAVORA_DEPLOY_HOST and TAVORA_DEPLOY_SSH_KEY first.' }
 New-Item -ItemType Directory -Path $staging | Out-Null
 try {
   Copy-Item $bundle (Join-Path $staging 'server.mjs')

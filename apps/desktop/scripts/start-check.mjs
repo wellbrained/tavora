@@ -4,7 +4,7 @@
 //
 //   node scripts/start-check.mjs <Tavora.exe> [--allow-handover]
 //
-// --allow-handover: a quick exit 0 passes too. Next to a running Tavora (wellbrained's `pnpm dev`
+// --allow-handover: a quick exit 0 passes too. Next to a running Tavora (a development `pnpm dev`
 // shares the data folder) a second one hands over to it and quits; the start gates ran
 // before that, the window did not.
 import { spawn, spawnSync } from "node:child_process";

@@ -14,7 +14,7 @@ The cropped files keep the original coordinates in their `viewBox`, so all five 
 
 Usage notes:
 
-- The dark swooshes inside the flame are transparent, so the logo only reads correctly on dark backgrounds. Follow the [style guide](../../docs/design/style-guide.md#spacing-shape-icons-and-logo): never recolour, stretch or outline it, and never place it on a light background.
+- The dark swooshes inside the flame are transparent, so the logo only reads correctly on dark backgrounds. Never recolour, stretch or outline it, and never place it on a light background.
 - This is a measured approximation of the raster, not a pixel copy. Edges stay within 1 px of the original, and the average color error is under 1 level per RGB channel. resvg and Cairo render it with small antialiasing differences.
 - Each stone has two faces split by one curved crease, plus a thin highlight along its top edge. This layout was approved on 2026-10-14.
 

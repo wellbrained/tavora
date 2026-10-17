@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Settings > Integrations > AI usage: the AI Usage connector. The Claude and Codex accounts, by
 // the folder of the CLI profile that holds each login, and the modules allowed to read them, each
-// revocable (decisions.md, module grants row of 2026-10-16). Logins stay in those folders; the main
+// revocable (decision log, module grants row of 2026-10-16). Logins stay in those folders; the main
 // process reads them and none of it comes to this page or to a module.
 import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";

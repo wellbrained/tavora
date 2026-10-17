@@ -1,4 +1,4 @@
-// Module grants (docs/decisions.md, module grants row of 2026-10-16): the player's stored yes to
+// Module grants (the decision log, module grants row of 2026-10-16): the player's stored yes to
 // what a module asks for in `permissions`. Kept in grants.json in the data folder, outside every
 // module's own folder, for the module's owner (publisher) and id, with the version that was granted.
 // A grant only covers what the module's current manifest still asks for, and every gated call

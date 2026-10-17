@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs on the Hetzner server: unpacks an uploaded docs build into a new release,
+# Runs on the server: unpacks an uploaded docs build into a new release,
 # switches /srv/tavora-docs/current to it and rolls back if the site stops answering.
 set -euo pipefail
 release="${1:-}"

@@ -1,4 +1,4 @@
-// Browser panel gate tests (docs/threat-model.md, B1 to B10). Web pages are
+// Browser panel gate tests (the threat model, B1 to B10). Web pages are
 // served by a local test server; host resolver rules give it "public" names,
 // so a page can be public and still be served from this machine.
 

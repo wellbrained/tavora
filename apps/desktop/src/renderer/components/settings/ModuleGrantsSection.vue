@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Settings > Integrations > Websites for modules: every module the player allowed to reach websites,
-// with what it may reach, and taking that back (decisions.md, module grants row of 2026-10-16).
+// with what it may reach, and taking that back (decision log, module grants row of 2026-10-16).
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { confirmAction, gamesUsing, listOf, state, submitAction } from "../../host";

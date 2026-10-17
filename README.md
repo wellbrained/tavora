@@ -51,7 +51,7 @@ Game workspaces and module data are stored on your PC. On Windows, installed Tav
 
 Online features make their own connections: game search and accounts use Tavora's service; game icons can come from this PC, Steam and Tavora's icon service; Browser pages connect to the sites you open. Game search and icon fetching have switches in Settings.
 
-Module pages run in a sandbox. The host validates their requests, scopes stored data by publisher, module and game, and checks granted capabilities on every call. Network grants name the allowed hosts; Discord and AI Usage use dedicated host connectors. An installable module does not get arbitrary access to your files, processes or account credentials. See the [threat model](docs/threat-model.md) for the precise boundaries and accepted limits.
+Module pages run in a sandbox. The host validates their requests, scopes stored data by publisher, module and game, and checks granted capabilities on every call. Network grants name the allowed hosts; Discord and AI Usage use dedicated host connectors. An installable module does not get arbitrary access to your files, processes or account credentials. See the [security model](https://docs.mytavora.app/guide/security) for the precise boundaries and known limits.
 
 ## Run from source
 
@@ -71,7 +71,7 @@ pnpm dev
 - Official modules are built in watch mode; a successful rebuild restarts Tavora to load them.
 - Example modules use their built files. Rebuild an example after editing it.
 
-**Development and installed Tavora have separate persistent state.** On Windows, dev uses `%APPDATA%\@tavora\desktop-dev`; the installed app keeps `%APPDATA%\@tavora\desktop`. This applies to tracker's dev button too. The first dev run starts empty; existing installed data is not copied. `TAVORA_USER_DATA` can select an explicit development/test profile.
+**Development and installed Tavora have separate persistent state.** On Windows, dev uses `%APPDATA%\@tavora\desktop-dev`; the installed app keeps `%APPDATA%\@tavora\desktop`. The first dev run starts empty; existing installed data is not copied. `TAVORA_USER_DATA` can select an explicit development/test profile.
 
 To open the compiled source build without watchers:
 
@@ -117,10 +117,10 @@ The SDK and packaging tools currently live in this repository and are not publis
 | `modules/` | Notes, To-Dos, Whiteboard, Discord, AI Usage, UI Playground and shared UI code |
 | `examples/` | Vanilla, React and Vue module examples, plus a theme starter |
 | `themes/` | Tavora, Hearthwood and Nightfall theme packages |
-| `docs/` | Decisions, threat model, backlog, design guidance and screenshots |
+| `docs/screenshots` | Screenshots used in this README |
 | `brand/` | Tavora logo sources and exported brand assets |
 
-The marketing website is maintained in the separate `tavora-website` repository. Product decisions live in [docs/decisions.md](docs/decisions.md); future work lives in [docs/backlog.md](docs/backlog.md).
+The marketing website is maintained in the separate `tavora-website` repository.
 
 ## Checks and releases
 
@@ -136,7 +136,7 @@ Electron tests need a display and must run as a normal user with Chromium's sand
 
 GitHub **Checks** runs typechecking, unit tests, builds, and a Windows install/start check on pull requests and pushes to `main`. The full Electron suite also runs on release tags, or on a manual workflow run when selected. `pnpm check` runs it locally. The root checks and builds exclude `apps/docs`; the docs site has its own build/deploy commands.
 
-Deployed app changes raise the patch version. A minor bump waits until the owner declares a feature complete; minor changes in PRs require the `feature-complete` label. Docs, CI and tooling-only changes keep the app version. Root and desktop versions must match, with a corresponding entry in `apps/desktop/src/shared/patch-notes.ts`.
+Deployed app changes raise the patch version. A minor bump needs the `feature-complete` label on the PR. Docs, CI and tooling-only changes keep the app version. Root and desktop versions must match, with a corresponding entry in `apps/desktop/src/shared/patch-notes.ts`.
 
 On the maintainer's PC, release from clean, up-to-date `main` after pushing and passing GitHub Checks:
 

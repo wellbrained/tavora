@@ -1,4 +1,4 @@
-// Module grants (decisions.md, module grants row of 2026-10-16): the consent dialog when a module is
+// Module grants (decision log, module grants row of 2026-10-16): the consent dialog when a module is
 // first added, adding it again without asking, taking it back in Settings > Integrations (its panels
 // go, an empty slot stays), and the Review bar when an update asks for more.
 

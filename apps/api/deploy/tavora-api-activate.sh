@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs on the Hetzner server (as root) after Deploy-Api.ps1 uploaded a release:
+# Runs on the server (as root) after Deploy-Api.ps1 uploaded a release:
 # unpacks it, installs the systemd unit and Caddy site file when they changed,
 # switches /srv/tavora-api/current to the new release, and rolls back when the
 # service does not answer its health check.
@@ -83,7 +83,7 @@ if ! cmp -s "$incoming/tavora-api.caddy" /etc/caddy/tavora-api.caddy; then
   fi
 fi
 
-# The helper scripts wellbrained runs by hand (ssh -t root@... tavora-api-set-setting takedown), kept next to the other server tools.
+# The helper scripts the maintainer runs by hand (ssh -t root@... tavora-api-set-setting takedown), kept next to the other server tools.
 for helper in set-steam-key set-setting backup; do
   if [[ -f "$incoming/tavora-api-$helper.sh" ]]; then install -m 750 -o root -g root "$incoming/tavora-api-$helper.sh" "/usr/local/sbin/tavora-api-$helper"; fi
 done
