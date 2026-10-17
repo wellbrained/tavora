@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.16",
+    date: "2026-10-17",
+    title: "Updates only go forward",
+    notes: [
+      "Install from zip now replaces a module only with a higher version. A zip with the same or an older version says which version you have instead of quietly going back.",
+    ],
+  },
+  {
     version: "0.17.15",
     date: "2026-10-17",
     title: "A link command that works anywhere",
