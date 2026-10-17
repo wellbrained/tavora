@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.20",
+    date: "2026-10-17",
+    title: "Settings > Development",
+    notes: [
+      "Module developers have their own Settings page now: Development, with the development folders, the examples and the UI Playground, and links to the docs and to GitHub. Settings > Modules shows the modules you use.",
+      "A development folder can be the folder you keep all your module projects in: Tavora loads every project directly inside it, and a new one made there shows up by itself.",
+      "Each project says what to do when it does not load yet, such as \"Not built yet. Run npm run dev\".",
+    ],
+  },
+  {
     version: "0.17.19",
     date: "2026-10-17",
     title: "Whiteboard: save as picture, clear, toolbar at the bottom",
