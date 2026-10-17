@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.18",
+    date: "2026-10-17",
+    title: "Panels open each other",
+    notes: [
+      "A module's panel can open its other panels on what it shows, such as the gear for the build you are looking at. Tavora brings forward a panel that already shows it, switches the one you used last, or opens a new one.",
+      "A panel saves your changes before it switches. If it can't, it keeps what it showed, and Tavora offers to open the other content in a new panel instead.",
+      "Module developers: the Panel Types Example has buttons that open its other panels.",
+    ],
+  },
+  {
     version: "0.17.17",
     date: "2026-10-17",
     title: "Each panel keeps what it shows",

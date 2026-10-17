@@ -2,7 +2,7 @@
 // and the oldest Tavora that has everything that SDK offers (its MIN_TAVORA). A test keeps these
 // equal to the packages in Tavora's repository, so a release never ships an old starter.
 export const VERSIONS = {
-  sdk: "0.2.3",
+  sdk: "0.2.4",
   pack: "0.1.0",
-  minTavora: "0.17.17",
+  minTavora: "0.17.18",
 } as const;
