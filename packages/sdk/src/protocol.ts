@@ -79,6 +79,11 @@ export interface HandshakeResult {
   module: { id: string; version: string };
   /** Capabilities this module has been granted. */
   capabilities: Capability[];
+  /**
+   * The panel this page runs in: its panel type, one of the manifest's `panels` ids, or null for a module
+   * without panel types. Tavora 0.17.12 and newer send it.
+   */
+  panel?: { type: string | null };
 }
 
 export interface DocumentSummary {

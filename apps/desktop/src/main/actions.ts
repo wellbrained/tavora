@@ -1,4 +1,4 @@
-import { isConnector, isGameId, isModuleId, isNetworkHost, isOwnerId, MAX_NETWORK_HOSTS, type Connector } from "@tavora/module-schema";
+import { isConnector, isGameId, isModuleId, isNetworkHost, isOwnerId, isPanelTypeId, MAX_NETWORK_HOSTS, type Connector } from "@tavora/module-schema";
 import type { BrowserCommand, HostAction, SteamImportGame } from "../shared/host-api";
 import { isSite, MAX_ADDRESS } from "./browser-url";
 import { INSTANCE_ID } from "./ids";
@@ -284,7 +284,13 @@ export function parseAction(raw: unknown): HostAction | null {
     case "ai-usage-remove":
       return only("accountId") && uuid(a.accountId) ? { type: a.type, accountId: a.accountId } : null;
     case "open-module":
-      return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
+      if (!only("moduleId", "panelType") || !isModuleId(a.moduleId)) return null;
+      if (a.panelType === undefined) return { type: a.type, moduleId: a.moduleId };
+      return isPanelTypeId(a.panelType) ? { type: a.type, moduleId: a.moduleId, panelType: a.panelType } : null;
+    case "choose-panel-type":
+      return only("instanceId", "panelType") && uuid(a.instanceId) && isPanelTypeId(a.panelType)
+        ? { type: a.type, instanceId: a.instanceId, panelType: a.panelType }
+        : null;
     case "close-panel":
     case "reload-panel":
     case "stop-panel":

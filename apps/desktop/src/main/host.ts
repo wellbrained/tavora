@@ -3,7 +3,7 @@ import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, type Connector } from "@tavora/module-schema";
+import { continuingPanelType, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, type Connector, type ResolvedPanelType } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -126,6 +126,7 @@ import {
   MAX_SNAPSHOTS,
   planSnapshot,
   saveWorkspace,
+  settlePanelTypes,
   WorkspaceError,
   type GameWorkspace,
   type InstanceRecord,
@@ -382,6 +383,7 @@ export class Host {
       Object.keys(library.games),
       (id) => modules.has(id),
     );
+    settlePanelTypes(workspace, panelTypesOf(modules));
     const savedProfile = await readJsonOrSetAside(path.join(userData, "profile.json"));
     const profile = sanitizeProfile(savedProfile);
     const savedWindow = await readJsonOrSetAside<WindowState>(path.join(userData, "window.json"));
@@ -527,8 +529,38 @@ export class Host {
     this.modules = modules;
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
+    settlePanelTypes(this.workspace, panelTypesOf(modules));
+    this.syncPanelTypes();
     await this.watchDevelopmentFolders();
     void this.refreshPublisherNames();
+  }
+
+  /**
+   * After modules were looked for again: a panel whose type an update removed stops and its slot says
+   * so (the decision log, named panels round 4); one whose type came back starts again.
+   */
+  private syncPanelTypes(): void {
+    const game = this.game;
+    if (!game) return;
+    for (const record of this.records(game.id)) {
+      const open = this.views.has(record.instanceId);
+      const missing = this.panelTypeOf(record) === undefined;
+      if (open && missing) this.destroyView(record.instanceId);
+      else if (!open && !missing) this.createView(record, game);
+    }
+    this.saveWorkspace();
+  }
+
+  /**
+   * The panel type a panel shows, with the module's entry, icon and sizes filled in; null for a module
+   * without types, undefined when the module no longer offers the panel's type.
+   */
+  private panelTypeOf(record: InstanceRecord): ResolvedPanelType | null | undefined {
+    const module = this.modules.get(record.moduleId);
+    if (!module) return undefined;
+    const types = panelTypes(module.manifest);
+    if (types.length === 0) return null;
+    return types.find((type) => type.id === record.panelType);
   }
 
   // ── Development folders ──────────────────────────────────────────────
@@ -1202,7 +1234,9 @@ export class Host {
         setRail(library, action);
         break;
       case "open-module":
-        return this.openModule(action.moduleId);
+        return this.openModule(action.moduleId, { ...(action.panelType ? { panelType: action.panelType } : {}) });
+      case "choose-panel-type":
+        return this.choosePanelType(action.instanceId, action.panelType);
       case "close-panel":
         return this.closePanel(action.instanceId);
       case "reload-panel":
@@ -1539,16 +1573,23 @@ export class Host {
     }
   }
 
-  /** Opens a new panel; the host UI docks it. Returns its instance id. */
-  private openModule(moduleId: string, openedFrom?: { instanceId: string; background: boolean }): string | void {
+  /**
+   * Opens a new panel; the host UI docks it. Returns its instance id. A module with panel types opens
+   * the type asked for, or its continuing type.
+   */
+  private openModule(moduleId: string, options: { openedFrom?: { instanceId: string; background: boolean }; panelType?: string } = {}): string | void {
+    const { openedFrom } = options;
     const game = this.game;
     const module = this.modules.get(moduleId);
     if (!game || !module || !this.supportsGame(module, game.id)) return;
+    const types = panelTypes(module.manifest);
+    const panelType = options.panelType ?? continuingPanelType(module.manifest) ?? undefined;
+    if (panelType !== undefined && !types.some((type) => type.id === panelType)) throw new WorkspaceError("error.panelTypeGone");
     const records = this.records(game.id);
     if (records.length >= LAYOUT_LIMITS.panels) {
       throw new WorkspaceError("error.panelLimit", { max: LAYOUT_LIMITS.panels });
     }
-    const record = { instanceId: randomUUID(), moduleId };
+    const record: InstanceRecord = { instanceId: randomUUID(), moduleId, ...(panelType ? { panelType } : {}) };
     records.push(record);
     if (openedFrom) this.openedFrom.set(record.instanceId, openedFrom);
     this.saveWorkspace();
@@ -1559,7 +1600,7 @@ export class Host {
   /** A new Browser tab in the same dock group as the one it was opened from; an empty one gets the address bar's focus. */
   private openBrowserTab(fromInstanceId: string, url: string | null, background: boolean): void {
     this.browser(fromInstanceId);
-    const id = this.openModule(BROWSER_MODULE_ID, { instanceId: fromInstanceId, background });
+    const id = this.openModule(BROWSER_MODULE_ID, { openedFrom: { instanceId: fromInstanceId, background } });
     if (!id) return;
     if (url) this.browser(id).restore(url);
     else setTimeout(() => this.window.webContents.send("host:shortcut", `address:${id}`), 100);
@@ -1605,6 +1646,19 @@ export class Host {
     }
     const id = this.openModule(BROWSER_MODULE_ID);
     if (id) this.browser(id).restore(url);
+  }
+
+  /** A panel whose type is gone becomes another type of the same module, and starts. */
+  private choosePanelType(instanceId: string, panelType: string): void {
+    const game = this.game;
+    const record = game && this.records(game.id).find((item) => item.instanceId === instanceId);
+    if (!game || !record) throw new WorkspaceError("error.panelClosed");
+    if (this.panelTypeOf(record) !== undefined) return;
+    const module = this.modules.get(record.moduleId);
+    if (!module || !panelTypes(module.manifest).some((type) => type.id === panelType)) throw new WorkspaceError("error.panelTypeGone");
+    record.panelType = panelType;
+    this.saveWorkspace();
+    this.createView(record, game, performance.now());
   }
 
   private closePanel(instanceId: string): void {
@@ -1834,15 +1888,17 @@ export class Host {
   }
 
   /** The current layout as a snapshot body: placeholders named after the panels they came from. */
-  private captureLayout(): Pick<Snapshot, "layout" | "modules" | "savedAt"> {
+  private captureLayout(): Pick<Snapshot, "layout" | "modules" | "panelTypes" | "savedAt"> {
     const workspace = this.currentWorkspace();
     const layout = workspace.layout;
     const panels = layoutPanels(layout);
     if (!layout || panels.length === 0) throw new WorkspaceError("error.layoutNeedsModule");
-    const moduleOf = new Map(workspace.instances.map((record) => [record.instanceId, record.moduleId]));
+    const recordOf = new Map(workspace.instances.map((record) => [record.instanceId, record]));
+    const panelTypes = Object.fromEntries(panels.flatMap((id) => (recordOf.get(id)!.panelType ? [[id, recordOf.get(id)!.panelType!]] : [])));
     return {
       layout: structuredClone(layout),
-      modules: Object.fromEntries(panels.map((id) => [id, moduleOf.get(id)!])),
+      modules: Object.fromEntries(panels.map((id) => [id, recordOf.get(id)!.moduleId])),
+      panelTypes,
       savedAt: new Date().toISOString(),
     };
   }
@@ -1904,11 +1960,15 @@ export class Host {
   /** openedAt is when the player asked for the panel; its time to a loaded page is measured from there. */
   private createView(record: InstanceRecord, game: TavoraGame, openedAt?: number): void {
     if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, game);
+    const panelType = this.panelTypeOf(record);
+    // Its type is gone: the slot says so and offers another type; nothing runs.
+    if (panelType === undefined) return;
     let measured = openedAt === undefined;
     const module = this.modules.get(record.moduleId)!;
     const view = new ModuleView({
       instanceId: record.instanceId,
       module,
+      panelType,
       game,
       data: this.data.get(module.owner, module.manifest.id, game.id),
       panelState: this.data.panelState,
@@ -2256,6 +2316,13 @@ export class Host {
         available: game !== null && this.supportsGame(module, game.id),
         minWidth: module.manifest.viewport.minWidth,
         minHeight: module.manifest.viewport.minHeight,
+        panels: panelTypes(module.manifest).map((type) => ({
+          id: type.id,
+          name: type.name,
+          icon: this.moduleInfo.get(module.manifest.id)?.panelIcons[type.id] ?? null,
+          minWidth: type.viewport.minWidth,
+          minHeight: type.viewport.minHeight,
+        })),
         provenance: module.provenance,
         development: isDevelopmentModule(module.manifest.id) || module.developmentFolder !== undefined,
         version: module.manifest.version,
@@ -2283,13 +2350,16 @@ export class Host {
         .map((entry) => ({ ...entry, publisher: entry.owner === LOCAL_OWNER || entry.owner === OFFICIAL_OWNER ? null : entry.owner })),
       panels: workspace.instances.map((record) => {
         const view = this.views.get(record.instanceId);
-        const name = this.modules.get(record.moduleId)!.manifest.name;
+        const type = this.panelTypeOf(record);
+        const name = type?.name ?? this.modules.get(record.moduleId)!.manifest.name;
+        const panelType = record.panelType ?? null;
         const openedFrom = this.openedFrom.get(record.instanceId);
-        if (!(view instanceof BrowserPanel)) return { instanceId: record.instanceId, moduleId: record.moduleId, name, status: view?.status ?? "loading" };
+        if (type === undefined) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: record.panelType ?? name, status: "unavailable" as const };
+        if (!(view instanceof BrowserPanel)) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status: view?.status ?? "loading" };
         const browser = view.state;
         // A Browser tab is named after its page, like a browser tab.
         const title = (browser.title || browser.host).trim().slice(0, 80);
-        return { instanceId: record.instanceId, moduleId: record.moduleId, name: title || name, status: view.status, browser, ...(openedFrom ? { openedFrom } : {}) };
+        return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: title || name, status: view.status, browser, ...(openedFrom ? { openedFrom } : {}) };
       }),
       layout: workspace.layout,
       layoutEpoch: this.layoutEpoch,
@@ -2441,4 +2511,13 @@ function devCsp(server: URL): string {
     "form-action 'none'",
     "frame-ancestors 'none'",
   ].join("; ");
+}
+
+/** What settlePanelTypes needs to know about the installed modules. */
+function panelTypesOf(modules: ReadonlyMap<string, InstalledModule>) {
+  return (moduleId: string) => {
+    const module = modules.get(moduleId);
+    if (!module) return undefined;
+    return { ids: panelTypes(module.manifest).map((type) => type.id), continuing: continuingPanelType(module.manifest) };
+  };
 }

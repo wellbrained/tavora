@@ -58,9 +58,11 @@ const game = computed(() => (view.value.currentGameId ? view.value.library.games
 function info(instanceId: string): PanelInfo | undefined {
   const panel = view.value.panels.find((item) => item.instanceId === instanceId);
   const module = panel && view.value.modules.find((item) => item.id === panel.moduleId);
+  // A panel type may need more (or less) room than its module.
+  const size = module?.panels.find((type) => type.id === panel?.panelType) ?? module;
   // A panel card's 1 px border on each side comes out of the module's room.
-  return panel && module
-    ? { title: panel.name, minWidth: module.minWidth + 2 * CARD_BORDER, minHeight: module.minHeight + 2 * CARD_BORDER }
+  return panel && size
+    ? { title: panel.name, minWidth: size.minWidth + 2 * CARD_BORDER, minHeight: size.minHeight + 2 * CARD_BORDER }
     : undefined;
 }
 

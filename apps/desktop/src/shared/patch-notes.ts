@@ -29,6 +29,17 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
+    version: "0.17.12",
+    date: "2026-10-17",
+    title: "Modules can offer several panels",
+    notes: [
+      "A module can now offer several named panels, such as an inventory and a build planner. The module library lists them under the module, each with its own Add, and every panel of a module shares its saved content.",
+      "Tabs show the panel's short name; hovering it shows the module's name too.",
+      "If a module update removes a panel you had open, its place stays with a note, and you can remove it or pick another panel of the same module.",
+      "Module developers: the new Panel Types Example under Development shows every option.",
+    ],
+  },
+  {
     version: "0.17.11",
     date: "2026-10-17",
     title: "Modules show who made them",
