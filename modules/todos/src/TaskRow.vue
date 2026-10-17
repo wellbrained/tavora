@@ -1,8 +1,14 @@
 <script setup lang="ts">
-// One to-do: a checkbox and title, opened in place to edit details, a source
-// link and steps. Its menu opens from the ⋯ button or a right-click and has
-// keyboard alternatives for everything drag and drop does.
-import { ArrowDown, ArrowUp, ChevronDown, Ellipsis, FolderInput, GripVertical, Link2, Pin, PinOff, Trash2, X } from "@lucide/vue";
+// One to-do: a checkbox and title, edited in place by clicking the title.
+// The editor takes exactly the title's place, so the row keeps its height
+// and nothing around it moves. While editing, Tab and Shift+Tab change its
+// level. The description is written in a popover from the menu, which opens
+// from the ⋯ button or a right-click and has keyboard alternatives for
+// everything drag and drop does.
+//
+// Every control sits in a box as tall as one title line (32 px), so all of
+// them share the first line's centre.
+import { AlignLeft, ArrowDown, ArrowUp, ChevronRight, Ellipsis, FolderInput, GripVertical, IndentDecrease, IndentIncrease, Pin, PinOff, Trash2 } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import {
   DropdownMenu,
@@ -14,20 +20,25 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
-import { computed, nextTick, ref, watch } from "vue";
-import AddInput from "./AddInput.vue";
+import { PopoverAnchor, PopoverContent, PopoverPortal, PopoverRoot } from "reka-ui";
+import { computed, inject, nextTick, ref } from "vue";
 import { t } from "./i18n";
+import { PANEL } from "./panel";
 import type { TodoStore } from "./store";
 import {
-  addStep,
-  deleteStep,
+  canIndent,
+  canShift,
   deleteTask,
+  doneState,
+  indentTask,
   MAX,
   moveTask,
-  normalizeLink,
+  outdentTask,
+  removedBlock,
+  restoreBlock,
+  restoreDone,
   setDone,
   shiftTask,
-  updateStep,
   updateTask,
   type Group,
   type Task,
@@ -39,96 +50,172 @@ const props = defineProps<{
   group: Group;
   groups: Group[];
   index: number;
-  expanded: boolean;
+  /** How far it is indented; 0 at the top level. */
+  depth: number;
+  /** Its direct sub-to-dos. */
+  children: { done: number; total: number };
   /** Where a dragged task would land relative to this one. */
   drop: "before" | "after" | null;
-  /** Shown in the objectives list, where the group name is helpful and reordering is not. */
+  /** Shown in the objectives list, where the group name is helpful and nesting and reordering are not. */
   compact?: boolean;
 }>();
-const emit = defineEmits<{ toggle: []; dragstart: [event: DragEvent]; dragend: [] }>();
+const emit = defineEmits<{ dragstart: [event: DragEvent]; dragend: [] }>();
+const panel = inject(PANEL)!;
 
 const menuOpen = ref(false);
-const title = ref(props.task.title);
-const details = ref(props.task.details);
-const link = ref(props.task.link);
-const linkError = ref("");
-const titleInput = ref<HTMLInputElement | null>(null);
+const title = ref("");
+const titleInput = ref<HTMLTextAreaElement | null>(null);
+/** Set while a level change moves this row, so the focus it loses does not close the editor. */
+let moving = false;
 
-// Follow changes from other panels unless this field is being edited.
-watch(
-  () => props.task,
-  (task) => {
-    if (document.activeElement !== titleInput.value) title.value = task.title;
-    if (document.activeElement?.getAttribute("data-field") !== "details") details.value = task.details;
-    if (document.activeElement?.getAttribute("data-field") !== "link") link.value = task.link;
-  },
-);
-
-watch(
-  () => props.expanded,
-  async (open) => {
-    if (!open) return;
-    await nextTick();
-    titleInput.value?.focus();
-  },
-);
-
-const stepsDone = computed(() => props.task.steps.filter((step) => step.done).length);
 const id = computed(() => props.task.id);
+// The objectives list shows the same task again; each copy has its own editor.
+const editKey = computed(() => (props.compact ? `objective:${props.task.id}` : props.task.id));
+const editing = computed(() => panel.editing.value === editKey.value);
+const folded = computed(() => panel.folded.value.includes(props.task.id));
+const hasMeta = computed(() => props.compact || props.children.total > 0 || props.task.details !== "");
 const now = () => new Date().toISOString();
 
 // A change may run again on a newer list when another panel saved first, so
 // every value it uses is read now, never inside it.
 const change = (fn: Parameters<TodoStore["apply"]>[0]) => void props.store.apply(fn);
 const checked = (event: Event) => (event.target as HTMLInputElement).checked;
-const value = (event: Event) => (event.target as HTMLInputElement).value;
 
 function setTaskDone(done: boolean) {
   const at = now();
-  change((data) => setDone(data, id.value, done, at));
+  const before = doneState(props.store.list.value, id.value);
+  const taskId = id.value;
+  if (done) panel.linger(taskId, props.task.pinned);
+  change((data) => setDone(data, taskId, done, at));
+  if (done) panel.offerUndo(t("app.undoFinished", { title: props.task.title }), () => change((data) => restoreDone(data, before)));
+}
+
+function remove() {
+  const removed = removedBlock(props.store.list.value, id.value);
+  const taskId = id.value;
+  change((data) => deleteTask(data, taskId));
+  if (removed) panel.offerUndo(t("app.undoDeleted", { title: props.task.title }), () => change((data) => restoreBlock(data, removed)));
 }
 
 function setPinned(pinned: boolean) {
-  change((data) => updateTask(data, id.value, { pinned }));
+  const taskId = id.value;
+  change((data) => updateTask(data, taskId, { pinned }));
 }
 
-function setStep(stepId: string, patch: { title?: string; done?: boolean }) {
-  change((data) => updateStep(data, id.value, stepId, patch));
+// ── Editing the title in place ───────────────────────────────────────
+
+async function startEdit() {
+  title.value = props.task.title;
+  panel.editing.value = editKey.value;
+  await nextTick();
+  const input = titleInput.value;
+  input?.focus();
+  input?.setSelectionRange(input.value.length, input.value.length);
 }
 
-function saveTitle() {
-  const next = title.value;
-  if (next.trim() && next.trim() !== props.task.title) change((data) => updateTask(data, id.value, { title: next }));
-  else title.value = props.task.title;
+function save() {
+  const taskId = id.value;
+  // A title is one line; pasted line breaks become spaces.
+  const next = title.value.replace(/\s*\n\s*/g, " ");
+  if (next.trim() && next.trim() !== props.task.title) change((data) => updateTask(data, taskId, { title: next }));
 }
 
-function saveDetails() {
-  const next = details.value;
-  if (next !== props.task.details) change((data) => updateTask(data, id.value, { details: next }));
+function close(keep: boolean) {
+  if (keep) save();
+  if (editing.value) panel.editing.value = null;
 }
 
-function saveLink() {
-  const href = normalizeLink(link.value);
-  if (href === null) {
-    linkError.value = t("task.linkInvalid");
-    return;
-  }
-  linkError.value = "";
-  link.value = href;
-  if (href !== props.task.link) change((data) => updateTask(data, id.value, { link: href }));
+/** Closes and saves once focus leaves the row, unless it went to this row's own controls. */
+function onFocusOut(event: FocusEvent) {
+  if (moving) return;
+  const next = event.relatedTarget as Node | null;
+  if (next && titleInput.value?.closest("[data-task-row]")?.contains(next)) return;
+  close(true);
+}
+
+async function changeLevel(outdent: boolean) {
+  const taskId = id.value;
+  if (outdent ? !props.task.parentId : !canIndent(props.group, props.index)) return;
+  const caret = titleInput.value?.selectionStart ?? null;
+  save();
+  moving = true;
+  change((data) => (outdent ? outdentTask(data, taskId) : indentTask(data, taskId)));
+  // Moving the row in the page takes the focus away; give it back where it was.
+  await nextTick();
+  moving = false;
+  if (!editing.value || !titleInput.value) return;
+  titleInput.value.focus();
+  if (caret !== null) titleInput.value.setSelectionRange(caret, caret);
 }
 
 function onTitleKey(event: KeyboardEvent) {
-  if (event.key === "Enter") (event.target as HTMLInputElement).blur();
   if (event.key === "Escape") {
-    title.value = props.task.title;
-    (event.target as HTMLInputElement).blur();
+    event.preventDefault();
+    close(false);
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    close(true);
+  } else if (event.key === "Tab" && !props.compact) {
+    event.preventDefault();
+    void changeLevel(event.shiftKey);
   }
 }
 
-function newStep(text: string) {
-  const stepId = crypto.randomUUID();
-  change((data) => addStep(data, id.value, stepId, text));
+// ── The description, in a popover ────────────────────────────────────
+
+const describing = ref(false);
+const description = ref("");
+const descriptionInput = ref<HTMLTextAreaElement | null>(null);
+let cancelled = false;
+/** The menu item asks for the popover; it opens once the menu has closed and let go of the focus. */
+let describeAfterMenu = false;
+
+function setDescribing(open: boolean) {
+  if (open) {
+    description.value = props.task.details;
+    cancelled = false;
+  } else if (!cancelled && description.value !== props.task.details) {
+    const taskId = id.value;
+    const details = description.value;
+    change((data) => updateTask(data, taskId, { details }));
+  }
+  describing.value = open;
+}
+
+function cancelDescription() {
+  cancelled = true;
+}
+
+function askDescription() {
+  describeAfterMenu = true;
+}
+
+function onMenuClosed(event: Event) {
+  if (!describeAfterMenu) return;
+  describeAfterMenu = false;
+  event.preventDefault();
+  setDescribing(true);
+}
+
+function focusDescription(event: Event) {
+  event.preventDefault();
+  const input = descriptionInput.value;
+  input?.focus();
+  input?.setSelectionRange(input.value.length, input.value.length);
+}
+
+function onDescriptionKey(event: KeyboardEvent) {
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    setDescribing(false);
+  }
+}
+
+// Inside the editor the usual menu stays, for copy and paste.
+function onContextMenu(event: MouseEvent) {
+  if (editing.value) return;
+  event.preventDefault();
+  menuOpen.value = true;
 }
 
 const otherGroups = computed(() => props.groups.filter((group) => group.id !== props.group.id));
@@ -139,20 +226,23 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
     :class="
       cn(
         'group/task relative rounded-md',
-        expanded ? 'bg-background my-1 border' : 'hover:bg-accent/60',
+        editing ? 'bg-background ring-ring/60 ring-1' : 'hover:bg-accent/60',
         drop === 'before' && 'drop-before',
         drop === 'after' && 'drop-after',
       )
     "
+    :style="!compact && depth ? { marginLeft: `${depth * 24}px` } : undefined"
     :data-testid="`task-${task.id}`"
     :data-done="task.done"
     :data-pinned="task.pinned"
-    @contextmenu.prevent="menuOpen = true"
+    :data-depth="depth"
+    data-task-row
+    @contextmenu="onContextMenu"
   >
-    <div class="flex min-h-9 items-start gap-1.5 py-1 pr-1 pl-0.5">
+    <div class="flex items-start gap-1.5 py-0.5 pr-1 pl-0.5">
       <span
         v-if="!compact"
-        class="text-muted-foreground flex h-[32px] w-4 flex-none cursor-grab items-center justify-center opacity-0 group-hover/task:opacity-100"
+        class="text-muted-foreground flex h-8 w-4 flex-none cursor-grab items-center justify-center opacity-0 group-hover/task:opacity-100"
         draggable="true"
         aria-hidden="true"
         :title="t('task.drag')"
@@ -161,8 +251,20 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
       >
         <GripVertical class="size-3.5" :stroke-width="1.5" />
       </span>
-      <!-- Controls sit in boxes as tall as a one-line title (buttons are at least 32 px), so they line up with its first line. -->
-      <span class="flex h-[32px] flex-none items-center px-0.5">
+      <span v-if="!compact" class="flex h-8 w-4 flex-none items-center justify-center">
+        <button
+          v-if="children.total"
+          type="button"
+          class="text-muted-foreground hover:text-foreground flex size-5 items-center justify-center rounded-sm"
+          :aria-expanded="!folded"
+          :aria-label="folded ? t('task.unfold', { title: task.title }) : t('task.fold', { title: task.title })"
+          data-testid="task-fold"
+          @click="panel.toggleFolded(task.id)"
+        >
+          <ChevronRight :class="cn('size-3.5 transition-transform', !folded && 'rotate-90')" :stroke-width="1.5" />
+        </button>
+      </span>
+      <span class="flex h-8 flex-none items-center px-0.5">
         <input
           type="checkbox"
           class="todo-check"
@@ -172,166 +274,129 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
           @change="setTaskDone(checked($event))"
         />
       </span>
-      <button
-        v-if="!expanded"
-        type="button"
-        class="flex min-w-0 flex-1 flex-col items-start justify-center rounded-sm px-1 py-1 text-left"
-        :aria-expanded="false"
-        data-testid="task-open"
-        @click="emit('toggle')"
-      >
-        <span :class="cn('w-full text-sm leading-5 break-words', task.done && 'text-muted-foreground line-through')" data-testid="task-title">{{
-          task.title
-        }}</span>
-        <span
-          v-if="compact || task.steps.length || task.link || task.details"
-          class="text-muted-foreground flex w-full min-w-0 items-center gap-2 text-xs"
-        >
-          <span v-if="compact" class="truncate">{{ group.name }}</span>
-          <span v-if="task.steps.length" class="flex-none tabular-nums" data-testid="task-steps">{{ t("task.steps", { done: stepsDone, total: task.steps.length }) }}</span>
-          <Link2 v-if="task.link" class="size-3 flex-none" :stroke-width="1.5" :aria-label="t('task.hasLink')" />
-          <span v-if="task.details && !compact" class="truncate">{{ task.details }}</span>
-        </span>
-      </button>
-      <input
-        v-else
-        ref="titleInput"
-        v-model="title"
-        class="focus-visible:border-ring h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-medium outline-none"
-        :aria-label="t('task.title')"
-        data-testid="task-title-input"
-        :maxlength="MAX.title"
-        @blur="saveTitle"
-        @keydown="onTitleKey"
-      />
-      <span v-if="task.pinned && !expanded && !compact" class="flex h-[32px] flex-none items-center">
-        <Pin class="text-primary size-3.5" :stroke-width="1.5" aria-label="Pinned" />
-      </span>
-      <button
-        v-if="expanded"
-        type="button"
-        class="text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md"
-        :aria-label="t('task.closeDetails')"
-        :title="t('task.closeDetails')"
-        data-testid="task-close"
-        @click="emit('toggle')"
-      >
-        <ChevronDown class="size-4 rotate-180" :stroke-width="1.5" />
-      </button>
-      <DropdownMenu v-model:open="menuOpen">
-        <DropdownMenuTrigger
-          :class="
-            cn(
-              'text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100',
-              (expanded || menuOpen) && 'opacity-100',
-            )
-          "
-          :aria-label="t('moreFor', { name: task.title })"
-          :title="t('more')"
-          data-testid="task-menu"
-        >
-          <Ellipsis class="size-4" :stroke-width="1.5" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem data-testid="menu-pin" @select="setPinned(!task.pinned)">
-            <PinOff v-if="task.pinned" :stroke-width="1.5" />
-            <Pin v-else :stroke-width="1.5" />
-            {{ task.pinned ? t("task.unpin") : t("task.pin") }}
-          </DropdownMenuItem>
-          <template v-if="!compact">
-            <DropdownMenuItem :disabled="index === 0" @select="change((data) => shiftTask(data, task.id, -1))">
-              <ArrowUp :stroke-width="1.5" /> {{ t("task.moveUp") }}
-            </DropdownMenuItem>
-            <DropdownMenuItem :disabled="index === group.tasks.length - 1" @select="change((data) => shiftTask(data, task.id, 1))">
-              <ArrowDown :stroke-width="1.5" /> {{ t("task.moveDown") }}
-            </DropdownMenuItem>
-            <DropdownMenuSub v-if="otherGroups.length">
-              <DropdownMenuSubTrigger><FolderInput :stroke-width="1.5" /> {{ t("task.moveToGroup") }}</DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                <DropdownMenuItem
-                  v-for="target in otherGroups"
-                  :key="target.id"
-                  @select="change((data) => moveTask(data, task.id, target.id, Number.MAX_SAFE_INTEGER))"
-                >
-                  {{ target.name }}
-                </DropdownMenuItem>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          </template>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" data-testid="menu-delete" @select="change((data) => deleteTask(data, task.id))">
-            <Trash2 :stroke-width="1.5" /> {{ t("task.delete") }}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
 
-    <div v-if="expanded" class="flex flex-col gap-3 px-3 pt-1 pb-3" data-testid="task-details">
-      <textarea
-        v-model="details"
-        data-field="details"
-        data-testid="task-details-input"
-        rows="3"
-        :maxlength="MAX.details"
-        :placeholder="t('task.details')"
-        :aria-label="t('task.details')"
-        class="placeholder:text-muted-foreground border-input focus-visible:border-ring field-sizing-content min-h-16 w-full resize-none rounded-md border bg-transparent px-2 py-1.5 text-sm outline-none"
-        @blur="saveDetails"
-      />
-      <div>
-        <label class="text-muted-foreground mb-1 block text-xs" :for="`link-${task.id}`">{{ t("task.sourceLink") }}</label>
-        <input
-          :id="`link-${task.id}`"
-          v-model="link"
-          data-field="link"
-          data-testid="task-link-input"
-          placeholder="https://"
-          :maxlength="MAX.link"
-          :aria-invalid="linkError ? true : undefined"
-          class="placeholder:text-muted-foreground border-input focus-visible:border-ring aria-invalid:border-destructive h-8 w-full min-w-0 rounded-md border bg-transparent px-2 text-sm outline-none"
-          @blur="saveLink"
-          @keydown.enter="($event.target as HTMLInputElement).blur()"
-        />
-        <p v-if="linkError" class="text-destructive mt-1 text-xs" role="alert">{{ linkError }}</p>
-      </div>
-      <div>
-        <p class="text-muted-foreground mb-1 text-xs">{{ t("task.stepsTitle") }}</p>
-        <ul role="list" data-testid="steps">
-          <li v-for="step in task.steps" :key="step.id" class="group/step flex items-center gap-2 rounded-md pl-1" :data-testid="`step-${step.id}`">
-            <input
-              type="checkbox"
-              class="todo-check todo-check-sm"
-              :checked="step.done"
-              :aria-label="t('task.stepDone', { title: step.title })"
-              data-testid="step-done"
-              @change="setStep(step.id, { done: checked($event) })"
-            />
-            <input
-              :value="step.title"
-              :class="
-                cn(
-                  'focus-visible:border-ring h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm outline-none',
-                  step.done && 'text-muted-foreground line-through',
-                )
-              "
-              :aria-label="t('task.step')"
+      <PopoverRoot :open="describing" @update:open="setDescribing">
+        <PopoverAnchor as-child>
+          <div class="flex min-w-0 flex-1 flex-col">
+            <!-- The title and its editor have the same box, font and wrapping, so switching between them moves nothing. -->
+            <textarea
+              v-if="editing"
+              ref="titleInput"
+              v-model="title"
+              rows="1"
+              class="block field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent px-1 py-1.5 text-sm leading-5 break-words outline-none"
+              :aria-label="t('task.title')"
+              data-testid="task-title-input"
               :maxlength="MAX.title"
-              @change="setStep(step.id, { title: value($event) })"
-              @keydown.enter="($event.target as HTMLInputElement).blur()"
+              @keydown="onTitleKey"
+              @focusout="onFocusOut"
             />
             <button
+              v-else
               type="button"
-              class="text-muted-foreground hover:text-destructive flex size-6 flex-none items-center justify-center rounded-md opacity-0 group-hover/step:opacity-100 focus-visible:opacity-100"
-              :aria-label="t('task.deleteStepLabel', { title: step.title })"
-              :title="t('task.deleteStep')"
-              @click="change((data) => deleteStep(data, task.id, step.id))"
+              class="block w-full cursor-text rounded-sm px-1 py-1.5 text-left text-sm leading-5 break-words"
+              :aria-label="t('task.edit', { title: task.title })"
+              data-testid="task-open"
+              @click="startEdit"
             >
-              <X class="size-3.5" :stroke-width="1.5" />
+              <span :class="cn(task.done && 'text-muted-foreground line-through')" data-testid="task-title">{{ task.title }}</span>
             </button>
-          </li>
-        </ul>
-        <AddInput :placeholder="t('task.addStep')" data-testid="add-step" :maxlength="MAX.title" @add="newStep" />
-      </div>
+            <div v-if="hasMeta" class="text-muted-foreground -mt-1 flex min-w-0 items-center gap-2 px-1 pb-1.5 text-xs leading-4">
+              <span v-if="compact" class="truncate">{{ group.name }}</span>
+              <span
+                v-if="children.total"
+                class="flex-none tabular-nums"
+                :aria-label="t('task.children', children)"
+                data-testid="task-children"
+                v-text="`${children.done}/${children.total}`"
+              />
+              <span v-if="task.details" class="truncate" data-testid="task-details-preview">{{ task.details }}</span>
+            </div>
+          </div>
+        </PopoverAnchor>
+        <PopoverPortal>
+          <PopoverContent
+            side="bottom"
+            align="start"
+            :side-offset="4"
+            :collision-padding="8"
+            class="bg-popover text-popover-foreground z-50 w-72 max-w-[calc(100vw-16px)] rounded-md border p-2 shadow-md"
+            data-testid="description-popover"
+            @open-auto-focus="focusDescription"
+            @escape-key-down="cancelDescription"
+          >
+            <textarea
+              ref="descriptionInput"
+              v-model="description"
+              :maxlength="MAX.details"
+              :placeholder="t('task.description')"
+              :aria-label="t('task.description')"
+              data-testid="description-input"
+              class="placeholder:text-muted-foreground border-input focus-visible:border-ring field-sizing-content block max-h-60 min-h-20 w-full resize-none rounded-md border bg-transparent px-2 py-1.5 text-sm outline-none"
+              @keydown="onDescriptionKey"
+            />
+            <p class="text-muted-foreground mt-1.5 px-0.5 text-[11px]">{{ t("task.descriptionHint") }}</p>
+          </PopoverContent>
+        </PopoverPortal>
+      </PopoverRoot>
+
+      <span v-if="task.pinned && !compact" class="flex h-8 flex-none items-center">
+        <Pin class="text-primary size-3.5" :stroke-width="1.5" aria-label="Pinned" />
+      </span>
+      <span class="flex h-8 flex-none items-center">
+        <DropdownMenu v-model:open="menuOpen">
+          <DropdownMenuTrigger
+            :class="
+              cn(
+                'text-muted-foreground hover:text-foreground flex size-7 items-center justify-center rounded-md opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100',
+                (menuOpen || editing) && 'opacity-100',
+              )
+            "
+            :aria-label="t('moreFor', { name: task.title })"
+            :title="t('more')"
+            data-testid="task-menu"
+          >
+            <Ellipsis class="size-4" :stroke-width="1.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" @close-auto-focus="onMenuClosed">
+            <DropdownMenuItem data-testid="menu-description" @select="askDescription">
+              <AlignLeft :stroke-width="1.5" />
+              {{ task.details ? t("task.editDescription") : t("task.addDescription") }}
+            </DropdownMenuItem>
+            <DropdownMenuItem data-testid="menu-pin" @select="setPinned(!task.pinned)">
+              <PinOff v-if="task.pinned" :stroke-width="1.5" />
+              <Pin v-else :stroke-width="1.5" />
+              {{ task.pinned ? t("task.unpin") : t("task.pin") }}
+            </DropdownMenuItem>
+            <template v-if="!compact">
+              <DropdownMenuItem :disabled="!canIndent(group, index)" data-testid="menu-indent" @select="change((data) => indentTask(data, task.id))">
+                <IndentIncrease :stroke-width="1.5" /> {{ t("task.indent") }}
+              </DropdownMenuItem>
+              <DropdownMenuItem :disabled="!task.parentId" data-testid="menu-outdent" @select="change((data) => outdentTask(data, task.id))">
+                <IndentDecrease :stroke-width="1.5" /> {{ t("task.outdent") }}
+              </DropdownMenuItem>
+              <DropdownMenuItem :disabled="!canShift(group, index, -1)" @select="change((data) => shiftTask(data, task.id, -1))">
+                <ArrowUp :stroke-width="1.5" /> {{ t("task.moveUp") }}
+              </DropdownMenuItem>
+              <DropdownMenuItem :disabled="!canShift(group, index, 1)" @select="change((data) => shiftTask(data, task.id, 1))">
+                <ArrowDown :stroke-width="1.5" /> {{ t("task.moveDown") }}
+              </DropdownMenuItem>
+              <DropdownMenuSub v-if="otherGroups.length">
+                <DropdownMenuSubTrigger><FolderInput :stroke-width="1.5" /> {{ t("task.moveToGroup") }}</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem v-for="target in otherGroups" :key="target.id" @select="change((data) => moveTask(data, task.id, target.id, null))">
+                    {{ target.name }}
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </template>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" data-testid="menu-delete" @select="remove">
+              <Trash2 :stroke-width="1.5" /> {{ t("task.delete") }}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </span>
     </div>
   </div>
 </template>

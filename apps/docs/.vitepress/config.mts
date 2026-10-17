@@ -15,8 +15,12 @@ export default defineConfig({
   vite: { server: { host: "127.0.0.1", port: 4001, strictPort: true } },
   // Tavora ships one dark theme for now (see docs/design/style-guide.md).
   appearance: "force-dark",
-  head: [["meta", { name: "theme-color", content: "#171412" }]],
+  head: [
+    ["meta", { name: "theme-color", content: "#171412" }],
+    ["link", { rel: "icon", type: "image/png", href: "/favicon.png" }],
+  ],
   themeConfig: {
+    logo: { src: "/tavora-emblem.svg", alt: "" },
     nav: [
       { text: "Guide", link: "/guide/getting-started" },
       { text: "Reference", link: "/reference/manifest" },
