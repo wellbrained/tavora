@@ -19,10 +19,11 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.17.5",
+    version: "0.17.6",
     date: "2026-10-17",
-    title: "No more silent closing",
+    title: "Separate development state and clearer startup errors",
     notes: [
+      "Development runs, including those started through tracker, keep their own games, settings and module data, separate from installed Tavora.",
       "If Tavora can't start, it now tells you why in a message instead of closing without a word, and writes a small log you can send to whoever helps you.",
     ],
   },
