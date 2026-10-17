@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.10",
+    date: "2026-10-17",
+    title: "A roomier module library",
+    notes: [
+      "The module library is now the same size as Settings, with compact rows and search that stays in view as you browse.",
+      "Switch between all modules, those already in this game and those you have not added yet. Counts and an Add another button make it clear what is already open.",
+    ],
+  },
+  {
     version: "0.17.6",
     date: "2026-10-17",
     title: "Separate development state and clearer startup errors",
