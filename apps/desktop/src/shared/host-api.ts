@@ -19,6 +19,12 @@ export type RootItem = { kind: "game"; id: string } | { kind: "folder"; id: stri
 
 export type IconView = { kind: "monogram"; text: string } | { kind: "image"; url: string };
 
+/** Tavora's own pages for module developers that Settings > Development opens in the browser. */
+export type DeveloperLink = "docs" | "discussions" | "issue";
+
+/** Why a development project did not load, for the fix Settings suggests. */
+export type DevelopmentProblemKind = "not-built" | "no-module" | "missing";
+
 export interface GameView {
   id: string;
   name: string;
@@ -356,8 +362,17 @@ export interface HostViewState {
   }[];
   /** Folders in the modules folder that could not be loaded, and why, for module authors. */
   moduleProblems: { folder: string; message: string }[];
-  /** Module project folders added in Settings > Modules: the module each one loads, or why it could not be loaded (null while it simply has none yet). */
-  developmentFolders: { folder: string; moduleId: string | null; problem: string | null }[];
+  /**
+   * Folders added in Settings > Development: a module project, or a folder of projects. `problem` is
+   * set when the folder itself has none or is gone; each project says the module it loads or why not.
+   * `kind` lets Settings suggest the fix: "not-built", "no-module" or "missing".
+   */
+  developmentFolders: {
+    folder: string;
+    problem: string | null;
+    kind: DevelopmentProblemKind | null;
+    projects: { project: string; moduleId: string | null; problem: string | null; kind: DevelopmentProblemKind | null }[];
+  }[];
   /** Saved data of modules that are not installed (or of another publisher than the installed one), kept until deleted. */
   leftoverModuleData: { owner: string; moduleId: string; publisher: string | null }[];
   /** Panels of the current game, in the order they were opened. */
@@ -473,6 +488,7 @@ export type HostAction =
   /** Picks a module project folder to load from (answers with the folder), or forgets one. */
   | { type: "add-development-folder" }
   | { type: "remove-development-folder"; folder: string }
+  | { type: "open-developer-link"; link: DeveloperLink }
   /** Looks for modules again, after the player changed their modules folder. */
   | { type: "reload-modules" }
   /** Moves a module from the player's modules folder to the recycle bin, after removing its panels in every game; its data stays. */

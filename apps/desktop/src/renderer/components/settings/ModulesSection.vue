@@ -4,15 +4,15 @@
 // zip checks and unpacks a module zip into the folder; dropping a module
 // package into the folder and pressing Reload adds it too. Remove moves it
 // to the recycle bin. A module's data stays, so adding it again finds it.
-// Development folders are for module developers: a module is loaded straight
-// from its project folder and its panels reload when the build changes.
-import { ArrowRightLeft, FileArchive, FolderCode, FolderInput, FolderOpen, RefreshCw, Trash2 } from "@lucide/vue";
+// What module developers use (development folders, the examples) is in
+// Settings > Development instead.
+import { ArrowRightLeft, FileArchive, FolderInput, FolderOpen, RefreshCw, Trash2 } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { act, confirmAction, gamesUsing, listOf, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";
-import ModuleIcon from "../ModuleIcon.vue";
+import ModuleRow from "./ModuleRow.vue";
 import SettingRow from "./SettingRow.vue";
 
 defineProps<{ highlight: string | null }>();
@@ -23,24 +23,10 @@ const modules = computed(() => state.value!.modules);
 const problems = computed(() => state.value!.moduleProblems);
 const leftover = computed(() => state.value!.leftoverModuleData);
 const files = computed(() => state.value!.moduleFiles);
-const developmentFolders = computed(() => state.value!.developmentFolders);
-
-async function addDevelopmentFolder() {
-  const result = await act({ type: "add-development-folder" });
-  if (result.ok && result.id) showToast(t("settings.devFolders.added", { folder: result.id }));
-}
-
-/** What a development folder loads, in words. */
-function folderStatus(entry: { moduleId: string | null; problem: string | null }): { text: string; ok: boolean } {
-  const module = entry.moduleId ? modules.value.find((item) => item.id === entry.moduleId) : undefined;
-  if (module) return { text: t("settings.devFolders.loads", { name: module.name, version: module.version }), ok: true };
-  return { text: t("settings.devFolders.problem", { message: entry.problem ?? "" }), ok: false };
-}
-
-// Modules for players first (Tavora's own, then the player's), examples last.
+// Tavora's own modules first, then the player's; development modules are listed in Settings > Development.
 const sorted = computed(() => {
-  const rank = (module: ModuleView) => (module.development ? 2 : module.provenance === "official" ? 0 : 1);
-  return [...modules.value].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  const rank = (module: ModuleView) => (module.provenance === "official" ? 0 : 1);
+  return modules.value.filter((module) => !module.development).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 });
 
 /** Panels of a module that are open in the current game, so Remove can say what closes. */
@@ -116,35 +102,6 @@ function remove(module: ModuleView) {
   </ul>
 
   <SettingRow
-    :label="t('settings.development-folders.label')"
-    :description="t('settings.development-folders.description')"
-    setting="development-folders"
-    :highlighted="highlight === 'development-folders'"
-  >
-    <Button variant="secondary" class="flex-none" data-testid="add-development-folder" @click="addDevelopmentFolder">
-      <FolderCode :stroke-width="1.5" /> {{ t("settings.devFolders.add") }}
-    </Button>
-  </SettingRow>
-  <ul v-if="developmentFolders.length" class="-mt-2 mb-2 flex flex-col" :aria-label="t('settings.development-folders.label')" data-testid="development-folders">
-    <li v-for="entry in developmentFolders" :key="entry.folder" class="flex items-center gap-3 border-b py-2 last:border-b-0" data-testid="development-folder">
-      <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span class="font-mono text-sm break-all">{{ entry.folder }}</span>
-        <span :class="cn('text-sm', folderStatus(entry).ok ? 'text-muted-foreground' : 'text-destructive')" data-testid="development-folder-status">{{ folderStatus(entry).text }}</span>
-      </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        class="flex-none"
-        :aria-label="t('settings.devFolders.removeLabel', { folder: entry.folder })"
-        data-testid="remove-development-folder"
-        @click="act({ type: 'remove-development-folder', folder: entry.folder })"
-      >
-        {{ t("settings.devFolders.remove") }}
-      </Button>
-    </li>
-  </ul>
-
-  <SettingRow
     :label="t('settings.module-files.label')"
     :description="t('settings.module-files.description')"
     setting="module-files"
@@ -172,39 +129,7 @@ function remove(module: ModuleView) {
   >
     <p class="font-medium">{{ t("settings.installed-modules.label") }}</p>
     <ul class="mt-2 flex flex-col" :aria-label="t('settings.installed-modules.label')" data-testid="module-list">
-      <li
-        v-for="module in sorted"
-        :key="module.id"
-        class="flex items-center gap-4 border-b py-3 last:border-b-0"
-        :data-testid="`module-${module.id}`"
-      >
-        <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span class="flex items-center gap-2">
-            <ModuleIcon :module-id="module.id" />
-            <span class="truncate font-medium">{{ module.name }}</span>
-            <span class="text-muted-foreground flex-none text-xs tabular-nums">{{ module.version }}</span>
-            <span
-              :class="cn('flex-none rounded-sm border px-1.5 text-xs', module.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
-              >{{ module.provenance === "official" ? t("common.official") : t("common.local") }}</span
-            >
-            <span
-              v-if="module.publisher && module.publisherName"
-              class="text-muted-foreground min-w-0 flex-none truncate rounded-sm border px-1.5 text-xs"
-              :title="t('settings.modules.byNameHint', { name: module.publisherName, key: module.publisher })"
-              :data-testid="`module-publisher-${module.id}`"
-              >{{ t("settings.modules.byName", { name: module.publisherName }) }}</span
-            >
-            <span
-              v-else-if="module.publisher"
-              class="text-muted-foreground flex-none rounded-sm border px-1.5 font-mono text-xs"
-              :title="t('settings.modules.publisherHint', { key: module.publisher })"
-              :data-testid="`module-publisher-${module.id}`"
-              >{{ t("settings.modules.publisher", { short: module.publisher.slice(0, 8) }) }}</span
-            >
-          </span>
-          <span v-if="module.description" class="text-muted-foreground line-clamp-2 text-sm">{{ module.description }}</span>
-          <span class="text-muted-foreground text-xs" :data-testid="`module-origin-${module.id}`">{{ t(`modules.origin.${module.origin.kind}`, { folder: module.origin.folder }) }}</span>
-        </div>
+      <ModuleRow v-for="module in sorted" :key="module.id" :module="module">
         <Button
           v-if="module.localDataWaiting"
           variant="secondary"
@@ -223,7 +148,7 @@ function remove(module: ModuleView) {
         >
           <Trash2 :stroke-width="1.5" /> {{ t("common.remove") }}
         </Button>
-      </li>
+      </ModuleRow>
     </ul>
   </div>
 

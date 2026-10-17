@@ -1,6 +1,6 @@
 {
   "name": "@tavora/create-module",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Makes a new Tavora module project: npm create @tavora/module.",
   "type": "module",
   "keywords": [
@@ -37,6 +37,7 @@
     "node": ">=22.12"
   },
   "dependencies": {
+    "@clack/prompts": "^1.8.1",
     "@tavora/module-schema": "workspace:^"
   },
   "devDependencies": {
