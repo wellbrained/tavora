@@ -452,7 +452,6 @@ export const de: Record<keyof typeof en, string> = {
   "addModule.category.official": "Offiziell",
   "addModule.category.local": "Auf diesem Computer",
   "addModule.category.development": "Entwicklung",
-  "addModule.unsupported": "Unterstützt dieses Spiel nicht",
   "addModule.addLabel": "{name} hinzufügen",
   "addModule.open": "{count} geöffnet",
   "addModule.panels": "Panels von {name}",

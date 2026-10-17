@@ -5,6 +5,8 @@ import { validateManifest } from "@tavora/module-schema";
 import { MIN_TAVORA, SDK_VERSION } from "@tavora/sdk";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createModule, CreateError, defaultsFor, idProblem, slugOf, TEMPLATES } from "./create.ts";
+import { CATALOG } from "../../../apps/desktop/src/main/catalog.ts";
+import { GAMES } from "./games.ts";
 import { VERSIONS } from "./versions.ts";
 
 let root: string;
@@ -64,6 +66,25 @@ describe("createModule", () => {
     await expect(createModule({ dir: fresh, id: "tavora.notes", name: "Notes", template: "vanilla" })).rejects.toThrow(/Tavora's own/);
     await expect(createModule({ dir: fresh, id: "example.notes", name: "  ", template: "vanilla" })).rejects.toThrow(/name/);
     await expect(createModule({ dir: fresh, id: "example.notes", name: "Notes", template: "svelte" as "vue" })).rejects.toThrow(/template/);
+  });
+});
+
+describe("games", () => {
+  it("a module made for one game lists only that game", async () => {
+    const dir = path.join(root, "build-planner");
+    await createModule({ dir, id: "example.build-planner", name: "Build Planner", template: "vanilla", game: "poe2" });
+    const manifest = validateManifest(await json(path.join(dir, "tavora.module.json")));
+    expect(manifest.ok && manifest.manifest.games).toEqual(["poe2"]);
+    const any = path.join(root, "any");
+    await createModule({ dir: any, id: "example.any", name: "Any", template: "vanilla" });
+    expect((await json(path.join(any, "tavora.module.json"))).games).toEqual([]);
+    await expect(createModule({ dir: path.join(root, "bad"), id: "example.bad", name: "Bad", template: "vanilla", game: "Path of Exile" })).rejects.toThrow(/game id/);
+  });
+
+  it("are Tavora's built-in games, and the manifest reference lists every id", async () => {
+    expect(GAMES).toEqual(CATALOG.map(({ id, name }) => ({ id, name })));
+    const reference = await readFile(path.resolve(import.meta.dirname, "../../../apps/docs/reference/manifest.md"), "utf8");
+    for (const game of GAMES) expect(reference, game.id).toContain(`| \`${game.id}\` |`);
   });
 });
 

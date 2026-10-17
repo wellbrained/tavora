@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { expectModuleText, launch, newUserData, openModule, seedLibrary } from "./harness";
+import { expectModuleText, launch, newUserData, openGame, openModule, seedLibrary } from "./harness";
 
 const ID = "devtest.tracker";
 
@@ -87,6 +87,32 @@ test("a folder of projects loads every project in it, says which still needs a b
     await make("notes", "devtest.notes", "Notes Dev", true);
     await expect(projects).toHaveCount(3);
     await expect(page.getByTestId("module-devtest.notes")).toBeVisible();
+  } finally {
+    await app.close();
+  }
+});
+
+test("a module made for one game is listed in Add module only in that game", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "tavora-project-"));
+  await writeFile(
+    path.join(dir, "tavora.module.json"),
+    JSON.stringify({ id: ID, name: "Tracker", version: "0.1.0", apiVersion: "1", entry: "dist/index.html", games: ["satisfactory"], viewport: { minWidth: 200, minHeight: 150 }, permissions: { network: [] } }),
+  );
+  await build(dir, "first build");
+  const userData = await newUserData();
+  await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), developmentFolders: [dir] }));
+  const { app, page } = await launch(userData);
+  try {
+    // Path of Exile 2 is shown first: the module is not in its library at all.
+    await page.getByTestId("add-module").click();
+    await expect(page.getByTestId("add-module-dialog")).toBeVisible();
+    await expect(page.getByTestId(`module-${ID}`)).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    // In Satisfactory it is listed and opens.
+    await openGame(page, "satisfactory");
+    await openModule(page, ID);
+    await expectModuleText(app, ID, "build", "first build");
   } finally {
     await app.close();
   }
