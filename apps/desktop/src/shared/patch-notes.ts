@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.4",
+    date: "2026-10-17",
+    title: "Tavora starts again",
+    notes: ["0.17.3 closed itself right away on every start, before a window opened. Tavora starts normally again."],
+  },
+  {
     version: "0.17.3",
     date: "2026-10-17",
     title: "To-Dos reworked, and safer accounts",

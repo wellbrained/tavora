@@ -9,7 +9,7 @@
 //
 // Order on the server: the installer and its blockmap first, latest.yml last, so a
 // manifest never points at a file that is not there yet (deploy/tavora-updates-publish.sh).
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -111,6 +111,24 @@ if (!new RegExp(`^version: ${version.replaceAll(".", "\\.")}$`, "m").test(readFi
   throw new Error(`latest.yml does not say version ${version}.`);
 }
 console.log(`Built ${installer} and its update files.`);
+
+// e2e runs Tavora unpackaged, so code that only runs packaged (the unsafe-switch gate) is
+// started here once: 0.17.3 shipped refusing every start. A second instance next to a
+// running Tavora quits with 0, which passes; an error exit fails the release.
+step("Starting the packaged build");
+const smoke = spawn(path.join(releaseDir, "win-unpacked", "Tavora.exe"), [], { stdio: ["ignore", "ignore", "pipe"] });
+let smokeErr = "";
+smoke.stderr.on("data", (chunk) => (smokeErr += chunk));
+const smokeExit = await new Promise((resolve) => {
+  const timer = setTimeout(() => resolve(null), 15_000);
+  smoke.on("exit", (code) => { clearTimeout(timer); resolve(code); });
+});
+if (smokeExit === null) spawnSync("taskkill", ["/PID", String(smoke.pid), "/T", "/F"], { stdio: "ignore" });
+if (smokeExit !== null && smokeExit !== 0) {
+  console.error(smokeErr.trim());
+  throw new Error(`The packaged Tavora.exe quit with exit code ${smokeExit} on a plain start. Nothing was published.`);
+}
+console.log(smokeExit === null ? "It started and kept running." : "It handed over to a Tavora that is already running.");
 
 if (dryRun) {
   console.log("\nDry run: stopping before the upload. Nothing was published or tagged.");
