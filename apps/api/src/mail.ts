@@ -57,7 +57,7 @@ export type MailLanguage = "en" | "de";
 
 export const mailLanguage = (input: unknown): MailLanguage => (input === "de" ? "de" : "en");
 
-export type CodeMailKind = "sign-in" | "create" | "change-email" | "remove-email" | "delete";
+export type CodeMailKind = "sign-in" | "create" | "change-email" | "remove-email" | "connect-discord" | "remove-discord" | "delete";
 
 const CODE_TEXTS: Record<MailLanguage, Record<CodeMailKind, { subject: string; lead: string }>> = {
   en: {
@@ -65,6 +65,8 @@ const CODE_TEXTS: Record<MailLanguage, Record<CodeMailKind, { subject: string; l
     create: { subject: "Your Tavora code", lead: "Here is your code to create a Tavora account:" },
     "change-email": { subject: "Confirm your new email for Tavora", lead: "Here is your code to use this address for your Tavora account:" },
     "remove-email": { subject: "Confirm removing your email from Tavora", lead: "Here is your code to remove this address from your Tavora account, which then signs in with Discord only:" },
+    "connect-discord": { subject: "Confirm connecting Discord to Tavora", lead: "Here is your code to connect a Discord login to your Tavora account, as a second way to sign in:" },
+    "remove-discord": { subject: "Confirm disconnecting Discord from Tavora", lead: "Here is your code to disconnect Discord from your Tavora account, which then signs in with this address only:" },
     delete: { subject: "Confirm deleting your Tavora account", lead: "Here is your code to delete your Tavora account:" },
   },
   de: {
@@ -72,6 +74,8 @@ const CODE_TEXTS: Record<MailLanguage, Record<CodeMailKind, { subject: string; l
     create: { subject: "Dein Tavora-Code", lead: "Hier ist dein Code, um ein Tavora-Konto zu erstellen:" },
     "change-email": { subject: "Bestätige deine neue E-Mail für Tavora", lead: "Hier ist dein Code, um diese Adresse für dein Tavora-Konto zu verwenden:" },
     "remove-email": { subject: "Bestätige das Entfernen deiner E-Mail bei Tavora", lead: "Hier ist dein Code, um diese Adresse aus deinem Tavora-Konto zu entfernen; es meldet sich dann nur noch mit Discord an:" },
+    "connect-discord": { subject: "Bestätige das Verbinden von Discord mit Tavora", lead: "Hier ist dein Code, um einen Discord-Login als zweiten Weg zur Anmeldung mit deinem Tavora-Konto zu verbinden:" },
+    "remove-discord": { subject: "Bestätige das Trennen von Discord bei Tavora", lead: "Hier ist dein Code, um Discord von deinem Tavora-Konto zu trennen; es meldet sich dann nur noch mit dieser Adresse an:" },
     delete: { subject: "Bestätige das Löschen deines Tavora-Kontos", lead: "Hier ist dein Code, um dein Tavora-Konto zu löschen:" },
   },
 };
@@ -104,31 +108,6 @@ export function emailChangedMail(to: string, newEmail: string, language: MailLan
         to,
         subject: "The email of your Tavora account was changed",
         text: `Your Tavora account now uses ${maskEmail(newEmail)} instead of this address.\n\nIf this was not you, write to tavora.app@gmail.com.\n\nTavora\n`,
-      };
-}
-
-/** Sent to the account's address when a Discord login was connected, so a stolen sign-in cannot add one quietly. */
-export function discordConnectedMail(to: string, discordName: string, language: MailLanguage): Mail {
-  return language === "de"
-    ? {
-        to,
-        subject: "Discord wurde mit deinem Tavora-Konto verbunden",
-        text: `Dein Tavora-Konto kann sich jetzt auch mit dem Discord-Konto @${discordName} anmelden.
-
-Wenn du das nicht warst, trenne Discord in Tavora unter Einstellungen > Konto und melde die anderen Geräte dort ab, oder schreib uns an tavora.app@gmail.com.
-
-Tavora
-`,
-      }
-    : {
-        to,
-        subject: "Discord was connected to your Tavora account",
-        text: `Your Tavora account can now also sign in with the Discord account @${discordName}.
-
-If this was not you, disconnect Discord in Tavora under Settings > Account and sign the other devices out there, or write to tavora.app@gmail.com.
-
-Tavora
-`,
       };
 }
 

@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { DEVICE_OS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
 import { DiscordError, isDiscordCode, isPkceVerifier, type DiscordClient, type DiscordIdentity } from "./discord.ts";
-import { codeMail, discordConnectedMail, emailChangedMail, MailLimitError, mailLanguage, type Mail, type Mailer } from "./mail.ts";
+import { codeMail, emailChangedMail, MailLimitError, mailLanguage, type Mail, type Mailer } from "./mail.ts";
 import { inspectPng } from "./png.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 
@@ -74,6 +74,10 @@ const tooMany = (context: Context, wait: number) => {
 /** What the owner sees of their account: never the Discord id, only its username as a label. */
 const accountAnswer = (account: Account) => ({ email: account.email, discord: account.discord ? { name: account.discord.name } : null, createdAt: account.createdAt });
 const lastMethod = (context: Context) => context.json({ error: "An account keeps at least one way to sign in.", reason: "last-method" }, 409);
+const discordConnected = (context: Context) =>
+  context.json({ error: "This account already has a Discord login; disconnect it first.", reason: "discord-connected" }, 409);
+const noEmail = (context: Context) => context.json({ error: "This account has no email address.", reason: "no-email" }, 409);
+const noDiscord = (context: Context) => context.json({ error: "This account has no Discord login.", reason: "no-discord" }, 409);
 const wrongCode = (context: Context) => context.json({ error: "That code is wrong or has expired.", reason: "wrong-code" }, 400);
 
 export function accountRoutes(options: AccountOptions, limiter: RateLimiter, clientKey: (request: Request) => string) {
@@ -341,38 +345,69 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     return context.json({ status: "created", token, device: session.id, account: accountAnswer(account) });
   });
 
-  // Signed in: connect Discord (a fresh Discord sign-in), never taking it from another account and never
-  // replacing the one the account has (that one is disconnected first, which needs its own sign-in).
-  // The account's address hears about it, so a stolen sign-in cannot add a way in quietly.
+  // Signed in: connect Discord. Only an account with an email has none (a Discord-only account already has
+  // one), and connecting needs a code sent to that address as well as a fresh Discord sign-in, so a stolen
+  // sign-in cannot add a way in that it controls. Never takes a login from another account or replaces the
+  // account's own.
+  signedIn.post("/discord/code", async (context) => {
+    const wait = codeLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const input = await body(context);
+    const account = context.get("account");
+    if (account.discord) return discordConnected(context);
+    if (!account.email) return noEmail(context);
+    if (usedUp(true)) return usedUpAnswer(context);
+    const request = store.requestCode(account.email, "connect-discord", account.id, now());
+    if (!request.ok) return tooMany(context, request.retryAfter);
+    return (await send(context, codeMail("connect-discord", account.email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
+  });
+
   signedIn.post("/discord", async (context) => {
     const wait = verifyLimiter.check(clientKey(context.req.raw));
     if (wait > 0) return tooMany(context, wait);
     const input = await body(context);
+    const account = context.get("account");
+    if (account.discord) return discordConnected(context);
+    if (!account.email) return noEmail(context);
+    if (typeof input.emailCode !== "string" || !CODE.test(input.emailCode)) {
+      return context.json({ error: "Send { code, verifier, emailCode }.", reason: "bad-request" }, 400);
+    }
+    // The email code is checked first (a wrong one counts as a try) and spent only once Discord said who this is.
+    if (!store.checkCode(account.email, "connect-discord", account.id, input.emailCode, now(), false)) return wrongCode(context);
     const who = await identify(context, input);
     if (who instanceof Response) return who;
-    const account = context.get("account");
-    if (account.discord && account.discord.id !== who.id) {
-      return context.json({ error: "This account already has a Discord login; disconnect it first.", reason: "discord-connected" }, 409);
-    }
+    if (!store.checkCode(account.email, "connect-discord", account.id, input.emailCode, now(), true)) return wrongCode(context);
     if (store.setDiscord(account.id, who) === "taken") {
       return context.json({ error: "That Discord login belongs to another Tavora account.", reason: "discord-taken" }, 409);
     }
-    // Best effort: the login is connected either way, and a full day of mail must not block it.
-    if (!account.discord && account.email && !usedUp(true)) await send(context, discordConnectedMail(account.email, who.name, mailLanguage(input.language)));
     return context.json({ account: accountAnswer({ ...account, discord: who }) });
   });
 
-  // Disconnect Discord: only while an email address remains, and only with a fresh sign-in with that same
-  // Discord login, so a stolen sign-in cannot swap in its own.
+  // Disconnect Discord: only while an email address remains, and only with a code sent to it. The owner can
+  // always remove a Discord login this way, also one they lost or one someone else connected; a stolen
+  // sign-in cannot, without the mailbox.
+  signedIn.post("/discord/remove/code", async (context) => {
+    const wait = codeLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const input = await body(context);
+    const account = context.get("account");
+    if (!account.discord) return noDiscord(context);
+    if (!account.email) return lastMethod(context);
+    if (usedUp(true)) return usedUpAnswer(context);
+    const request = store.requestCode(account.email, "remove-discord", account.id, now());
+    if (!request.ok) return tooMany(context, request.retryAfter);
+    return (await send(context, codeMail("remove-discord", account.email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
+  });
+
   signedIn.post("/discord/remove", async (context) => {
     const wait = verifyLimiter.check(clientKey(context.req.raw));
     if (wait > 0) return tooMany(context, wait);
+    const input = await body(context);
     const account = context.get("account");
-    if (!account.discord) return context.json({ error: "This account has no Discord login.", reason: "no-discord" }, 409);
+    if (typeof input.code !== "string" || !CODE.test(input.code)) return context.json({ error: "Send { code }.", reason: "bad-request" }, 400);
+    if (!account.discord) return noDiscord(context);
     if (!account.email) return lastMethod(context);
-    const who = await identify(context, await body(context));
-    if (who instanceof Response) return who;
-    if (account.discord.id !== who.id) return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
+    if (!store.checkCode(account.email, "remove-discord", account.id, input.code, now(), true)) return wrongCode(context);
     if (store.removeDiscord(account.id) === "last-method") return lastMethod(context);
     return context.json({ account: accountAnswer({ ...account, discord: null }) });
   });
