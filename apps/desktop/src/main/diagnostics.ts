@@ -2,10 +2,13 @@
 // whoever is helping. Nothing here is sent anywhere: it is text the player
 // copies and shares on purpose. It holds versions, counts, timings and the
 // last errors, never game or module names, notes or the player's folders.
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
+import path from "node:path";
 
 /** Lines kept: enough to see what went wrong lately, little enough to paste. */
 const ERRORS_KEPT = 20;
+const STARTUP_LOG_KEPT = 50;
 const SAMPLES_KEPT = 20;
 const LINE_MAX = 400;
 
@@ -85,6 +88,23 @@ export class Timings {
       return { name, count: list.length, last: list[list.length - 1]!, median: sorted[Math.floor(sorted.length / 2)]!, max: sorted[sorted.length - 1]! };
     });
   }
+}
+
+/**
+ * Adds a line to the startup log (logs/startup.log in the data folder), keeping the newest
+ * few. It survives a start that fails before any window, so a player can send it.
+ */
+export function appendStartupLog(file: string, text: string, folders: { home?: string; userData?: string } = {}, now = new Date()): void {
+  let lines: string[] = [];
+  try {
+    lines = readFileSync(file, "utf8").split(/\r?\n/).filter(Boolean);
+  } catch {
+    // No log yet.
+  }
+  const line = scrub(text, folders).replace(/\s+/g, " ").trim();
+  lines.push(`${now.toISOString()} ${line.length > LINE_MAX ? `${line.slice(0, LINE_MAX)}…` : line}`);
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, `${lines.slice(-STARTUP_LOG_KEPT).join("\n")}\n`);
 }
 
 export const errorLog = new ErrorLog();
