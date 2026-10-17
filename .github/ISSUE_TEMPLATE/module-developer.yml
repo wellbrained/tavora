@@ -1,0 +1,27 @@
+name: Module developer
+description: A bug or a gap you hit while building a Tavora module (SDK, manifest, tavora-pack, the starter or the docs).
+labels: ["module developers"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Error codes and messages help.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Tavora, and @tavora/sdk from your package.json.
+      placeholder: Tavora 0.17.12, @tavora/sdk 0.2.2
+    validations:
+      required: true
+  - type: textarea
+    id: modules
+    attributes:
+      label: Settings > Modules
+      description: What Settings > Modules shows next to your module, if anything.
+  - type: markdown
+    attributes:
+      value: Questions are welcome in [Discussions](https://github.com/wellbrained/tavora/discussions). Security problems go privately, as [SECURITY.md](https://github.com/wellbrained/tavora/blob/main/SECURITY.md) says.

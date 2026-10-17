@@ -2,9 +2,21 @@
   "name": "@tavora/sdk",
   "version": "0.2.4",
   "description": "Typed client for Tavora modules: talks to the Tavora Desktop host over its bridge.",
-  "private": true,
   "type": "module",
   "sideEffects": false,
+  "keywords": [
+    "tavora",
+    "module",
+    "sdk",
+    "gaming"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wellbrained/tavora.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://docs.mytavora.app/",
+  "bugs": "https://github.com/wellbrained/tavora/issues",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p ."
@@ -19,12 +31,29 @@
       "source": "./src/protocol.ts",
       "types": "./dist/protocol.d.ts",
       "default": "./dist/protocol.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./protocol": {
+        "types": "./dist/protocol.d.ts",
+        "default": "./dist/protocol.js"
+      },
+      "./package.json": "./package.json"
     }
   },
   "files": [
     "dist",
     "src",
-    "README.md"
+    "!src/**/*.test.ts",
+    "README.md",
+    "CHANGELOG.md"
   ],
   "license": "MIT"
 }

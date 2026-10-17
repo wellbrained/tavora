@@ -61,10 +61,10 @@ Methods without params must be sent with `params` left out.
 | `documents.delete` | `{ id, ifRevision? }` | `null` (also when the document did not exist) |
 | `panel.getState` | none | this panel's state, or `null` |
 | `panel.setState` | `{ value }` | `null`; `value: null` removes the state |
-| `panel.getLaunch` | none | why this page is loading, the same on every call until it loads again: `{ reason: "add" }` for a panel the player just added, `{ reason: "restore", content }` for one that was open before, with what it last showed through `panel.setContent` (or `null`), or `{ reason: "open", content }` for one another panel opened with `panels.open` (Tavora 0.17.14 and newer). See [Content per panel](#content-per-panel) (Tavora 0.17.13 and newer) |
-| `panels.open` | `{ type, content? }` | `"shown"`, `"switched"`, `"opened"` or `"failed"`: opens one of this module's own panel types in the current game, on `content` (`{ id, title }`) when given. See [Opening another panel](#opening-another-panel). Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for a type the module does not have (Tavora 0.17.14 and newer) |
-| `panel.navigated` | `{ requestId, handled, ok }` | `null`; the answer to a `panel.navigate` event. The SDK sends it for you from `panel.onNavigate` (Tavora 0.17.14 and newer) |
-| `panel.setContent` | `{ content }` | `null`; `content` is `{ id, title }` or `null`: what the panel shows now. `id` is your own, 1 to 200 characters; `title` is its full name, 1 to 200 characters, kept on one line. `INVALID_PARAMS` otherwise (Tavora 0.17.13 and newer) |
+| `panel.getLaunch` | none | why this page is loading, the same on every call until it loads again: `{ reason: "add" }` for a panel the player just added, `{ reason: "restore", content }` for one that was open before, with what it last showed through `panel.setContent` (or `null`), or `{ reason: "open", content }` for one another panel opened with `panels.open` (Tavora 0.17.15 and newer). See [Content per panel](#content-per-panel) (Tavora 0.17.14 and newer) |
+| `panels.open` | `{ type, content? }` | `"shown"`, `"switched"`, `"opened"` or `"failed"`: opens one of this module's own panel types in the current game, on `content` (`{ id, title }`) when given. See [Opening another panel](#opening-another-panel). Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for a type the module does not have (Tavora 0.17.15 and newer) |
+| `panel.navigated` | `{ requestId, handled, ok }` | `null`; the answer to a `panel.navigate` event. The SDK sends it for you from `panel.onNavigate` (Tavora 0.17.15 and newer) |
+| `panel.setContent` | `{ content }` | `null`; `content` is `{ id, title }` or `null`: what the panel shows now. `id` is your own, 1 to 200 characters; `title` is its full name, 1 to 200 characters, kept on one line. `INVALID_PARAMS` otherwise (Tavora 0.17.14 and newer) |
 | `workspace.getViewport` | none | `{ width, height }` of the panel in CSS pixels |
 | `ui.getLanguage` | none | the language of Tavora's own texts as a code, `"en"` or `"de"` for now; show your module in it, or in English when you have no translation |
 | `ui.showMenu` | `{ items, at, side?, align? }` | the chosen item's `id`, or `null` when the player closed the menu; see [Menus](#menus) |
@@ -184,7 +184,7 @@ Writes are atomic: a crash leaves either the old or the new document, never a mi
 
 ### Content per panel
 
-Each panel of a module can show something different: one build, character, run or document of your own, picked in a selector in your panel's toolbar. Tavora has no model of its own for it; it only needs to know what each panel shows. Needs Tavora 0.17.13 or newer.
+Each panel of a module can show something different: one build, character, run or document of your own, picked in a selector in your panel's toolbar. Tavora has no model of its own for it; it only needs to know what each panel shows. Needs Tavora 0.17.14 or newer.
 
 - When the page loads, ask `panel.getLaunch()`. `{ reason: "add" }` means the player just added the panel: pick the content yourself, such as the one used last, or show a picker. `{ reason: "restore", content }` means the panel was open before (a restart, a switch back to this game, a reload); `content` is what it last showed, or `null`. Keep the panel's own choice in its `panel` state too, so each copy keeps its own.
 - Whenever the selection changes, call `panel.setContent({ id, title })`, or `panel.setContent(null)` for nothing. Tavora keeps it with the panel and shows `title` when the player hovers the tab, below the panel's and the module's names. Tabs stay short, so copies of one panel type look the same; the hover text and your toolbar tell them apart.
@@ -193,7 +193,7 @@ Each panel of a module can show something different: one build, character, run o
 
 #### Opening another panel
 
-A panel can open the module's other panel types on what it shows, such as the gear for the build in the planner: `panels.open(type, { content })`. Needs Tavora 0.17.14 or newer. Only right after a click or key press in the panel, once per click, and only the module's own types in the game shown now. Tavora picks the panel:
+A panel can open the module's other panel types on what it shows, such as the gear for the build in the planner: `panels.open(type, { content })`. Needs Tavora 0.17.15 or newer. Only right after a click or key press in the panel, once per click, and only the module's own types in the game shown now. Tavora picks the panel:
 
 1. A panel of that type that already shows `content` (by `id`, as its `panel.setContent` said) comes to the front: `"shown"`. Without `content`, the panel of that type used last comes to the front.
 2. Else the panel of that type the player used last is asked to switch: it gets a `panel.navigate` event, which the SDK hands to your `panel.onNavigate` handler. Save any pending edits there, switch, and resolve: `"switched"`, and it comes to the front. Other copies keep what they show.
@@ -214,7 +214,7 @@ The Panel Types Example in Tavora's examples folder does all of this.
 | `aiUsage.accountsChanged` | `null` | the player added, renamed or removed an AI account; only with the `aiUsage` capability |
 | `discord.state` | `DiscordState` | the connection to the Discord app changed; only with the `discord` capability, after `discord.state` was asked |
 | `discord.event` | `{ event, data }` | a Discord event the panel subscribed to; only with the `discord` capability |
-| `panel.navigate` | `{ requestId, content }` | another panel of this module asked this one to show `content` (`panels.open`); answer with `panel.navigated` within 5 seconds. The SDK does it for you: use `panel.onNavigate` (Tavora 0.17.14 and newer) |
+| `panel.navigate` | `{ requestId, content }` | another panel of this module asked this one to show `content` (`panels.open`); answer with `panel.navigated` within 5 seconds. The SDK does it for you: use `panel.onNavigate` (Tavora 0.17.15 and newer) |
 | `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden, its tab is in the background, or another group is maximized); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
 | `lifecycle.resume` | `null` | the panel is visible again |
 | `lifecycle.dispose` | `null` | the panel is closing. Best effort only: it may never arrive, so never rely on it to save |

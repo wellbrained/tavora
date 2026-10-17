@@ -19,7 +19,7 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.17.14",
+    version: "0.17.15",
     date: "2026-10-17",
     title: "Panels open each other",
     notes: [
@@ -29,13 +29,23 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
-    version: "0.17.13",
+    version: "0.17.14",
     date: "2026-10-17",
     title: "Each panel keeps what it shows",
     notes: [
       "Panels of a module can each show something different, such as a different build, and keep it when you switch games or restart Tavora.",
       "Hovering a panel's tab now shows the full name of what it shows, below the panel's and the module's names.",
       "Module developers: the Panel Types Example now picks a build in each panel.",
+    ],
+  },
+  {
+    version: "0.17.13",
+    date: "2026-10-17",
+    title: "Whiteboard: place pictures, move the palette",
+    notes: [
+      "A picture you paste or drop on the Whiteboard can now be dragged into place right away. It locks once you click elsewhere or pick a tool, so drawing on it does not move it.",
+      "Every picture on the Whiteboard has a small lock on its corner: click it to lock or unlock just that picture. Lock pictures in the header still does all of them at once.",
+      "The Whiteboard's style palette (stroke, background, width, …) has a handle: drag it anywhere on the board, or fold it away with the arrow. The panel remembers where you left it. Double-click the handle to put it back.",
     ],
   },
   {

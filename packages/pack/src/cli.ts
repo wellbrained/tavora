@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // tavora-pack <module folder> [--out <file.zip>] [--key <key file>]
 //   Packs a built module into a zip signed with your publisher key, made on
 //   first use. Back the key up: a new key makes you a new publisher.
@@ -5,7 +6,7 @@
 //   Links your publisher key to your Tavora account with a code from Tavora
 //   (Settings > Account > Link a publisher key), so players see your
 //   developer name. Only the key's public half leaves this PC.
-// In this repository: pnpm tavora-pack ... (or pnpm pack-module ...).
+// Installed from npm as @tavora/pack; in Tavora's own repository: pnpm tavora-pack ...
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
