@@ -9,6 +9,7 @@ import { BLOB_PATH, CLIPBOARD_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession, type BridgeContext } from "./bridge";
 import type { CheckedMenu } from "./module-menu";
 import type { PanelContent, PanelLaunch } from "./panel-content";
+import { LIMITS, type PanelOpenResult } from "@tavora/sdk/protocol";
 import type { DiscordConnector, DiscordListener } from "./discord";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
@@ -53,6 +54,8 @@ export interface ModuleViewOptions {
   launch(): PanelLaunch;
   /** What the panel shows now (panel.setContent), already checked. */
   setContent(content: PanelContent | null): void;
+  /** panels.open from this panel, after its click was taken: the host picks or opens the destination. */
+  openPanel(type: string, content: PanelContent | null): Promise<PanelOpenResult>;
   /** Hosts the player granted this module for network.fetch, as installed now; asked on every call and redirect. */
   networkHosts(): ReadonlySet<string>;
   /** Connectors the player granted this module, as installed now; asked on every call. */
@@ -157,6 +160,9 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
 export const SETTLE_MS = 150;
 export const NO_BRIDGE_MS = 400;
 export const REVEAL_CAP_MS = 2_000;
+/** How a panel answered panel.navigate. */
+export type NavigateOutcome = "switched" | "failed" | "unhandled";
+
 /** How long after a click or key press a link may be opened. */
 export const GESTURE_MS = 2_000;
 
@@ -182,6 +188,11 @@ export class ModuleView {
   revealed = false;
   private revealTimers: ReturnType<typeof setTimeout>[] = [];
   private settleTimer: ReturnType<typeof setTimeout> | undefined;
+  /** When the player last clicked or typed in this panel, or when it opened; panels.open switches the one used last. */
+  usedAt = Date.now();
+  private nextNavigation = 1;
+  /** panel.navigate requests waiting for the page's answer. */
+  private readonly navigations = new Map<number, (outcome: NavigateOutcome) => void>();
 
   constructor(private readonly options: ModuleViewOptions) {
     const { module, game } = options;
@@ -287,6 +298,7 @@ export class ModuleView {
 
   noteGesture(): void {
     this.gestureAt = Date.now();
+    this.usedAt = this.gestureAt;
     gestureOf(this.view.webContents.session).at = this.gestureAt;
   }
 
@@ -365,6 +377,14 @@ export class ModuleView {
         panelType: this.options.panelType?.id ?? null,
         launch: this.options.launch(),
         setContent: this.options.setContent,
+        openPanel: (type, content) => {
+          // One click opens or switches one panel, so a page cannot keep panels coming on its own.
+          this.takeGesture("panels.open");
+          return this.options.openPanel(type, content);
+        },
+        navigated: (requestId, handled, ok) => {
+          if (this.bridge === bridge) this.navigated(requestId, handled, ok);
+        },
         game,
         data,
         panelState,
@@ -603,7 +623,32 @@ export class ModuleView {
     if (!this.view.webContents.isDestroyed()) this.view.webContents.close();
   }
 
+  /**
+   * Asks the page to switch to other content (panel.onNavigate). It saves first; `failed` when it could not or did
+   * not answer within navigateTimeoutMs (it keeps what it showed), `unhandled` when the page takes no navigation.
+   */
+  navigate(content: PanelContent): Promise<NavigateOutcome> {
+    const bridge = this.bridge;
+    if (!bridge || !bridge.ready || this.status !== "ready") return Promise.resolve("failed");
+    const requestId = this.nextNavigation++;
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => finish("failed"), LIMITS.navigateTimeoutMs);
+      const finish = (outcome: NavigateOutcome) => {
+        clearTimeout(timer);
+        if (this.navigations.delete(requestId)) resolve(outcome);
+      };
+      this.navigations.set(requestId, finish);
+      bridge.emit("panel.navigate", { requestId, content: { ...content } });
+    });
+  }
+
+  private navigated(requestId: number, handled: boolean, ok: boolean): void {
+    this.navigations.get(requestId)?.(!handled ? "unhandled" : ok ? "switched" : "failed");
+  }
+
   private disconnect(): void {
+    // A page that goes away answers nothing more.
+    for (const finish of [...this.navigations.values()]) finish("failed");
     this.bridge?.close();
     this.bridge = undefined;
     this.options.discord.release(this.options.instanceId);

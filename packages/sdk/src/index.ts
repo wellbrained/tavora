@@ -36,6 +36,7 @@ import {
   type NetworkResponse,
   type PanelContent,
   type PanelLaunch,
+  type PanelOpenResult,
   type PutDocumentParams,
   type TavoraDocument,
   type TavoraGame,
@@ -67,6 +68,7 @@ export type {
   NetworkResponse,
   PanelContent,
   PanelLaunch,
+  PanelOpenResult,
   PutDocumentParams,
   TavoraDocument,
   TavoraGame,
@@ -80,7 +82,7 @@ export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, PROTOCOL
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.3";
+export const SDK_VERSION = "0.2.4";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -151,6 +153,23 @@ export interface TavoraSDK {
      * back through getLaunch after a restart. Needs Tavora 0.17.13 or newer.
      */
     setContent(content: PanelContent | null): Promise<void>;
+    /**
+     * Lets another panel of this module switch this one to other content (`panels.open`). The handler saves any
+     * pending edits and switches, then resolves; it throws (or rejects) when it cannot, and the panel keeps what it
+     * showed. It has 5 seconds. One handler per page: a new one replaces the last. Without one, Tavora opens a new
+     * panel instead of switching this one. Needs Tavora 0.17.14 or newer.
+     */
+    onNavigate(fn: (content: PanelContent) => void | Promise<void>): Unsubscribe;
+  };
+  /** The module's other panels. */
+  panels: {
+    /**
+     * Opens one of this module's own panel types in the current game, on `content` when given. Tavora brings
+     * forward a panel of that type already showing the content, else switches the one used last
+     * (`panel.onNavigate`), else opens a new one. Call it from the click or key press that asked for it: the host
+     * refuses it otherwise (PERMISSION_DENIED). Needs Tavora 0.17.14 or newer.
+     */
+    open(type: string, options?: { content?: PanelContent }): Promise<PanelOpenResult>;
   };
   workspace: {
     getViewport(): Promise<TavoraViewport>;
@@ -363,6 +382,24 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
 
   const host = await call("bridge.handshake", { protocol: PROTOCOL_VERSION, sdkVersion: SDK_VERSION });
 
+  // panel.onNavigate: Tavora asks, the handler saves and switches, and the answer says how it went.
+  let navigate: ((content: PanelContent) => void | Promise<void>) | null = null;
+  on("panel.navigate", ({ requestId, content }) => {
+    const handler = navigate;
+    void (async () => {
+      let ok = false;
+      if (handler) {
+        try {
+          await handler(content);
+          ok = true;
+        } catch (error) {
+          console.error("[tavora] panel.onNavigate handler failed", error);
+        }
+      }
+      await call("panel.navigated", { requestId, handled: handler !== null, ok }).catch(() => {});
+    })();
+  });
+
   return {
     host,
     game: {
@@ -408,6 +445,17 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       setContent: async (content) => {
         await call("panel.setContent", { content });
       },
+      onNavigate: (fn) => {
+        navigate = fn;
+        return () => {
+          if (navigate === fn) navigate = null;
+        };
+      },
+    },
+    panels: {
+      // Tavora may wait for another panel to save first.
+      open: (type, options = {}) =>
+        call("panels.open", { type, ...(options.content ? { content: options.content } : {}) }, LIMITS.navigateTimeoutMs + 5_000),
     },
     workspace: {
       getViewport: () => call("workspace.getViewport"),

@@ -5,6 +5,7 @@ import AddModuleDialog from "./components/AddModuleDialog.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import GrantDialog from "./components/GrantDialog.vue";
 import LinkChoiceDialog from "./components/LinkChoiceDialog.vue";
+import NavigationChoiceDialog from "./components/NavigationChoiceDialog.vue";
 import GameRail from "./components/GameRail.vue";
 import ModuleMenu from "./components/menus/ModuleMenu.vue";
 import PromptDialog from "./components/PromptDialog.vue";
@@ -41,6 +42,7 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <ShareIconsDialog v-else-if="dialog?.kind === 'share-icons'" :request="dialog" />
     <PromptDialog v-else-if="dialog?.kind === 'prompt'" :key="dialog.title" :request="dialog" />
     <LinkChoiceDialog v-else-if="dialog?.kind === 'link-choice'" :url="dialog.url" />
+    <NavigationChoiceDialog v-else-if="dialog?.kind === 'navigation-choice'" :panel="dialog.panel" :content="dialog.content" />
     <ConfirmDialog v-else-if="dialog?.kind === 'confirm'" :key="dialog.title" :request="dialog" />
     <GrantDialog v-else-if="dialog?.kind === 'grant'" :key="dialog.moduleId" :request="dialog" />
     <ModuleMenu />
