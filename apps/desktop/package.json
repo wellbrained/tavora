@@ -43,6 +43,7 @@
   "main": "out/main/index.cjs",
   "license": "MIT",
   "description": "Second-monitor gaming companion",
+  "author": "Tavora",
   "build": {
     "appId": "gg.tavora.desktop",
     "electronFuses": {

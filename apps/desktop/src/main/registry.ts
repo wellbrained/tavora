@@ -22,7 +22,7 @@ export interface InstalledModule {
    * so a module that only claims another's id never sees its data (S5).
    */
   owner: string;
-  /** Part of the host (the Browser, Discord, AI usage), not a package on disk. */
+  /** Part of the host (the Browser), not a package on disk. */
   builtIn?: true;
 }
 
@@ -34,7 +34,7 @@ export const OFFICIAL_PREFIX = "tavora.";
 /** The id the Browser is listed under in the module library; reserved like every `tavora.` id. */
 export const BROWSER_MODULE_ID = "tavora.browser";
 
-/** The Discord voice panel, built into the host like the Browser. */
+/** The official Discord module (modules/discord), which Tavora moves the built-in panel's settings to. */
 export const DISCORD_MODULE_ID = "tavora.discord";
 
 /** The official AI Usage module (modules/ai-usage), which Tavora moves the built-in panel's settings to. */
@@ -193,30 +193,6 @@ export function browserModule(version: string): InstalledModule {
       games: [],
       // The minimum height includes the toolbar the host draws above the page.
       viewport: { minWidth: 360, minHeight: 280, preferredWidth: 900, preferredHeight: 700 },
-      permissions: { network: [] },
-    },
-    root: "",
-    provenance: "official",
-    owner: OFFICIAL_OWNER,
-    builtIn: true,
-  };
-}
-
-/**
- * The Discord panel is drawn by the host UI from what the Discord app on this
- * PC reports (main/discord.ts); like the Browser it has no files.
- */
-export function discordModule(version: string): InstalledModule {
-  return {
-    manifest: {
-      id: DISCORD_MODULE_ID,
-      name: "Discord",
-      description: "Who is in your Discord voice channel, who is talking and who is muted. You talk in Discord as usual.",
-      version,
-      apiVersion: "1",
-      entry: "",
-      games: [],
-      viewport: { minWidth: 220, minHeight: 200, preferredWidth: 320, preferredHeight: 520 },
       permissions: { network: [] },
     },
     root: "",
