@@ -12,6 +12,9 @@ const LAYOUT = {
 describe("parseAction", () => {
   it.each([
     [{ type: "show-welcome" }],
+    [{ type: "account-email-remove-code" }],
+    [{ type: "account-email-remove", code: "123456" }],
+    [{ type: "account-discord-disconnect" }],
     [{ type: "link-choice", choice: "panel" }],
     [{ type: "module-files-change" }],
     [{ type: "module-files-reset" }],
@@ -237,6 +240,11 @@ describe("parseAction", () => {
     [{ type: "apply-layout-grid", columns: 2.5, rows: 2 }],
     [{ type: "save-snapshot", name: "x".repeat(81) }],
     [{ type: "delete-snapshot", snapshotId: "1" }],
+    // Removing the email needs the code sent to it; a removal without one, or with anything else, is refused.
+    [{ type: "account-email-remove" }],
+    [{ type: "account-email-remove", code: "12345" }],
+    [{ type: "account-email-remove-code", email: "a@b.c" }],
+    [{ type: "account-discord-disconnect", code: "x" }],
   ])("rejects %j", (action) => {
     expect(parseAction(action)).toBeNull();
   });

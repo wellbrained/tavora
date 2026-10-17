@@ -123,6 +123,14 @@ test("the Discord module asks first, connects once approved and shows who is in 
     fake.dispatch("VOICE_STATE_DELETE", person("5", "Sarah"));
     await expect.poll(() => count(app, '[data-testid="discord-member-5"]')).toBe(0);
 
+    // Muting needs the player's own click too (D8): unmuting would switch their microphone back on.
+    await clickInModule(app, DISCORD, "discord-mute");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(fake.commands.some((c) => c.cmd === "SET_VOICE_SETTINGS")).toBe(false);
+    await gesture(app);
+    await clickInModule(app, DISCORD, "discord-mute");
+    await expect.poll(() => fake.commands.find((c) => c.cmd === "SET_VOICE_SETTINGS")?.args).toEqual({ mute: true });
+
     // Joining a channel needs the player's own click too (D8).
     await clickInModule(app, DISCORD, "discord-join-11");
     await new Promise((resolve) => setTimeout(resolve, 300));

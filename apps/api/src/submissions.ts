@@ -73,14 +73,17 @@ export function createSubmissions({ state, store, gameName, now = () => new Date
       return state.listPending().map((row) => ({ ...row, gameName: gameName(row.id), hasIcon: hosted.has(row.id) }));
     },
 
-    /** Publishes an offered icon. The game's own name and the name it was offered under both match it. */
+    /**
+     * Publishes an offered icon under the game's own name only. The name it was offered under is the sender's free
+     * text (a renamed game, or anything a client sends); as a match name it would hand this icon to other games.
+     */
     approve(sha256: string): { ok: true; id: string } | { ok: false; error: string } {
       const row = state.pending(sha256);
       if (!row) return { ok: false, error: "No such offer." };
       if (store.list().some((entry) => entry.id === row.id)) return { ok: false, error: "That game already has an icon. Take it down first." };
       const canonical = gameName(row.id);
-      const names = [...new Set([canonical ?? row.name, row.name])];
-      state.approve(sha256, names, now());
+      if (canonical === null) return { ok: false, error: "That game is not in the dataset any more." };
+      state.approve(sha256, [canonical], now());
       return { ok: true, id: row.id };
     },
 

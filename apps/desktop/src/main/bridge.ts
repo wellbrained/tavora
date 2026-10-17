@@ -48,8 +48,8 @@ export interface BridgeContext {
   aiUsage: { accounts(): Promise<AiUsageAccountInfo[]>; read(accountId: string): Promise<AiUsageReading> };
   /**
    * The discord connector (discord.ts) for this panel; only reached with the `discord` capability. Commands
-   * and subscriptions arrive checked (discord-commands.ts); connect, allowControl and SELECT_VOICE_CHANNEL
-   * throw PERMISSION_DENIED unless the panel just got a click or key press.
+   * and subscriptions arrive checked (discord-commands.ts); connect, allowControl, SELECT_VOICE_CHANNEL and
+   * SET_VOICE_SETTINGS throw PERMISSION_DENIED unless the panel just got a click or key press.
    */
   discord: {
     state(): Promise<DiscordState>;

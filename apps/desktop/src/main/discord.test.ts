@@ -28,6 +28,8 @@ interface Setup {
   secrets?: DiscordSecrets;
   running?: boolean;
   tokenStatus?: number;
+  /** Discord's image server streams a picture far over the limit, with no length said. */
+  hugePicture?: boolean;
 }
 
 /** A panel as the connector sees it: what it was told. */
@@ -38,7 +40,7 @@ function panel() {
   return { states, events, listener };
 }
 
-async function setup({ secrets = { token: null }, running = true, tokenStatus = 200 }: Setup = {}) {
+async function setup({ secrets = { token: null }, running = true, tokenStatus = 200, hugePicture = false }: Setup = {}) {
   connector?.dispose();
   await fake?.close();
   fake = await fakeDiscord();
@@ -59,6 +61,13 @@ async function setup({ secrets = { token: null }, running = true, tokenStatus = 
     fetch: (async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       requests.push({ url, body: String(init?.body ?? "") });
+      if (url.startsWith("https://cdn.discordapp.com/") && hugePicture) {
+        const chunk = new Uint8Array(64 * 1024);
+        chunk.set(PNG.subarray(0, 8));
+        let sent = 0;
+        const body = new ReadableStream<Uint8Array>({ pull: (controller) => (sent++ < 64 ? controller.enqueue(chunk) : controller.close()) });
+        return new Response(body, { status: 200 });
+      }
       if (url.startsWith("https://cdn.discordapp.com/")) return new Response(PNG, { status: 200 });
       const grant = new URLSearchParams(String(init?.body)).get("grant_type");
       if (tokenStatus !== 200) return Response.json({ error: "invalid_client" }, { status: tokenStatus });
@@ -217,6 +226,15 @@ describe("DiscordConnector", () => {
     expect(await connector.image("https://evil.example/avatars/1/x.png")).toBeNull();
     expect(await connector.image(`https://cdn.discordapp.com/attachments/1/2/${HASH}.png`)).toBeNull();
     expect(requests.map((r) => r.url)).toEqual([`https://cdn.discordapp.com/avatars/1/${HASH}.png?size=64`]);
+  });
+
+  it("stops reading a picture that grows past the limit, even with no length said", async () => {
+    const { connector } = await setup({ hugePicture: true });
+    expect(await connector.image(`https://cdn.discordapp.com/avatars/1/${HASH}.png`)).toBeNull();
+  });
+
+  it("asks Discord for exactly these scopes: no messages, no audio (D1, D2)", () => {
+    expect(SCOPES).toEqual(["rpc", "rpc.voice.read", "rpc.voice.write", "identify"]);
   });
 
   it("refreshes an expired sign-in, and asks again when Discord refuses it", async () => {

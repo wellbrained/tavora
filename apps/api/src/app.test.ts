@@ -114,7 +114,23 @@ describe("steam library endpoint", () => {
     expect((await post(app, { profile: 5 })).status).toBe(400);
     expect((await post(app, { profile: "" })).status).toBe(400);
     expect((await post(app, { profile: "x".repeat(201) })).status).toBe(400);
-    expect((await post(app, { profile: "x", padding: "y".repeat(2000) })).status).toBe(400);
+    expect((await post(app, { profile: "x", padding: "y".repeat(2000) })).status).toBe(413);
+  });
+
+  it("stops reading a body bigger than a profile could be, declared or streamed", async () => {
+    const app = createApp({ db: steamDb, steam: client, steamRateLimiter: createRateLimiter({ limit: 100, windowMs: 60_000 }) });
+    const big = JSON.stringify({ profile: "x", padding: "y".repeat(10 * 1024 * 1024) });
+    expect((await post(app, big)).status).toBe(413);
+    // No Content-Length: the limit counts while the body streams in.
+    const bytes = new TextEncoder().encode(big);
+    const stream = new ReadableStream({
+      start(controller) {
+        for (let at = 0; at < bytes.length; at += 64 * 1024) controller.enqueue(bytes.subarray(at, at + 64 * 1024));
+        controller.close();
+      },
+    });
+    const streamed = await app.request("http://tavora.test/v1/steam/library", { method: "POST", headers: { "content-type": "application/json" }, body: stream, duplex: "half" } as RequestInit);
+    expect(streamed.status).toBe(413);
   });
 
   it("is not routed for GET, and has its own, stricter limit", async () => {

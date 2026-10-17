@@ -399,15 +399,36 @@ describe("Discord login", () => {
     expect(await (await call("POST", "/discord/sign-in", { code: "codenik00000", verifier: VERIFIER })).json()).toMatchObject({ status: "signed-in", account: { email: "me@example.com" } });
   });
 
-  it("never removes the last way in", async () => {
-    const { call, signIn } = setupDiscord();
+  it("never removes the last way in, and removes a method only with a fresh code or Discord sign-in", async () => {
+    const { call, signIn, lastCode } = setupDiscord();
     const token = await signIn("me@example.com");
-    expect(await (await call("DELETE", "/discord", undefined, token)).json()).toMatchObject({ reason: "no-discord" });
-    expect(await (await call("DELETE", "/email", undefined, token)).json()).toMatchObject({ reason: "last-method" });
+    expect(await (await call("POST", "/discord/remove", { code: "codenik00000", verifier: VERIFIER }, token)).json()).toMatchObject({ reason: "no-discord" });
+    expect(await (await call("POST", "/email/remove/code", {}, token)).json()).toMatchObject({ reason: "last-method" });
     await call("POST", "/discord", { code: "codenik00000", verifier: VERIFIER }, token);
-    expect(await (await call("DELETE", "/email", undefined, token)).json()).toMatchObject({ account: { email: null, discord: { name: "nik" } } });
-    expect(await (await call("DELETE", "/discord", undefined, token)).json()).toMatchObject({ reason: "last-method" });
-    expect(await (await call("DELETE", "/email", undefined, token)).json()).toMatchObject({ reason: "no-email" });
+    // The session alone is not enough: the old one-step routes are gone, and a wrong code changes nothing.
+    expect((await call("DELETE", "/email", undefined, token)).status).toBe(404);
+    expect((await call("DELETE", "/discord", undefined, token)).status).toBe(404);
+    expect((await call("POST", "/email/remove/code", {}, token)).status).toBe(202);
+    const code = lastCode();
+    expect(await (await call("POST", "/email/remove", { code: code === "000000" ? "000001" : "000000" }, token)).json()).toMatchObject({ reason: "wrong-code" });
+    expect(await (await call("POST", "/email/remove", { code: lastCode() }, token)).json()).toMatchObject({ account: { email: null, discord: { name: "nik" } } });
+    expect(await (await call("POST", "/discord/remove", { code: "codenik00000", verifier: VERIFIER }, token)).json()).toMatchObject({ reason: "last-method" });
+    expect(await (await call("POST", "/email/remove/code", {}, token)).json()).toMatchObject({ reason: "no-email" });
+  });
+
+  it("does not let a stolen sign-in swap in its own Discord login or cut the owner out quietly (A6)", async () => {
+    const { call, signIn, inbox, store } = setupDiscord();
+    const token = await signIn("me@example.com");
+    inbox.clear();
+    // Connecting Discord tells the account's address.
+    await call("POST", "/discord", { code: "codenik00000", verifier: VERIFIER }, token);
+    expect(inbox.mails()[0]).toMatchObject({ to: "me@example.com", subject: "Discord was connected to your Tavora account" });
+    // Another Discord login does not replace the connected one.
+    expect(await (await call("POST", "/discord", { code: "codeother000", verifier: VERIFIER }, token)).json()).toMatchObject({ reason: "discord-connected" });
+    // Disconnecting needs a sign-in with the connected login itself.
+    expect(await (await call("POST", "/discord/remove", { code: "codeother000", verifier: VERIFIER }, token)).json()).toMatchObject({ reason: "discord-mismatch" });
+    expect(store.accountByDiscord(NIK.id)?.email).toBe("me@example.com");
+    expect(await (await call("POST", "/discord/remove", { code: "codenik00000", verifier: VERIFIER }, token)).json()).toMatchObject({ account: { email: "me@example.com", discord: null } });
   });
 
   it("adds an email to a Discord-only account with a code, and sends no change notice to a missing address", async () => {

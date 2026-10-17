@@ -46,8 +46,14 @@ describe("isPrivateHost", () => {
     }
   });
 
+  it("knows names only the local network's DNS answers, and common router names (B7)", () => {
+    for (const host of ["router", "nas", "printer.lan", "box.home", "nas.home.arpa", "wiki.internal", "fritz.box", "FRITZ.BOX.", "speedport.ip", "routerlogin.net", "pc.localdomain"]) {
+      expect(isPrivateHost(host), host).toBe(true);
+    }
+  });
+
   it("treats everything else as public", () => {
-    for (const host of ["example.com", "8.8.8.8", "172.32.0.1", "192.169.0.1", "100.128.0.1", "[2001:db8::1]", "[::ffff:808:808]", "local.example.com"]) {
+    for (const host of ["example.com", "8.8.8.8", "172.32.0.1", "192.169.0.1", "100.128.0.1", "[2001:db8::1]", "[::ffff:808:808]", "local.example.com", "lan.example.com", "box.com", "internal.example.org"]) {
       expect(isPrivateHost(host), host).toBe(false);
     }
   });

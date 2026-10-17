@@ -118,6 +118,8 @@ export type AccountPending =
   /** A Discord login with no account yet: the player is asked before one is made. */
   | { kind: "discord-create"; name: string }
   | { kind: "change-email"; email: string }
+  /** Removing the email waits for the code sent to it. */
+  | { kind: "remove-email" }
   | { kind: "delete" };
 
 /** Settings > Account. Sent on its own channel; the sign-in token never leaves the main process. */
@@ -493,7 +495,8 @@ export type HostAction =
   | { type: "account-discord-sign-in" }
   | { type: "account-discord-connect" }
   | { type: "account-discord-disconnect" }
-  | { type: "account-email-remove" }
+  | { type: "account-email-remove-code" }
+  | { type: "account-email-remove"; code: string }
   /** Deletes the account by a fresh Discord sign-in (an account without an email address). */
   | { type: "account-delete-discord" }
   /** The answer to "Which profile?" on a first sign-in. */

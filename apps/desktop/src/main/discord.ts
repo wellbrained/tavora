@@ -427,10 +427,18 @@ export class DiscordConnector {
   private async fetchImage(url: string): Promise<string | null> {
     try {
       const response = await this.deps.fetch(url, { redirect: "error", credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(10_000) });
-      if (!response.ok) return null;
+      if (!response.ok || !response.body) return null;
       const length = Number(response.headers.get("content-length") ?? 0);
       if (length > MAX_IMAGE) return null;
-      return pngDataUrl(Buffer.from(await response.arrayBuffer()));
+      // Counted while it streams in, so an answer without a length cannot grow past the limit either.
+      const parts: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
+        size += chunk.byteLength;
+        if (size > MAX_IMAGE) return null;
+        parts.push(Buffer.from(chunk));
+      }
+      return pngDataUrl(Buffer.concat(parts));
     } catch {
       return null;
     }
