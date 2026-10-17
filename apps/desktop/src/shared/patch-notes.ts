@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.2",
+    date: "2026-10-17",
+    title: "To-Dos, tidied up",
+    notes: [
+      "To-do rows line up exactly: checkbox, title, pin and ⋯ share one line.",
+      "Editing a title keeps the row as it is: nothing moves or grows while you type.",
+      "Descriptions are written from the ⋯ menu (Add description) in a small box that floats over the list. Ctrl+Enter or clicking outside saves, Esc cancels.",
+    ],
+  },
+  {
     version: "0.17.1",
     date: "2026-10-17",
     title: "To-Dos, reworked",
