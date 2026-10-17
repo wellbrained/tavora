@@ -1,7 +1,7 @@
 import { connect, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
 
 // This page runs inside a Tavora panel; in a normal browser connect() fails. Build it and add this
-// folder in Tavora (Settings > Modules > Add a development folder) to see it.
+// folder in Tavora (Settings > Development > Add a development folder) to see it.
 
 const status = document.querySelector<HTMLParagraphElement>("#status")!;
 const counter = document.querySelector<HTMLButtonElement>("#counter")!;
