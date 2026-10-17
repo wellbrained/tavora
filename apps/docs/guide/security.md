@@ -84,7 +84,7 @@ A zip is checked before anything is extracted:
 1. The manifest is read and validated first.
 2. Only regular files are extracted. Links, absolute paths, `..`, drive letters, reserved Windows names and paths that differ only in case are refused.
 3. The archive size, the unpacked size, the file count and the compression ratio are capped.
-4. The signature is checked, and the publisher (a key, or `local` for an unsigned zip) is recorded by the host. Ids starting with `tavora.` are refused. A zip whose id is already installed is accepted only as an update signed by the same publisher.
+4. The signature is checked, and the publisher (a key, or `local` for an unsigned zip) is recorded by the host. Ids starting with `tavora.` are refused. A zip whose id is already installed is accepted only as an update signed by the same publisher, with a higher version.
 5. Data is keyed by publisher and id. A module from another publisher that claims a removed module's id starts empty.
 6. The module is unpacked into a temporary folder and moved into place, so a half-extracted module never loads.
 7. Nothing from the archive is ever run.

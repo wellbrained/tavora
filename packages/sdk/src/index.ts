@@ -89,7 +89,7 @@ export const SDK_VERSION = "0.2.4";
  * `minTavora`, so an older Tavora says it needs an update instead of loading a module it cannot run
  * (the starter, `npm create @tavora/module`, does). The changelog names it for every version.
  */
-export const MIN_TAVORA = "0.17.15";
+export const MIN_TAVORA = "0.17.18";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -151,20 +151,20 @@ export interface TavoraSDK {
     /**
      * Why this page is loading: `{ reason: "add" }` for a panel the player just added (pick its content
      * yourself, such as the last one used, or show a picker), or `{ reason: "restore", content }` for a panel
-     * that was open before, with what it last showed. Needs Tavora 0.17.14 or newer.
+     * that was open before, with what it last showed. Needs Tavora 0.17.17 or newer.
      */
     getLaunch(): Promise<PanelLaunch>;
     /**
      * Tells Tavora what this panel shows now, such as the build picked in your toolbar's selector, or null for
      * nothing. Tavora keeps it with the panel, shows the title when the player hovers the tab, and gives it
-     * back through getLaunch after a restart. Needs Tavora 0.17.14 or newer.
+     * back through getLaunch after a restart. Needs Tavora 0.17.17 or newer.
      */
     setContent(content: PanelContent | null): Promise<void>;
     /**
      * Lets another panel of this module switch this one to other content (`panels.open`). The handler saves any
      * pending edits and switches, then resolves; it throws (or rejects) when it cannot, and the panel keeps what it
      * showed. It has 5 seconds. One handler per page: a new one replaces the last. Without one, Tavora opens a new
-     * panel instead of switching this one. Needs Tavora 0.17.15 or newer.
+     * panel instead of switching this one. Needs Tavora 0.17.18 or newer.
      */
     onNavigate(fn: (content: PanelContent) => void | Promise<void>): Unsubscribe;
   };
@@ -174,7 +174,7 @@ export interface TavoraSDK {
      * Opens one of this module's own panel types in the current game, on `content` when given. Tavora brings
      * forward a panel of that type already showing the content, else switches the one used last
      * (`panel.onNavigate`), else opens a new one. Call it from the click or key press that asked for it: the host
-     * refuses it otherwise (PERMISSION_DENIED). Needs Tavora 0.17.15 or newer.
+     * refuses it otherwise (PERMISSION_DENIED). Needs Tavora 0.17.18 or newer.
      */
     open(type: string, options?: { content?: PanelContent }): Promise<PanelOpenResult>;
   };

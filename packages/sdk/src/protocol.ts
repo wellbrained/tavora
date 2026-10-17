@@ -326,18 +326,18 @@ export interface Methods {
   "documents.delete": { params: { id: string; ifRevision?: number }; result: null };
   "panel.getState": { params: undefined; result: JsonValue | null };
   "panel.setState": { params: { value: JsonValue | null }; result: null };
-  /** Why this page is loading; the same answer for every call until the page loads again. Tavora 0.17.14 and newer. */
+  /** Why this page is loading; the same answer for every call until the page loads again. Tavora 0.17.17 and newer. */
   "panel.getLaunch": { params: undefined; result: PanelLaunch };
-  /** What the panel shows now, or null for nothing. Tavora 0.17.14 and newer. */
+  /** What the panel shows now, or null for nothing. Tavora 0.17.17 and newer. */
   "panel.setContent": { params: { content: PanelContent | null }; result: null };
   /**
    * The answer to a `panel.navigate` event: `handled` is false when the page takes no navigation (no handler), `ok`
-   * whether it now shows the content. Tavora 0.17.15 and newer.
+   * whether it now shows the content. Tavora 0.17.18 and newer.
    */
   "panel.navigated": { params: { requestId: number; handled: boolean; ok: boolean }; result: null };
   /**
    * Opens one of this module's own panel types in the current game, optionally on some content. Only right after a
-   * click or key press in the panel, once per click. Tavora 0.17.15 and newer.
+   * click or key press in the panel, once per click. Tavora 0.17.18 and newer.
    */
   "panels.open": { params: { type: string; content?: PanelContent }; result: PanelOpenResult };
   "workspace.getViewport": { params: undefined; result: TavoraViewport };
