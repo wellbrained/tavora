@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fingerprint, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
-import { applyOwners, forgetOwner, installZip, readOwnerRecords } from "./installer";
+import { applyOwners, compareModuleVersions, forgetOwner, installZip, readOwnerRecords } from "./installer";
 import type { InstalledModule } from "./registry";
 
 /** The Tavora version the installer runs as in these tests. */
@@ -33,8 +33,8 @@ async function zipFile(dir: string, files: ZipFile[]): Promise<string> {
   return file;
 }
 
-function loaded(id: string, root: string, owner: string): InstalledModule {
-  return { manifest: JSON.parse(manifest(id)), root, provenance: "local", owner };
+function loaded(id: string, root: string, owner: string, version = "1.0.0"): InstalledModule {
+  return { manifest: JSON.parse(manifest(id, version)), root, provenance: "local", owner };
 }
 
 describe("installZip", () => {
@@ -92,6 +92,27 @@ describe("installZip", () => {
     expect(await readFile(path.join(root, "dist", "index.html"), "utf8")).toBe("<p>new</p>");
   });
 
+  it("updates only to a higher version, and says which versions", async () => {
+    const { userData, userModules } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const first = packageFiles("wellbrained.tracker", "1.2.0");
+    await installZip(await zipFile(userData, [...first, signFiles(first, key)]), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
+    const root = path.join(userModules, "wellbrained.tracker");
+    const modules = new Map([["wellbrained.tracker", loaded("wellbrained.tracker", root, fingerprint(key), "1.2.0")]]);
+
+    for (const version of ["1.2.0", "1.1.9", "1.2.0-beta.1"]) {
+      const files = packageFiles("wellbrained.tracker", version, "<p>old</p>");
+      await expect(installZip(await zipFile(userData, [...files, signFiles(files, key)]), { userData, userModules, tavoraVersion: TAVORA, modules })).rejects.toMatchObject({
+        key: "error.installNotNewer",
+        params: { name: "Tracker", installed: "1.2.0", version },
+      });
+    }
+    expect(await readFile(path.join(root, "dist", "index.html"), "utf8")).toBe("<p>hi</p>");
+
+    const next = packageFiles("wellbrained.tracker", "1.2.1", "<p>new</p>");
+    expect((await installZip(await zipFile(userData, [...next, signFiles(next, key)]), { userData, userModules, tavoraVersion: TAVORA, modules })).updated).toBe(true);
+  });
+
   it("refuses an id loaded from somewhere else, a reserved id, a tampered zip and a missing entry", async () => {
     const { userData, userModules } = await setup();
     const elsewhere = new Map([["wellbrained.tracker", loaded("wellbrained.tracker", "/dev/modules/tracker", "local")]]);
@@ -115,6 +136,17 @@ describe("installZip", () => {
     await writeFile(path.join(userModules, "wellbrained.tracker", "mine.txt"), "keep");
     await expect(installZip(await zipFile(userData, packageFiles("wellbrained.tracker")), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() })).rejects.toMatchObject({ key: "error.installFolderTaken" });
     expect(await readdir(path.join(userModules, "wellbrained.tracker"))).toEqual(["mine.txt"]);
+  });
+});
+
+describe("compareModuleVersions", () => {
+  it("orders versions as semver does", () => {
+    const ordered = ["0.9.0", "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta", "1.0.0-beta.2", "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0", "1.0.1", "1.2.0", "1.10.0", "2.0.0"];
+    for (let i = 0; i < ordered.length - 1; i++) {
+      expect(compareModuleVersions(ordered[i]!, ordered[i + 1]!)).toBeLessThan(0);
+      expect(compareModuleVersions(ordered[i + 1]!, ordered[i]!)).toBeGreaterThan(0);
+    }
+    expect(compareModuleVersions("1.0.0-beta.1", "1.0.0-beta.1")).toBe(0);
   });
 });
 

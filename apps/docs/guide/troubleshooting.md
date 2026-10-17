@@ -41,6 +41,7 @@ Check `error.code`, not the message. The codes are in the [protocol reference](.
 ## Installing the zip fails
 
 - **"comes from a different publisher, so it can't replace it"**: the zip is signed with another key than the installed version. Sign it with your original key; see [Your publisher key](./publisher-key.md).
+- **"An update needs a higher version"**: the zip has the same or a lower `version` than the installed one. Raise `version` in `tavora.module.json`, build and zip again.
 - **"is already installed from somewhere else"**: the same id is installed from a folder. Remove that first.
 - **"needs Tavora … or newer"**: the player has to update Tavora first.
 - **"can't be read as a module zip"**: make the zip with `npm run zip` (`tavora-pack`), not by hand.
