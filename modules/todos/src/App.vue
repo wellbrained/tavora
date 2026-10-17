@@ -6,7 +6,7 @@ import { Check, ChevronsDownUp, ChevronsUpDown, ListChecks, X } from "@lucide/vu
 import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
-import type { TavoraSDK } from "@tavora/sdk";
+import type { MenuRequest, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef } from "vue";
 import AddInput from "./AddInput.vue";
 import GroupSection, { type DropTarget } from "./GroupSection.vue";
@@ -103,7 +103,9 @@ function toggleAllGroups() {
   savePanel();
 }
 
-provide(PANEL, { finished, editing, folded, toggleFolded: (id) => toggle(folded, id), linger, lingering, offerUndo });
+/** Before the panel is connected there is nothing to show a menu with. */
+const showMenu = (request: MenuRequest) => sdk.value?.ui.showMenu(request) ?? Promise.resolve(null);
+provide(PANEL, { finished, editing, folded, toggleFolded: (id) => toggle(folded, id), linger, lingering, offerUndo, showMenu });
 
 const cleanup: (() => void)[] = [];
 

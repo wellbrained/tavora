@@ -6,6 +6,7 @@ import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BLOB_PATH, CLIPBOARD_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession, type BridgeContext } from "./bridge";
+import type { CheckedMenu } from "./module-menu";
 import type { DiscordConnector, DiscordListener } from "./discord";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
@@ -42,6 +43,8 @@ export interface ModuleViewOptions {
   onReveal?(): void;
   /** The player opened a web address from the module (links.open); it was checked to be one. */
   onOpenLink(url: string): void;
+  /** Shows a module's menu in the host UI, over this panel (host.ts); resolves with the chosen id, or null. */
+  showMenu(menu: CheckedMenu): Promise<string | null>;
   /** Hosts the player granted this module for network.fetch, as installed now; asked on every call and redirect. */
   networkHosts(): ReadonlySet<string>;
   /** Connectors the player granted this module, as installed now; asked on every call. */
@@ -370,6 +373,11 @@ export class ModuleView {
         getLanguage: this.options.getLanguage,
         onBusy: (busy, served) => this.onBridgeBusy(busy, served),
         openLink: (url) => this.openLink(url),
+        showMenu: (menu) => {
+          // One click opens one menu, so a page cannot keep menus coming on its own.
+          this.takeGesture("ui.showMenu");
+          return this.options.showMenu(menu);
+        },
       },
       () => {
         if (this.bridge !== bridge) return;

@@ -28,6 +28,15 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
+    version: "0.17.9",
+    date: "2026-10-17",
+    title: "Menus that fit",
+    notes: [
+      "The menu of a To-Dos group now opens above everything, so its Color list is never cut off in a narrow panel. Right-click a group's header to open the same menu where you clicked.",
+      "Other modules can show their menus the same way, drawn by Tavora in your theme.",
+    ],
+  },
+  {
     version: "0.17.8",
     date: "2026-10-17",
     title: "Modules can say which Tavora they need",

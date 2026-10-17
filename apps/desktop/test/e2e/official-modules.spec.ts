@@ -462,14 +462,18 @@ test("to-dos: a group gets a color from its menu, and keeps it after a restart",
   // Let the save settle first, as a person would.
   await page.waitForTimeout(300);
 
-  // Color is a submenu of the group's menu; the keyboard opens both levels.
-  const menu = `document.querySelector('[data-slot="dropdown-menu-content"][data-state="open"]')`;
-  await inModule(app, TODOS, `${q("group-menu")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
-  await expect.poll(() => inModule(app, TODOS, `!!${menu}?.querySelector('[data-testid="menu-color"]') && ${menu}.getAnimations().length === 0`)).toBe(true);
-  await inModule(app, TODOS, `(() => { const item = ${q("menu-color")}; item.focus(); item.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); })()`);
-  await expect.poll(() => inModule(app, TODOS, `!!${q("menu-color-blue")}`)).toBe(true);
-  await expect.poll(() => inModule(app, TODOS, `document.getAnimations().length === 0`)).toBe(true);
-  await inModule(app, TODOS, `${q("menu-color-blue")}.click()`);
+  // The group's menu is drawn by Tavora above every panel (ui.showMenu). A script click opens nothing;
+  // a real key press on the ⋯ button does, and Color is a submenu of it.
+  await inModule(app, TODOS, `${q("group-menu")}.click()`);
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId("module-menu")).toHaveCount(0);
+  await inModule(app, TODOS, `${q("group-menu")}.focus()`);
+  await typeInModule(app, TODOS, "\n");
+  await expect(page.getByTestId("module-menu")).toBeVisible();
+  await expect(page.getByTestId("module-menu-item-rename")).toBeVisible();
+  await page.getByTestId("module-menu-sub-3").click();
+  await page.getByTestId("module-menu-item-color:blue").click();
+  await expect(page.getByTestId("module-menu")).toHaveCount(0);
   await expect.poll(tint).toBe("blue");
   expect(await inModule(app, TODOS, `getComputedStyle(${header}).backgroundColor !== getComputedStyle(${header}.closest("section")).backgroundColor`)).toBe(true);
   await app.close();
