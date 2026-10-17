@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.5",
+    date: "2026-10-17",
+    title: "No more silent closing",
+    notes: [
+      "If Tavora can't start, it now tells you why in a message instead of closing without a word, and writes a small log you can send to whoever helps you.",
+    ],
+  },
+  {
     version: "0.17.4",
     date: "2026-10-17",
     title: "Tavora starts again",
