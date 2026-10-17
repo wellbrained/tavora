@@ -19,6 +19,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.1",
+    date: "2026-10-17",
+    title: "To-Dos, reworked",
+    notes: [
+      "To-dos can have sub-to-dos, up to four levels deep. While editing a to-do, Tab makes it a sub-to-do of the one above and Shift+Tab moves it back up a level. Tab works the same in a group's add row, so you can type a whole list with its sub-to-dos in one go. A to-do with sub-to-dos shows how many are done and folds them away with its little arrow.",
+      "Click a to-do's title to edit it right where it is, with its description below. Enter saves, Esc cancels. No more panel opening underneath.",
+      "Finishing a to-do finishes its sub-to-dos too, and a toast lets you undo it. Deleting a to-do can be undone the same way.",
+      "A bar at the top of To-Dos holds the controls: how many to-dos are open, folding all groups at once, and whether finished to-dos stay in the list or vanish smoothly. Vanishing waits a moment, then the row slides away instead of the list jumping.",
+      "Steps are now sub-to-dos, and a to-do's source link moved into its description. Nothing you wrote is lost.",
+    ],
+  },
+  {
     version: "0.17.0",
     date: "2026-10-17",
     title: "Sign in with Discord, and modules that ask first",
