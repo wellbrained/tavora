@@ -1,4 +1,11 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vitepress";
+
+// The docs always follow main: the Tavora and SDK versions they describe, read when the site is built.
+// From Tavora 1.0 on there is a docs site per major version.
+const versionOf = (file: string) => (JSON.parse(readFileSync(new URL(file, import.meta.url), "utf8")) as { version: string }).version;
+const tavora = versionOf("../../../package.json");
+const sdk = versionOf("../../../packages/sdk/package.json");
 
 // Written by TypeDoc (typedoc-vitepress-theme) during `pnpm generate`.
 const apiSidebar = await import("../api/typedoc-sidebar.json", { with: { type: "json" } })
@@ -26,6 +33,14 @@ export default defineConfig({
       { text: "Reference", link: "/reference/manifest" },
       { text: "SDK API", link: "/api/" },
       { text: "mytavora.app", link: "https://mytavora.app/" },
+      {
+        text: `Tavora ${tavora}`,
+        items: [
+          { text: `These docs describe Tavora ${tavora} and @tavora/sdk ${sdk}`, link: "/reference/changelog" },
+          { text: "SDK changelog", link: "/reference/changelog" },
+          { text: "@tavora/sdk on npm", link: "https://www.npmjs.com/package/@tavora/sdk" },
+        ],
+      },
     ],
     sidebar: [
       {
@@ -61,6 +76,8 @@ export default defineConfig({
       text: "Edit this page on GitHub",
     },
     search: { provider: "local" },
-    footer: { message: "Code under the MIT License. The Tavora name and logo are not covered by it." },
+    footer: {
+      message: `For Tavora ${tavora} and @tavora/sdk ${sdk}. Code under the MIT License. The Tavora name and logo are not covered by it.`,
+    },
   },
 });
