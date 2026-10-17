@@ -3,6 +3,9 @@ layout: home
 
 hero:
   name: Tavora
+  image:
+    src: /tavora-emblem.svg
+    alt: Tavora campfire emblem
   text: Build modules for Tavora
   tagline: Modules are small web apps that run in sandboxed panels next to a game. This is how to build one, and how the host talks to it.
   actions:
