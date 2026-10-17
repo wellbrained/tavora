@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.15",
+    date: "2026-10-17",
+    title: "A link command that works anywhere",
+    notes: [
+      "Module developers: Link a publisher key in Settings > Account now copies \"npx @tavora/pack link\" with your code, which runs in any folder, also where @tavora/pack isn't installed.",
+    ],
+  },
+  {
     version: "0.17.13",
     date: "2026-10-17",
     title: "Whiteboard: place pictures, move the palette",

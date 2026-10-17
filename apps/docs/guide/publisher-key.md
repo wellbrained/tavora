@@ -30,13 +30,13 @@ Players see who signed a module as the key's fingerprint, a long hex code. Link 
 
 1. In Tavora, sign in under **Settings > Account** and choose a **developer name** under Module developer. It is public and unique (case, spaces, dots, dashes and underscores don't count), and you can change it once every 30 days.
 2. Press **Link a publisher key**. Tavora shows a one-time code, valid for 10 minutes.
-3. In your module's folder, run the command it shows, with `npx` in front:
+3. Copy the command it shows and run it in a terminal, in any folder:
 
    ```sh
-   npx tavora-pack link ABCD-EFGH
+   npx @tavora/pack link ABCD-EFGH
    ```
 
-   Outside a module project, `npx @tavora/pack link ABCD-EFGH` does the same. Pass `--key` if you sign with another key file.
+   In a module project, `npx tavora-pack link ABCD-EFGH` does the same. Pass `--key` if you sign with another key file.
 
 The command signs the code with your key and sends the signature and the key's public half; the secret key stays on your PC. An account can link several keys, and a key belongs to one account. You can unlink a key in Settings > Account.
 
