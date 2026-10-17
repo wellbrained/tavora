@@ -89,7 +89,7 @@ export interface BridgeContext {
   /** Whether the panel is hidden right now. */
   isSuspended(): boolean;
   /** Opens a web address in a Browser panel. Throws a HostError when the panel did not just get a click or key press, or the address is not a web address. */
-  openLink(url: string): void;
+  openLink(url: string): void | Promise<void>;
   /** ui.showMenu: Tavora draws the checked menu above every panel; the chosen id, or null. Throws PERMISSION_DENIED without a click or key press first. */
   showMenu(menu: CheckedMenu): Promise<string | null>;
   /** network.fetch: checks the grant on every hop and makes the request (network.ts). Throws HostErrors. */
@@ -180,10 +180,10 @@ const handlers = new Map<string, Handler>([
 
   [
     "links.open",
-    (s, params) => {
+    async (s, params) => {
       const url = required(object(params), "url");
       if (typeof url !== "string" || url.length === 0 || url.length > LINK_MAX) throw new HostError("INVALID_PARAMS", "params.url must be a web address");
-      s.context.openLink(url);
+      await s.context.openLink(url);
       return null;
     },
   ],
