@@ -64,15 +64,7 @@ Values you store must be JSON. Type parameters such as `get<number>()` are not c
 
 ## Where data lives
 
-| Scope | API | Shared by |
-| --- | --- | --- |
-| Settings | `tavora.storage` | All panels of this module in this game |
-| Settings for every game | `tavora.storage.app` | All panels of this module in every game |
-| Documents | `tavora.documents` | All panels of this module in this game, with revisions |
-| Pictures | `tavora.blobs` | All panels of this module in this game |
-| UI state | `tavora.panel` | This one panel; removed when it closes |
-
-Nothing is shared between modules, and nothing between games except `storage.app`. See [Where data lives](../reference/protocol.md#where-data-lives) for the details.
+Settings go in `tavora.storage`, the player's work in `tavora.documents`, pictures in `tavora.blobs` and where a panel is scrolled to in `tavora.panel`. Which to use when, and how two open panels avoid overwriting each other, is in [Saving data](./saving-data.md).
 
 ## More from the host
 
@@ -86,7 +78,7 @@ Nothing is shared between modules, and nothing between games except `storage.app
 | `tavora.connectors.aiUsage` | The usage of the player's Claude and Codex accounts, with the `ai-usage` connector. |
 | `tavora.connectors.discord` | The Discord app on this PC through Tavora's Discord sign-in, with the `discord` connector: voice channels, mute and deafen, voice events. |
 
-What needs the player's permission (`permissions.network` and `permissions.connectors` in the [manifest](../reference/manifest.md)) works only once the player has granted it: they are asked when they add the module and can take it back in Settings > Integrations. Until then the call fails with `PERMISSION_DENIED`; `tavora.host.capabilities` lists what was granted when the module connected. See [Capabilities](../reference/protocol.md#capabilities) and [Connectors](../reference/protocol.md#connectors).
+What reaches outside the panel needs the player's yes first; see [Permissions and consent](./permissions.md). Following the theme and the language is in [Look and languages](./look-and-languages.md).
 
 ## Build the module
 
@@ -107,25 +99,8 @@ npm run zip     # the same as npx tavora-pack .
 
 The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`) and the icon, plus `tavora.signature.json`. Your sources and `node_modules` stay out. Use `--out` to choose the file name.
 
-The first run makes your publisher key in `~/.tavora/publisher-key.pem` (or the file you pass with `--key`). It stays on your PC. **Back it up and never share it.** The key is who you are to Tavora: the settings and documents your module saves for players belong to your key, so only modules signed by it can see them. Lose the key and your next version counts as a different publisher, whose module starts with empty data. A module signed by another key can never read your module's data, even if it uses the same id.
+The first run makes your publisher key in `~/.tavora/publisher-key.pem`. **Back it up and never share it**: updates and your players' data depend on it. Read [Your publisher key](./publisher-key.md) before you send the first zip, and link the key to your account there so players see your name.
 
-While you build, keep loading the module from a folder: an unsigned folder module needs no key, and its data is kept apart from the signed version's.
+Players install the zip with **Settings > Modules > Install from zip**. While you build, keep loading the module from its development folder: it needs no key, and its data is kept apart from the signed version's.
 
-### Show your name instead of a fingerprint
-
-Players see who signed a module as the key's fingerprint, unless the key is linked to a Tavora account with a developer name. Then they see "by <name>" in Settings > Modules, in the dialog that asks for permissions, and when they install your zip.
-
-1. In Tavora, sign in under Settings > Account and choose a **developer name** under Module developer. It is public, unique (case, spaces, dots, dashes and underscores don't count) and can change once every 30 days.
-2. Press **Link a publisher key**. Tavora shows a one-time code, valid for 10 minutes.
-3. Run the command it shows in your module's folder, with the key you sign with:
-
-   ```sh
-   npx tavora-pack link ABCD-EFGH
-   ```
-
-   Outside a module project, `npx @tavora/pack link ABCD-EFGH` does the same.
-
-   It signs the code with your publisher key and sends the signature and the key's public half to Tavora's service, which checks the signature before it links the key. The secret key never leaves your PC. Pass `--key` if you sign with another key file.
-
-An account can link several keys; a key belongs to one account. Link your key now, even before you need it: if you ever lose it, only a key that was linked can later be claimed back by your account.
-
+Something not working? See [Troubleshooting](./troubleshooting.md).
