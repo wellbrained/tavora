@@ -316,3 +316,22 @@ body {
   outline: 2px solid var(--ring, var(--primary));
   outline-offset: 1px;
 }
+
+/* The palette's Layers row is hidden: its shortcuts (Ctrl+Shift+[ and ]) and the right-click menu still do the same. */
+.excalidraw .App-menu__left fieldset:has(.zIndexButton) {
+  display: none;
+}
+
+/* With the toolbar at the bottom (Toolbar.tsx), its hints and its More tools menu open above it, not off the board. */
+.board.toolbar-bottom .excalidraw .shapes-section .HintViewer {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+.board.toolbar-bottom .excalidraw .shapes-section .dropdown-menu {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}

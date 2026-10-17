@@ -50,6 +50,7 @@ Values you store must be JSON. Type parameters such as `get<number>()` are not c
 | `tavora.ui.getLanguage()`, `onLanguageChange` | The language of Tavora's own texts (`"en"`, `"de"`). Show your module in it, or in English when you have no translation. |
 | `tavora.blobs` | Pictures too big for a document: up to 50 MB each and 500 MB per module and game. `put` a file, show it with `url(id)`. See [Files](https://docs.mytavora.app/reference/protocol#files-blobs). |
 | `tavora.clipboard.writeImage(png)` | Puts a PNG on the system clipboard. Call it from the click or key press that asked for it. See [Clipboard](https://docs.mytavora.app/reference/protocol#clipboard). |
+| `tavora.pictures.save(png, name)` | Saves a PNG in the player's `Pictures\Tavora` folder and resolves with the file name. Call it from the click or key press that asked for it. See [Saving pictures](https://docs.mytavora.app/reference/protocol#saving-pictures). |
 | `tavora.links.open(url)` | Opens a web address in the game's Browser panel, from a click or key press. |
 | `tavora.network.fetch(url, init)` | A web request to a host listed in `permissions.network`, once the player granted it. See [Network](https://docs.mytavora.app/reference/protocol#network). |
 | `tavora.connectors.aiUsage` | The usage of the player's Claude and Codex accounts, with the `ai-usage` connector. |

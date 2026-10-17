@@ -101,6 +101,8 @@ export async function launch(
     env: {
       ...process.env,
       TAVORA_USER_DATA: dir,
+      // Pictures a module saves land here, never in the Pictures folder of the PC the tests run on.
+      TAVORA_PICTURES_DIR: path.join(dir, "Pictures"),
       // Tests never look at the Steam client on this machine or ask Steam for icons.
       TAVORA_STEAM_ICONS_URL: "off",
       // Tests read English texts whatever language the PC they run on speaks.

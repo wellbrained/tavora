@@ -4,6 +4,7 @@ import { cleanName, formatMegabytes, MAX_BOARD_BYTES, nextBoardName, sizeLevel, 
 import { unusedFiles } from "./pictures";
 import type { Controls, Pictures, SaveState, View } from "./Board";
 import BoardMenu from "./BoardMenu";
+import Toolbar, { toolbarPlace, type ToolbarPlace } from "./Toolbar";
 import Palette, { DEFAULT_PALETTE, palettePlace, type PalettePlace } from "./Palette";
 import { currentLanguage, setLanguage, t, type Language } from "./i18n";
 import { createBoards, type Boards } from "./store";
@@ -30,6 +31,12 @@ interface Undo {
   id: number;
   message: string;
   run(): Promise<void>;
+}
+
+/** A file name for a saved picture: the board's name and when it was saved, such as "Board 1 2026-10-17 21-47". */
+export function pictureName(board: string, now = new Date()): string {
+  const two = (value: number) => String(value).padStart(2, "0");
+  return `${board} ${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())} ${two(now.getHours())}-${two(now.getMinutes())}`;
 }
 
 /** How long the Undo notice stays when left alone. */
@@ -75,6 +82,7 @@ export default function App() {
   const undoCount = useRef(0);
   const [palette, setPalette] = useState<PalettePlace>(DEFAULT_PALETTE);
   const paletteRef = useRef<PalettePlace>(DEFAULT_PALETTE);
+  const [toolbar, setToolbar] = useState<ToolbarPlace>("top");
   const [boardElement, setBoardElement] = useState<HTMLElement | null>(null);
 
   const saveSelection = useCallback(() => {
@@ -134,6 +142,8 @@ export default function App() {
           setLanguage(code);
           setLanguageState(currentLanguage());
         });
+        // Where the toolbar goes is one choice for every game.
+        setToolbar(toolbarPlace(await connected.storage.app.get("toolbar").catch(() => null)));
         if (!cancelled) setSdk(connected);
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
@@ -233,6 +243,14 @@ export default function App() {
     [saveSelection],
   );
 
+  const placeToolbar = useCallback(
+    (place: ToolbarPlace) => {
+      setToolbar(place);
+      void sdk?.storage.app.set("toolbar", place).catch(() => undefined);
+    },
+    [sdk],
+  );
+
   const placePalette = useCallback(
     (place: PalettePlace) => {
       paletteRef.current = place;
@@ -272,6 +290,33 @@ export default function App() {
       copyRunning.current = false;
       setCopying(false);
     }
+  }, []);
+
+  /** Save as picture: the same picture as Copy as picture, saved as a file in Pictures\Tavora right after the click. */
+  const saveAsPicture = useCallback(async () => {
+    const board = controls.current;
+    if (!board || copyRunning.current) return;
+    copyRunning.current = true;
+    setCopying(true);
+    try {
+      const saved = await board.saveAsPicture(pictureName(names.current.get(selectedId.current ?? "") ?? t("boardWord")));
+      setNotice({ id: ++noticeCount.current, message: t(saved.what === "selection" ? "savePicture.selection" : "savePicture.board", { name: saved.fileName }) });
+    } catch (reason: unknown) {
+      const code = reason instanceof TavoraError ? reason.code : undefined;
+      const message =
+        code === "PERMISSION_DENIED" ? t("copy.slow") : code === "QUOTA_EXCEEDED" ? t("copy.tooBig") : t("savePicture.failed", { error: reason instanceof Error ? reason.message : String(reason) });
+      setNotice({ id: ++noticeCount.current, message });
+    } finally {
+      copyRunning.current = false;
+      setCopying(false);
+    }
+  }, []);
+
+  /** Clear board: everything off the board, with Undo in the notice (Ctrl+Z works too). */
+  const clearBoard = useCallback(() => {
+    const restore = controls.current?.clear();
+    if (!restore) return;
+    setUndo({ id: ++undoCount.current, message: t("clear.done"), run: async () => restore() });
   }, []);
 
   const remove = useCallback(
@@ -332,6 +377,19 @@ export default function App() {
             {t(pictures.allLocked ? "image.unlock" : "image.lock")}
           </button>
         ) : null}
+        <button type="button" className="button copy-picture" title={t("clear.hint")} data-testid="clear-board" disabled={empty} onClick={clearBoard}>
+          {t("clear.button")}
+        </button>
+        <button
+          type="button"
+          className="button copy-picture"
+          title={t("savePicture.hint")}
+          data-testid="save-picture"
+          disabled={empty || copying}
+          onClick={() => void saveAsPicture()}
+        >
+          {t("savePicture.button")}
+        </button>
         <button
           type="button"
           className="button copy-picture"
@@ -371,8 +429,11 @@ export default function App() {
             onPicturesLoaded={setPicturesLoaded}
             onNotice={(message) => setNotice({ id: ++noticeCount.current, message })}
             onControls={(value) => (controls.current = value)}
+            toolbar={toolbar}
+            onToolbar={placeToolbar}
           />
         </Suspense>
+        <Toolbar board={boardElement} place={toolbar} />
         <Palette board={boardElement} place={palette} onPlace={placePalette} />
       </main>
       {notice && !undo ? (

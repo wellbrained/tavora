@@ -201,8 +201,8 @@ async function click(app: ElectronApplication, testId: string) {
   );
 }
 
-test("whiteboard: Copy as picture puts the board with its pictures on the clipboard", async () => {
-  const { app, page } = await launch();
+test("whiteboard: Copy and Save as picture, and Clear board with Undo", async () => {
+  const { app, page, userData } = await launch();
   await openModule(page, WHITEBOARD);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`).catch(() => ""), { timeout: 20_000 }).toBe("Board 1");
   await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
@@ -285,6 +285,30 @@ test("whiteboard: Copy as picture puts the board with its pictures on the clipbo
   );
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Copied the board as a picture");
   expect(await app.evaluate(async ({ clipboard }) => (await clipboard.read()).flatMap((item) => item.types))).toContain("image/png");
+
+  // Save as picture writes the same PNG into Pictures\Tavora, named after the board, and never replaces a file.
+  for (const expected of [/^Board 1 \d{4}-\d\d-\d\d \d\d-\d\d\.png$/, /^Board 1 \d{4}-\d\d-\d\d \d\d-\d\d( \(2\))?\.png$/]) {
+    await inModule(app, WHITEBOARD, `${q("notice-toast")}?.querySelector("button")?.click()`);
+    await click(app, "save-picture");
+    await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Saved the board as");
+    const notice = await inModule<string>(app, WHITEBOARD, `${q("notice-toast")}.textContent`);
+    expect(notice.match(/“(.+)”/)?.[1]).toMatch(expected);
+  }
+  const saved = await readdir(path.join(userData, "Pictures", "Tavora"));
+  expect(saved).toHaveLength(2);
+  const file = await readFile(path.join(userData, "Pictures", "Tavora", saved[0]!));
+  expect([...file.subarray(1, 4)].map((byte) => String.fromCharCode(byte)).join("")).toBe("PNG");
+  // Without a click it is refused.
+  const refused = await inModule<string>(app, WHITEBOARD, `fetch("/_pictures/?name=x", { method: "POST", body: new Blob([new Uint8Array(8)], { type: "image/png" }) }).then((r) => r.status)`);
+  expect(refused).toBe(403);
+
+  // Clear board takes everything off; Undo in the notice brings it back.
+  await inModule(app, WHITEBOARD, `${q("notice-toast")}?.querySelector("button")?.click()`);
+  await inModule(app, WHITEBOARD, `${q("clear-board")}.click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(true);
+  await inModule(app, WHITEBOARD, `${q("undo")}.click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(false);
+  expect(await inModule(app, WHITEBOARD, `${q("picture-lock")} !== null`)).toBe(true);
   await app.close();
 });
 
@@ -321,4 +345,27 @@ test("whiteboard: the style palette can be moved and folded away, and stays so f
   await inModule(app, WHITEBOARD, `${q("palette-toggle")}.click()`);
   await expect.poll(async () => (await rect(".App-menu__left")).height).toBeGreaterThan(100);
   await app.close();
+});
+
+test("whiteboard: the toolbar can sit at the bottom, chosen once for every game", async () => {
+  const { app, page, userData } = await launch();
+  await openModule(page, WHITEBOARD);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`).catch(() => ""), { timeout: 20_000 }).toBe("Board 1");
+  await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
+  const toolbarTop = () => inModule<number>(app, WHITEBOARD, `Math.round(document.querySelector(".App-toolbar-container").getBoundingClientRect().top - document.querySelector(".excalidraw").getBoundingClientRect().top)`);
+  const height = await inModule<number>(app, WHITEBOARD, `document.querySelector(".excalidraw").getBoundingClientRect().height`);
+  expect(await toolbarTop()).toBeLessThan(60);
+
+  // The main menu moves it down, above the zoom and undo buttons.
+  await inModule(app, WHITEBOARD, `document.querySelector(".main-menu-trigger").click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("toolbar-place")}?.textContent ?? ""`)).toContain("Toolbar at the bottom");
+  await inModule(app, WHITEBOARD, `${q("toolbar-place")}.click()`);
+  await expect.poll(toolbarTop).toBeGreaterThan(height - 160);
+
+  // Kept: a new panel starts with it at the bottom.
+  await app.close();
+  const again = await launch(userData);
+  await expect.poll(() => inModule(again.app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`).catch(() => false), { timeout: 20_000 }).toBe(true);
+  await expect.poll(() => inModule<number>(again.app, WHITEBOARD, `Math.round(document.querySelector(".App-toolbar-container").getBoundingClientRect().top - document.querySelector(".excalidraw").getBoundingClientRect().top)`)).toBeGreaterThan(height - 160);
+  await again.app.close();
 });

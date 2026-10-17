@@ -19,6 +19,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.16",
+    date: "2026-10-17",
+    title: "Whiteboard: save as picture, clear, toolbar at the bottom",
+    notes: [
+      "Save as picture in the Whiteboard saves the selection, or the whole board, as a PNG in your Pictures\\Tavora folder in one click, named after the board and the time.",
+      "Clear board takes everything off a board at once. Undo in the notice, or Ctrl+Z, brings it back.",
+      "Choose where the Whiteboard's toolbar sits: open the menu (☰) and pick Toolbar at the bottom, or back to the top. The choice is kept for every game.",
+      "The Layers row is gone from the style palette to keep it short. Its shortcuts and the right-click menu still move things forward and back.",
+      "For module developers: pictures.save(png, name) saves a PNG in the player's Pictures\\Tavora folder right after a click (SDK 0.2.3).",
+    ],
+  },
+  {
     version: "0.17.15",
     date: "2026-10-17",
     title: "A link command that works anywhere",

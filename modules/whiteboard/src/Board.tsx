@@ -30,6 +30,10 @@ export interface Controls {
   setPicturesLocked(locked: boolean): void;
   /** Puts the selection, or the whole board when nothing is selected, on the clipboard as a PNG. Call it from a click or key press. */
   copyAsPicture(): Promise<"selection" | "board">;
+  /** Saves the same picture as a file in Pictures\Tavora, named after `name`. Call it from a click or key press. */
+  saveAsPicture(name: string): Promise<{ what: "selection" | "board"; fileName: string }>;
+  /** Takes everything off the board, as one step that Undo brings back; returns how to put it all back. */
+  clear(): () => void;
 }
 
 /** The pictures on the board: how many, and whether they are all locked. */
@@ -61,9 +65,12 @@ interface Props {
   onPicturesLoaded(count: number): void;
   onNotice(message: string): void;
   onControls(controls: Controls | null): void;
+  /** Where the toolbar is, for the menu item that moves it. */
+  toolbar: "top" | "bottom";
+  onToolbar(place: "top" | "bottom"): void;
 }
 
-export default function Board({ sdk, data, view, mode, language, onSave, onView, onState, onSize, onDirty, onPictures, onEmpty, onCopyShortcut, onPicturesLoaded, onNotice, onControls }: Props) {
+export default function Board({ sdk, data, view, mode, language, onSave, onView, onState, onSize, onDirty, onPictures, onEmpty, onCopyShortcut, onPicturesLoaded, onNotice, onControls, toolbar, onToolbar }: Props) {
   // The newest drawing, and what was last stored, kept outside React's render so drawing never waits for it.
   const latest = useRef<{ elements: readonly OrderedExcalidrawElement[]; background: string; files: BinaryFiles } | null>(null);
   const pictures = useMemo(() => createPictures(sdk, data.files), [sdk, data.files]);
@@ -191,6 +198,26 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
     timer.current = setTimeout(() => void flush(), SAVE_DELAY_MS);
   }
 
+  /** The selection, or the whole board when nothing is selected, as a PNG that looks as the board does in the panel. */
+  async function pictureOf(instance: ExcalidrawImperativeAPI): Promise<{ png: Blob; what: "selection" | "board" }> {
+    const appState = instance.getAppState();
+    const elements = elementsToCopy(instance.getSceneElements(), appState.selectedElementIds);
+    if (elements.length === 0) throw new Error("the board is empty");
+    // As the board looks in the panel: its background, and dark when the panel is dark.
+    const png = await exportToBlob({
+      elements,
+      files: instance.getFiles(),
+      appState: { exportBackground: true, viewBackgroundColor: appState.viewBackgroundColor, exportWithDarkMode: theme.current === "dark" },
+      mimeType: "image/png",
+      exportPadding: COPY_PADDING,
+      getDimensions: (width: number, height: number) => {
+        const scale = copyScale(width, height);
+        return { width: Math.round(width * scale), height: Math.round(height * scale), scale };
+      },
+    });
+    return { png, what: elements.length < instance.getSceneElements().length ? "selection" : "board" };
+  }
+
   // Reads the board's stored pictures back once Excalidraw is ready.
   function ready(instance: ExcalidrawImperativeAPI) {
     api.current = instance;
@@ -201,23 +228,24 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         }),
       copyAsPicture: async () => {
-        const appState = instance.getAppState();
-        const elements = elementsToCopy(instance.getSceneElements(), appState.selectedElementIds);
-        if (elements.length === 0) throw new Error("the board is empty");
-        // As the board looks in the panel: its background, and dark when the panel is dark.
-        const png = await exportToBlob({
-          elements,
-          files: instance.getFiles(),
-          appState: { exportBackground: true, viewBackgroundColor: appState.viewBackgroundColor, exportWithDarkMode: theme.current === "dark" },
-          mimeType: "image/png",
-          exportPadding: COPY_PADDING,
-          getDimensions: (width: number, height: number) => {
-            const scale = copyScale(width, height);
-            return { width: Math.round(width * scale), height: Math.round(height * scale), scale };
-          },
-        });
-        await sdk.clipboard.writeImage(png);
-        return elements.length < instance.getSceneElements().length ? "selection" : "board";
+        const picture = await pictureOf(instance);
+        await sdk.clipboard.writeImage(picture.png);
+        return picture.what;
+      },
+      saveAsPicture: async (name) => {
+        const picture = await pictureOf(instance);
+        const { fileName } = await sdk.pictures.save(picture.png, name);
+        return { what: picture.what, fileName };
+      },
+      clear: () => {
+        const before = instance.getSceneElements();
+        const bump = <T extends ExcalidrawElement>(element: T, isDeleted: boolean): T => ({ ...element, isDeleted, version: element.version + 2, versionNonce: Math.floor(Math.random() * 2 ** 31), updated: Date.now() });
+        instance.updateScene({ elements: before.map((element) => bump(element, true)), captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+        return () => {
+          const ids = new Set(before.map((element) => element.id));
+          const now = instance.getSceneElementsIncludingDeleted();
+          instance.updateScene({ elements: now.map((element) => (ids.has(element.id) && element.isDeleted ? bump(element, false) : element)), captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+        };
       },
     });
     const needed = pictureFileIds(data.elements as unknown as ExcalidrawElement[]);
@@ -289,6 +317,9 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
         <MainMenu>
           <MainMenu.DefaultItems.ClearCanvas />
           <MainMenu.DefaultItems.ChangeCanvasBackground />
+        <MainMenu.Item data-testid="toolbar-place" onSelect={() => onToolbar(toolbar === "bottom" ? "top" : "bottom")}>
+          {t(toolbar === "bottom" ? "toolbar.top" : "toolbar.bottom")}
+        </MainMenu.Item>
           <MainMenu.DefaultItems.Help />
         </MainMenu>
       </Excalidraw>

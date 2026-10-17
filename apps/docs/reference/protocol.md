@@ -107,6 +107,14 @@ A module can keep pictures that are too big for a document: up to 50 MB each and
 - **Only a complete PNG:** the host checks every part of the file before using it (`INVALID_PARAMS` for anything else, such as a different format, a cut-off or damaged file, or a picture over 16384 pixels on a side or 100 million pixels), and a file over 20 MB is `QUOTA_EXCEEDED`.
 - **Write only:** a module cannot read the clipboard.
 
+### Saving pictures
+
+`sdk.pictures.save(png, name)` saves a picture as a `.png` file in Tavora's own folder in the player's Pictures (`Pictures\Tavora`), right away, without a dialog. The PNG is sent to the module's own address, `POST /_pictures/?name=…`, as the request body, and the answer is `{ fileName }`, the name the file was saved under.
+
+- **Only after the player did something:** the same as the clipboard, one picture per click or key press within 2 seconds, otherwise `PERMISSION_DENIED`. A press used for the clipboard is used up for saving too.
+- **Only a complete PNG,** with the same checks and limits as the clipboard (`INVALID_PARAMS`, `QUOTA_EXCEEDED`).
+- **Only that folder, only new files:** `name` is a suggestion. Tavora takes out anything a file name cannot hold (slashes, colons, control characters, leading and trailing dots), shortens it to 80 characters, uses `Picture` when nothing is left, adds `.png`, and adds ` (2)`, ` (3)` and so on rather than replace a file. A module cannot choose the folder, the type or overwrite anything, and never learns where the folder is.
+
 ### Menus
 
 `sdk.ui.showMenu(request)` shows a menu that Tavora draws above every panel, in its own style and theme. A menu inside your page is cut off at the panel's edge; this one is not.
@@ -265,6 +273,7 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | Document title | 200 characters |
 | Stored files (`blobs`) | 50 MB each, 500 MB per module and game; PNG, JPEG, GIF and WebP only |
 | `clipboard.writeImage` | one PNG per click or key press, at most 20 MB, 16384 pixels on a side and 100 million pixels |
+| `pictures.save` | the same as `clipboard.writeImage`; names up to 80 characters |
 | Panel state | 256 KiB |
 | JSON nesting depth | 64 |
 | `network.fetch` answer | 5 MB of body, 15 s, 5 redirects, 6 requests at once per panel |
