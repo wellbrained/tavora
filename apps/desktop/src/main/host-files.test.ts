@@ -185,50 +185,50 @@ describe("leftover module data", () => {
 
   it("lists what each owner's modules saved", async () => {
     const userData = await tempDir();
-    await seed(userData, "local", "nik.tracker", "poe2", "l");
-    await seed(userData, KEY, "nik.tracker", "poe2", "k");
+    await seed(userData, "local", "wellbrained.tracker", "poe2", "l");
+    await seed(userData, KEY, "wellbrained.tracker", "poe2", "k");
     const found = await listModuleData(userData);
     expect(found.sort((a, b) => a.owner.localeCompare(b.owner))).toEqual([
-      { owner: KEY, moduleId: "nik.tracker" },
-      { owner: "local", moduleId: "nik.tracker" },
+      { owner: KEY, moduleId: "wellbrained.tracker" },
+      { owner: "local", moduleId: "wellbrained.tracker" },
     ]);
   });
 
   it("deletes one owner's data now and its browser storage at the next start", async () => {
     const userData = await tempDir();
-    await seed(userData, "local", "nik.tracker", "poe2", "l");
-    await seed(userData, KEY, "nik.tracker", "poe2", "k");
-    expect(await deleteModuleDataOf(userData, "local", "nik.tracker")).toEqual([modulePartition("local", "nik.tracker", "poe2")]);
-    expect(await listModuleData(userData)).toEqual([{ owner: KEY, moduleId: "nik.tracker" }]);
+    await seed(userData, "local", "wellbrained.tracker", "poe2", "l");
+    await seed(userData, KEY, "wellbrained.tracker", "poe2", "k");
+    expect(await deleteModuleDataOf(userData, "local", "wellbrained.tracker")).toEqual([modulePartition("local", "wellbrained.tracker", "poe2")]);
+    expect(await listModuleData(userData)).toEqual([{ owner: KEY, moduleId: "wellbrained.tracker" }]);
     await migrateModuleData(userData);
-    expect(await readdir(path.join(userData, "Partitions"))).toEqual([`module%3A${KEY}%3Anik.tracker@poe2`]);
-    await expect(deleteModuleDataOf(userData, "..", "nik.tracker")).rejects.toThrow();
+    expect(await readdir(path.join(userData, "Partitions"))).toEqual([`module%3A${KEY}%3Awellbrained.tracker@poe2`]);
+    await expect(deleteModuleDataOf(userData, "..", "wellbrained.tracker")).rejects.toThrow();
   });
 
   it("moves local data to the signed owner at the next start, keeping a game the signed module already has", async () => {
     const userData = await tempDir();
-    await seed(userData, "local", "nik.tracker", "poe2", "local poe2");
-    await seed(userData, "local", "nik.tracker", "satisfactory", "local satisfactory");
-    await seed(userData, KEY, "nik.tracker", "satisfactory", "signed satisfactory");
+    await seed(userData, "local", "wellbrained.tracker", "poe2", "local poe2");
+    await seed(userData, "local", "wellbrained.tracker", "satisfactory", "local satisfactory");
+    await seed(userData, KEY, "wellbrained.tracker", "satisfactory", "signed satisfactory");
     // The settings shared by every game (storage.app) move like a game's.
     for (const [folder, body] of [["_app", "local app"], ["not a game", "stays"]] as const) {
-      await mkdir(path.join(userData, "module-data", "local", "nik.tracker", folder), { recursive: true });
-      await writeFile(path.join(userData, "module-data", "local", "nik.tracker", folder, "storage.json"), body);
+      await mkdir(path.join(userData, "module-data", "local", "wellbrained.tracker", folder), { recursive: true });
+      await writeFile(path.join(userData, "module-data", "local", "wellbrained.tracker", folder, "storage.json"), body);
     }
-    await queueLocalDataMove(userData, "nik.tracker", KEY);
-    await expect(queueLocalDataMove(userData, "nik.tracker", "local")).rejects.toThrow();
+    await queueLocalDataMove(userData, "wellbrained.tracker", KEY);
+    await expect(queueLocalDataMove(userData, "wellbrained.tracker", "local")).rejects.toThrow();
     await migrateModuleData(userData);
 
-    const read = (owner: string, game: string) => readFile(path.join(userData, "module-data", owner, "nik.tracker", game, "storage.json"), "utf8");
+    const read = (owner: string, game: string) => readFile(path.join(userData, "module-data", owner, "wellbrained.tracker", game, "storage.json"), "utf8");
     expect(await read(KEY, "poe2")).toBe("local poe2");
     expect(await read(KEY, "satisfactory")).toBe("signed satisfactory");
     expect(await read("local", "satisfactory")).toBe("local satisfactory");
     expect(await read(KEY, "_app")).toBe("local app");
     expect(await read("local", "not a game")).toBe("stays");
     expect((await readdir(path.join(userData, "Partitions"))).sort()).toEqual([
-      `module%3A${KEY}%3Anik.tracker@poe2`,
-      `module%3A${KEY}%3Anik.tracker@satisfactory`,
-      "module%3Alocal%3Anik.tracker@satisfactory",
+      `module%3A${KEY}%3Awellbrained.tracker@poe2`,
+      `module%3A${KEY}%3Awellbrained.tracker@satisfactory`,
+      "module%3Alocal%3Awellbrained.tracker@satisfactory",
     ]);
     // Done once: the queue is empty afterwards.
     expect(await readdir(userData)).not.toContain("module-data-pending.json");
@@ -239,21 +239,21 @@ describe("leftover module data", () => {
     // Saved before modules had owners.
     await mkdir(blob("tavora.notes", "poe2"), { recursive: true });
     await writeFile(blob("tavora.notes", "poe2", "a.png"), "official");
-    await mkdir(blob("nik.tracker", "poe2"), { recursive: true });
-    await writeFile(blob("nik.tracker", "poe2", "b.png"), "local");
+    await mkdir(blob("wellbrained.tracker", "poe2"), { recursive: true });
+    await writeFile(blob("wellbrained.tracker", "poe2", "b.png"), "local");
     await migrateModuleData(userData);
     expect(await readFile(blob("official", "tavora.notes", "poe2", "a.png"), "utf8")).toBe("official");
-    expect(await readFile(blob("local", "nik.tracker", "poe2", "b.png"), "utf8")).toBe("local");
+    expect(await readFile(blob("local", "wellbrained.tracker", "poe2", "b.png"), "utf8")).toBe("local");
 
     // A module with only files left is listed, and its files move with Move.
-    expect((await listModuleData(userData)).map((found) => `${found.owner}/${found.moduleId}`).sort()).toEqual(["local/nik.tracker", "official/tavora.notes"]);
-    await queueLocalDataMove(userData, "nik.tracker", KEY);
+    expect((await listModuleData(userData)).map((found) => `${found.owner}/${found.moduleId}`).sort()).toEqual(["local/wellbrained.tracker", "official/tavora.notes"]);
+    await queueLocalDataMove(userData, "wellbrained.tracker", KEY);
     await migrateModuleData(userData);
-    expect(await readFile(blob(KEY, "nik.tracker", "poe2", "b.png"), "utf8")).toBe("local");
+    expect(await readFile(blob(KEY, "wellbrained.tracker", "poe2", "b.png"), "utf8")).toBe("local");
     expect(await readdir(blob("local"))).toEqual([]);
 
     // Delete removes them.
-    await deleteModuleDataOf(userData, KEY, "nik.tracker");
+    await deleteModuleDataOf(userData, KEY, "wellbrained.tracker");
     expect(await readdir(blob(KEY))).toEqual([]);
   });
 });

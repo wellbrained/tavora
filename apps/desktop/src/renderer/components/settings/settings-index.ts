@@ -61,6 +61,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["share-icons", "general"],
   ["steam-import", "integrations"],
   ["own-modules", "modules"],
+  ["development-folders", "modules"],
   ["module-files", "modules"],
   ["installed-modules", "modules"],
   ["browser-shared-sites", "browser"],

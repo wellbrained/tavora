@@ -4,7 +4,9 @@
 // zip checks and unpacks a module zip into the folder; dropping a module
 // package into the folder and pressing Reload adds it too. Remove moves it
 // to the recycle bin. A module's data stays, so adding it again finds it.
-import { ArrowRightLeft, FileArchive, FolderInput, FolderOpen, RefreshCw, Trash2 } from "@lucide/vue";
+// Development folders are for module developers: a module is loaded straight
+// from its project folder and its panels reload when the build changes.
+import { ArrowRightLeft, FileArchive, FolderCode, FolderInput, FolderOpen, RefreshCw, Trash2 } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -21,6 +23,19 @@ const modules = computed(() => state.value!.modules);
 const problems = computed(() => state.value!.moduleProblems);
 const leftover = computed(() => state.value!.leftoverModuleData);
 const files = computed(() => state.value!.moduleFiles);
+const developmentFolders = computed(() => state.value!.developmentFolders);
+
+async function addDevelopmentFolder() {
+  const result = await act({ type: "add-development-folder" });
+  if (result.ok && result.id) showToast(t("settings.devFolders.added", { folder: result.id }));
+}
+
+/** What a development folder loads, in words. */
+function folderStatus(entry: { moduleId: string | null; problem: string | null }): { text: string; ok: boolean } {
+  const module = entry.moduleId ? modules.value.find((item) => item.id === entry.moduleId) : undefined;
+  if (module) return { text: t("settings.devFolders.loads", { name: module.name, version: module.version }), ok: true };
+  return { text: t("settings.devFolders.problem", { message: entry.problem ?? "" }), ok: false };
+}
 
 // Modules for players first (Tavora's own, then the player's), examples last.
 const sorted = computed(() => {
@@ -92,6 +107,35 @@ function remove(module: ModuleView) {
     <li v-for="problem in problems" :key="problem.folder" class="text-sm">
       <span class="text-destructive font-medium">{{ problem.folder }}</span>
       <span class="text-muted-foreground"> {{ t("settings.modules.problem", { folder: "", message: problem.message }).trim() }}</span>
+    </li>
+  </ul>
+
+  <SettingRow
+    :label="t('settings.development-folders.label')"
+    :description="t('settings.development-folders.description')"
+    setting="development-folders"
+    :highlighted="highlight === 'development-folders'"
+  >
+    <Button variant="secondary" class="flex-none" data-testid="add-development-folder" @click="addDevelopmentFolder">
+      <FolderCode :stroke-width="1.5" /> {{ t("settings.devFolders.add") }}
+    </Button>
+  </SettingRow>
+  <ul v-if="developmentFolders.length" class="-mt-2 mb-2 flex flex-col" :aria-label="t('settings.development-folders.label')" data-testid="development-folders">
+    <li v-for="entry in developmentFolders" :key="entry.folder" class="flex items-center gap-3 border-b py-2 last:border-b-0" data-testid="development-folder">
+      <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span class="font-mono text-sm break-all">{{ entry.folder }}</span>
+        <span :class="cn('text-sm', folderStatus(entry).ok ? 'text-muted-foreground' : 'text-destructive')" data-testid="development-folder-status">{{ folderStatus(entry).text }}</span>
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        class="flex-none"
+        :aria-label="t('settings.devFolders.removeLabel', { folder: entry.folder })"
+        data-testid="remove-development-folder"
+        @click="act({ type: 'remove-development-folder', folder: entry.folder })"
+      >
+        {{ t("settings.devFolders.remove") }}
+      </Button>
     </li>
   </ul>
 
