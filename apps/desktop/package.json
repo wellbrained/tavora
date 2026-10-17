@@ -1,6 +1,6 @@
 {
   "name": "@tavora/desktop",
-  "version": "0.16.10",
+  "version": "0.16.12",
   "private": true,
   "type": "module",
   "scripts": {
@@ -98,8 +98,7 @@
         "nsis",
         "zip"
       ],
-      "icon": "assets/tavora.ico",
-      "signAndEditExecutable": false
+      "icon": "assets/tavora.ico"
     },
     "linux": {
       "target": [
