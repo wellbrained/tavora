@@ -71,17 +71,27 @@ function privateIpv4([a, b]: number[]): boolean {
 }
 
 /**
+ * Endings that only a home or office network's own DNS answers (RFC 6762, RFC 8375, ICANN's
+ * reserved `.internal`, and names routers use by habit), so a name with one is on the local network.
+ */
+const LOCAL_SUFFIXES = [".localhost", ".local", ".lan", ".home", ".home.arpa", ".internal", ".intranet", ".localdomain", ".corp", ".private"];
+/** Router and NAS names that are full domains but answered by the device itself on its network. */
+const LOCAL_NAMES = new Set(["fritz.box", "speedport.ip", "myfritz.box", "router.asus.com", "routerlogin.net", "routerlogin.com", "tplinkwifi.net", "tplinklogin.net"]);
+
+/**
  * Whether a host name (as `URL.hostname` gives it) points at this PC or the
- * local network: loopback, private and link-local ranges, `localhost` and
- * `.local` names. Names that resolve to such an address are not caught (see
- * DNS rebinding in docs/browser-security.md).
+ * local network: loopback, private and link-local ranges, `localhost`, a name
+ * without a dot (`http://router/`, which only the local network's DNS knows),
+ * local endings such as `.local`, `.lan` and `.home.arpa`, and common router
+ * names. Other names that resolve to such an address are not caught (see DNS
+ * rebinding in docs/browser-security.md).
  */
 export function isPrivateHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, "");
-  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return true;
+  if (host === "localhost" || LOCAL_NAMES.has(host) || LOCAL_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
   const v4 = ipv4(host);
   if (v4) return privateIpv4(v4);
-  if (!host.startsWith("[")) return false;
+  if (!host.startsWith("[")) return host !== "" && !host.includes(".");
   const v6 = host.slice(1, -1);
   if (v6 === "::" || v6 === "::1") return true;
   // IPv4-mapped (::ffff:7f00:1, as the URL parser writes ::ffff:127.0.0.1).

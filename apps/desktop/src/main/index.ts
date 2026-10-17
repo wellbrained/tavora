@@ -9,6 +9,39 @@ import { parseTestHosts } from "./network";
 // The last errors of this run, for Settings > Copy diagnostic info.
 errorLog.capture();
 
+// Command line switches the fuses don't cover. Each would open a debugging port into Tavora's pages, switch off
+// their sandbox, site isolation (`--disable-features`) or web security, point the Browser at another proxy, resolver
+// or certificate check, or move Chromium's own profile (`--user-data-dir`). Tavora never starts itself with them,
+// so a packaged Tavora that gets one quits before any page or port exists; tests and `pnpm dev` (unpackaged) still
+// pass some (host resolver rules).
+const UNSAFE_SWITCHES = [
+  "remote-debugging-port",
+  "remote-debugging-pipe",
+  "remote-debugging-address",
+  "inspect",
+  "inspect-brk",
+  "no-sandbox",
+  "disable-gpu-sandbox",
+  "disable-web-security",
+  "disable-site-isolation-trials",
+  "disable-features",
+  "user-data-dir",
+  "js-flags",
+  "allow-file-access-from-files",
+  "ignore-certificate-errors",
+  "proxy-server",
+  "proxy-pac-url",
+  "host-rules",
+  "host-resolver-rules",
+  "load-extension",
+];
+const unsafe = app.isPackaged ? UNSAFE_SWITCHES.find((name) => app.commandLine.hasSwitch(name)) : undefined;
+if (unsafe) {
+  console.error(`[tavora] refusing to start with --${unsafe}`);
+  // At once: nothing below may run, not even the single-instance check.
+  process.exit(1);
+}
+
 // Both schemes behave like https origins: standard URL parsing, a secure
 // context and per-origin storage. Neither may register service workers.
 protocol.registerSchemesAsPrivileged([
@@ -61,14 +94,13 @@ if (devServer) {
 
 // Quitting saves layouts and window bounds first (see window-all-closed).
 // Under `pnpm dev` the dev script restarts Tavora, so it keeps hot reload.
-// A portable build relaunches its own .exe, not the copy it unpacked.
+// Tavora relaunches its own executable; nothing in the environment can name another one.
 function restart(): void {
   if (devServer && process.send) {
     process.send("restart");
     return;
   }
-  const portable = process.env.PORTABLE_EXECUTABLE_FILE;
-  app.relaunch(portable ? { execPath: portable } : undefined);
+  app.relaunch();
   app.quit();
 }
 

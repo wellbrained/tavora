@@ -201,7 +201,7 @@ export interface TavoraSDK {
       connect(): Promise<void>;
       /** Asks Discord to approve muting and deafening, for a sign-in that can't yet (canControl false). From a click or key press. */
       allowControl(): Promise<void>;
-      /** Sends one command; resolves with Discord's answer as it came, or why there is none. SELECT_VOICE_CHANNEL only from a click or key press. */
+      /** Sends one command; resolves with Discord's answer as it came, or why there is none. SELECT_VOICE_CHANNEL and SET_VOICE_SETTINGS only from a click or key press. */
       command<C extends DiscordCommand>(command: C, args: DiscordCommands[C]): Promise<DiscordResult>;
       /** Starts sending an event to this panel (VOICE_CHANNEL_SELECT without a channel, the others for one voice channel). Kept across reconnects. */
       subscribe(event: DiscordEventName, channelId?: string): Promise<void>;

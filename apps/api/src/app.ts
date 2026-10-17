@@ -8,6 +8,9 @@ import { MAX_UPLOAD_BODY, type Submissions } from "./submissions.ts";
 import { DEFAULT_LIMIT, MAX_LIMIT, MAX_QUERY_LENGTH, searchGames } from "./search.ts";
 import { MAX_PROFILE_LENGTH, SteamError, type SteamClient } from "./steam.ts";
 
+/** A Steam import body is `{ "profile": <at most MAX_PROFILE_LENGTH characters> }`; nothing bigger is read. */
+const STEAM_BODY = 1000;
+
 export interface AppOptions {
   db: DatabaseSync;
   /** Which client a request is from; the server derives it from the connection. */
@@ -142,7 +145,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
 
   // Steam import. POST, so the profile is in no URL; JSON only, which a web
   // page on another site cannot send without a preflight this service refuses.
-  app.post("/v1/steam/library", async (context) => {
+  app.post("/v1/steam/library", bodyLimit({ maxSize: STEAM_BODY, onError: (context) => context.json({ error: "Send { \"profile\": a Steam profile link or SteamID64 }." }, 413) }), async (context) => {
     const wait = steamLimiter.check(clientKey ? clientKey(context.req.raw) : "local");
     if (wait > 0) {
       context.header("Retry-After", String(wait));
@@ -155,7 +158,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const text = await context.req.text();
     let profile: unknown;
     try {
-      profile = text.length <= 1000 ? (JSON.parse(text) as { profile?: unknown }).profile : undefined;
+      profile = text.length <= STEAM_BODY ? (JSON.parse(text) as { profile?: unknown }).profile : undefined;
     } catch {
       profile = undefined;
     }

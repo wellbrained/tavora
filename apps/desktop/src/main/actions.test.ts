@@ -12,6 +12,12 @@ const LAYOUT = {
 describe("parseAction", () => {
   it.each([
     [{ type: "show-welcome" }],
+    [{ type: "account-email-remove-code" }],
+    [{ type: "account-email-remove", code: "123456" }],
+    [{ type: "account-discord-connect-code" }],
+    [{ type: "account-discord-connect", code: "123456" }],
+    [{ type: "account-discord-disconnect-code" }],
+    [{ type: "account-discord-disconnect", code: "123456" }],
     [{ type: "link-choice", choice: "panel" }],
     [{ type: "module-files-change" }],
     [{ type: "module-files-reset" }],
@@ -237,6 +243,15 @@ describe("parseAction", () => {
     [{ type: "apply-layout-grid", columns: 2.5, rows: 2 }],
     [{ type: "save-snapshot", name: "x".repeat(81) }],
     [{ type: "delete-snapshot", snapshotId: "1" }],
+    // Removing the email needs the code sent to it; a removal without one, or with anything else, is refused.
+    [{ type: "account-email-remove" }],
+    [{ type: "account-email-remove", code: "12345" }],
+    [{ type: "account-email-remove-code", email: "a@b.c" }],
+    [{ type: "account-discord-disconnect", code: "x" }],
+    // Connecting or disconnecting Discord needs the emailed code.
+    [{ type: "account-discord-connect" }],
+    [{ type: "account-discord-disconnect" }],
+    [{ type: "account-discord-connect-code", code: "123456" }],
   ])("rejects %j", (action) => {
     expect(parseAction(action)).toBeNull();
   });
