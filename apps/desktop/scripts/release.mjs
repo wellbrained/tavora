@@ -9,13 +9,24 @@
 //
 // Order on the server: the installer and its blockmap first, latest.yml last, so a
 // manifest never points at a file that is not there yet (deploy/tavora-updates-publish.sh).
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
-import { AFTER_RELEASE, CHECKLIST, checkCi, checkRelease } from "./release-guards.mjs";
+import { AFTER_RELEASE, CHECKLIST, checkCi, checkInstalled, checkRelease } from "./release-guards.mjs";
+import { checkStart } from "./start-check.mjs";
+
+/** The version of the Tavora installed for this user (asar is off, so its package.json is a plain file), or null. */
+function readInstalledVersion() {
+  try {
+    const file = path.join(process.env.LOCALAPPDATA ?? "", "Programs", "Tavora", "resources", "app", "package.json");
+    return JSON.parse(readFileSync(file, "utf8")).version ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const desktop = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repo = path.dirname(path.dirname(desktop));
@@ -112,23 +123,11 @@ if (!new RegExp(`^version: ${version.replaceAll(".", "\\.")}$`, "m").test(readFi
 }
 console.log(`Built ${installer} and its update files.`);
 
-// e2e runs Tavora unpackaged, so code that only runs packaged (the unsafe-switch gate) is
-// started here once: 0.17.3 shipped refusing every start. A second instance next to a
-// running Tavora quits with 0, which passes; an error exit fails the release.
+// The installed app's full start is checked on CI (Checks, packaged-start); this catches a
+// build that quits at once. Next to a running Tavora it can only get as far as the handover.
 step("Starting the packaged build");
-const smoke = spawn(path.join(releaseDir, "win-unpacked", "Tavora.exe"), [], { stdio: ["ignore", "ignore", "pipe"] });
-let smokeErr = "";
-smoke.stderr.on("data", (chunk) => (smokeErr += chunk));
-const smokeExit = await new Promise((resolve) => {
-  const timer = setTimeout(() => resolve(null), 15_000);
-  smoke.on("exit", (code) => { clearTimeout(timer); resolve(code); });
-});
-if (smokeExit === null) spawnSync("taskkill", ["/PID", String(smoke.pid), "/T", "/F"], { stdio: "ignore" });
-if (smokeExit !== null && smokeExit !== 0) {
-  console.error(smokeErr.trim());
-  throw new Error(`The packaged Tavora.exe quit with exit code ${smokeExit} on a plain start. Nothing was published.`);
-}
-console.log(smokeExit === null ? "It started and kept running." : "It handed over to a Tavora that is already running.");
+const started = await checkStart(path.join(releaseDir, "win-unpacked", "Tavora.exe"), { allowHandover: true });
+console.log(started === "window" ? "It started and showed its window." : "It handed over to a Tavora that is already running (the window check ran on CI).");
 
 if (dryRun) {
   console.log("\nDry run: stopping before the upload. Nothing was published or tagged.");
@@ -139,11 +138,18 @@ if (!dryRun) {
   step("Checks by hand");
   console.log(`Installer: ${path.join(releaseDir, installer)}`);
   const ask = createInterface({ input: process.stdin, output: process.stdout });
-  for (const item of CHECKLIST) {
+  for (const [index, item] of CHECKLIST.entries()) {
     const answer = (await ask.question(`  ${item} [y/N] `)).trim().toLowerCase();
     if (answer !== "y") {
       ask.close();
       console.error("Not releasing: that check did not pass. Nothing was published or tagged.");
+      process.exit(1);
+    }
+    // The checks count only on the new build: 0.17.3 was checked on an older install.
+    const problem = index === 0 ? checkInstalled(readInstalledVersion(), version) : undefined;
+    if (problem) {
+      ask.close();
+      console.error(`Not releasing: ${problem} Nothing was published or tagged.`);
       process.exit(1);
     }
   }

@@ -67,6 +67,13 @@ export function checkCi(runs, sha) {
   return [];
 }
 
+/** Why the installed Tavora can't stand for `version` in the by-hand checks, or undefined. */
+export function checkInstalled(installed, version) {
+  if (!installed) return `Tavora is not installed for this user; run Tavora-Setup-${version}.exe from the release folder first.`;
+  if (installed !== version) return `the installed Tavora is ${installed}, not ${version}; run Tavora-Setup-${version}.exe from the release folder and check again.`;
+  return undefined;
+}
+
 /** The by-hand checks before an installer goes out, asked one by one. */
 export const CHECKLIST = [
   "The installed build starts (run the new installer from the release folder).",

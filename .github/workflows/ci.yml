@@ -1,7 +1,8 @@
 name: Checks
 
 # Typecheck, unit tests and build run for every pull request to main, for every
-# push to main and for release tags. The e2e suite takes about 14 minutes, so it
+# push to main and for release tags, and next to them a Windows job installs and
+# starts the packaged app (packaged-start, below). The e2e suite takes about 14 minutes, so it
 # runs only for release tags or when started by hand from the Actions tab (Run
 # workflow, pick the branch). A new push to the same pull request cancels the run
 # before it.
@@ -56,3 +57,34 @@ jobs:
           name: e2e-results
           path: apps/desktop/test-results
           retention-days: 7
+
+  # e2e runs Tavora unpackaged, so code that only runs packaged was never started before a
+  # release (0.17.3 quit on every start). This builds the real installer, installs it the way
+  # a player does and passes only once the installed Tavora shows its window. `pnpm release`
+  # requires the whole Checks run, so this job too.
+  packaged-start:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter @tavora/desktop package --win nsis --publish never
+      - name: Install like a player (silent, for this user)
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem apps/desktop/release -Filter 'Tavora-Setup-*.exe' | Select-Object -First 1
+          $p = Start-Process $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "The installer exited with $($p.ExitCode)." }
+      - name: Start the installed Tavora
+        shell: pwsh
+        run: node apps/desktop/scripts/start-check.mjs "$env:LOCALAPPDATA\Programs\Tavora\Tavora.exe"
+      - if: failure()
+        name: Startup log
+        shell: pwsh
+        run: Get-Content "$env:APPDATA\@tavora\desktop\logs\startup.log" -ErrorAction SilentlyContinue

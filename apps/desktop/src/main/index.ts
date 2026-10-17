@@ -5,16 +5,26 @@ import { HOST_SCHEME, MODULE_SCHEME } from "./assets";
 import { errorLog } from "./diagnostics";
 import { Host } from "./host";
 import { parseTestHosts } from "./network";
+import { reportStartupFailure } from "./startup-failure";
 import { findUnsafeSwitch } from "./unsafe-switches";
 
 // The last errors of this run, for Settings > Copy diagnostic info.
 errorLog.capture();
 
+// The data folder is fixed, not derived from the app's name: it has always been
+// %APPDATA%\@tavora\desktop (the package name), and the installed app is named
+// Tavora, which would otherwise move everyone's games and settings.
+// Like every switch below, only a development run honours the environment: whoever can set it for a packaged Tavora
+// could otherwise point it at their own data folder or modules, or have a module listed as Official.
+const userData = !app.isPackaged && process.env.TAVORA_USER_DATA
+  ? path.resolve(process.env.TAVORA_USER_DATA)
+  : path.join(app.getPath("appData"), "@tavora", "desktop");
+
 // A packaged Tavora started with a switch that opens it up quits before any page or port exists (unsafe-switches.ts).
 const unsafe = app.isPackaged ? findUnsafeSwitch(process.argv.slice(1)) : undefined;
 if (unsafe) {
-  console.error(`[tavora] refusing to start with --${unsafe}`);
-  // At once: nothing below may run, not even the single-instance check.
+  reportStartupFailure(userData, `Tavora was started with --${unsafe}, which would let other programs into it, so it closed. Start Tavora from its own shortcut or the Start menu.`);
+  // Nothing below may run, not even the single-instance check.
   process.exit(1);
 }
 
@@ -28,13 +38,7 @@ protocol.registerSchemesAsPrivileged([
 // Every renderer is sandboxed, including any created by accident.
 app.enableSandbox();
 
-// The data folder is fixed, not derived from the app's name: it has always been
-// %APPDATA%\@tavora\desktop (the package name), and the installed app is named
-// Tavora, which would otherwise move everyone's games and settings.
-// Like every switch below, only a development run honours the environment: whoever can set it for a packaged Tavora
-// could otherwise point it at their own data folder or modules, or have a module listed as Official.
-if (!app.isPackaged && process.env.TAVORA_USER_DATA) app.setPath("userData", path.resolve(process.env.TAVORA_USER_DATA));
-else app.setPath("userData", path.join(app.getPath("appData"), "@tavora", "desktop"));
+app.setPath("userData", userData);
 
 // OLED panels don't use the RGB subpixel layout ClearType assumes, so small
 // text gets colour fringes there. Chromium only takes this switch before the
@@ -155,7 +159,7 @@ if (!app.requestSingleInstanceLock()) {
       });
     })
     .catch((error: unknown) => {
-      console.error("[tavora] failed to start", error);
+      reportStartupFailure(userData, "Something went wrong while Tavora was starting.", error instanceof Error ? (error.stack ?? error.message) : String(error));
       app.exit(1);
     });
 }
