@@ -131,6 +131,8 @@ describe("panel types", () => {
     expect(problems).toEqual([{ folder: "pageless", message: "the entry file b.html is missing (is it built?)" }]);
     const info = await describeModules(local, modules);
     expect(info.get("example.typed")!.panelIcons).toEqual({ a: null, b: `data:image/png;base64,${png.toString("base64")}` });
+  });
+});
 
 describe("development folders", () => {
   it("load one module straight from each project folder, ahead of an installed copy, with local data", async () => {
