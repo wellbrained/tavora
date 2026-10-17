@@ -69,6 +69,8 @@ pnpm dev
 
 Opens Tavora without building it. Changes to the host UI (`apps/desktop/src/renderer`) show up instantly with hot reload, keeping the app's state. Changes to the main process or preloads (`src/main`, `src/preload`, `src/shared`) restart Tavora by itself after a second. Closing Tavora or pressing Ctrl+C ends it. The dev server uses port 4000; `pnpm dev --port <n>` picks another.
 
+Development has its own persistent profile (`%APPDATA%\@tavora\desktop-dev` on Windows); the installed app keeps `%APPDATA%\@tavora\desktop`. This also applies when tracker starts dev. The first dev run starts empty; no installed data is copied. `TAVORA_USER_DATA` can still select an explicit development/test profile. Decided 2026-10-17 to keep development and installed state separate.
+
 Modules run from their built files, so run `pnpm build` once first; after changing a module, rebuild it and reload its panel. Development mode only works from the source tree: packaged builds never load the dev server.
 
 ## Checks
