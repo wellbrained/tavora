@@ -63,7 +63,7 @@ defineExpose({ focus: () => input.value?.focus() });
         :class="
           cn(
             'placeholder:text-muted-foreground focus-visible:border-ring h-8 w-full min-w-0 rounded-md border bg-transparent pr-2 text-sm outline-none',
-            alignToTasks ? 'pl-[74px]' : 'pl-8',
+            alignToTasks ? 'pl-[79px]' : 'pl-8',
             outlined ? 'border-input bg-card' : 'hover:bg-accent/60 focus-visible:bg-background border-transparent',
           )
         "
