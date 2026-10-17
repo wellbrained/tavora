@@ -19,13 +19,29 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.17.14",
+    version: "0.17.17",
     date: "2026-10-17",
     title: "Each panel keeps what it shows",
     notes: [
       "Panels of a module can each show something different, such as a different build, and keep it when you switch games or restart Tavora.",
       "Hovering a panel's tab now shows the full name of what it shows, below the panel's and the module's names.",
       "Module developers: the Panel Types Example now picks a build in each panel.",
+    ],
+  },
+  {
+    version: "0.17.16",
+    date: "2026-10-17",
+    title: "Updates only go forward",
+    notes: [
+      "Install from zip now replaces a module only with a higher version. A zip with the same or an older version says which version you have instead of quietly going back.",
+    ],
+  },
+  {
+    version: "0.17.15",
+    date: "2026-10-17",
+    title: "A link command that works anywhere",
+    notes: [
+      "Module developers: Link a publisher key in Settings > Account now copies \"npx @tavora/pack link\" with your code, which runs in any folder, also where @tavora/pack isn't installed.",
     ],
   },
   {

@@ -306,9 +306,9 @@ export interface Methods {
   "documents.delete": { params: { id: string; ifRevision?: number }; result: null };
   "panel.getState": { params: undefined; result: JsonValue | null };
   "panel.setState": { params: { value: JsonValue | null }; result: null };
-  /** Why this page is loading; the same answer for every call until the page loads again. Tavora 0.17.14 and newer. */
+  /** Why this page is loading; the same answer for every call until the page loads again. Tavora 0.17.17 and newer. */
   "panel.getLaunch": { params: undefined; result: PanelLaunch };
-  /** What the panel shows now, or null for nothing. Tavora 0.17.14 and newer. */
+  /** What the panel shows now, or null for nothing. Tavora 0.17.17 and newer. */
   "panel.setContent": { params: { content: PanelContent | null }; result: null };
   "workspace.getViewport": { params: undefined; result: TavoraViewport };
   "ui.getTheme": { params: undefined; result: TavoraTheme };

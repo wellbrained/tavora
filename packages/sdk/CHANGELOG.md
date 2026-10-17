@@ -4,7 +4,7 @@ What changed in `@tavora/sdk` and the bridge protocol it speaks, newest first. B
 
 ## 0.2.3
 
-- Content per panel: `panel.setContent({ id, title } | null)` tells Tavora what the panel shows now, such as the build picked in your toolbar. Tavora keeps it with the panel across game switches and restarts and shows the title when the player hovers the tab. `panel.getLaunch()` says why the page is loading: `{ reason: "add" }` for a panel the player just added (pick the content yourself, such as the last one used), or `{ reason: "restore", content }` for one that was open before (Tavora 0.17.14). Set `minTavora` to `0.17.14` or newer when you use them.
+- Content per panel: `panel.setContent({ id, title } | null)` tells Tavora what the panel shows now, such as the build picked in your toolbar. Tavora keeps it with the panel across game switches and restarts and shows the title when the player hovers the tab. `panel.getLaunch()` says why the page is loading: `{ reason: "add" }` for a panel the player just added (pick the content yourself, such as the last one used), or `{ reason: "restore", content }` for one that was open before (Tavora 0.17.17). Set `minTavora` to `0.17.17` or newer when you use them.
 
 ## 0.2.2
 

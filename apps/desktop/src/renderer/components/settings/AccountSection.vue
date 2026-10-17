@@ -101,7 +101,7 @@ async function saveDeveloperName() {
 }
 const linkCommandText = computed(() => {
   const code = view.value?.linkCode?.code ?? "";
-  return `tavora-pack link ${code.slice(0, 4)}-${code.slice(4)}`;
+  return `npx @tavora/pack link ${code.slice(0, 4)}-${code.slice(4)}`;
 });
 async function copyLinkCommand() {
   if ((await act({ type: "account-copy-link-command" })).ok) showToast(t("account.developer.copied"));
