@@ -23,7 +23,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     date: "2026-10-17",
     title: "Safer accounts, Discord and Browser",
     notes: [
-      "Removing the email from your Tavora account now asks for a code sent to that address, and disconnecting Discord asks you to sign in with Discord once more. Connecting Discord sends a note to your email. Someone who got hold of your sign-in can no longer quietly take your account.",
+      "Removing the email from your Tavora account, and connecting or disconnecting Discord, now ask for a code sent to your email. Someone who got hold of your sign-in can no longer quietly take your account, and you can always remove a Discord login, even one you can no longer sign in to.",
       "A module can mute, unmute or deafen you in Discord only right after you click in its panel, like joining a channel.",
       "One click on a web page opens at most one new Browser tab, and pages on the internet can no longer reach your router or other devices by their local names.",
     ],

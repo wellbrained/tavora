@@ -1130,10 +1130,14 @@ export class Host {
         return this.account.deleteAccount(action.code);
       case "account-discord-sign-in":
         return this.account.discordSignIn();
+      case "account-discord-connect-code":
+        return this.account.sendConnectDiscordCode();
       case "account-discord-connect":
-        return this.account.connectDiscord();
+        return this.account.connectDiscord(action.code);
+      case "account-discord-disconnect-code":
+        return this.account.sendDisconnectDiscordCode();
       case "account-discord-disconnect":
-        return this.account.disconnectDiscord();
+        return this.account.disconnectDiscord(action.code);
       case "account-email-remove-code":
         return this.account.sendRemoveEmailCode();
       case "account-email-remove":

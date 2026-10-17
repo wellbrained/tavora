@@ -226,18 +226,42 @@ export class AccountClient {
     await this.signedIn(answer);
   }
 
-  /** Connects Discord to the signed-in account (a fresh Discord sign-in in the browser). */
-  async connectDiscord(): Promise<void> {
+  /**
+   * Connecting Discord starts with a code sent to the account's address, so a stolen sign-in cannot add a way in
+   * that it controls; the player then types the code and approves in Discord (connectDiscord).
+   */
+  async sendConnectDiscordCode(): Promise<void> {
     this.ensure(true);
-    const login = await this.discord();
-    await this.updated(await this.call("POST", "/discord", login, true));
+    await this.call("POST", "/discord/code", { language: this.options.language() }, true);
+    this.pending = { kind: "connect-discord" };
+    this.changed();
   }
 
-  /** Disconnects Discord by a fresh sign-in with that same Discord login, so a stolen sign-in cannot swap in its own. */
-  async disconnectDiscord(): Promise<void> {
-    this.ensure(true);
+  /** Connects Discord to the signed-in account: the code from the email, then a fresh Discord sign-in in the browser. */
+  async connectDiscord(emailCode: string): Promise<void> {
+    if (this.pending?.kind !== "connect-discord") throw new PlayerError("account.error.noCode");
     const login = await this.discord();
-    await this.updated(await this.call("POST", "/discord/remove", login, true));
+    const answer = await this.call("POST", "/discord", { ...login, emailCode }, true);
+    this.pending = null;
+    await this.updated(answer);
+  }
+
+  /**
+   * Disconnecting Discord needs a code sent to the account's address, so the owner can always remove a Discord login,
+   * also one they lost or one someone else connected, and a stolen sign-in cannot.
+   */
+  async sendDisconnectDiscordCode(): Promise<void> {
+    this.ensure(true);
+    await this.call("POST", "/discord/remove/code", { language: this.options.language() }, true);
+    this.pending = { kind: "remove-discord" };
+    this.changed();
+  }
+
+  async disconnectDiscord(code: string): Promise<void> {
+    if (this.pending?.kind !== "remove-discord") throw new PlayerError("account.error.noCode");
+    const answer = await this.call("POST", "/discord/remove", { code }, true);
+    this.pending = null;
+    await this.updated(answer);
   }
 
   /** Removing the email needs a code sent to it, so a stolen sign-in cannot cut the owner out. */

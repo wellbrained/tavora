@@ -15,23 +15,17 @@ export function createRateLimiter(options: { limit: number; windowMs: number; ma
   const hits = new Map<string, { count: number; resetAt: number }>();
   const maxClients = options.maxClients ?? MAX_CLIENTS;
   let lastSweep = 0;
-  const sweep = (now: number) => {
-    lastSweep = now;
-    for (const [name, entry] of hits) if (entry.resetAt <= now) hits.delete(name);
-  };
   return {
     check(key, now = Date.now()) {
-      if (now - lastSweep > options.windowMs) sweep(now);
+      if (now - lastSweep > options.windowMs) {
+        lastSweep = now;
+        for (const [name, entry] of hits) if (entry.resetAt <= now) hits.delete(name);
+      }
       const entry = hits.get(key);
       if (!entry || entry.resetAt <= now) {
-        if (!entry && hits.size >= maxClients) {
-          sweep(now);
-          // Still full: forget the oldest, which a Map keeps first.
-          for (const name of hits.keys()) {
-            if (hits.size < maxClients) break;
-            hits.delete(name);
-          }
-        }
+        // Full: forget the oldest, which a Map keeps first. No sweep here, so a flood of new keys costs
+        // one deletion each, never a pass over every client; the regular sweep above still runs once a window.
+        if (!entry && hits.size >= maxClients) hits.delete(hits.keys().next().value!);
         hits.set(key, { count: 1, resetAt: now + options.windowMs });
         return 0;
       }

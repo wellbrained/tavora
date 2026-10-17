@@ -10,9 +10,10 @@ import { parseTestHosts } from "./network";
 errorLog.capture();
 
 // Command line switches the fuses don't cover. Each would open a debugging port into Tavora's pages, switch off
-// their sandbox or web security, or point the Browser at another proxy, resolver or certificate check. Tavora never
-// starts itself with them, so a packaged Tavora that gets one quits before any page or port exists; tests and
-// `pnpm dev` (unpackaged) still pass some (host resolver rules).
+// their sandbox, site isolation (`--disable-features`) or web security, point the Browser at another proxy, resolver
+// or certificate check, or move Chromium's own profile (`--user-data-dir`). Tavora never starts itself with them,
+// so a packaged Tavora that gets one quits before any page or port exists; tests and `pnpm dev` (unpackaged) still
+// pass some (host resolver rules).
 const UNSAFE_SWITCHES = [
   "remote-debugging-port",
   "remote-debugging-pipe",
@@ -23,6 +24,8 @@ const UNSAFE_SWITCHES = [
   "disable-gpu-sandbox",
   "disable-web-security",
   "disable-site-isolation-trials",
+  "disable-features",
+  "user-data-dir",
   "js-flags",
   "allow-file-access-from-files",
   "ignore-certificate-errors",

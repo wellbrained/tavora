@@ -229,9 +229,25 @@ function startDelete() {
         :description="signedIn.discord ? t('account.methods.discordConnected', { name: signedIn.discord.name }) : t('account.methods.discordNone')"
         data-testid="account-discord"
       >
-        <Button v-if="signedIn.discord && signedIn.email" variant="secondary" :disabled="busy" data-testid="account-discord-disconnect" @click="runDiscord({ type: 'account-discord-disconnect' })">{{ t("account.discord.disconnect") }}</Button>
-        <Button v-else-if="!signedIn.discord" variant="secondary" :disabled="busy" data-testid="account-discord-connect" @click="runDiscord({ type: 'account-discord-connect' })">{{ t("account.discord.connect") }}</Button>
+        <template v-if="pending?.kind !== 'connect-discord' && pending?.kind !== 'remove-discord'">
+          <Button v-if="signedIn.discord && signedIn.email" variant="secondary" :disabled="busy" data-testid="account-discord-disconnect" @click="run({ type: 'account-discord-disconnect-code' })">{{ t("account.discord.disconnect") }}</Button>
+          <Button v-else-if="!signedIn.discord" variant="secondary" :disabled="busy" data-testid="account-discord-connect" @click="run({ type: 'account-discord-connect-code' })">{{ t("account.discord.connect") }}</Button>
+        </template>
       </SettingRow>
+
+      <!-- Connecting or disconnecting Discord needs the code sent to the account's address (A6). -->
+      <form
+        v-if="pending?.kind === 'connect-discord' || pending?.kind === 'remove-discord'"
+        class="flex flex-col gap-3 border-b py-4"
+        @submit.prevent="codeReady && (pending?.kind === 'connect-discord' ? runDiscord({ type: 'account-discord-connect', code: cleanCode }) : run({ type: 'account-discord-disconnect', code: cleanCode }))"
+      >
+        <span class="text-muted-foreground">{{ t(pending.kind === "connect-discord" ? "account.discord.connectCodeSent" : "account.discord.disconnectCodeSent", { email: signedIn.email ?? "" }) }}</span>
+        <div class="flex gap-2">
+          <Input v-model="code" class="w-40 tracking-widest tabular-nums" inputmode="numeric" autocomplete="one-time-code" maxlength="7" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
+          <Button type="submit" :disabled="busy || !codeReady" data-testid="account-confirm-discord">{{ t(pending.kind === "connect-discord" ? "account.discord.connectConfirm" : "account.discord.disconnectConfirm") }}</Button>
+          <Button type="button" variant="ghost" :disabled="busy" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
+        </div>
+      </form>
 
       <div class="border-b py-4">
         <span class="font-medium">{{ t("account.devices.title") }}</span>

@@ -371,14 +371,22 @@ describe("Discord login", () => {
 
   it("connects and disconnects Discord, removes the email with a code, and says why the last method stays", async () => {
     const { calls, fetchImpl } = service({
+      "POST /discord/code": () => json({ status: "sent" }, 202),
       "POST /discord": () => json({ account: discordAccount("me@example.com", "nik") }),
       "POST /email/remove/code": () => json({ status: "sent" }, 202),
       "POST /email/remove": () => json({ account: discordAccount(null, "nik") }),
+      "POST /discord/remove/code": () => json({ status: "sent" }, 202),
       "POST /discord/remove": () => json({ reason: "last-method" }, 409),
     });
     const { account, kept } = client(fetchImpl, { saved: SAVED, discordLogin: async () => LOGIN });
     await account.init();
-    await account.connectDiscord();
+    // Connecting: a code to the account's address first, then the Discord sign-in goes along with it.
+    await expect(account.connectDiscord("654321")).rejects.toMatchObject({ key: "account.error.noCode" });
+    await account.sendConnectDiscordCode();
+    expect(account.view().pending).toEqual({ kind: "connect-discord" });
+    await account.connectDiscord("654321");
+    expect(calls.find((call) => call.url.endsWith("/discord"))!.body).toEqual({ ...LOGIN, emailCode: "654321" });
+    expect(account.view().pending).toBeNull();
     expect(account.view().account).toMatchObject({ email: "me@example.com", discord: { name: "nik" } });
     // No code asked for yet: nothing is removed.
     await expect(account.removeEmail("123456")).rejects.toMatchObject({ key: "account.error.noCode" });
@@ -388,24 +396,28 @@ describe("Discord login", () => {
     expect(calls.find((call) => call.url.endsWith("/email/remove"))!.body).toEqual({ code: "123456" });
     expect(account.view().pending).toBeNull();
     expect(kept.at(-1)).toMatchObject({ email: null, discord: "nik" });
-    // Disconnecting signs in with Discord again and sends that sign-in along.
-    await expect(account.disconnectDiscord()).rejects.toMatchObject({ key: "account.error.lastMethod" });
-    expect(calls.find((call) => call.url.endsWith("/discord/remove"))!.body).toEqual(LOGIN);
+    // Disconnecting needs a code to the address too; no Discord sign-in, so a lost login can always go.
+    await expect(account.disconnectDiscord("111111")).rejects.toMatchObject({ key: "account.error.noCode" });
+    await account.sendDisconnectDiscordCode();
+    expect(account.view().pending).toEqual({ kind: "remove-discord" });
+    await expect(account.disconnectDiscord("111111")).rejects.toMatchObject({ key: "account.error.lastMethod" });
+    expect(calls.find((call) => call.url.endsWith("/discord/remove"))!.body).toEqual({ code: "111111" });
     expect(account.view().account).toMatchObject({ discord: { name: "nik" } });
   });
 
   it("says when the account already has another Discord login", async () => {
-    const { fetchImpl } = service({ "POST /discord": () => json({ reason: "discord-connected" }, 409) });
+    const { fetchImpl } = service({ "POST /discord/code": () => json({ reason: "discord-connected" }, 409) });
     const { account } = client(fetchImpl, { saved: SAVED, discordLogin: async () => LOGIN });
     await account.init();
-    await expect(account.connectDiscord()).rejects.toMatchObject({ key: "account.error.discordConnected" });
+    await expect(account.sendConnectDiscordCode()).rejects.toMatchObject({ key: "account.error.discordConnected" });
   });
 
   it("tells a Discord login another account has apart", async () => {
-    const { fetchImpl } = service({ "POST /discord": () => json({ reason: "discord-taken" }, 409) });
+    const { fetchImpl } = service({ "POST /discord/code": () => json({ status: "sent" }, 202), "POST /discord": () => json({ reason: "discord-taken" }, 409) });
     const { account } = client(fetchImpl, { saved: SAVED, discordLogin: async () => LOGIN });
     await account.init();
-    await expect(account.connectDiscord()).rejects.toMatchObject({ key: "account.error.discordTaken" });
+    await account.sendConnectDiscordCode();
+    await expect(account.connectDiscord("654321")).rejects.toMatchObject({ key: "account.error.discordTaken" });
   });
 
   it("deletes a Discord-only account with a fresh Discord sign-in", async () => {

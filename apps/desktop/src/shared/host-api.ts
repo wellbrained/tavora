@@ -120,6 +120,9 @@ export type AccountPending =
   | { kind: "change-email"; email: string }
   /** Removing the email waits for the code sent to it. */
   | { kind: "remove-email" }
+  /** Connecting or disconnecting Discord waits for the code sent to the account's address. */
+  | { kind: "connect-discord" }
+  | { kind: "remove-discord" }
   | { kind: "delete" };
 
 /** Settings > Account. Sent on its own channel; the sign-in token never leaves the main process. */
@@ -493,8 +496,10 @@ export type HostAction =
   | { type: "account-delete"; code: string }
   /** Discord login in the browser: sign in (or create), connect to the signed-in account, disconnect. */
   | { type: "account-discord-sign-in" }
-  | { type: "account-discord-connect" }
-  | { type: "account-discord-disconnect" }
+  | { type: "account-discord-connect-code" }
+  | { type: "account-discord-connect"; code: string }
+  | { type: "account-discord-disconnect-code" }
+  | { type: "account-discord-disconnect"; code: string }
   | { type: "account-email-remove-code" }
   | { type: "account-email-remove"; code: string }
   /** Deletes the account by a fresh Discord sign-in (an account without an email address). */
