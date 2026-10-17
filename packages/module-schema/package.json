@@ -2,15 +2,50 @@
   "name": "@tavora/module-schema",
   "version": "0.1.0",
   "description": "Validator and JSON Schema for Tavora module manifests (tavora.module.json).",
-  "private": true,
   "type": "module",
+  "keywords": [
+    "tavora",
+    "module",
+    "manifest",
+    "json-schema"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wellbrained/tavora.git",
+    "directory": "packages/module-schema"
+  },
+  "homepage": "https://docs.mytavora.app/",
+  "bugs": "https://github.com/wellbrained/tavora/issues",
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p ."
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./schema.json": "./schema/tavora.module.schema.json"
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schema.json": "./schema/tavora.module.schema.json",
+    "./package.json": "./package.json"
   },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./schema.json": "./schema/tavora.module.schema.json",
+      "./package.json": "./package.json"
+    }
+  },
+  "files": [
+    "dist",
+    "schema",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "devDependencies": {
     "ajv": "8.20.0",
     "@types/node": "^22.20.5"

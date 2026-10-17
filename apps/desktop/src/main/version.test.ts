@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { SDK_VERSION } from "@tavora/sdk";
+import { MIN_TAVORA, SDK_VERSION } from "@tavora/sdk";
 import { describe, expect, it } from "vitest";
 import { PATCH_NOTES } from "../shared/patch-notes";
 
@@ -30,6 +30,17 @@ describe("SDK version", () => {
     const { version } = JSON.parse(readFileSync(new URL("package.json", sdk), "utf8")) as { version: string };
     expect(SDK_VERSION).toBe(version);
     expect(readFileSync(new URL("CHANGELOG.md", sdk), "utf8").split(/\r?\n/)).toContain(`## ${version}`);
+  });
+
+  it("needs the Tavora its newest changelog entry names, which is never newer than this app", () => {
+    const changelog = readFileSync(new URL("../../../../packages/sdk/CHANGELOG.md", import.meta.url), "utf8");
+    const newest = changelog.split(/^## /m)[1] ?? "";
+    const named = [...newest.matchAll(/\(Tavora (\d+\.\d+\.\d+)\)/g)].map((match) => parts(match[1]!));
+    const highest = named.sort((a, b) => b[0] - a[0] || b[1] - a[1] || b[2] - a[2])[0];
+    expect(highest?.join(".")).toBe(MIN_TAVORA);
+    const app = parts((JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }).version);
+    const need = parts(MIN_TAVORA);
+    expect(app[0] - need[0] || app[1] - need[1] || app[2] - need[2]).toBeGreaterThanOrEqual(0);
   });
 });
 

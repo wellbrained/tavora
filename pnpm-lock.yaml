@@ -454,6 +454,19 @@ importers:
         specifier: 8.3.4
         version: 8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
 
+  packages/create-module:
+    dependencies:
+      '@tavora/module-schema':
+        specifier: workspace:^
+        version: link:../module-schema
+    devDependencies:
+      '@tavora/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      '@types/node':
+        specifier: ^22.20.5
+        version: 22.20.5
+
   packages/module-schema:
     devDependencies:
       '@types/node':
@@ -466,7 +479,7 @@ importers:
   packages/pack:
     dependencies:
       '@tavora/module-schema':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../module-schema
     devDependencies:
       '@types/node':

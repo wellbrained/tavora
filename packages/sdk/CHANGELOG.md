@@ -4,6 +4,7 @@ What changed in `@tavora/sdk` and the bridge protocol it speaks, newest first. B
 
 ## 0.2.1
 
+- `MIN_TAVORA`: the oldest Tavora that has everything this SDK version offers, for `minTavora` in your manifest.
 - `ui.showMenu(request)`: a menu Tavora draws above every panel, so it is never cut off at the panel's edge. Items with an optional colour dot, check or radio mark, hint and danger style; separators; headings; one level of submenus. Only right after a click, right-click or key press in the panel; resolves with the chosen id or null (Tavora 0.17.9).
 
 ## 0.2.0
