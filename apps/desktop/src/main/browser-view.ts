@@ -204,9 +204,11 @@ export class BrowserPanel {
     });
     // A link the player opened in a new tab or window (target=_blank,
     // Ctrl+click, middle click) becomes a new Browser tab beside this one.
-    // Without a click or key press just before, nothing opens.
+    // Without a click or key press just before, nothing opens, and one click
+    // opens one tab, so a page cannot open a pile of them from a single click.
     contents.setWindowOpenHandler(({ url, disposition }) => {
       if (Date.now() - this.lastGesture < GESTURE_MS && this.mayFollow(url)) {
+        this.lastGesture = 0;
         setImmediate(() => current() && this.options.onOpenTab(url, disposition === "background-tab"));
       }
       return { action: "deny" };

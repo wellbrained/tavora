@@ -27,7 +27,7 @@ export const DEVICE_OS = ["windows", "linux", "macos", "other"] as const;
 export type DeviceOs = (typeof DEVICE_OS)[number];
 
 /** What a code is for. A sign-in code also creates the account when the address has none. */
-export type CodePurpose = "sign-in" | "change-email" | "delete";
+export type CodePurpose = "sign-in" | "change-email" | "remove-email" | "connect-discord" | "remove-discord" | "delete";
 
 /** A Discord login: the user id is the identity, the username only a label shown to the owner. */
 export interface DiscordLogin {

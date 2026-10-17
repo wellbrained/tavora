@@ -10,6 +10,7 @@ import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
 import { loadIconStore } from "./icons.ts";
 import { createBrevoMailer, createTestInbox, createTestInboxApp, type Mailer } from "./mail.ts";
+import { clientOf } from "./rate-limit.ts";
 import { createSteamClient } from "./steam.ts";
 import { createSubmissions } from "./submissions.ts";
 
@@ -91,8 +92,8 @@ const app = createApp({
     : {}),
   ...(takedownContact ? { takedownContact } : {}),
   ...(steamKey ? { steam: createSteamClient({ key: steamKey }) } : {}),
-  clientKey: (request) =>
-    (behindProxy ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() : undefined) || "shared",
+  // An IPv6 client counts by its /64 (clientOf), so new addresses from one connection share one limit.
+  clientKey: (request) => (behindProxy ? clientOf(request.headers.get("x-forwarded-for")?.split(",")[0]) : null) ?? "shared",
 });
 
 serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {

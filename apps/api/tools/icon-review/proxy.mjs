@@ -1,8 +1,10 @@
 // Tavora's icon review page on the tailnet (https://tavora-iconreview.<tailnet>.ts.net).
 // The page runs on the server's 127.0.0.1:4011 and is never forwarded by Caddy. This process, started by
 // CoreHub on this PC, keeps an SSH tunnel to it and answers on 127.0.0.1:<port> (CoreHub's tailnet proxy
-// forwards the name there), adding the admin token itself so the page needs no password.
-// Nothing on the server changes. Usage: node proxy.mjs <port>
+// forwards the name there). It passes requests on as they come: the page asks for the admin token once per
+// browser session and sends it itself, so reaching the proxy is not enough to change anything (threat model H9).
+// The token file is read only for the hourly look at the queue below. Nothing on the server changes.
+// Usage: node proxy.mjs <port>
 import { spawn } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import http from "node:http";
@@ -20,10 +22,6 @@ if (!Number.isInteger(port) || port < 1024 || port > 65000) throw new Error("Usa
 const token = readFileSync(tokenFile, "utf8").trim();
 if (token.length < 24) throw new Error("The admin token file is empty or too short.");
 
-// The page reads its token from sessionStorage; give it a placeholder so it never asks. The real token is
-// added below, on the way to the server.
-const PLACEHOLDER = 'try { sessionStorage.setItem("adminToken", "via-proxy"); } catch {}\n';
-
 let tunnel;
 let stopping = false;
 function openTunnel() {
@@ -39,8 +37,8 @@ function openTunnel() {
 }
 openTunnel();
 
-// Only this machine and the tailnet name may talk to the proxy: a web page cannot reach the token by
-// pointing another name at 127.0.0.1 (DNS rebinding).
+// Only this machine and the tailnet name may talk to the proxy, so a web page cannot use it by pointing
+// another name at 127.0.0.1 (DNS rebinding).
 const hostOk = (host = "") => {
   const name = host.toLowerCase().replace(/:\d+$/, "");
   return name === "127.0.0.1" || name === "localhost" || name.startsWith(`${tailnetName}.`) && name.endsWith(".ts.net");
@@ -51,19 +49,9 @@ http.createServer((request, response) => {
     response.writeHead(421, { "Content-Type": "text/plain" }).end("Wrong host.");
     return;
   }
-  const headers = { ...request.headers, host: `127.0.0.1:${tunnelPort}`, "x-admin-token": token };
-  delete headers["accept-encoding"]; // the page script is edited below, so it has to come uncompressed
+  // The admin token, if any, is the one the page sent; the proxy never adds its own.
+  const headers = { ...request.headers, host: `127.0.0.1:${tunnelPort}` };
   const upstream = http.request({ host: "127.0.0.1", port: tunnelPort, method: request.method, path: request.url, headers }, (reply) => {
-    if (request.url?.split("?")[0] === "/admin.js" && reply.statusCode === 200) {
-      const parts = [];
-      reply.on("data", (part) => parts.push(part));
-      reply.on("end", () => {
-        const body = Buffer.concat([Buffer.from(PLACEHOLDER), ...parts]);
-        const out = { ...reply.headers, "content-length": String(body.length) };
-        response.writeHead(200, out).end(body);
-      });
-      return;
-    }
     response.writeHead(reply.statusCode ?? 502, reply.headers);
     reply.pipe(response);
   });

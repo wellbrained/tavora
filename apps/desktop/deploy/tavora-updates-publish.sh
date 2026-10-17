@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Runs on the Hetzner server for `pnpm release`: files uploaded to /tmp/tavora-updates-incoming
+# Runs on the Hetzner server for `pnpm release`: files uploaded to /root/tavora-incoming/updates
+# (root's own home, so no other user can put or swap a file there)
 # become the feed's newest version. The installer and its blockmap go in first and
 # latest.yml last (replaced in one step), so nobody ever sees a manifest that points at a
 # file that is not there yet. Keeps the three newest versions for differential updates.
@@ -11,7 +12,8 @@ if [[ "$mode" == allow-patch ]]; then
 else
   [[ "$version" =~ ^[0-9]+\.[0-9]+\.0$ ]] || { echo "Only minor versions (x.y.0) are published, not '$version' (use allow-patch for a one-off)"; exit 1; }
 fi
-incoming=/tmp/tavora-updates-incoming
+incoming=/root/tavora-incoming/updates
+[[ -d "$incoming" && ! -L "$incoming" && "$(stat -c %u "$incoming")" == 0 ]] || { echo "$incoming is missing or not root's"; exit 1; }
 root=/srv/tavora-updates
 installer="Tavora-Setup-$version.exe"
 for f in "$installer" "$installer.blockmap" latest.yml; do

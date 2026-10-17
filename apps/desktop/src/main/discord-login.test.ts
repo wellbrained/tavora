@@ -44,6 +44,23 @@ describe("Discord browser sign-in", () => {
     await expect(result).rejects.toMatchObject({ key: "account.error.discordCancelled" });
   });
 
+  it("takes a second sign-in on the same port right after the first, through the same keep-alive client", async () => {
+    // A browser keeps connections open; the second return must reach the second listener, not the stopped first one.
+    const port = nextPort++;
+    const signIn = () =>
+      discordLogin({
+        language: () => "en",
+        port,
+        timeoutMs: 2000,
+        open: async (url) => {
+          const state = new URL(url).searchParams.get("state");
+          setTimeout(() => void fetch(`http://127.0.0.1:${port}/discord?code=codenik00000&state=${state}`, { keepalive: true }).catch(() => undefined), 10);
+        },
+      });
+    await expect(signIn()).resolves.toMatchObject({ code: "codenik00000" });
+    await expect(signIn()).resolves.toMatchObject({ code: "codenik00000" });
+  });
+
   it("says so when the port is in use", async () => {
     const { createServer } = await import("node:net");
     const port = nextPort++;

@@ -36,9 +36,13 @@ try {
   & tar.exe -czf $archive -C $staging .
   if ($LASTEXITCODE -ne 0) { throw 'Archive failed.' }
   $deploy = Join-Path $api 'deploy'
-  & scp.exe -i $key -o BatchMode=yes -o StrictHostKeyChecking=yes $archive (Join-Path $deploy 'tavora-api.service') (Join-Path $deploy 'tavora-api.caddy') (Join-Path $deploy 'tavora-api-activate.sh') (Join-Path $deploy 'tavora-api-set-steam-key.sh') (Join-Path $deploy 'tavora-api-set-setting.sh') (Join-Path $deploy 'tavora-api-backup.sh') (Join-Path $deploy 'tavora-api-backup.service') (Join-Path $deploy 'tavora-api-backup.timer') "${remote}:/tmp/"
+  # Staged in root's own home (mode 0700), never in /tmp, so no other user on the server can swap what root installs.
+  $incoming = '/root/tavora-incoming/api'
+  & ssh.exe -i $key -o BatchMode=yes -o StrictHostKeyChecking=yes $remote "rm -rf $incoming && install -d -m 700 /root/tavora-incoming $incoming"
+  if ($LASTEXITCODE -ne 0) { throw 'Could not prepare the upload folder.' }
+  & scp.exe -i $key -o BatchMode=yes -o StrictHostKeyChecking=yes $archive (Join-Path $deploy 'tavora-api.service') (Join-Path $deploy 'tavora-api.caddy') (Join-Path $deploy 'tavora-api-activate.sh') (Join-Path $deploy 'tavora-api-set-steam-key.sh') (Join-Path $deploy 'tavora-api-set-setting.sh') (Join-Path $deploy 'tavora-api-backup.sh') (Join-Path $deploy 'tavora-api-backup.service') (Join-Path $deploy 'tavora-api-backup.timer') "${remote}:${incoming}/"
   if ($LASTEXITCODE -ne 0) { throw 'Upload failed.' }
-  & ssh.exe -i $key -o BatchMode=yes -o StrictHostKeyChecking=yes $remote "bash /tmp/tavora-api-activate.sh $release"
+  & ssh.exe -i $key -o BatchMode=yes -o StrictHostKeyChecking=yes $remote "bash $incoming/tavora-api-activate.sh $release"
   if ($LASTEXITCODE -ne 0) { throw 'Deployment failed; inspect the server output. The previous release is kept.' }
 } finally {
   Remove-Item $archive -ErrorAction SilentlyContinue

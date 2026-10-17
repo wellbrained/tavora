@@ -237,9 +237,9 @@ export function parseAction(raw: unknown): HostAction | null {
     case "discord-sign-out":
       return only() ? { type: a.type } : null;
     case "account-discord-sign-in":
-    case "account-discord-connect":
-    case "account-discord-disconnect":
-    case "account-email-remove":
+    case "account-discord-connect-code":
+    case "account-discord-disconnect-code":
+    case "account-email-remove-code":
     case "account-delete-discord":
       return only() ? { type: a.type } : null;
     case "account-create":
@@ -254,6 +254,9 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("email") && text(a.email, 254) ? { type: a.type, email: a.email } : null;
     case "account-verify":
     case "account-change-email":
+    case "account-email-remove":
+    case "account-discord-connect":
+    case "account-discord-disconnect":
     case "account-delete":
       return only("code") && typeof a.code === "string" && /^\d{6}$/.test(a.code) ? { type: a.type, code: a.code } : null;
     case "account-profile-choice":
