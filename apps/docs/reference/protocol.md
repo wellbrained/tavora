@@ -233,6 +233,8 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | One document's `data` | 4 MiB |
 | All documents per module and game | 50 MiB, at most 1000 documents |
 | Document title | 200 characters |
+| Stored files (`blobs`) | 50 MB each, 500 MB per module and game; PNG, JPEG, GIF and WebP only |
+| `clipboard.writeImage` | one PNG per click or key press, at most 20 MB, 16384 pixels on a side and 100 million pixels |
 | Panel state | 256 KiB |
 | JSON nesting depth | 64 |
 | `network.fetch` answer | 5 MB of body, 15 s, 5 redirects, 6 requests at once per panel |

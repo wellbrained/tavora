@@ -59,10 +59,26 @@ Values you store must be JSON. Type parameters such as `get<number>()` are not c
 | Scope | API | Shared by |
 | --- | --- | --- |
 | Settings | `tavora.storage` | All panels of this module in this game |
+| Settings for every game | `tavora.storage.app` | All panels of this module in every game |
 | Documents | `tavora.documents` | All panels of this module in this game, with revisions |
+| Pictures | `tavora.blobs` | All panels of this module in this game |
 | UI state | `tavora.panel` | This one panel; removed when it closes |
 
-Nothing is shared between games or between modules. See [Where data lives](../reference/protocol.md#where-data-lives) for the details.
+Nothing is shared between modules, and nothing between games except `storage.app`. See [Where data lives](../reference/protocol.md#where-data-lives) for the details.
+
+## More from the host
+
+| API | What it does |
+| --- | --- |
+| `tavora.ui.getLanguage()`, `onLanguageChange` | The language of Tavora's own texts (`"en"`, `"de"`). Show your module in it, or in English when you have no translation. |
+| `tavora.blobs` | Pictures too big for a document: up to 50 MB each and 500 MB per module and game. `put` a file, show it with `url(id)`. See [Files](../reference/protocol.md#files-blobs). |
+| `tavora.clipboard.writeImage(png)` | Puts a PNG on the system clipboard. Call it from the click or key press that asked for it. See [Clipboard](../reference/protocol.md#clipboard). |
+| `tavora.links.open(url)` | Opens a web address in the game's Browser panel, from a click or key press. |
+| `tavora.network.fetch(url, init)` | A web request to a host listed in `permissions.network`, once the player granted it. See [Network](../reference/protocol.md#network). |
+| `tavora.connectors.aiUsage` | The usage of the player's Claude and Codex accounts, with the `ai-usage` connector. |
+| `tavora.connectors.discord` | The Discord app on this PC through Tavora's Discord sign-in, with the `discord` connector: voice channels, mute and deafen, voice events. |
+
+What needs the player's permission (`permissions.network` and `permissions.connectors` in the [manifest](../reference/manifest.md)) works only once the player has granted it: they are asked when they add the module and can take it back in Settings > Integrations. Until then the call fails with `PERMISSION_DENIED`; `tavora.host.capabilities` lists what was granted when the module connected. See [Capabilities](../reference/protocol.md#capabilities) and [Connectors](../reference/protocol.md#connectors).
 
 ## Build the module
 
