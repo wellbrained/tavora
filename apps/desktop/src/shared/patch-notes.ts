@@ -26,7 +26,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "Save as image in the Whiteboard saves the selection, or the whole board, as a PNG in your Pictures\\Tavora folder in one click, named after the board and the time. Copy as image, Save as image and Clear board are now proper buttons in the header.",
       "Clear board takes everything off a board at once. Undo in the notice, or Ctrl+Z, brings it back.",
       "Choose where the Whiteboard's toolbar sits: open the menu (☰) and pick Toolbar at the bottom, or back to the top. The choice is kept for every game.",
-      "The style palette is shorter: Color, Background, Fill, Stroke width and style, fonts and arrowheads show; Sloppiness, Edges, Opacity, Align and Actions wait under More options. The Layers row is gone; its shortcuts and the right-click menu still move things forward and back.",
+      "Ten quick colours for lines and backgrounds instead of five, and a more compact style palette. It is shorter too: Color, Background, Fill, Stroke width and style, fonts and arrowheads show; Sloppiness, Edges, Opacity, Align and Actions wait under More options. The Layers row is gone; its shortcuts and the right-click menu still move things forward and back.",
       "For module developers: pictures.save(png, name) saves a PNG in the player's Pictures\\Tavora folder right after a click (SDK 0.2.3).",
     ],
   },
