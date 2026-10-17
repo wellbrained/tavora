@@ -1,5 +1,5 @@
 // Installs a module from a zip into the player's modules folder, following
-// "Rules for a future zip installer" in docs/threat-model.md: the zip is read
+// "Rules for a future zip installer" in the threat model: the zip is read
 // and checked in memory (readZip), the manifest validated and the signature
 // verified before anything is written, then the files go to a staging folder
 // that is renamed into place. Nothing from the zip is ever run.

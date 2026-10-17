@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
-import { CHECKLIST, checkCi, checkRelease, compareVersions, lastReleased } from "./release-guards.mjs";
+import { CHECKLIST, checkCi, checkInstalled, checkRelease, compareVersions, lastReleased } from "./release-guards.mjs";
 
 const ready = { branch: "main", dirty: false, ahead: 0, behind: 0, tags: [] as string[], noteVersions: ["0.4.0"] };
 
@@ -95,6 +95,20 @@ describe("checkCi", () => {
     expect(checkCi([run("in_progress", null, "2026-10-16T10:00:00Z")], SHA)[0]).toContain("in_progress");
     expect(checkCi([run("completed", "success", "2026-10-16T10:00:00Z", "other")], SHA)[0]).toContain("no Checks run");
     expect(checkCi([], SHA)).toHaveLength(1);
+  });
+});
+
+describe("checkInstalled", () => {
+  it("passes when the version being released is installed", () => {
+    expect(checkInstalled("0.17.5", "0.17.5")).toBeUndefined();
+  });
+
+  it("refuses an older install, which is how 0.17.3 got through", () => {
+    expect(checkInstalled("0.17.0", "0.17.3")).toContain("installed Tavora is 0.17.0, not 0.17.3");
+  });
+
+  it("refuses when Tavora is not installed", () => {
+    expect(checkInstalled(null, "0.17.5")).toContain("not installed");
   });
 });
 

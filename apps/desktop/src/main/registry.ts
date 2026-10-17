@@ -203,7 +203,7 @@ export async function describeModules(userModules: string, modules: Map<string, 
 
 /**
  * The Browser is built into the host, not a module package
- * (docs/browser-security.md), but it is listed, docked and saved in layouts
+ * (the Browser security notes), but it is listed, docked and saved in layouts
  * like an official module. It has no files, so `root` is empty and nothing
  * is ever served for it.
  */

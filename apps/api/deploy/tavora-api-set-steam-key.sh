@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Interactive, for wellbrained to run on the server (ssh -t): asks for the Steam Web API
+# Interactive, for the maintainer to run on the server (ssh -t): asks for the Steam Web API
 # key without showing it, checks it against Steam, stores it where only root and
 # the service can read it, and restarts the service. The key is never printed
 # and never passes through an assistant.

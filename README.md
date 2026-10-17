@@ -1,99 +1,155 @@
 # Tavora
 
-Local-first, second-monitor gaming companion for Windows and Linux. Each game gets its own dockable workspace; community modules are self-contained web bundles that run inside a permission-checked host.
+**Your games, with a workspace of their own.**
 
-**Status:** Milestone C, the local player MVP, is done. Next, before Browser: polish the current features and styling, and add an online game database. Milestone C includes: Ctrl+K search and Settings search, the official Notes and To-Dos modules, the game library (built-in list and custom games, favorites, folders, Trash) on a collapsible game rail, plus everything from Milestone B (manifest v1, bridge protocol v1, `@tavora/sdk` 0.1.0, example modules in vanilla TypeScript, React and Vue). Nothing here is a released or stable API yet. See [docs/threat-model.md](docs/threat-model.md) for what the host guarantees and how it is tested.
+Tavora is a local-first gaming companion for your second monitor. Keep notes, to-dos, drawings, guides and other tools together in a dockable workspace for each game. Switch games, and Tavora restores that game's panels and saved work.
 
-## Layout
+[Website](https://mytavora.app/) · [Developer docs](https://docs.mytavora.app/) · [Report a bug](https://github.com/wellbrained/tavora/issues)
 
-| Path | Purpose |
-| --- | --- |
-| `apps/desktop` | Tavora Desktop host (Electron): module views, bridge, storage, game library and the host UI (Vue, shadcn-vue, Tailwind) |
-| `packages/sdk` | `@tavora/sdk`, the typed client modules use to talk to the host, plus the wire protocol types ([README](packages/sdk/README.md)) |
-| `packages/module-schema` | `tavora.module.json` types, validation, JSON Schema, module and game id rules |
-| `modules/notes`, `modules/todos`, `modules/playground` | Official Notes, To-Dos and UI Playground modules (Vue), built on `@tavora/sdk` like any other module ([README](modules/README.md)) |
-| `modules/whiteboard` | Official Whiteboard module (React, on Excalidraw), also built on `@tavora/sdk` |
-| `themes/` | Official theme packages (Tavora, Nightfall, Hearthwood), data only ([format](apps/docs/reference/theme.md)) |
-| `modules/shared` | `@tavora/official-ui`: theme, shadcn-vue components and save helpers bundled into the official modules |
-| `examples/vanilla-module` | Example module with no framework |
-| `examples/react-module` | The same example built with React |
-| `examples/vue-module` | The same example built with Vue |
-| `examples/theme-starter` | A theme to copy and change: the Tavora theme, Dark and Light, under its own id |
-| `apps/desktop/test/fixtures/hostile-module` | Deliberately hostile module used by the gate tests |
-| `apps/docs` | Developer docs for [docs.mytavora.app](https://docs.mytavora.app/) (VitePress): guide, [manifest](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md), and generated SDK API |
-| `brand/logo` | Vector logo SVGs: master, lockup, emblem, wordmark and flame ([README](brand/logo/README.md)) |
-| `docs/design/` | [Style guide](docs/design/style-guide.md): tokens, type, components, accessibility and theme rules |
-| `docs/` | Threat model, decision log and [backlog](docs/backlog.md) |
+![Tavora showing a Satisfactory workspace with a game library, rich-text Notes and grouped To-Dos with sub-tasks](docs/screenshots/workspace.png)
 
-The marketing site at [mytavora.app](https://mytavora.app/) lives in its separate `tavora-website` repository.
+*A Satisfactory workspace with sample notes and a factory checklist. The screenshots below use an isolated demo profile.*
 
-Planned later, not created yet: `apps/{api,portal}`, `packages/{cli,module-runtime,shared-types}`, `services/review-worker`, `infra/`.
+> **Early development:** Tavora has installable Windows preview builds, but has not reached its first public 1.0 release. Features, saved-data formats and module APIs can still change. Windows is the primary platform; Linux has a source-build AppImage target and receives less testing. There is no macOS build.
 
-## Getting started
+## What you can do
 
-Requires Node 22+ and pnpm (via `corepack enable`).
+- **Give every game its own workspace.** Arrange panels side by side or in tabs, resize them, maximize a panel, and save named layouts. Each game remembers its own setup.
+- **Keep a game library.** Search the online game database, add a game by name, or import a public Steam library. Organize games with favorites and folders; removed games go to Trash before permanent deletion.
+- **Write Notes.** Rich text, images, named and pinned notes, search, and a scratchpad for each game. Notes save automatically and can be open in several panels.
+- **Track To-Dos.** Colored groups, sub-to-dos, pinned objectives, descriptions, and undo for finishing or deleting a task.
+- **Sketch on a Whiteboard.** Multiple boards per game, drawing tools, pictures, and Copy as picture. Built on [Excalidraw](https://github.com/excalidraw/excalidraw).
+- **Keep guides nearby.** The built-in Browser has per-game tabs and sign-ins, ad blocking, and a choice to share a site's sign-in across games.
+- **Add more tools.** Official Discord and AI Usage modules, plus modules you install from ZIP files. Modules ask before using capabilities such as named websites or host connectors.
+- **Make it comfortable.** Three built-in themes, light/dark modes that can follow the system, custom themes, English and German, keyboard shortcuts, and Ctrl+K search.
+
+**Discord voice access is currently limited to approved testers of Tavora's Discord app.** Discord account sign-in is separate. AI Usage reads supported Claude and Codex accounts on this PC through the host; modules do not receive their credentials.
+
+### A place to think things through
+
+![Tavora Whiteboard showing a saved Stardew Valley farm plan with connected boxes and handwritten labels](docs/screenshots/whiteboard.png)
+
+*Whiteboard drawings and their pictures stay with the game. Copy a selection or the whole board as a PNG.*
+
+### A look that follows you
+
+![Tavora Appearance settings with Tavora, Hearthwood and Nightfall themes, system/light/dark choices and custom-theme controls](docs/screenshots/appearance.png)
+
+*Themes apply to the host and modules. Each built-in theme includes light and dark variations.*
+
+## Try the Windows preview
+
+The current preview is [Tavora 0.17.6 for Windows](https://updates.mytavora.app/Tavora-Setup-0.17.6.exe). The [update feed](https://updates.mytavora.app/latest.yml) lists the latest published build. Install it, add a game, choose a layout, and use **Add module** to fill the panels. You can also start with the [source build](#run-from-source).
+
+Preview builds are unsigned, so Windows may show an unrecognized-app warning. Installed Windows builds check for updates through `updates.mytavora.app`; automatic downloading can be changed in Settings.
+
+An account is optional: email-code or Discord sign-in is available, but your local game library, notes and layouts do not require one. **Signing in does not sync game workspaces between PCs yet.** A public module catalogue is also still planned; outside modules currently arrive as ZIP files.
+
+## Your data and module permissions
+
+Game workspaces and module data are stored on your PC. On Windows, installed Tavora uses `%APPDATA%\@tavora\desktop`. Pictures normally live under that profile; their folder can be moved in Settings. Tavora keeps local backups and has **Copy diagnostic info** for troubleshooting.
+
+Online features make their own connections: game search and accounts use Tavora's service; game icons can come from this PC, Steam and Tavora's icon service; Browser pages connect to the sites you open. Game search and icon fetching have switches in Settings.
+
+Module pages run in a sandbox. The host validates their requests, scopes stored data by publisher, module and game, and checks granted capabilities on every call. Network grants name the allowed hosts; Discord and AI Usage use dedicated host connectors. An installable module does not get arbitrary access to your files, processes or account credentials. See the [security model](https://docs.mytavora.app/guide/security) for the precise boundaries and known limits.
+
+## Run from source
+
+Use Node.js 22.18+ and pnpm 10.28.0 (the repository pins pnpm in `package.json`; `.nvmrc` selects Node 22).
 
 ```sh
+corepack enable
 pnpm install
-pnpm build                              # SDK, host, official and example modules
-pnpm --filter @tavora/desktop start     # opens Tavora with Notes, To-Dos and the example modules
-pnpm --filter @tavora/docs dev          # developer docs at http://127.0.0.1:4001
-```
-
-To package a standalone test build after `pnpm build`:
-
-```sh
-pnpm --filter @tavora/desktop package --win    # installer (Tavora-Setup-x.y.z.exe), its update files and a zip
-pnpm --filter @tavora/desktop package --linux  # AppImage
-```
-
-Output lives in `apps/desktop/release/`. Builds include Notes, To-Dos and the example modules, keep data in the normal per-user folder (`%APPDATA%\@tavora\desktop`), and are unsigned. The Windows installer updates itself from updates.mytavora.app (see Releasing).
-
-### Releasing
-
-Installed apps update only when a **minor** version (x.y.0) is released. While a feature is being worked on, PRs raise only the patch number and publish nothing; the minor number goes up once a big feature is complete, in a PR wellbrained marks with the `feature-complete` label (the Version check refuses a minor raise without it), and 1.0.0 is the first public release. To release, raise the minor number in `apps/desktop/package.json` (and the same version in the root `package.json`, which tracker shows; a test keeps them equal), fold the patch-notes entries since the last release into one entry for it (`apps/desktop/src/shared/patch-notes.ts`), merge that through a PR, then on the maintainer's PC:
-
-```sh
-pnpm release --dry-run   # checks, tests, e2e and the installer build; stops before the upload
-pnpm release             # the same, then uploads to updates.mytavora.app and tags vX.Y.0
-pnpm release --allow-patch   # a one-off release of a patch version (x.y.z), e.g. to try an update
-```
-
-The script refuses unless it runs on a clean, up-to-date `main` with an `x.y.0` version that has its patch-notes entry. The server side lives in `apps/desktop/deploy` (Caddy site, one-time setup, publish script); the installer, update manifest and last three versions are kept at `/srv/tavora-updates`.
-
-### Development mode
-
-```sh
+pnpm build
 pnpm dev
 ```
 
-Opens Tavora without building it. Changes to the host UI (`apps/desktop/src/renderer`) show up instantly with hot reload, keeping the app's state. Changes to the main process or preloads (`src/main`, `src/preload`, `src/shared`) restart Tavora by itself after a second. Closing Tavora or pressing Ctrl+C ends it. The dev server uses port 4000; `pnpm dev --port <n>` picks another.
+`pnpm dev` opens Tavora with hot reload at `http://127.0.0.1:4000`. Use `pnpm dev --port <n>` to choose another port. Closing Tavora or pressing Ctrl+C ends the development session.
 
-Modules run from their built files, so run `pnpm build` once first; after changing a module, rebuild it and reload its panel. Development mode only works from the source tree: packaged builds never load the dev server.
+- Host UI edits reload in place.
+- Main-process and preload edits restart Tavora automatically.
+- Official modules are built in watch mode; a successful rebuild restarts Tavora to load them.
+- Example modules use their built files. Rebuild an example after editing it.
 
-## Checks
+**Development and installed Tavora have separate persistent state.** On Windows, dev uses `%APPDATA%\@tavora\desktop-dev`; the installed app keeps `%APPDATA%\@tavora\desktop`. The first dev run starts empty; existing installed data is not copied. `TAVORA_USER_DATA` can select an explicit development/test profile.
 
-Tests run locally. GitHub Actions only runs them for release tags (`v*`) or when started by hand. The docs site at docs.mytavora.app is served by Caddy on the Hetzner server; publish it with `pnpm --filter @tavora/docs deploy:server` once `apps/docs` has no uncommitted changes (builds on this PC, uploads the static files, keeps the previous release for rollback). The docs are their own project: the root `pnpm build`, `pnpm typecheck` and `pnpm check` skip `@tavora/docs`, and changes elsewhere in the repo never block a docs deploy.
+To open the compiled source build without watchers:
 
 ```sh
-pnpm check       # everything below, in order
-pnpm typecheck
-pnpm test        # unit tests (vitest)
-pnpm test:e2e    # Electron gate tests (Playwright); on headless Linux wrap in xvfb-run -a
+pnpm --filter @tavora/desktop start
 ```
 
-The e2e tests must run as a normal user, not root: Chromium refuses to start its sandbox as root, and the gate tests are only meaningful with the sandbox on.
+To run the developer documentation locally:
 
-## How a module runs
+```sh
+pnpm --filter @tavora/docs dev
+```
 
-1. The host discovers packages with a `tavora.module.json` and validates the manifest. Modules shipped with Tavora (`modules/`) are shown as Official, everything else found on disk as Local; ids starting with `tavora.` are refused outside the official folder.
-2. Each panel is a sandboxed `WebContentsView` with its own session per module and game, served from `tavora-module://<module-id>/` with a strict CSP. All network requests from the page are cancelled; hosts the player granted are reached only through `network.fetch`, made by the main process.
-3. The module's SDK posts a hello; the host creates a `MessagePort` bound to that view's module, game and panel, and relays it through a preload that exposes nothing else. The SDK then sends a versioned handshake.
-4. Every request is validated by the host. Identity never comes from the message. Capabilities beyond the core need the player's grant, checked on every call (`grants.ts`); network is the first that can be granted, files, clipboard reading and shared data are still refused.
-5. The host watches each panel: a page that fails to load, stops answering its heartbeat or crashes is shown as such in the panel header, with Reload or Stop. Module data is kept.
+### Build a standalone app
 
-## License
+After `pnpm build`:
 
-The code is available under the [MIT License](LICENSE). The Tavora name and logo are not covered by the license and may not be used to brand forks or derived apps.
+```sh
+pnpm --filter @tavora/desktop package --win    # Windows installer, update files and ZIP
+pnpm --filter @tavora/desktop package --linux  # AppImage; build on Linux
+```
 
-Security issues: see [SECURITY.md](SECURITY.md).
+Artifacts go to `apps/desktop/release/`. Packaged builds use the installed-app profile and include the official modules, themes and example modules. Unlike development runs, a packaged build ignores development-only profile and server overrides.
+
+## Build a module
+
+A module is a small web app with a `tavora.module.json` manifest and built assets. The host supplies the current game, theme, language and permitted APIs through the TypeScript [`@tavora/sdk`](packages/sdk/README.md).
+
+Start with the [developer guide](https://docs.mytavora.app/guide/getting-started), or an example in [vanilla TypeScript](examples/vanilla-module), [React](examples/react-module) or [Vue](examples/vue-module). The official modules use the same SDK. The UI Playground shows Tavora's shared controls and styling.
+
+The SDK and packaging tools currently live in this repository and are not published to npm. Signed module ZIPs, permission prompts and publisher-bound updates are implemented; the broader outside-developer workflow is still being built. APIs are not stable before 1.0. The [manifest reference](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md) and [theme format](apps/docs/reference/theme.md) describe the current contracts.
+
+## Repository map
+
+| Path | Purpose |
+| --- | --- |
+| `apps/desktop` | Electron host, Vue UI, dockable views, Browser, permissions and local storage |
+| `apps/api` | Game search, Steam import, accounts and the hosted game-icon service |
+| `apps/docs` | VitePress developer documentation and generated SDK reference |
+| `packages/sdk` | Typed module client and wire-protocol types |
+| `packages/module-schema` | Manifest types, validation, JSON Schema and ID rules |
+| `packages/pack` | Module ZIP packing, signatures and archive validation |
+| `modules/` | Notes, To-Dos, Whiteboard, Discord, AI Usage, UI Playground and shared UI code |
+| `examples/` | Vanilla, React and Vue module examples, plus a theme starter |
+| `themes/` | Tavora, Hearthwood and Nightfall theme packages |
+| `docs/screenshots` | Screenshots used in this README |
+| `brand/` | Tavora logo sources and exported brand assets |
+
+The marketing website is maintained in the separate `tavora-website` repository.
+
+## Checks and releases
+
+```sh
+pnpm check       # typecheck, unit tests, build, then Electron tests
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm test:e2e
+```
+
+Electron tests need a display and must run as a normal user with Chromium's sandbox enabled. On headless Linux, use `xvfb-run -a pnpm test:e2e`.
+
+GitHub **Checks** runs typechecking, unit tests, builds, and a Windows install/start check on pull requests and pushes to `main`. The full Electron suite also runs on release tags, or on a manual workflow run when selected. `pnpm check` runs it locally. The root checks and builds exclude `apps/docs`; the docs site has its own build/deploy commands.
+
+Deployed app changes raise the patch version. A minor bump needs the `feature-complete` label on the PR. Docs, CI and tooling-only changes keep the app version. Root and desktop versions must match, with a corresponding entry in `apps/desktop/src/shared/patch-notes.ts`.
+
+On the maintainer's PC, release from clean, up-to-date `main` after pushing and passing GitHub Checks:
+
+```sh
+pnpm release --allow-patch --dry-run  # validate, test and package without publishing
+pnpm release --allow-patch            # publish a patch release
+pnpm release                         # publish an approved x.y.0 release
+```
+
+The script currently requires `--allow-patch` for patch releases. It checks versions, tags and patch notes, runs automated checks, packages and starts the app, then requires checks of the **new installed version**: startup, game add/remove, opening a module, and Settings. The server publishes the installer and blockmap before atomically switching `latest.yml`; the release is tagged afterward. Finally, verify that a previously installed version updates successfully. Deployment scripts live in `apps/desktop/deploy`.
+
+## License and security
+
+Code is available under the [MIT License](LICENSE). The Tavora name and logo are not covered by that license and may not be used to brand forks or derived apps. Game names and logos belong to their respective owners; Tavora is not affiliated with their publishers.
+
+To report a security issue, follow [SECURITY.md](SECURITY.md).

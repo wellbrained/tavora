@@ -2,7 +2,7 @@ name: Version
 
 # Work in progress raises only the patch number. A pull request that raises the
 # minor or major number of the app needs the `feature-complete` label, which
-# only wellbrained adds (docs/decisions.md, 2026-10-16). Runs again when labels change.
+# only the maintainer adds (the decision log, 2026-10-16). Runs again when labels change.
 on:
   pull_request:
     branches: [main]

@@ -174,7 +174,7 @@ async function queue(userData: string, change: PendingChanges): Promise<void> {
 /**
  * Asks for a module's local data to move to its signed version at the next
  * start, when no session has either open. Only a deliberate press in Settings
- * > Modules does this, never an install (docs/decisions.md, S5 rule 3).
+ * > Modules does this, never an install (the decision log, S5 rule 3).
  */
 export async function queueLocalDataMove(userData: string, moduleId: string, to: string): Promise<void> {
   if (!isModuleId(moduleId) || !isOwnerId(to) || to === LOCAL_OWNER || to === OFFICIAL_OWNER) throw new Error("invalid move");

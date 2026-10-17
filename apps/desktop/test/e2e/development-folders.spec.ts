@@ -1,6 +1,5 @@
-// Development folders (decisions.md, Milestone D row of 2026-10-17): a module developer adds their
-// project folder in Settings > Modules, Tavora loads the module straight from it, and its panels
-// reload when the build changes.
+// Development folders: a module developer adds their project folder in Settings > Modules,
+// Tavora loads the module straight from it, and its panels reload when the build changes.
 
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

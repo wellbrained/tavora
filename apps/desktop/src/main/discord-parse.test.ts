@@ -32,7 +32,7 @@ describe("Discord data the connector reads", () => {
   });
 
   it("reads the signed-in user and the scopes of a sign-in", () => {
-    expect(parseUser({ user: { id: "7", username: "brain", global_name: "Brain" } })).toEqual({ id: "7", name: "Brain" });
+    expect(parseUser({ user: { id: "7", username: "robin", global_name: "Robin" } })).toEqual({ id: "7", name: "Robin" });
     expect(parseUser({})).toBeNull();
     expect(parseScopes({ scopes: ["rpc", 7, "identify"] })).toEqual(["rpc", "identify"]);
     expect(parseScopes(null)).toEqual([]);

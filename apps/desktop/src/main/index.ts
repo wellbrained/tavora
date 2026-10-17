@@ -5,9 +5,28 @@ import { HOST_SCHEME, MODULE_SCHEME } from "./assets";
 import { errorLog } from "./diagnostics";
 import { Host } from "./host";
 import { parseTestHosts } from "./network";
+import { reportStartupFailure } from "./startup-failure";
+import { findUnsafeSwitch } from "./unsafe-switches";
 
 // The last errors of this run, for Settings > Copy diagnostic info.
 errorLog.capture();
+
+// Installed and development runs keep separate state, independent of the app name.
+// Installed data stays in %APPDATA%\@tavora\desktop; dev uses desktop-dev.
+// Explicit development/test profiles still take precedence.
+// Like every switch below, only a development run honours the environment: whoever can set it for a packaged Tavora
+// could otherwise point it at their own data folder or modules, or have a module listed as Official.
+const userData = !app.isPackaged && process.env.TAVORA_USER_DATA
+  ? path.resolve(process.env.TAVORA_USER_DATA)
+  : path.join(app.getPath("appData"), "@tavora", app.isPackaged ? "desktop" : "desktop-dev");
+
+// A packaged Tavora started with a switch that opens it up quits before any page or port exists (unsafe-switches.ts).
+const unsafe = app.isPackaged ? findUnsafeSwitch(process.argv.slice(1)) : undefined;
+if (unsafe) {
+  reportStartupFailure(userData, `Tavora was started with --${unsafe}, which would let other programs into it, so it closed. Start Tavora from its own shortcut or the Start menu.`);
+  // Nothing below may run, not even the single-instance check.
+  process.exit(1);
+}
 
 // Both schemes behave like https origins: standard URL parsing, a secure
 // context and per-origin storage. Neither may register service workers.
@@ -19,13 +38,7 @@ protocol.registerSchemesAsPrivileged([
 // Every renderer is sandboxed, including any created by accident.
 app.enableSandbox();
 
-// The data folder is fixed, not derived from the app's name: it has always been
-// %APPDATA%\@tavora\desktop (the package name), and the installed app is named
-// Tavora, which would otherwise move everyone's games and settings.
-// Like every switch below, only a development run honours the environment: whoever can set it for a packaged Tavora
-// could otherwise point it at their own data folder or modules, or have a module listed as Official.
-if (!app.isPackaged && process.env.TAVORA_USER_DATA) app.setPath("userData", path.resolve(process.env.TAVORA_USER_DATA));
-else app.setPath("userData", path.join(app.getPath("appData"), "@tavora", "desktop"));
+app.setPath("userData", userData);
 
 // OLED panels don't use the RGB subpixel layout ClearType assumes, so small
 // text gets colour fringes there. Chromium only takes this switch before the
@@ -61,14 +74,13 @@ if (devServer) {
 
 // Quitting saves layouts and window bounds first (see window-all-closed).
 // Under `pnpm dev` the dev script restarts Tavora, so it keeps hot reload.
-// A portable build relaunches its own .exe, not the copy it unpacked.
+// Tavora relaunches its own executable; nothing in the environment can name another one.
 function restart(): void {
   if (devServer && process.send) {
     process.send("restart");
     return;
   }
-  const portable = process.env.PORTABLE_EXECUTABLE_FILE;
-  app.relaunch(portable ? { execPath: portable } : undefined);
+  app.relaunch();
   app.quit();
 }
 
@@ -132,7 +144,7 @@ if (!app.requestSingleInstanceLock()) {
         devServer,
         // A packaged app only ever talks to api.mytavora.app.
         apiUrl: !app.isPackaged ? process.env.TAVORA_API_URL : undefined,
-        // Accounts are on for everyone since 0.16.4 (wellbrained, 2026-10-16: testers try them in the installed app).
+        // Accounts are on for everyone since 0.16.4 (2026-10-16: testers try them in the installed app).
         accounts: true,
         // Development only: another account service, such as a local apps/api with TAVORA_TEST_INBOX_PORT (its codes show on that inbox page).
         accountUrl: !app.isPackaged ? process.env.TAVORA_ACCOUNT_URL : undefined,
@@ -147,7 +159,7 @@ if (!app.requestSingleInstanceLock()) {
       });
     })
     .catch((error: unknown) => {
-      console.error("[tavora] failed to start", error);
+      reportStartupFailure(userData, "Something went wrong while Tavora was starting.", error instanceof Error ? (error.stack ?? error.message) : String(error));
       app.exit(1);
     });
 }

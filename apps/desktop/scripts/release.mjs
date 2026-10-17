@@ -1,5 +1,5 @@
 // `pnpm release`: publishes a minor version of the Windows app to updates.mytavora.app.
-// Run on wellbrained's PC from a clean, up-to-date main whose version is x.y.0.
+// Run on the maintainer's PC from a clean, up-to-date main whose version is x.y.0.
 //
 //   pnpm release              checks, builds, uploads, tags and pushes the tag
 //   pnpm release --dry-run    checks and builds, then stops before the upload
@@ -15,7 +15,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
-import { AFTER_RELEASE, CHECKLIST, checkCi, checkRelease } from "./release-guards.mjs";
+import { AFTER_RELEASE, CHECKLIST, checkCi, checkInstalled, checkRelease } from "./release-guards.mjs";
+import { checkStart } from "./start-check.mjs";
+
+/** The version of the Tavora installed for this user (asar is off, so its package.json is a plain file), or null. */
+function readInstalledVersion() {
+  try {
+    const file = path.join(process.env.LOCALAPPDATA ?? "", "Programs", "Tavora", "resources", "app", "package.json");
+    return JSON.parse(readFileSync(file, "utf8")).version ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const desktop = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repo = path.dirname(path.dirname(desktop));
@@ -25,10 +36,15 @@ const skipE2e = process.argv.includes("--skip-e2e");
 const allowPatch = process.argv.includes("--allow-patch");
 const skipCi = process.argv.includes("--skip-ci-check");
 
-// Same server and key as the docs and the service use.
-const key = "D:\\Server\\vpn ssh-key-2026-10-05.key";
-const remote = "root@100.64.0.1";
+// Same server and key as the docs and the service use, from the maintainer's environment:
+// TAVORA_DEPLOY_HOST (user@host) and TAVORA_DEPLOY_SSH_KEY (path to the private key).
+const key = process.env.TAVORA_DEPLOY_SSH_KEY ?? "";
+const remote = process.env.TAVORA_DEPLOY_HOST ?? "";
 const sshOptions = ["-i", key, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15"];
+if (!dryRun && (!key || !remote)) {
+  console.error("Set TAVORA_DEPLOY_HOST and TAVORA_DEPLOY_SSH_KEY first. Nothing was built or published.");
+  process.exit(1);
+}
 const feed = "https://updates.mytavora.app";
 
 function run(command, args, options = {}) {
@@ -112,6 +128,12 @@ if (!new RegExp(`^version: ${version.replaceAll(".", "\\.")}$`, "m").test(readFi
 }
 console.log(`Built ${installer} and its update files.`);
 
+// The installed app's full start is checked on CI (Checks, packaged-start); this catches a
+// build that quits at once. Next to a running Tavora it can only get as far as the handover.
+step("Starting the packaged build");
+const started = await checkStart(path.join(releaseDir, "win-unpacked", "Tavora.exe"), { allowHandover: true });
+console.log(started === "window" ? "It started and showed its window." : "It handed over to a Tavora that is already running (the window check ran on CI).");
+
 if (dryRun) {
   console.log("\nDry run: stopping before the upload. Nothing was published or tagged.");
   process.exit(0);
@@ -121,11 +143,18 @@ if (!dryRun) {
   step("Checks by hand");
   console.log(`Installer: ${path.join(releaseDir, installer)}`);
   const ask = createInterface({ input: process.stdin, output: process.stdout });
-  for (const item of CHECKLIST) {
+  for (const [index, item] of CHECKLIST.entries()) {
     const answer = (await ask.question(`  ${item} [y/N] `)).trim().toLowerCase();
     if (answer !== "y") {
       ask.close();
       console.error("Not releasing: that check did not pass. Nothing was published or tagged.");
+      process.exit(1);
+    }
+    // The checks count only on the new build: 0.17.3 was checked on an older install.
+    const problem = index === 0 ? checkInstalled(readInstalledVersion(), version) : undefined;
+    if (problem) {
+      ask.close();
+      console.error(`Not releasing: ${problem} Nothing was published or tagged.`);
       process.exit(1);
     }
   }
@@ -133,13 +162,14 @@ if (!dryRun) {
 }
 
 step(`Publishing ${version} to ${feed}`);
-const incoming = "/tmp/tavora-updates-incoming";
+// Staged in root's own home (mode 0700), never in /tmp: another user on the server could otherwise
+// create the folder first and swap the installer or the script root runs (security review, finding 6).
+const incoming = "/root/tavora-incoming/updates";
 const script = path.join(desktop, "deploy", "tavora-updates-publish.sh");
 const ssh = (command) => run("ssh.exe", [...sshOptions, remote, command]);
-ssh(`rm -rf ${incoming} && mkdir -p ${incoming}`);
-run("scp.exe", [...sshOptions, ...files, `${remote}:${incoming}/`]);
-run("scp.exe", [...sshOptions, script, `${remote}:/tmp/`]);
-ssh(`bash /tmp/tavora-updates-publish.sh ${version}${allowPatch ? " allow-patch" : ""}`);
+ssh(`rm -rf ${incoming} && install -d -m 700 /root/tavora-incoming ${incoming}`);
+run("scp.exe", [...sshOptions, ...files, script, `${remote}:${incoming}/`]);
+ssh(`bash ${incoming}/tavora-updates-publish.sh ${version}${allowPatch ? " allow-patch" : ""}`);
 
 step("Tagging");
 git("tag", "-a", `v${version}`, built, "-m", `Tavora ${version}`);

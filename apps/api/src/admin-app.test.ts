@@ -130,7 +130,7 @@ describe("approve, deny and takedown", () => {
     const body = (await (await call("/api/overview")).json()) as { pending: unknown[]; hosted: { id: string; origin: string; source: string | null; names: string[] }[] };
     expect(body.pending).toEqual([]);
     expect(body.hosted.map((icon) => [icon.id, icon.origin])).toEqual([["diablo-iv", "approved"], ["hades-2", "release"]]);
-    expect(body.hosted[0]).toMatchObject({ source: "installed", names: ["Diablo IV", "Diablo 4"] });
+    expect(body.hosted[0]).toMatchObject({ source: "installed", names: ["Diablo IV"] });
   });
 
   it("refuses to approve what is not there, and what would give a game two icons", async () => {

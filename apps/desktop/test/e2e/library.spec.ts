@@ -46,7 +46,7 @@ async function noteIn(running: Awaited<ReturnType<typeof launch>>, gameId: strin
 
 test("the first-run welcome takes a name and games, and can be shown again", async () => {
   const { app, page, userData } = await launch(undefined, [], { seed: false });
-  await page.getByTestId("onboarding-name").fill("Brain");
+  await page.getByTestId("onboarding-name").fill("Robin");
   await page.getByTestId("onboarding-next").click();
   await page.getByTestId("onboarding-add-game").click();
   await page.getByTestId("game-search").fill("elden");
@@ -56,7 +56,7 @@ test("the first-run welcome takes a name and games, and can be shown again", asy
   await page.getByTestId("onboarding-next").click();
   await page.getByTestId("onboarding-done").click();
   await expect(page.getByTestId("welcome")).toContainText("Welcome back");
-  await expect(page.getByTestId("rail-profile")).toHaveAttribute("aria-label", "Profile: Brain");
+  await expect(page.getByTestId("rail-profile")).toHaveAttribute("aria-label", "Profile: Robin");
   await app.close();
 
   const again = await launch(userData);

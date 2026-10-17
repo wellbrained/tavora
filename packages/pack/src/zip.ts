@@ -1,5 +1,5 @@
 // A small zip writer and a strict zip reader for module packages. The reader
-// is the installer's first line (docs/threat-model.md, "Rules for a future zip
+// is the installer's first line (the threat model, "Rules for a future zip
 // installer"): it refuses links, unsafe names, encryption and zip64, and caps
 // sizes and compression before anything is unpacked.
 import { crc32, deflateRawSync, inflateRawSync } from "node:zlib";

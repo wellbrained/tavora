@@ -1,4 +1,4 @@
-// The Discord module and the discord connector (docs/threat-model.md, D1 to D9).
+// The Discord module and the discord connector (the threat model, D1 to D9).
 // A pretend Discord app listens where the real one would, and a local server
 // stands in for Discord's token address, so nothing here reaches Discord.
 
@@ -27,13 +27,13 @@ const person = (id: string, name: string, voice: Record<string, boolean> = {}) =
 test.beforeAll(async () => {
   fake = await fakeDiscord();
   fake.answers.set("AUTHORIZE", () => ({ data: { code: "code123" } }));
-  fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "nik", global_name: "wellbrained" }, scopes: ["rpc", "rpc.voice.read", "rpc.voice.write", "identify"] } }));
+  fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "alex", global_name: "Alex" }, scopes: ["rpc", "rpc.voice.read", "rpc.voice.write", "identify"] } }));
   fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({
     data: {
       id: "10",
       guild_id: "20",
       name: "Factory Floor",
-      voice_states: [person("1", "wellbrained"), person("2", "Jonas"), person("3", "Lena", { self_mute: true }), person("4", "Max", { self_mute: true, self_deaf: true }), person("5", "Sarah", { mute: true })],
+      voice_states: [person("1", "Alex"), person("2", "Jonas"), person("3", "Lena", { self_mute: true }), person("4", "Max", { self_mute: true, self_deaf: true }), person("5", "Sarah", { mute: true })],
     },
   }));
   fake.answers.set("GET_GUILD", () => ({ data: { id: "20", name: "Wellbrained Crew", icon_url: null } }));
@@ -122,6 +122,14 @@ test("the Discord module asks first, connects once approved and shows who is in 
 
     fake.dispatch("VOICE_STATE_DELETE", person("5", "Sarah"));
     await expect.poll(() => count(app, '[data-testid="discord-member-5"]')).toBe(0);
+
+    // Muting needs the player's own click too (D8): unmuting would switch their microphone back on.
+    await clickInModule(app, DISCORD, "discord-mute");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(fake.commands.some((c) => c.cmd === "SET_VOICE_SETTINGS")).toBe(false);
+    await gesture(app);
+    await clickInModule(app, DISCORD, "discord-mute");
+    await expect.poll(() => fake.commands.find((c) => c.cmd === "SET_VOICE_SETTINGS")?.args).toEqual({ mute: true });
 
     // Joining a channel needs the player's own click too (D8).
     await clickInModule(app, DISCORD, "discord-join-11");

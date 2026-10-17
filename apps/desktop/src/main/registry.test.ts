@@ -100,22 +100,22 @@ describe("development folders", () => {
   it("load one module straight from each project folder, ahead of an installed copy, with local data", async () => {
     const projects = await mkdtemp(path.join(tmpdir(), "tavora-projects-"));
     const own = await mkdtemp(path.join(tmpdir(), "tavora-own-"));
-    const project = await makeModule(projects, "my-tracker", "jumoog.tracker", "Tracker (dev)");
-    await makeModule(own, "tracker", "jumoog.tracker", "Tracker (installed)");
+    const project = await makeModule(projects, "my-tracker", "example.tracker", "Tracker (dev)");
+    await makeModule(own, "tracker", "example.tracker", "Tracker (installed)");
     const problems: ModuleProblem[] = [];
     const modules = await discoverModules({ development: [project], local: [own] }, problems);
-    expect(modules.get("jumoog.tracker")).toMatchObject({ developmentFolder: project, provenance: "local", owner: "local", manifest: { name: "Tracker (dev)" } });
+    expect(modules.get("example.tracker")).toMatchObject({ developmentFolder: project, provenance: "local", owner: "local", manifest: { name: "Tracker (dev)" } });
     // The installed copy waits, and says why.
     expect(problems).toEqual([{ folder: "tracker", message: "another module with the same id is already loaded" }]);
     const info = await describeModules(own, modules);
-    expect(info.get("jumoog.tracker")).toMatchObject({ origin: { kind: "dev", folder: project }, removable: false });
+    expect(info.get("example.tracker")).toMatchObject({ origin: { kind: "dev", folder: project }, removable: false });
   });
 
   it("never look into the folders inside a project, and say what is wrong with it", async () => {
     const projects = await mkdtemp(path.join(tmpdir(), "tavora-projects-"));
     const empty = path.join(projects, "workspace");
-    await makeModule(empty, "inner", "jumoog.inner");
-    const unbuilt = await makeModule(projects, "unbuilt", "jumoog.unbuilt");
+    await makeModule(empty, "inner", "example.inner");
+    const unbuilt = await makeModule(projects, "unbuilt", "example.unbuilt");
     await rm(path.join(unbuilt, "index.html"));
     const reserved = await makeModule(projects, "fake", "tavora.notes");
     const problems: ModuleProblem[] = [];

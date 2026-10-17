@@ -4,7 +4,7 @@
  * Every version bump of apps/desktop/package.json adds an entry here; a test
  * keeps the two in step. Write for players, in plain friendly words. At 1.0 these
  * entries are replaced by a "1.0 release catalog" of all features, and a fresh
- * changelog starts (docs/decisions.md).
+ * changelog starts (the decision log).
  */
 export interface PatchNote {
   /** major.minor.patch, as in apps/desktop/package.json. */
@@ -19,7 +19,7 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.17.3",
+    version: "0.17.7",
     date: "2026-10-17",
     title: "Development folders",
     notes: [
@@ -28,25 +28,35 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
-    version: "0.17.2",
+    version: "0.17.6",
     date: "2026-10-17",
-    title: "To-Dos, tidied up",
+    title: "Separate development state and clearer startup errors",
     notes: [
-      "To-do rows line up exactly: checkbox, title, pin and ⋯ share one line.",
-      "Editing a title keeps the row as it is: nothing moves or grows while you type.",
-      "Descriptions are written from the ⋯ menu (Add description) in a small box that floats over the list. Ctrl+Enter or clicking outside saves, Esc cancels.",
+      "Development runs keep their own games, settings and module data, separate from installed Tavora.",
+      "If Tavora can't start, it now tells you why in a message instead of closing without a word, and writes a small log you can send to whoever helps you.",
     ],
   },
   {
-    version: "0.17.1",
+    version: "0.17.4",
     date: "2026-10-17",
-    title: "To-Dos, reworked",
+    title: "Tavora starts again",
+    notes: ["0.17.3 closed itself right away on every start, before a window opened. Tavora starts normally again."],
+  },
+  {
+    version: "0.17.3",
+    date: "2026-10-17",
+    title: "To-Dos reworked, and safer accounts",
     notes: [
       "To-dos can have sub-to-dos, up to four levels deep. While editing a to-do, Tab makes it a sub-to-do of the one above and Shift+Tab moves it back up a level. Tab works the same in a group's add row, so you can type a whole list with its sub-to-dos in one go. A to-do with sub-to-dos shows how many are done and folds them away with its little arrow.",
-      "Click a to-do's title to edit it right where it is, with its description below. Enter saves, Esc cancels. No more panel opening underneath.",
+      "Click a to-do's title to edit it right where it is. Enter saves, Esc cancels. The row stays exactly as it is while you type, and no panel opens underneath.",
+      "Descriptions are written from the ⋯ menu (Add description) in a small box that floats over the list. Ctrl+Enter or clicking outside saves, Esc cancels. The first line shows in grey under the title.",
+      "To-do rows line up exactly: checkbox, title, pin and ⋯ share one line.",
       "Finishing a to-do finishes its sub-to-dos too, and a toast lets you undo it. Deleting a to-do can be undone the same way.",
       "A bar at the top of To-Dos holds the controls: how many to-dos are open, folding all groups at once, and whether finished to-dos stay in the list or vanish smoothly. Vanishing waits a moment, then the row slides away instead of the list jumping.",
       "Steps are now sub-to-dos, and a to-do's source link moved into its description. Nothing you wrote is lost.",
+      "Removing the email from your Tavora account, and connecting or disconnecting Discord, now ask for a code sent to your email. Someone who got hold of your sign-in can no longer quietly take your account, and you can always remove a Discord login, even one you can no longer sign in to.",
+      "A module can mute, unmute or deafen you in Discord only right after you click in its panel, like joining a channel.",
+      "One click on a web page opens at most one new Browser tab, and pages on the internet can no longer reach your router or other devices by their local names.",
     ],
   },
   {

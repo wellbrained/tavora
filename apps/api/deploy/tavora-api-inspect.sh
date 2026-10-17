@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read-only. Runs on the Hetzner server and prints what is needed to deploy the
+# Read-only. Runs on the server and prints what is needed to deploy the
 # game search service: Node, how Caddy is configured, how docs.mytavora.app is
 # routed, which ports are taken and how the other Node apps run under systemd.
 # It changes nothing and prints no secrets (environment files are not read).
@@ -23,7 +23,8 @@ ss -ltnH 2>/dev/null | awk '{print $4}' | grep -E '^127\.0\.0\.1:' | sort -t: -k
 
 section 'app services'
 systemctl list-units --type=service --state=running --no-legend 2>/dev/null | awk '{print $1}' | grep -vE '^(systemd|dbus|getty|ssh|cron|rsyslog|user|polkit|snapd|unattended|multipathd|networkd|chrony|qemu|serial|containerd)' | head -n 30
-for unit in tracker kura mei; do
+# Other units to show, as an example of a working setup: TAVORA_INSPECT_UNITS="unit1 unit2".
+for unit in ${TAVORA_INSPECT_UNITS:-}; do
   if systemctl cat "$unit" >/dev/null 2>&1; then
     section "unit: $unit"
     systemctl cat "$unit" | grep -vE '^(#|$)' | sed -E 's/(TOKEN|KEY|SECRET|PASSWORD)=[^ ]*/\1=<hidden>/g' | head -n 30

@@ -1,4 +1,4 @@
-// The Browser panel's page (docs/browser-security.md). Unlike a module view
+// The Browser panel's page (the Browser security notes). Unlike a module view
 // it has no preload, no bridge and no IPC: the toolbar is drawn by the host
 // UI, and the page is only ever told where to go by the main process.
 import { session, WebContentsView, type Session, type WebContents } from "electron";
@@ -204,9 +204,11 @@ export class BrowserPanel {
     });
     // A link the player opened in a new tab or window (target=_blank,
     // Ctrl+click, middle click) becomes a new Browser tab beside this one.
-    // Without a click or key press just before, nothing opens.
+    // Without a click or key press just before, nothing opens, and one click
+    // opens one tab, so a page cannot open a pile of them from a single click.
     contents.setWindowOpenHandler(({ url, disposition }) => {
       if (Date.now() - this.lastGesture < GESTURE_MS && this.mayFollow(url)) {
+        this.lastGesture = 0;
         setImmediate(() => current() && this.options.onOpenTab(url, disposition === "background-tab"));
       }
       return { action: "deny" };

@@ -1,6 +1,6 @@
-// The version rule every pull request is checked against (see docs/decisions.md,
+// The version rule every pull request is checked against (see the decision log,
 // 2026-10-16). Work in progress raises only the patch number; the minor (or
-// major) number goes up only when wellbrained says a feature is complete, which he marks
+// major) number goes up only when the maintainer says a feature is complete, which they mark
 // by adding the `feature-complete` label to the pull request.
 //
 // Usage in CI: node version-bump.mjs <base version> <head version> <true|false>
@@ -22,7 +22,7 @@ export function checkVersionBump(base, head, featureComplete) {
   }
   const problems = [];
   if (!featureComplete) {
-    problems.push(`${base} to ${head} raises the ${hMajor !== bMajor ? "major" : "minor"} number. Work in progress raises only the patch number (${base.replace(/\d+$/, (p) => String(Number(p) + 1))}); only wellbrained raises the minor number, by adding the "${LABEL}" label when a feature is complete.`);
+    problems.push(`${base} to ${head} raises the ${hMajor !== bMajor ? "major" : "minor"} number. Work in progress raises only the patch number (${base.replace(/\d+$/, (p) => String(Number(p) + 1))}); only the maintainer raises the minor number, by adding the "${LABEL}" label when a feature is complete.`);
   }
   if (hPatch !== 0) problems.push(`A new minor or major version starts at patch 0, not ${head}.`);
   return problems;
