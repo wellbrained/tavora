@@ -60,13 +60,14 @@ export interface PanelView {
   /** The tab's name: the panel type's short name, or the module's name. */
   name: string;
   status: InstanceStatus;
+  /** The full name of what the panel shows, as the module last set it (panel.setContent); the tab's hover text. */
+  content: string | null;
   /** Set for Browser panels: what their toolbar shows. */
   browser?: BrowserState;
   /** A Browser tab opened from another one: docked beside it, and left in the background when asked. */
   openedFrom?: { instanceId: string; background: boolean };
 }
 
-/** A Browser panel's page, as its toolbar shows it. Nothing here comes from the page but its title. */
 /** One of a module's named panel types, as Add module and the tabs show it. */
 export interface PanelTypeView {
   id: string;
@@ -77,6 +78,7 @@ export interface PanelTypeView {
   minHeight: number;
 }
 
+/** A Browser panel's page, as its toolbar shows it. Nothing here comes from the page but its title. */
 export interface BrowserState {
   /** The page's address; empty before anything was opened. */
   url: string;
@@ -368,6 +370,11 @@ export interface HostViewState {
   moduleFiles: { folder: string; custom: boolean; /** The folder is there (a custom one on a drive that is unplugged is not). */ available: boolean; moving: boolean };
   /** A web address a module asked to open while the game has no Browser panel; the host UI asks where it should open (link-choice). */
   pendingLink: string | null;
+  /**
+   * A panel of a module could not switch to content another of its panels asked for (panels.open); the host UI asks
+   * whether to open it in a new panel (navigation-choice). `panel` is the panel type's name, `content` the title.
+   */
+  pendingNavigation: { panel: string; content: string } | null;
   snapshots: SnapshotView[];
   notice: string | null;
   /** The player's local profile. */
@@ -398,6 +405,8 @@ export type HostAction =
   | { type: "show-welcome" }
   /** The answer to pendingLink: a new Browser panel, the system browser, or nothing. */
   | { type: "link-choice"; choice: "panel" | "system" | "cancel" }
+  /** The answer to pendingNavigation: open the content in a new panel, or leave it. */
+  | { type: "navigation-choice"; choice: "new-panel" | "cancel" }
   /** Opens the system dialog to pick the place for the pictures of modules, then moves them there. */
   | { type: "module-files-change" }
   /** Moves the pictures of modules back to the default folder. */
@@ -657,4 +666,4 @@ export interface TavoraHostApi {
 }
 
 /** `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). */
-export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}` | `address:${string}`;
+export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}` | `address:${string}` | `panel:${string}`;

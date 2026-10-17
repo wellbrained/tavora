@@ -40,6 +40,8 @@ export function parseAction(raw: unknown): HostAction | null {
       return only() ? { type: a.type } : null;
     case "link-choice":
       return only("choice") && (a.choice === "panel" || a.choice === "system" || a.choice === "cancel") ? { type: "link-choice", choice: a.choice } : null;
+    case "navigation-choice":
+      return only("choice") && (a.choice === "new-panel" || a.choice === "cancel") ? { type: "navigation-choice", choice: a.choice } : null;
     case "show-welcome":
     case "restart":
     case "download-update":

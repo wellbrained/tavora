@@ -63,8 +63,11 @@ Some calls change something outside the module's panel. They work only within 2 
 - **`clipboard.writeImage`** puts a checked PNG on the clipboard. There is no call to read the clipboard.
 - **`pictures.save`** writes a checked PNG as a new file into one folder, `Pictures\Tavora`. The module only suggests a name, which Tavora cleans; it cannot pick another folder or file type, replace a file, or read anything back, and it never learns where the folder is.
 - **`ui.showMenu`** shows a menu that Tavora draws above every panel, so it can lie outside the module's panel. Tavora checks the menu first and draws only plain text, separators, headings, check marks and colour dots from plain CSS colour values (nothing that loads or runs), in its own style. One menu shows at a time, it closes with Esc, a click elsewhere or a game switch, and the module learns only which of its own items the player chose, or that none was.
+- **`panels.open`** opens, brings forward or switches a panel of the same module, in the game shown now, so it changes the workspace outside the module's panel. A module can open only its own panel types, never another module's panels, and one press opens or switches one panel. The panel asked to switch is the module's own page and may refuse; then nothing changes, and only the player can open the content in a new panel. The module learns only what Tavora did: shown, switched, opened or failed.
 
 A module can still label a button misleadingly and get the player to click it. The result is the same as a link on any web page: the player sees the new tab, and the Browser panel is sandboxed.
+
+One call puts a module's text outside its panel without a click: **`panel.setContent`** names what the panel shows, and Tavora shows that name when the player hovers the panel's own tab. Tavora checks it first and shows only one line of plain text, at most 200 characters, below the panel's and the module's names, on that tab and nowhere else. The module learns nothing back.
 
 ## Module files
 
@@ -82,7 +85,7 @@ A zip is checked before anything is extracted:
 1. The manifest is read and validated first.
 2. Only regular files are extracted. Links, absolute paths, `..`, drive letters, reserved Windows names and paths that differ only in case are refused.
 3. The archive size, the unpacked size, the file count and the compression ratio are capped.
-4. The signature is checked, and the publisher (a key, or `local` for an unsigned zip) is recorded by the host. Ids starting with `tavora.` are refused. A zip whose id is already installed is accepted only as an update signed by the same publisher.
+4. The signature is checked, and the publisher (a key, or `local` for an unsigned zip) is recorded by the host. Ids starting with `tavora.` are refused. A zip whose id is already installed is accepted only as an update signed by the same publisher, with a higher version.
 5. Data is keyed by publisher and id. A module from another publisher that claims a removed module's id starts empty.
 6. The module is unpacked into a temporary folder and moved into place, so a half-extracted module never loads.
 7. Nothing from the archive is ever run.

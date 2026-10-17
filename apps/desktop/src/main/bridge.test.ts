@@ -44,6 +44,10 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     moduleVersion: "1.2.3",
     instanceId,
     panelType: null,
+    launch: { reason: "add" },
+    setContent: () => {},
+    openPanel: () => Promise.resolve("opened"),
+    navigated: () => {},
     game: { id: "poe2", displayName: "Path of Exile 2" },
     data: registry.get("local", moduleId, "poe2"),
     appSettings: registry.appSettings("local", moduleId),
@@ -172,6 +176,49 @@ describe("identity", () => {
     expect(await call(other, "panel.getState")).toMatchObject({ result: null });
     expect(await call(port, "panel.setState", { value: null })).toMatchObject({ ok: true });
     expect(await call(port, "panel.getState")).toMatchObject({ result: null });
+  });
+});
+
+describe("panel content", () => {
+  it("says why the page is loading, the same on every call", async () => {
+    const restored = await connected({ ...makeContext(), launch: { reason: "restore", content: { id: "b1", title: "Ice Shot" } } });
+    expect(await call(port, "panel.getLaunch")).toMatchObject({ ok: true, result: { reason: "add" } });
+    expect(await call(restored, "panel.getLaunch")).toMatchObject({ result: { reason: "restore", content: { id: "b1", title: "Ice Shot" } } });
+    expect(await call(restored, "panel.getLaunch")).toMatchObject({ result: { reason: "restore", content: { id: "b1", title: "Ice Shot" } } });
+    expect(await call(port, "panel.getLaunch", {})).toMatchObject({ error: { code: "INVALID_PARAMS" } });
+  });
+
+  it("passes on what the panel shows, on one line, and refuses anything else", async () => {
+    const shown: unknown[] = [];
+    const p = await connected({ ...makeContext(), setContent: (content) => shown.push(content) });
+    expect(await call(p, "panel.setContent", { content: { id: "b1", title: "  0.5 Ice Shot\nDeadeye  " } })).toMatchObject({ ok: true, result: null });
+    expect(await call(p, "panel.setContent", { content: null })).toMatchObject({ ok: true });
+    for (const content of [undefined, "b1", { id: "", title: "x" }, { id: "b1", title: " \n " }, { id: "b1" }, { id: "x".repeat(201), title: "x" }, { id: "b1", title: "x".repeat(201) }]) {
+      expect(await call(p, "panel.setContent", content === undefined ? {} : { content })).toMatchObject({ error: { code: "INVALID_PARAMS" } });
+    }
+    expect(shown).toEqual([{ id: "b1", title: "0.5 Ice Shot Deadeye" }, null]);
+  });
+
+  it("passes panels.open on with a checked type and content, and refuses anything else", async () => {
+    const asked: unknown[] = [];
+    const p = await connected({ ...makeContext(), openPanel: (type, content) => (asked.push([type, content]), Promise.resolve("switched")) });
+    expect(await call(p, "panels.open", { type: "planner", content: { id: "b1", title: "Ice\tShot" } })).toMatchObject({ ok: true, result: "switched" });
+    expect(await call(p, "panels.open", { type: "gear" })).toMatchObject({ ok: true });
+    for (const params of [{}, { type: "../x" }, { type: "Planner" }, { type: "planner", content: null }, { type: "planner", content: { id: "b1" } }]) {
+      expect(await call(p, "panels.open", params)).toMatchObject({ error: { code: "INVALID_PARAMS" } });
+    }
+    expect(asked).toEqual([
+      ["planner", { id: "b1", title: "Ice Shot" }],
+      ["gear", null],
+    ]);
+  });
+
+  it("passes on the page's answer to panel.navigate", async () => {
+    const answers: unknown[] = [];
+    const p = await connected({ ...makeContext(), navigated: (...answer) => answers.push(answer) });
+    expect(await call(p, "panel.navigated", { requestId: 3, handled: true, ok: false })).toMatchObject({ ok: true, result: null });
+    expect(await call(p, "panel.navigated", { requestId: 3, handled: "yes", ok: true })).toMatchObject({ error: { code: "INVALID_PARAMS" } });
+    expect(answers).toEqual([[3, true, false]]);
   });
 });
 

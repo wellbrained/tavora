@@ -14,13 +14,18 @@ import {
   type DiscordState,
   type HandshakeResult,
   type NetworkResponse,
+  type PanelContent,
+  type PanelLaunch,
+  type PanelOpenResult,
   type TavoraGame,
   type TavoraTheme,
   type TavoraViewport,
 } from "@tavora/sdk/protocol";
+import { isPanelTypeId } from "@tavora/module-schema";
 import { HostError } from "./errors";
 import { discordCommand, discordSubscription } from "./discord-commands";
 import { checkMenu, type CheckedMenu } from "./module-menu";
+import { checkPanelContent } from "./panel-content";
 import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
 
 /** The parts of Electron's MessagePortMain the bridge uses. */
@@ -43,6 +48,18 @@ export interface BridgeContext {
   instanceId: string;
   /** The panel type this panel shows (one of the manifest's `panels` ids), or null for a module without types. */
   panelType: string | null;
+  /** Why this page is loading (panel.getLaunch); the same for the whole page load. */
+  launch: PanelLaunch;
+  /** panel.setContent, with the content already checked: Tavora keeps it with the panel and shows its title on the tab. */
+  setContent(content: PanelContent | null): void;
+  /**
+   * panels.open with a checked panel type id and content: opens or switches one of this module's own panels in the
+   * current game. Throws PERMISSION_DENIED unless the panel just got a click or key press, INVALID_PARAMS for a type
+   * the module does not have.
+   */
+  openPanel(type: string, content: PanelContent | null): Promise<PanelOpenResult>;
+  /** The page's answer to a panel.navigate event. */
+  navigated(requestId: number, handled: boolean, ok: boolean): void;
   game: TavoraGame;
   data: ModuleData;
   /** The module's settings shared by every game (storage.app). */
@@ -255,6 +272,52 @@ const handlers = new Map<string, Handler>([
     },
   ],
 
+  ["panel.getLaunch", (s, params) => (noParams(params), structuredClone(s.context.launch))],
+  [
+    "panel.setContent",
+    (s, params) => {
+      const raw = required(object(params), "content");
+      const content = raw === null ? null : checkPanelContent(raw);
+      if (raw !== null && content === null) {
+        throw new HostError(
+          "INVALID_PARAMS",
+          `params.content must be null or { id, title }: an id of 1 to ${LIMITS.maxContentIdLength} characters and a title of 1 to ${LIMITS.maxTitleLength}`,
+        );
+      }
+      s.context.setContent(content);
+      return null;
+    },
+  ],
+
+  [
+    "panel.navigated",
+    (s, params) => {
+      const p = object(params);
+      const requestId = required(p, "requestId");
+      const handled = required(p, "handled");
+      const ok = required(p, "ok");
+      if (!Number.isSafeInteger(requestId) || typeof handled !== "boolean" || typeof ok !== "boolean") {
+        throw new HostError("INVALID_PARAMS", "params must be { requestId: integer, handled: boolean, ok: boolean }");
+      }
+      s.context.navigated(requestId as number, handled, ok);
+      return null;
+    },
+  ],
+  [
+    "panels.open",
+    (s, params) => {
+      const p = object(params);
+      const type = required(p, "type");
+      if (!isPanelTypeId(type)) throw new HostError("INVALID_PARAMS", "params.type must be a panel type id of this module");
+      let content: PanelContent | null = null;
+      if (p.content !== undefined) {
+        content = checkPanelContent(p.content);
+        if (!content) throw new HostError("INVALID_PARAMS", "params.content must be { id, title }, as for panel.setContent");
+      }
+      return s.context.openPanel(type, content);
+    },
+  ],
+
   ["workspace.getViewport", (s, params) => (noParams(params), s.context.getViewport())],
   ["ui.getTheme", (s, params) => (noParams(params), s.context.getTheme())],
   ["ui.getLanguage", (s, params) => (noParams(params), s.context.getLanguage())],
@@ -283,6 +346,11 @@ export class BridgeSession {
     port.on("close", () => this.markClosed());
     context.data.documents.on("change", this.onDocumentChange);
     port.start();
+  }
+
+  /** The page connected and has not gone away, so events reach it. */
+  get ready(): boolean {
+    return !this.closed && this.handshakeDone;
   }
 
   emit<E extends EventName>(event: E, data: Events[E]): void {

@@ -19,7 +19,7 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.17.16",
+    version: "0.17.19",
     date: "2026-10-17",
     title: "Whiteboard: save as picture, clear, toolbar at the bottom",
     notes: [
@@ -27,7 +27,35 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "Clear board takes everything off a board at once. Undo in the notice, or Ctrl+Z, brings it back.",
       "Choose where the Whiteboard's toolbar sits: open the menu (☰) and pick Toolbar at the bottom, or back to the top. The choice is kept for every game.",
       "Ten quick colours for lines and backgrounds instead of five, and a more compact style palette. It is shorter too: Color, Background, Fill, Stroke width and style, fonts and arrowheads show; Sloppiness, Edges, Opacity, Align and Actions wait under More options. The Layers row is gone; its shortcuts and the right-click menu still move things forward and back.",
-      "For module developers: pictures.save(png, name) saves a PNG in the player's Pictures\\Tavora folder right after a click (SDK 0.2.3).",
+      "For module developers: pictures.save(png, name) saves a PNG in the player's Pictures\\Tavora folder right after a click (SDK 0.2.5).",
+      ],
+    },
+    {
+    version: "0.17.18",
+    date: "2026-10-17",
+    title: "Panels open each other",
+    notes: [
+      "A module's panel can open its other panels on what it shows, such as the gear for the build you are looking at. Tavora brings forward a panel that already shows it, switches the one you used last, or opens a new one.",
+      "A panel saves your changes before it switches. If it can't, it keeps what it showed, and Tavora offers to open the other content in a new panel instead.",
+      "Module developers: the Panel Types Example has buttons that open its other panels.",
+    ],
+  },
+  {
+    version: "0.17.17",
+    date: "2026-10-17",
+    title: "Each panel keeps what it shows",
+    notes: [
+      "Panels of a module can each show something different, such as a different build, and keep it when you switch games or restart Tavora.",
+      "Hovering a panel's tab now shows the full name of what it shows, below the panel's and the module's names.",
+      "Module developers: the Panel Types Example now picks a build in each panel.",
+    ],
+  },
+  {
+    version: "0.17.16",
+    date: "2026-10-17",
+    title: "Updates only go forward",
+    notes: [
+      "Install from zip now replaces a module only with a higher version. A zip with the same or an older version says which version you have instead of quietly going back.",
     ],
   },
   {

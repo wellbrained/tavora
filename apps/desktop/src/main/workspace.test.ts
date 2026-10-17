@@ -91,6 +91,20 @@ describe("loadWorkspace", () => {
     expect(poe2.snapshots[0]!.panelTypes).toEqual({ [A]: "planner" });
   });
 
+  it("keeps what a panel shows, and drops content that is not an id and a title", async () => {
+    const file = await tempFile();
+    const content = { id: "b1", title: "0.5 Ice Shot Deadeye Leveling Guide" };
+    await writeFile(
+      file,
+      JSON.stringify({
+        version: 2,
+        games: { poe2: { instances: [{ instanceId: A, moduleId: "m.a", content }, { instanceId: B, moduleId: "m.a", content: { id: 7, title: "x" } }], layout: null, snapshots: [] } },
+      }),
+    );
+    const poe2 = (await loadWorkspace(file, ["poe2"], () => true)).games.poe2!;
+    expect(poe2.instances).toEqual([{ instanceId: A, moduleId: "m.a", content }, { instanceId: B, moduleId: "m.a" }]);
+  });
+
   it("ignores an unreadable file", async () => {
     const file = await tempFile();
     await writeFile(file, "{oops");

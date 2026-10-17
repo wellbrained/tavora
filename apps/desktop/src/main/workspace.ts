@@ -4,6 +4,7 @@ import { isPanelTypeId } from "@tavora/module-schema";
 import { INSTANCE_ID } from "./ids";
 import { PlayerError } from "./messages";
 import { layoutPanels, parseLayout, pruneLayout, type SavedLayout } from "./layout";
+import { checkPanelContent, type PanelContent } from "./panel-content";
 
 export { INSTANCE_ID } from "./ids";
 
@@ -12,6 +13,8 @@ export interface InstanceRecord {
   moduleId: string;
   /** Which of the module's panel types this panel is; left out for a module without types. */
   panelType?: string;
+  /** What the panel last said it shows (panel.setContent); kept across game switches and restarts. */
+  content?: PanelContent;
 }
 
 /**
@@ -108,7 +111,10 @@ export async function loadWorkspace(
           typeof record.moduleId === "string" &&
           isInstalled(record.moduleId),
       )
-      .map(({ instanceId, moduleId, panelType }): InstanceRecord => ({ instanceId, moduleId, ...(isPanelTypeId(panelType) ? { panelType } : {}) }));
+      .map(({ instanceId, moduleId, panelType, content }): InstanceRecord => {
+        const checked = checkPanelContent(content);
+        return { instanceId, moduleId, ...(isPanelTypeId(panelType) ? { panelType } : {}), ...(checked ? { content: checked } : {}) };
+      });
     const open = new Set(instances.map((record) => record.instanceId));
     const snapshots = (Array.isArray(game.snapshots) ? game.snapshots : [])
       .map((snapshot) => parseSnapshot(snapshot, isInstalled))
