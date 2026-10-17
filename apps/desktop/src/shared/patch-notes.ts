@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.21",
+    date: "2026-10-17",
+    title: "Clicks in modules always count",
+    notes: [
+      "A click in a module that opens a link, a menu or a Discord action no longer gets refused now and then as if you had not clicked.",
+    ],
+  },
+  {
     version: "0.17.20",
     date: "2026-10-17",
     title: "Settings > Development",

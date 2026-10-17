@@ -182,7 +182,7 @@ export type NavigateOutcome = "switched" | "failed" | "unhandled";
 /** How long after a click or key press a link may be opened. */
 export const GESTURE_MS = 2_000;
 /**
- * How long panels.open waits for the click that allows it. The preload reports clicks on another channel than
+ * How long a call that needs a click waits for it. The preload reports clicks on another channel than
  * the bridge, so the report can land just after the call the click made.
  */
 const GESTURE_LATE_MS = 250;
@@ -327,14 +327,11 @@ export class ModuleView {
     for (const wake of this.gestureWaiters) wake();
   }
 
-  /** Something only a click or key press in the page may do, once per click. */
-  private takeGesture(what: string): void {
-    if (Date.now() - this.gestureAt > GESTURE_MS) throw new HostError("PERMISSION_DENIED", `${what} must be called right after a click or key press`);
-    this.gestureAt = 0;
-  }
-
-  /** As takeGesture, but first waits a moment for a click whose report has not arrived yet. */
-  private async takeGestureSoon(what: string): Promise<void> {
+  /**
+   * Something only a click or key press in the page may do, once per click. Waits a moment first for a click
+   * whose report has not arrived yet.
+   */
+  private async takeGesture(what: string): Promise<void> {
     if (Date.now() - this.gestureAt > GESTURE_MS) {
       await new Promise<void>((resolve) => {
         const done = () => {
@@ -346,17 +343,15 @@ export class ModuleView {
         this.gestureWaiters.add(done);
       });
     }
-    this.takeGesture(what);
+    if (Date.now() - this.gestureAt > GESTURE_MS) throw new HostError("PERMISSION_DENIED", `${what} must be called right after a click or key press`);
+    this.gestureAt = 0;
   }
 
   /** links.open: only a web address, and only right after the player did something in the page. */
-  private openLink(url: string): void {
-    if (Date.now() - this.gestureAt > GESTURE_MS) {
-      throw new HostError("PERMISSION_DENIED", "links.open must be called right after a click or key press");
-    }
+  private async openLink(url: string): Promise<void> {
     if (!isWebUrl(url)) throw new HostError("INVALID_PARAMS", "params.url must be an http or https address");
     // One click opens one link, so a script cannot open a pile of them.
-    this.gestureAt = 0;
+    await this.takeGesture("links.open");
     this.options.onOpenLink(url);
   }
 
@@ -420,7 +415,7 @@ export class ModuleView {
         setContent: this.options.setContent,
         openPanel: async (type, content) => {
           // One click opens or switches one panel, so a page cannot keep panels coming on its own.
-          await this.takeGestureSoon("panels.open");
+          await this.takeGesture("panels.open");
           return this.options.openPanel(type, content);
         },
         navigated: (requestId, handled, ok) => {
@@ -445,9 +440,9 @@ export class ModuleView {
         getLanguage: this.options.getLanguage,
         onBusy: (busy, served) => this.onBridgeBusy(busy, served),
         openLink: (url) => this.openLink(url),
-        showMenu: (menu) => {
+        showMenu: async (menu) => {
           // One click opens one menu, so a page cannot keep menus coming on its own.
-          this.takeGesture("ui.showMenu");
+          await this.takeGesture("ui.showMenu");
           return this.options.showMenu(menu);
         },
       },
@@ -491,12 +486,12 @@ export class ModuleView {
     return {
       state: async () => (await use(), connector.state()),
       connect: async () => {
-        this.takeGesture("discord.connect");
+        await this.takeGesture("discord.connect");
         await use();
         await connector.connectNow();
       },
       allowControl: async () => {
-        this.takeGesture("discord.allowControl");
+        await this.takeGesture("discord.allowControl");
         await use();
         await connector.allowControl();
       },
@@ -504,7 +499,7 @@ export class ModuleView {
         // Joining or leaving, and muting or deafening the player (which can switch their microphone back on),
         // only follow a click or key press (D8). A person's volume streams while a slider is dragged, and only
         // changes what the player hears, so it needs none.
-        if (command === "SELECT_VOICE_CHANNEL" || command === "SET_VOICE_SETTINGS") this.takeGesture(command);
+        if (command === "SELECT_VOICE_CHANNEL" || command === "SET_VOICE_SETTINGS") await this.takeGesture(command);
         await use();
         return connector.command(command, args);
       },
