@@ -50,3 +50,15 @@ _Avoid_: permission (for the player's yes), consent (for the stored record)
 _Avoid_: integration (for the code), plugin, bridge
 
 **Integrations**: The settings page for connectors and grants: each connection's sign-in or accounts, the modules allowed to use it, and every other module grant, each revocable.
+
+**Publisher key**: The Ed25519 key pair a module developer signs zips with, made on their PC by `tavora-pack` the first time and kept there; the secret half never leaves that PC. Its fingerprint is the publisher a player's data belongs to. Losing it without a linked account means a new publisher.
+_Avoid_: certificate, developer key (for the account), signing secret
+
+**Key linking**: Tying a publisher key to an account: Settings > Account shows a one-time code, `tavora-pack link <code>` signs it with the key, and the service stores only the public half. A linked key shows the account's developer name to players and can be claimed back after a loss once the catalogue exists.
+_Avoid_: key upload, registering a key
+
+**Developer name**: The public name an account shows on the modules of its linked keys ("by jumoog"). Unique regardless of case, changeable once every 30 days, and a dropped name stays blocked for 30 days. Separate from the private profile name.
+_Avoid_: username, publisher name, author (for the account)
+
+**Development folder**: A module project folder a developer adds in Settings > Modules. Tavora loads the module straight from it, reloads its panels when the build changes and lists it as Development; its data counts as local.
+_Avoid_: dev mode, sideload, debug module
