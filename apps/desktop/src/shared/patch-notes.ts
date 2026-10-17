@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.8",
+    date: "2026-10-17",
+    title: "Modules can say which Tavora they need",
+    notes: [
+      "A module can name the oldest Tavora it works with. If yours is older, installing it says which Tavora it needs instead of installing something that would not work, and Settings > Modules says why it is not loaded.",
+    ],
+  },
+  {
     version: "0.17.7",
     date: "2026-10-17",
     title: "Development folders",

@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { isGameId, isModuleId, isOwnerId, validateManifest } from "./index";
+import { isGameId, isModuleId, isOwnerId, needsNewerTavora, validateManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -155,7 +155,27 @@ const cases: [string, unknown, boolean][] = [
   ["connectors not a list", { ...valid, permissions: { network: [], connectors: "ai-usage" } }, false],
   ["shared data permission", { ...valid, permissions: { network: [], sharedData: { consume: [] } } }, false],
   ["unknown field", { ...valid, nodeIntegration: true }, false],
+  ["minTavora", { ...valid, minTavora: "0.18.0" }, true],
+  ["minTavora with a pre-release", { ...valid, minTavora: "0.18.0-beta" }, false],
+  ["minTavora with two parts", { ...valid, minTavora: "0.18" }, false],
+  ["minTavora with a leading zero", { ...valid, minTavora: "0.018.0" }, false],
+  ["minTavora as a number", { ...valid, minTavora: 18 }, false],
 ];
+
+describe("needsNewerTavora", () => {
+  it.each([
+    [undefined, "0.17.0", false],
+    ["0.18.0", "0.17.9", true],
+    ["0.18.0", "0.18.0", false],
+    ["0.18.0", "0.18.1", false],
+    ["0.18.2", "0.18.10", false],
+    ["1.0.0", "0.99.99", true],
+    ["0.18.0", "0.19.0-dev", false],
+    ["0.18.0", "0.18.0-dev", false],
+  ] as const)("minTavora %s on Tavora %s needs a newer Tavora: %s", (minTavora, tavora, expected) => {
+    expect(needsNewerTavora(minTavora === undefined ? {} : { minTavora }, tavora)).toBe(expected);
+  });
+});
 
 describe("JSON Schema", () => {
   const ajv = new Ajv({ allErrors: true, strict: true });

@@ -3,7 +3,7 @@
 A Tavora module is a web page that runs in a sandboxed panel inside Tavora Desktop, next to a game. It talks to the host through `@tavora/sdk`, and it ships as a folder with a [`tavora.module.json`](../reference/manifest.md) manifest and its built files.
 
 ::: warning Not released yet
-`@tavora/sdk` 0.1.0 speaks [bridge protocol v1](../reference/protocol.md). It is not published to npm yet, and nothing here is a stable API before Tavora's first public release. For now, build modules inside the [Tavora repository](https://github.com/wellbrained/tavora) and depend on the SDK as `"@tavora/sdk": "workspace:*"`.
+`@tavora/sdk` 0.2.0 speaks [bridge protocol v1](../reference/protocol.md); see the [changelog](../reference/changelog.md). It is not published to npm yet, and nothing here is a stable API before Tavora's first public release. For now, build modules inside the [Tavora repository](https://github.com/wellbrained/tavora) and depend on the SDK as `"@tavora/sdk": "workspace:*"`.
 :::
 
 ## Start from an example

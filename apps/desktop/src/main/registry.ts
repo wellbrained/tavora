@@ -1,6 +1,6 @@
 import { readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import { LOCAL_OWNER, OFFICIAL_OWNER, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { LOCAL_OWNER, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { resolveAsset } from "./assets";
 import { moduleIconUrl } from "./module-icon";
 
@@ -76,6 +76,8 @@ export interface ModuleSources {
    */
   development?: string[];
   local?: string[];
+  /** This Tavora's version; a module whose `minTavora` is newer is not loaded. */
+  tavoraVersion?: string;
 }
 
 /**
@@ -86,7 +88,7 @@ export interface ModuleSources {
  * cannot pass itself off as official.
  */
 export async function discoverModules(
-  { official = [], development = [], local = [] }: ModuleSources,
+  { official = [], development = [], local = [], tavoraVersion }: ModuleSources,
   problems: ModuleProblem[] = [],
 ): Promise<Map<string, InstalledModule>> {
   const modules = new Map<string, InstalledModule>();
@@ -102,7 +104,7 @@ export async function discoverModules(
     const found = project === undefined ? await candidates(dir) : project === "missing" ? [] : project;
     for (const candidate of found) {
       const report = (message: string) => problems.push({ folder: path.basename(candidate), message, ...(fromProject ? { developmentFolder: dir } : {}) });
-      const installed = await loadModule(candidate, provenance, (message) => {
+      const installed = await loadModule(candidate, provenance, tavoraVersion, (message) => {
         if (provenance === "local") report(message);
       });
       if (!installed) continue;
@@ -170,7 +172,7 @@ async function candidates(dir: string): Promise<string[]> {
   }
 }
 
-async function loadModule(dir: string, provenance: Provenance, problem: (message: string) => void): Promise<InstalledModule | undefined> {
+async function loadModule(dir: string, provenance: Provenance, tavoraVersion: string | undefined, problem: (message: string) => void): Promise<InstalledModule | undefined> {
   let raw: unknown;
   try {
     raw = JSON.parse(await readFile(path.join(dir, MANIFEST), "utf8"));
@@ -185,6 +187,11 @@ async function loadModule(dir: string, provenance: Provenance, problem: (message
   if (!result.ok) {
     console.warn(`[tavora] invalid module in ${dir}: ${result.errors.join("; ")}`);
     problem(result.errors.slice(0, 2).join("; "));
+    return undefined;
+  }
+  if (tavoraVersion !== undefined && needsNewerTavora(result.manifest, tavoraVersion)) {
+    console.warn(`[tavora] module ${result.manifest.id} needs Tavora ${result.manifest.minTavora}; this is ${tavoraVersion}`);
+    problem(`it needs Tavora ${result.manifest.minTavora} or newer (this is ${tavoraVersion})`);
     return undefined;
   }
   const root = await realpath(dir);

@@ -1,6 +1,6 @@
 # Bridge protocol v1
 
-**Status:** Milestone B, 2026-10-14. Version 1 is what `@tavora/sdk` 0.1.0 speaks. It may still change before Tavora's first public release; after that, breaking changes need a new major version (see [Versioning](#versioning)).
+**Status:** Version 1 is what `@tavora/sdk` 0.2.0 speaks. It may still change before Tavora's first public release; after that, breaking changes need a new major version (see [Versioning](#versioning)). What changed when is in the [changelog](./changelog.md).
 
 Module authors normally use `@tavora/sdk` and never see these messages. This page is for people writing another SDK, reviewing the host, or debugging.
 
@@ -251,4 +251,5 @@ Values must be JSON: `null`, booleans, finite numbers, strings, arrays and plain
 - The handshake carries the version the SDK wants. A host that cannot serve it answers `INCOMPATIBLE` with the versions it supports, and the SDK's `connect()` rejects with that error.
 - Within a major version, the host may add methods, events, optional params, result fields and error codes. Modules must ignore event names and result fields they do not know.
 - Removing or changing anything existing needs a new major version. A host should keep serving the previous major version for as long as published modules use it.
-- The manifest's `apiVersion` names the major version the module was built for.
+- The manifest's `apiVersion` names the major version the module was built for, and `minTavora` the oldest Tavora that has everything it uses.
+- Before Tavora 1.0, version 1 may still change in ways that break modules. Each such change raises `@tavora/sdk`'s minor version and is marked **Breaking** in the [changelog](./changelog.md). From 1.0 on, the rules above apply.
