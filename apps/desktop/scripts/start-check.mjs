@@ -24,6 +24,8 @@ const APP_WINDOW_TITLE = "Tavora";
 function visibleWindows(exe) {
   const script = path.join(path.dirname(fileURLToPath(import.meta.url)), "windows.ps1");
   const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Name", path.basename(exe, ".exe")], { encoding: "utf8" });
+  // A broken probe must fail loudly, not look like "no window yet".
+  if (result.error || result.status !== 0) throw new Error(`Window probe failed: ${result.error?.message ?? result.stderr}`);
   return (result.stdout ?? "").split(/\r?\n/).filter(Boolean).map((line) => {
     const [pid, cls, title = ""] = line.split("\t");
     return { pid: Number(pid), cls, title };
