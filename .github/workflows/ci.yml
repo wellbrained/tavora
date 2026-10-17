@@ -33,11 +33,11 @@ jobs:
     env:
       E2E: ${{ (github.event_name == 'workflow_dispatch' && inputs.e2e) || startsWith(github.ref, 'refs/tags/') }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
@@ -52,11 +52,27 @@ jobs:
       - if: env.E2E == 'true'
         run: xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm test:e2e
       - if: failure() && env.E2E == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-results
           path: apps/desktop/test-results
           retention-days: 7
+
+  # Development and CI use Node 24, but the API service runs on Node 22 on the server, and the
+  # npm packages for module developers (@tavora/pack, @tavora/create-module) promise Node 22.12+.
+  # So the unit tests run on Node 22 as well.
+  node-22:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
 
   # e2e runs Tavora unpackaged, so code that only runs packaged was never started before a
   # release (0.17.3 quit on every start). This builds the real installer, installs it the way
@@ -66,11 +82,11 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
@@ -91,7 +107,7 @@ jobs:
         shell: pwsh
         run: Get-Content "$env:APPDATA\@tavora\desktop\logs\startup.log" -ErrorAction SilentlyContinue
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: start-check-screen
           path: ${{ runner.temp }}\start-check.png

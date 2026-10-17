@@ -55,7 +55,7 @@ Module pages run in a sandbox. The host validates their requests, scopes stored 
 
 ## Run from source
 
-Use Node.js 22.18+ and pnpm 10.28.0 (the repository pins pnpm in `package.json`; `.nvmrc` selects Node 22).
+Use Node.js 24 LTS and pnpm 10.28.0 (the repository pins pnpm in `package.json`; `.nvmrc` selects Node 24). The API service and the published packages for module developers still support Node 22, and CI tests them on it too.
 
 ```sh
 corepack enable
