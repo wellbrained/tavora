@@ -7,11 +7,12 @@ import "@excalidraw/excalidraw/index.css";
 import type { ExcalidrawElement, ExcalidrawImageElement, OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { AppState, BinaryFiles, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { JsonValue, TavoraSDK } from "@tavora/sdk";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MAX_BOARD_BYTES, sceneSignature, type BoardData } from "./boards";
 import { COPY_PADDING, copyScale, elementsToCopy } from "./copy";
 import { t, type Language } from "./i18n";
 import { createPictures, pictureFileIds } from "./pictures";
+import PictureLocks, { lockSpots, spotsKey, type LockSpot } from "./PictureLocks";
 
 /** How long drawing must pause before the board is saved. */
 const SAVE_DELAY_MS = 600;
@@ -88,6 +89,8 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
   const summary = useRef("");
   const empty = useRef<boolean | null>(null);
   const theme = useRef(mode);
+  const [spots, setSpots] = useState<LockSpot[]>([]);
+  const spotsSeen = useRef("");
   theme.current = mode;
 
   function flush(): Promise<void> {
@@ -159,6 +162,18 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
       }, 0);
     }
     for (const element of live) seen.current.add(element.id);
+    // A lock that would lie under Excalidraw's menus (the palette, the toolbar, …) is left out.
+    const nextSpots = lockSpots(live, { scrollX: appState.scrollX, scrollY: appState.scrollY, zoom: appState.zoom.value, width: appState.width, height: appState.height }).filter((spot) =>
+      document
+        .elementsFromPoint(appState.offsetLeft + spot.x, appState.offsetTop + spot.y)
+        .find((element) => !element.closest(".picture-locks"))
+        ?.matches("canvas"),
+    );
+    const key = spotsKey(nextSpots);
+    if (key !== spotsSeen.current) {
+      spotsSeen.current = key;
+      setSpots(nextSpots);
+    }
     const description = `${live.length}:${live.every((element) => element.locked)}`;
     if (description !== summary.current) {
       summary.current = description;
@@ -245,26 +260,39 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
     scrollToContent: !view && data.elements.length > 0,
   };
 
+  function setPictureLocked(id: string, locked: boolean) {
+    const instance = api.current;
+    if (!instance) return;
+    placing.current.delete(id);
+    instance.updateScene({
+      elements: instance.getSceneElements().map((element) => (element.id === id ? { ...element, locked, version: element.version + 1, versionNonce: Math.floor(Math.random() * 2 ** 31), updated: Date.now() } : element)),
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+  }
+
   return (
-    <Excalidraw
-      initialData={initialData}
-      excalidrawAPI={ready}
-      onChange={onChange}
-      onScrollChange={(scrollX, scrollY, zoom) => onView({ scrollX, scrollY, zoom: zoom.value })}
-      langCode={language === "de" ? "de-DE" : "en"}
-      theme={mode}
-      // The panel shares the page with nothing else, but shortcuts are still only for the focused drawing.
-      handleKeyboardGlobally={false}
-      autoFocus
-      UIOptions={{
-        canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, toggleTheme: false },
-      }}
-    >
-      <MainMenu>
-        <MainMenu.DefaultItems.ClearCanvas />
-        <MainMenu.DefaultItems.ChangeCanvasBackground />
-        <MainMenu.DefaultItems.Help />
-      </MainMenu>
-    </Excalidraw>
+    <>
+      <Excalidraw
+        initialData={initialData}
+        excalidrawAPI={ready}
+        onChange={onChange}
+        onScrollChange={(scrollX, scrollY, zoom) => onView({ scrollX, scrollY, zoom: zoom.value })}
+        langCode={language === "de" ? "de-DE" : "en"}
+        theme={mode}
+        // The panel shares the page with nothing else, but shortcuts are still only for the focused drawing.
+        handleKeyboardGlobally={false}
+        autoFocus
+        UIOptions={{
+          canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, toggleTheme: false },
+        }}
+      >
+        <MainMenu>
+          <MainMenu.DefaultItems.ClearCanvas />
+          <MainMenu.DefaultItems.ChangeCanvasBackground />
+          <MainMenu.DefaultItems.Help />
+        </MainMenu>
+      </Excalidraw>
+      <PictureLocks spots={spots} onToggle={setPictureLocked} />
+    </>
   );
 }

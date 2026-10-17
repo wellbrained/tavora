@@ -173,6 +173,15 @@ test("whiteboard: a pasted picture can be dragged into place, is then locked, ke
   await inModule(app, WHITEBOARD, `${q("picture-lock")}.click()`);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock")}.dataset.locked`)).toBe("false");
   await expect.poll(async () => (await storedBoard(userData, "Board 1"))?.elements.find((element) => element.type === "image")?.locked).toBe(false);
+
+  // Each picture has its own lock on its corner, which locks and unlocks just that one.
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock-one")}?.dataset.locked ?? ""`)).toBe("false");
+  await click(app, "picture-lock-one");
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock-one")}?.dataset.locked ?? ""`)).toBe("true");
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock")}.dataset.locked`)).toBe("true");
+  await expect.poll(async () => (await storedBoard(userData, "Board 1"))?.elements.find((element) => element.type === "image")?.locked).toBe(true);
+  await click(app, "picture-lock-one");
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock-one")}?.dataset.locked ?? ""`)).toBe("false");
   await app.close();
 });
 

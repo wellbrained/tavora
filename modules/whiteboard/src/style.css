@@ -218,6 +218,10 @@ body {
 }
 
 /* The handle Palette.tsx puts at the top of Excalidraw's style palette: drag it to move the palette, fold it away. */
+/* Its scrollbar must not push the handle sideways. */
+.excalidraw .App-menu__left {
+  overflow-x: hidden;
+}
 .excalidraw .App-menu__left .palette-handle {
   position: sticky;
   z-index: 1;
@@ -273,4 +277,42 @@ body {
 }
 .excalidraw .App-menu__left.palette-collapsed .palette-grip {
   border-bottom: 0;
+}
+
+/* The lock on each picture's corner (PictureLocks.tsx). Below Excalidraw's menus, above its drawing. */
+.picture-locks {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.picture-lock-one {
+  position: absolute;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: pointer;
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.45);
+  opacity: 0.55;
+  transition: opacity 0.12s;
+}
+.picture-lock-one:hover,
+.picture-lock-one:focus-visible,
+.picture-lock-one[data-locked="true"] {
+  opacity: 1;
+}
+.picture-lock-one[data-locked="true"] {
+  background: color-mix(in oklab, var(--primary, #6965db) 85%, black);
+}
+.picture-lock-one:focus-visible {
+  outline: 2px solid var(--ring, var(--primary));
+  outline-offset: 1px;
 }
