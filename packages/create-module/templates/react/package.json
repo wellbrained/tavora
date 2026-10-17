@@ -4,8 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/check-install.cjs",
     "dev": "vite build --watch",
+    "prebuild": "node scripts/check-install.cjs",
     "build": "vite build",
+    "prezip": "node scripts/check-install.cjs",
     "zip": "tavora-pack ."
   },
   "dependencies": {

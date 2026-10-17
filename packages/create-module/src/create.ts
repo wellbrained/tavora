@@ -66,6 +66,7 @@ export function nameProblem(name: string): string | null {
 
 const run = (manager: ModuleOptions["packageManager"]) => (manager === "pnpm" ? "pnpm" : manager === "yarn" ? "yarn" : "npm run");
 const exec = (manager: ModuleOptions["packageManager"]) => (manager === "pnpm" ? "pnpm exec" : manager === "yarn" ? "yarn" : "npx");
+const install = (manager: ModuleOptions["packageManager"]) => (manager === "yarn" ? "yarn" : `${manager} install`);
 
 /** Placeholders that are already JSON, standing outside quotes, so they are put in as they are. */
 const RAW = new Set(["games"]);
@@ -111,6 +112,7 @@ export async function createModule(options: ModuleOptions): Promise<string[]> {
     minTavora: VERSIONS.minTavora,
     run: run(options.packageManager),
     exec: exec(options.packageManager),
+    install: install(options.packageManager),
   };
   const written: string[] = [];
   for (const source of ["shared", options.template]) {
