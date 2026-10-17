@@ -17,23 +17,24 @@ export interface ClipboardDeps {
   write(png: Buffer): void | Promise<void>;
 }
 
-const STATUS: Partial<Record<ErrorCode, number>> = { PERMISSION_DENIED: 403, QUOTA_EXCEEDED: 413, INVALID_PARAMS: 415 };
+export const STATUS: Partial<Record<ErrorCode, number>> = { PERMISSION_DENIED: 403, QUOTA_EXCEEDED: 413, INVALID_PARAMS: 415 };
 
-function json(status: number, body: unknown): Response {
+export function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
   });
 }
 
-async function readBody(request: Request, max: number): Promise<Buffer> {
+/** Reads a request body of at most `max` bytes; `what` names it in the error. */
+export async function readBody(request: Request, max: number, what = "a picture for the clipboard"): Promise<Buffer> {
   const declared = Number(request.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > max) throw new HostError("QUOTA_EXCEEDED", `a picture for the clipboard can be at most ${max} bytes`);
+  if (Number.isFinite(declared) && declared > max) throw new HostError("QUOTA_EXCEEDED", `${what} can be at most ${max} bytes`);
   const parts: Buffer[] = [];
   let total = 0;
   for await (const chunk of request.body as unknown as AsyncIterable<Uint8Array>) {
     total += chunk.byteLength;
-    if (total > max) throw new HostError("QUOTA_EXCEEDED", `a picture for the clipboard can be at most ${max} bytes`);
+    if (total > max) throw new HostError("QUOTA_EXCEEDED", `${what} can be at most ${max} bytes`);
     parts.push(Buffer.from(chunk));
   }
   return Buffer.concat(parts);

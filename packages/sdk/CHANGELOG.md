@@ -2,6 +2,10 @@
 
 What changed in `@tavora/sdk` and the bridge protocol it speaks, newest first. Before Tavora 1.0 the SDK may still change in ways that break modules; each such change raises the minor version (0.2 → 0.3) and is marked **Breaking** here. Anything else raises the patch version. To make sure players have a Tavora that knows what your module uses, set [`minTavora`](https://docs.mytavora.app/reference/manifest) in its manifest.
 
+## 0.2.5
+
+- `pictures.save(png, name)`: saves a PNG as a new file in the player's `Pictures\Tavora` folder, right after a click or key press in the panel; resolves with the file name it got (Tavora 0.17.19). `MIN_TAVORA` is now `0.17.19`.
+
 ## 0.2.4
 
 - Opening another panel: `panels.open(type, { content })` opens one of the module's own panel types in the current game, right after a click or key press. Tavora brings forward a panel of that type already showing the content, else asks the one used last to switch through `panel.onNavigate(fn)` (save pending edits, then resolve; throw to refuse; 5 seconds), else opens a new one, whose `panel.getLaunch()` is `{ reason: "open", content }`. It resolves with `"shown"`, `"switched"`, `"opened"` or `"failed"`; when a switch fails, the player is offered the content in a new panel (Tavora 0.17.18). Set `minTavora` to `0.17.18` or newer when you use them.

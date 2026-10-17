@@ -61,6 +61,7 @@ Some calls need no grant but only work right after the player clicked or pressed
 
 - `tavora.links.open(url)`: opens a web page in the game's Browser panel.
 - `tavora.clipboard.writeImage(png)`: copies a PNG.
+- `tavora.pictures.save(png, name)`: saves a PNG in the player's `Pictures\Tavora` folder.
 - `tavora.ui.showMenu(...)`: a menu Tavora draws above every panel.
 - `discord.connect`, `discord.allowControl`, joining a voice channel, muting and unmuting.
 

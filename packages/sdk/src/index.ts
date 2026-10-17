@@ -5,6 +5,7 @@
 import {
   BLOB_PATH,
   CLIPBOARD_PATH,
+  PICTURES_PATH,
   HELLO_MESSAGE,
   LIMITS,
   PORT_MESSAGE,
@@ -82,14 +83,14 @@ export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, PROTOCOL
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.4";
+export const SDK_VERSION = "0.2.5";
 
 /**
  * The oldest Tavora that has everything this SDK version offers. Put it in your manifest as
  * `minTavora`, so an older Tavora says it needs an update instead of loading a module it cannot run
  * (the starter, `npm create @tavora/module`, does). The changelog names it for every version.
  */
-export const MIN_TAVORA = "0.17.18";
+export const MIN_TAVORA = "0.17.19";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -218,6 +219,16 @@ export interface TavoraSDK {
      * picture. PNG only, a complete one, at most 20 MB and 16384 pixels on a side (INVALID_PARAMS, QUOTA_EXCEEDED).
      */
     writeImage(png: Blob): Promise<void>;
+  };
+  pictures: {
+    /**
+     * Saves a picture as a .png file in Tavora's folder in the player's Pictures (Pictures\Tavora), right away,
+     * without a dialog. `name` suggests the file name: Tavora makes it safe and adds " (2)" and so on rather than
+     * replace a file. Resolves with the name it was saved under; the module never learns where the folder is.
+     * Call it from the click or key press that asked for it: the host refuses it otherwise (PERMISSION_DENIED), and
+     * one press saves one picture. The same PNG limits as clipboard.writeImage apply.
+     */
+    save(png: Blob, name?: string): Promise<{ fileName: string }>;
   };
   links: {
     /**
@@ -513,6 +524,22 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         if (response.ok) return;
         const body = (await response.json().catch(() => null)) as { error?: ErrorPayload } | null;
         throw new TavoraError(body?.error ?? { code: "INTERNAL", message: `could not copy the picture (${response.status})` });
+      },
+    },
+    pictures: {
+      save: async (png, name = "") => {
+        if (png.type !== "image/png") throw new TavoraError({ code: "INVALID_PARAMS", message: "only a PNG picture can be saved" });
+        const address = new URL(PICTURES_PATH, window.location.href);
+        if (name) address.searchParams.set("name", name);
+        let response: Response;
+        try {
+          response = await fetch(address, { method: "POST", body: png, headers: { "Content-Type": "image/png" } });
+        } catch {
+          throw new TavoraError({ code: "INTERNAL", message: "could not save the picture" });
+        }
+        const body = (await response.json().catch(() => null)) as { fileName?: string; error?: ErrorPayload } | null;
+        if (response.ok && typeof body?.fileName === "string") return { fileName: body.fileName };
+        throw new TavoraError(body?.error ?? { code: "INTERNAL", message: `could not save the picture (${response.status})` });
       },
     },
     links: {

@@ -594,5 +594,11 @@ export const BLOB_ID = /^[a-f0-9]{32}$/;
 /** POST a PNG here, from the module's own page, to put it on the clipboard (see clipboard.writeImage). */
 export const CLIPBOARD_PATH = "/_clipboard/";
 
+/**
+ * POST a PNG here, from the module's own page, to save it as a file in Tavora's folder in the player's Pictures
+ * (see pictures.save). `?name=` suggests the file name; the answer is `{ fileName }`, the name it was saved under.
+ */
+export const PICTURES_PATH = "/_pictures/";
+
 /** Document ids: host-generated UUIDs or module-chosen slugs. */
 export const DOCUMENT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;

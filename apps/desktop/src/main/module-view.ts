@@ -1,11 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
+import path from "node:path";
+import { app, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
 import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./gamedata";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
-import { BLOB_PATH, CLIPBOARD_PATH } from "@tavora/sdk/protocol";
+import { BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession, type BridgeContext } from "./bridge";
 import type { CheckedMenu } from "./module-menu";
 import type { PanelContent, PanelLaunch } from "./panel-content";
@@ -14,6 +15,7 @@ import type { DiscordConnector, DiscordListener } from "./discord";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
 import { serveClipboard } from "./clipboard-http";
+import { savePictureFile, servePictureSave } from "./picture-save-http";
 import { isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
 import { moduleFetch, type TestHosts } from "./network";
@@ -98,6 +100,12 @@ async function writeClipboardPicture(png: Buffer): Promise<void> {
   await clipboard.write([new ClipboardItem({ "image/png": new Blob([new Uint8Array(png)], { type: "image/png" }) })]);
 }
 
+/** Where modules save pictures: a Tavora folder in the player's Pictures (tests point Pictures elsewhere, unpackaged only). */
+function picturesFolder(): string {
+  const pictures = !app.isPackaged && process.env.TAVORA_PICTURES_DIR ? path.resolve(process.env.TAVORA_PICTURES_DIR) : app.getPath("pictures");
+  return path.join(pictures, "Tavora");
+}
+
 /**
  * Every module gets its own session per game: separate cookies, web storage,
  * cache and a separate renderer process from the host and other modules.
@@ -119,6 +127,14 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
     if (url.pathname === CLIPBOARD_PATH) {
       const gesture = gestureOf(ses);
       return serveClipboard(request, { allowed: () => Date.now() - gesture.at <= GESTURE_MS, consume: () => void (gesture.at = 0), write: writeClipboardPicture });
+    }
+    if (url.pathname === PICTURES_PATH) {
+      const gesture = gestureOf(ses);
+      return servePictureSave(request, url, {
+        allowed: () => Date.now() - gesture.at <= GESTURE_MS,
+        consume: () => void (gesture.at = 0),
+        save: (png, name) => savePictureFile(picturesFolder(), png, name),
+      });
     }
     if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
     const file = await resolveAsset(module.root, url.pathname);
