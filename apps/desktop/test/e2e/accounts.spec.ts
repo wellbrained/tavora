@@ -198,7 +198,7 @@ test("a developer chooses a public name and links a publisher key with tavora-pa
     // A one-time code, and the command that uses it.
     await page.getByTestId("account-link-code").click();
     const command = (await page.getByTestId("account-link-command").textContent()) ?? "";
-    expect(command).toMatch(/^tavora-pack link [A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    expect(command).toMatch(/^npx @tavora\/pack link [A-Z2-9]{4}-[A-Z2-9]{4}$/);
     const code = command.split(" ").at(-1)!;
 
     // The real pack command signs the code with a key on this PC and sends only its public half.
