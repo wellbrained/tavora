@@ -16,7 +16,7 @@ import { PlayerError } from "./messages";
 export const ACCOUNT_TIMEOUT_MS = 10_000;
 
 /** The command a developer runs with a link code, as the app shows and copies it ("ABCD-EFGH"). */
-export const linkCommand = (code: string) => `tavora-pack link ${code.slice(0, 4)}-${code.slice(4)}`;
+export const linkCommand = (code: string) => `npx @tavora/pack link ${code.slice(0, 4)}-${code.slice(4)}`;
 
 export interface SavedAccount {
   token: string;

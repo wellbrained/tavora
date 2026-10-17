@@ -4,6 +4,7 @@ import { cleanName, formatMegabytes, MAX_BOARD_BYTES, nextBoardName, sizeLevel, 
 import { unusedFiles } from "./pictures";
 import type { Controls, Pictures, SaveState, View } from "./Board";
 import BoardMenu from "./BoardMenu";
+import Palette, { DEFAULT_PALETTE, palettePlace, type PalettePlace } from "./Palette";
 import { currentLanguage, setLanguage, t, type Language } from "./i18n";
 import { createBoards, type Boards } from "./store";
 
@@ -13,6 +14,8 @@ const Board = lazy(() => import("./Board"));
 interface PanelState {
   selected?: string;
   views?: Record<string, View>;
+  /** Where the style palette is moved to, and whether it is folded away. */
+  palette?: PalettePlace;
 }
 
 interface Shown {
@@ -70,10 +73,13 @@ export default function App() {
   const views = useRef<Record<string, View>>({});
   const viewTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const undoCount = useRef(0);
+  const [palette, setPalette] = useState<PalettePlace>(DEFAULT_PALETTE);
+  const paletteRef = useRef<PalettePlace>(DEFAULT_PALETTE);
+  const [boardElement, setBoardElement] = useState<HTMLElement | null>(null);
 
   const saveSelection = useCallback(() => {
     if (!sdk) return;
-    void sdk.panel.setState({ selected: selectedId.current, views: views.current } as unknown as PanelState as never).catch(() => undefined);
+    void sdk.panel.setState({ selected: selectedId.current, views: views.current, palette: paletteRef.current } as unknown as PanelState as never).catch(() => undefined);
   }, [sdk]);
 
   const refreshList = useCallback(async () => {
@@ -143,6 +149,8 @@ export default function App() {
       const [state, existing] = await Promise.all([sdk.panel.getState<PanelState>(), refreshList()]);
       if (cancelled) return;
       views.current = state?.views && typeof state.views === "object" ? state.views : {};
+      paletteRef.current = palettePlace(state?.palette);
+      setPalette(paletteRef.current);
       let id = existing.find((board) => board.id === state?.selected)?.id ?? existing[0]?.id;
       if (!id) {
         const created = await boards.create(`${t("boardWord")} 1`);
@@ -221,6 +229,15 @@ export default function App() {
       views.current[id] = view;
       clearTimeout(viewTimer.current);
       viewTimer.current = setTimeout(saveSelection, 500);
+    },
+    [saveSelection],
+  );
+
+  const placePalette = useCallback(
+    (place: PalettePlace) => {
+      paletteRef.current = place;
+      setPalette(place);
+      saveSelection();
     },
     [saveSelection],
   );
@@ -334,7 +351,7 @@ export default function App() {
           {saveState === "idle" ? "" : t(`save.${saveState}` as "save.saved")}
         </span>
       </header>
-      <main className="board" data-board={shown.id} data-pictures={picturesLoaded} data-testid="board">
+      <main className="board" data-board={shown.id} data-pictures={picturesLoaded} data-testid="board" ref={setBoardElement}>
         <Suspense fallback={<p className="status">{t("loading")}</p>}>
           <Board
             key={`${shown.id}:${shown.nonce}`}
@@ -356,6 +373,7 @@ export default function App() {
             onControls={(value) => (controls.current = value)}
           />
         </Suspense>
+        <Palette board={boardElement} place={palette} onPlace={placePalette} />
       </main>
       {notice && !undo ? (
         <div className="toast" role="status" data-testid="notice-toast" key={`n${notice.id}`}>

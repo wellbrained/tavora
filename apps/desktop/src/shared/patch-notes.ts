@@ -27,6 +27,24 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
+    version: "0.17.15",
+    date: "2026-10-17",
+    title: "A link command that works anywhere",
+    notes: [
+      "Module developers: Link a publisher key in Settings > Account now copies \"npx @tavora/pack link\" with your code, which runs in any folder, also where @tavora/pack isn't installed.",
+    ],
+  },
+  {
+    version: "0.17.13",
+    date: "2026-10-17",
+    title: "Whiteboard: place pictures, move the palette",
+    notes: [
+      "A picture you paste or drop on the Whiteboard can now be dragged into place right away. It locks once you click elsewhere or pick a tool, so drawing on it does not move it.",
+      "Every picture on the Whiteboard has a small lock on its corner: click it to lock or unlock just that picture. Lock pictures in the header still does all of them at once.",
+      "The Whiteboard's style palette (stroke, background, width, …) has a handle: drag it anywhere on the board, or fold it away with the arrow. The panel remembers where you left it. Double-click the handle to put it back.",
+    ],
+  },
+  {
     version: "0.17.12",
     date: "2026-10-17",
     title: "Modules can offer several panels",
