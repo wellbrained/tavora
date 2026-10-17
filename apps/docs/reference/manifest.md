@@ -68,7 +68,7 @@ A module can offer several tools as separate panels, such as an Inventory, a Bui
 | `viewport` | no | This type's sizes, with the same rules as the module's `viewport`. The module's when left out. |
 | `continues` | no | `true` on the type that panels opened before the module had panel types become, keeping their state. At most one type; without it, the first type. |
 
-When an update removes a panel type, its open panels keep their place and say the type is gone; the player can remove them or pick another type of the same module. The module's saved content is not touched. The Panel Types Example in Tavora's examples folder shows every option.
+When an update removes a panel type, its open panels keep their place and say the type is gone; the player can remove them or pick another type of the same module. The module's saved content is not touched. Each panel can also show content of its own, such as a different build; see [Content per panel](./protocol.md#content-per-panel). The Panel Types Example in Tavora's examples folder shows every option.
 
 ## What is not in v1 yet
 

@@ -2,6 +2,10 @@
 
 What changed in `@tavora/sdk` and the bridge protocol it speaks, newest first. Before Tavora 1.0 the SDK may still change in ways that break modules; each such change raises the minor version (0.2 → 0.3) and is marked **Breaking** here. Anything else raises the patch version. To make sure players have a Tavora that knows what your module uses, set [`minTavora`](https://docs.mytavora.app/reference/manifest) in its manifest.
 
+## 0.2.3
+
+- Content per panel: `panel.setContent({ id, title } | null)` tells Tavora what the panel shows now, such as the build picked in your toolbar. Tavora keeps it with the panel across game switches and restarts and shows the title when the player hovers the tab. `panel.getLaunch()` says why the page is loading: `{ reason: "add" }` for a panel the player just added (pick the content yourself, such as the last one used), or `{ reason: "restore", content }` for one that was open before (Tavora 0.17.17). Set `minTavora` to `0.17.17` or newer when you use them.
+
 ## 0.2.2
 
 - `MIN_TAVORA`: the oldest Tavora that has everything this SDK version offers, for `minTavora` in your manifest.

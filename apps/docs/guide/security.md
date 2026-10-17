@@ -65,6 +65,8 @@ Some calls change something outside the module's panel. They work only within 2 
 
 A module can still label a button misleadingly and get the player to click it. The result is the same as a link on any web page: the player sees the new tab, and the Browser panel is sandboxed.
 
+One call puts a module's text outside its panel without a click: **`panel.setContent`** names what the panel shows, and Tavora shows that name when the player hovers the panel's own tab. Tavora checks it first and shows only one line of plain text, at most 200 characters, below the panel's and the module's names, on that tab and nowhere else. The module learns nothing back.
+
 ## Module files
 
 `blobs` keeps pictures for a module, per game:

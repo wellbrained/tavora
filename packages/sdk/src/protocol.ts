@@ -86,6 +86,25 @@ export interface HandshakeResult {
   panel?: { type: string | null };
 }
 
+/**
+ * What a panel shows, as the module names it: a build, a character, a run, a document. Tavora keeps it
+ * with the panel and shows the title when the player hovers the panel's tab.
+ */
+export interface PanelContent {
+  /** The module's own id for it, at most 200 characters. */
+  id: string;
+  /** Its full name, at most 200 characters on one line. */
+  title: string;
+}
+
+/**
+ * Why this page of the panel is loading.
+ * - `add`: the player just added the panel. Pick the content yourself, such as the last one used, or show a picker.
+ * - `restore`: the panel was open before (a restart, a game switch back, a reload). `content` is what it last
+ *   showed through `panel.setContent`, or null.
+ */
+export type PanelLaunch = { reason: "add" } | { reason: "restore"; content: PanelContent | null };
+
 export interface DocumentSummary {
   id: string;
   title: string;
@@ -287,6 +306,10 @@ export interface Methods {
   "documents.delete": { params: { id: string; ifRevision?: number }; result: null };
   "panel.getState": { params: undefined; result: JsonValue | null };
   "panel.setState": { params: { value: JsonValue | null }; result: null };
+  /** Why this page is loading; the same answer for every call until the page loads again. Tavora 0.17.17 and newer. */
+  "panel.getLaunch": { params: undefined; result: PanelLaunch };
+  /** What the panel shows now, or null for nothing. Tavora 0.17.17 and newer. */
+  "panel.setContent": { params: { content: PanelContent | null }; result: null };
   "workspace.getViewport": { params: undefined; result: TavoraViewport };
   "ui.getTheme": { params: undefined; result: TavoraTheme };
   /** The language of Tavora's own texts, as a code such as "en" or "de". */
@@ -420,6 +443,8 @@ export const LIMITS = {
   maxDocumentsBytes: 50 * 1024 * 1024,
   maxDocuments: 1000,
   maxTitleLength: 200,
+  /** A panel content's id (panel.setContent); its title has maxTitleLength. */
+  maxContentIdLength: 200,
   /** UI state for one panel. */
   maxPanelStateBytes: 256 * 1024,
   /** One stored file (see Blobs). */

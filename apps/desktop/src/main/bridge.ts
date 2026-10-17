@@ -14,6 +14,8 @@ import {
   type DiscordState,
   type HandshakeResult,
   type NetworkResponse,
+  type PanelContent,
+  type PanelLaunch,
   type TavoraGame,
   type TavoraTheme,
   type TavoraViewport,
@@ -21,6 +23,7 @@ import {
 import { HostError } from "./errors";
 import { discordCommand, discordSubscription } from "./discord-commands";
 import { checkMenu, type CheckedMenu } from "./module-menu";
+import { checkPanelContent } from "./panel-content";
 import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
 
 /** The parts of Electron's MessagePortMain the bridge uses. */
@@ -43,6 +46,10 @@ export interface BridgeContext {
   instanceId: string;
   /** The panel type this panel shows (one of the manifest's `panels` ids), or null for a module without types. */
   panelType: string | null;
+  /** Why this page is loading (panel.getLaunch); the same for the whole page load. */
+  launch: PanelLaunch;
+  /** panel.setContent, with the content already checked: Tavora keeps it with the panel and shows its title on the tab. */
+  setContent(content: PanelContent | null): void;
   game: TavoraGame;
   data: ModuleData;
   /** The module's settings shared by every game (storage.app). */
@@ -251,6 +258,23 @@ const handlers = new Map<string, Handler>([
     "panel.setState",
     async (s, params) => {
       await s.context.panelState.set(s.context.instanceId, required(object(params), "value"));
+      return null;
+    },
+  ],
+
+  ["panel.getLaunch", (s, params) => (noParams(params), structuredClone(s.context.launch))],
+  [
+    "panel.setContent",
+    (s, params) => {
+      const raw = required(object(params), "content");
+      const content = raw === null ? null : checkPanelContent(raw);
+      if (raw !== null && content === null) {
+        throw new HostError(
+          "INVALID_PARAMS",
+          `params.content must be null or { id, title }: an id of 1 to ${LIMITS.maxContentIdLength} characters and a title of 1 to ${LIMITS.maxTitleLength}`,
+        );
+      }
+      s.context.setContent(content);
       return null;
     },
   ],

@@ -1,9 +1,10 @@
-import { connect, type TavoraTheme } from "@tavora/sdk";
+import { connect, type DocumentSummary, type PanelLaunch, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
 import manifest from "../tavora.module.json";
 
 // A showcase of named panel types: each page asks Tavora which type it runs
-// as and shows the options that type takes from the manifest. It does no real
-// work; it is here to show what a module with several panels can declare.
+// as and shows the options that type takes from the manifest. Each panel also
+// picks a build of its own and tells Tavora about it. It does no real work; it
+// is here to show what a module with several panels can declare and do.
 
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.querySelector<T>(`[data-testid="${id}"]`)!;
 
@@ -57,6 +58,78 @@ function render(typeId: string | null) {
   );
 }
 
+/** Builds every panel can pick from. They are documents, so they are shared and each panel hears about changes. */
+const SAMPLE_BUILDS = [
+  { id: "ice-shot", title: "0.5 Ice Shot Deadeye Leveling Guide" },
+  { id: "lightning-arrow", title: "Lightning Arrow Invoker" },
+  { id: "minion-witch", title: "Minion Witch for maps" },
+];
+
+function describeLaunch(launch: PanelLaunch): string {
+  if (launch.reason === "add") return "add: the player just added this panel, so it picked the build used last";
+  return launch.content ? `restore: it was open before and showed "${launch.content.title}"` : "restore: it was open before and showed nothing";
+}
+
+/** The content selector in the toolbar: one build per panel, kept with the panel and told to Tavora. */
+async function contentSelector(tavora: TavoraSDK) {
+  const select = el<HTMLSelectElement>("content-select");
+  const remove = el<HTMLButtonElement>("delete-content");
+  // Fixed ids, so two panels adding them at once still make three builds.
+  if ((await tavora.documents.list()).length === 0) {
+    for (const build of SAMPLE_BUILDS) await tavora.documents.put({ ...build, data: { notes: "" } });
+  }
+  let builds: DocumentSummary[] = [];
+  let selected: string | null = null;
+  const load = async () => {
+    builds = (await tavora.documents.list()).sort((a, b) => a.title.localeCompare(b.title));
+  };
+
+  const show = async () => {
+    const build = builds.find((item) => item.id === selected);
+    select.replaceChildren(
+      ...(build ? [] : [new Option("Pick a build", "", true, true)]),
+      ...builds.map((item) => new Option(item.title, item.id, false, item.id === selected)),
+    );
+    select.title = build?.title ?? "";
+    select.disabled = builds.length === 0;
+    remove.disabled = !build;
+    // Deleted content leaves the panel open with a note, never another build in its place.
+    el("content-gone").hidden = build !== undefined || selected === null;
+    await tavora.panel.setContent(build ? { id: build.id, title: build.title } : null);
+  };
+  const pick = async (id: string | null) => {
+    selected = id;
+    await tavora.panel.setState(id === null ? null : { build: id });
+    if (id !== null) await tavora.storage.set("lastUsed", id);
+    await show();
+  };
+
+  await load();
+  const launch = await tavora.panel.getLaunch();
+  el("launch").textContent = describeLaunch(launch);
+  if (launch.reason === "add") {
+    // A fresh panel: the build used last, else the first one.
+    const last = await tavora.storage.get<string>("lastUsed");
+    await pick(builds.some((item) => item.id === last) ? last : (builds[0]?.id ?? null));
+  } else {
+    // Open before: the panel's own choice, kept in its panel state.
+    selected = (await tavora.panel.getState<{ build: string }>())?.build ?? launch.content?.id ?? null;
+    await show();
+  }
+
+  select.addEventListener("change", () => void pick(select.value || null));
+  remove.addEventListener("click", async () => {
+    if (selected === null) return;
+    await tavora.documents.delete(selected);
+    await load();
+    await show();
+  });
+  tavora.documents.onChange(async () => {
+    await load();
+    await show();
+  });
+}
+
 async function main() {
   const tavora = await connect();
   render(tavora.panel.type);
@@ -73,6 +146,8 @@ async function main() {
     el("shared").textContent = String(shared);
     await tavora.storage.set("shared", shared);
   });
+
+  await contentSelector(tavora);
 }
 
 main().catch((error: unknown) => {
