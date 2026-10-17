@@ -12,15 +12,15 @@ A Tavora module is a web page that runs in a sandboxed panel inside Tavora Deskt
 npm create @tavora/module
 ```
 
-It asks for a folder, the module's name, its id (`publisher.module-name`) and a template: vanilla TypeScript, Vue or React. The project builds with Vite and depends on `@tavora/sdk` and `@tavora/pack`; its manifest already sets [`minTavora`](../reference/manifest.md) to the Tavora that SDK needs. pnpm works too: `pnpm create @tavora/module`.
+It asks where the project goes (the empty folder you are in, or a new folder in it), the module's name, its id (`publisher.module-name`) and a template: vanilla TypeScript, Vue or React. The project builds with Vite and depends on `@tavora/sdk` and `@tavora/pack`; its manifest already sets [`minTavora`](../reference/manifest.md) to the Tavora that SDK needs. pnpm works too: `pnpm create @tavora/module`.
 
 ```sh
 cd my-module
 npm install
-npm run dev     # rebuilds on every change
+npm run dev     # builds, then rebuilds on every change: leave it running
 ```
 
-In Tavora, open Settings > Modules, choose **Add a development folder** and pick the project folder. The module appears in Add module, and its panels reload by themselves when `npm run dev` rebuilds.
+In Tavora, open **Settings > Development**, choose **Add a development folder…** and pick the project folder, or the folder you keep all your module projects in: Tavora loads every project directly inside it, and finds new ones by itself. The module appears in Add module, and its panels reload by themselves when `npm run dev` rebuilds.
 
 To add the SDK to a project of your own instead: `npm install @tavora/sdk`, and follow [Build the module](#build-the-module). The same small module is also built three ways in Tavora's repository: [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module), [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module) and [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module). A module that offers several panels is shown in the [panel types example](https://github.com/wellbrained/tavora/tree/main/examples/panels-module) (see [Panel types](../reference/manifest.md#panel-types)).
 

@@ -24,8 +24,10 @@ export interface InstalledModule {
   owner: string;
   /** Part of the host (the Browser), not a package on disk. */
   builtIn?: true;
-  /** Loaded from this development folder, as the player added it in Settings > Modules. */
+  /** Loaded from this development folder, as the player added it in Settings > Development. */
   developmentFolder?: string;
+  /** The module's project folder: the development folder itself, or a folder directly inside it. */
+  developmentProject?: string;
 }
 
 export const MANIFEST = "tavora.module.json";
@@ -65,15 +67,19 @@ export interface ModuleProblem {
   message: string;
   /** For a development folder: its full path, so Settings shows the problem next to it. */
   developmentFolder?: string;
+  /** For a project in a development folder: the project's full path. */
+  developmentProject?: string;
+  /** What Settings can suggest: build it first, add another folder, or the folder is gone. */
+  kind?: "not-built" | "no-module" | "missing";
 }
 
 export interface ModuleSources {
   /** Modules that ship with Tavora. Searched first, so they win over a local copy. */
   official?: string[];
   /**
-   * Module project folders a developer added (Settings > Modules). Each is one module, never a
-   * folder of modules; they come before the other local folders, so a project wins over an
-   * installed copy of the same module.
+   * Folders a developer added (Settings > Development): a module project, or a folder with several
+   * projects directly inside it (see developmentProjects). They come before the other local
+   * folders, so a project wins over an installed copy of the same module.
    */
   development?: string[];
   local?: string[];
@@ -99,17 +105,23 @@ export async function discoverModules(
     ...local.map((dir) => ({ dir, provenance: "local" as const, development: false })),
   ];
   for (const { dir, provenance, development: fromProject } of dirs) {
-    const project = fromProject ? await projectCandidate(dir) : undefined;
-    if (project === "missing") problems.push({ folder: path.basename(dir), message: "this folder can't be found", developmentFolder: dir });
-    else if (project?.length === 0) problems.push({ folder: path.basename(dir), message: "there is no tavora.module.json in this folder", developmentFolder: dir });
+    const project = fromProject ? await developmentProjects(dir) : undefined;
+    if (project === "missing") problems.push({ folder: path.basename(dir), message: "this folder can't be found", developmentFolder: dir, kind: "missing" });
+    else if (project?.length === 0) {
+      problems.push({ folder: path.basename(dir), message: "there is no tavora.module.json in this folder or in the folders directly inside it", developmentFolder: dir, kind: "no-module" });
+    }
     const found = project === undefined ? await candidates(dir) : project === "missing" ? [] : project;
     for (const candidate of found) {
-      const report = (message: string) => problems.push({ folder: path.basename(candidate), message, ...(fromProject ? { developmentFolder: dir } : {}) });
-      const installed = await loadModule(candidate, provenance, tavoraVersion, (message) => {
-        if (provenance === "local") report(message);
+      const report = (message: string, kind?: ModuleProblem["kind"]) =>
+        problems.push({ folder: path.basename(candidate), message, ...(fromProject ? { developmentFolder: dir, developmentProject: candidate } : {}), ...(kind ? { kind } : {}) });
+      const installed = await loadModule(candidate, provenance, tavoraVersion, (message, kind) => {
+        if (provenance === "local") report(message, kind);
       });
       if (!installed) continue;
-      if (fromProject) installed.developmentFolder = dir;
+      if (fromProject) {
+        installed.developmentFolder = dir;
+        installed.developmentProject = candidate;
+      }
       const { id } = installed.manifest;
       if (provenance !== "official" && id.startsWith(OFFICIAL_PREFIX)) {
         console.warn(`[tavora] module id ${id} in ${candidate} is reserved for official Tavora modules; skipping it`);
@@ -132,15 +144,37 @@ export async function discoverModules(
   return modules;
 }
 
-/** A development folder is one module: the folder itself when it has a manifest, else nothing ("missing" when the folder is gone). */
-async function projectCandidate(dir: string): Promise<string[] | "missing"> {
+/** A folder directly inside a development folder that may be a module project: not hidden, not node_modules. */
+export function mayHoldProject(name: string): boolean {
+  return !name.startsWith(".") && name !== "node_modules";
+}
+
+/**
+ * The module projects in a development folder: the folder itself when it has a manifest, else
+ * every folder directly inside it that has one, so a developer can add the folder they keep all
+ * their modules in. Never deeper, so node_modules and build output are not searched.
+ * "missing" when the folder is gone.
+ */
+export async function developmentProjects(dir: string): Promise<string[] | "missing"> {
+  let entries;
   try {
-    const entries = await readdir(dir, { withFileTypes: true });
-    return entries.some((entry) => entry.isFile() && entry.name === MANIFEST) ? [dir] : [];
+    entries = await readdir(dir, { withFileTypes: true });
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     return code === "ENOENT" || code === "ENOTDIR" ? "missing" : [];
   }
+  if (entries.some((entry) => entry.isFile() && entry.name === MANIFEST)) return [dir];
+  const projects: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !mayHoldProject(entry.name)) continue;
+    const child = path.join(dir, entry.name);
+    try {
+      if ((await readdir(child, { withFileTypes: true })).some((item) => item.isFile() && item.name === MANIFEST)) projects.push(child);
+    } catch {
+      // Gone or unreadable: not a project.
+    }
+  }
+  return projects.sort((a, b) => a.localeCompare(b));
 }
 
 /**
@@ -173,7 +207,12 @@ async function candidates(dir: string): Promise<string[]> {
   }
 }
 
-async function loadModule(dir: string, provenance: Provenance, tavoraVersion: string | undefined, problem: (message: string) => void): Promise<InstalledModule | undefined> {
+async function loadModule(
+  dir: string,
+  provenance: Provenance,
+  tavoraVersion: string | undefined,
+  problem: (message: string, kind?: ModuleProblem["kind"]) => void,
+): Promise<InstalledModule | undefined> {
   let raw: unknown;
   try {
     raw = JSON.parse(await readFile(path.join(dir, MANIFEST), "utf8"));
@@ -200,7 +239,7 @@ async function loadModule(dir: string, provenance: Provenance, tavoraVersion: st
   for (const entry of entries) {
     if (await resolveAsset(root, `/${entry}`)) continue;
     console.warn(`[tavora] module ${result.manifest.id} has no entry file ${entry}; is it built?`);
-    problem(`the entry file ${entry} is missing (is it built?)`);
+    problem(`the entry file ${entry} is missing (is it built?)`, "not-built");
     return undefined;
   }
   for (const icon of icons) {

@@ -23,7 +23,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, GameView, HostAction, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, DeveloperLink, GameView, HostAction, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
 import { resolveLanguage, translate, type Language } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -95,7 +95,7 @@ import { isWebUrl, siteOfUrl } from "./browser-url";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, discoverModules, isDevelopmentModule, buildFolderName, MANIFEST, projectEntry, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, developmentProjects, discoverModules, isDevelopmentModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import { AiUsageConnector } from "./ai-usage";
@@ -147,6 +147,14 @@ interface Rect {
 const FREEZE_TIMEOUT_MS = 250;
 /** How long a development folder's build must be quiet before its panels reload. */
 const DEVELOPMENT_RELOAD_MS = 300;
+/** The pages Settings > Development links to. */
+const DEVELOPER_LINKS: Record<DeveloperLink, string> = {
+  docs: "https://docs.mytavora.app/guide/getting-started",
+  discussions: "https://github.com/wellbrained/tavora/discussions",
+  issue: "https://github.com/wellbrained/tavora/issues/new?template=module-developer.yml",
+};
+/** Folders watched in one development folder for a new project, at most. */
+const MAX_DEVELOPMENT_SUBFOLDERS = 100;
 
 /** The player's own modules, next to the themes folder in their data folder. */
 function userModulesDir(options: HostOptions): string {
@@ -572,19 +580,45 @@ export class Host {
   private readonly developmentWatchers = new Map<string, { watchers: FSWatcher[]; timer: ReturnType<typeof setTimeout> | undefined; rediscover: boolean }>();
 
   /**
-   * Watches each development folder, whether or not its module loaded. Only the project folder
-   * itself and its build folder are watched, never node_modules or .git. A change to the build
-   * reloads the module's open panels; a change to the manifest, the build folder appearing or being
-   * replaced, or any change while the module did not load looks for modules again, so a folder added
-   * before its first build or a broken manifest that was fixed loads by itself. Changes come in
-   * bursts while a build writes, so it waits for a quiet moment.
+   * Watches each module project in the development folders, whether or not its module loaded. Only
+   * the project folder itself and its build folder are watched, never node_modules or .git. A change
+   * to the build reloads the module's open panels; a change to the manifest, the build folder
+   * appearing or being replaced, or any change while the module did not load looks for modules
+   * again, so a project added before its first build or a broken manifest that was fixed loads by
+   * itself. A development folder that holds projects is watched too, with each folder directly in
+   * it, so a new project made there later is found. Changes come in bursts while a build writes, so
+   * it waits for a quiet moment.
    */
   private async watchDevelopmentFolders(): Promise<void> {
     // Read everything first, so two calls at once cannot leave watchers of the older one behind.
-    const projects = await Promise.all(
+    const folders = await Promise.all(
       this.library.developmentFolders.map(async (folder) => {
-        const module = [...this.modules.values()].find((item) => item.developmentFolder === folder);
-        return { folder, module, entry: module?.manifest.entry ?? (await projectEntry(folder)) };
+        const found = await developmentProjects(folder);
+        const projects = found === "missing" ? [] : found;
+        const holder = !(projects.length === 1 && projects[0] === folder);
+        let others: string[] = [];
+        if (holder) {
+          try {
+            others = (await readdir(folder, { withFileTypes: true }))
+              .filter((entry) => entry.isDirectory() && mayHoldProject(entry.name))
+              .map((entry) => path.join(folder, entry.name))
+              .filter((dir) => !projects.includes(dir))
+              .slice(0, MAX_DEVELOPMENT_SUBFOLDERS);
+          } catch {
+            // Gone: Settings says so, and there is nothing to watch.
+          }
+        }
+        return {
+          folder,
+          holder,
+          others,
+          projects: await Promise.all(
+            projects.map(async (project) => {
+              const module = [...this.modules.values()].find((item) => item.developmentProject === project);
+              return { project, module, entry: module?.manifest.entry ?? (await projectEntry(project)) };
+            }),
+          ),
+        };
       }),
     );
     for (const { watchers, timer } of this.developmentWatchers.values()) {
@@ -592,9 +626,7 @@ export class Host {
       for (const watcher of watchers) watcher.close();
     }
     this.developmentWatchers.clear();
-    for (const { folder, module, entry } of projects) {
-      const root = module?.root ?? folder;
-      const built = entry === undefined ? undefined : buildFolderName(entry);
+    const watched = (key: string) => {
       const state = { watchers: [] as FSWatcher[], timer: undefined as ReturnType<typeof setTimeout> | undefined, rediscover: false };
       const changed = (rediscover: boolean) => {
         state.rediscover ||= rediscover;
@@ -603,7 +635,7 @@ export class Host {
           state.timer = undefined;
           const again = state.rediscover;
           state.rediscover = false;
-          void this.developmentChanged(folder, again).catch((error: unknown) => console.error("[tavora] reloading a development module failed", error));
+          void this.developmentChanged(key, again).catch((error: unknown) => console.error("[tavora] reloading a development module failed", error));
         }, DEVELOPMENT_RELOAD_MS);
       };
       const watchFolder = (dir: string, recursive: boolean, listener: (name: string | null) => void) => {
@@ -615,27 +647,45 @@ export class Host {
           if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.warn(`[tavora] cannot watch the development folder ${dir}`, error);
         }
       };
-      watchFolder(root, false, (name) => {
-        if (!module || name === null || name === MANIFEST || name === built) changed(true);
-        else if (built === undefined) changed(false);
-      });
-      if (built !== undefined) watchFolder(path.join(root, built), true, () => changed(!module));
-      this.developmentWatchers.set(folder, state);
+      this.developmentWatchers.set(key, state);
+      return { changed, watchFolder };
+    };
+    for (const { folder, holder, others, projects } of folders) {
+      if (holder) {
+        // A project appearing in the folder, or a manifest in one of its folders, is a new module.
+        const { changed, watchFolder } = watched(folder);
+        watchFolder(folder, false, () => changed(true));
+        for (const dir of others) {
+          watchFolder(dir, false, (name) => {
+            if (name === null || name === MANIFEST) changed(true);
+          });
+        }
+      }
+      for (const { project, module, entry } of projects) {
+        const { changed, watchFolder } = watched(project);
+        const root = module?.root ?? project;
+        const built = entry === undefined ? undefined : buildFolderName(entry);
+        watchFolder(root, false, (name) => {
+          if (!module || name === null || name === MANIFEST || name === built) changed(true);
+          else if (built === undefined) changed(false);
+        });
+        if (built !== undefined) watchFolder(path.join(root, built), true, () => changed(!module));
+      }
     }
   }
 
-  /** A development folder's files changed: its module's panels load the new build, after looking for modules again when asked. */
-  private async developmentChanged(folder: string, rediscover: boolean): Promise<void> {
+  /** A development project's files changed: its module's panels load the new build, after looking for modules again when asked. */
+  private async developmentChanged(project: string, rediscover: boolean): Promise<void> {
     if (rediscover) {
       await this.reloadModules();
       this.pushState();
     }
-    const moduleId = [...this.modules.values()].find((item) => item.developmentFolder === folder)?.manifest.id;
+    const moduleId = [...this.modules.values()].find((item) => item.developmentProject === project)?.manifest.id;
     if (moduleId === undefined) return;
     for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === moduleId) view.reload();
   }
 
-  /** The player picks a module project folder; Tavora loads the module from it from now on. Answers with the folder, or nothing when cancelled. */
+  /** The player picks a module project folder, or a folder of them; Tavora loads the modules from it from now on. Answers with the folder, or nothing when cancelled. */
   private async addDevelopmentFolder(): Promise<string | void> {
     const picked = await dialog.showOpenDialog(this.window, { title: translate(this.language, "dialog.developmentFolder"), properties: ["openDirectory"] });
     const folder = picked.filePaths[0];
@@ -647,7 +697,13 @@ export class Host {
     return path.resolve(folder);
   }
 
-  /** Forgets a development folder; its module's panels close like a removed module's, and its data stays. */
+  /** Opens one of Tavora's pages for module developers in the player's browser. The renderer names the page, never an address. */
+  private openDeveloperLink(link: DeveloperLink): void {
+    const url = Object.hasOwn(DEVELOPER_LINKS, link) ? DEVELOPER_LINKS[link] : undefined;
+    if (url && !this.options.hidden) void shell.openExternal(url).catch((error: unknown) => console.error("[tavora]", error));
+  }
+
+  /** Forgets a development folder; its modules' panels close like a removed module's, and their data stays. */
   private async removeDevelopmentFolder(folder: string): Promise<void> {
     const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
     this.library.developmentFolders = this.library.developmentFolders.filter((item) => key(item) !== key(folder));
@@ -1198,6 +1254,8 @@ export class Host {
         return this.addDevelopmentFolder();
       case "remove-development-folder":
         return this.removeDevelopmentFolder(action.folder);
+      case "open-developer-link":
+        return this.openDeveloperLink(action.link);
       case "open-modules-folder":
         return this.openModulesFolder();
       case "remove-module":
@@ -2370,9 +2428,23 @@ export class Host {
       })),
       moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder).map(({ folder, message }) => ({ folder, message })),
       developmentFolders: this.library.developmentFolders.map((folder) => {
-        const module = [...this.modules.values()].find((item) => item.developmentFolder === folder);
-        const problem = this.moduleProblems.find((item) => item.developmentFolder === folder);
-        return { folder, moduleId: module?.manifest.id ?? null, problem: module ? null : (problem?.message ?? null) };
+        const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
+        const projects = new Map<string, { project: string; moduleId: string | null; problem: string | null; kind: NonNullable<ModuleProblem["kind"]> | null }>();
+        for (const module of this.modules.values()) {
+          if (module.developmentFolder === folder && module.developmentProject) {
+            projects.set(module.developmentProject, { project: module.developmentProject, moduleId: module.manifest.id, problem: null, kind: null });
+          }
+        }
+        for (const item of this.moduleProblems) {
+          if (item.developmentFolder !== folder || !item.developmentProject || projects.has(item.developmentProject)) continue;
+          projects.set(item.developmentProject, { project: item.developmentProject, moduleId: null, problem: item.message, kind: item.kind ?? null });
+        }
+        return {
+          folder,
+          problem: own?.message ?? null,
+          kind: own?.kind ?? null,
+          projects: [...projects.values()].sort((a, b) => a.project.localeCompare(b.project)),
+        };
       }),
       leftoverModuleData: this.moduleData
         .filter((entry) => this.modules.get(entry.moduleId)?.owner !== entry.owner)

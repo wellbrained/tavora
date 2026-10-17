@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildFolderName, describeModules, discoverModules, projectEntry, type ModuleProblem } from "./registry";
+import { buildFolderName, describeModules, developmentProjects, discoverModules, projectEntry, type ModuleProblem } from "./registry";
 
 async function makeModule(root: string, folder: string, id: string, name = id, permissions: Record<string, unknown> = { network: [] }): Promise<string> {
   const dir = path.join(root, folder);
@@ -128,7 +128,7 @@ describe("panel types", () => {
     const problems: ModuleProblem[] = [];
     const modules = await discoverModules({ local: [local] }, problems);
     expect([...modules.keys()]).toEqual(["example.typed"]);
-    expect(problems).toEqual([{ folder: "pageless", message: "the entry file b.html is missing (is it built?)" }]);
+    expect(problems).toEqual([{ folder: "pageless", message: "the entry file b.html is missing (is it built?)", kind: "not-built" }]);
     const info = await describeModules(local, modules);
     expect(info.get("example.typed")!.panelIcons).toEqual({ a: null, b: `data:image/png;base64,${png.toString("base64")}` });
   });
@@ -142,17 +142,36 @@ describe("development folders", () => {
     await makeModule(own, "tracker", "example.tracker", "Tracker (installed)");
     const problems: ModuleProblem[] = [];
     const modules = await discoverModules({ development: [project], local: [own] }, problems);
-    expect(modules.get("example.tracker")).toMatchObject({ developmentFolder: project, provenance: "local", owner: "local", manifest: { name: "Tracker (dev)" } });
+    expect(modules.get("example.tracker")).toMatchObject({ developmentFolder: project, developmentProject: project, provenance: "local", owner: "local", manifest: { name: "Tracker (dev)" } });
     // The installed copy waits, and says why.
     expect(problems).toEqual([{ folder: "tracker", message: "another module with the same id is already loaded" }]);
     const info = await describeModules(own, modules);
     expect(info.get("example.tracker")).toMatchObject({ origin: { kind: "dev", folder: project }, removable: false });
   });
 
-  it("never look into the folders inside a project, and say what is wrong with it", async () => {
+  it("load every project directly inside a folder of projects, but never deeper", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "tavora-workspace-"));
+    const tracker = await makeModule(workspace, "tracker", "example.tracker");
+    const planner = await makeModule(workspace, "planner", "example.planner");
+    await makeModule(path.join(workspace, "notes", "packages"), "deep", "example.deep");
+    await makeModule(path.join(workspace, "node_modules"), "dependency", "example.dependency");
+    await makeModule(path.join(workspace, ".cache"), "hidden", "example.hidden");
+    await makeModule(path.join(workspace, "node_modules"), "", "example.in-node-modules");
+    await mkdir(path.join(workspace, ".hidden-project"), { recursive: true });
+    await writeFile(path.join(workspace, ".hidden-project", "tavora.module.json"), "{}");
+    expect(await developmentProjects(workspace)).toEqual([planner, tracker]);
+
+    const problems: ModuleProblem[] = [];
+    const modules = await discoverModules({ development: [workspace] }, problems);
+    expect([...modules.keys()].sort()).toEqual(["example.planner", "example.tracker"]);
+    expect(modules.get("example.tracker")).toMatchObject({ developmentFolder: workspace, developmentProject: tracker });
+    expect(problems).toEqual([]);
+  });
+
+  it("say what is wrong with a folder or a project in it, and which kind of fix it needs", async () => {
     const projects = await mkdtemp(path.join(tmpdir(), "tavora-projects-"));
     const empty = path.join(projects, "workspace");
-    await makeModule(empty, "inner", "example.inner");
+    await makeModule(path.join(empty, "src"), "deep", "example.deep");
     const unbuilt = await makeModule(projects, "unbuilt", "example.unbuilt");
     await rm(path.join(unbuilt, "index.html"));
     const reserved = await makeModule(projects, "fake", "tavora.notes");
@@ -160,10 +179,10 @@ describe("development folders", () => {
     const modules = await discoverModules({ development: [empty, unbuilt, reserved, path.join(projects, "gone")] }, problems);
     expect(modules.size).toBe(0);
     expect(problems).toEqual([
-      { folder: "workspace", message: "there is no tavora.module.json in this folder", developmentFolder: empty },
-      { folder: "unbuilt", message: "the entry file index.html is missing (is it built?)", developmentFolder: unbuilt },
-      { folder: "fake", message: "its id is reserved for Tavora's own modules", developmentFolder: reserved },
-      { folder: "gone", message: "this folder can't be found", developmentFolder: path.join(projects, "gone") },
+      { folder: "workspace", message: "there is no tavora.module.json in this folder or in the folders directly inside it", developmentFolder: empty, kind: "no-module" },
+      { folder: "unbuilt", message: "the entry file index.html is missing (is it built?)", developmentFolder: unbuilt, developmentProject: unbuilt, kind: "not-built" },
+      { folder: "fake", message: "its id is reserved for Tavora's own modules", developmentFolder: reserved, developmentProject: reserved },
+      { folder: "gone", message: "this folder can't be found", developmentFolder: path.join(projects, "gone"), kind: "missing" },
     ]);
   });
 

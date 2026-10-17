@@ -16,6 +16,7 @@ import GameIcon from "../GameIcon.vue";
 import AccountSection from "./AccountSection.vue";
 import AppearanceSection from "./AppearanceSection.vue";
 import LanguagePicker from "./LanguagePicker.vue";
+import DevelopmentSection from "./DevelopmentSection.vue";
 import ModulesSection from "./ModulesSection.vue";
 import BrowserSection from "./BrowserSection.vue";
 import IntegrationsSection from "./IntegrationsSection.vue";
@@ -398,6 +399,9 @@ function deleteNow(gameId: string, name: string) {
 
           <template v-else-if="section === 'modules'">
             <ModulesSection :highlight="highlight" />
+          </template>
+          <template v-else-if="section === 'development'">
+            <DevelopmentSection :highlight="highlight" />
           </template>
 
           <template v-else-if="section === 'browser'">

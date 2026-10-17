@@ -1,4 +1,4 @@
-import { Blocks, Globe, Keyboard, Palette, Plug, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
+import { Blocks, FolderCode, Globe, Keyboard, Palette, Plug, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
 import type { MessageKey } from "../../../shared/i18n";
 import { t } from "../../i18n";
 
@@ -13,6 +13,7 @@ export const GROUPS = [
       { id: "general", icon: SlidersHorizontal },
       { id: "appearance", icon: Palette },
       { id: "modules", icon: Blocks },
+      { id: "development", icon: FolderCode },
       { id: "browser", icon: Globe },
       { id: "integrations", icon: Plug },
       { id: "shortcuts", icon: Keyboard },
@@ -61,9 +62,11 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["share-icons", "general"],
   ["steam-import", "integrations"],
   ["own-modules", "modules"],
-  ["development-folders", "modules"],
   ["module-files", "modules"],
   ["installed-modules", "modules"],
+  ["development-folders", "development"],
+  ["development-modules", "development"],
+  ["developer-docs", "development"],
   ["browser-shared-sites", "browser"],
   ["browser-adblock-off", "browser"],
   ["browser-clear-game", "browser"],
