@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { expectModuleText, inModule, launch, NOTES, openGame, openModule, panels, PLAYGROUND, TODOS, typeInModule, VUE } from "./harness";
+import { expectModuleText, inModule, launch, NOTES, openGame, openModule, panels, PLAYGROUND, TODOS, typeInModule, VUE, waitForShown } from "./harness";
 
 // The official Notes, To-Dos and UI Playground modules, driven through their own pages.
 
@@ -461,6 +461,9 @@ test("to-dos: a group gets a color from its menu, and keeps it after a restart",
   // The panel shows a change at once and replaces its list when the save is acknowledged, which closes an open menu.
   // Let the save settle first, as a person would.
   await page.waitForTimeout(300);
+
+  // Tavora draws a module's menu over the panel's place on screen, so the panel must be shown first.
+  await waitForShown(app, TODOS);
 
   // The group's menu is drawn by Tavora above every panel (ui.showMenu). A script click opens nothing;
   // a real key press on the ⋯ button does, and Color is a submenu of it.
