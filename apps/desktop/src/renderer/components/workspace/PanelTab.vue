@@ -21,7 +21,7 @@ const dock = inject(DOCK)!;
 const id = props.params.api.id;
 const panel = computed(() => state.value?.panels.find((item) => item.instanceId === id));
 const status = computed<InstanceStatus>(() => panel.value?.status ?? "loading");
-/** Hover text: a panel type's tab names the module too (the decision log, named panels round 4). */
+/** A panel type's tab names the module too, on hover and as its menu's heading (the decision log, named panels round 4). */
 const title = computed(() => {
   if (!panel.value?.panelType) return panel.value?.name ?? "";
   const module = state.value?.modules.find((item) => item.id === panel.value!.moduleId);
@@ -42,6 +42,7 @@ function items() {
       data-panel-tab
       :data-module-id="panel?.moduleId"
       :data-panel-type="panel?.panelType ?? undefined"
+      :title="title"
       :data-status="status"
     >
       <ModuleIcon v-if="state?.library.moduleIcons" :module-id="panel?.moduleId" :panel-type="panel?.panelType" />
