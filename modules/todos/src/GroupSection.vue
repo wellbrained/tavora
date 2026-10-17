@@ -13,17 +13,33 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
-import { computed, nextTick, onBeforeUnmount, ref } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, ref } from "vue";
 import AddInput from "./AddInput.vue";
 import { plural, t } from "./i18n";
+import { collapse, PANEL } from "./panel";
 import type { TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
-import { addTask, clearDone, GROUP_COLORS, MAX, moveGroup, openCount, renameGroup, setGroupColor, type Group, type GroupColor } from "./todos";
+import {
+  addTask,
+  clearDone,
+  depths,
+  GROUP_COLORS,
+  MAX,
+  MAX_DEPTH,
+  moveGroup,
+  openCount,
+  parentAtEnd,
+  renameGroup,
+  setGroupColor,
+  type Group,
+  type GroupColor,
+  type Task,
+} from "./todos";
 
 export interface DropTarget {
   groupId: string;
-  /** Position among the group's tasks, counted with the dragged task still in place. */
-  index: number;
+  /** The task the dragged one lands in front of, as its sibling; null for the end of the group. */
+  beforeId: string | null;
 }
 
 const props = defineProps<{
@@ -32,20 +48,18 @@ const props = defineProps<{
   groups: Group[];
   position: number;
   collapsed: boolean;
-  hideDone: boolean;
-  expandedId: string | null;
   dragging: boolean;
   drop: DropTarget | null;
 }>();
 const emit = defineEmits<{
   toggleCollapsed: [];
-  expand: [taskId: string];
   remove: [];
   dragstart: [taskId: string, event: DragEvent];
   dragend: [];
   dragover: [target: DropTarget];
   drop: [];
 }>();
+const panel = inject(PANEL)!;
 
 /** "None" first, then each color. */
 const COLOR_OPTIONS: GroupColor[] = ["", ...GROUP_COLORS];
@@ -55,10 +69,51 @@ const renaming = ref(false);
 const nameInput = ref<HTMLInputElement | null>(null);
 const remaining = computed(() => openCount(props.group));
 const doneCount = computed(() => props.group.tasks.length - remaining.value);
-const visible = computed(() =>
-  props.group.tasks.map((task, index) => ({ task, index })).filter(({ task }) => !props.hideDone || !task.done),
-);
 const change = (fn: Parameters<TodoStore["apply"]>[0]) => void props.store.apply(fn);
+
+interface Row {
+  task: Task;
+  index: number;
+  depth: number;
+  children: { done: number; total: number };
+}
+
+/**
+ * The rows this panel shows: sub-to-dos of folded or hidden tasks are left
+ * out, and so are finished ones when they vanish, unless they (or a task
+ * above them) were finished a moment ago.
+ */
+const rows = computed<Row[]>(() => {
+  const { tasks } = props.group;
+  const depth = depths(tasks);
+  const children = new Map<string, { done: number; total: number }>();
+  for (const task of tasks) {
+    if (!task.parentId) continue;
+    const count = children.get(task.parentId) ?? { done: 0, total: 0 };
+    count.total++;
+    if (task.done) count.done++;
+    children.set(task.parentId, count);
+  }
+  const vanish = panel.finished.value === "vanish";
+  const hidden = new Set<string>();
+  const kept = new Set<string>();
+  const shown: Row[] = [];
+  tasks.forEach((task, index) => {
+    const parent = task.parentId;
+    if (parent && (hidden.has(parent) || panel.folded.value.includes(parent))) return hidden.add(task.id);
+    if (panel.lingering.value.has(task.id) || (parent && kept.has(parent))) kept.add(task.id);
+    if (vanish && task.done && !kept.has(task.id)) return hidden.add(task.id);
+    shown.push({ task, index, depth: depth.get(task.id) ?? 0, children: children.get(task.id) ?? { done: 0, total: 0 } });
+  });
+  return shown;
+});
+
+// The add row indents with Tab like a to-do being edited: one level deeper than the last to-do at most.
+const addLevel = ref(0);
+const maxAddLevel = computed(() => {
+  const last = props.group.tasks.at(-1);
+  return last ? Math.min((depths(props.group.tasks).get(last.id) ?? 0) + 1, MAX_DEPTH) : 0;
+});
 
 async function startRename() {
   renaming.value = true;
@@ -94,30 +149,32 @@ function onNameDoubleClick() {
   void startRename();
 }
 
-function add(text: string) {
+function add(text: string, level: number) {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
-  change((data) => addTask(data, props.group.id, { id, title: text, createdAt }, crypto.randomUUID()));
+  const parentId = parentAtEnd(props.group, level);
+  change((data) => addTask(data, props.group.id, { id, title: text, createdAt, parentId }, crypto.randomUUID()));
 }
 
-function overTask(event: DragEvent, index: number) {
+/** Dropping on a row's lower half puts the task in front of the next row shown, or at the end. */
+function overTask(event: DragEvent, position: number) {
   if (!props.dragging) return;
   event.preventDefault();
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
   const after = event.clientY > rect.top + rect.height / 2;
-  emit("dragover", { groupId: props.group.id, index: after ? index + 1 : index });
+  emit("dragover", { groupId: props.group.id, beforeId: rows.value[after ? position + 1 : position]?.task.id ?? null });
 }
 
 function overGroup(event: DragEvent) {
   if (!props.dragging) return;
   event.preventDefault();
-  if (event.target === event.currentTarget || props.collapsed) emit("dragover", { groupId: props.group.id, index: props.group.tasks.length });
+  if (event.target === event.currentTarget || props.collapsed) emit("dragover", { groupId: props.group.id, beforeId: null });
 }
 
-function dropMark(index: number): "before" | "after" | null {
+function dropMark(position: number): "before" | "after" | null {
   if (!props.drop || props.drop.groupId !== props.group.id) return null;
-  if (props.drop.index === index) return "before";
-  if (props.drop.index === index + 1 && index === props.group.tasks.length - 1) return "after";
+  if (props.drop.beforeId === rows.value[position]!.task.id) return "before";
+  if (props.drop.beforeId === null && position === rows.value.length - 1) return "after";
   return null;
 }
 </script>
@@ -127,7 +184,7 @@ function dropMark(index: number): "before" | "after" | null {
     :class="
       cn(
         'bg-card overflow-hidden rounded-lg border',
-        drop?.groupId === group.id && (collapsed || !group.tasks.length) && 'border-primary bg-primary/10',
+        drop?.groupId === group.id && (collapsed || !rows.length) && 'border-primary bg-primary/10',
       )
     "
     :aria-label="group.name"
@@ -232,28 +289,31 @@ function dropMark(index: number): "before" | "after" | null {
     </header>
 
     <div v-if="!collapsed" class="p-1">
-      <ul role="list">
-        <li v-for="{ task, index } in visible" :key="task.id" @dragover="overTask($event, index)">
+      <TransitionGroup tag="ul" role="list" :css="false" @leave="collapse">
+        <li v-for="(row, at) in rows" :key="row.task.id" @dragover="overTask($event, at)">
           <TaskRow
             :store="store"
-            :task="task"
+            :task="row.task"
             :group="group"
             :groups="groups"
-            :index="index"
-            :expanded="expandedId === task.id"
-            :drop="dropMark(index)"
-            @toggle="emit('expand', task.id)"
-            @dragstart="(event) => emit('dragstart', task.id, event)"
+            :index="row.index"
+            :depth="row.depth"
+            :children="row.children"
+            :drop="dropMark(at)"
+            @dragstart="(event) => emit('dragstart', row.task.id, event)"
             @dragend="emit('dragend')"
           />
         </li>
-      </ul>
-      <p v-if="hideDone && doneCount && !visible.length" class="text-muted-foreground px-3 py-1 text-xs">
+      </TransitionGroup>
+      <p v-if="panel.finished.value === 'vanish' && doneCount && !rows.length" class="text-muted-foreground px-3 py-1 text-xs">
         {{ plural("group.hidden", doneCount) }}
       </p>
       <AddInput
+        v-model:level="addLevel"
         align-to-tasks
-        :placeholder="t('group.addTo', { name: group.name })"
+        :max-level="maxAddLevel"
+        :placeholder="Math.min(addLevel, maxAddLevel) ? t('group.addSub') : t('group.addTo', { name: group.name })"
+        :title="maxAddLevel ? t('group.addHint') : undefined"
         :maxlength="MAX.title"
         :data-testid="`add-task-${group.id}`"
         @add="add"
