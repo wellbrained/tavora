@@ -15,6 +15,9 @@ import { PlayerError } from "./messages";
 
 export const ACCOUNT_TIMEOUT_MS = 10_000;
 
+/** The command a developer runs with a link code, as the app shows and copies it ("ABCD-EFGH"). */
+export const linkCommand = (code: string) => `tavora-pack link ${code.slice(0, 4)}-${code.slice(4)}`;
+
 export interface SavedAccount {
   token: string;
   /** Null for an account that signs in with Discord only. */
@@ -118,7 +121,27 @@ const REASONS: Record<string, MessageKey> = {
   unavailable: "account.error.unavailable",
   "email-taken": "account.error.emailTaken",
   "same-email": "account.error.sameEmail",
+  "bad-name": "account.error.badName",
+  "name-taken": "account.error.nameTaken",
+  "name-reserved": "account.error.nameReserved",
+  "no-developer-name": "account.error.noDeveloperName",
+  "not-found": "account.error.keyGone",
 };
+
+/** The account's developer side as the service answers it; null for anything off. */
+function developerSide(value: unknown): { developer: { name: string; nextChangeAt: string } | null; keys: { fingerprint: string; linkedAt: string }[] } | null {
+  const raw = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
+  if (!Array.isArray(raw.keys)) return null;
+  const developer = (typeof raw.developer === "object" && raw.developer !== null ? raw.developer : null) as Record<string, unknown> | null;
+  const keys = raw.keys
+    .map((item) => (typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {}))
+    .filter((item) => typeof item.fingerprint === "string" && /^[0-9a-f]{32}$/.test(item.fingerprint) && isText(item.linkedAt, 40))
+    .map((item) => ({ fingerprint: item.fingerprint as string, linkedAt: item.linkedAt as string }));
+  return {
+    developer: developer && isText(developer.name, 32) && isText(developer.nextChangeAt, 40) ? { name: developer.name, nextChangeAt: developer.nextChangeAt } : null,
+    keys,
+  };
+}
 
 function device(value: unknown): AccountDevice | null {
   const raw = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
@@ -138,6 +161,11 @@ export class AccountClient {
   private pendingTicket: string | null = null;
   /** The account's profile when it differs from this PC's on the first sign-in here: the player chooses once. */
   private profileChoice: (ProfileData & { updatedAt: string }) | null = null;
+  /** The developer side as last read: the public name and the linked publisher keys. */
+  private developer: AccountView["developer"] = null;
+  private publisherKeys: AccountView["publisherKeys"] = null;
+  /** The code for `tavora-pack link` the player asked for, until it runs out. */
+  private linkCode: AccountView["linkCode"] = null;
   private readonly baseUrl: string;
 
   constructor(private readonly options: AccountClientOptions) {
@@ -161,6 +189,9 @@ export class AccountClient {
       devices: this.saved ? this.devices : null,
       pending: this.pending,
       profileChoice: this.saved && this.profileChoice ? { name: this.profileChoice.name, initials: this.profileChoice.initials, picture: this.profileChoice.picture !== null } : null,
+      developer: this.saved ? this.developer : null,
+      publisherKeys: this.saved ? this.publisherKeys : null,
+      linkCode: this.saved && this.linkCode && Date.parse(this.linkCode.expiresAt) > Date.now() ? this.linkCode : null,
     };
   }
 
@@ -315,6 +346,40 @@ export class AccountClient {
     this.devices = Array.isArray(answer.devices) ? answer.devices.map(device).filter((item): item is AccountDevice => item !== null) : [];
     // The email or Discord may have changed on another PC.
     await this.updated(answer);
+    // The developer side too; a service without it yet leaves it unknown.
+    this.takeDeveloper(await this.call("GET", "/developer", undefined, true).catch(() => ({})));
+  }
+
+  // ── Developer side ─────────────────────────────────────────────────────
+
+  /** Sets the public name players see on the modules of the account's linked keys. */
+  async setDeveloperName(name: string): Promise<void> {
+    this.ensure(true);
+    this.takeDeveloper(await this.call("PUT", "/developer", { name: name.trim() }, true));
+  }
+
+  /** A one-time code the developer types into `tavora-pack link`, valid for 10 minutes. */
+  async newLinkCode(): Promise<void> {
+    this.ensure(true);
+    const answer = await this.call("POST", "/keys/code", {}, true);
+    if (typeof answer.code !== "string" || !/^[A-Z0-9]{8}$/.test(answer.code) || !isText(answer.expiresAt, 40)) throw new PlayerError("error.generic");
+    this.linkCode = { code: answer.code, expiresAt: answer.expiresAt };
+    this.changed();
+  }
+
+  async unlinkKey(fingerprint: string): Promise<void> {
+    this.ensure(true);
+    this.takeDeveloper(await this.call("DELETE", `/keys/${encodeURIComponent(fingerprint)}`, undefined, true));
+  }
+
+  private takeDeveloper(answer: Record<string, unknown>): void {
+    const side = developerSide(answer);
+    if (!side) return;
+    this.developer = side.developer;
+    // A key linked meanwhile used the code up.
+    if (this.publisherKeys && side.keys.length > this.publisherKeys.length) this.linkCode = null;
+    this.publisherKeys = side.keys;
+    this.changed();
   }
 
   /** Signs this PC out. Everything on the PC stays; if the service cannot be reached the sign-in is still forgotten here. */
@@ -444,6 +509,9 @@ export class AccountClient {
     this.pendingCode = null;
     this.pendingTicket = null;
     this.profileChoice = null;
+    this.developer = null;
+    this.publisherKeys = null;
+    this.linkCode = null;
     await this.options.save(null);
     this.changed();
   }
@@ -489,6 +557,10 @@ export class AccountClient {
     if (response.status === 429) {
       const seconds = Number(response.headers.get("retry-after"));
       throw new PlayerError("account.error.tooMany", { minutes: Math.max(1, Math.ceil((Number.isFinite(seconds) ? seconds : 60) / 60)) });
+    }
+    if (json.reason === "name-too-soon") {
+      const at = typeof json.nextChangeAt === "string" ? new Date(json.nextChangeAt) : null;
+      if (at && Number.isFinite(at.getTime())) throw new PlayerError("account.error.nameTooSoon", { date: new Intl.DateTimeFormat(this.options.language(), { dateStyle: "long" }).format(at) });
     }
     if (json.reason === "daily-limit") {
       // The service's emails for today are used up: say when sending works again, in the player's own time.

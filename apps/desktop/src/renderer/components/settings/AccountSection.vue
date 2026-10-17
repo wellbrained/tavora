@@ -7,7 +7,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AccountDevice, HostAction } from "../../../shared/host-api";
-import { account, act, confirmAction, submitAction } from "../../host";
+import { account, act, confirmAction, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import SettingRow from "./SettingRow.vue";
 
@@ -81,6 +81,37 @@ function signOutDevice(device: AccountDevice) {
     message: t("account.devices.signOutMessage", { device: osName(device), date: formatDate(device.createdAt) }),
     confirm: t("account.signOut"),
     run: () => submitAction({ type: "account-sign-out-device", deviceId: device.id }),
+  });
+}
+
+// The developer side: the public name, the linked publisher keys and a code to link another.
+const developerName = ref("");
+watch(
+  () => view.value?.developer?.name,
+  (name) => (developerName.value = name ?? ""),
+  { immediate: true },
+);
+const nameHint = computed(() => {
+  const next = view.value?.developer?.nextChangeAt;
+  return next && Date.parse(next) > Date.now() ? t("account.developer.nameNext", { date: formatDate(next) }) : t("account.developer.nameHint");
+});
+async function saveDeveloperName() {
+  const name = developerName.value.trim();
+  if (await run({ type: "account-developer-name", name })) showToast(t("account.developer.saved", { name }));
+}
+const linkCommandText = computed(() => {
+  const code = view.value?.linkCode?.code ?? "";
+  return `tavora-pack link ${code.slice(0, 4)}-${code.slice(4)}`;
+});
+async function copyLinkCommand() {
+  if ((await act({ type: "account-copy-link-command" })).ok) showToast(t("account.developer.copied"));
+}
+function unlinkKey(fingerprint: string) {
+  confirmAction({
+    title: t("account.developer.unlinkTitle"),
+    message: t("account.developer.unlinkMessage"),
+    confirm: t("account.developer.unlink"),
+    run: () => submitAction({ type: "account-unlink-key", fingerprint }),
   });
 }
 
@@ -261,6 +292,50 @@ function startDelete() {
             <Button v-else variant="ghost" size="sm" :disabled="busy" @click="signOutDevice(device)">{{ t("account.signOut") }}</Button>
           </li>
         </ul>
+      </div>
+
+      <!-- The developer side: only matters to people who make modules. -->
+      <div class="border-b py-4" data-testid="account-developer">
+        <span class="font-medium">{{ t("account.developer.title") }}</span>
+        <p class="text-muted-foreground mt-1 text-sm">{{ t("account.developer.hint") }}</p>
+
+        <form class="mt-3 flex flex-col gap-1" @submit.prevent="saveDeveloperName">
+          <label class="text-sm font-medium" for="account-developer-name">{{ t("account.developer.name") }}</label>
+          <div class="flex gap-2">
+            <Input id="account-developer-name" v-model="developerName" class="max-w-60" maxlength="32" autocomplete="off" spellcheck="false" data-testid="account-developer-name" />
+            <Button type="submit" :disabled="busy || !developerName.trim() || developerName.trim() === view?.developer?.name" data-testid="account-developer-save">{{ t("account.developer.save") }}</Button>
+          </div>
+          <span class="text-muted-foreground text-xs" data-testid="account-developer-name-hint">{{ nameHint }}</span>
+        </form>
+
+        <div class="mt-4">
+          <span class="text-sm font-medium">{{ t("account.developer.keys") }}</span>
+          <p v-if="!view?.publisherKeys?.length" class="text-muted-foreground mt-1 text-sm" data-testid="account-keys-none">{{ t("account.developer.noKeys") }}</p>
+          <ul v-else class="mt-1" data-testid="account-keys">
+            <li v-for="key in view.publisherKeys" :key="key.fingerprint" class="flex min-h-10 items-center gap-3" :data-testid="`account-key-${key.fingerprint}`">
+              <span class="flex-1 font-mono text-sm" :title="key.fingerprint">{{ key.fingerprint.slice(0, 16) }}…</span>
+              <span class="text-muted-foreground text-sm">{{ t("account.developer.keyLinked", { date: formatDate(key.linkedAt) }) }}</span>
+              <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.unlinkLabel', { key: key.fingerprint.slice(0, 16) })" @click="unlinkKey(key.fingerprint)">
+                {{ t("account.developer.unlink") }}
+              </Button>
+            </li>
+          </ul>
+        </div>
+
+        <div class="mt-3 flex flex-col gap-3">
+          <div class="flex items-center gap-3">
+            <Button variant="secondary" :disabled="busy || !view?.developer" data-testid="account-link-code" @click="run({ type: 'account-link-code' })">{{ t("account.developer.link") }}</Button>
+            <span v-if="!view?.developer" class="text-muted-foreground text-sm">{{ t("account.developer.linkNeedsName") }}</span>
+          </div>
+          <div v-if="view?.linkCode" class="flex flex-col gap-2 rounded-md border p-3" data-testid="account-link">
+            <span class="text-sm">{{ t("account.developer.linkHint", { time: formatDate(view.linkCode.expiresAt, { timeStyle: "short" }) }) }}</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <code class="bg-muted rounded px-2 py-1 font-mono text-sm select-all" data-testid="account-link-command">{{ linkCommandText }}</code>
+              <Button variant="ghost" size="sm" data-testid="account-link-copy" @click="copyLinkCommand">{{ t("account.developer.copy") }}</Button>
+              <Button variant="ghost" size="sm" :disabled="busy" data-testid="account-link-refresh" @click="run({ type: 'account-refresh' })">{{ t("account.developer.refresh") }}</Button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <SettingRow :label="t('account.signOut')" :description="t('account.signOutHint')">
