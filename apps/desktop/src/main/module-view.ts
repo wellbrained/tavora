@@ -6,6 +6,7 @@ import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BLOB_PATH, CLIPBOARD_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession, type BridgeContext } from "./bridge";
+import type { DiscordConnector, DiscordListener } from "./discord";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
 import { serveClipboard } from "./clipboard-http";
@@ -49,6 +50,8 @@ export interface ModuleViewOptions {
   appSettings: ModuleStore;
   /** The ai-usage connector, for a module granted it. */
   aiUsage: BridgeContext["aiUsage"];
+  /** The discord connector, shared by every panel; this view uses it under its own instance id. */
+  discord: Pick<DiscordConnector, "use" | "release" | "state" | "connectNow" | "allowControl" | "command" | "subscribe" | "unsubscribe" | "image">;
   /** Test runs only: hosts mapped to a local server (network.ts). */
   testHosts?: TestHosts;
 }
@@ -276,6 +279,12 @@ export class ModuleView {
     gestureOf(this.view.webContents.session).at = this.gestureAt;
   }
 
+  /** Something only a click or key press in the page may do, once per click. */
+  private takeGesture(what: string): void {
+    if (Date.now() - this.gestureAt > GESTURE_MS) throw new HostError("PERMISSION_DENIED", `${what} must be called right after a click or key press`);
+    this.gestureAt = 0;
+  }
+
   /** links.open: only a web address, and only right after the player did something in the page. */
   private openLink(url: string): void {
     if (Date.now() - this.gestureAt > GESTURE_MS) {
@@ -347,6 +356,7 @@ export class ModuleView {
         panelState,
         appSettings: this.options.appSettings,
         aiUsage: this.options.aiUsage,
+        discord: this.discordFor(() => bridge),
         capabilities: () => this.capabilities(),
         fetch: (params) =>
           moduleFetch(params, {
@@ -362,19 +372,66 @@ export class ModuleView {
         openLink: (url) => this.openLink(url),
       },
       () => {
-        if (this.bridge === bridge) this.bridge = undefined;
+        if (this.bridge !== bridge) return;
+        this.bridge = undefined;
+        this.options.discord.release(this.options.instanceId);
       },
     );
     this.bridge = bridge;
     this.view.webContents.postMessage("tavora:port", null, [port2]);
   }
 
-  /** What the player has granted now (grants.ts): `network` with any granted host, `aiUsage` with the ai-usage connector. */
+  /** What the player has granted now (grants.ts): `network` with any granted host, `aiUsage` and `discord` with their connectors. */
   private capabilities(): ReadonlySet<Capability> {
     const granted = new Set<Capability>();
     if (this.options.networkHosts().size > 0) granted.add("network");
     if (this.options.connectors().has("ai-usage")) granted.add("aiUsage");
+    if (this.options.connectors().has("discord")) granted.add("discord");
     return granted;
+  }
+
+  /**
+   * The discord connector as this panel uses it. Any call but image() makes the panel a user, which
+   * keeps the connection running until the page goes; what the connector tells reaches only the page
+   * that asked, and only while the grant lasts. Signing in and joining or leaving a channel need a
+   * click or key press in the page first, one per click.
+   */
+  private discordFor(bridge: () => BridgeSession): BridgeContext["discord"] {
+    const connector = this.options.discord;
+    const instanceId = this.options.instanceId;
+    const listener: DiscordListener = {
+      state: (state) => {
+        if (this.bridge === bridge() && this.capabilities().has("discord")) bridge().emit("discord.state", state);
+      },
+      event: (event) => {
+        if (this.bridge === bridge() && this.capabilities().has("discord")) bridge().emit("discord.event", event);
+      },
+    };
+    const use = () => connector.use(instanceId, listener);
+    return {
+      state: async () => (await use(), connector.state()),
+      connect: async () => {
+        this.takeGesture("discord.connect");
+        await use();
+        await connector.connectNow();
+      },
+      allowControl: async () => {
+        this.takeGesture("discord.allowControl");
+        await use();
+        await connector.allowControl();
+      },
+      command: async (command, args) => {
+        if (command === "SELECT_VOICE_CHANNEL") this.takeGesture("SELECT_VOICE_CHANNEL");
+        await use();
+        return connector.command(command, args);
+      },
+      subscribe: async (event, channelId) => {
+        await use();
+        await connector.subscribe(instanceId, event, channelId);
+      },
+      unsubscribe: (event, channelId) => connector.unsubscribe(instanceId, event, channelId),
+      image: (url) => connector.image(url),
+    };
   }
 
   /** The player changed the AI accounts; a module granted the connector hears it. */
@@ -527,6 +584,7 @@ export class ModuleView {
   private disconnect(): void {
     this.bridge?.close();
     this.bridge = undefined;
+    this.options.discord.release(this.options.instanceId);
   }
 
   private setStatus(status: InstanceStatus): void {

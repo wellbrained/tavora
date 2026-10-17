@@ -1,8 +1,7 @@
-import type { DiscordMember } from "../shared/host-api";
-
-// Turns what the Discord app sends into the plain values the Discord panel
-// shows. Everything from Discord is checked here: ids must be Discord ids,
-// names are cut to a sensible length, and anything unexpected is dropped.
+// Turns what the Discord app sends (through Tavora's discord connector, as it
+// came) into the plain values the panel shows. Everything from Discord is
+// checked here: ids must be Discord ids, names are cut to a sensible length,
+// and anything unexpected is dropped.
 
 const SNOWFLAKE = /^\d{1,20}$/;
 const AVATAR_HASH = /^(?:a_)?[0-9a-f]{32}$/;
@@ -11,6 +10,8 @@ export const MAX_NAME = 64;
 export const MAX_MEMBERS = 99;
 /** Most voice channels listed for a server. */
 export const MAX_CHANNELS = 50;
+/** Most servers listed to choose from. */
+export const MAX_SERVERS = 200;
 
 export const isSnowflake = (value: unknown): value is string => typeof value === "string" && SNOWFLAKE.test(value);
 
@@ -25,8 +26,18 @@ export function cleanName(value: unknown, fallback: string): string {
 }
 
 /** A person in a voice channel, with their avatar hash for loading the picture. */
-export interface VoicePerson extends Omit<DiscordMember, "avatar" | "speaking"> {
+export interface VoicePerson {
+  id: string;
+  name: string;
   avatarHash: string | null;
+  selfMute: boolean;
+  selfDeaf: boolean;
+  /** Muted or deafened by a moderator. */
+  serverMute: boolean;
+  serverDeaf: boolean;
+  /** The player's own volume for this person (0 to 200, 100 normally) and whether the player muted them for themselves. */
+  volume: number;
+  mutedForMe: boolean;
 }
 
 /** One entry of a channel's `voice_states`, or the data of a VOICE_STATE_* event. */
@@ -93,14 +104,16 @@ export function parseVoiceChannelIds(raw: unknown): string[] {
 export interface Guild {
   id: string;
   name: string;
+  /** Discord's icon address as it came; Tavora only fetches it when it is one of Discord's own. */
   iconUrl: string | null;
 }
 
-/** GET_GUILD. The icon is only kept when it is one of Discord's own icon addresses. */
+/** GET_GUILD. */
 export function parseGuild(raw: unknown): Guild | null {
   const guild = record(raw);
   if (!isSnowflake(guild.id)) return null;
-  return { id: guild.id, name: cleanName(guild.name, "Server"), iconUrl: imageUrl(guild.icon_url) };
+  const icon = guild.icon_url;
+  return { id: guild.id, name: cleanName(guild.name, "Server"), iconUrl: typeof icon === "string" && icon.startsWith("https://cdn.discordapp.com/") && icon.length <= 300 ? icon : null };
 }
 
 /** The servers the player is on, from GET_GUILDS. */
@@ -108,16 +121,10 @@ export function parseGuilds(raw: unknown): { id: string; name: string }[] {
   const list = record(raw).guilds;
   if (!Array.isArray(list)) return [];
   return list
-    .slice(0, 200)
+    .slice(0, MAX_SERVERS)
     .map((item) => parseGuild(item))
     .filter((guild): guild is Guild => guild !== null)
     .map((guild) => ({ id: guild.id, name: guild.name }));
-}
-
-/** The scopes Discord says the sign-in has, from AUTHENTICATE. */
-export function parseScopes(raw: unknown): string[] {
-  const scopes = record(raw).scopes;
-  return Array.isArray(scopes) ? scopes.filter((scope): scope is string => typeof scope === "string").slice(0, 20) : [];
 }
 
 /** The `user_id` of a SPEAKING_START or SPEAKING_STOP event. */
@@ -126,42 +133,51 @@ export function speakingUser(raw: unknown): string | null {
   return isSnowflake(id) ? id : null;
 }
 
-/** The signed-in user from AUTHENTICATE. */
-export function parseUser(raw: unknown): { id: string; name: string } | null {
-  const user = record(record(raw).user);
-  return isSnowflake(user.id) ? { id: user.id, name: cleanName(user.global_name, cleanName(user.username, "You")) } : null;
+/** The channel an event names, if it names one. */
+export function eventChannel(raw: unknown): string | null {
+  const id = record(raw).channel_id;
+  return isSnowflake(id) ? id : null;
 }
 
-const CDN = "https://cdn.discordapp.com/";
-
-/** The address of someone's Discord picture, small. */
+/** The address of someone's Discord picture; Tavora fetches it as a small PNG. */
 export function avatarUrl(userId: string, hash: string): string | null {
-  return isSnowflake(userId) && AVATAR_HASH.test(hash) ? `${CDN}avatars/${userId}/${hash}.png?size=64` : null;
+  return isSnowflake(userId) && AVATAR_HASH.test(hash) ? `https://cdn.discordapp.com/avatars/${userId}/${hash}.png` : null;
 }
 
-/**
- * A server icon address from Discord, if it is one: only Discord's image
- * server, only `icons/<id>/<hash>`, and always asked for as a small PNG.
- */
-export function imageUrl(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return null;
-  }
-  if (url.origin + "/" !== CDN) return null;
-  const match = /^\/icons\/(\d{1,20})\/((?:a_)?[0-9a-f]{32})\.(?:png|webp|jpg|gif)$/.exec(url.pathname);
-  return match ? `${CDN}icons/${match[1]}/${match[2]}.png?size=64` : null;
+/** The channel to join again from the panel, kept in the settings shared by every game. */
+export interface LastChannel {
+  channelId: string;
+  guildId: string;
+  name: string;
+  serverName: string | null;
 }
 
-const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-/** Largest picture Tavora keeps; a 64-pixel PNG is a few kilobytes. */
-export const MAX_IMAGE = 256 * 1024;
+/** The server a game remembers (its settings in that game), and the channel the player was last in there. */
+export interface GameServer {
+  guildId: string | null;
+  serverName: string | null;
+  channelId: string | null;
+  channelName: string | null;
+}
 
-/** A PNG from Discord as a data address, or null when it is not a small PNG. */
-export function pngDataUrl(bytes: Buffer): string | null {
-  if (bytes.length > MAX_IMAGE || bytes.length < PNG.length || !bytes.subarray(0, PNG.length).equals(PNG)) return null;
-  return `data:image/png;base64,${bytes.toString("base64")}`;
+const savedName = (value: unknown) => (typeof value === "string" ? cleanName(value, "") || null : null);
+
+/** The channel to rejoin as saved; null when there is none or it is damaged. */
+export function parseLast(raw: unknown): LastChannel | null {
+  const value = record(raw);
+  const name = savedName(value.name);
+  if (!isSnowflake(value.channelId) || !isSnowflake(value.guildId) || !name) return null;
+  return { channelId: value.channelId, guildId: value.guildId, name, serverName: savedName(value.serverName) };
+}
+
+/** A game's server as saved; null when the game remembers none ("Remember the server" is not ticked). */
+export function parseGameServer(raw: unknown): GameServer | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const value = record(raw);
+  return {
+    guildId: isSnowflake(value.guildId) ? value.guildId : null,
+    serverName: savedName(value.serverName),
+    channelId: isSnowflake(value.channelId) ? value.channelId : null,
+    channelName: savedName(value.channelName),
+  };
 }

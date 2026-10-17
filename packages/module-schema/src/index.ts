@@ -66,9 +66,10 @@ export function isGameId(value: unknown): value is string {
 
 /**
  * Connectors (glossary): parts of Tavora that hold a sign-in and let a granted module use it without
- * seeing the token. `ai-usage` reads the usage of the player's Claude and Codex accounts.
+ * seeing the token. `ai-usage` reads the usage of the player's Claude and Codex accounts; `discord` talks to the
+ * Discord app on this PC with Tavora's Discord sign-in (voice channels, who is talking, joining and muting).
  */
-export const CONNECTORS = ["ai-usage"] as const;
+export const CONNECTORS = ["ai-usage", "discord"] as const;
 export type Connector = (typeof CONNECTORS)[number];
 
 export function isConnector(value: unknown): value is Connector {

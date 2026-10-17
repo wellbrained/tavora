@@ -1,24 +1,27 @@
 import { createHash } from "node:crypto";
+import type { DiscordEvent, DiscordState } from "@tavora/sdk/protocol";
 import { afterEach, describe, expect, it } from "vitest";
-import { DiscordConnection, OTHERS_MS, SCOPES, type DiscordSecrets } from "./discord";
+import { DiscordConnector, SCOPES, type DiscordListener } from "./discord";
 import { RpcClient } from "./discord-rpc";
+import type { DiscordSecrets } from "./discord-store";
 import { fakeDiscord, until, type FakeDiscord } from "./discord-fake.test-helper";
 
 const HASH = "0123456789abcdef0123456789abcdef";
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(8)]);
+const SIGNED_IN: DiscordSecrets = { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } };
 
-const person = (id: string, name: string, voice: Record<string, boolean> = {}) => ({
+const person = (id: string, name: string) => ({
   nick: null,
-  voice_state: { mute: false, deaf: false, self_mute: false, self_deaf: false, ...voice },
-  user: { id, username: name.toLowerCase(), global_name: name, avatar: id === "1" ? HASH : null },
+  voice_state: { mute: false, deaf: false, self_mute: false, self_deaf: false },
+  user: { id, username: name.toLowerCase(), global_name: name, avatar: null },
 });
 
 let fake: FakeDiscord | undefined;
-let connection: DiscordConnection | undefined;
+let connector: DiscordConnector | undefined;
 afterEach(async () => {
-  connection?.dispose();
+  connector?.dispose();
   await fake?.close();
-  fake = connection = undefined;
+  fake = connector = undefined;
 });
 
 interface Setup {
@@ -27,8 +30,16 @@ interface Setup {
   tokenStatus?: number;
 }
 
+/** A panel as the connector sees it: what it was told. */
+function panel() {
+  const states: DiscordState[] = [];
+  const events: DiscordEvent[] = [];
+  const listener: DiscordListener = { state: (state) => void states.push(state), event: (event) => void events.push(event) };
+  return { states, events, listener };
+}
+
 async function setup({ secrets = { token: null }, running = true, tokenStatus = 200 }: Setup = {}) {
-  connection?.dispose();
+  connector?.dispose();
   await fake?.close();
   fake = await fakeDiscord();
   const discord = fake;
@@ -38,17 +49,11 @@ async function setup({ secrets = { token: null }, running = true, tokenStatus = 
       ? { data: { user: { id: "1", username: "brain", global_name: "Brain" }, scopes: SCOPES } }
       : { error: { code: 4009, message: "Invalid token" } },
   );
-  discord.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({
-    data: { id: "10", guild_id: "20", name: "Factory Floor", position: 1, voice_states: [person("1", "Brain"), person("2", "Lena", { self_mute: true })] },
-  }));
-  discord.answers.set("GET_GUILD", () => ({ data: { id: "20", name: "Wellbrained Crew", icon_url: `https://cdn.discordapp.com/icons/20/${HASH}.png` } }));
-  discord.answers.set("GET_CHANNELS", () => ({ data: { channels: [{ id: "10", type: 2 }, { id: "11", type: 2 }, { id: "12", type: 0 }] } }));
-  discord.answers.set("GET_CHANNEL", (args) => ({ data: { id: args.channel_id, guild_id: "20", name: "Lobby", position: 2, voice_states: [person("3", "Tobi")] } }));
+  discord.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain")] } }));
   const requests: { url: string; body: string }[] = [];
   const saved: DiscordSecrets[] = [];
   const timers: (() => void)[] = [];
-  const views: string[] = [];
-  connection = new DiscordConnection({
+  connector = new DiscordConnector({
     clientId: "99",
     connect: (events) => RpcClient.connect("99", events, running ? [discord.path] : ["/nonexistent/discord-ipc-0"]),
     fetch: (async (input: string | URL | Request, init?: RequestInit) => {
@@ -62,38 +67,32 @@ async function setup({ secrets = { token: null }, running = true, tokenStatus = 
     load: async () => secrets,
     save: async (next) => void saved.push(next),
     canSaveSignIn: true,
-    onChange: (view) => views.push(view.status),
+    onChange: () => undefined,
     setTimer: (fn) => {
       timers.push(fn);
       return 0 as unknown as ReturnType<typeof setTimeout>;
     },
     clearTimer: () => undefined,
   });
-  return { connection, fake: discord, requests, saved, timers, views };
+  return { connector, fake: discord, requests, saved, timers };
 }
 
-describe("DiscordConnection", () => {
-  it("does nothing until a Discord panel is open", async () => {
-    const { connection, fake } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
-    expect(connection.view().status).toBe("off");
+describe("DiscordConnector", () => {
+  it("does nothing until a panel uses it", async () => {
+    const { connector, fake } = await setup({ secrets: SIGNED_IN });
+    expect(connector.view().status).toBe("off");
     expect(fake.commands).toEqual([]);
   });
 
-  it("needs no secret: a first start only waits for Connect", async () => {
-    const { connection } = await setup({ secrets: { token: null } });
-    await connection.setWanted(true);
-    expect(connection.view()).toMatchObject({ status: "signed-out", canSaveSignIn: true });
-    await expect(connection.connectNow()).resolves.toBeUndefined();
-  });
-
-  it("waits for Connect before asking Discord for approval, then shows the voice channel", async () => {
-    const { connection, fake, requests, saved } = await setup();
-    await connection.setWanted(true);
-    expect(connection.view().status).toBe("signed-out");
+  it("waits for Connect before asking Discord for approval, then signs in with PKCE and no secret", async () => {
+    const { connector, fake, requests, saved, timers } = await setup();
+    const one = panel();
+    await connector.use("p1", one.listener);
+    expect(connector.state()).toMatchObject({ status: "signed-out", canSaveSignIn: true });
     expect(fake.commands).toEqual([]);
 
-    await connection.connectNow();
-    await until(() => connection.view().status === "connected" && connection.view().channels.length === 2);
+    await connector.connectNow();
+    await until(() => connector.state().status === "connected");
     // PKCE: the challenge goes to the Discord app, the verifier only to Discord's token address, and no secret exists.
     const authorize = fake.commands.find((c) => c.cmd === "AUTHORIZE")?.args as Record<string, unknown>;
     expect(authorize).toEqual({ client_id: "99", scopes: ["rpc", "rpc.voice.read", "rpc.voice.write", "identify"], code_challenge: expect.any(String), code_challenge_method: "S256" });
@@ -106,259 +105,154 @@ describe("DiscordConnection", () => {
     expect(body.get("code_verifier")!.length).toBeGreaterThanOrEqual(43);
     expect(requests.every((r) => !r.body.includes("client_secret"))).toBe(true);
     expect(saved.at(-1)?.token).toMatchObject({ accessToken: "good", refreshToken: "r1" });
-
-    const view = connection.view();
-    expect(view.user).toEqual({ id: "1", name: "Brain" });
-    expect(view.server).toMatchObject({ id: "20", name: "Wellbrained Crew" });
-    expect(view.call?.name).toBe("Factory Floor");
-    expect(view.call?.members.map((m) => [m.name, m.selfMute])).toEqual([
-      ["Brain", false],
-      ["Lena", true],
-    ]);
-    expect(view.channels.map((c) => c.id)).toEqual(["10", "11"]);
-    expect(view.channels[1]).toEqual({ id: "11", name: "Lobby", members: [expect.objectContaining({ name: "Tobi" })] });
-    for (const evt of ["VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_DELETE", "SPEAKING_START", "SPEAKING_STOP"]) {
-      expect(fake.commands).toContainEqual({ cmd: "SUBSCRIBE", args: { channel_id: "10" }, evt });
-    }
-    await until(() => connection.view().call!.members[0]!.avatar !== null && connection.view().server!.icon !== null);
+    expect(connector.state()).toEqual({ status: "connected", error: null, user: { id: "1", name: "Brain" }, canControl: true, canSaveSignIn: true });
+    // The panel hears it (changes are told after a short wait), and never the token.
+    for (const fn of timers.splice(0)) fn();
+    expect(one.states.at(-1)?.status).toBe("connected");
+    expect(JSON.stringify(one.states)).not.toContain("good");
   });
 
-  it("follows talking, joining, leaving and muting", async () => {
-    const { connection, fake } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
-    await connection.setWanted(true);
-    await until(() => connection.view().status === "connected" && connection.view().call !== null);
-    const members = () => connection.view().call!.members;
+  it("passes commands on and Discord's answer back as it came", async () => {
+    const { connector, fake } = await setup({ secrets: SIGNED_IN });
+    await connector.use("p1", panel().listener);
+    await until(() => connector.state().status === "connected");
+    expect(await connector.command("GET_SELECTED_VOICE_CHANNEL", {})).toEqual({ ok: true, data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain")] } });
+
+    // Joining takes the player out of another call, as Discord's own list does; leaving does not need to.
+    await connector.command("SELECT_VOICE_CHANNEL", { channel_id: "11" });
+    await connector.command("SELECT_VOICE_CHANNEL", { channel_id: null });
+    expect(fake.commands.filter((c) => c.cmd === "SELECT_VOICE_CHANNEL").map((c) => c.args)).toEqual([{ channel_id: "11", force: true }, { channel_id: null }]);
+
+    fake.answers.set("GET_CHANNEL", () => ({ error: { code: 4000, message: "No permission" } }));
+    expect(await connector.command("GET_CHANNEL", { channel_id: "11" })).toEqual({ ok: false, reason: "refused", code: 4000, message: "No permission" });
+
+    fake.answers.set("GET_GUILDS", () => ({ data: { guilds: [{ id: "1", name: "x".repeat(600 * 1024) }] } }));
+    expect(await connector.command("GET_GUILDS", {})).toMatchObject({ ok: false, reason: "no-answer" });
+  });
+
+  it("answers not-connected while there is no connection", async () => {
+    const { connector } = await setup();
+    expect(await connector.command("GET_GUILDS", {})).toEqual({ ok: false, reason: "not-connected", code: null, message: null });
+  });
+
+  it("does not mute with a sign-in that lacks the permission, until the player allows it", async () => {
+    const { connector, fake } = await setup({ secrets: SIGNED_IN });
+    fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "brain", global_name: "Brain" }, scopes: ["rpc", "rpc.voice.read", "identify"] } }));
+    await connector.use("p1", panel().listener);
+    await until(() => connector.state().status === "connected");
+    expect(connector.state().canControl).toBe(false);
+    expect(await connector.command("SET_VOICE_SETTINGS", { mute: true })).toMatchObject({ ok: false, reason: "refused" });
+    expect(fake.commands.some((c) => c.cmd === "SET_VOICE_SETTINGS")).toBe(false);
+
+    fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "brain", global_name: "Brain" }, scopes: SCOPES } }));
+    await connector.allowControl();
+    await until(() => connector.state().canControl);
+    expect(fake.commands.some((c) => c.cmd === "AUTHORIZE")).toBe(true);
+    expect(await connector.command("SET_VOICE_SETTINGS", { mute: true })).toMatchObject({ ok: true });
+  });
+
+  it("asks Discord once per subscription for every panel, and sends each event only to the panels that want it", async () => {
+    const { connector, fake } = await setup({ secrets: SIGNED_IN });
+    const one = panel();
+    const two = panel();
+    await connector.use("p1", one.listener);
+    await connector.use("p2", two.listener);
+    await until(() => connector.state().status === "connected");
+    await connector.subscribe("p1", "SPEAKING_START", "10");
+    await connector.subscribe("p2", "SPEAKING_START", "10");
+    await connector.subscribe("p2", "VOICE_CHANNEL_SELECT", null);
+    expect(fake.commands.filter((c) => c.cmd === "SUBSCRIBE")).toEqual([
+      { cmd: "SUBSCRIBE", args: { channel_id: "10" }, evt: "SPEAKING_START" },
+      { cmd: "SUBSCRIBE", args: {}, evt: "VOICE_CHANNEL_SELECT" },
+    ]);
 
     fake.dispatch("SPEAKING_START", { user_id: "2", channel_id: "10" });
-    await until(() => members().find((m) => m.id === "2")?.speaking === true);
-    fake.dispatch("SPEAKING_STOP", { user_id: "2", channel_id: "10" });
-    await until(() => members().find((m) => m.id === "2")?.speaking === false);
-
-    fake.dispatch("VOICE_STATE_CREATE", person("4", "Max", { mute: true }));
-    await until(() => members().length === 3);
-    expect(members()[2]).toMatchObject({ name: "Max", serverMute: true });
-
-    fake.dispatch("VOICE_STATE_UPDATE", person("2", "Lena", { self_mute: false, self_deaf: true }));
-    await until(() => members().find((m) => m.id === "2")?.selfDeaf === true);
-
-    fake.dispatch("VOICE_STATE_DELETE", person("4", "Max"));
-    await until(() => members().length === 2);
-
-    // Speaking in another channel is not shown here.
     fake.dispatch("SPEAKING_START", { user_id: "2", channel_id: "99" });
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(members().find((m) => m.id === "2")?.speaking).toBe(false);
-  });
-
-  it("switches channels and shows a direct call without a server", async () => {
-    const { connection, fake } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
-    await connection.setWanted(true);
-    await until(() => connection.view().call?.id === "10");
-    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "30", name: null, voice_states: [person("1", "Brain"), person("5", "Kira")] } }));
-    fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: "30" });
-    await until(() => connection.view().call?.id === "30" && connection.view().server === null);
-    expect(connection.view()).toMatchObject({ server: null, channels: [], call: { name: "Call" } });
-    expect(fake.commands).toContainEqual({ cmd: "UNSUBSCRIBE", args: { channel_id: "10" }, evt: "SPEAKING_START" });
-
-    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: null }));
     fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: null });
-    await until(() => connection.view().call === null);
-    expect(connection.view().status).toBe("connected");
-  });
-
-  it("remembers the last server channel, and joins it or another listed one when asked", async () => {
-    const { connection, fake, saved } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
-    await connection.setWanted(true);
-    await until(() => connection.view().status === "connected" && connection.view().channels.length === 2);
-    const last = { channelId: "10", guildId: "20", name: "Factory Floor", serverName: "Wellbrained Crew" };
-    await until(() => saved.at(-1)?.last?.serverName === "Wellbrained Crew");
-    expect(saved.at(-1)?.last).toEqual(last);
-    expect(connection.view().last).toEqual({ channelId: "10", name: "Factory Floor", serverName: "Wellbrained Crew" });
-
-    // Leaving keeps it, and Rejoin joins it. Nothing is sent before the player asks.
-    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: null }));
-    fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: null });
-    await until(() => connection.view().call === null);
-    expect(connection.view().last?.channelId).toBe("10");
-    expect(fake.commands.some((c) => c.cmd === "SELECT_VOICE_CHANNEL")).toBe(false);
-    await connection.join("10");
-    expect(fake.commands.find((c) => c.cmd === "SELECT_VOICE_CHANNEL")?.args).toEqual({ channel_id: "10", force: true });
-
-    // A listed channel can be joined; one Tavora never showed cannot.
-    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain")] } }));
-    fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: "10" });
-    await until(() => connection.view().channels.length === 2);
-    await connection.join("11");
-    expect(fake.commands.filter((c) => c.cmd === "SELECT_VOICE_CHANNEL").map((c) => c.args.channel_id)).toEqual(["10", "11"]);
-    await expect(connection.join("99")).rejects.toMatchObject({ key: "discord.error.joinUnknown" });
-
-    // Discord refusing (no permission) is said plainly.
-    fake.answers.set("SELECT_VOICE_CHANNEL", () => ({ error: { code: 4000, message: "No permission" } }));
-    await expect(connection.join("11")).rejects.toMatchObject({ key: "discord.error.joinFailed" });
-
-    // A call without a server is not remembered, and Sign out forgets it.
-    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "30", name: null, voice_states: [person("1", "Brain")] } }));
-    fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: "30" });
-    await until(() => connection.view().call?.id === "30" && connection.view().server === null);
-    expect(connection.view().last?.channelId).toBe("10");
-    await connection.signOut();
-    expect(connection.view().last).toBeNull();
-  });
-
-  it("remembers a server for each game, browses it without a call, and reads it every 5 minutes", async () => {
-    const { connection, fake, saved, timers } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
-    fake.answers.set("GET_GUILD", (args) => ({ data: { id: args.guild_id, name: args.guild_id === "21" ? "Other Crew" : "Wellbrained Crew", icon_url: null } }));
-    fake.answers.set("GET_GUILDS", () => ({ data: { guilds: [{ id: "20", name: "Wellbrained Crew" }, { id: "21", name: "Other Crew" }] } }));
-    connection.setGame("poe2");
-    await connection.setWanted(true);
-    await until(() => connection.view().status === "connected" && connection.view().call !== null && connection.view().channels.length === 2);
-    expect(connection.view().servers.map((s) => s.name)).toEqual(["Wellbrained Crew", "Other Crew"]);
-    expect(connection.view().game).toEqual({ remember: false, serverId: null });
-
-    // Ticking the box in a call takes the call's server and channel.
-    await connection.rememberGame("poe2", true);
-    expect(saved.at(-1)?.games?.poe2).toEqual({ guildId: "20", serverName: "Wellbrained Crew", channelId: "10", channelName: "Factory Floor" });
-    expect(connection.view().game).toEqual({ remember: true, serverId: "20" });
-
-    // Without a call the game's server is still listed, and Rejoin offers the game's channel.
-    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: null }));
-    fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: null });
-    await until(() => connection.view().call === null && connection.view().channels.length === 2);
-    expect(connection.view()).toMatchObject({ browseServer: { id: "20", name: "Wellbrained Crew" }, last: { channelId: "10", name: "Factory Floor", serverName: "Wellbrained Crew" } });
-
-    // Another game without a server shows nothing and offers the last channel anywhere.
-    connection.setGame("satisfactory");
-    await until(() => connection.view().channels.length === 0);
-    expect(connection.view()).toMatchObject({ browseServer: null, game: { remember: false }, last: { channelId: "10" } });
-
-    // Choosing a server from the list; only a server the player is on is accepted.
-    await connection.rememberGame("satisfactory", true);
-    await connection.setGameServer("satisfactory", "21");
-    expect(connection.view()).toMatchObject({ browseServer: { id: "21", name: "Other Crew" }, game: { remember: true, serverId: "21" }, last: null });
-    await expect(connection.setGameServer("satisfactory", "99")).rejects.toMatchObject({ key: "discord.error.serverUnknown" });
-
-    // A call on another server does not replace the game's server.
-    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain")] } }));
-    fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: "10" });
-    await until(() => connection.view().call?.id === "10");
-    expect(connection.view()).toMatchObject({ server: { id: "20" }, browseServer: { id: "21" } });
-    expect(saved.at(-1)?.games?.satisfactory?.guildId).toBe("21");
-
-    // Unticking forgets the server; the browsed list is read again by a timer (5 minutes), not every 10 seconds.
-    await connection.rememberGame("satisfactory", false);
-    expect(saved.at(-1)?.games?.satisfactory).toBeUndefined();
-    expect(OTHERS_MS).toBe(300_000);
-    expect(timers.length).toBeGreaterThan(0);
-  });
-
-  it("leaves, mutes and deafens, and asks for the new permission first when the sign-in lacks it", async () => {
-    const { connection, fake } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
-    await connection.setWanted(true);
-    await until(() => connection.view().status === "connected" && connection.view().call !== null);
-    expect(connection.view()).toMatchObject({ canControl: true, self: { mute: false, deaf: false } });
-    await connection.setVoice({ mute: true });
-    await connection.setVoice({ deaf: false });
-    expect(fake.commands.filter((c) => c.cmd === "SET_VOICE_SETTINGS").map((c) => c.args)).toEqual([{ mute: true }, { deaf: false }]);
-    fake.dispatch("VOICE_STATE_UPDATE", person("1", "Brain", { self_mute: true }));
-    await until(() => connection.view().self?.mute === true);
-    await connection.leave();
-    expect(fake.commands.find((c) => c.cmd === "SELECT_VOICE_CHANNEL")?.args).toEqual({ channel_id: null });
-    // The panel shows at once that the player is out, without waiting for Discord's own event.
-    expect(connection.view().call).toBeNull();
-    fake.answers.set("SET_VOICE_SETTINGS", () => ({ error: { code: 4000, message: "No" } }));
-    await expect(connection.setVoice({ mute: false })).rejects.toMatchObject({ key: "discord.error.voiceFailed" });
-
-    // A sign-in made before the write scope existed can read, but must be approved again to mute.
-    const old = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
-    old.fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "brain", global_name: "Brain" }, scopes: ["rpc", "rpc.voice.read", "identify"] } }));
-    await old.connection.setWanted(true);
-    await until(() => old.connection.view().status === "connected");
-    expect(old.connection.view().canControl).toBe(false);
-    await expect(old.connection.setVoice({ mute: true })).rejects.toMatchObject({ key: "discord.error.needsControl" });
-    expect(old.fake.commands.some((c) => c.cmd === "SET_VOICE_SETTINGS")).toBe(false);
-    old.fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "brain", global_name: "Brain" }, scopes: SCOPES } }));
-    await old.connection.allowControl();
-    await until(() => old.connection.view().canControl);
-    expect(old.fake.commands.some((c) => c.cmd === "AUTHORIZE")).toBe(true);
-  });
-
-  it("shows the volume and mute for me of each person, and changes them for the player only", async () => {
-    const { connection, fake } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
-    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({
-      data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain"), { ...person("2", "Lena"), volume: 150, mute: true }, { ...person("3", "Tobi"), volume: 999 }] },
-    }));
-    await connection.setWanted(true);
-    await until(() => connection.view().status === "connected" && connection.view().call?.members.length === 3);
-    const lena = () => connection.view().call!.members.find((m) => m.id === "2")!;
-    expect(connection.view().call!.members.map((m) => [m.volume, m.mutedForMe])).toEqual([[100, false], [150, true], [200, false]]);
-
-    // Shown at once, and sent to Discord for that person only.
-    await connection.setUserVoice("2", { volume: 80 });
-    expect(lena().volume).toBe(80);
-    await connection.setUserVoice("2", { mute: false });
-    expect(lena().mutedForMe).toBe(false);
-    expect(fake.commands.filter((c) => c.cmd === "SET_USER_VOICE_SETTINGS").map((c) => c.args)).toEqual([
-      { user_id: "2", volume: 80 },
-      { user_id: "2", mute: false },
+    fake.dispatch("MESSAGE_CREATE", { channel_id: "10", content: "secret" });
+    await until(() => two.events.length === 2);
+    expect(one.events).toEqual([{ event: "SPEAKING_START", data: { user_id: "2", channel_id: "10" } }]);
+    expect(two.events).toEqual([
+      { event: "SPEAKING_START", data: { user_id: "2", channel_id: "10" } },
+      { event: "VOICE_CHANNEL_SELECT", data: { channel_id: null } },
     ]);
 
-    // Not for the player, and not for someone who is not in the call.
-    await expect(connection.setUserVoice("1", { volume: 50 })).rejects.toMatchObject({ key: "discord.error.personGone" });
-    await expect(connection.setUserVoice("99", { mute: true })).rejects.toMatchObject({ key: "discord.error.personGone" });
-
-    // Discord refusing puts back what Discord says.
-    fake.answers.set("SET_USER_VOICE_SETTINGS", () => ({ error: { code: 4000, message: "No" } }));
-    await expect(connection.setUserVoice("2", { volume: 10 })).rejects.toMatchObject({ key: "discord.error.voiceFailed" });
-    await until(() => lena().volume === 150 && lena().mutedForMe);
+    // Discord is told to stop only when no panel wants it any more.
+    await connector.unsubscribe("p1", "SPEAKING_START", "10");
+    expect(fake.commands.some((c) => c.cmd === "UNSUBSCRIBE")).toBe(false);
+    connector.release("p2");
+    await until(() => fake.commands.some((c) => c.cmd === "UNSUBSCRIBE"));
+    expect(fake.commands.filter((c) => c.cmd === "UNSUBSCRIBE")).toEqual(
+      expect.arrayContaining([
+        { cmd: "UNSUBSCRIBE", args: { channel_id: "10" }, evt: "SPEAKING_START" },
+        { cmd: "UNSUBSCRIBE", args: {}, evt: "VOICE_CHANNEL_SELECT" },
+      ]),
+    );
+    expect(connector.state().status).toBe("connected");
   });
 
-  it("leaves at once, and comes back when Discord refuses", async () => {
-    const { connection, fake } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
-    await connection.setWanted(true);
-    await until(() => connection.view().status === "connected" && connection.view().call !== null);
-    fake.answers.set("SELECT_VOICE_CHANNEL", () => ({ error: { code: 4000, message: "No" } }));
-    await expect(connection.leave()).rejects.toMatchObject({ key: "discord.error.leaveFailed" });
-    await until(() => connection.view().call !== null);
+  it("subscribes again after Discord restarts", async () => {
+    const { connector, fake } = await setup({ secrets: SIGNED_IN });
+    await connector.use("p1", panel().listener);
+    await connector.subscribe("p1", "VOICE_STATE_UPDATE", "10");
+    await until(() => connector.state().status === "connected");
+    expect(fake.commands.filter((c) => c.cmd === "SUBSCRIBE")).toHaveLength(1);
+    fake.drop();
+    await until(() => connector.state().status === "not-running");
+    expect(await connector.command("GET_GUILDS", {})).toMatchObject({ ok: false, reason: "not-connected" });
   });
 
-  it("does not join while not connected", async () => {
-    const { connection } = await setup();
-    await expect(connection.join("10")).rejects.toMatchObject({ key: "discord.error.joinNotConnected" });
+  it("limits how many subscriptions one panel keeps", async () => {
+    const { connector } = await setup({ secrets: SIGNED_IN });
+    await connector.use("p1", panel().listener);
+    for (let i = 0; i < 32; i++) await connector.subscribe("p1", "SPEAKING_START", String(100 + i));
+    await expect(connector.subscribe("p1", "SPEAKING_START", "999")).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("fetches only Discord's own pictures, once, as small PNGs", async () => {
+    const { connector, requests } = await setup();
+    const avatar = `https://cdn.discordapp.com/avatars/1/${HASH}.webp?size=1024`;
+    expect(await connector.image(avatar)).toMatch(/^data:image\/png;base64,/);
+    expect(await connector.image(avatar)).toMatch(/^data:image\/png;base64,/);
+    expect(await connector.image("https://evil.example/avatars/1/x.png")).toBeNull();
+    expect(await connector.image(`https://cdn.discordapp.com/attachments/1/2/${HASH}.png`)).toBeNull();
+    expect(requests.map((r) => r.url)).toEqual([`https://cdn.discordapp.com/avatars/1/${HASH}.png?size=64`]);
   });
 
   it("refreshes an expired sign-in, and asks again when Discord refuses it", async () => {
     const expired = { token: { accessToken: "old", refreshToken: "r", expiresAt: 0 } };
     const first = await setup({ secrets: expired });
-    await first.connection.setWanted(true);
-    await until(() => first.connection.view().status === "connected");
+    await first.connector.use("p1", panel().listener);
+    await until(() => first.connector.state().status === "connected");
     expect(first.requests.some((r) => r.body.includes("grant_type=refresh_token"))).toBe(true);
     // Refreshing needs no secret either.
     expect(first.requests.every((r) => !r.body.includes("client_secret"))).toBe(true);
 
     // The token is refused and refreshing fails too: Tavora is signed out and waits for Connect.
     const second = await setup({ secrets: { token: { accessToken: "old", refreshToken: "r", expiresAt: Date.now() + 1e9 } }, tokenStatus: 401 });
-    await second.connection.setWanted(true);
-    await until(() => second.connection.view().status === "signed-out");
+    await second.connector.use("p1", panel().listener);
+    await until(() => second.connector.state().status === "signed-out");
     expect(second.saved.at(-1)?.token).toBeNull();
     expect(second.fake.commands.some((c) => c.cmd === "AUTHORIZE")).toBe(false);
   });
 
   it("says so when Discord does not sign Tavora in", async () => {
-    const { connection } = await setup({ tokenStatus: 401 });
-    await connection.setWanted(true);
-    await connection.connectNow();
-    await until(() => connection.view().status === "error");
-    expect(connection.view().error).toBe("discord.error.noSignIn");
+    const { connector } = await setup({ tokenStatus: 401 });
+    await connector.use("p1", panel().listener);
+    await connector.connectNow();
+    await until(() => connector.state().status === "error");
+    expect(connector.state().error).toBe("no-sign-in");
+    expect(connector.view().error).toBe("discord.error.noSignIn");
   });
 
   it("uses a new verifier for each sign-in", async () => {
-    const { connection, requests, fake } = await setup();
-    await connection.setWanted(true);
-    await connection.connectNow();
-    await until(() => connection.view().status === "connected");
-    await connection.signOut();
-    await connection.connectNow();
-    await until(() => connection.view().status === "connected");
+    const { connector, requests, fake } = await setup();
+    await connector.use("p1", panel().listener);
+    await connector.connectNow();
+    await until(() => connector.state().status === "connected");
+    await connector.signOut();
+    await connector.connectNow();
+    await until(() => connector.state().status === "connected");
     const verifiers = requests.filter((r) => r.body.includes("code_verifier")).map((r) => new URLSearchParams(r.body).get("code_verifier"));
     expect(verifiers).toHaveLength(2);
     expect(verifiers[0]).not.toBe(verifiers[1]);
@@ -366,26 +260,38 @@ describe("DiscordConnection", () => {
   });
 
   it("keeps looking while Discord isn't running, and notices when it quits", async () => {
-    const { connection, timers } = await setup({ running: false, secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
-    await connection.setWanted(true);
-    await until(() => connection.view().status === "not-running");
+    const { connector, timers } = await setup({ running: false, secrets: SIGNED_IN });
+    await connector.use("p1", panel().listener);
+    await until(() => connector.state().status === "not-running");
     expect(timers.length).toBeGreaterThan(0);
 
-    const running = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
-    await running.connection.setWanted(true);
-    await until(() => running.connection.view().status === "connected");
+    const running = await setup({ secrets: SIGNED_IN });
+    await running.connector.use("p1", panel().listener);
+    await until(() => running.connector.state().status === "connected");
     running.fake.drop();
-    await until(() => running.connection.view().status === "not-running");
-    expect(running.connection.view().call).toBeNull();
+    await until(() => running.connector.state().status === "not-running");
   });
 
-  it("disconnects when the last panel closes, and forgets the sign-in on Sign out", async () => {
-    const { connection, saved } = await setup({ secrets: { token: { accessToken: "good", refreshToken: "r", expiresAt: Date.now() + 1e9 } } });
-    await connection.setWanted(true);
-    await until(() => connection.view().status === "connected");
-    await connection.setWanted(false);
-    expect(connection.view()).toMatchObject({ status: "off", call: null });
-    await connection.signOut();
-    expect(saved.at(-1)).toEqual({ token: null, last: null, games: {} });
+  it("disconnects when the last panel goes, and forgets the sign-in on Sign out", async () => {
+    const { connector, saved } = await setup({ secrets: SIGNED_IN });
+    await connector.use("p1", panel().listener);
+    await connector.use("p2", panel().listener);
+    await until(() => connector.state().status === "connected");
+    connector.release("p1");
+    expect(connector.view().status).toBe("connected");
+    connector.release("p2");
+    expect(connector.view().status).toBe("off");
+    await connector.signOut();
+    expect(saved.at(-1)).toEqual({ token: null });
+  });
+
+  it("hands over what the built-in panel kept, once, and keeps the sign-in", async () => {
+    const last = { channelId: "10", guildId: "20", name: "Factory Floor", serverName: "Crew" };
+    const games = { poe2: { guildId: "20", serverName: "Crew", channelId: "10", channelName: "Factory Floor" } };
+    const { connector, saved } = await setup({ secrets: { ...SIGNED_IN, last, games } });
+    expect(await connector.legacyPanelData()).toEqual({ last, games });
+    await connector.forgetLegacyPanelData();
+    expect(saved.at(-1)).toEqual({ token: SIGNED_IN.token });
+    expect(await connector.legacyPanelData()).toBeNull();
   });
 });
