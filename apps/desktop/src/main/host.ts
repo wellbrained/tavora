@@ -94,7 +94,7 @@ import { isWebUrl, siteOfUrl } from "./browser-url";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, discoverModules, isDevelopmentModule, buildFolderName, MANIFEST, projectEntry, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import { AiUsageConnector } from "./ai-usage";
 import { readClaudeEmail } from "./ai-usage-claude";
@@ -416,7 +416,7 @@ export class Host {
 
     host.screen = library.startup === "last-game" && library.lastGameId ? "game" : "welcome";
     host.registerIpc();
-    host.watchDevelopmentFolders();
+    await host.watchDevelopmentFolders();
     host.registerWindowEvents();
     host.window.once("ready-to-show", () => timings.record("startup", process.uptime() * 1000));
     await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
@@ -514,60 +514,75 @@ export class Host {
     this.modules = modules;
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
-    this.watchDevelopmentFolders();
+    await this.watchDevelopmentFolders();
   }
 
   // ── Development folders ──────────────────────────────────────────────
 
-  /** One watcher per module loaded from a development folder, and its pending reload. */
-  private readonly developmentWatchers = new Map<string, { watcher: FSWatcher; timer: ReturnType<typeof setTimeout> | undefined }>();
+  /** The watchers of each development folder, and its pending reload. */
+  private readonly developmentWatchers = new Map<string, { watchers: FSWatcher[]; timer: ReturnType<typeof setTimeout> | undefined; rediscover: boolean }>();
 
   /**
-   * Watches each module loaded from a development folder. A change to its built files reloads its
-   * open panels; a change to its manifest looks for modules again, since the id, entry or permissions
-   * may have changed. Changes come in bursts while a build writes, so it waits for a quiet moment.
+   * Watches each development folder, whether or not its module loaded. Only the project folder
+   * itself and its build folder are watched, never node_modules or .git. A change to the build
+   * reloads the module's open panels; a change to the manifest, the build folder appearing or being
+   * replaced, or any change while the module did not load looks for modules again, so a folder added
+   * before its first build or a broken manifest that was fixed loads by itself. Changes come in
+   * bursts while a build writes, so it waits for a quiet moment.
    */
-  private watchDevelopmentFolders(): void {
-    for (const { watcher, timer } of this.developmentWatchers.values()) {
+  private async watchDevelopmentFolders(): Promise<void> {
+    // Read everything first, so two calls at once cannot leave watchers of the older one behind.
+    const projects = await Promise.all(
+      this.library.developmentFolders.map(async (folder) => {
+        const module = [...this.modules.values()].find((item) => item.developmentFolder === folder);
+        return { folder, module, entry: module?.manifest.entry ?? (await projectEntry(folder)) };
+      }),
+    );
+    for (const { watchers, timer } of this.developmentWatchers.values()) {
       clearTimeout(timer);
-      watcher.close();
+      for (const watcher of watchers) watcher.close();
     }
     this.developmentWatchers.clear();
-    for (const module of this.modules.values()) {
-      if (!module.developmentFolder) continue;
-      const moduleId = module.manifest.id;
-      const built = path.dirname(path.join(module.root, module.manifest.entry));
-      let manifestChanged = false;
-      try {
-        const watcher = watch(module.root, { recursive: true, persistent: false }, (_event, name) => {
-          if (!name) return;
-          const changed = path.join(module.root, name.toString());
-          if (changed === path.join(module.root, "tavora.module.json")) manifestChanged = true;
-          else if (!changed.startsWith(built + path.sep) && changed !== built) return;
-          const entry = this.developmentWatchers.get(moduleId);
-          if (!entry) return;
-          clearTimeout(entry.timer);
-          entry.timer = setTimeout(() => {
-            entry.timer = undefined;
-            const reloadAll = manifestChanged;
-            manifestChanged = false;
-            void this.developmentChanged(moduleId, reloadAll).catch((error: unknown) => console.error("[tavora] reloading a development module failed", error));
-          }, DEVELOPMENT_RELOAD_MS);
-        });
-        watcher.on("error", () => watcher.close());
-        this.developmentWatchers.set(moduleId, { watcher, timer: undefined });
-      } catch (error) {
-        console.warn(`[tavora] cannot watch the development folder ${module.developmentFolder}`, error);
-      }
+    for (const { folder, module, entry } of projects) {
+      const root = module?.root ?? folder;
+      const built = entry === undefined ? undefined : buildFolderName(entry);
+      const state = { watchers: [] as FSWatcher[], timer: undefined as ReturnType<typeof setTimeout> | undefined, rediscover: false };
+      const changed = (rediscover: boolean) => {
+        state.rediscover ||= rediscover;
+        clearTimeout(state.timer);
+        state.timer = setTimeout(() => {
+          state.timer = undefined;
+          const again = state.rediscover;
+          state.rediscover = false;
+          void this.developmentChanged(folder, again).catch((error: unknown) => console.error("[tavora] reloading a development module failed", error));
+        }, DEVELOPMENT_RELOAD_MS);
+      };
+      const watchFolder = (dir: string, recursive: boolean, listener: (name: string | null) => void) => {
+        try {
+          const watcher = watch(dir, { recursive, persistent: false }, (_event, name) => listener(name?.toString() ?? null));
+          watcher.on("error", () => watcher.close());
+          state.watchers.push(watcher);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.warn(`[tavora] cannot watch the development folder ${dir}`, error);
+        }
+      };
+      watchFolder(root, false, (name) => {
+        if (!module || name === null || name === MANIFEST || name === built) changed(true);
+        else if (built === undefined) changed(false);
+      });
+      if (built !== undefined) watchFolder(path.join(root, built), true, () => changed(!module));
+      this.developmentWatchers.set(folder, state);
     }
   }
 
-  /** A development module's files changed: its panels load the new build. */
-  private async developmentChanged(moduleId: string, manifestChanged: boolean): Promise<void> {
-    if (manifestChanged) {
+  /** A development folder's files changed: its module's panels load the new build, after looking for modules again when asked. */
+  private async developmentChanged(folder: string, rediscover: boolean): Promise<void> {
+    if (rediscover) {
       await this.reloadModules();
       this.pushState();
     }
+    const moduleId = [...this.modules.values()].find((item) => item.developmentFolder === folder)?.manifest.id;
+    if (moduleId === undefined) return;
     for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === moduleId) view.reload();
   }
 

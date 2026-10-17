@@ -28,7 +28,7 @@ export interface InstalledModule {
   developmentFolder?: string;
 }
 
-const MANIFEST = "tavora.module.json";
+export const MANIFEST = "tavora.module.json";
 
 /** Module ids starting with this publisher are reserved for official modules. */
 export const OFFICIAL_PREFIX = "tavora.";
@@ -96,8 +96,10 @@ export async function discoverModules(
     ...local.map((dir) => ({ dir, provenance: "local" as const, development: false })),
   ];
   for (const { dir, provenance, development: fromProject } of dirs) {
-    const found = fromProject ? await projectCandidate(dir) : await candidates(dir);
-    if (fromProject && found.length === 0) problems.push({ folder: path.basename(dir), message: "there is no tavora.module.json in this folder", developmentFolder: dir });
+    const project = fromProject ? await projectCandidate(dir) : undefined;
+    if (project === "missing") problems.push({ folder: path.basename(dir), message: "this folder can't be found", developmentFolder: dir });
+    else if (project?.length === 0) problems.push({ folder: path.basename(dir), message: "there is no tavora.module.json in this folder", developmentFolder: dir });
+    const found = project === undefined ? await candidates(dir) : project === "missing" ? [] : project;
     for (const candidate of found) {
       const report = (message: string) => problems.push({ folder: path.basename(candidate), message, ...(fromProject ? { developmentFolder: dir } : {}) });
       const installed = await loadModule(candidate, provenance, (message) => {
@@ -127,13 +129,34 @@ export async function discoverModules(
   return modules;
 }
 
-/** A development folder is one module: the folder itself when it has a manifest, else nothing. */
-async function projectCandidate(dir: string): Promise<string[]> {
+/** A development folder is one module: the folder itself when it has a manifest, else nothing ("missing" when the folder is gone). */
+async function projectCandidate(dir: string): Promise<string[] | "missing"> {
   try {
     const entries = await readdir(dir, { withFileTypes: true });
     return entries.some((entry) => entry.isFile() && entry.name === MANIFEST) ? [dir] : [];
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === "ENOENT" || code === "ENOTDIR" ? "missing" : [];
+  }
+}
+
+/**
+ * The folder a module's build goes into: the first folder of its manifest's entry, such as `dist`
+ * for `dist/index.html`. Undefined when the entry sits in the project folder itself or outside it.
+ */
+export function buildFolderName(entry: string): string | undefined {
+  const [first, ...rest] = path.normalize(entry).split(path.sep);
+  return first && rest.length > 0 && first !== ".." ? first : undefined;
+}
+
+/** The entry a development folder's manifest names, even when the manifest does not validate yet. */
+export async function projectEntry(dir: string): Promise<string | undefined> {
+  try {
+    const raw: unknown = JSON.parse(await readFile(path.join(dir, MANIFEST), "utf8"));
+    const entry = typeof raw === "object" && raw !== null ? (raw as { entry?: unknown }).entry : undefined;
+    return typeof entry === "string" ? entry : undefined;
   } catch {
-    return [];
+    return undefined;
   }
 }
 
