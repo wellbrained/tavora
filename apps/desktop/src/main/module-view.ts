@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
 import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
+import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./gamedata";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
@@ -23,6 +24,8 @@ export type { InstanceStatus } from "../shared/host-api";
 export interface ModuleViewOptions {
   instanceId: string;
   module: InstalledModule;
+  /** The panel type this panel shows (its page comes from it), or null for a module without types. */
+  panelType: ResolvedPanelType | null;
   game: TavoraGame;
   data: ModuleData;
   panelState: PanelStateStore;
@@ -266,7 +269,7 @@ export class ModuleView {
     });
 
     this.hideUntilSettled();
-    void contents.loadURL(`${origin}/${module.manifest.entry}`).catch(() => {
+    void contents.loadURL(`${origin}/${options.panelType?.entry ?? module.manifest.entry}`).catch(() => {
       // Load failures surface through did-fail-load / render-process-gone.
     });
   }
@@ -351,6 +354,7 @@ export class ModuleView {
         moduleId: module.manifest.id,
         moduleVersion: module.manifest.version,
         instanceId,
+        panelType: this.options.panelType?.id ?? null,
         game,
         data,
         panelState,

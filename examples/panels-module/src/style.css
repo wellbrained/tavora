@@ -1,0 +1,11 @@
+/* Tavora gives the page its font, colours and control styles; this only
+   adds layout, plus the theme colours main.ts sets from tavora.ui. */
+body { background: var(--bg); color: var(--text); }
+main { padding: 16px; }
+main[data-page="planner"] h1 { color: var(--accent); }
+.eyebrow, dt, .default { color: var(--muted); }
+h1 { margin: 4px 0 8px; }
+h2 { margin: 16px 0 6px; font-size: 1em; }
+dt { font-size: 0.85em; }
+dd { margin: 0 0 8px; }
+p { margin: 4px 0; }

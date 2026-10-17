@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isModuleId, isOwnerId, LOCAL_OWNER, needsNewerTavora, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, readZip, verifyFiles, ZIP_LIMITS, ZipError } from "@tavora/pack";
 import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
@@ -104,8 +104,9 @@ export async function installZip(zipFile: string, { userData, userModules, modul
   const { manifest } = result;
   if (needsNewerTavora(manifest, tavoraVersion)) throw new InstallError("error.installNeedsNewer", { name: manifest.name, needed: manifest.minTavora!, current: tavoraVersion });
   const names = new Set(files.map((file) => file.name));
-  if (!names.has(manifest.entry)) throw new InstallError("error.installRefused", { reason: `the entry page ${manifest.entry} is missing` });
-  if (manifest.icon && !names.has(manifest.icon)) throw new InstallError("error.installRefused", { reason: `the icon ${manifest.icon} is missing` });
+  const { entries, icons } = manifestFiles(manifest);
+  for (const entry of entries) if (!names.has(entry)) throw new InstallError("error.installRefused", { reason: `the entry page ${entry} is missing` });
+  for (const icon of icons) if (!names.has(icon)) throw new InstallError("error.installRefused", { reason: `the icon ${icon} is missing` });
   if (manifest.id.startsWith(OFFICIAL_PREFIX)) throw new InstallError("error.installRefused", { reason: "its id is reserved for Tavora's own modules" });
 
   const verified = verifyFiles(files);

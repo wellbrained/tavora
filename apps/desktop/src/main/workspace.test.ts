@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { SavedLayout } from "./layout";
-import { emptyWorkspace, loadWorkspace, planSnapshot, saveWorkspace, type Snapshot } from "./workspace";
+import { emptyWorkspace, loadWorkspace, planSnapshot, saveWorkspace, settlePanelTypes, type Snapshot } from "./workspace";
 
 const A = "00000000-0000-4000-8000-00000000000a";
 const B = "00000000-0000-4000-8000-00000000000b";
@@ -76,6 +76,21 @@ describe("loadWorkspace", () => {
     expect(state.games.satisfactory!.instances).toEqual([]);
   });
 
+  it("keeps a panel's type, and drops one that is not a type id", async () => {
+    const file = await tempFile();
+    const snapshot = { id: S, name: "Plan", savedAt: "2026-10-17T12:00:00.000Z", layout: twoColumns(A, B), modules: { [A]: "m.a", [B]: "m.a" }, panelTypes: { [A]: "planner", [B]: "../x" } };
+    await writeFile(
+      file,
+      JSON.stringify({
+        version: 2,
+        games: { poe2: { instances: [{ instanceId: A, moduleId: "m.a", panelType: "planner" }, { instanceId: B, moduleId: "m.a", panelType: "Bad Type" }], layout: null, snapshots: [snapshot] } },
+      }),
+    );
+    const poe2 = (await loadWorkspace(file, ["poe2"], () => true)).games.poe2!;
+    expect(poe2.instances).toEqual([{ instanceId: A, moduleId: "m.a", panelType: "planner" }, { instanceId: B, moduleId: "m.a" }]);
+    expect(poe2.snapshots[0]!.panelTypes).toEqual({ [A]: "planner" });
+  });
+
   it("ignores an unreadable file", async () => {
     const file = await tempFile();
     await writeFile(file, "{oops");
@@ -117,5 +132,45 @@ describe("planSnapshot", () => {
       { instanceId: opened, moduleId: "notes" },
     ]);
     expect(plan.close).toEqual([{ instanceId: B, moduleId: "todos" }]);
+  });
+});
+
+describe("panel types", () => {
+  const snapshot: Snapshot = {
+    id: S,
+    name: "Planner and inventory",
+    savedAt: "2026-10-17T12:00:00.000Z",
+    layout: twoColumns(A, B),
+    modules: { [A]: "m.a", [B]: "m.a" },
+    panelTypes: { [A]: "planner", [B]: "inventory" },
+  };
+
+  it("reuses only panels of the same type and opens the type that is missing", () => {
+    let next = 0;
+    const newId = () => `00000000-0000-4000-8000-${String(++next).padStart(12, "0")}`;
+    const plan = planSnapshot(snapshot, [{ instanceId: C, moduleId: "m.a", panelType: "planner" }, { instanceId: B, moduleId: "m.a", panelType: "planner" }], newId);
+    const opened = "00000000-0000-4000-8000-000000000001";
+    expect(plan.instances).toEqual([
+      { instanceId: C, moduleId: "m.a", panelType: "planner" },
+      { instanceId: opened, moduleId: "m.a", panelType: "inventory" },
+    ]);
+    expect(plan.close).toEqual([{ instanceId: B, moduleId: "m.a", panelType: "planner" }]);
+  });
+
+  it("gives older panels the continuing type, keeps removed types and clears types of modules without them", () => {
+    const state = emptyWorkspace(["poe2"]);
+    state.games.poe2!.instances = [
+      { instanceId: A, moduleId: "m.typed" },
+      { instanceId: B, moduleId: "m.typed", panelType: "removed" },
+      { instanceId: C, moduleId: "m.plain", panelType: "planner" },
+    ];
+    state.games.poe2!.snapshots = [{ ...snapshot, modules: { [A]: "m.typed", [B]: "m.plain" }, panelTypes: { [B]: "planner" } }];
+    settlePanelTypes(state, (id) => (id === "m.typed" ? { ids: ["inventory", "planner"], continuing: "planner" } : { ids: [], continuing: null }));
+    expect(state.games.poe2!.instances).toEqual([
+      { instanceId: A, moduleId: "m.typed", panelType: "planner" },
+      { instanceId: B, moduleId: "m.typed", panelType: "removed" },
+      { instanceId: C, moduleId: "m.plain" },
+    ]);
+    expect(state.games.poe2!.snapshots[0]!.panelTypes).toEqual({ [A]: "planner" });
   });
 });

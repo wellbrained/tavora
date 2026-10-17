@@ -1,6 +1,6 @@
 # Bridge protocol v1
 
-**Status:** Version 1 is what `@tavora/sdk` 0.2.0 speaks. It may still change before Tavora's first public release; after that, breaking changes need a new major version (see [Versioning](#versioning)). What changed when is in the [changelog](./changelog.md).
+**Status:** Version 1 is what `@tavora/sdk` 0.2.1 speaks. It may still change before Tavora's first public release; after that, breaking changes need a new major version (see [Versioning](#versioning)). What changed when is in the [changelog](./changelog.md).
 
 Module authors normally use `@tavora/sdk` and never see these messages. This page is for people writing another SDK, reviewing the host, or debugging.
 
@@ -48,7 +48,7 @@ Methods without params must be sent with `params` left out.
 
 | Method | Params | Result |
 | --- | --- | --- |
-| `bridge.handshake` | `{ protocol: 1, sdkVersion: string }` | `{ protocol: 1, host: { name: "tavora-desktop", version }, module: { id, version }, capabilities }`: `capabilities` lists what the player has granted, such as `["network"]` |
+| `bridge.handshake` | `{ protocol: 1, sdkVersion: string }` | `{ protocol: 1, host: { name: "tavora-desktop", version }, module: { id, version }, capabilities, panel: { type } }`: `capabilities` lists what the player has granted, such as `["network"]`; `panel.type` is the [panel type](./manifest.md#panel-types) this panel shows, or `null` for a module without panel types (Tavora 0.17.9 and newer) |
 | `game.getCurrent` | none | `{ id, displayName }` of the game this panel belongs to |
 | `storage.get` | `{ key }` | the stored JSON value, or `null` |
 | `storage.set` | `{ key, value }` | `null` |

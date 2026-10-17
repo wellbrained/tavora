@@ -43,6 +43,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     moduleId,
     moduleVersion: "1.2.3",
     instanceId,
+    panelType: null,
     game: { id: "poe2", displayName: "Path of Exile 2" },
     data: registry.get("local", moduleId, "poe2"),
     appSettings: registry.appSettings("local", moduleId),
@@ -98,8 +99,15 @@ describe("handshake", () => {
         host: { name: "tavora-desktop", version: "0.0.0-test" },
         module: { id: "local.example.a", version: "1.2.3" },
         capabilities: [],
+        panel: { type: null },
       },
     });
+  });
+
+  it("tells the page which panel type it runs as", async () => {
+    const p = new FakePort();
+    new BridgeSession(p, { ...context, panelType: "planner" });
+    expect(await call(p, "bridge.handshake", { protocol: 1, sdkVersion: "0.2.1" })).toMatchObject({ ok: true, result: { panel: { type: "planner" } } });
   });
 
   it("rejects an incompatible SDK with the supported versions", async () => {

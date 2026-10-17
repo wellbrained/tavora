@@ -4,6 +4,8 @@
 // during menus and drags, or the module's name and state. A Browser panel
 // also gets its toolbar here, above the page, and its start and error pages.
 // A module whose update asks for more gets a bar above its view to review it.
+// A panel whose type the module no longer offers says so, with Remove and the
+// module's other panel types (the decision log, named panels round 4).
 import type { IDockviewPanelProps } from "dockview-vue";
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
@@ -19,6 +21,7 @@ const id = props.params.api.id;
 const element = ref<HTMLElement | null>(null);
 const panel = computed(() => state.value?.panels.find((item) => item.instanceId === id));
 const image = computed(() => frozen.value[id]);
+const module = computed(() => state.value?.modules.find((item) => item.id === panel.value?.moduleId));
 /** The module's update asks for something not granted yet (or its grant was lost): the bar offers to review it. */
 const reviewNeeded = computed(() => {
   const module = state.value?.modules.find((item) => item.id === panel.value?.moduleId);
@@ -64,6 +67,29 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
       draggable="false"
       @load="onImageLoad"
     />
+    <div
+      v-else-if="panel?.status === 'unavailable'"
+      class="flex size-full flex-col items-center justify-center gap-3 overflow-y-auto p-4 text-center"
+      :data-testid="`panel-type-gone-${id}`"
+    >
+      <p class="max-w-sm text-sm">{{ t("panel.typeGone", { module: module?.name ?? panel.moduleId, type: panel.name }) }}</p>
+      <template v-if="module?.panels.length">
+        <p class="text-muted-foreground text-sm">{{ t("panel.typeGoneChoose", { module: module.name }) }}</p>
+        <div class="flex max-w-md flex-wrap justify-center gap-2">
+          <Button
+            v-for="type in module.panels"
+            :key="type.id"
+            size="sm"
+            variant="outline"
+            :data-testid="`choose-panel-type-${type.id}`"
+            @click="act({ type: 'choose-panel-type', instanceId: id, panelType: type.id })"
+          >
+            {{ type.name }}
+          </Button>
+        </div>
+      </template>
+      <Button size="sm" variant="ghost" data-testid="remove-unavailable-panel" @click="act({ type: 'close-panel', instanceId: id })">{{ t("panel.remove") }}</Button>
+    </div>
     <div v-else-if="panel?.browser?.error" class="flex size-full flex-col items-center justify-center gap-3 p-4 text-center" :data-testid="`browser-error-${id}`">
       <p class="font-medium">{{ t(`browser.error.${panel.browser.error.kind}`, { detail: panel.browser.error.detail }) }}</p>
       <p class="text-muted-foreground max-w-sm truncate text-sm">{{ panel.browser.host }}</p>

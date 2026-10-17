@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// The small icon in front of a module's name. The module's own icon (its
-// manifest `icon`) comes first; then, for the modules that stand for a
+// The small icon in front of a module's name. A panel type's icon (its own,
+// else the module's) or the module's own icon (its manifest `icon`) comes first; then, for the modules that stand for a
 // product (Discord, React, Vue, ...), its real logo, or a plain line icon
 // for the built-in ones; any other module gets a puzzle piece.
 import { Gauge, Globe, ListTodo, NotebookPen, PenTool, Puzzle } from "@lucide/vue";
@@ -8,10 +8,14 @@ import { computed } from "vue";
 import { state } from "../host";
 import { BRAND_LOGOS } from "../module-icons";
 
-const props = withDefaults(defineProps<{ moduleId: string | undefined; size?: string }>(), { size: "size-4" });
+const props = withDefaults(defineProps<{ moduleId: string | undefined; panelType?: string | null; size?: string }>(), { size: "size-4", panelType: null });
 
 const LINE_ICONS = { "tavora.ai-usage": Gauge, "tavora.browser": Globe, "tavora.notes": NotebookPen, "tavora.todos": ListTodo, "tavora.whiteboard": PenTool } as const;
-const picture = computed(() => state.value?.modules.find((module) => module.id === props.moduleId)?.icon ?? null);
+const picture = computed(() => {
+  const module = state.value?.modules.find((item) => item.id === props.moduleId);
+  const type = props.panelType === null ? undefined : module?.panels.find((item) => item.id === props.panelType);
+  return type ? type.icon : (module?.icon ?? null);
+});
 const logo = computed(() => BRAND_LOGOS[props.moduleId ?? ""]);
 const line = computed(() => LINE_ICONS[props.moduleId as keyof typeof LINE_ICONS] ?? Puzzle);
 </script>

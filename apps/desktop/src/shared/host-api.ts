@@ -9,7 +9,8 @@ import type { LayoutTemplateId } from "./layout-templates";
  * could not be loaded. unresponsive: the page stopped answering and may
  * recover. crashed: the renderer is gone until the panel is reloaded.
  */
-export type InstanceStatus = "loading" | "ready" | "failed" | "unresponsive" | "crashed";
+/** `unavailable`: the module no longer offers this panel's type, so nothing runs in it. */
+export type InstanceStatus = "loading" | "ready" | "failed" | "unresponsive" | "crashed" | "unavailable";
 
 export type Screen = "welcome" | "game";
 export type RootSort = "recent" | "manual";
@@ -54,6 +55,9 @@ export interface FolderView {
 export interface PanelView {
   instanceId: string;
   moduleId: string;
+  /** Which of the module's panel types this is; null for a module without types. */
+  panelType: string | null;
+  /** The tab's name: the panel type's short name, or the module's name. */
   name: string;
   status: InstanceStatus;
   /** Set for Browser panels: what their toolbar shows. */
@@ -63,6 +67,16 @@ export interface PanelView {
 }
 
 /** A Browser panel's page, as its toolbar shows it. Nothing here comes from the page but its title. */
+/** One of a module's named panel types, as Add module and the tabs show it. */
+export interface PanelTypeView {
+  id: string;
+  name: string;
+  /** The type's own icon (or the module's) as a data address, or null. */
+  icon: string | null;
+  minWidth: number;
+  minHeight: number;
+}
+
 export interface BrowserState {
   /** The page's address; empty before anything was opened. */
   url: string;
@@ -308,6 +322,8 @@ export interface HostViewState {
     /** The smallest panel content area the module works in. */
     minWidth: number;
     minHeight: number;
+    /** Its panel types, in the manifest's order; empty for a module with one panel and no types. */
+    panels: PanelTypeView[];
     /** Official modules ship with Tavora; local ones were found on disk. */
     provenance: "official" | "local";
     /** A playground or example for module authors, listed under Development. */
@@ -458,7 +474,10 @@ export type HostAction =
   | { type: "set-profile-picture"; png: string }
   | { type: "remove-profile-picture" }
   | { type: "set-rail"; expanded?: boolean; width?: number }
-  | { type: "open-module"; moduleId: string }
+  /** Opens a new panel; `panelType` picks one of the module's panel types (its continuing type when left out). */
+  | { type: "open-module"; moduleId: string; panelType?: string }
+  /** Gives a panel whose type an update removed another type of the same module. */
+  | { type: "choose-panel-type"; instanceId: string; panelType: string }
   | { type: "close-panel"; instanceId: string }
   | { type: "reload-panel"; instanceId: string }
   | { type: "stop-panel"; instanceId: string }

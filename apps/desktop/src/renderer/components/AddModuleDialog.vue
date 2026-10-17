@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// The module library: every installed module, to open in the current game.
+// The module library: every installed module, to open in the current game. A module with panel
+// types lists them under its row, each with its own Add (the decision log, named panels round 1).
 import { computed, ref } from "vue";
 import { addModule, dialog, state, type AddModuleRequest } from "../host";
 import { Button } from "@/components/ui/button";
@@ -34,21 +35,25 @@ function count(id: Category): number {
 const groups = computed(() => {
   const text = query.value.trim().toLowerCase();
   const matches = state.value!.modules.filter(
-    (module) => !text || module.name.toLowerCase().includes(text) || (module.description ?? "").toLowerCase().includes(text),
+    (module) =>
+      !text ||
+      module.name.toLowerCase().includes(text) ||
+      (module.description ?? "").toLowerCase().includes(text) ||
+      module.panels.some((type) => type.name.toLowerCase().includes(text)),
   );
   return CATEGORIES.value.filter((item) => item.id !== "all")
     .map((item) => ({ ...item, items: matches.filter((module) => categoryOf(module) === item.id) }))
     .filter((group) => group.items.length && (category.value === "all" || category.value === group.id));
 });
 
-/** How many panels of a module are already open in this game. */
-function openCount(moduleId: string): number {
-  return state.value!.panels.filter((panel) => panel.moduleId === moduleId).length;
+/** How many panels of a module (of one of its panel types, if given) are already open in this game. */
+function openCount(moduleId: string, panelType?: string): number {
+  return state.value!.panels.filter((panel) => panel.moduleId === moduleId && (panelType === undefined || panel.panelType === panelType)).length;
 }
 
 /** Adds it, or asks for what it needs first (the consent dialog takes this dialog's place). */
-function add(moduleId: string) {
-  addModule(moduleId, (dialog.value as AddModuleRequest).slot ?? null);
+function add(moduleId: string, panelType?: string) {
+  addModule(moduleId, (dialog.value as AddModuleRequest).slot ?? null, panelType);
 }
 
 /** Enter opens the first module that can run in this game. */
@@ -91,7 +96,7 @@ function submit() {
             <li
               v-for="module in group.items"
               :key="module.id"
-              :class="cn('bg-card flex items-start gap-3 rounded-lg border p-3', !module.available && 'opacity-60')"
+              :class="cn('bg-card flex flex-wrap items-start gap-3 rounded-lg border p-3', !module.available && 'opacity-60')"
               :data-testid="`module-${module.id}`"
             >
               <span
@@ -116,7 +121,7 @@ function submit() {
                 <span v-if="!module.available" class="text-muted-foreground text-sm">{{ t("addModule.unsupported") }}</span>
                 <span v-else-if="module.description" class="text-muted-foreground line-clamp-2 text-sm">{{ module.description }}</span>
               </span>
-              <span class="flex flex-none flex-col items-end gap-1">
+              <span v-if="!module.panels.length" class="flex flex-none flex-col items-end gap-1">
                 <Button
                   size="sm"
                   variant="outline"
@@ -130,6 +135,29 @@ function submit() {
                 </Button>
                 <span v-if="openCount(module.id)" class="text-muted-foreground text-xs">{{ t("addModule.open", { count: openCount(module.id) }) }}</span>
               </span>
+              <ul
+                v-if="module.panels.length"
+                class="flex basis-full flex-col gap-1 border-t pt-2"
+                :aria-label="t('addModule.panels', { name: module.name })"
+                :data-testid="`panel-types-${module.id}`"
+              >
+                <li v-for="type in module.panels" :key="type.id" class="flex items-center gap-2 pl-1">
+                  <ModuleIcon :module-id="module.id" :panel-type="type.id" />
+                  <span class="min-w-0 flex-1 truncate text-sm">{{ type.name }}</span>
+                  <span v-if="openCount(module.id, type.id)" class="text-muted-foreground text-xs">{{ t("addModule.open", { count: openCount(module.id, type.id) }) }}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary h-7"
+                    :data-testid="`open-${module.id}-${type.id}`"
+                    :disabled="!module.available"
+                    :aria-label="t('addModule.addLabel', { name: `${module.name}: ${type.name}` })"
+                    @click="add(module.id, type.id)"
+                  >
+                    {{ t("common.add") }}
+                  </Button>
+                </li>
+              </ul>
             </li>
           </ul>
         </section>

@@ -2,6 +2,10 @@
 
 What changed in `@tavora/sdk` and the bridge protocol it speaks, newest first. Before Tavora 1.0 the SDK may still change in ways that break modules; each such change raises the minor version (0.2 → 0.3) and is marked **Breaking** here. Anything else raises the patch version. To make sure players have a Tavora that knows what your module uses, set [`minTavora`](https://docs.mytavora.app/reference/manifest) in its manifest.
 
+## 0.2.1
+
+- Panel types: a manifest may list `panels`, named tools such as Inventory and Build planner that players add, dock and copy on their own, all sharing the module's saved content and permissions. `panel.type` says which one a page runs as; the handshake carries it as `panel.type` (Tavora 0.17.9). Set `minTavora` to `0.17.9` or newer when you use them: an older Tavora refuses the `panels` field.
+
 ## 0.2.0
 
 Needs Tavora 0.17.8 or newer for `minTavora`; everything else works from the Tavora version named next to it.

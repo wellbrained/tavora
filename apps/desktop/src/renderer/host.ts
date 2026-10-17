@@ -132,6 +132,8 @@ export interface LinkChoiceRequest {
 export interface GrantRequest {
   kind: "grant";
   moduleId: string;
+  /** The panel type to open once allowed, for a module with panel types. */
+  panelType?: string;
   slot: string | null;
   review: boolean;
 }
@@ -220,19 +222,20 @@ export function needsGrant(module: ModuleState): boolean {
 }
 
 /**
- * Adds a module to the current game, into `slot` if given. A module that asks for something not
- * granted yet goes through the consent dialog first; once granted, it is added without asking.
+ * Adds a module to the current game, into `slot` if given; `panelType` picks one of its panel types
+ * (its continuing type when left out). A module that asks for something not granted yet goes through
+ * the consent dialog first; once granted, it is added without asking.
  */
-export function addModule(moduleId: string, slot: string | null = null): void {
+export function addModule(moduleId: string, slot: string | null = null, panelType?: string): void {
   const module = state.value?.modules.find((item) => item.id === moduleId);
   if (!module) return;
   if (needsGrant(module)) {
-    dialog.value = { kind: "grant", moduleId, slot, review: false };
+    dialog.value = { kind: "grant", moduleId, slot, review: false, ...(panelType ? { panelType } : {}) };
     return;
   }
   dialog.value = null;
   nextPanelSlot.value = slot;
-  void act({ type: "open-module", moduleId });
+  void act({ type: "open-module", moduleId, ...(panelType ? { panelType } : {}) });
 }
 
 /** Names joined as a sentence in Tavora's language: "A, B and C". */

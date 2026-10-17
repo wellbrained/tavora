@@ -70,7 +70,7 @@ export type {
 export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, PROTOCOL_VERSION, THEME_TOKENS } from "./protocol.js";
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.0";
+export const SDK_VERSION = "0.2.1";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -125,6 +125,8 @@ export interface TavoraSDK {
   };
   /** UI state for this one panel (selection, scroll, open tab). Cleared when the panel is closed. */
   panel: {
+    /** Which of the manifest's `panels` this panel is, by id; null for a module without panel types (or an older Tavora). */
+    readonly type: string | null;
     getState<T = JsonValue>(): Promise<T | null>;
     setState(value: JsonValue | null): Promise<void>;
   };
@@ -369,6 +371,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       onChange: (fn) => on("documents.changed", fn),
     },
     panel: {
+      type: host.panel?.type ?? null,
       getState: <T = JsonValue>() => call("panel.getState") as Promise<T | null>,
       setState: async (value) => {
         await call("panel.setState", { value });

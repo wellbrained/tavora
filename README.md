@@ -100,7 +100,7 @@ Artifacts go to `apps/desktop/release/`. Packaged builds use the installed-app p
 
 A module is a small web app with a `tavora.module.json` manifest and built assets. The host supplies the current game, theme, language and permitted APIs through the TypeScript [`@tavora/sdk`](packages/sdk/README.md).
 
-Start with the [developer guide](https://docs.mytavora.app/guide/getting-started), or an example in [vanilla TypeScript](examples/vanilla-module), [React](examples/react-module) or [Vue](examples/vue-module). The official modules use the same SDK. The UI Playground shows Tavora's shared controls and styling.
+Start with the [developer guide](https://docs.mytavora.app/guide/getting-started), or an example in [vanilla TypeScript](examples/vanilla-module), [React](examples/react-module) or [Vue](examples/vue-module), and one with [several panel types](examples/panels-module). The official modules use the same SDK. The UI Playground shows Tavora's shared controls and styling.
 
 The SDK and packaging tools currently live in this repository and are not published to npm. Signed module ZIPs, permission prompts and publisher-bound updates are implemented; the broader outside-developer workflow is still being built. APIs are not stable before 1.0. The [manifest reference](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md) and [theme format](apps/docs/reference/theme.md) describe the current contracts.
 

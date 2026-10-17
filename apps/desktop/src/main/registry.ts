@@ -1,6 +1,6 @@
 import { readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import { LOCAL_OWNER, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { resolveAsset } from "./assets";
 import { moduleIconUrl } from "./module-icon";
 
@@ -50,6 +50,7 @@ const DEVELOPMENT_MODULES = new Set([
   "local.example.vanilla-module",
   "local.example.react-module",
   "local.example.vue-module",
+  "local.example.panels-module",
 ]);
 
 export function isDevelopmentModule(id: string): boolean {
@@ -147,14 +148,17 @@ async function loadModule(dir: string, provenance: Provenance, tavoraVersion: st
     return undefined;
   }
   const root = await realpath(dir);
-  if (!(await resolveAsset(root, `/${result.manifest.entry}`))) {
-    console.warn(`[tavora] module ${result.manifest.id} has no entry file ${result.manifest.entry}; is it built?`);
-    problem(`the entry file ${result.manifest.entry} is missing (is it built?)`);
+  const { entries, icons } = manifestFiles(result.manifest);
+  for (const entry of entries) {
+    if (await resolveAsset(root, `/${entry}`)) continue;
+    console.warn(`[tavora] module ${result.manifest.id} has no entry file ${entry}; is it built?`);
+    problem(`the entry file ${entry} is missing (is it built?)`);
     return undefined;
   }
-  if (result.manifest.icon !== undefined && !(await resolveAsset(root, `/${result.manifest.icon}`))) {
-    console.warn(`[tavora] module ${result.manifest.id} has no icon file ${result.manifest.icon}`);
-    problem(`the icon file ${result.manifest.icon} is missing`);
+  for (const icon of icons) {
+    if (await resolveAsset(root, `/${icon}`)) continue;
+    console.warn(`[tavora] module ${result.manifest.id} has no icon file ${icon}`);
+    problem(`the icon file ${icon} is missing`);
     return undefined;
   }
   return { manifest: result.manifest, root, provenance, owner: provenance === "official" ? OFFICIAL_OWNER : LOCAL_OWNER };
@@ -167,6 +171,8 @@ export interface ModuleInfo {
   removable: boolean;
   /** The manifest icon as a data address, or null (see module-icon.ts). */
   icon: string | null;
+  /** Each panel type's icon (its own, else the module's) as a data address, or null. */
+  panelIcons: Record<string, string | null>;
 }
 
 /** Where each module was found, and whether Settings may remove it. */
@@ -177,7 +183,10 @@ export async function describeModules(userModules: string, modules: Map<string, 
     const own = module.provenance === "local" && path.dirname(module.root) === userRoot;
     const kind = module.provenance === "official" ? "official" : isDevelopmentModule(id) ? "example" : own ? "own" : "dev";
     const origin = { kind, folder: path.basename(module.root) } as const;
-    info.set(id, { origin, removable: own, icon: await moduleIconUrl(module.root, module.manifest.icon) });
+    const icon = await moduleIconUrl(module.root, module.manifest.icon);
+    const panelIcons: Record<string, string | null> = {};
+    for (const type of module.manifest.panels ?? []) panelIcons[type.id] = type.icon === undefined ? icon : await moduleIconUrl(module.root, type.icon);
+    info.set(id, { origin, removable: own, icon, panelIcons });
   }
   return info;
 }

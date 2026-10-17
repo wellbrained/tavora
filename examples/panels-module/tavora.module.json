@@ -1,0 +1,25 @@
+{
+  "$schema": "../../packages/module-schema/schema/tavora.module.schema.json",
+  "id": "local.example.panels-module",
+  "name": "Panel Types Example",
+  "description": "One module, three named panels: add each on its own, open copies side by side, and see which options each panel type uses.",
+  "version": "0.0.0",
+  "apiVersion": "1",
+  "minTavora": "0.17.9",
+  "entry": "dist/index.html",
+  "icon": "dist/icons/overview.png",
+  "games": [],
+  "viewport": { "minWidth": 320, "minHeight": 240 },
+  "panels": [
+    { "id": "overview", "name": "Overview", "continues": true },
+    {
+      "id": "planner",
+      "name": "Build planner",
+      "entry": "dist/planner.html",
+      "icon": "dist/icons/planner.png",
+      "viewport": { "minWidth": 480, "minHeight": 320, "preferredWidth": 720, "preferredHeight": 520 }
+    },
+    { "id": "inventory", "name": "Inventory", "icon": "dist/icons/inventory.png" }
+  ],
+  "permissions": { "network": [] }
+}

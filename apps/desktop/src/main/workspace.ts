@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { isPanelTypeId } from "@tavora/module-schema";
 import { INSTANCE_ID } from "./ids";
 import { PlayerError } from "./messages";
 import { layoutPanels, parseLayout, pruneLayout, type SavedLayout } from "./layout";
@@ -9,6 +10,8 @@ export { INSTANCE_ID } from "./ids";
 export interface InstanceRecord {
   instanceId: string;
   moduleId: string;
+  /** Which of the module's panel types this panel is; left out for a module without types. */
+  panelType?: string;
 }
 
 /**
@@ -21,6 +24,8 @@ export interface Snapshot {
   savedAt: string;
   layout: SavedLayout;
   modules: Record<string, string>;
+  /** The panel type of each placeholder whose module has types. */
+  panelTypes?: Record<string, string>;
 }
 
 export interface GameWorkspace {
@@ -67,7 +72,11 @@ function parseSnapshot(raw: unknown, isInstalled: (moduleId: string) => boolean)
   const layout = pruneLayout(parseLayout(raw.layout), (slot) => slot in modules);
   if (!layout) return null;
   for (const slot of Object.keys(modules)) if (!layoutPanels(layout).includes(slot)) delete modules[slot];
-  return { id, name, savedAt, layout, modules };
+  const panelTypes: Record<string, string> = {};
+  if (isRecord(raw.panelTypes)) {
+    for (const [slot, type] of Object.entries(raw.panelTypes)) if (slot in modules && isPanelTypeId(type)) panelTypes[slot] = type;
+  }
+  return { id, name, savedAt, layout, modules, ...(Object.keys(panelTypes).length ? { panelTypes } : {}) };
 }
 
 /**
@@ -91,13 +100,15 @@ export async function loadWorkspace(
   for (const gameId of gameIds) {
     const game = saved.games?.[gameId];
     if (!isRecord(game)) continue;
-    const instances = (Array.isArray(game.instances) ? game.instances : []).filter(
-      (record): record is InstanceRecord =>
-        typeof record?.instanceId === "string" &&
-        INSTANCE_ID.test(record.instanceId) &&
-        typeof record.moduleId === "string" &&
-        isInstalled(record.moduleId),
-    );
+    const instances = (Array.isArray(game.instances) ? game.instances : [])
+      .filter(
+        (record): record is InstanceRecord =>
+          typeof record?.instanceId === "string" &&
+          INSTANCE_ID.test(record.instanceId) &&
+          typeof record.moduleId === "string" &&
+          isInstalled(record.moduleId),
+      )
+      .map(({ instanceId, moduleId, panelType }): InstanceRecord => ({ instanceId, moduleId, ...(isPanelTypeId(panelType) ? { panelType } : {}) }));
     const open = new Set(instances.map((record) => record.instanceId));
     const snapshots = (Array.isArray(game.snapshots) ? game.snapshots : [])
       .map((snapshot) => parseSnapshot(snapshot, isInstalled))
@@ -112,6 +123,42 @@ export async function loadWorkspace(
   return state;
 }
 
+/** A module's panel types as the workspace needs them: their ids, and the one older panels become. */
+export interface PanelTypesOf {
+  ids: readonly string[];
+  continuing: string | null;
+}
+
+/**
+ * Gives every panel of a module with panel types its type, and takes it from panels of a module that
+ * no longer has any (the decision log, named panels round 6). A panel opened before its module had
+ * types becomes the continuing type; one whose type an update removed keeps it, so its slot can say
+ * the type is gone. Snapshots get the same treatment.
+ */
+export function settlePanelTypes(state: WorkspaceState, typesOf: (moduleId: string) => PanelTypesOf | undefined): void {
+  const settle = (moduleId: string, panelType: string | undefined): string | undefined => {
+    const types = typesOf(moduleId);
+    if (!types || types.ids.length === 0) return undefined;
+    return panelType ?? types.continuing ?? undefined;
+  };
+  for (const game of Object.values(state.games)) {
+    for (const record of game.instances) {
+      const panelType = settle(record.moduleId, record.panelType);
+      if (panelType === undefined) delete record.panelType;
+      else record.panelType = panelType;
+    }
+    for (const snapshot of game.snapshots) {
+      const panelTypes: Record<string, string> = {};
+      for (const [slot, moduleId] of Object.entries(snapshot.modules)) {
+        const panelType = settle(moduleId, snapshot.panelTypes?.[slot]);
+        if (panelType !== undefined) panelTypes[slot] = panelType;
+      }
+      if (Object.keys(panelTypes).length) snapshot.panelTypes = panelTypes;
+      else delete snapshot.panelTypes;
+    }
+  }
+}
+
 export async function saveWorkspace(file: string, state: WorkspaceState): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.tmp`;
@@ -121,8 +168,8 @@ export async function saveWorkspace(file: string, state: WorkspaceState): Promis
 
 /**
  * Works out which panels a snapshot needs. Each placeholder reuses an open
- * panel of the same module where there is one, so the panel keeps its
- * state; the rest get new panels. Open panels nothing reuses are returned
+ * panel of the same module and panel type where there is one, so the panel
+ * keeps its state; the rest get new panels. Open panels nothing reuses are returned
  * as `close`.
  */
 export function planSnapshot(
@@ -133,21 +180,24 @@ export function planSnapshot(
   const unused = [...open];
   const slots = new Map<string, string>();
   const instances: InstanceRecord[] = [];
-  const take = (slot: string, moduleId: string) => {
-    // The same panel the snapshot was saved from, else any of that module.
-    let index = unused.findIndex((record) => record.instanceId === slot && record.moduleId === moduleId);
-    if (index < 0) index = unused.findIndex((record) => record.moduleId === moduleId);
-    const record = index >= 0 ? unused.splice(index, 1)[0]! : { instanceId: newId(), moduleId };
+  // A panel matches a placeholder when it shows the same module and panel type.
+  const matches = (record: InstanceRecord, slot: string) =>
+    record.moduleId === snapshot.modules[slot] && record.panelType === snapshot.panelTypes?.[slot];
+  const take = (slot: string) => {
+    // The same panel the snapshot was saved from, else any of that module and type.
+    let index = unused.findIndex((record) => record.instanceId === slot && matches(record, slot));
+    if (index < 0) index = unused.findIndex((record) => matches(record, slot));
+    const panelType = snapshot.panelTypes?.[slot];
+    const record = index >= 0 ? unused.splice(index, 1)[0]! : { instanceId: newId(), moduleId: snapshot.modules[slot]!, ...(panelType ? { panelType } : {}) };
     slots.set(slot, record.instanceId);
     instances.push(record);
   };
   const order = layoutPanels(snapshot.layout);
   // Exact matches first, so a panel is not taken by an earlier placeholder of the same module.
   for (const slot of order) {
-    const moduleId = snapshot.modules[slot]!;
-    if (unused.some((record) => record.instanceId === slot && record.moduleId === moduleId)) take(slot, moduleId);
+    if (unused.some((record) => record.instanceId === slot && matches(record, slot))) take(slot);
   }
-  for (const slot of order) if (!slots.has(slot)) take(slot, snapshot.modules[slot]!);
+  for (const slot of order) if (!slots.has(slot)) take(slot);
   const layout = pruneLayout(snapshot.layout, (slot) => slots.has(slot), (slot) => slots.get(slot)!)!;
   // Keep the order panels appear in the layout.
   const position = new Map(layoutPanels(layout).map((id, index) => [id, index]));
