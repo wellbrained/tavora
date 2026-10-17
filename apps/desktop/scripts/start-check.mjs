@@ -15,6 +15,7 @@ const WINDOW_TITLE = "Tavora";
 /** The title of a process's main window, or "" while it has none (Windows only). */
 function windowTitle(pid) {
   const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).MainWindowTitle`], { encoding: "utf8" });
+  if (result.error || result.status !== 0) throw new Error(`Window probe failed: ${result.error?.message ?? result.stderr}`);
   return (result.stdout ?? "").trim();
 }
 
@@ -40,7 +41,8 @@ export async function checkStart(exe, { allowHandover = false, timeoutMs = 60_00
       }
       if (windowTitle(child.pid) === WINDOW_TITLE) return "window";
     }
-    throw new Error(`Tavora.exe showed no "${WINDOW_TITLE}" window within ${timeoutMs / 1000} s.\n${stderr.trim()}`);
+    const probe = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `Get-Process -Name Tavora -ErrorAction SilentlyContinue | Select-Object Id,SessionId,MainWindowTitle,MainWindowHandle,Responding | ConvertTo-Json -Compress`], { encoding: "utf8" });
+    throw new Error(`Tavora.exe (PID ${child.pid}) showed no "${WINDOW_TITLE}" window within ${timeoutMs / 1000} s.\nWindows: ${probe.stdout?.trim()}\nProbe: ${probe.stderr?.trim()}\n${stderr.trim()}`);
   } finally {
     if (exit === null) spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
   }
