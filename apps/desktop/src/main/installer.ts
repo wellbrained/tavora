@@ -148,7 +148,13 @@ export async function installZip(zipFile: string, { userData, userModules, modul
   let updated = false;
   if (existing) {
     const own = existing.provenance === "local" && path.dirname(existing.root) === userModules && path.basename(existing.root) === folder;
-    if (!own) throw new InstallError("error.installTaken", { name: existing.manifest.name });
+    if (!own) {
+      // Say where the other copy comes from, so the player knows what to remove.
+      const name = existing.manifest.name;
+      if (existing.developmentFolder) throw new InstallError("error.installTakenDevelopment", { name, folder: existing.developmentFolder });
+      if (existing.provenance === "official") throw new InstallError("error.installTakenOfficial", { name });
+      throw new InstallError("error.installTaken", { name, folder: existing.root });
+    }
     if (existing.owner !== owner) throw new InstallError("error.installOtherPublisher", { name: existing.manifest.name });
     if (compareModuleVersions(manifest.version, existing.manifest.version) <= 0) {
       throw new InstallError("error.installNotNewer", { name: existing.manifest.name, installed: existing.manifest.version, version: manifest.version });

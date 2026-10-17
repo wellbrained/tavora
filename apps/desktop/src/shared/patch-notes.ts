@@ -19,143 +19,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.17.22",
-    date: "2026-10-17",
-    title: "Modules for one game stay in that game",
+    version: "0.18.0",
+    date: "2026-10-18",
+    title: "Modules from other people",
     notes: [
-      "Add module now lists only the modules for the game you are in. A module made for another game no longer shows up greyed out.",
-      "Module developers: the starter asks which game your module is for and fills in its games, and the docs list every game id.",
-    ],
-  },
-  {
-    version: "0.17.21",
-    date: "2026-10-17",
-    title: "Clicks in modules always count",
-    notes: [
-      "A click in a module that opens a link, a menu or a Discord action no longer gets refused now and then as if you had not clicked.",
-    ],
-  },
-  {
-    version: "0.17.20",
-    date: "2026-10-17",
-    title: "Settings > Development",
-    notes: [
-      "Module developers have their own Settings page now: Development, with the development folders, the examples and the UI Playground, and links to the docs and to GitHub. Settings > Modules shows the modules you use.",
-      "A development folder can be the folder you keep all your module projects in: Tavora loads every project directly inside it, and a new one made there shows up by itself.",
-      "Each project says what to do when it does not load yet, such as \"Not built yet. Run npm run dev\".",
-    ],
-  },
-  {
-    version: "0.17.19",
-    date: "2026-10-17",
-    title: "Whiteboard: save as picture, clear, toolbar at the bottom",
-    notes: [
-      "Save as image in the Whiteboard saves the selection, or the whole board, as a PNG in your Pictures\\Tavora folder in one click, named after the board and the time. Copy as image, Save as image and Clear board are now proper buttons in the header.",
-      "Clear board takes everything off a board at once. Undo in the notice, or Ctrl+Z, brings it back.",
-      "Choose where the Whiteboard's toolbar sits: open the menu (☰) and pick Toolbar at the bottom, or back to the top. The choice is kept for every game.",
-      "Ten quick colours for lines and backgrounds instead of five, and a more compact style palette. It is shorter too: Color, Background, Fill, Stroke width and style, fonts and arrowheads show; Sloppiness, Edges, Opacity, Align and Actions wait under More options. The Layers row is gone; its shortcuts and the right-click menu still move things forward and back.",
-      "For module developers: pictures.save(png, name) saves a PNG in the player's Pictures\\Tavora folder right after a click (SDK 0.2.5).",
-      ],
-    },
-    {
-    version: "0.17.18",
-    date: "2026-10-17",
-    title: "Panels open each other",
-    notes: [
-      "A module's panel can open its other panels on what it shows, such as the gear for the build you are looking at. Tavora brings forward a panel that already shows it, switches the one you used last, or opens a new one.",
-      "A panel saves your changes before it switches. If it can't, it keeps what it showed, and Tavora offers to open the other content in a new panel instead.",
-      "Module developers: the Panel Types Example has buttons that open its other panels.",
-    ],
-  },
-  {
-    version: "0.17.17",
-    date: "2026-10-17",
-    title: "Each panel keeps what it shows",
-    notes: [
-      "Panels of a module can each show something different, such as a different build, and keep it when you switch games or restart Tavora.",
-      "Hovering a panel's tab now shows the full name of what it shows, below the panel's and the module's names.",
-      "Module developers: the Panel Types Example now picks a build in each panel.",
-    ],
-  },
-  {
-    version: "0.17.16",
-    date: "2026-10-17",
-    title: "Updates only go forward",
-    notes: [
-      "Install from zip now replaces a module only with a higher version. A zip with the same or an older version says which version you have instead of quietly going back.",
-    ],
-  },
-  {
-    version: "0.17.15",
-    date: "2026-10-17",
-    title: "A link command that works anywhere",
-    notes: [
-      "Module developers: Link a publisher key in Settings > Account now copies \"npx @tavora/pack link\" with your code, which runs in any folder, also where @tavora/pack isn't installed.",
-    ],
-  },
-  {
-    version: "0.17.13",
-    date: "2026-10-17",
-    title: "Whiteboard: place pictures, move the palette",
-    notes: [
-      "A picture you paste or drop on the Whiteboard can now be dragged into place right away. It locks once you click elsewhere or pick a tool, so drawing on it does not move it.",
-      "Every picture on the Whiteboard has a small lock on its corner: click it to lock or unlock just that picture. Lock pictures in the header still does all of them at once.",
-      "The Whiteboard's style palette (stroke, background, width, …) has a handle: drag it anywhere on the board, or fold it away with the arrow. The panel remembers where you left it. Double-click the handle to put it back.",
-    ],
-  },
-  {
-    version: "0.17.12",
-    date: "2026-10-17",
-    title: "Modules can offer several panels",
-    notes: [
-      "A module can now offer several named panels, such as an inventory and a build planner. The module library lists them under the module, each with its own Add, and every panel of a module shares its saved content.",
-      "Tabs show the panel's short name; hovering it shows the module's name too.",
-      "If a module update removes a panel you had open, its place stays with a note, and you can remove it or pick another panel of the same module.",
-      "Module developers: the new Panel Types Example under Development shows every option.",
-    ],
-  },
-  {
-    version: "0.17.11",
-    date: "2026-10-17",
-    title: "Modules show who made them",
-    notes: [
-      "A module from a zip now shows its developer's name, \"by ...\", in Settings > Modules, when it asks for permissions and when you install it, once the developer has linked their key to their Tavora account. Before, you only saw a key's fingerprint.",
-      "For module developers: Settings > Account has a new Module developer part. Choose a public developer name, then link your publisher key with a one-time code and \"tavora-pack link\".",
-    ],
-  },
-  {
-    version: "0.17.10",
-    date: "2026-10-17",
-    title: "A roomier module library",
-    notes: [
-      "The module library is now the same size as Settings, with compact rows and search that stays in view as you browse.",
-      "Switch between all modules, those already in this game and those you have not added yet. Counts and an Add another button make it clear what is already open.",
-    ],
-  },
-  {
-    version: "0.17.9",
-    date: "2026-10-17",
-    title: "Menus that fit",
-    notes: [
-      "The menu of a To-Dos group now opens above everything, so its Color list is never cut off in a narrow panel. Right-click a group's header to open the same menu where you clicked.",
-      "Other modules can show their menus the same way, drawn by Tavora in your theme.",
-    ],
-  },
-  {
-    version: "0.17.8",
-    date: "2026-10-17",
-    title: "Modules can say which Tavora they need",
-    notes: [
-      "A module can name the oldest Tavora it works with. If yours is older, installing it says which Tavora it needs instead of installing something that would not work, and Settings > Modules says why it is not loaded.",
-    ],
-  },
-  {
-    version: "0.17.7",
-    date: "2026-10-17",
-    title: "Development folders",
-    notes: [
-      "For module developers: Settings > Modules > Add a development folder loads a module straight from its project folder. Its open panels reload by themselves whenever you build it again, and a folder added before its first build loads as soon as the build is there.",
-      "Each development folder says which module it loads, or why it can't. Remove it there to stop loading it; the project and the module's data stay.",
+      "Modules from other people: install a module someone sent you with Settings > Modules > Install from zip. It shows who made it, \"by …\", once its developer has linked their key to their Tavora account. An update is a newer zip from the same developer and keeps your data; a zip with the same or an older version, or from someone else, is refused with a message that says why.",
+      "A module can say which Tavora it needs. If yours is older, installing it says which version to update to instead of installing something that would not work.",
+      "The module library (Add module) is roomier: the same size as Settings, with compact rows, search that stays in view, a switch between all modules, those in this game and those not added yet, and counts and Add another for what is already open. It lists only the modules made for the game you are in.",
+      "Modules can offer several panels, such as an inventory and a build planner, each with its own Add. Every panel can show something different, such as a different build, and keeps it when you switch games or restart. A panel can open another one on what it shows, and saves your changes before it switches. Tabs show a short name, and hovering one shows the full one.",
+      "Menus of modules open above everything, drawn by Tavora in your theme, so they are never cut off in a narrow panel. Right-click a To-Dos group's header for its menu.",
+      "A click in a module that opens a link, a menu or a Discord action no longer gets refused now and then.",
+      "Whiteboard: drag a pasted or dropped picture into place right away, and lock or unlock each picture with the lock on its corner. Save as image saves the selection or the whole board as a PNG in Pictures\\Tavora; Clear board empties it, and Undo brings it back. The style palette can be moved or folded away, has ten quick colours and keeps the rarer options under More options, and the toolbar can sit at the bottom.",
+      "For module developers: Settings > Development loads modules straight from their project folders, or from the folder you keep all your projects in, and reloads them on every build. Settings > Account has a Module developer part for your public name and linking your publisher key. Start a module with npm create @tavora/module; the docs are at docs.mytavora.app.",
     ],
   },
   {
