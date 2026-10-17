@@ -41,6 +41,7 @@ export default defineConfig({
           { text: "Module manifest", link: "/reference/manifest" },
           { text: "Bridge protocol", link: "/reference/protocol" },
           { text: "Theme packages", link: "/reference/theme" },
+          { text: "SDK changelog", link: "/reference/changelog" },
         ],
       },
       { text: "@tavora/sdk API", link: "/api/", collapsed: true, items: apiSidebar },

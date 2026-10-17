@@ -15,6 +15,8 @@ export interface ModuleManifest {
   description?: string;
   version: string;
   apiVersion: "1";
+  /** The oldest Tavora the module works with, such as `0.18.0`. An older Tavora refuses to install or load it, and says why. */
+  minTavora?: string;
   entry: string;
   icon?: string;
   games: string[];
@@ -39,7 +41,7 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "entry", "icon", "games", "viewport", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "games", "viewport", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
 
 export function isModuleId(value: unknown): value is string {
@@ -94,6 +96,24 @@ export function isNetworkHost(value: unknown): value is string {
   return !/^\d+$/.test(last) && !["localhost", "local", "internal", "arpa"].includes(last);
 }
 
+/** A Tavora release version: major.minor.patch, numbers only. */
+const TAVORA_VERSION = /^(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})$/;
+
+/**
+ * Whether this Tavora is older than the module's `minTavora`. Compares major, minor and patch as
+ * numbers; anything after the patch number of Tavora's own version (a pre-release) is ignored.
+ */
+export function needsNewerTavora(manifest: Pick<ModuleManifest, "minTavora">, tavoraVersion: string): boolean {
+  if (!manifest.minTavora) return false;
+  const parts = (version: string) => version.split(/[-+]/)[0]!.split(".").map((part) => Number(part) || 0);
+  const need = parts(manifest.minTavora);
+  const have = parts(tavoraVersion);
+  for (let i = 0; i < 3; i++) {
+    if ((have[i] ?? 0) !== (need[i] ?? 0)) return (have[i] ?? 0) < (need[i] ?? 0);
+  }
+  return false;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -126,6 +146,7 @@ export function validateManifest(input: unknown): ManifestResult {
   }
   if (typeof input.version !== "string" || !SEMVER.test(input.version)) errors.push("version must be semver, e.g. 1.0.0");
   if (input.apiVersion !== "1") errors.push('apiVersion must be "1"');
+  if (input.minTavora !== undefined && (typeof input.minTavora !== "string" || !TAVORA_VERSION.test(input.minTavora))) errors.push("minTavora must be a Tavora version such as 0.18.0");
   if (!isPackagePath(input.entry)) errors.push("entry must be a relative path inside the package");
   else if (!input.entry.endsWith(".html")) errors.push("entry must be an .html file");
   if (input.icon !== undefined) {

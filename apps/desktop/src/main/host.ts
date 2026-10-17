@@ -356,7 +356,7 @@ export class Host {
     }
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
     const moduleProblems: ModuleProblem[] = [];
-    const modules = await discoverModules(Host.moduleSources(options, library.developmentFolders), moduleProblems);
+    const modules = await discoverModules({ ...Host.moduleSources(options, library.developmentFolders), tavoraVersion: app.getVersion() }, moduleProblems);
     applyOwners(modules, await realUserModulesDir(options), await readOwnerRecords(userData));
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     const moduleInfo = await describeModules(userModulesDir(options), modules);
@@ -506,7 +506,7 @@ export class Host {
   /** Looks for modules again; panels of modules that are gone are closed. */
   private async reloadModules(): Promise<void> {
     const problems: ModuleProblem[] = [];
-    const modules = await discoverModules(Host.moduleSources(this.options, this.library.developmentFolders), problems);
+    const modules = await discoverModules({ ...Host.moduleSources(this.options, this.library.developmentFolders), tavoraVersion: app.getVersion() }, problems);
     applyOwners(modules, await realUserModulesDir(this.options), await readOwnerRecords(this.options.userData));
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
@@ -747,7 +747,7 @@ export class Host {
     });
     const file = picked.filePaths[0];
     if (picked.canceled || !file) return;
-    const installed = await installZip(file, { userData: this.options.userData, userModules: await realUserModulesDir(this.options), modules: this.modules });
+    const installed = await installZip(file, { userData: this.options.userData, userModules: await realUserModulesDir(this.options), modules: this.modules, tavoraVersion: app.getVersion() });
     await this.reloadModules();
     if (installed.updated) {
       for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === installed.manifest.id) view.reload();

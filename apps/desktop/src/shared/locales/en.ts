@@ -495,6 +495,7 @@ export const en = {
   "error.installRefused": "This zip can't be installed: {reason}.",
   "error.installTaken": "{name} is already installed from somewhere else. Remove it first, or use a different zip.",
   "error.installOtherPublisher": "This zip has the same id as {name} but comes from a different publisher, so it can't replace it. Remove {name} first if you want this one.",
+  "error.installNeedsNewer": "{name} needs Tavora {needed} or newer, and this is Tavora {current}. Update Tavora first, then install it again.",
   "error.tooManyDevelopmentFolders": "Tavora loads at most 20 development folders. Remove one first.",
   "error.installFolderTaken": "Your modules folder already has a folder named {folder}. Move it away and try again.",
   "error.updatesDev": "Updates only work in the installed Tavora, not in a development run.",

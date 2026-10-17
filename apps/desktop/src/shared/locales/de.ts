@@ -497,6 +497,7 @@ export const de: Record<keyof typeof en, string> = {
   "error.installRefused": "Dieses Zip kann nicht installiert werden: {reason}.",
   "error.installTaken": "{name} ist schon aus einer anderen Quelle installiert. Entferne es zuerst oder nimm ein anderes Zip.",
   "error.installOtherPublisher": "Dieses Zip hat dieselbe ID wie {name}, stammt aber von einem anderen Herausgeber und kann es deshalb nicht ersetzen. Entferne {name} zuerst, wenn du dieses möchtest.",
+  "error.installNeedsNewer": "{name} braucht Tavora {needed} oder neuer, und dies ist Tavora {current}. Aktualisiere zuerst Tavora und installiere es dann noch einmal.",
   "error.tooManyDevelopmentFolders": "Tavora lädt höchstens 20 Entwicklungsordner. Entferne zuerst einen.",
   "error.installFolderTaken": "In deinem Modulordner gibt es schon einen Ordner namens {folder}. Verschiebe ihn und versuche es erneut.",
   "error.updatesDev": "Updates funktionieren nur im installierten Tavora, nicht in einem Entwicklungslauf.",

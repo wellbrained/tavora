@@ -96,6 +96,21 @@ describe("discoverModules", () => {
   });
 });
 
+describe("minTavora", () => {
+  it("does not load a module that needs a newer Tavora, and says why", async () => {
+    const local = await mkdtemp(path.join(tmpdir(), "tavora-local-"));
+    const later = await makeModule(local, "later", "example.later");
+    const manifest = JSON.parse(await readFile(path.join(later, "tavora.module.json"), "utf8"));
+    await writeFile(path.join(later, "tavora.module.json"), JSON.stringify({ ...manifest, minTavora: "0.18.0" }));
+    await makeModule(local, "now", "example.now");
+    const problems: ModuleProblem[] = [];
+    const modules = await discoverModules({ local: [local], tavoraVersion: "0.17.9" }, problems);
+    expect([...modules.keys()]).toEqual(["example.now"]);
+    expect(problems).toEqual([{ folder: "later", message: "it needs Tavora 0.18.0 or newer (this is 0.17.9)" }]);
+    expect([...(await discoverModules({ local: [local], tavoraVersion: "0.18.0" })).keys()].sort()).toEqual(["example.later", "example.now"]);
+  });
+});
+
 describe("development folders", () => {
   it("load one module straight from each project folder, ahead of an installed copy, with local data", async () => {
     const projects = await mkdtemp(path.join(tmpdir(), "tavora-projects-"));
