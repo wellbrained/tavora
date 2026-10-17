@@ -3,7 +3,7 @@
 // so a page can be public and still be served from this machine.
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import type { AddressInfo } from "node:net";
@@ -21,6 +21,20 @@ let tls: Server;
 let port: number;
 let tlsPort: number;
 const hits: string[] = [];
+
+/** openssl from PATH, or else the one Git for Windows ships (Windows has none of its own). */
+function openssl(): string {
+  try {
+    execFileSync("openssl", ["version"], { stdio: "ignore" });
+    return "openssl";
+  } catch {
+    const git = execFileSync("git", ["--exec-path"], { encoding: "utf8" }).trim();
+    // git --exec-path is <Git>/mingw64/libexec/git-core; the openssl is in <Git>/usr/bin.
+    const bundled = path.join(git, "..", "..", "..", "usr", "bin", "openssl.exe");
+    if (existsSync(bundled)) return bundled;
+    throw new Error("No openssl found: install one or put it on PATH (Git for Windows ships one in usr\\bin).");
+  }
+}
 
 /** A public page address: the name is mapped to 127.0.0.1 by the host resolver rules. */
 const publicUrl = (pathname: string) => `http://public.test:${port}${pathname}`;
@@ -64,7 +78,7 @@ test.beforeAll(async () => {
   port = (server.address() as AddressInfo).port;
   // A self-signed certificate, which a page must never be opened with.
   const dir = mkdtempSync(path.join(tmpdir(), "tavora-tls-"));
-  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=public.test", "-days", "1", "-keyout", path.join(dir, "key.pem"), "-out", path.join(dir, "cert.pem")], { stdio: "ignore" });
+  execFileSync(openssl(), ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=public.test", "-days", "1", "-keyout", path.join(dir, "key.pem"), "-out", path.join(dir, "cert.pem")], { stdio: "ignore" });
   tls = createHttpsServer({ key: readFileSync(path.join(dir, "key.pem")), cert: readFileSync(path.join(dir, "cert.pem")) }, handle);
   await new Promise<void>((resolve) => tls.listen(0, "127.0.0.1", resolve));
   tlsPort = (tls.address() as AddressInfo).port;
