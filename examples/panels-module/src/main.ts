@@ -152,8 +152,12 @@ async function contentSelector(tavora: TavoraSDK) {
         button.textContent = `Open in ${type.name}`;
         button.addEventListener("click", async () => {
           const build = builds.find((item) => item.id === selected);
-          const result = await tavora.panels.open(type.id, build ? { content: { id: build.id, title: build.title } } : {});
-          el("open-result").textContent = result;
+          try {
+            el("open-result").textContent = await tavora.panels.open(type.id, build ? { content: { id: build.id, title: build.title } } : {});
+          } catch (error) {
+            // Without a real click or key press just before, Tavora refuses (PERMISSION_DENIED).
+            el("open-result").textContent = `refused: ${error instanceof Error ? error.message : String(error)}`;
+          }
         });
         return button;
       }),

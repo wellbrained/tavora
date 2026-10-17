@@ -165,6 +165,11 @@ export type NavigateOutcome = "switched" | "failed" | "unhandled";
 
 /** How long after a click or key press a link may be opened. */
 export const GESTURE_MS = 2_000;
+/**
+ * How long panels.open waits for the click that allows it. The preload reports clicks on another channel than
+ * the bridge, so the report can land just after the call the click made.
+ */
+const GESTURE_LATE_MS = 250;
 
 /** Corner radius of a panel card in the host UI (dock.css), in px. */
 const PANEL_RADIUS = 10;
@@ -296,16 +301,36 @@ export class ModuleView {
   /** When the player last clicked or pressed a key in the page (reported by the preload from real input only). */
   private gestureAt = 0;
 
+  /** Calls waiting for a click report that is still on its way (takeGestureSoon). */
+  private readonly gestureWaiters = new Set<() => void>();
+
   noteGesture(): void {
     this.gestureAt = Date.now();
     this.usedAt = this.gestureAt;
     gestureOf(this.view.webContents.session).at = this.gestureAt;
+    for (const wake of this.gestureWaiters) wake();
   }
 
   /** Something only a click or key press in the page may do, once per click. */
   private takeGesture(what: string): void {
     if (Date.now() - this.gestureAt > GESTURE_MS) throw new HostError("PERMISSION_DENIED", `${what} must be called right after a click or key press`);
     this.gestureAt = 0;
+  }
+
+  /** As takeGesture, but first waits a moment for a click whose report has not arrived yet. */
+  private async takeGestureSoon(what: string): Promise<void> {
+    if (Date.now() - this.gestureAt > GESTURE_MS) {
+      await new Promise<void>((resolve) => {
+        const done = () => {
+          clearTimeout(timer);
+          this.gestureWaiters.delete(done);
+          resolve();
+        };
+        const timer = setTimeout(done, GESTURE_LATE_MS);
+        this.gestureWaiters.add(done);
+      });
+    }
+    this.takeGesture(what);
   }
 
   /** links.open: only a web address, and only right after the player did something in the page. */
@@ -377,9 +402,9 @@ export class ModuleView {
         panelType: this.options.panelType?.id ?? null,
         launch: this.options.launch(),
         setContent: this.options.setContent,
-        openPanel: (type, content) => {
+        openPanel: async (type, content) => {
           // One click opens or switches one panel, so a page cannot keep panels coming on its own.
-          this.takeGesture("panels.open");
+          await this.takeGestureSoon("panels.open");
           return this.options.openPanel(type, content);
         },
         navigated: (requestId, handled, ok) => {
