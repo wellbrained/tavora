@@ -8,21 +8,27 @@
 // shares the data folder) a second one hands over to it and quits; the start gates ran
 // before that, the window did not.
 import { spawn, spawnSync } from "node:child_process";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const WINDOW_TITLE = "Tavora";
+/**
+ * Tavora's window is a Chromium one, shown only once its page has painted (show: false until
+ * ready-to-show). The "could not start" message box is a #32770 dialog, so it never counts.
+ * Not the title: on CI .NET's MainWindowTitle read "" while the welcome screen was up.
+ */
+const APP_WINDOW_CLASS = "Chrome_WidgetWin_1";
 
-/** The title of a process's main window, or "" while it has none (Windows only). */
-function windowTitle(pid) {
-  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).MainWindowTitle`], { encoding: "utf8" });
-  return (result.stdout ?? "").trim();
+/** The visible top-level windows of every process with this exe's name: [{ pid, cls, title }] (Windows only). */
+function visibleWindows(exe) {
+  const script = path.join(path.dirname(fileURLToPath(import.meta.url)), "windows.ps1");
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Name", path.basename(exe, ".exe")], { encoding: "utf8" });
+  return (result.stdout ?? "").split(/\r?\n/).filter(Boolean).map((line) => {
+    const [pid, cls, title = ""] = line.split("\t");
+    return { pid: Number(pid), cls, title };
+  });
 }
 
-/** Every Tavora.exe with its main window, to tell "no window" apart from "another window" when the check fails. */
-function tavoraWindows() {
-  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "Get-Process Tavora -ErrorAction SilentlyContinue | ForEach-Object { \"pid $($_.Id): window '$($_.MainWindowTitle)' handle $($_.MainWindowHandle) responding $($_.Responding)\" }"], { encoding: "utf8" });
-  return (result.stdout ?? "").trim() || "no Tavora.exe running";
-}
+const describeWindows = (windows) => windows.map((w) => `pid ${w.pid}: ${w.cls} "${w.title}"`).join("\n") || "no visible Tavora window";
 
 /** Saves the whole screen as a PNG (Windows only). */
 function screenshot(file) {
@@ -56,14 +62,15 @@ export async function checkStart(exe, { allowHandover = false, timeoutMs = 120_0
         if (exit === 0 && allowHandover) return "handover";
         throw new Error(`Tavora.exe quit with exit code ${exit} before showing its window.\n${stderr.trim()}`);
       }
-      if (windowTitle(child.pid) === WINDOW_TITLE) {
-        console.log(`Window up after ${Math.round((Date.now() - deadline + timeoutMs) / 1000)} s.`);
+      const windows = visibleWindows(exe);
+      if (windows.some((w) => w.cls === APP_WINDOW_CLASS)) {
+        console.log(`Window up after ${Math.round((Date.now() - deadline + timeoutMs) / 1000)} s:\n${describeWindows(windows)}`);
         return "window";
       }
     }
     // CI sets START_CHECK_SCREENSHOT and uploads the file: what the screen shows while Tavora still runs.
     if (process.env.START_CHECK_SCREENSHOT) screenshot(process.env.START_CHECK_SCREENSHOT);
-    throw new Error(`Tavora.exe showed no "${WINDOW_TITLE}" window within ${timeoutMs / 1000} s.\n${tavoraWindows()}\n${stderr.trim()}`);
+    throw new Error(`Tavora.exe showed no window within ${timeoutMs / 1000} s.\n${describeWindows(visibleWindows(exe))}\n${stderr.trim()}`);
   } finally {
     if (exit === null) spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
   }
