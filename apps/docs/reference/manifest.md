@@ -42,7 +42,33 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `permissions.connectors` | no | Connectors the module asks to use: `"ai-usage"` to read the usage of the player's Claude and Codex accounts, `"discord"` to use the Discord app on this PC with Tavora's Discord sign-in (see [Connectors](./protocol.md#connectors)). Each name once; each works only once the player has granted it. |
 | `permissions.webAssembly` | no | `true` lets the page compile WebAssembly (the page's security policy gets `'wasm-unsafe-eval'`). Only Tavora's own modules may ask for it; a module from your modules folder that does is not loaded, and the Modules page says why. |
 
-Paths (`entry`, `icon`) are relative to the package root and must stay inside it: no leading `/`, no `.` or `..` segments, no empty segments, no backslashes or `:`. Tavora also checks that both files exist when it discovers the module.
+| `panels` | no | Named [panel types](#panel-types) the module offers, 1 to 16. Without it the module has one panel, made from `entry`, `icon` and `viewport`. |
+
+Paths (`entry`, `icon`, and the same fields of a panel type) are relative to the package root and must stay inside it: no leading `/`, no `.` or `..` segments, no empty segments, no backslashes or `:`. Tavora also checks that both files exist when it discovers the module.
+
+## Panel types
+
+A module can offer several tools as separate panels, such as an Inventory, a Build planner and a Map tracker. Players add each one on its own from the module library, dock it anywhere and may open several copies side by side. All panel types of a module share its saved content (`storage`, `documents`, `blobs`) and its permissions; each open panel keeps its own `panel` state. Needs Tavora 0.17.12 or newer, so set `minTavora` to at least `0.17.12`.
+
+```json
+"panels": [
+  { "id": "overview", "name": "Overview", "continues": true },
+  { "id": "planner", "name": "Build planner", "entry": "dist/planner.html", "icon": "dist/icons/planner.png",
+    "viewport": { "minWidth": 480, "minHeight": 320 } },
+  { "id": "inventory", "name": "Inventory" }
+]
+```
+
+| Field | Required | Rules |
+| --- | --- | --- |
+| `id` | yes | Stable identity: lowercase letters, digits and `-`, starting with a letter, at most 32 characters, unique in the module. Saved layouts and open panels keep it, so never change it after release. |
+| `name` | yes | The short name on the panel's tab, 1 to 24 characters. Renaming it keeps every saved layout. |
+| `entry` | no | This type's page. The module's `entry` when left out, so one page can serve every type and ask [`panel.type`](./protocol.md#methods) which one it is. |
+| `icon` | no | This type's tab icon. The module's `icon` when left out. |
+| `viewport` | no | This type's sizes, with the same rules as the module's `viewport`. The module's when left out. |
+| `continues` | no | `true` on the type that panels opened before the module had panel types become, keeping their state. At most one type; without it, the first type. |
+
+When an update removes a panel type, its open panels keep their place and say the type is gone; the player can remove them or pick another type of the same module. The module's saved content is not touched. The Panel Types Example in Tavora's examples folder shows every option.
 
 ## What is not in v1 yet
 

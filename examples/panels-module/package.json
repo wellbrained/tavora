@@ -1,0 +1,17 @@
+{
+  "name": "@tavora/example-panels-module",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@tavora/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "8.3.4"
+  },
+  "license": "MIT"
+}

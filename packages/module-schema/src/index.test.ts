@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { isGameId, isModuleId, isOwnerId, needsNewerTavora, validateManifest } from "./index";
+import { continuingPanelType, isGameId, isModuleId, isOwnerId, needsNewerTavora, panelTypes, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -160,7 +160,60 @@ const cases: [string, unknown, boolean][] = [
   ["minTavora with two parts", { ...valid, minTavora: "0.18" }, false],
   ["minTavora with a leading zero", { ...valid, minTavora: "0.018.0" }, false],
   ["minTavora as a number", { ...valid, minTavora: 18 }, false],
+  ["one panel type", { ...valid, panels: [{ id: "planner", name: "Build planner" }] }, true],
+  [
+    "full panel type",
+    { ...valid, panels: [{ id: "map-tracker", name: "Map tracker", entry: "dist/map.html", icon: "map.webp", viewport: { minWidth: 200, minHeight: 100 }, continues: true }] },
+    true,
+  ],
+  ["16 panel types", { ...valid, panels: Array.from({ length: 16 }, (_, i) => ({ id: `p${i}`, name: `Panel ${i}` })) }, true],
+  ["17 panel types", { ...valid, panels: Array.from({ length: 17 }, (_, i) => ({ id: `p${i}`, name: `Panel ${i}` })) }, false],
+  ["no panel types", { ...valid, panels: [] }, false],
+  ["panels not a list", { ...valid, panels: { id: "planner", name: "Planner" } }, false],
+  ["panel type without a name", { ...valid, panels: [{ id: "planner" }] }, false],
+  ["panel name of 24 characters", { ...valid, panels: [{ id: "planner", name: "n".repeat(24) }] }, true],
+  ["panel name of 25 characters", { ...valid, panels: [{ id: "planner", name: "n".repeat(25) }] }, false],
+  ["blank panel name", { ...valid, panels: [{ id: "planner", name: " " }] }, false],
+  ["uppercase panel id", { ...valid, panels: [{ id: "Planner", name: "Planner" }] }, false],
+  ["panel id with a dot", { ...valid, panels: [{ id: "build.planner", name: "Planner" }] }, false],
+  ["panel id of 33 characters", { ...valid, panels: [{ id: `p${"a".repeat(32)}`, name: "Planner" }] }, false],
+  ["panel entry outside the package", { ...valid, panels: [{ id: "planner", name: "Planner", entry: "../x.html" }] }, false],
+  ["panel entry not a page", { ...valid, panels: [{ id: "planner", name: "Planner", entry: "dist/x.js" }] }, false],
+  ["svg panel icon", { ...valid, panels: [{ id: "planner", name: "Planner", icon: "x.svg" }] }, false],
+  ["panel viewport without a height", { ...valid, panels: [{ id: "planner", name: "Planner", viewport: { minWidth: 100 } }] }, false],
+  ["panel continues as a string", { ...valid, panels: [{ id: "planner", name: "Planner", continues: "yes" }] }, false],
+  ["unknown panel field", { ...valid, panels: [{ id: "planner", name: "Planner", title: "x" }] }, false],
 ];
+
+describe("panel types", () => {
+  const two = (extra: object = {}) => ({ ...valid, panels: [{ id: "inventory", name: "Inventory" }, { id: "planner", name: "Build planner", ...extra }] });
+
+  // Neither rule fits in the JSON Schema, so only the validator checks them.
+  it("refuses an id given twice", () => {
+    const result = validateManifest({ ...valid, panels: [{ id: "planner", name: "A" }, { id: "planner", name: "B" }] });
+    expect(result).toEqual({ ok: false, errors: ["panels lists the id planner twice"] });
+  });
+
+  it("refuses two continuing types", () => {
+    const result = validateManifest({ ...valid, panels: [{ id: "a", name: "A", continues: true }, { id: "b", name: "B", continues: true }] });
+    expect(result).toEqual({ ok: false, errors: ["only one panel type may set continues"] });
+  });
+
+  it("fills in the module's entry, icon and viewport", () => {
+    const manifest = { ...two({ entry: "dist/planner.html", viewport: { minWidth: 500, minHeight: 400 } }), icon: "icon.png" } as ModuleManifest;
+    expect(panelTypes(manifest)).toEqual([
+      { id: "inventory", name: "Inventory", entry: "dist/index.html", icon: "icon.png", viewport: valid.viewport },
+      { id: "planner", name: "Build planner", entry: "dist/planner.html", icon: "icon.png", viewport: { minWidth: 500, minHeight: 400 } },
+    ]);
+    expect(panelTypes(valid as ModuleManifest)).toEqual([]);
+  });
+
+  it("continues older panels as the marked type, else the first", () => {
+    expect(continuingPanelType(two({ continues: true }) as ModuleManifest)).toBe("planner");
+    expect(continuingPanelType(two() as ModuleManifest)).toBe("inventory");
+    expect(continuingPanelType(valid as ModuleManifest)).toBeNull();
+  });
+});
 
 describe("needsNewerTavora", () => {
   it.each([

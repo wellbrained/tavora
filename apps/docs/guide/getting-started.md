@@ -8,7 +8,7 @@ A Tavora module is a web page that runs in a sandboxed panel inside Tavora Deskt
 
 ## Start from an example
 
-The same small module is built three ways: [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module), [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module) and [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module). Copy one into `examples/`, give it its own `id` in `tavora.module.json`, and run:
+The same small module is built three ways: [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module), [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module) and [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module). A module that offers several panels is shown in the [panel types example](https://github.com/wellbrained/tavora/tree/main/examples/panels-module) (see [Panel types](../reference/manifest.md#panel-types)). Copy one into `examples/`, give it its own `id` in `tavora.module.json`, and run:
 
 ```sh
 pnpm install

@@ -59,7 +59,8 @@ async function allow() {
   dialog.value = null;
   if (props.request.review) return;
   nextPanelSlot.value = props.request.slot;
-  void act({ type: "open-module", moduleId: current.id });
+  const { panelType } = props.request;
+  void act({ type: "open-module", moduleId: current.id, ...(panelType ? { panelType } : {}) });
 }
 </script>
 
