@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
@@ -46,8 +46,10 @@ import {
   deleteFolder,
   iconFileShared,
   deleteTrashedGame,
+  cleanDevelopmentFolders,
   isLive,
   LibraryError,
+  MAX_DEVELOPMENT_FOLDERS,
   markPlayed,
   moveFolder,
   moveGame,
@@ -139,6 +141,8 @@ interface Rect {
 
 /** How long to wait for a still image of a panel before hiding it anyway. */
 const FREEZE_TIMEOUT_MS = 250;
+/** How long a development folder's build must be quiet before its panels reload. */
+const DEVELOPMENT_RELOAD_MS = 300;
 
 /** The player's own modules, next to the themes folder in their data folder. */
 function userModulesDir(options: HostOptions): string {
@@ -350,13 +354,13 @@ export class Host {
     for (const [name, version] of Object.entries(SUPPORTED_VERSIONS)) {
       await keepNewerFile(path.join(userData, name), version).catch(() => null);
     }
+    const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
     const moduleProblems: ModuleProblem[] = [];
-    const modules = await discoverModules(Host.moduleSources(options), moduleProblems);
+    const modules = await discoverModules(Host.moduleSources(options, library.developmentFolders), moduleProblems);
     applyOwners(modules, await realUserModulesDir(options), await readOwnerRecords(userData));
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     const moduleInfo = await describeModules(userModulesDir(options), modules);
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
-    const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
     // Before any module session or store is opened (S5: data is keyed by owner and id).
     await migrateModuleData(userData, (line) => console.warn(`[tavora] ${line}`), library.moduleFilesFolder ?? defaultFilesRoot(userData)).catch((error: unknown) =>
       console.error("[tavora] moving module data under its owner failed", error),
@@ -412,6 +416,7 @@ export class Host {
 
     host.screen = library.startup === "last-game" && library.lastGameId ? "game" : "welcome";
     host.registerIpc();
+    host.watchDevelopmentFolders();
     host.registerWindowEvents();
     host.window.once("ready-to-show", () => timings.record("startup", process.uptime() * 1000));
     await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
@@ -493,15 +498,15 @@ export class Host {
     }
   }
 
-  /** Modules that ship with Tavora, any development folders, and the player's own modules folder. */
-  private static moduleSources(options: HostOptions) {
-    return { official: options.officialModuleDirs, local: [...options.moduleDirs, userModulesDir(options)] };
+  /** Modules that ship with Tavora, the development folders the player added, any test folders, and the player's own modules folder. */
+  private static moduleSources(options: HostOptions, developmentFolders: string[]) {
+    return { official: options.officialModuleDirs, development: developmentFolders, local: [...options.moduleDirs, userModulesDir(options)] };
   }
 
   /** Looks for modules again; panels of modules that are gone are closed. */
   private async reloadModules(): Promise<void> {
     const problems: ModuleProblem[] = [];
-    const modules = await discoverModules(Host.moduleSources(this.options), problems);
+    const modules = await discoverModules(Host.moduleSources(this.options, this.library.developmentFolders), problems);
     applyOwners(modules, await realUserModulesDir(this.options), await readOwnerRecords(this.options.userData));
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
@@ -509,6 +514,81 @@ export class Host {
     this.modules = modules;
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
+    this.watchDevelopmentFolders();
+  }
+
+  // ── Development folders ──────────────────────────────────────────────
+
+  /** One watcher per module loaded from a development folder, and its pending reload. */
+  private readonly developmentWatchers = new Map<string, { watcher: FSWatcher; timer: ReturnType<typeof setTimeout> | undefined }>();
+
+  /**
+   * Watches each module loaded from a development folder. A change to its built files reloads its
+   * open panels; a change to its manifest looks for modules again, since the id, entry or permissions
+   * may have changed. Changes come in bursts while a build writes, so it waits for a quiet moment.
+   */
+  private watchDevelopmentFolders(): void {
+    for (const { watcher, timer } of this.developmentWatchers.values()) {
+      clearTimeout(timer);
+      watcher.close();
+    }
+    this.developmentWatchers.clear();
+    for (const module of this.modules.values()) {
+      if (!module.developmentFolder) continue;
+      const moduleId = module.manifest.id;
+      const built = path.dirname(path.join(module.root, module.manifest.entry));
+      let manifestChanged = false;
+      try {
+        const watcher = watch(module.root, { recursive: true, persistent: false }, (_event, name) => {
+          if (!name) return;
+          const changed = path.join(module.root, name.toString());
+          if (changed === path.join(module.root, "tavora.module.json")) manifestChanged = true;
+          else if (!changed.startsWith(built + path.sep) && changed !== built) return;
+          const entry = this.developmentWatchers.get(moduleId);
+          if (!entry) return;
+          clearTimeout(entry.timer);
+          entry.timer = setTimeout(() => {
+            entry.timer = undefined;
+            const reloadAll = manifestChanged;
+            manifestChanged = false;
+            void this.developmentChanged(moduleId, reloadAll).catch((error: unknown) => console.error("[tavora] reloading a development module failed", error));
+          }, DEVELOPMENT_RELOAD_MS);
+        });
+        watcher.on("error", () => watcher.close());
+        this.developmentWatchers.set(moduleId, { watcher, timer: undefined });
+      } catch (error) {
+        console.warn(`[tavora] cannot watch the development folder ${module.developmentFolder}`, error);
+      }
+    }
+  }
+
+  /** A development module's files changed: its panels load the new build. */
+  private async developmentChanged(moduleId: string, manifestChanged: boolean): Promise<void> {
+    if (manifestChanged) {
+      await this.reloadModules();
+      this.pushState();
+    }
+    for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === moduleId) view.reload();
+  }
+
+  /** The player picks a module project folder; Tavora loads the module from it from now on. Answers with the folder, or nothing when cancelled. */
+  private async addDevelopmentFolder(): Promise<string | void> {
+    const picked = await dialog.showOpenDialog(this.window, { title: translate(this.language, "dialog.developmentFolder"), properties: ["openDirectory"] });
+    const folder = picked.filePaths[0];
+    if (picked.canceled || !folder) return;
+    if (this.library.developmentFolders.length >= MAX_DEVELOPMENT_FOLDERS) throw new LibraryError("error.tooManyDevelopmentFolders");
+    this.library.developmentFolders = cleanDevelopmentFolders([...this.library.developmentFolders, folder]);
+    this.saveLibrary();
+    await this.reloadModules();
+    return path.resolve(folder);
+  }
+
+  /** Forgets a development folder; its module's panels close like a removed module's, and its data stays. */
+  private async removeDevelopmentFolder(folder: string): Promise<void> {
+    const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
+    this.library.developmentFolders = this.library.developmentFolders.filter((item) => key(item) !== key(folder));
+    this.saveLibrary();
+    await this.reloadModules();
   }
 
   /**
@@ -1039,6 +1119,10 @@ export class Host {
         break;
       case "reload-modules":
         return this.reloadModules();
+      case "add-development-folder":
+        return this.addDevelopmentFolder();
+      case "remove-development-folder":
+        return this.removeDevelopmentFolder(action.folder);
       case "open-modules-folder":
         return this.openModulesFolder();
       case "remove-module":
@@ -2069,7 +2153,7 @@ export class Host {
         minWidth: module.manifest.viewport.minWidth,
         minHeight: module.manifest.viewport.minHeight,
         provenance: module.provenance,
-        development: isDevelopmentModule(module.manifest.id),
+        development: isDevelopmentModule(module.manifest.id) || module.developmentFolder !== undefined,
         version: module.manifest.version,
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
@@ -2083,7 +2167,12 @@ export class Host {
         },
         usedIn: this.gamesUsing(module.manifest.id),
       })),
-      moduleProblems: this.moduleProblems.map((problem) => ({ ...problem })),
+      moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder).map(({ folder, message }) => ({ folder, message })),
+      developmentFolders: this.library.developmentFolders.map((folder) => {
+        const module = [...this.modules.values()].find((item) => item.developmentFolder === folder);
+        const problem = this.moduleProblems.find((item) => item.developmentFolder === folder);
+        return { folder, moduleId: module?.manifest.id ?? null, problem: module ? null : (problem?.message ?? null) };
+      }),
       leftoverModuleData: this.moduleData
         .filter((entry) => this.modules.get(entry.moduleId)?.owner !== entry.owner)
         .map((entry) => ({ ...entry, publisher: entry.owner === LOCAL_OWNER || entry.owner === OFFICIAL_OWNER ? null : entry.owner })),

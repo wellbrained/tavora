@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.2",
+    date: "2026-10-17",
+    title: "Development folders",
+    notes: [
+      "For module developers: Settings > Modules > Add a development folder loads a module straight from its project folder. Its open panels reload by themselves whenever you build it again.",
+      "Each development folder says which module it loads, or why it can't. Remove it there to stop loading it; the project and the module's data stay.",
+    ],
+  },
+  {
     version: "0.17.1",
     date: "2026-10-17",
     title: "To-Dos, reworked",

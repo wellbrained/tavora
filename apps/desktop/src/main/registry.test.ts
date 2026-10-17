@@ -96,6 +96,40 @@ describe("discoverModules", () => {
   });
 });
 
+describe("development folders", () => {
+  it("load one module straight from each project folder, ahead of an installed copy, with local data", async () => {
+    const projects = await mkdtemp(path.join(tmpdir(), "tavora-projects-"));
+    const own = await mkdtemp(path.join(tmpdir(), "tavora-own-"));
+    const project = await makeModule(projects, "my-tracker", "jumoog.tracker", "Tracker (dev)");
+    await makeModule(own, "tracker", "jumoog.tracker", "Tracker (installed)");
+    const problems: ModuleProblem[] = [];
+    const modules = await discoverModules({ development: [project], local: [own] }, problems);
+    expect(modules.get("jumoog.tracker")).toMatchObject({ developmentFolder: project, provenance: "local", owner: "local", manifest: { name: "Tracker (dev)" } });
+    // The installed copy waits, and says why.
+    expect(problems).toEqual([{ folder: "tracker", message: "another module with the same id is already loaded" }]);
+    const info = await describeModules(own, modules);
+    expect(info.get("jumoog.tracker")).toMatchObject({ origin: { kind: "dev", folder: project }, removable: false });
+  });
+
+  it("never look into the folders inside a project, and say what is wrong with it", async () => {
+    const projects = await mkdtemp(path.join(tmpdir(), "tavora-projects-"));
+    const empty = path.join(projects, "workspace");
+    await makeModule(empty, "inner", "jumoog.inner");
+    const unbuilt = await makeModule(projects, "unbuilt", "jumoog.unbuilt");
+    await rm(path.join(unbuilt, "index.html"));
+    const reserved = await makeModule(projects, "fake", "tavora.notes");
+    const problems: ModuleProblem[] = [];
+    const modules = await discoverModules({ development: [empty, unbuilt, reserved, path.join(projects, "gone")] }, problems);
+    expect(modules.size).toBe(0);
+    expect(problems).toEqual([
+      { folder: "workspace", message: "there is no tavora.module.json in this folder", developmentFolder: empty },
+      { folder: "unbuilt", message: "the entry file index.html is missing (is it built?)", developmentFolder: unbuilt },
+      { folder: "fake", message: "its id is reserved for Tavora's own modules", developmentFolder: reserved },
+      { folder: "gone", message: "there is no tavora.module.json in this folder", developmentFolder: path.join(projects, "gone") },
+    ]);
+  });
+});
+
 describe("describeModules", () => {
   it("lets Settings remove only direct children of the player's own modules folder", async () => {
     const official = await mkdtemp(path.join(tmpdir(), "tavora-official-"));

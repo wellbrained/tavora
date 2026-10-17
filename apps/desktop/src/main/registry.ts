@@ -24,6 +24,8 @@ export interface InstalledModule {
   owner: string;
   /** Part of the host (the Browser), not a package on disk. */
   builtIn?: true;
+  /** Loaded from this development folder, as the player added it in Settings > Modules. */
+  developmentFolder?: string;
 }
 
 const MANIFEST = "tavora.module.json";
@@ -60,11 +62,19 @@ export function isDevelopmentModule(id: string): boolean {
 export interface ModuleProblem {
   folder: string;
   message: string;
+  /** For a development folder: its full path, so Settings shows the problem next to it. */
+  developmentFolder?: string;
 }
 
 export interface ModuleSources {
   /** Modules that ship with Tavora. Searched first, so they win over a local copy. */
   official?: string[];
+  /**
+   * Module project folders a developer added (Settings > Modules). Each is one module, never a
+   * folder of modules; they come before the other local folders, so a project wins over an
+   * installed copy of the same module.
+   */
+  development?: string[];
   local?: string[];
 }
 
@@ -76,40 +86,55 @@ export interface ModuleSources {
  * cannot pass itself off as official.
  */
 export async function discoverModules(
-  { official = [], local = [] }: ModuleSources,
+  { official = [], development = [], local = [] }: ModuleSources,
   problems: ModuleProblem[] = [],
 ): Promise<Map<string, InstalledModule>> {
   const modules = new Map<string, InstalledModule>();
   const dirs = [
-    ...official.map((dir) => ({ dir, provenance: "official" as const })),
-    ...local.map((dir) => ({ dir, provenance: "local" as const })),
+    ...official.map((dir) => ({ dir, provenance: "official" as const, development: false })),
+    ...development.map((dir) => ({ dir, provenance: "local" as const, development: true })),
+    ...local.map((dir) => ({ dir, provenance: "local" as const, development: false })),
   ];
-  for (const { dir, provenance } of dirs) {
-    for (const candidate of await candidates(dir)) {
+  for (const { dir, provenance, development: fromProject } of dirs) {
+    const found = fromProject ? await projectCandidate(dir) : await candidates(dir);
+    if (fromProject && found.length === 0) problems.push({ folder: path.basename(dir), message: "there is no tavora.module.json in this folder", developmentFolder: dir });
+    for (const candidate of found) {
+      const report = (message: string) => problems.push({ folder: path.basename(candidate), message, ...(fromProject ? { developmentFolder: dir } : {}) });
       const installed = await loadModule(candidate, provenance, (message) => {
-        if (provenance === "local") problems.push({ folder: path.basename(candidate), message });
+        if (provenance === "local") report(message);
       });
       if (!installed) continue;
+      if (fromProject) installed.developmentFolder = dir;
       const { id } = installed.manifest;
       if (provenance !== "official" && id.startsWith(OFFICIAL_PREFIX)) {
         console.warn(`[tavora] module id ${id} in ${candidate} is reserved for official Tavora modules; skipping it`);
-        problems.push({ folder: path.basename(candidate), message: "its id is reserved for Tavora's own modules" });
+        report("its id is reserved for Tavora's own modules");
         continue;
       }
       if (provenance !== "official" && installed.manifest.permissions.webAssembly === true) {
         console.warn(`[tavora] module ${id} in ${candidate} asks to run WebAssembly, which only Tavora's own modules may; skipping it`);
-        problems.push({ folder: path.basename(candidate), message: "permissions.webAssembly is only for Tavora's own modules" });
+        report("permissions.webAssembly is only for Tavora's own modules");
         continue;
       }
       if (modules.has(id)) {
         console.warn(`[tavora] duplicate module id ${id} in ${candidate}; keeping the first one`);
-        if (provenance === "local") problems.push({ folder: path.basename(candidate), message: "another module with the same id is already loaded" });
+        if (provenance === "local") report("another module with the same id is already loaded");
         continue;
       }
       modules.set(id, installed);
     }
   }
   return modules;
+}
+
+/** A development folder is one module: the folder itself when it has a manifest, else nothing. */
+async function projectCandidate(dir: string): Promise<string[]> {
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    return entries.some((entry) => entry.isFile() && entry.name === MANIFEST) ? [dir] : [];
+  } catch {
+    return [];
+  }
 }
 
 async function candidates(dir: string): Promise<string[]> {
@@ -169,7 +194,8 @@ export async function describeModules(userModules: string, modules: Map<string, 
   for (const [id, module] of modules) {
     const own = module.provenance === "local" && path.dirname(module.root) === userRoot;
     const kind = module.provenance === "official" ? "official" : isDevelopmentModule(id) ? "example" : own ? "own" : "dev";
-    const origin = { kind, folder: path.basename(module.root) } as const;
+    // A development folder is shown by its full path, so the developer can tell projects apart.
+    const origin = { kind, folder: module.developmentFolder ?? path.basename(module.root) } as const;
     info.set(id, { origin, removable: own, icon: await moduleIconUrl(module.root, module.manifest.icon) });
   }
   return info;
