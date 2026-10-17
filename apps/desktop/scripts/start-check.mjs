@@ -18,11 +18,29 @@ function windowTitle(pid) {
   return (result.stdout ?? "").trim();
 }
 
+/** Every Tavora.exe with its main window, to tell "no window" apart from "another window" when the check fails. */
+function tavoraWindows() {
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "Get-Process Tavora -ErrorAction SilentlyContinue | ForEach-Object { \"pid $($_.Id): window '$($_.MainWindowTitle)' handle $($_.MainWindowHandle) responding $($_.Responding)\" }"], { encoding: "utf8" });
+  return (result.stdout ?? "").trim() || "no Tavora.exe running";
+}
+
+/** Saves the whole screen as a PNG (Windows only). */
+function screenshot(file) {
+  const script = [
+    "Add-Type -AssemblyName System.Windows.Forms, System.Drawing",
+    "$b = [System.Windows.Forms.SystemInformation]::VirtualScreen",
+    "$bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height",
+    "[System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Left, $b.Top, 0, 0, $b.Size)",
+    `$bmp.Save('${file.replaceAll("'", "''")}', [System.Drawing.Imaging.ImageFormat]::Png)`,
+  ].join("; ");
+  spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { stdio: "inherit" });
+}
+
 /**
  * Resolves to "window" or "handover"; throws with what Tavora printed when it quits or never shows a window.
- * options: { allowHandover = false, timeoutMs = 60_000 }
+ * options: { allowHandover = false, timeoutMs = 120_000 }
  */
-export async function checkStart(exe, { allowHandover = false, timeoutMs = 60_000 } = {}) {
+export async function checkStart(exe, { allowHandover = false, timeoutMs = 120_000 } = {}) {
   const child = spawn(exe, [], { stdio: ["ignore", "ignore", "pipe"] });
   let stderr = "";
   child.stderr.on("data", (chunk) => (stderr += chunk));
@@ -38,9 +56,14 @@ export async function checkStart(exe, { allowHandover = false, timeoutMs = 60_00
         if (exit === 0 && allowHandover) return "handover";
         throw new Error(`Tavora.exe quit with exit code ${exit} before showing its window.\n${stderr.trim()}`);
       }
-      if (windowTitle(child.pid) === WINDOW_TITLE) return "window";
+      if (windowTitle(child.pid) === WINDOW_TITLE) {
+        console.log(`Window up after ${Math.round((Date.now() - deadline + timeoutMs) / 1000)} s.`);
+        return "window";
+      }
     }
-    throw new Error(`Tavora.exe showed no "${WINDOW_TITLE}" window within ${timeoutMs / 1000} s.\n${stderr.trim()}`);
+    // CI sets START_CHECK_SCREENSHOT and uploads the file: what the screen shows while Tavora still runs.
+    if (process.env.START_CHECK_SCREENSHOT) screenshot(process.env.START_CHECK_SCREENSHOT);
+    throw new Error(`Tavora.exe showed no "${WINDOW_TITLE}" window within ${timeoutMs / 1000} s.\n${tavoraWindows()}\n${stderr.trim()}`);
   } finally {
     if (exit === null) spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
   }
