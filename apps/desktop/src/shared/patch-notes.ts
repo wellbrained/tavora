@@ -27,6 +27,15 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
+    version: "0.17.7",
+    date: "2026-10-17",
+    title: "Development folders",
+    notes: [
+      "For module developers: Settings > Modules > Add a development folder loads a module straight from its project folder. Its open panels reload by themselves whenever you build it again, and a folder added before its first build loads as soon as the build is there.",
+      "Each development folder says which module it loads, or why it can't. Remove it there to stop loading it; the project and the module's data stay.",
+    ],
+  },
+  {
     version: "0.17.6",
     date: "2026-10-17",
     title: "Separate development state and clearer startup errors",

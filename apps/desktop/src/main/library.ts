@@ -79,6 +79,8 @@ export interface Library {
   moduleIcons: boolean;
   /** Where modules keep their pictures, when the player moved it from the default folder. */
   moduleFilesFolder: string | null;
+  /** Module project folders a developer added in Settings > Modules; loaded straight from there (registry.ts). */
+  developmentFolders: string[];
   /** The Steam profile link or id the player chose to remember for the Steam import, or null. Kept only on this PC. */
   steamProfile: string | null;
   /** The language of Tavora's texts: one of them, or the system's. */
@@ -99,6 +101,25 @@ export const TRASH_DAYS = 30;
 export const MAX_NAME = 80;
 export const MAX_LABEL = 3;
 
+/** Most development folders kept. */
+export const MAX_DEVELOPMENT_FOLDERS = 20;
+
+/** Absolute paths only, each once (ignoring case on Windows), at most MAX_DEVELOPMENT_FOLDERS. */
+export function cleanDevelopmentFolders(values: unknown[]): string[] {
+  const seen = new Set<string>();
+  const folders: string[] = [];
+  for (const value of values) {
+    if (typeof value !== "string" || value.length === 0 || value.length > 500 || !path.isAbsolute(value)) continue;
+    const folder = path.resolve(value);
+    const key = process.platform === "win32" ? folder.toLowerCase() : folder;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    folders.push(folder);
+    if (folders.length === MAX_DEVELOPMENT_FOLDERS) break;
+  }
+  return folders;
+}
+
 /** A problem the player caused and should read, e.g. a duplicate game. */
 export class LibraryError extends PlayerError {}
 
@@ -118,6 +139,7 @@ export function emptyLibrary(): Library {
     steamIcons: true,
     moduleIcons: true,
     moduleFilesFolder: null,
+    developmentFolders: [],
     steamProfile: null,
     language: "system",
     theme: { ...DEFAULT_THEME },
@@ -590,6 +612,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.steamIcons === "boolean") library.steamIcons = saved.steamIcons;
   if (typeof saved.moduleIcons === "boolean") library.moduleIcons = saved.moduleIcons;
   if (typeof saved.moduleFilesFolder === "string" && saved.moduleFilesFolder.length <= 500 && path.isAbsolute(saved.moduleFilesFolder)) library.moduleFilesFolder = saved.moduleFilesFolder;
+  if (Array.isArray(saved.developmentFolders)) library.developmentFolders = cleanDevelopmentFolders(saved.developmentFolders);
   if (isLanguageSetting(saved.language)) library.language = saved.language;
   if (typeof saved.steamProfile === "string" && saved.steamProfile.trim() && saved.steamProfile.length <= 200) library.steamProfile = saved.steamProfile.trim();
   const theme = asRecord(saved.theme);
