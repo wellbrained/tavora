@@ -32,6 +32,11 @@ export default defineConfig({
         text: "Guide",
         items: [
           { text: "Getting started", link: "/guide/getting-started" },
+          { text: "Permissions and consent", link: "/guide/permissions" },
+          { text: "Saving data", link: "/guide/saving-data" },
+          { text: "Look and languages", link: "/guide/look-and-languages" },
+          { text: "Your publisher key", link: "/guide/publisher-key" },
+          { text: "Troubleshooting", link: "/guide/troubleshooting" },
           { text: "Security model", link: "/guide/security" },
         ],
       },
