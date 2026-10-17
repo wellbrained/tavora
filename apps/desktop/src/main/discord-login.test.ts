@@ -23,10 +23,10 @@ async function run(answer: (authorize: URL, port: number) => string | null) {
 
 describe("Discord browser sign-in", () => {
   it("asks for identify only with PKCE, and returns the code with the verifier", async () => {
-    const { result, opened } = await run((url, port) => `http://127.0.0.1:${port}/discord?code=codenik00000&state=${url.searchParams.get("state")}`);
+    const { result, opened } = await run((url, port) => `http://127.0.0.1:${port}/discord?code=codewellbrained&state=${url.searchParams.get("state")}`);
     const { code, verifier } = await result;
     const url = opened();
-    expect(code).toBe("codenik00000");
+    expect(code).toBe("codewellbrained");
     expect(url.origin + url.pathname).toBe("https://discord.com/oauth2/authorize");
     expect(Object.fromEntries(url.searchParams)).toMatchObject({ client_id: "1560388687370387610", response_type: "code", scope: "identify", redirect_uri: DISCORD_LOGIN_REDIRECT, code_challenge_method: "S256" });
     const { createHash } = await import("node:crypto");
@@ -54,11 +54,11 @@ describe("Discord browser sign-in", () => {
         timeoutMs: 2000,
         open: async (url) => {
           const state = new URL(url).searchParams.get("state");
-          setTimeout(() => void fetch(`http://127.0.0.1:${port}/discord?code=codenik00000&state=${state}`, { keepalive: true }).catch(() => undefined), 10);
+          setTimeout(() => void fetch(`http://127.0.0.1:${port}/discord?code=codewellbrained&state=${state}`, { keepalive: true }).catch(() => undefined), 10);
         },
       });
-    await expect(signIn()).resolves.toMatchObject({ code: "codenik00000" });
-    await expect(signIn()).resolves.toMatchObject({ code: "codenik00000" });
+    await expect(signIn()).resolves.toMatchObject({ code: "codewellbrained" });
+    await expect(signIn()).resolves.toMatchObject({ code: "codewellbrained" });
   });
 
   it("says so when the port is in use", async () => {
