@@ -260,14 +260,14 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
 
   // The rectangle just drawn is selected, so only it is copied, twice its size.
   const selection = await copy();
-  expect(selection.notice).toContain("Copied the selection as a picture");
+  expect(selection.notice).toContain("Copied the selection as an image");
   expect(selection.size.width).toBeGreaterThan(400);
   expect(selection.size.width).toBeLessThan(1000);
 
   // A click on the locked picture clears the selection; then the whole board is copied, sharper than the 1440 px picture.
   await drag(app, { x: area.x + area.width * 0.7, y: area.y + area.height * 0.6 }, { x: area.x + area.width * 0.7, y: area.y + area.height * 0.6 });
   const board = await copy();
-  expect(board.notice).toContain("Copied the board as a picture");
+  expect(board.notice).toContain("Copied the board as an image");
   expect(board.size.width).toBeGreaterThan(1440);
   expect(Math.max(board.size.width, board.size.height)).toBeLessThanOrEqual(8192);
 
@@ -283,7 +283,7 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
     },
     WHITEBOARD,
   );
-  await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Copied the board as a picture");
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Copied the board as an image");
   expect(await app.evaluate(async ({ clipboard }) => (await clipboard.read()).flatMap((item) => item.types))).toContain("image/png");
 
   // Save as picture writes the same PNG into Pictures\Tavora, named after the board, and never replaces a file.

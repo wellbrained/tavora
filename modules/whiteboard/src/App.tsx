@@ -377,12 +377,19 @@ export default function App() {
             {t(pictures.allLocked ? "image.unlock" : "image.lock")}
           </button>
         ) : null}
-        <button type="button" className="button copy-picture" title={t("clear.hint")} data-testid="clear-board" disabled={empty} onClick={clearBoard}>
-          {t("clear.button")}
+        <button
+          type="button"
+          className="button action"
+          title={t("copy.hint")}
+          data-testid="copy-picture"
+          disabled={empty || copying}
+          onClick={() => void copyAsPicture()}
+        >
+          {t("copy.button")}
         </button>
         <button
           type="button"
-          className="button copy-picture"
+          className="button action"
           title={t("savePicture.hint")}
           data-testid="save-picture"
           disabled={empty || copying}
@@ -390,15 +397,8 @@ export default function App() {
         >
           {t("savePicture.button")}
         </button>
-        <button
-          type="button"
-          className="button copy-picture"
-          title={t("copy.hint")}
-          data-testid="copy-picture"
-          disabled={empty || copying}
-          onClick={() => void copyAsPicture()}
-        >
-          {t("copy.button")}
+        <button type="button" className="button action action-danger" title={t("clear.hint")} data-testid="clear-board" disabled={empty} onClick={clearBoard}>
+          {t("clear.button")}
         </button>
         {level !== "ok" ? (
           <span className={level === "full" ? "size size-full" : "size"} role="status" data-testid="board-size">

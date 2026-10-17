@@ -151,9 +151,14 @@ export default function Palette({ board, place, onPlace }: Props) {
         if (!(event.target as HTMLElement).closest("button")) onPlace(DEFAULT_PALETTE);
       }}
     >
-      <span className="palette-dots" aria-hidden="true">
-        ⋮⋮
-      </span>
+      <svg className="palette-dots" viewBox="0 0 10 16" width="8" height="12" aria-hidden="true" fill="currentColor">
+        <circle cx="2.5" cy="3" r="1.5" />
+        <circle cx="7.5" cy="3" r="1.5" />
+        <circle cx="2.5" cy="8" r="1.5" />
+        <circle cx="7.5" cy="8" r="1.5" />
+        <circle cx="2.5" cy="13" r="1.5" />
+        <circle cx="7.5" cy="13" r="1.5" />
+      </svg>
       <span className="palette-title">{t("palette.title")}</span>
       <button
         type="button"

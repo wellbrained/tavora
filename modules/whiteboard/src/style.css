@@ -245,7 +245,7 @@ body {
   cursor: grabbing;
 }
 .palette-dots {
-  letter-spacing: -3px;
+  flex: none;
   opacity: 0.5;
 }
 .palette-title {
@@ -334,4 +334,23 @@ body {
   bottom: 100%;
   margin-top: 0;
   margin-bottom: 0.5rem;
+}
+
+/* Copy as image, Save as image and Clear board: proper buttons with a touch of the accent; Clear board in red. */
+.button.action {
+  height: 26px;
+  font-size: 12px;
+  border-color: color-mix(in oklab, var(--primary) 45%, transparent);
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
+}
+.button.action:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--primary) 26%, transparent);
+}
+.button.action-danger {
+  color: var(--destructive);
+  border-color: color-mix(in oklab, var(--destructive) 50%, transparent);
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+}
+.button.action-danger:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--destructive) 24%, transparent);
 }
