@@ -1,0 +1,33 @@
+:root{color-scheme:dark;font:13px 'Segoe UI',sans-serif;--host-background:#171412;--host-surface:#201c19;--host-text:#f2ece0;--host-textMuted:#aaa398;--host-accent:#e0a243;--weapon-set-1:#da665a;--weapon-set-2:#86b56a;--passive-shared:#d3af61}*{box-sizing:border-box}body{margin:0;background:var(--host-background);color:var(--host-text);height:100vh;display:flex;flex-direction:column}#app{flex:1;min-height:0;display:flex;flex-direction:column}button,input,select{font:inherit;color:inherit;background:var(--host-surface);border:1px solid var(--border,#49433b);border-radius:5px;padding:6px 8px;min-width:0}button{cursor:pointer}button:disabled{opacity:.4}button:hover{border-color:var(--host-accent)}button:focus-visible,input:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid var(--host-accent)}header{padding:10px;display:flex;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--border,#49433b)}#build{flex:1 1 100%;max-width:100%;text-overflow:ellipsis}.actions{display:flex;flex-wrap:wrap;gap:6px}header label{display:flex;gap:7px;align-items:center;min-width:0}header label select{max-width:210px}.panels{padding:7px 10px;display:flex;gap:6px;border-bottom:1px solid var(--border,#49433b)}.panels button{font-size:12px}.content{flex:1;min-height:0;overflow:auto;padding:12px}.empty{padding:20px;max-width:600px;margin:auto}.empty h1{font-size:20px}h2{font-size:15px;margin:8px 0}p{line-height:1.6}small,.muted{color:var(--host-textMuted)}article{padding:12px 0;border-bottom:1px solid var(--border,#49433b)}article:first-child{padding-top:0}.gem{display:inline-block;border-left:3px solid #aaa;padding:4px 7px;background:var(--host-surface);border-radius:4px;font-size:12px}.gem-strength{border-color:#da665a}.gem-dexterity{border-color:#86b56a}.gem-intelligence{border-color:#72b3d6}.gem.lineage{outline:1px solid #d3af61}.supports{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0}.socketed{flex-basis:100%;font-size:11px;color:var(--host-textMuted)}.rarity-unique{color:#d68a4d}.rarity-rare{color:#e9d183}.rarity-magic{color:#999df6}.mods{color:#9da9dc;overflow-wrap:anywhere}.excerpt{border-left:2px solid var(--host-accent);padding:7px 10px;background:var(--host-surface);margin-bottom:12px}.excerpt summary{cursor:pointer;color:var(--host-textMuted)}.excerpt p{white-space:pre-wrap;font-size:12px;margin:8px 0}.excerpt button{font-size:11px}.guide-reader{height:100%;display:grid;grid-template-columns:minmax(95px,28%) minmax(0,1fr);gap:12px}.guide-reader nav{display:flex;flex-direction:column;gap:5px;overflow:auto}.guide-reader nav button{text-align:left;overflow-wrap:anywhere}.guide-article{overflow:auto;scroll-padding-top:10px;min-width:0}.guide-article section{padding:8px 0 20px;border-bottom:1px solid var(--border,#49433b)}.original-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}.tree-content{display:flex;flex-direction:column;padding:0}.tree-content>.excerpt{margin:0;flex-shrink:0;max-height:25%;overflow:auto}.tree-controls{display:flex;padding:8px;gap:6px;flex-wrap:wrap}#search{flex:1;min-width:100px}.tree-body{position:relative;min-height:180px;flex:1;overflow:hidden;background:#10181d url('/assets/tree-background.webp') center/cover}.tree-body canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}.tree-body canvas.dragging{cursor:grabbing}.tree-buttons{position:absolute;right:8px;bottom:8px;display:flex;gap:4px}.tree-info{padding:8px;font-size:12px}.tree-info summary{cursor:pointer}.node-tooltip{position:absolute;z-index:5;background:#191714;color:#eee;border:1px solid #a58a55;max-width:300px;padding:10px;font-size:12px;pointer-events:none;line-height:1.5}.node-tooltip strong,.node-state{display:block}.node-tooltip strong{color:#e5c27c;margin-bottom:6px}.node-state{margin-top:6px;color:#aaa}#ascendancy-view{width:min(450px,95vw);height:430px;border:1px solid #88724d;background:var(--host-background);color:var(--host-text);padding:12px}#ascendancy-view .tree-body{height:320px}#status{margin:0;padding:5px 10px;color:var(--host-textMuted);font-size:12px;overflow-wrap:anywhere;max-height:80px;overflow:auto}#status:empty{display:none}[hidden]{display:none!important}
+#app header{padding:6px 8px;gap:6px;flex-wrap:nowrap;align-items:center;flex-shrink:0}
+#build{flex:1 1 0;width:0;max-width:none}
+#variant{flex:0 1 40%;width:40%;text-overflow:ellipsis}
+header .more{flex:0 0 32px;font-size:20px;line-height:18px;padding:5px}
+#build-actions{inset:44px 8px auto auto;max-width:calc(100vw - 16px);margin:0;padding:6px;background:var(--host-background);color:var(--host-text);border:1px solid var(--border,#49433b);border-radius:7px;box-shadow:0 8px 24px #0008}
+#build-actions:popover-open{display:flex;flex-direction:column;gap:4px}
+#build-actions>button{text-align:left}
+#build-actions nav{display:flex;gap:4px;border-top:1px solid var(--border,#49433b);padding-top:6px;margin-top:2px}
+.excerpt summary,.tree-info summary{display:flex;align-items:center;gap:6px;list-style:none;line-height:20px}
+.excerpt summary::-webkit-details-marker,.tree-info summary::-webkit-details-marker{display:none}
+.excerpt summary::before,.tree-info summary::before{content:'›';display:inline-block;font-size:16px;line-height:1;transform:rotate(0deg)}
+.excerpt[open]>summary::before,.tree-info[open]>summary::before{transform:rotate(90deg)}
+.excerpt{padding:4px 8px;margin-bottom:8px}
+.excerpt[open]{max-height:35vh;overflow:auto}
+.tree-content>.excerpt{max-height:25%;margin:0}
+.tree-controls{padding:6px;gap:5px;flex-wrap:nowrap}
+.tree-controls button{white-space:nowrap;max-width:35%;overflow:hidden;text-overflow:ellipsis}
+.tree-controls select{max-width:32%}
+.tree-controls #search{min-width:50px;width:0}
+.tree-info{padding:4px 8px;flex-shrink:0}
+.tree-body{min-height:80px}
+.guide-reader{height:100%;min-height:0}
+#guide-section{display:none}
+.guide-reader nav button[aria-current=true]{border-color:var(--host-accent)}
+@media(max-width:600px){
+ .content{padding:8px}
+ .tree-content{padding:0}
+ .guide-reader{display:flex;flex-direction:column;gap:6px}
+ #guide-section{display:block;flex-shrink:0;width:100%}
+ .guide-reader nav{display:none}
+ .guide-article{flex:1;min-height:0}
+}
