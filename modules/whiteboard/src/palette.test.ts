@@ -6,7 +6,7 @@ const home = { left: 16, top: 100, right: 216, bottom: 500 };
 
 describe("palettePlace", () => {
   it("reads a stored place and falls back for anything else", () => {
-    expect(palettePlace({ x: 12, y: -4, collapsed: true })).toEqual({ x: 12, y: -4, collapsed: true });
+    expect(palettePlace({ x: 12, y: -4, collapsed: true, more: true })).toEqual({ x: 12, y: -4, collapsed: true, more: true });
     expect(palettePlace(undefined)).toEqual(DEFAULT_PALETTE);
     expect(palettePlace({ x: "1", y: Number.NaN, collapsed: "yes" })).toEqual(DEFAULT_PALETTE);
   });

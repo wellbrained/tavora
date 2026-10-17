@@ -354,3 +354,36 @@ body {
 .button.action-danger:hover:not(:disabled) {
   background: color-mix(in oklab, var(--destructive) 24%, transparent);
 }
+
+/* The less used options (Palette.tsx marks them) sit under More options, folded away until opened. */
+.excalidraw .App-menu__left .panelColumn > * {
+  order: 0;
+}
+.excalidraw .App-menu__left .panelColumn > .palette-more {
+  order: 1;
+}
+.excalidraw .App-menu__left .panelColumn > .palette-extra {
+  order: 2;
+}
+.excalidraw .App-menu__left:not(.palette-more-open) .panelColumn > .palette-extra,
+.excalidraw .App-menu__left:not(.palette-has-extra) .palette-more {
+  display: none;
+}
+.palette-more-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-on-surface, inherit);
+  cursor: pointer;
+  border: 0;
+  border-top: 1px solid var(--default-border-color, transparent);
+  background: transparent;
+}
+.palette-more-toggle:hover {
+  color: var(--color-primary, inherit);
+}

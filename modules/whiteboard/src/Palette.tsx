@@ -11,19 +11,53 @@ export interface PalettePlace {
   x: number;
   y: number;
   collapsed: boolean;
+  /** Whether the less used options (sloppiness, edges, opacity, align, actions, …) are shown too. */
+  more: boolean;
 }
 
-export const DEFAULT_PALETTE: PalettePlace = { x: 0, y: 0, collapsed: false };
+export const DEFAULT_PALETTE: PalettePlace = { x: 0, y: 0, collapsed: false, more: false };
 
 /** Reads a stored place, falling back to the default for anything that is not one. */
 export function palettePlace(value: unknown): PalettePlace {
   if (!value || typeof value !== "object") return DEFAULT_PALETTE;
-  const { x, y, collapsed } = value as Record<string, unknown>;
+  const { x, y, collapsed, more } = value as Record<string, unknown>;
   return {
     x: typeof x === "number" && Number.isFinite(x) ? x : 0,
     y: typeof y === "number" && Number.isFinite(y) ? y : 0,
     collapsed: collapsed === true,
+    more: more === true,
   };
+}
+
+/**
+ * The options that always show: colour, background, fill, stroke width and style, font family and size, arrowheads.
+ * Recognised by what is inside them, so it works in every language. Everything else goes under More options.
+ */
+const MAIN_OPTIONS = [
+  '[data-testid^="color-top-pick-"]',
+  '[data-testid^="fill-"]',
+  '[data-testid^="strokeWidth-"]',
+  'input[name="strokeStyle"]',
+  '[data-testid^="font-family-"]',
+  '[data-testid^="fontSize-"]',
+  ".iconSelectList",
+].join(",");
+
+/** Sorts Excalidraw's options into the main ones and the more ones, and calls the stroke colour plain Color. */
+function sortOptions(palette: HTMLElement, column: HTMLElement, more: HTMLElement): void {
+  let extra = 0;
+  for (const child of column.children) {
+    if (child === more) continue;
+    const isExtra = !child.querySelector(MAIN_OPTIONS);
+    child.classList.toggle("palette-extra", isExtra);
+    if (isExtra && !child.querySelector(".zIndexButton")) extra++;
+  }
+  palette.classList.toggle("palette-has-extra", extra > 0);
+  // The stroke colour is the one picker without a transparent choice (the background has one). Its text node is
+  // changed in place, so Excalidraw keeps owning it.
+  const stroke = [...column.children].find((child) => child.querySelector('[data-testid^="color-top-pick-"]') && !child.querySelector('[data-testid="color-top-pick-transparent"]'));
+  const label = stroke?.querySelector("h3, legend")?.firstChild;
+  if (label?.nodeType === Node.TEXT_NODE && label.nodeValue !== t("palette.color")) label.nodeValue = t("palette.color");
 }
 
 interface Box {
@@ -59,6 +93,8 @@ interface Props {
 export default function Palette({ board, place, onPlace }: Props) {
   /** The palette Excalidraw shows right now, and the handle put into it. */
   const [shown, setShown] = useState<{ palette: HTMLElement; handle: HTMLElement } | null>(null);
+  /** Where the More options toggle is put, at the end of the options. */
+  const [moreHost, setMoreHost] = useState<HTMLElement | null>(null);
   const current = useRef(place);
   current.current = place;
   const drag = useRef<{ pointer: number; startX: number; startY: number; from: PalettePlace; moved: boolean } | null>(null);
@@ -69,22 +105,44 @@ export default function Palette({ board, place, onPlace }: Props) {
     let known: { palette: HTMLElement; handle: HTMLElement } | null = null;
     const find = () => {
       const palette = board.querySelector<HTMLElement>(".App-menu__left");
-      if (known && known.palette === palette && palette.firstElementChild === known.handle) return;
-      known?.handle.remove();
-      if (palette) {
-        const handle = document.createElement("div");
-        handle.className = "palette-handle";
-        palette.prepend(handle);
-        known = { palette, handle };
-      } else known = null;
-      setShown(known);
+      if (!(known && known.palette === palette && palette.firstElementChild === known.handle)) {
+        known?.handle.remove();
+        if (palette) {
+          const handle = document.createElement("div");
+          handle.className = "palette-handle";
+          palette.prepend(handle);
+          known = { palette, handle };
+        } else known = null;
+        setShown(known);
+      }
+      const column = palette?.querySelector<HTMLElement>(".panelColumn") ?? null;
+      if (!column) {
+        if (more) {
+          more.remove();
+          more = null;
+          setMoreHost(null);
+        }
+        return;
+      }
+      if (!more || more.parentElement !== column) {
+        more?.remove();
+        more = document.createElement("div");
+        more.className = "palette-more";
+        column.append(more);
+        setMoreHost(more);
+      }
+      sortOptions(palette!, column, more);
     };
+    let more: HTMLElement | null = null;
     find();
     const observer = new MutationObserver(find);
-    observer.observe(board, { childList: true, subtree: true });
+    // Text too: Excalidraw names the options again when the language changes.
+    observer.observe(board, { childList: true, subtree: true, characterData: true });
     return () => {
       observer.disconnect();
+      more?.remove();
       setShown(null);
+      setMoreHost(null);
     };
   }, [board]);
 
@@ -99,6 +157,7 @@ export default function Palette({ board, place, onPlace }: Props) {
       const kept = clampPlace(x, y, home, board.getBoundingClientRect());
       palette.style.transform = kept.x || kept.y ? `translate(${kept.x}px, ${kept.y}px)` : "";
       palette.classList.toggle("palette-collapsed", current.current.collapsed);
+      palette.classList.toggle("palette-more-open", current.current.more);
     };
     apply();
     const observer = new ResizeObserver(apply);
@@ -138,7 +197,22 @@ export default function Palette({ board, place, onPlace }: Props) {
   }
 
   const label = t(place.collapsed ? "palette.expand" : "palette.collapse");
-  return createPortal(
+  const moreToggle = moreHost
+    ? createPortal(
+        <button
+          type="button"
+          className="palette-more-toggle"
+          aria-expanded={place.more}
+          data-testid="palette-more"
+          onClick={() => onPlace({ ...current.current, more: !current.current.more })}
+        >
+          <span>{t(place.more ? "palette.less" : "palette.more")}</span>
+          <span aria-hidden="true">{place.more ? "▾" : "▸"}</span>
+        </button>,
+        moreHost,
+      )
+    : null;
+  const handle = createPortal(
     <div
       className="palette-grip"
       title={t("palette.move")}
@@ -173,5 +247,11 @@ export default function Palette({ board, place, onPlace }: Props) {
       </button>
     </div>,
     shown.handle,
+  );
+  return (
+    <>
+      {handle}
+      {moreToggle}
+    </>
   );
 }

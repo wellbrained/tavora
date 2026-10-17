@@ -329,6 +329,16 @@ test("whiteboard: the style palette can be moved and folded away, and stays so f
   await expect.poll(async () => Math.round((await rect(".App-menu__left")).x - start.x)).toBe(200);
   expect(Math.round((await rect(".App-menu__left")).y - start.y)).toBe(30);
 
+  // Only the main options show; the stroke colour is called Color, and the rest waits under More options.
+  const visible = (name: string) => inModule<boolean>(app, WHITEBOARD, `(() => { const input = document.querySelector('.App-menu__left input[name="${name}"]'); return !!input && input.closest("fieldset").offsetParent !== null; })()`);
+  expect(await visible("strokeStyle")).toBe(true);
+  expect(await visible("sloppiness")).toBe(false);
+  expect(await inModule(app, WHITEBOARD, `document.querySelector(".App-menu__left .panelColumn h3")?.textContent ?? ""`)).toBe("Color");
+  await inModule(app, WHITEBOARD, `${q("palette-more")}.click()`);
+  await expect.poll(() => visible("sloppiness")).toBe(true);
+  await inModule(app, WHITEBOARD, `${q("palette-more")}.click()`);
+  await expect.poll(() => visible("sloppiness")).toBe(false);
+
   // Folded away, only the handle is left.
   await inModule(app, WHITEBOARD, `${q("palette-toggle")}.click()`);
   await expect.poll(async () => (await rect(".App-menu__left")).height).toBeLessThan(60);
