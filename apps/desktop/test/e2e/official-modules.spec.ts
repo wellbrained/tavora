@@ -273,7 +273,7 @@ test("notes: a pasted picture is stored by the host, shown, resized and removed"
   await app.close();
 });
 
-test("to-dos: groups, steps, objectives and finished tasks, kept after a restart", async () => {
+test("to-dos: groups, sub-to-dos, editing in place, objectives and finished tasks, kept after a restart", async () => {
   const { app, page, userData } = await launch();
   await openModule(page, TODOS);
   await ready(app, TODOS, "empty");
@@ -311,16 +311,33 @@ test("to-dos: groups, steps, objectives and finished tasks, kept after a restart
   await new Promise((resolve) => setTimeout(resolve, 400));
   await expect.poll(() => taskTitles(app)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor", "Defeat the Executioner"]);
 
-  // Steps are added inside a task's details.
-  await inModule(app, TODOS, `${taskTitled("Defeat the Executioner")}.querySelector('[data-testid="task-open"]').click()`);
-  await expect.poll(() => inModule(app, TODOS, `!!${q("task-details")}`)).toBe(true);
-  for (const step of ["Reach level 30", "Get cold resistance"]) {
-    await addInto(app, TODOS, $(`[data-testid="task-details"] form`), step);
+  // Tab in a group's add row makes the next to-dos sub-to-dos of the last one.
+  await inModule(
+    app,
+    TODOS,
+    `${groupNamed("Bosses")}.querySelector("form input").dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }))`,
+  );
+  for (const title of ["Reach level 30", "Get cold resistance"]) {
+    await addInto(app, TODOS, `${groupNamed("Bosses")}.querySelector("form")`, title);
   }
-  await expect.poll(() => inModule(app, TODOS, `${q("steps")}.querySelectorAll("li").length`)).toBe(2);
-  await inModule(app, TODOS, `${q("steps")}.querySelector('[data-testid="step-done"]').click()`);
-  await click(app, TODOS, `[data-testid="task-close"]`);
-  await expectModuleText(app, TODOS, "task-steps", "1/2 steps");
+  await expect.poll(() => inModule(app, TODOS, `${taskTitled("Get cold resistance")}?.dataset.depth`)).toBe("1");
+  await inModule(app, TODOS, `${taskTitled("Reach level 30")}.querySelector('[data-testid="task-done"]').click()`);
+  await expectModuleText(app, TODOS, "task-children", "1/2");
+
+  // A to-do is edited in place: clicking its title opens the editor in its row, Enter saves.
+  await inModule(app, TODOS, `${taskTitled("Find the Ancient Crypt")}.querySelector('[data-testid="task-open"]').click()`);
+  await expect.poll(() => inModule(app, TODOS, `document.activeElement === ${q("task-title-input")}`)).toBe(true);
+  await inModule(
+    app,
+    TODOS,
+    `(() => {
+      const details = ${q("task-details-input")};
+      details.value = "Behind the waterfall";
+      details.dispatchEvent(new Event("input", { bubbles: true }));
+      ${q("task-title-input")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    })()`,
+  );
+  await expectModuleText(app, TODOS, "task-details-preview", "Behind the waterfall");
 
   // Pinned tasks show up as current objectives.
   for (const title of ["Find the Ancient Crypt", "Defeat Count Geonor"]) {
@@ -328,10 +345,16 @@ test("to-dos: groups, steps, objectives and finished tasks, kept after a restart
   }
   await expect.poll(() => taskTitles(app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor"]);
 
-  // Finishing a task un-pins it; hiding finished tasks is this panel's choice.
+  // Finishing a task un-pins it and offers to undo that.
   await inModule(app, TODOS, `${taskTitled("Defeat Count Geonor")}.querySelector('[data-testid="task-done"]').click()`);
   await expect.poll(() => taskTitles(app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt"]);
-  await click(app, TODOS, `[data-testid="toggle-done"]`);
+  await click(app, TODOS, `[data-testid="undo"]`);
+  await expect.poll(() => taskTitles(app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor"]);
+  await inModule(app, TODOS, `${taskTitled("Defeat Count Geonor")}.querySelector('[data-testid="task-done"]').click()`);
+  await expect.poll(() => taskTitles(app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt"]);
+
+  // Whether finished tasks stay or vanish is this panel's setting in the toolbar.
+  await pickFromMenu(app, TODOS, q("finished-mode"), "finished-vanish");
   await expect.poll(() => taskTitles(app)).not.toContain("Defeat Count Geonor");
 
   await app.close();
@@ -340,9 +363,10 @@ test("to-dos: groups, steps, objectives and finished tasks, kept after a restart
   await ready(again.app, TODOS, "todos-app");
   await expect.poll(() => taskTitles(again.app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt"]);
   await expect.poll(() => taskTitles(again.app)).not.toContain("Defeat Count Geonor");
-  await click(again.app, TODOS, `[data-testid="toggle-done"]`);
+  await expect.poll(() => taskTitles(again.app)).not.toContain("Reach level 30");
+  await pickFromMenu(again.app, TODOS, q("finished-mode"), "finished-stay");
   await expect.poll(() => taskTitles(again.app)).toContain("Defeat Count Geonor");
-  await expectModuleText(again.app, TODOS, "task-steps", "1/2 steps");
+  await expectModuleText(again.app, TODOS, "task-children", "1/2");
   await again.app.close();
 });
 

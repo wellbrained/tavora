@@ -2,6 +2,11 @@
 // task, and each change is a pure function on it. Changes take their new ids
 // as arguments, so re-applying one after another panel saved first gives the
 // same result.
+//
+// Sub-to-dos are ordinary tasks with a `parentId`. A group keeps its tasks
+// in one flat list in the order they are shown, so a task's sub-to-dos
+// always follow it directly: a task and everything below it form a block
+// that moves as one.
 
 import type { JsonValue } from "@tavora/sdk";
 
@@ -11,16 +16,11 @@ export const LIST_TITLE = "To-Dos";
 /** The group a first to-do goes into when there is none yet. */
 export const DEFAULT_GROUP = "To-Dos";
 
-export const MAX = { groupName: 80, title: 300, details: 5000, link: 2000 } as const;
+export const MAX = { groupName: 80, title: 300, details: 5000 } as const;
 /** What a stored list may hold; a damaged or hand-edited document cannot make the panel build more than this. */
-export const LIMITS = { groups: 200, tasksPerGroup: 2000, stepsPerTask: 200 } as const;
-
-export interface Step {
-  [key: string]: JsonValue;
-  id: string;
-  title: string;
-  done: boolean;
-}
+export const LIMITS = { groups: 200, tasksPerGroup: 2000 } as const;
+/** How deep sub-to-dos go: a top-level task is depth 0, so there are four levels in all. */
+export const MAX_DEPTH = 3;
 
 export interface Task {
   [key: string]: JsonValue;
@@ -29,11 +29,10 @@ export interface Task {
   done: boolean;
   /** Optional longer text. */
   details: string;
-  /** Optional web address where the task came from, such as a guide. */
-  link: string;
   /** Pinned tasks are shown as current objectives at the top. */
   pinned: boolean;
-  steps: Step[];
+  /** The task this one is a sub-to-do of, in the same group; null at the top level. */
+  parentId: string | null;
   createdAt: string;
   doneAt: string | null;
 }
@@ -53,7 +52,7 @@ export interface Group {
 
 export interface TodoList {
   [key: string]: JsonValue;
-  version: 1;
+  version: 2;
   groups: Group[];
 }
 
@@ -83,13 +82,13 @@ function unique<T extends { id: string }>(items: T[]): T[] {
 export function parseList(raw: JsonValue | null): TodoList {
   const groups = isObject(raw ?? null) ? list((raw as JsonObject).groups) : [];
   return {
-    version: 1,
+    version: 2,
     groups: unique(
       groups.slice(0, LIMITS.groups).map((group) => ({
         id: text(group.id, 64),
         name: text(group.name, MAX.groupName) || DEFAULT_GROUP,
         color: parseColor(group.color),
-        tasks: unique(list(group.tasks).slice(0, LIMITS.tasksPerGroup).map(parseTask)),
+        tasks: tidy(unique(list(group.tasks).flatMap(parseTask)).slice(0, LIMITS.tasksPerGroup)),
       })),
     ),
   };
@@ -100,24 +99,60 @@ function parseColor(value: JsonValue | undefined): GroupColor {
   return GROUP_COLORS.find((color) => color === value) ?? "";
 }
 
-function parseTask(task: JsonObject): Task {
+/**
+ * One stored task, followed by the sub-to-dos an older version kept as
+ * "steps". That version's source link moves into the details so nothing
+ * written there is lost.
+ */
+function parseTask(task: JsonObject): Task[] {
+  const id = text(task.id, 64);
   const done = task.done === true;
-  return {
-    id: text(task.id, 64),
-    title: text(task.title, MAX.title),
-    done,
-    details: text(task.details, MAX.details),
-    // Only web addresses are kept, whatever an older version or a hand edit left there.
-    link: normalizeLink(text(task.link, MAX.link)) ?? "",
-    pinned: task.pinned === true,
-    steps: unique(
-      list(task.steps)
-        .slice(0, LIMITS.stepsPerTask)
-        .map((step) => ({ id: text(step.id, 64), title: text(step.title, MAX.title), done: step.done === true })),
-    ),
-    createdAt: text(task.createdAt, 40),
-    doneAt: done && typeof task.doneAt === "string" ? task.doneAt.slice(0, 40) : null,
-  };
+  const createdAt = text(task.createdAt, 40);
+  const link = text(task.link, 2000).trim();
+  const details = text(task.details, MAX.details);
+  const steps = list(task.steps)
+    .slice(0, 200)
+    .map((step): Task => {
+      const stepDone = step.done === true;
+      return {
+        id: text(step.id, 64),
+        title: text(step.title, MAX.title),
+        done: stepDone,
+        details: "",
+        pinned: false,
+        parentId: id,
+        createdAt,
+        doneAt: stepDone ? createdAt : null,
+      };
+    });
+  return [
+    {
+      id,
+      title: text(task.title, MAX.title),
+      done,
+      details: (link && !details.includes(link) ? (details ? `${details}\n${link}` : link) : details).slice(0, MAX.details),
+      pinned: task.pinned === true,
+      parentId: typeof task.parentId === "string" ? task.parentId : null,
+      createdAt,
+      doneAt: done && typeof task.doneAt === "string" ? task.doneAt.slice(0, 40) : null,
+    },
+    ...steps,
+  ];
+}
+
+/**
+ * Makes every parent point at a task above it whose block the task is in,
+ * and keeps nesting within MAX_DEPTH. Anything else moves up to the deepest
+ * level it can keep.
+ */
+function tidy(tasks: Task[]): Task[] {
+  let chain: string[] = [];
+  for (const task of tasks) {
+    const level = Math.min(task.parentId ? chain.indexOf(task.parentId) + 1 : 0, MAX_DEPTH);
+    task.parentId = level ? chain[level - 1]! : null;
+    chain = [...chain.slice(0, level), task.id];
+  }
+  return tasks;
 }
 
 // ── Looking things up ────────────────────────────────────────────────
@@ -135,8 +170,64 @@ export function pinnedTasks(data: TodoList): { group: Group; task: Task }[] {
   return data.groups.flatMap((group) => group.tasks.filter((task) => task.pinned).map((task) => ({ group, task })));
 }
 
+/** Open tasks of a group, sub-to-dos included. */
 export function openCount(group: Group): number {
   return group.tasks.filter((task) => !task.done).length;
+}
+
+/** How deep each task of a group sits, by id. */
+export function depths(tasks: Task[]): Map<string, number> {
+  const depth = new Map<string, number>();
+  for (const task of tasks) depth.set(task.id, task.parentId ? (depth.get(task.parentId) ?? -1) + 1 : 0);
+  return depth;
+}
+
+/** Where the block of the task at `index` ends: the index right after its last sub-to-do. */
+export function blockEnd(tasks: Task[], index: number): number {
+  const inside = new Set([tasks[index]!.id]);
+  let end = index + 1;
+  while (end < tasks.length && inside.has(tasks[end]!.parentId!)) inside.add(tasks[end++]!.id);
+  return end;
+}
+
+/** The ids of a task's sub-to-dos at any depth. */
+function descendants(tasks: Task[], index: number): Task[] {
+  return tasks.slice(index + 1, blockEnd(tasks, index));
+}
+
+/** The nearest task above with the same parent, or -1. */
+function previousSibling(tasks: Task[], index: number): number {
+  const { parentId } = tasks[index]!;
+  for (let at = index - 1; at >= 0; at--) {
+    if (tasks[at]!.id === parentId) return -1;
+    if (tasks[at]!.parentId === parentId) return at;
+  }
+  return -1;
+}
+
+/** How many levels a block spans below its top task. */
+function blockHeight(tasks: Task[], index: number): number {
+  const depth = depths(tasks.slice(index, blockEnd(tasks, index)).map((task, at) => (at ? task : { ...task, parentId: null })));
+  return Math.max(...depth.values());
+}
+
+/** The sub-to-dos directly under a task: how many there are and how many are done. */
+export function childCount(tasks: Task[], taskId: string): { done: number; total: number } {
+  const children = tasks.filter((task) => task.parentId === taskId);
+  return { done: children.filter((task) => task.done).length, total: children.length };
+}
+
+/**
+ * The parent a task added at the end of a group gets when it is indented to
+ * `level`: the last task's ancestor (or the last task itself) one level up.
+ * The level is limited to what the last task allows.
+ */
+export function parentAtEnd(group: Group, level: number): string | null {
+  const chain: string[] = [];
+  const last = group.tasks.at(-1);
+  for (let id = last?.id ?? null; id; id = group.tasks.find((task) => task.id === id)?.parentId ?? null) chain.unshift(id);
+  const clamped = Math.min(level, chain.length, MAX_DEPTH);
+  return clamped ? chain[clamped - 1]! : null;
 }
 
 // ── Changes ──────────────────────────────────────────────────────────
@@ -177,11 +268,14 @@ export interface NewTask {
   id: string;
   title: string;
   createdAt: string;
+  /** Adds it as the last sub-to-do of this task; at the end of the group when null or gone. */
+  parentId?: string | null;
 }
 
 /**
- * Adds a task at the end of a group. With no group id, or when that group
- * is gone, it goes into the first group, which is created if there is none.
+ * Adds a task at the end of a group, or of its parent's sub-to-dos. With no
+ * group id, or when that group is gone, it goes into the first group, which
+ * is created if there is none.
  */
 export function addTask(data: TodoList, groupId: string | null, task: NewTask, newGroupId: string): void {
   const title = task.title.trim().slice(0, MAX.title);
@@ -191,20 +285,22 @@ export function addTask(data: TodoList, groupId: string | null, task: NewTask, n
     addGroup(data, newGroupId, DEFAULT_GROUP);
     group = data.groups[0]!;
   }
-  group.tasks.push({
+  const parent = group.tasks.findIndex((item) => item.id === task.parentId);
+  const at = parent === -1 ? group.tasks.length : blockEnd(group.tasks, parent);
+  group.tasks.splice(at, 0, {
     id: task.id,
     title,
     done: false,
     details: "",
-    link: "",
     pinned: false,
-    steps: [],
+    parentId: parent === -1 ? null : task.parentId!,
     createdAt: task.createdAt,
     doneAt: null,
   });
+  tidy(group.tasks);
 }
 
-export type TaskPatch = Partial<Pick<Task, "title" | "details" | "link" | "pinned">>;
+export type TaskPatch = Partial<Pick<Task, "title" | "details" | "pinned">>;
 
 export function updateTask(data: TodoList, taskId: string, patch: TaskPatch): void {
   const found = findTask(data, taskId);
@@ -215,83 +311,158 @@ export function updateTask(data: TodoList, taskId: string, patch: TaskPatch): vo
     if (title) task.title = title;
   }
   if (patch.details !== undefined) task.details = patch.details.slice(0, MAX.details);
-  if (patch.link !== undefined) task.link = patch.link.trim().slice(0, MAX.link);
   if (patch.pinned !== undefined) task.pinned = patch.pinned;
 }
 
+/**
+ * Finishing a task finishes its sub-to-dos too; reopening one reopens the
+ * tasks it sits under. A finished objective is no longer current.
+ */
 export function setDone(data: TodoList, taskId: string, done: boolean, at: string): void {
   const found = findTask(data, taskId);
   if (!found) return;
-  found.task.done = done;
-  found.task.doneAt = done ? at : null;
-  // A finished objective is no longer current.
-  if (done) found.task.pinned = false;
+  const { group, task, index } = found;
+  const affected = done ? [task, ...descendants(group.tasks, index)] : [task, ...ancestors(group, task)];
+  for (const item of affected) {
+    if (item.done === done) continue;
+    item.done = done;
+    item.doneAt = done ? at : null;
+    if (done) item.pinned = false;
+  }
 }
 
+function ancestors(group: Group, task: Task): Task[] {
+  const found: Task[] = [];
+  for (let parent = task.parentId; parent; ) {
+    const item = group.tasks.find((candidate) => candidate.id === parent);
+    if (!item) break;
+    found.push(item);
+    parent = item.parentId;
+  }
+  return found;
+}
+
+/** What finishing or reopening a task can change, saved so it can be put back. */
+export type DoneState = Pick<Task, "id" | "done" | "doneAt" | "pinned">[];
+
+export function doneState(data: TodoList, taskId: string): DoneState {
+  const found = findTask(data, taskId);
+  if (!found) return [];
+  const { group, task, index } = found;
+  return [task, ...descendants(group.tasks, index), ...ancestors(group, task)].map(({ id, done, doneAt, pinned }) => ({ id, done, doneAt, pinned }));
+}
+
+export function restoreDone(data: TodoList, state: DoneState): void {
+  for (const saved of state) {
+    const task = findTask(data, saved.id)?.task;
+    if (task) Object.assign(task, saved);
+  }
+}
+
+/** Deletes a task with its sub-to-dos. */
 export function deleteTask(data: TodoList, taskId: string): void {
   const found = findTask(data, taskId);
-  if (found) found.group.tasks.splice(found.index, 1);
+  if (found) found.group.tasks.splice(found.index, blockEnd(found.group.tasks, found.index) - found.index);
 }
 
-/** Removes the finished tasks of one group. */
+/** A task with its sub-to-dos and where they were, so a deletion can be undone. */
+export interface Removed {
+  groupId: string;
+  index: number;
+  tasks: Task[];
+}
+
+export function removedBlock(data: TodoList, taskId: string): Removed | null {
+  const found = findTask(data, taskId);
+  if (!found) return null;
+  return { groupId: found.group.id, index: found.index, tasks: structuredClone(found.group.tasks.slice(found.index, blockEnd(found.group.tasks, found.index))) };
+}
+
+/** Puts a deleted block back where it was, unless its group is gone or its tasks came back some other way. */
+export function restoreBlock(data: TodoList, removed: Removed): void {
+  const group = data.groups.find((item) => item.id === removed.groupId);
+  if (!group || removed.tasks.some((task) => findTask(data, task.id))) return;
+  group.tasks.splice(clamp(removed.index, 0, group.tasks.length), 0, ...structuredClone(removed.tasks));
+  tidy(group.tasks);
+}
+
+/** Removes the finished tasks of one group, with their sub-to-dos. */
 export function clearDone(data: TodoList, groupId: string): void {
   const group = data.groups.find((item) => item.id === groupId);
-  if (group) group.tasks = group.tasks.filter((task) => !task.done);
+  if (!group) return;
+  const gone = new Set<string>();
+  group.tasks = group.tasks.filter((task) => {
+    if (task.done || gone.has(task.parentId!)) gone.add(task.id);
+    return !gone.has(task.id);
+  });
 }
 
 /**
- * Moves a task to a position in a group, counted as if the task were already
- * removed from where it is. Used by drag and drop and by Move up/down.
+ * Moves a task with its sub-to-dos in front of another task, becoming that
+ * task's sibling, or to the end of a group's top level when `beforeId` is
+ * null. Used by drag and drop and by Move to group.
  */
-export function moveTask(data: TodoList, taskId: string, groupId: string, index: number): void {
+export function moveTask(data: TodoList, taskId: string, groupId: string, beforeId: string | null): void {
   const found = findTask(data, taskId);
   const target = data.groups.find((group) => group.id === groupId);
   if (!found || !target) return;
-  found.group.tasks.splice(found.index, 1);
-  target.tasks.splice(clamp(index, 0, target.tasks.length), 0, found.task);
+  const block = found.group.tasks.slice(found.index, blockEnd(found.group.tasks, found.index));
+  if (beforeId !== null && block.some((task) => task.id === beforeId)) return;
+  const before = beforeId === null ? null : target.tasks.find((task) => task.id === beforeId);
+  if (before === undefined) return;
+  found.group.tasks.splice(found.index, block.length);
+  block[0]!.parentId = before?.parentId ?? null;
+  target.tasks.splice(before ? target.tasks.indexOf(before) : target.tasks.length, 0, ...block);
+  tidy(target.tasks);
 }
 
-/** Moves a task one place up (-1) or down (+1) inside its group. */
-export function shiftTask(data: TodoList, taskId: string, delta: number): void {
+/** Moves a task, with its sub-to-dos, past its sibling above (-1) or below (+1). */
+export function shiftTask(data: TodoList, taskId: string, delta: -1 | 1): void {
   const found = findTask(data, taskId);
-  if (found) moveTask(data, taskId, found.group.id, found.index + delta);
-}
-
-// ── Steps (subtasks) ─────────────────────────────────────────────────
-
-export function addStep(data: TodoList, taskId: string, stepId: string, title: string): void {
-  const task = findTask(data, taskId)?.task;
-  const clean = title.trim().slice(0, MAX.title);
-  if (!task || !clean || task.steps.some((step) => step.id === stepId)) return;
-  task.steps.push({ id: stepId, title: clean, done: false });
-}
-
-export function updateStep(data: TodoList, taskId: string, stepId: string, patch: Partial<Pick<Step, "title" | "done">>): void {
-  const step = findTask(data, taskId)?.task.steps.find((item) => item.id === stepId);
-  if (!step) return;
-  if (patch.title !== undefined) {
-    const title = patch.title.trim().slice(0, MAX.title);
-    if (title) step.title = title;
+  if (!found) return;
+  const { tasks } = found.group;
+  const end = blockEnd(tasks, found.index);
+  if (delta === -1) {
+    const above = previousSibling(tasks, found.index);
+    if (above !== -1) tasks.splice(above, 0, ...tasks.splice(found.index, end - found.index));
+  } else if (tasks[end]?.parentId === found.task.parentId && end < tasks.length) {
+    const block = tasks.splice(found.index, end - found.index);
+    tasks.splice(blockEnd(tasks, found.index), 0, ...block);
   }
-  if (patch.done !== undefined) step.done = patch.done;
 }
 
-export function deleteStep(data: TodoList, taskId: string, stepId: string): void {
-  const task = findTask(data, taskId)?.task;
-  if (task) task.steps = task.steps.filter((step) => step.id !== stepId);
+/** Whether a task can be moved up (-1) or down (+1) among its siblings. */
+export function canShift(group: Group, index: number, delta: -1 | 1): boolean {
+  if (delta === -1) return previousSibling(group.tasks, index) !== -1;
+  return group.tasks[blockEnd(group.tasks, index)]?.parentId === group.tasks[index]!.parentId && blockEnd(group.tasks, index) < group.tasks.length;
 }
 
-/** Only web addresses are kept as links. */
-export function normalizeLink(input: string): string | null {
-  const value = input.trim();
-  if (!value) return "";
-  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`;
-  try {
-    const url = new URL(withScheme);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
-  } catch {
-    return null;
-  }
+/** Makes a task the last sub-to-do of its sibling above, if nesting allows. */
+export function indentTask(data: TodoList, taskId: string): void {
+  const found = findTask(data, taskId);
+  if (!found || !canIndent(found.group, found.index)) return;
+  found.task.parentId = found.group.tasks[previousSibling(found.group.tasks, found.index)]!.id;
+}
+
+export function canIndent(group: Group, index: number): boolean {
+  const above = previousSibling(group.tasks, index);
+  if (above === -1) return false;
+  return depths(group.tasks).get(group.tasks[above]!.id)! + 1 + blockHeight(group.tasks, index) <= MAX_DEPTH;
+}
+
+/**
+ * Moves a task one level up: it follows its former parent's block, and the
+ * tasks below it stay where they are.
+ */
+export function outdentTask(data: TodoList, taskId: string): void {
+  const found = findTask(data, taskId);
+  if (!found || !found.task.parentId) return;
+  const { tasks } = found.group;
+  const parent = tasks.findIndex((task) => task.id === found.task.parentId);
+  const parentEnd = blockEnd(tasks, parent);
+  const block = tasks.splice(found.index, blockEnd(tasks, found.index) - found.index);
+  block[0]!.parentId = tasks[parent]!.parentId;
+  tasks.splice(parentEnd - block.length, 0, ...block);
 }
 
 function clamp(value: number, min: number, max: number): number {
