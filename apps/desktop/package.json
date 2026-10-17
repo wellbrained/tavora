@@ -1,6 +1,6 @@
 {
   "name": "@tavora/desktop",
-  "version": "0.16.11",
+  "version": "0.17.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -43,6 +43,7 @@
   "main": "out/main/index.cjs",
   "license": "MIT",
   "description": "Second-monitor gaming companion",
+  "author": "Tavora",
   "build": {
     "appId": "gg.tavora.desktop",
     "electronFuses": {
@@ -98,8 +99,7 @@
         "nsis",
         "zip"
       ],
-      "icon": "assets/tavora.ico",
-      "signAndEditExecutable": false
+      "icon": "assets/tavora.ico"
     },
     "linux": {
       "target": [
