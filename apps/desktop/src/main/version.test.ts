@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { SDK_VERSION } from "@tavora/sdk";
 import { describe, expect, it } from "vitest";
 import { PATCH_NOTES } from "../shared/patch-notes";
 
@@ -20,6 +21,15 @@ describe("app version", () => {
   it("is also the repository's version (tools read the root package.json), so a bump changes both", () => {
     const root = JSON.parse(readFileSync(new URL("../../../../package.json", import.meta.url), "utf8")) as { version?: string };
     expect(root.version).toBe(version);
+  });
+});
+
+describe("SDK version", () => {
+  it("is the version in its package.json, and its changelog has an entry for it", () => {
+    const sdk = new URL("../../../../packages/sdk/", import.meta.url);
+    const { version } = JSON.parse(readFileSync(new URL("package.json", sdk), "utf8")) as { version: string };
+    expect(SDK_VERSION).toBe(version);
+    expect(readFileSync(new URL("CHANGELOG.md", sdk), "utf8").split(/\r?\n/)).toContain(`## ${version}`);
   });
 });
 

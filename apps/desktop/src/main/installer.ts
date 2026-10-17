@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isModuleId, isOwnerId, LOCAL_OWNER, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { isModuleId, isOwnerId, LOCAL_OWNER, needsNewerTavora, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, readZip, verifyFiles, ZIP_LIMITS, ZipError } from "@tavora/pack";
 import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
@@ -67,6 +67,8 @@ export interface InstallOptions {
   userModules: string;
   /** Every module loaded now, with the folder it came from. */
   modules: ReadonlyMap<string, InstalledModule>;
+  /** This Tavora's version; a zip whose `minTavora` is newer is refused before anything is unpacked. */
+  tavoraVersion: string;
 }
 
 export interface Installed {
@@ -76,7 +78,7 @@ export interface Installed {
   updated: boolean;
 }
 
-export async function installZip(zipFile: string, { userData, userModules, modules }: InstallOptions): Promise<Installed> {
+export async function installZip(zipFile: string, { userData, userModules, modules, tavoraVersion }: InstallOptions): Promise<Installed> {
   const size = await stat(zipFile).then((info) => (info.isFile() ? info.size : -1));
   if (size < 0) throw new InstallError("error.installNotZip");
   if (size > ZIP_LIMITS.maxArchiveBytes) throw new InstallError("error.installRefused", { reason: "the zip is too big" });
@@ -100,6 +102,7 @@ export async function installZip(zipFile: string, { userData, userModules, modul
   const result = validateManifest(raw);
   if (!result.ok) throw new InstallError("error.installRefused", { reason: result.errors.slice(0, 2).join("; ") });
   const { manifest } = result;
+  if (needsNewerTavora(manifest, tavoraVersion)) throw new InstallError("error.installNeedsNewer", { name: manifest.name, needed: manifest.minTavora!, current: tavoraVersion });
   const names = new Set(files.map((file) => file.name));
   if (!names.has(manifest.entry)) throw new InstallError("error.installRefused", { reason: `the entry page ${manifest.entry} is missing` });
   if (manifest.icon && !names.has(manifest.icon)) throw new InstallError("error.installRefused", { reason: `the icon ${manifest.icon} is missing` });

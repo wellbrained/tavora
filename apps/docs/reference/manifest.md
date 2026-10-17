@@ -32,6 +32,7 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `description` | no | 1 to 300 characters, not only spaces. |
 | `version` | yes | Semver, e.g. `1.0.0` or `2.0.0-beta.1`. |
 | `apiVersion` | yes | `"1"` (a string). The [bridge protocol](./protocol.md) major version the module was built for. |
+| `minTavora` | no | The oldest Tavora the module works with, as `major.minor.patch` (e.g. `0.18.0`). An older Tavora refuses to install the zip or load the folder and tells the player which version is needed. Set it to the Tavora version that added the newest SDK feature you use (see the [changelog](./changelog.md)). |
 | `entry` | yes | The HTML page to load, as a path inside the package. Must end in `.html`. |
 | `icon` | no | A `.png` or `.webp` file inside the package, square, at least 128 × 128. |
 | `games` | yes | Game ids the module is made for, e.g. `["poe2"]`. An empty array means any game. |

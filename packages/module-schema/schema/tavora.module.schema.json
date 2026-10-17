@@ -55,6 +55,14 @@
       "const": "1",
       "description": "Manifest and bridge contract version. Only \"1\" exists."
     },
+    "minTavora": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d{0,5})\\.(0|[1-9]\\d{0,5})\\.(0|[1-9]\\d{0,5})$",
+      "description": "The oldest Tavora the module works with. An older Tavora refuses to install or load it and says why.",
+      "examples": [
+        "0.18.0"
+      ]
+    },
     "entry": {
       "type": "string",
       "allOf": [
