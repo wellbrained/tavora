@@ -2,11 +2,12 @@
 // The consent dialog (decisions.md, module grants row of 2026-10-16): what a module asks for that the
 // player has not granted, shown when the module is first added or when an update asks for more.
 // Tavora draws it, never the module, so a module cannot fake or hide what it asks for. A connector
-// shows what the module would read through it: for AI Usage, the accounts set up right now.
-import { Gauge, Globe } from "@lucide/vue";
+// shows what the module would read through it: for AI Usage, the accounts set up right now; for
+// Discord, what it can see and do in the Discord app, with Tavora's sign-in.
+import { Gauge, Globe, Headphones } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
-import { act, aiUsage, dialog, nextPanelSlot, openSettings, state, type GrantRequest } from "../host";
+import { act, aiUsage, dialog, discord, nextPanelSlot, openSettings, state, type GrantRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 import ModuleIcon from "./ModuleIcon.vue";
@@ -19,6 +20,7 @@ const module = computed(() => state.value?.modules.find((item) => item.id === pr
 const hosts = computed(() => module.value?.permissions.missing.network ?? []);
 const connectors = computed(() => module.value?.permissions.missing.connectors ?? []);
 const aiAccounts = computed(() => aiUsage.value?.accounts ?? []);
+const discordUser = computed(() => discord.value?.user ?? null);
 
 // The module went away, or has nothing left to ask: nothing to answer.
 watch(
@@ -85,6 +87,18 @@ async function allow() {
       <p class="text-muted-foreground text-sm">
         {{ t("grant.aiUsageNote") }}
         <button type="button" class="text-foreground underline underline-offset-2" @click="editAccounts">{{ t("grant.aiUsageAccounts") }}</button>
+      </p>
+    </section>
+    <section v-if="connectors.includes('discord')" class="flex flex-col gap-2" :aria-label="t('grant.discord')" data-testid="grant-discord">
+      <h3 class="flex items-center gap-2 font-medium"><Headphones :stroke-width="1.5" class="size-4" /> {{ t("grant.discord") }}</h3>
+      <ul class="bg-muted flex list-disc flex-col gap-1 rounded-md py-2 pr-3 pl-7 text-sm" data-testid="grant-discord-can">
+        <li>{{ t("grant.discordRead") }}</li>
+        <li>{{ t("grant.discordJoin") }}</li>
+        <li>{{ t("grant.discordVoice") }}</li>
+      </ul>
+      <p class="text-muted-foreground text-sm">
+        {{ discordUser ? t("grant.discordAs", { name: discordUser.name }) : t("grant.discordSignIn") }}
+        {{ t("grant.discordNote") }}
       </p>
     </section>
     <section v-if="hosts.length" class="flex flex-col gap-2" :aria-label="t('grant.network')">

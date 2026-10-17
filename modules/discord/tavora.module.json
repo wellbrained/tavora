@@ -1,0 +1,12 @@
+{
+  "$schema": "../../packages/module-schema/schema/tavora.module.schema.json",
+  "id": "tavora.discord",
+  "name": "Discord",
+  "description": "Who is in your Discord voice channel, who is talking and who is muted. You talk in Discord as usual.",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "entry": "dist/index.html",
+  "games": [],
+  "viewport": { "minWidth": 220, "minHeight": 200, "preferredWidth": 320, "preferredHeight": 520 },
+  "permissions": { "network": [], "connectors": ["discord"] }
+}
