@@ -7,11 +7,12 @@ import "@excalidraw/excalidraw/index.css";
 import type { ExcalidrawElement, ExcalidrawImageElement, OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { AppState, BinaryFiles, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { JsonValue, TavoraSDK } from "@tavora/sdk";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MAX_BOARD_BYTES, sceneSignature, type BoardData } from "./boards";
 import { COPY_PADDING, copyScale, elementsToCopy } from "./copy";
 import { t, type Language } from "./i18n";
 import { createPictures, pictureFileIds } from "./pictures";
+import PictureLocks, { lockSpots, spotsKey, type LockSpot } from "./PictureLocks";
 
 /** How long drawing must pause before the board is saved. */
 const SAVE_DELAY_MS = 600;
@@ -81,11 +82,15 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
   const props = useRef({ data, onSave, onState, onSize, onDirty, onNotice, onCopyShortcut });
   props.current = { data, onSave, onState, onSize, onDirty, onNotice, onCopyShortcut };
   const api = useRef<ExcalidrawImperativeAPI | null>(null);
-  /** Pictures already on the board when it opened or seen once since; only a new one is locked. */
+  /** Pictures already on the board when it opened or seen once since; only a new one is locked (once it is placed). */
   const seen = useRef(new Set<string>((data.elements as unknown as ExcalidrawElement[]).filter((element) => element.type === "image").map((element) => element.id)));
+  /** New pictures that are still being placed: they are locked once they are no longer selected. */
+  const placing = useRef(new Set<string>());
   const summary = useRef("");
   const empty = useRef<boolean | null>(null);
   const theme = useRef(mode);
+  const [spots, setSpots] = useState<LockSpot[]>([]);
+  const spotsSeen = useRef("");
   theme.current = mode;
 
   function flush(): Promise<void> {
@@ -137,22 +142,37 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
   function onChange(elements: readonly OrderedExcalidrawElement[], appState: AppState, files: BinaryFiles) {
     latest.current = { elements, background: appState.viewBackgroundColor, files };
 
-    // A picture that was just added is locked, so scribbling on top of it does not drag it around. Only once Excalidraw has
-    // given it its file: until then it is still changing the element, and replacing the element would lose that.
+    // A picture that was just added stays free while it is selected, so it can be dragged into place first. Once it is
+    // let go of (something else is selected, or nothing), it is locked, so scribbling on top of it does not drag it
+    // around. Only once Excalidraw has given it its file: until then it is still changing the element.
     const live = elements.filter((element) => element.type === "image" && !element.isDeleted);
-    const added = live.filter((element) => !seen.current.has(element.id) && (element as ExcalidrawImageElement).fileId !== null);
-    if (added.length > 0) {
-      for (const element of added) seen.current.add(element.id);
-      const ids = new Set(added.map((element) => element.id));
+    for (const element of live) if (!seen.current.has(element.id)) placing.current.add(element.id);
+    const placed = live.filter((element) => placing.current.has(element.id) && (element as ExcalidrawImageElement).fileId !== null && !appState.selectedElementIds[element.id]);
+    if (placed.length > 0) {
+      for (const element of placed) placing.current.delete(element.id);
+      const ids = new Set(placed.map((element) => element.id));
       // After this change has been handled, not inside it.
       setTimeout(() => {
         const scene = api.current?.getSceneElements();
         if (!scene) return;
         api.current?.updateScene({
-          elements: scene.map((element) => (ids.has(element.id) ? { ...element, locked: true, version: element.version + 1, versionNonce: Math.floor(Math.random() * 2 ** 31), updated: Date.now() } : element)),
+          elements: scene.map((element) => (ids.has(element.id) && !element.locked ? { ...element, locked: true, version: element.version + 1, versionNonce: Math.floor(Math.random() * 2 ** 31), updated: Date.now() } : element)),
           captureUpdate: CaptureUpdateAction.NEVER,
         });
       }, 0);
+    }
+    for (const element of live) seen.current.add(element.id);
+    // A lock that would lie under Excalidraw's menus (the palette, the toolbar, …) is left out.
+    const nextSpots = lockSpots(live, { scrollX: appState.scrollX, scrollY: appState.scrollY, zoom: appState.zoom.value, width: appState.width, height: appState.height }).filter((spot) =>
+      document
+        .elementsFromPoint(appState.offsetLeft + spot.x, appState.offsetTop + spot.y)
+        .find((element) => !element.closest(".picture-locks"))
+        ?.matches("canvas"),
+    );
+    const key = spotsKey(nextSpots);
+    if (key !== spotsSeen.current) {
+      spotsSeen.current = key;
+      setSpots(nextSpots);
     }
     const description = `${live.length}:${live.every((element) => element.locked)}`;
     if (description !== summary.current) {
@@ -240,26 +260,39 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
     scrollToContent: !view && data.elements.length > 0,
   };
 
+  function setPictureLocked(id: string, locked: boolean) {
+    const instance = api.current;
+    if (!instance) return;
+    placing.current.delete(id);
+    instance.updateScene({
+      elements: instance.getSceneElements().map((element) => (element.id === id ? { ...element, locked, version: element.version + 1, versionNonce: Math.floor(Math.random() * 2 ** 31), updated: Date.now() } : element)),
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+  }
+
   return (
-    <Excalidraw
-      initialData={initialData}
-      excalidrawAPI={ready}
-      onChange={onChange}
-      onScrollChange={(scrollX, scrollY, zoom) => onView({ scrollX, scrollY, zoom: zoom.value })}
-      langCode={language === "de" ? "de-DE" : "en"}
-      theme={mode}
-      // The panel shares the page with nothing else, but shortcuts are still only for the focused drawing.
-      handleKeyboardGlobally={false}
-      autoFocus
-      UIOptions={{
-        canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, toggleTheme: false },
-      }}
-    >
-      <MainMenu>
-        <MainMenu.DefaultItems.ClearCanvas />
-        <MainMenu.DefaultItems.ChangeCanvasBackground />
-        <MainMenu.DefaultItems.Help />
-      </MainMenu>
-    </Excalidraw>
+    <>
+      <Excalidraw
+        initialData={initialData}
+        excalidrawAPI={ready}
+        onChange={onChange}
+        onScrollChange={(scrollX, scrollY, zoom) => onView({ scrollX, scrollY, zoom: zoom.value })}
+        langCode={language === "de" ? "de-DE" : "en"}
+        theme={mode}
+        // The panel shares the page with nothing else, but shortcuts are still only for the focused drawing.
+        handleKeyboardGlobally={false}
+        autoFocus
+        UIOptions={{
+          canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, toggleTheme: false },
+        }}
+      >
+        <MainMenu>
+          <MainMenu.DefaultItems.ClearCanvas />
+          <MainMenu.DefaultItems.ChangeCanvasBackground />
+          <MainMenu.DefaultItems.Help />
+        </MainMenu>
+      </Excalidraw>
+      <PictureLocks spots={spots} onToggle={setPictureLocked} />
+    </>
   );
 }

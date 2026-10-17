@@ -20,6 +20,8 @@ export const en = {
   "image.unlock": "Unlock pictures",
   "image.lockHint": "Locked pictures stay put while you draw on top of them",
   "image.unlockHint": "Unlock pictures to move or resize them",
+  "image.lockOne": "Lock this picture",
+  "image.unlockOne": "Unlock this picture",
   "image.unsupported": "Pictures of this kind ({type}) can't be saved on a board. Use PNG, JPEG, GIF or WebP.",
   "image.failed": "Could not save a picture: {error}",
   "size.warn": "This board is getting full ({used} of {max}). Remove some drawings.",
@@ -31,6 +33,10 @@ export const en = {
   "copy.slow": "Making the picture took too long to copy. Select a smaller part and try again.",
   "copy.tooBig": "The picture is too big to copy. Select a smaller part and try again.",
   "copy.failed": "Could not copy the picture: {error}",
+  "palette.title": "Style",
+  "palette.move": "Drag to move the palette. Double-click to put it back.",
+  "palette.collapse": "Fold the palette away",
+  "palette.expand": "Show the palette",
 } as const;
 
 export const de: Record<keyof typeof en, string> = {
@@ -53,6 +59,8 @@ export const de: Record<keyof typeof en, string> = {
   "image.unlock": "Bilder entsperren",
   "image.lockHint": "Gesperrte Bilder bleiben an ihrem Platz, während du darauf zeichnest",
   "image.unlockHint": "Bilder entsperren, um sie zu verschieben oder ihre Größe zu ändern",
+  "image.lockOne": "Dieses Bild sperren",
+  "image.unlockOne": "Dieses Bild entsperren",
   "image.unsupported": "Bilder dieser Art ({type}) können auf einer Tafel nicht gespeichert werden. Nutze PNG, JPEG, GIF oder WebP.",
   "image.failed": "Ein Bild konnte nicht gespeichert werden: {error}",
   "size.warn": "Diese Tafel wird voll ({used} von {max}). Entferne einige Zeichnungen.",
@@ -64,6 +72,10 @@ export const de: Record<keyof typeof en, string> = {
   "copy.slow": "Das Bild zu erstellen hat zu lange gedauert. Wähle einen kleineren Teil aus und versuch es noch einmal.",
   "copy.tooBig": "Das Bild ist zu groß zum Kopieren. Wähle einen kleineren Teil aus und versuch es noch einmal.",
   "copy.failed": "Das Bild konnte nicht kopiert werden: {error}",
+  "palette.title": "Stil",
+  "palette.move": "Ziehen, um die Palette zu verschieben. Doppelklick setzt sie zurück.",
+  "palette.collapse": "Palette einklappen",
+  "palette.expand": "Palette ausklappen",
 };
 
 export type MessageKey = keyof typeof en;
