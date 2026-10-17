@@ -450,7 +450,6 @@ export const en = {
   "addModule.category.official": "Official",
   "addModule.category.local": "On this computer",
   "addModule.category.development": "Development",
-  "addModule.unsupported": "Does not support this game",
   "addModule.addLabel": "Add {name}",
   "addModule.open": "{count} open",
   "addModule.panels": "Panels of {name}",

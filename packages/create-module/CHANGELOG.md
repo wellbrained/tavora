@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.2
+
+- Asks which game the module is for: any game, or one picked from Tavora's games by typing to search. `--game poe2` (or `--game any`) skips the question. Tavora offers a module made for one game only in that game.
+
 ## 0.1.1
 
 - Asks with arrow keys: where the project goes (the empty folder you are in, or a new folder in it) and which template.

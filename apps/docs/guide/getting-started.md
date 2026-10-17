@@ -80,6 +80,16 @@ Settings go in `tavora.storage`, the player's work in `tavora.documents`, pictur
 
 What reaches outside the panel needs the player's yes first; see [Permissions and consent](./permissions.md). Following the theme and the language is in [Look and languages](./look-and-languages.md).
 
+## Made for one game
+
+A module made for one game, such as a build planner for Path of Exile 2, lists that game in its manifest:
+
+```json
+"games": ["poe2"]
+```
+
+Tavora then offers it only in that game: in any other game it is not in Add module at all. `"games": []` means any game. The starter asks which game the module is for and fills this in. The ids of Tavora's built-in games are in the [manifest reference](../reference/manifest.md#game-ids).
+
 ## Build the module
 
 - Bundle everything. A module's page has no network access, so no CDN scripts, web fonts or remote images. To reach a web API, name its host in `permissions.network` and call [`network.fetch`](../reference/protocol.md#network) once the player has granted it.

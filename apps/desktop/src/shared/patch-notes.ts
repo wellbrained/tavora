@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.17.22",
+    date: "2026-10-17",
+    title: "Modules for one game stay in that game",
+    notes: [
+      "Add module now lists only the modules for the game you are in. A module made for another game no longer shows up greyed out.",
+      "Module developers: the starter asks which game your module is for and fills in its games, and the docs list every game id.",
+    ],
+  },
+  {
     version: "0.17.21",
     date: "2026-10-17",
     title: "Clicks in modules always count",

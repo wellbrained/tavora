@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The module library: every installed module, to open in the current game. A module with panel
 // types lists them under its row, each with its own Add (the decision log, named panels round 1).
+// A module made for other games (its manifest's `games`) is not listed at all.
 import { computed, ref } from "vue";
 import { addModule, dialog, openSettings, state, type AddModuleRequest } from "../host";
 import { Button } from "@/components/ui/button";
@@ -41,8 +42,8 @@ const panelCounts = computed(() => {
 });
 const searched = computed(() => {
   const text = query.value.trim().toLocaleLowerCase();
-  return state.value!.modules.filter((module) =>
-    !text || [module.name, module.description ?? "", module.id, ...module.panels.map((type) => type.name)].some((value) => value.toLocaleLowerCase().includes(text)),
+  return state.value!.modules.filter((module) => module.available && (
+    !text || [module.name, module.description ?? "", module.id, ...module.panels.map((type) => type.name)].some((value) => value.toLocaleLowerCase().includes(text))),
   );
 });
 function matchesGame(module: ModuleView, filter: GameFilter): boolean {
@@ -83,9 +84,9 @@ function add(moduleId: string, panelType?: string) {
   addModule(moduleId, (dialog.value as AddModuleRequest).slot ?? null, panelType);
 }
 
-/** Enter opens the first module that can run in this game. */
+/** Enter opens the first module listed. */
 function submit() {
-  const first = groups.value.flatMap((group) => group.items).find((module) => module.available);
+  const first = groups.value[0]?.items[0];
   if (first) add(first.id);
 }
 </script>
@@ -133,7 +134,7 @@ function submit() {
             </h3>
             <ul class="flex flex-col">
               <li v-for="module in group.items" :key="module.id"
-                :class="cn('flex flex-wrap items-center gap-3 border-b py-3 last:border-b-0', !module.available && 'opacity-60')"
+                class="flex flex-wrap items-center gap-3 border-b py-3 last:border-b-0"
                 :data-testid="`module-${module.id}`"
               >
                 <span class="bg-background text-primary flex size-9 shrink-0 items-center justify-center rounded-lg border" aria-hidden="true"><ModuleIcon :module-id="module.id" size="size-5" /></span>
@@ -144,10 +145,9 @@ function submit() {
                     <span v-if="openCount(module.id)" class="text-primary text-xs" :data-testid="`in-game-${module.id}`">{{ t("addModule.inGame", { count: openCount(module.id) }) }}</span>
                   </div>
                   <p v-if="module.description" class="text-muted-foreground line-clamp-2 text-sm" :title="module.description">{{ module.description }}</p>
-                  <p v-if="!module.available" class="text-muted-foreground text-xs">{{ t("addModule.unsupported") }}</p>
                 </div>
                 <Button v-if="!module.panels.length" size="sm" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary shrink-0"
-                  :data-testid="`open-${module.id}`" :disabled="!module.available" :aria-label="t('addModule.addLabel', { name: module.name })" @click="add(module.id)"
+                  :data-testid="`open-${module.id}`" :aria-label="t('addModule.addLabel', { name: module.name })" @click="add(module.id)"
                 >{{ openCount(module.id) ? t("addModule.addAnother") : t("common.add") }}</Button>
                 <ul v-else class="flex basis-full flex-col gap-1 pl-12" :aria-label="t('addModule.panels', { name: module.name })" :data-testid="`panel-types-${module.id}`">
                   <li v-for="type in module.panels" :key="type.id" class="flex items-center gap-2">
@@ -155,7 +155,7 @@ function submit() {
                     <span class="min-w-0 flex-1 truncate text-sm">{{ type.name }}</span>
                     <span v-if="openCount(module.id, type.id)" class="text-muted-foreground text-xs">{{ t("addModule.open", { count: openCount(module.id, type.id) }) }}</span>
                     <Button size="sm" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary h-7 shrink-0"
-                      :data-testid="`open-${module.id}-${type.id}`" :disabled="!module.available" :aria-label="t('addModule.addLabel', { name: `${module.name}: ${type.name}` })" @click="add(module.id, type.id)"
+                      :data-testid="`open-${module.id}-${type.id}`" :aria-label="t('addModule.addLabel', { name: `${module.name}: ${type.name}` })" @click="add(module.id, type.id)"
                     >{{ openCount(module.id, type.id) ? t("addModule.addAnother") : t("common.add") }}</Button>
                   </li>
                 </ul>
