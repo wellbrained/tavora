@@ -61,6 +61,7 @@ Some calls change something outside the module's panel. They work only within 2 
 
 - **`links.open`** opens an `http` or `https` address in Tavora's Browser panel, or, after the player confirms, in the system browser. The module learns nothing back.
 - **`clipboard.writeImage`** puts a checked PNG on the clipboard. There is no call to read the clipboard.
+- **`ui.showMenu`** shows a menu that Tavora draws above every panel, so it can lie outside the module's panel. Tavora checks the menu first and draws only plain text, separators, headings, check marks and colour dots from plain CSS colour values (nothing that loads or runs), in its own style. One menu shows at a time, it closes with Esc, a click elsewhere or a game switch, and the module learns only which of its own items the player chose, or that none was.
 
 A module can still label a button misleadingly and get the player to click it. The result is the same as a link on any web page: the player sees the new tab, and the Browser panel is sandboxed.
 

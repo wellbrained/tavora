@@ -20,6 +20,7 @@ import {
 } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
 import { discordCommand, discordSubscription } from "./discord-commands";
+import { checkMenu, type CheckedMenu } from "./module-menu";
 import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
 
 /** The parts of Electron's MessagePortMain the bridge uses. */
@@ -70,6 +71,8 @@ export interface BridgeContext {
   isSuspended(): boolean;
   /** Opens a web address in a Browser panel. Throws a HostError when the panel did not just get a click or key press, or the address is not a web address. */
   openLink(url: string): void;
+  /** ui.showMenu: Tavora draws the checked menu above every panel; the chosen id, or null. Throws PERMISSION_DENIED without a click or key press first. */
+  showMenu(menu: CheckedMenu): Promise<string | null>;
   /** network.fetch: checks the grant on every hop and makes the request (network.ts). Throws HostErrors. */
   fetch(params: unknown): Promise<NetworkResponse>;
   /**
@@ -253,6 +256,7 @@ const handlers = new Map<string, Handler>([
   ["workspace.getViewport", (s, params) => (noParams(params), s.context.getViewport())],
   ["ui.getTheme", (s, params) => (noParams(params), s.context.getTheme())],
   ["ui.getLanguage", (s, params) => (noParams(params), s.context.getLanguage())],
+  ["ui.showMenu", (s, params) => s.context.showMenu(checkMenu(params))],
 ]);
 
 /** Serves one module panel over one port. */

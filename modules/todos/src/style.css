@@ -80,45 +80,11 @@
   }
 }
 
-/* Group colors: one tint per name, set on the header and on the menu's swatches. */
-[data-tint="red"] {
-  --tint: oklch(0.64 0.2 25);
-}
-[data-tint="orange"] {
-  --tint: oklch(0.72 0.17 55);
-}
-[data-tint="yellow"] {
-  --tint: oklch(0.82 0.16 95);
-}
-[data-tint="green"] {
-  --tint: oklch(0.7 0.17 150);
-}
-[data-tint="teal"] {
-  --tint: oklch(0.7 0.12 195);
-}
-[data-tint="blue"] {
-  --tint: oklch(0.65 0.17 255);
-}
-[data-tint="violet"] {
-  --tint: oklch(0.63 0.2 295);
-}
-[data-tint="pink"] {
-  --tint: oklch(0.7 0.19 350);
-}
+/* Group colors: the header sets --tint from GROUP_TINTS (todos.ts). */
 .tinted-header {
   background: color-mix(in oklab, var(--tint) 16%, var(--card));
 }
 .tinted-header:hover {
   background: color-mix(in oklab, var(--tint) 24%, var(--card));
 }
-.color-swatch {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  border-radius: 9999px;
-  background: var(--tint, transparent);
-  border: 1.5px solid color-mix(in oklab, var(--tint, var(--muted-foreground)) 70%, transparent);
-}
-.color-swatch:not([data-tint]) {
-  border-style: dashed;
-}
+

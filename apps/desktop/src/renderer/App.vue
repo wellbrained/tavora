@@ -6,6 +6,7 @@ import ConfirmDialog from "./components/ConfirmDialog.vue";
 import GrantDialog from "./components/GrantDialog.vue";
 import LinkChoiceDialog from "./components/LinkChoiceDialog.vue";
 import GameRail from "./components/GameRail.vue";
+import ModuleMenu from "./components/menus/ModuleMenu.vue";
 import PromptDialog from "./components/PromptDialog.vue";
 import SearchDialog from "./components/SearchDialog.vue";
 import ShareIconsDialog from "./components/ShareIconsDialog.vue";
@@ -42,6 +43,7 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <LinkChoiceDialog v-else-if="dialog?.kind === 'link-choice'" :url="dialog.url" />
     <ConfirmDialog v-else-if="dialog?.kind === 'confirm'" :key="dialog.title" :request="dialog" />
     <GrantDialog v-else-if="dialog?.kind === 'grant'" :key="dialog.moduleId" :request="dialog" />
+    <ModuleMenu />
 
     <!-- Over the toolbar: module panels are native views drawn above this
          page, so anything lower would be hidden behind them. -->

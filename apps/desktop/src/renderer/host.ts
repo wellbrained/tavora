@@ -1,7 +1,7 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import type { AccountView, ActionResult, AiUsageView, DiscordView, HostAction, HostShortcut, HostViewState } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, DiscordView, HostAction, HostShortcut, HostViewState, ModuleMenu } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
 import type { SettingsSection } from "./components/settings/settings-index";
 import { numberedGames } from "./shortcuts";
@@ -262,6 +262,10 @@ export const dragging = ref(false);
 
 /** The empty slot (a dock group id) the next panel to open goes into, if any. */
 export const nextPanelSlot = ref<string | null>(null);
+
+/** A module's menu to draw over its panel (ui.showMenu), or null. */
+export const moduleMenu = shallowRef<ModuleMenu | null>(null);
+api.onModuleMenu((menu) => (moduleMenu.value = menu));
 
 /** Still images of the panels, by instance id, while they are hidden. */
 export const frozen = shallowRef<Record<string, string>>({});

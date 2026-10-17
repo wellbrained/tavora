@@ -529,6 +529,23 @@ export type HostAction =
   | { type: "delete-snapshot"; snapshotId: string };
 
 /** `id` is set when the action created something (a game, a folder). */
+/** One entry of a module's menu, as the main process checked it (the SDK's MenuEntry). */
+export type ModuleMenuEntry =
+  | { type: "item"; id: string; label: string; hint?: string; color?: string; checked?: boolean; radio?: boolean; disabled?: boolean; danger?: boolean }
+  | { type: "separator" }
+  | { type: "heading"; label: string }
+  | { type: "submenu"; label: string; color?: string; disabled?: boolean; items: ModuleMenuEntry[] };
+
+/** A module's menu for the host UI to draw over its panel (ui.showMenu); `at` is in the panel's CSS pixels. */
+export interface ModuleMenu {
+  requestId: number;
+  instanceId: string;
+  items: ModuleMenuEntry[];
+  at: { x: number; y: number; width?: number; height?: number };
+  side?: "bottom" | "top" | "right" | "left";
+  align?: "start" | "center" | "end";
+}
+
 export type ActionResult = { ok: true; id?: string; shared?: number; added?: number } | { ok: false; error: string };
 
 export interface CatalogMatch {
@@ -600,6 +617,10 @@ export interface TavoraHostApi {
   onAiUsage(listener: (view: AiUsageView) => void): void;
   getAccount(): Promise<AccountView | null>;
   onAccount(listener: (view: AccountView) => void): void;
+  /** A module asked for a menu (or null: close the one shown). */
+  onModuleMenu(listener: (menu: ModuleMenu | null) => void): void;
+  /** The player chose an item of the module menu, or closed it (null). */
+  answerModuleMenu(requestId: number, id: string | null): void;
 }
 
 /** `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). */
