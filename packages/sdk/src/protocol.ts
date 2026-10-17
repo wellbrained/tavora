@@ -286,6 +286,8 @@ export interface Methods {
   "ui.getTheme": { params: undefined; result: TavoraTheme };
   /** The language of Tavora's own texts, as a code such as "en" or "de". */
   "ui.getLanguage": { params: undefined; result: string };
+  /** Shows a menu drawn by Tavora above every panel. Only right after a click, right-click or key press in the panel. The chosen item's id, or null. */
+  "ui.showMenu": { params: MenuRequest; result: string | null };
   /** Opens a web address in the game's Browser panel. Only right after a click or key press in the panel; http and https only. */
   "links.open": { params: { url: string }; result: null };
   "blobs.list": { params: undefined; result: BlobInfo[] };
@@ -439,7 +441,60 @@ export const LIMITS = {
   maxDiscordAnswerBytes: 512 * 1024,
   /** Discord events one panel may subscribe to at once. */
   maxDiscordSubscriptions: 32,
+  /** Entries in one menu, submenus included. */
+  maxMenuEntries: 100,
+  /** Characters of a menu label or heading. */
+  maxMenuLabel: 80,
+  /** Characters of the hint on the right of a menu item, such as a shortcut. */
+  maxMenuHint: 30,
 } as const;
+
+/**
+ * One entry of a menu drawn by Tavora (ui.showMenu). Text only; Tavora draws it in the current theme.
+ * An item list where any item sets `checked` keeps a column for the mark, so labels line up.
+ */
+export type MenuEntry =
+  | {
+      type: "item";
+      /** Returned when the player picks it; unique within the menu, at most 64 characters. */
+      id: string;
+      label: string;
+      /** Small grey text on the right, such as a shortcut ("Ctrl+D"). */
+      hint?: string;
+      /** A colour dot before the label, as a CSS colour: `#rgb`, `#rrggbb`, `rgb()`, `hsl()`, `oklch()` and the like, or `transparent` for an empty ring. */
+      color?: string;
+      /** Shows a check mark (or a dot, with `radio`) when true, and keeps the mark's column when false. */
+      checked?: boolean;
+      /** The mark is a dot: one choice of several. */
+      radio?: boolean;
+      disabled?: boolean;
+      /** Red, for something that deletes or cannot be undone. */
+      danger?: boolean;
+    }
+  | { type: "separator" }
+  | { type: "heading"; label: string }
+  | {
+      type: "submenu";
+      label: string;
+      color?: string;
+      disabled?: boolean;
+      /** Items, separators and headings; a submenu holds no further submenus. */
+      items: MenuEntry[];
+    };
+
+/** What ui.showMenu shows, and where. */
+export interface MenuRequest {
+  items: MenuEntry[];
+  /**
+   * Where, in the panel's CSS pixels from its top left corner: a point for a context menu (the pointer's
+   * position), or a rectangle (a button) the menu opens next to. Tavora keeps the menu inside the window.
+   */
+  at: { x: number; y: number; width?: number; height?: number };
+  /** Which side of `at` the menu opens on, when there is room. Default "bottom". */
+  side?: "bottom" | "top" | "right" | "left";
+  /** How the menu lines up with `at` along that side. Default "start". */
+  align?: "start" | "center" | "end";
+}
 
 /** The kinds of file a module can keep with blobs.put, found by looking at the file itself. */
 export const BLOB_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;

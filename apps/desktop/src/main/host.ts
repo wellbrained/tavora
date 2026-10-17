@@ -23,7 +23,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, GameView, HostAction, HostViewState, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, GameView, HostAction, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
 import { resolveLanguage, translate, type Language } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -94,6 +94,7 @@ import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
 import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, discoverModules, isDevelopmentModule, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
+import type { CheckedMenu } from "./module-menu";
 import { AiUsageConnector } from "./ai-usage";
 import { readClaudeEmail } from "./ai-usage-claude";
 import { readCodexUsage } from "./ai-usage-codex";
@@ -848,6 +849,9 @@ export class Host {
     });
     ipcMain.on("host:overlay", (event, open: unknown) => {
       if (fromHost(event) && typeof open === "boolean") void this.setOverlay(open);
+    });
+    ipcMain.on("host:module-menu-answer", (event, answer: unknown) => {
+      if (fromHost(event)) this.answerModuleMenu(answer);
     });
   }
 
@@ -1786,6 +1790,7 @@ export class Host {
       onStorageOver: () => void this.purgeModuleStorage(module.manifest.id, game.id),
       onReveal: () => this.applyBounds(),
       onOpenLink: (url) => this.openLinkFromModule(url),
+      showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
@@ -1920,6 +1925,7 @@ export class Host {
   }
 
   private destroyView(instanceId: string): void {
+    this.closeModuleMenu(instanceId);
     const view = this.views.get(instanceId);
     if (!view) return;
     this.views.delete(instanceId);
@@ -1997,6 +2003,50 @@ export class Host {
     if (change !== this.overlayChanges || this.window.isDestroyed()) return;
     this.window.webContents.send("host:frozen", images);
     this.forEachView((view) => view.setVisible(false));
+  }
+
+  // ── Module menus ─────────────────────────────────────────────────────
+
+  /** The module menu the host UI shows now (ui.showMenu), and how to answer the module. */
+  private moduleMenu: { requestId: number; instanceId: string; choices: ReadonlySet<string>; resolve(id: string | null): void } | undefined;
+  private moduleMenuRequests = 0;
+
+  /**
+   * Draws a module's menu in the host UI, over its panel and every other one. Only one at a time: a
+   * new one closes the last. Nothing is shown for a panel that is hidden or under a host menu or dialog.
+   */
+  private showModuleMenu(instanceId: string, menu: CheckedMenu): Promise<string | null> {
+    if (!this.views.has(instanceId) || !this.panelBounds.has(instanceId) || this.overlay || this.window.isDestroyed()) return Promise.resolve(null);
+    this.closeModuleMenu();
+    const requestId = ++this.moduleMenuRequests;
+    return new Promise((resolve) => {
+      this.moduleMenu = { requestId, instanceId, choices: menu.choices, resolve };
+      // The menu is drawn by the host page, so the keyboard goes there while it is open.
+      this.window.webContents.focus();
+      const shown: ModuleMenu = { requestId, instanceId, ...menu.request };
+      this.window.webContents.send("host:module-menu", shown);
+    });
+  }
+
+  /** The player chose an item or closed the menu. Only an item the module offered (and did not disable) counts. */
+  private answerModuleMenu(raw: unknown): void {
+    const answer = (typeof raw === "object" && raw !== null ? raw : {}) as { requestId?: unknown; id?: unknown };
+    const open = this.moduleMenu;
+    if (!open || answer.requestId !== open.requestId) return;
+    this.moduleMenu = undefined;
+    open.resolve(typeof answer.id === "string" && open.choices.has(answer.id) ? answer.id : null);
+    // The keyboard goes back to the panel, so an action such as Rename can take it.
+    const view = this.views.get(open.instanceId);
+    if (view instanceof ModuleView && !view.view.webContents.isDestroyed()) view.view.webContents.focus();
+  }
+
+  /** Closes the module menu shown now (only if it belongs to `instanceId`, when given), as if nothing was chosen. */
+  private closeModuleMenu(instanceId?: string): void {
+    const open = this.moduleMenu;
+    if (!open || (instanceId !== undefined && open.instanceId !== instanceId)) return;
+    this.moduleMenu = undefined;
+    open.resolve(null);
+    if (!this.window.isDestroyed()) this.window.webContents.send("host:module-menu", null);
   }
 
   // ── State ────────────────────────────────────────────────────────────

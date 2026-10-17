@@ -1,18 +1,11 @@
 <script setup lang="ts">
 // One group of to-dos with its own add row. Tasks can be dragged inside and
-// between groups; the menus offer the same moves without a mouse.
-import { ArrowDown, ArrowUp, Check, ChevronRight, Ellipsis, ListX, Palette, Pencil, Trash2 } from "@lucide/vue";
+// between groups; the menus offer the same moves without a mouse. The group's
+// menu (⋯ or a right-click on the header) is drawn by Tavora above every
+// panel, so its Color submenu is never cut off in a narrow panel.
+import type { MenuEntry } from "@tavora/sdk";
+import { ChevronRight, Ellipsis } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@tavora/official-ui/components/ui/dropdown-menu";
 import { computed, inject, nextTick, onBeforeUnmount, ref } from "vue";
 import AddInput from "./AddInput.vue";
 import { plural, t } from "./i18n";
@@ -24,6 +17,7 @@ import {
   clearDone,
   depths,
   GROUP_COLORS,
+  GROUP_TINTS,
   MAX,
   MAX_DEPTH,
   moveGroup,
@@ -149,6 +143,57 @@ function onNameDoubleClick() {
   void startRename();
 }
 
+/** The group's menu, as entries Tavora draws. */
+function menuEntries(): MenuEntry[] {
+  return [
+    { type: "item", id: "rename", label: t("group.rename") },
+    { type: "item", id: "up", label: t("group.moveUp"), disabled: props.position === 0 },
+    { type: "item", id: "down", label: t("group.moveDown"), disabled: props.position === props.groups.length - 1 },
+    {
+      type: "submenu",
+      label: t("group.color"),
+      items: COLOR_OPTIONS.map((option) => ({
+        type: "item" as const,
+        id: `color:${option || "none"}`,
+        label: colorName(option),
+        color: option ? GROUP_TINTS[option] : "transparent",
+        checked: props.group.color === option,
+        radio: true,
+      })),
+    },
+    { type: "item", id: "clear-done", label: t("group.deleteFinished"), disabled: !doneCount.value },
+    { type: "separator" },
+    { type: "item", id: "delete", label: t("group.delete"), danger: true },
+  ];
+}
+
+/** The ⋯ button's menu opens below it; a right-click on the header opens it at the pointer. */
+const menuOpen = ref(false);
+async function openMenu(at: { x: number; y: number; width?: number; height?: number }) {
+  menuOpen.value = true;
+  const choice = await panel.showMenu({ items: menuEntries(), at, align: at.width ? "end" : "start" }).catch(() => null);
+  menuOpen.value = false;
+  if (choice === "rename") void startRename();
+  else if (choice === "up") change((data) => moveGroup(data, props.group.id, -1));
+  else if (choice === "down") change((data) => moveGroup(data, props.group.id, 1));
+  else if (choice === "clear-done") change((data) => clearDone(data, props.group.id));
+  else if (choice === "delete") emit("remove");
+  else if (choice?.startsWith("color:")) {
+    const option = choice.slice("color:".length);
+    const color = COLOR_OPTIONS.find((item) => (item || "none") === option);
+    if (color !== undefined) change((data) => setGroupColor(data, props.group.id, color));
+  }
+}
+function onMenuButton(event: MouseEvent) {
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  void openMenu({ x: box.left, y: box.top, width: box.width, height: box.height });
+}
+function onHeaderContextMenu(event: MouseEvent) {
+  if (renaming.value || (event.target as Element).closest("input")) return;
+  event.preventDefault();
+  void openMenu({ x: event.clientX, y: event.clientY });
+}
+
 function add(text: string, level: number) {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
@@ -201,8 +246,10 @@ function dropMark(position: number): "before" | "after" | null {
         )
       "
       :data-tint="group.color || undefined"
+      :style="group.color ? { '--tint': GROUP_TINTS[group.color] } : undefined"
       data-testid="group-header"
       @click="onHeaderClick"
+      @contextmenu="onHeaderContextMenu"
     >
       <button
         type="button"
@@ -245,47 +292,18 @@ function dropMark(position: number): "before" | "after" | null {
         :style="{ width: `${(doneCount / group.tasks.length) * 100}%` }"
         aria-hidden="true"
       />
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          class="text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md opacity-0 group-hover/header:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
-          :aria-label="t('moreFor', { name: group.name })"
-          :title="t('more')"
-          data-testid="group-menu"
-        >
-          <Ellipsis class="size-4" :stroke-width="1.5" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem data-testid="menu-rename" @select="startRename"><Pencil :stroke-width="1.5" /> {{ t("group.rename") }}</DropdownMenuItem>
-          <DropdownMenuItem :disabled="position === 0" @select="change((data) => moveGroup(data, group.id, -1))">
-            <ArrowUp :stroke-width="1.5" /> {{ t("group.moveUp") }}
-          </DropdownMenuItem>
-          <DropdownMenuItem :disabled="position === groups.length - 1" @select="change((data) => moveGroup(data, group.id, 1))">
-            <ArrowDown :stroke-width="1.5" /> {{ t("group.moveDown") }}
-          </DropdownMenuItem>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger data-testid="menu-color"><Palette :stroke-width="1.5" /> {{ t("group.color") }}</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem
-                v-for="option in COLOR_OPTIONS"
-                :key="option || 'none'"
-                :data-testid="`menu-color-${option || 'none'}`"
-                @select="change((data) => setGroupColor(data, group.id, option))"
-              >
-                <span class="color-swatch" :data-tint="option || undefined" aria-hidden="true" />
-                {{ colorName(option) }}
-                <Check v-if="group.color === option" class="ml-auto" :stroke-width="1.5" />
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuItem :disabled="!doneCount" data-testid="menu-clear-done" @select="change((data) => clearDone(data, group.id))">
-            <ListX :stroke-width="1.5" /> {{ t("group.deleteFinished") }}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" data-testid="menu-delete-group" @select="emit('remove')">
-            <Trash2 :stroke-width="1.5" /> {{ t("group.delete") }}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <button
+        type="button"
+        :class="cn('text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md opacity-0 group-hover/header:opacity-100 focus-visible:opacity-100', menuOpen && 'opacity-100')"
+        :aria-label="t('moreFor', { name: group.name })"
+        :title="t('more')"
+        aria-haspopup="menu"
+        :aria-expanded="menuOpen"
+        data-testid="group-menu"
+        @click="onMenuButton"
+      >
+        <Ellipsis class="size-4" :stroke-width="1.5" />
+      </button>
     </header>
 
     <div v-if="!collapsed" class="p-1">
