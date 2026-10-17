@@ -67,10 +67,52 @@ export interface Session {
 
 export type CodeRequest = { ok: true; code: string } | { ok: false; retryAfter: number };
 
+/** A developer name can change once in this long, and a name given up stays blocked for others as long. */
+export const NAME_HOLD_MS = 30 * 24 * 60 * 60_000;
+/** How long a code for linking a publisher key lasts. */
+export const LINK_CODE_TTL_MS = 10 * 60_000;
+/** Publisher keys one account can link. */
+export const MAX_KEYS = 20;
+/** The letters a link code is made of: no 0/O, 1/I/L, so it can be typed from the screen. */
+const LINK_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+export const LINK_CODE = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/;
+
+/** An account's public name as a module developer: shown to players as "by <name>". */
+export interface Developer {
+  name: string;
+  /** When it was last set, in ms; it can change again NAME_HOLD_MS later. */
+  changedAt: number;
+}
+
+/** A publisher key linked to an account: its fingerprint (the owner id in module data) and when. */
+export interface LinkedKey {
+  fingerprint: string;
+  linkedAt: string;
+}
+
+export type NameChange = { ok: true; developer: Developer } | { ok: false; reason: "name-taken" | "name-reserved" | "name-too-soon"; nextChangeAt?: number };
+
 /** How long a checked Discord login waits for the player's yes to a new account. */
 export const DISCORD_TICKET_TTL_MS = 10 * 60_000;
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+
+/**
+ * What makes two developer names the same: case, spaces, dots, dashes and underscores do not
+ * count, so "Well Brained" cannot pose as "wellbrained".
+ */
+export const nameKey = (name: string) => name.toLowerCase().replace(/[ ._-]/g, "");
+
+/** Names nobody can take, and anything that claims to be Tavora. */
+const RESERVED = new Set(["official", "admin", "administrator", "support", "help", "moderator", "mod", "system", "root", "staff", "team", "security", "local", "unknown", "anonymous", "everyone", "nobody", "developer"]);
+export const isReservedName = (key: string) => key.includes("tavora") || RESERVED.has(key);
+
+/** 3 to 32 characters: letters, digits, spaces, dots, dashes and underscores, starting and ending with a letter or digit, no two separators in a row. */
+export function cleanDeveloperName(input: unknown): string | null {
+  if (typeof input !== "string") return null;
+  const name = input.trim();
+  return /^[A-Za-z0-9][A-Za-z0-9 ._-]{1,30}[A-Za-z0-9]$/.test(name) && !/[ ._-]{2}/.test(name) ? name : null;
+}
 // Codes and counters are kept by a hash of the address, so an address that
 // never became an account is not written down in the clear.
 const addressKey = (email: string) => sha256(`address:${email}`);
@@ -113,6 +155,19 @@ export class AccountStore {
         name text not null, initials text not null, picture blob, updated_at integer not null
       );
       create table if not exists discord_tickets (ticket_hash text primary key, discord_id text not null, discord_name text not null, expires_at integer not null);
+      create table if not exists developers (
+        account_id text primary key references accounts (id) on delete cascade,
+        name text not null, name_key text not null unique, changed_at integer not null
+      );
+      create table if not exists released_names (name_key text primary key, account_id text not null, released_at integer not null);
+      create table if not exists publisher_keys (
+        fingerprint text primary key, account_id text not null references accounts (id) on delete cascade,
+        public_key text not null, linked_at integer not null
+      );
+      create index if not exists publisher_keys_account on publisher_keys (account_id);
+      create table if not exists link_codes (
+        code_hash text primary key, account_id text not null references accounts (id) on delete cascade, expires_at integer not null
+      );
     `);
     this.migrate();
   }
@@ -226,10 +281,15 @@ export class AccountStore {
     return row && row.expires_at > now ? { id: row.discord_id, name: row.discord_name } : null;
   }
 
-  /** Removes the account, every sign-in and every code waiting for it. */
-  deleteAccount(id: string): void {
+  /** Removes the account, every sign-in and every code waiting for it. Its developer name stays blocked for others for a while. */
+  deleteAccount(id: string, now = Date.now()): void {
     this.db.exec("begin");
     try {
+      const developer = this.developer(id);
+      if (developer) this.release(nameKey(developer.name), id, now);
+      this.db.prepare("delete from link_codes where account_id = ?").run(id);
+      this.db.prepare("delete from publisher_keys where account_id = ?").run(id);
+      this.db.prepare("delete from developers where account_id = ?").run(id);
       this.db.prepare("delete from codes where account_id = ?").run(id);
       this.db.prepare("delete from sessions where account_id = ?").run(id);
       this.db.prepare("delete from profiles where account_id = ?").run(id);
@@ -239,6 +299,95 @@ export class AccountStore {
       this.db.exec("rollback");
       throw error;
     }
+  }
+
+  // ── Developer name and publisher keys ──────────────────────────────────
+
+  developer(accountId: string): Developer | null {
+    const row = this.db.prepare("select name, changed_at from developers where account_id = ?").get(accountId) as { name: string; changed_at: number } | undefined;
+    return row ? { name: row.name, changedAt: row.changed_at } : null;
+  }
+
+  /**
+   * Sets the account's developer name (checked with cleanDeveloperName first). Unique by nameKey
+   * among developers and among names given up in the last NAME_HOLD_MS (except the account's own),
+   * and changed at most once in that time.
+   */
+  setDeveloperName(accountId: string, name: string, now: number): NameChange {
+    const key = nameKey(name);
+    if (isReservedName(key)) return { ok: false, reason: "name-reserved" };
+    const current = this.developer(accountId);
+    if (current?.name === name) return { ok: true, developer: current };
+    if (current && now - current.changedAt < NAME_HOLD_MS) return { ok: false, reason: "name-too-soon", nextChangeAt: current.changedAt + NAME_HOLD_MS };
+    const owner = this.db.prepare("select account_id from developers where name_key = ?").get(key) as { account_id: string } | undefined;
+    if (owner && owner.account_id !== accountId) return { ok: false, reason: "name-taken" };
+    const held = this.db.prepare("select account_id from released_names where name_key = ? and released_at > ?").get(key, now - NAME_HOLD_MS) as { account_id: string } | undefined;
+    if (held && held.account_id !== accountId) return { ok: false, reason: "name-taken" };
+    this.db.exec("begin");
+    try {
+      if (current && nameKey(current.name) !== key) this.release(nameKey(current.name), accountId, now);
+      this.db.prepare("delete from released_names where name_key = ? and account_id = ?").run(key, accountId);
+      this.db
+        .prepare(
+          "insert into developers (account_id, name, name_key, changed_at) values (?, ?, ?, ?) on conflict (account_id) do update set name = excluded.name, name_key = excluded.name_key, changed_at = excluded.changed_at",
+        )
+        .run(accountId, name, key, now);
+      this.db.exec("commit");
+    } catch (error) {
+      this.db.exec("rollback");
+      // Taken a moment ago by another account.
+      if (error instanceof Error && /UNIQUE/.test(error.message)) return { ok: false, reason: "name-taken" };
+      throw error;
+    }
+    return { ok: true, developer: { name, changedAt: now } };
+  }
+
+  private release(key: string, accountId: string, now: number): void {
+    this.db.prepare("insert or replace into released_names (name_key, account_id, released_at) values (?, ?, ?)").run(key, accountId, now);
+  }
+
+  /** A new one-time code to link a publisher key; any earlier one of the account stops working. Only its hash is kept. */
+  linkCode(accountId: string, now: number): { code: string; expiresAt: number } {
+    this.sweep(now);
+    this.db.prepare("delete from link_codes where account_id = ?").run(accountId);
+    const code = Array.from({ length: 8 }, () => LINK_ALPHABET[randomInt(0, LINK_ALPHABET.length)]).join("");
+    const expiresAt = now + LINK_CODE_TTL_MS;
+    this.db.prepare("insert into link_codes (code_hash, account_id, expires_at) values (?, ?, ?)").run(sha256(`link:${code}`), accountId, expiresAt);
+    return { code, expiresAt };
+  }
+
+  /** The account a link code was made for, used up by taking it; null when unknown or expired. */
+  takeLinkCode(code: string, now: number): string | null {
+    const hash = sha256(`link:${code}`);
+    const row = this.db.prepare("select account_id, expires_at from link_codes where code_hash = ?").get(hash) as { account_id: string; expires_at: number } | undefined;
+    this.db.prepare("delete from link_codes where code_hash = ?").run(hash);
+    return row && row.expires_at > now ? row.account_id : null;
+  }
+
+  /** Links a publisher key (its public half only) to an account. A key belongs to one account; linking it again is fine. */
+  linkKey(accountId: string, fingerprint: string, publicKey: string, now: number): "ok" | "taken" | "too-many" {
+    const owner = this.db.prepare("select account_id from publisher_keys where fingerprint = ?").get(fingerprint) as { account_id: string } | undefined;
+    if (owner) return owner.account_id === accountId ? "ok" : "taken";
+    if (this.keys(accountId).length >= MAX_KEYS) return "too-many";
+    this.db.prepare("insert into publisher_keys (fingerprint, account_id, public_key, linked_at) values (?, ?, ?, ?)").run(fingerprint, accountId, publicKey, now);
+    return "ok";
+  }
+
+  keys(accountId: string): LinkedKey[] {
+    return (
+      this.db.prepare("select fingerprint, linked_at from publisher_keys where account_id = ? order by linked_at, rowid").all(accountId) as unknown as { fingerprint: string; linked_at: number }[]
+    ).map((row) => ({ fingerprint: row.fingerprint, linkedAt: new Date(row.linked_at).toISOString() }));
+  }
+
+  /** Unlinks one of the account's keys; false when it has no such key. */
+  unlinkKey(accountId: string, fingerprint: string): boolean {
+    return Number(this.db.prepare("delete from publisher_keys where fingerprint = ? and account_id = ?").run(fingerprint, accountId).changes) > 0;
+  }
+
+  /** The developer name players see for a key, or null when the key is not linked or its account has no name. */
+  publisherName(fingerprint: string): string | null {
+    const row = this.db.prepare("select d.name from publisher_keys k join developers d on d.account_id = k.account_id where k.fingerprint = ?").get(fingerprint) as { name: string } | undefined;
+    return row?.name ?? null;
   }
 
   // ── Mail sent per day ──────────────────────────────────────────────────
@@ -366,6 +515,8 @@ export class AccountStore {
     this.db.prepare("delete from code_requests where at <= ?").run(now - DAY_MS);
     this.db.prepare("delete from discord_tickets where expires_at <= ?").run(now);
     this.db.prepare("delete from sessions where last_used_at <= ?").run(now - SESSION_IDLE_MS);
+    this.db.prepare("delete from link_codes where expires_at <= ?").run(now);
+    this.db.prepare("delete from released_names where released_at <= ?").run(now - NAME_HOLD_MS);
   }
 }
 

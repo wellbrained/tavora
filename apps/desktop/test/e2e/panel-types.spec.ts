@@ -24,6 +24,7 @@ test("each panel type opens its own page, named on its tab", async () => {
   await addPanel(page, "planner");
   await expect(panels(page, PANELS)).toHaveCount(1);
   await expect(page.locator(`[data-panel-tab][data-panel-type="planner"]`)).toContainText("Build planner");
+  await expect(page.locator(`[data-panel-tab][data-panel-type="planner"]`)).toHaveAttribute("title", "Build planner · Panel Types Example");
   await expectModuleText(app, PANELS, "panel-type", "Build planner");
   await expectModuleText(app, PANELS, "page", "Page: planner.html");
 

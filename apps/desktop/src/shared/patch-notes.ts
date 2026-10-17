@@ -40,6 +40,15 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
+    version: "0.17.11",
+    date: "2026-10-17",
+    title: "Modules show who made them",
+    notes: [
+      "A module from a zip now shows its developer's name, \"by ...\", in Settings > Modules, when it asks for permissions and when you install it, once the developer has linked their key to their Tavora account. Before, you only saw a key's fingerprint.",
+      "For module developers: Settings > Account has a new Module developer part. Choose a public developer name, then link your publisher key with a one-time code and \"tavora-pack link\".",
+    ],
+  },
+  {
     version: "0.17.10",
     date: "2026-10-17",
     title: "A roomier module library",
