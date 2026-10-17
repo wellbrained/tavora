@@ -33,7 +33,7 @@ function render(typeId: string | null) {
   el("panel-type").textContent = type ? type.name : "No panel type";
   el("summary").textContent = type
     ? `tavora.panel.type is "${type.id}". Tavora loaded ${type.entry ?? manifest.entry} for it.`
-    : "This Tavora sent no panel type; it is older than 0.17.9.";
+    : "This Tavora sent no panel type; it is older than 0.17.12.";
 
   const options = el("options");
   options.replaceChildren();

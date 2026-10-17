@@ -61,6 +61,7 @@ Some calls change something outside the module's panel. They work only within 2 
 
 - **`links.open`** opens an `http` or `https` address in Tavora's Browser panel, or, after the player confirms, in the system browser. The module learns nothing back.
 - **`clipboard.writeImage`** puts a checked PNG on the clipboard. There is no call to read the clipboard.
+- **`ui.showMenu`** shows a menu that Tavora draws above every panel, so it can lie outside the module's panel. Tavora checks the menu first and draws only plain text, separators, headings, check marks and colour dots from plain CSS colour values (nothing that loads or runs), in its own style. One menu shows at a time, it closes with Esc, a click elsewhere or a game switch, and the module learns only which of its own items the player chose, or that none was.
 
 A module can still label a button misleadingly and get the player to click it. The result is the same as a link on any web page: the player sees the new tab, and the Browser panel is sandboxed.
 
@@ -112,4 +113,5 @@ Tavora accounts are optional. Modules learn nothing about them: no SDK call, bri
 - **The Browser panel has no Safe Browsing.** A phishing page still renders. A public name that resolves to a local address (DNS rebinding) is not caught there, because the panel checks names, not resolved addresses. Sign-in popups that need `window.opener` do not work.
 - **Discord's local connection is trusted.** Whatever listens where the Discord app listens gets the Discord token. A program that can do that is already running as the player.
 - **Unsigned local modules are known only by their id.** Another local module put in the same folder under the same id gets its grants.
+- **A development folder is a module's whole bundle.** A module loaded from a development folder (Settings > Modules) can read every file in that project folder, such as its sources or a `.env` file, because G6 is measured from that folder. It is an unsigned local module, known only by its id. Add only your own projects.
 - **WebAssembly is allowed only for Tavora's own modules** that ask for it, because the Whiteboard needs it. Community modules do not get it.

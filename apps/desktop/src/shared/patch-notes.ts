@@ -19,14 +19,32 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.17.9",
+    version: "0.17.12",
     date: "2026-10-17",
     title: "Modules can offer several panels",
     notes: [
-      "A module can now offer several named panels, such as an inventory and a build planner. Module library lists them under the module, each with its own Add, and every panel of a module shares its saved content.",
+      "A module can now offer several named panels, such as an inventory and a build planner. The module library lists them under the module, each with its own Add, and every panel of a module shares its saved content.",
       "Tabs show the panel's short name; hovering it shows the module's name too.",
       "If a module update removes a panel you had open, its place stays with a note, and you can remove it or pick another panel of the same module.",
       "Module developers: the new Panel Types Example under Development shows every option.",
+    ],
+  },
+  {
+    version: "0.17.10",
+    date: "2026-10-17",
+    title: "A roomier module library",
+    notes: [
+      "The module library is now the same size as Settings, with compact rows and search that stays in view as you browse.",
+      "Switch between all modules, those already in this game and those you have not added yet. Counts and an Add another button make it clear what is already open.",
+    ],
+  },
+  {
+    version: "0.17.9",
+    date: "2026-10-17",
+    title: "Menus that fit",
+    notes: [
+      "The menu of a To-Dos group now opens above everything, so its Color list is never cut off in a narrow panel. Right-click a group's header to open the same menu where you clicked.",
+      "Other modules can show their menus the same way, drawn by Tavora in your theme.",
     ],
   },
   {
@@ -35,6 +53,15 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     title: "Modules can say which Tavora they need",
     notes: [
       "A module can name the oldest Tavora it works with. If yours is older, installing it says which Tavora it needs instead of installing something that would not work, and Settings > Modules says why it is not loaded.",
+    ],
+  },
+  {
+    version: "0.17.7",
+    date: "2026-10-17",
+    title: "Development folders",
+    notes: [
+      "For module developers: Settings > Modules > Add a development folder loads a module straight from its project folder. Its open panels reload by themselves whenever you build it again, and a folder added before its first build loads as soon as the build is there.",
+      "Each development folder says which module it loads, or why it can't. Remove it there to stop loading it; the project and the module's data stay.",
     ],
   },
   {

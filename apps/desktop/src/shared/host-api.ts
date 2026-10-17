@@ -346,6 +346,8 @@ export interface HostViewState {
   }[];
   /** Folders in the modules folder that could not be loaded, and why, for module authors. */
   moduleProblems: { folder: string; message: string }[];
+  /** Module project folders added in Settings > Modules: the module each one loads, or why it could not be loaded (null while it simply has none yet). */
+  developmentFolders: { folder: string; moduleId: string | null; problem: string | null }[];
   /** Saved data of modules that are not installed (or of another publisher than the installed one), kept until deleted. */
   leftoverModuleData: { owner: string; moduleId: string; publisher: string | null }[];
   /** Panels of the current game, in the order they were opened. */
@@ -451,6 +453,9 @@ export type HostAction =
   | { type: "open-themes-folder" }
   /** Opens the player's modules folder in the file manager, creating it first. */
   | { type: "open-modules-folder" }
+  /** Picks a module project folder to load from (answers with the folder), or forgets one. */
+  | { type: "add-development-folder" }
+  | { type: "remove-development-folder"; folder: string }
   /** Looks for modules again, after the player changed their modules folder. */
   | { type: "reload-modules" }
   /** Moves a module from the player's modules folder to the recycle bin, after removing its panels in every game; its data stays. */
@@ -543,6 +548,23 @@ export type HostAction =
   | { type: "delete-snapshot"; snapshotId: string };
 
 /** `id` is set when the action created something (a game, a folder). */
+/** One entry of a module's menu, as the main process checked it (the SDK's MenuEntry). */
+export type ModuleMenuEntry =
+  | { type: "item"; id: string; label: string; hint?: string; color?: string; checked?: boolean; radio?: boolean; disabled?: boolean; danger?: boolean }
+  | { type: "separator" }
+  | { type: "heading"; label: string }
+  | { type: "submenu"; label: string; color?: string; disabled?: boolean; items: ModuleMenuEntry[] };
+
+/** A module's menu for the host UI to draw over its panel (ui.showMenu); `at` is in the panel's CSS pixels. */
+export interface ModuleMenu {
+  requestId: number;
+  instanceId: string;
+  items: ModuleMenuEntry[];
+  at: { x: number; y: number; width?: number; height?: number };
+  side?: "bottom" | "top" | "right" | "left";
+  align?: "start" | "center" | "end";
+}
+
 export type ActionResult = { ok: true; id?: string; shared?: number; added?: number } | { ok: false; error: string };
 
 export interface CatalogMatch {
@@ -614,6 +636,10 @@ export interface TavoraHostApi {
   onAiUsage(listener: (view: AiUsageView) => void): void;
   getAccount(): Promise<AccountView | null>;
   onAccount(listener: (view: AccountView) => void): void;
+  /** A module asked for a menu (or null: close the one shown). */
+  onModuleMenu(listener: (menu: ModuleMenu | null) => void): void;
+  /** The player chose an item of the module menu, or closed it (null). */
+  answerModuleMenu(requestId: number, id: string | null): void;
 }
 
 /** `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). */

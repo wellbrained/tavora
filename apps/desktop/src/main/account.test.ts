@@ -340,7 +340,7 @@ describe("the profile in the account", () => {
 });
 
 describe("Discord login", () => {
-  const LOGIN = { code: "codenik00000", verifier: "v".repeat(43) };
+  const LOGIN = { code: "codewellbrained", verifier: "v".repeat(43) };
   const discordAccount = (email: string | null, name: string | null) => ({ email, discord: name ? { name } : null, createdAt: SAVED.createdAt });
 
   it("signs a known Discord login in, keeping its username and no email", async () => {

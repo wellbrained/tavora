@@ -1,6 +1,6 @@
 # Bridge protocol v1
 
-**Status:** Version 1 is what `@tavora/sdk` 0.2.1 speaks. It may still change before Tavora's first public release; after that, breaking changes need a new major version (see [Versioning](#versioning)). What changed when is in the [changelog](./changelog.md).
+**Status:** Version 1 is what `@tavora/sdk` 0.2.2 speaks. It may still change before Tavora's first public release; after that, breaking changes need a new major version (see [Versioning](#versioning)). What changed when is in the [changelog](./changelog.md).
 
 Module authors normally use `@tavora/sdk` and never see these messages. This page is for people writing another SDK, reviewing the host, or debugging.
 
@@ -48,7 +48,7 @@ Methods without params must be sent with `params` left out.
 
 | Method | Params | Result |
 | --- | --- | --- |
-| `bridge.handshake` | `{ protocol: 1, sdkVersion: string }` | `{ protocol: 1, host: { name: "tavora-desktop", version }, module: { id, version }, capabilities, panel: { type } }`: `capabilities` lists what the player has granted, such as `["network"]`; `panel.type` is the [panel type](./manifest.md#panel-types) this panel shows, or `null` for a module without panel types (Tavora 0.17.9 and newer) |
+| `bridge.handshake` | `{ protocol: 1, sdkVersion: string }` | `{ protocol: 1, host: { name: "tavora-desktop", version }, module: { id, version }, capabilities, panel: { type } }`: `capabilities` lists what the player has granted, such as `["network"]`; `panel.type` is the [panel type](./manifest.md#panel-types) this panel shows, or `null` for a module without panel types (Tavora 0.17.12 and newer) |
 | `game.getCurrent` | none | `{ id, displayName }` of the game this panel belongs to |
 | `storage.get` | `{ key }` | the stored JSON value, or `null` |
 | `storage.set` | `{ key, value }` | `null` |
@@ -63,6 +63,7 @@ Methods without params must be sent with `params` left out.
 | `panel.setState` | `{ value }` | `null`; `value: null` removes the state |
 | `workspace.getViewport` | none | `{ width, height }` of the panel in CSS pixels |
 | `ui.getLanguage` | none | the language of Tavora's own texts as a code, `"en"` or `"de"` for now; show your module in it, or in English when you have no translation |
+| `ui.showMenu` | `{ items, at, side?, align? }` | the chosen item's `id`, or `null` when the player closed the menu; see [Menus](#menus) |
 | `links.open` | `{ url }` | `null`; opens the web address (http or https, at most 2048 characters) as a new tab in the game's Browser panel, or in a new Browser panel. Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for anything but a web address. You learn nothing about the page |
 | `blobs.list` | none | `BlobInfo[]` (`{ id, bytes, type, createdAt }`), oldest first |
 | `blobs.usage` | none | `{ bytes, count, maxBytes, maxFileBytes }` for this module and game |
@@ -105,6 +106,35 @@ A module can keep pictures that are too big for a document: up to 50 MB each and
 - **Only after the player did something:** it must follow a real click or key press in the module (within 2 seconds), and one press copies one picture; otherwise it is refused with `PERMISSION_DENIED`. Call it from the click handler of the button.
 - **Only a complete PNG:** the host checks every part of the file before using it (`INVALID_PARAMS` for anything else, such as a different format, a cut-off or damaged file, or a picture over 16384 pixels on a side or 100 million pixels), and a file over 20 MB is `QUOTA_EXCEEDED`.
 - **Write only:** a module cannot read the clipboard.
+
+### Menus
+
+`sdk.ui.showMenu(request)` shows a menu that Tavora draws above every panel, in its own style and theme. A menu inside your page is cut off at the panel's edge; this one is not.
+
+- **Only after the player did something:** call it from the click, right-click or key press that asked for it (within 2 seconds); each press opens one menu, otherwise `PERMISSION_DENIED`. One menu shows at a time: a new one closes the last, and Esc, a click elsewhere or switching games closes it too. It resolves with the chosen item's `id`, or `null`.
+- **Where:** `at` is in your panel's CSS pixels from its top left corner (`getBoundingClientRect()` values). Give the pointer's `{ x, y }` for a context menu, or a button's `{ x, y, width, height }` for a dropdown next to it. `side` (`"bottom"`, `"top"`, `"right"`, `"left"`; default bottom) and `align` (`"start"`, `"center"`, `"end"`; default start) say where it opens when there is room; Tavora keeps it inside the window.
+- **What:** `items` is a list of entries:
+  - `{ type: "item", id, label, hint?, color?, checked?, radio?, disabled?, danger? }`: `id` is what you get back (unique in the menu, up to 64 letters, digits, `.`, `_`, `:` or `-`). `hint` is small text on the right, such as a shortcut. `color` adds a dot: `#rgb`/`#rrggbb`, a colour function of numbers such as `oklch(0.7 0.17 150)`, or `transparent` for an empty ring. `checked` shows a check mark (a dot with `radio`); in a list where any item sets it, the others keep the column so labels line up. `danger` makes it red.
+  - `{ type: "separator" }` and `{ type: "heading", label }`.
+  - `{ type: "submenu", label, color?, disabled?, items }`: one level only; its items hold no further submenus.
+- **Text only:** labels are plain text (at most 80 characters, hints 30), never HTML, and a menu holds at most 100 entries, submenus included. Anything else is `INVALID_PARAMS`. There are no sliders or other controls in menus; keep those in your page.
+
+```ts
+button.addEventListener("click", async () => {
+  const box = button.getBoundingClientRect();
+  const choice = await tavora.ui.showMenu({
+    at: { x: box.left, y: box.top, width: box.width, height: box.height },
+    align: "end",
+    items: [
+      { type: "item", id: "rename", label: "Rename", hint: "F2" },
+      { type: "submenu", label: "Color", items: [{ type: "item", id: "red", label: "Red", color: "#e5675a", radio: true, checked: true }] },
+      { type: "separator" },
+      { type: "item", id: "delete", label: "Delete", danger: true },
+    ],
+  });
+  if (choice === "rename") startRename();
+});
+```
 
 ### Network
 
@@ -240,6 +270,7 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | `network.fetch` answer | 5 MB of body, 15 s, 5 redirects, 6 requests at once per panel |
 | `aiUsage.read` | one reading per account and minute for all modules, 40 s, answers up to 256 KB |
 | `discord.command` | 15 s, answers and events up to 512 KB; 32 subscriptions per panel |
+| `ui.showMenu` | one menu per click or key press, 100 entries, labels 80 characters, hints 30 |
 
 These limits are checked first inside your own page, by the preload Tavora gives it, before a message reaches the host. A request over a limit is answered with `BAD_REQUEST` (`INVALID_PARAMS` for data that is not plain JSON) and never sent on, so a module that sends something huge can only slow itself down. A request id cannot be reused while its answer is pending.
 

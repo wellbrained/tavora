@@ -29,6 +29,7 @@ import {
   type HandshakeResult,
   type HostMessage,
   type JsonValue,
+  type MenuRequest,
   type MethodName,
   type Methods,
   type NetworkRequest,
@@ -58,6 +59,8 @@ export type {
   ErrorCode,
   HandshakeResult,
   JsonValue,
+  MenuEntry,
+  MenuRequest,
   NetworkRequest,
   NetworkResponse,
   PutDocumentParams,
@@ -69,8 +72,11 @@ export type {
 } from "./protocol.js";
 export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, PROTOCOL_VERSION, THEME_TOKENS } from "./protocol.js";
 
+/** How long a menu may stay open; the host closes it itself when its panel goes. */
+const MENU_TIMEOUT_MS = 60 * 60_000;
+
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.1";
+export const SDK_VERSION = "0.2.2";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -141,6 +147,12 @@ export interface TavoraSDK {
     getLanguage(): Promise<string>;
     /** Fires when the player changes the language. */
     onLanguageChange(fn: (language: string) => void): Unsubscribe;
+    /**
+     * Shows a menu that Tavora draws above every panel, so it is never cut off at the panel's edge. Call it from
+     * the click, right-click or key press that asked for it: the host refuses it otherwise (PERMISSION_DENIED).
+     * Resolves with the chosen item's id, or null when the player closed the menu without choosing.
+     */
+    showMenu(request: MenuRequest): Promise<string | null>;
   };
   /**
    * Files (pictures) this module keeps in the current game, shared by all of its panels. They live
@@ -386,6 +398,8 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       onThemeChange: (fn) => on("ui.theme", fn),
       getLanguage: () => call("ui.getLanguage"),
       onLanguageChange: (fn) => on("ui.language", fn),
+      // The player may take their time choosing.
+      showMenu: (request) => call("ui.showMenu", request, MENU_TIMEOUT_MS),
     },
     blobs: {
       put: async (file) => {

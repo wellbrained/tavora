@@ -56,6 +56,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     getLanguage: () => "de",
     isSuspended: () => false,
     openLink: () => {},
+    showMenu: () => Promise.resolve(null),
     fetch: () => Promise.reject(new Error("no network in this test")),
   };
 }
@@ -107,7 +108,7 @@ describe("handshake", () => {
   it("tells the page which panel type it runs as", async () => {
     const p = new FakePort();
     new BridgeSession(p, { ...context, panelType: "planner" });
-    expect(await call(p, "bridge.handshake", { protocol: 1, sdkVersion: "0.2.1" })).toMatchObject({ ok: true, result: { panel: { type: "planner" } } });
+    expect(await call(p, "bridge.handshake", { protocol: 1, sdkVersion: "0.2.2" })).toMatchObject({ ok: true, result: { panel: { type: "planner" } } });
   });
 
   it("rejects an incompatible SDK with the supported versions", async () => {
@@ -447,6 +448,29 @@ describe("aiUsage", () => {
   it("passes on that an account does not exist", async () => {
     const p = await granted({ aiUsage: { accounts: async () => [], read: async () => Promise.reject(new HostError("INVALID_PARAMS", "there is no AI account with that id")) } });
     expect(await call(p, "aiUsage.read", { accountId: "gone" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+});
+
+describe("ui.showMenu", () => {
+  const menu = { items: [{ type: "item", id: "rename", label: "Rename" }], at: { x: 1, y: 2 } };
+
+  it("hands the checked menu to the host and answers with the chosen id", async () => {
+    const shown: unknown[] = [];
+    const p = await connected({ ...makeContext(), showMenu: async (checked) => (shown.push(checked.request), "rename") });
+    expect(await call(p, "ui.showMenu", menu)).toMatchObject({ ok: true, result: "rename" });
+    expect(shown).toEqual([menu]);
+  });
+
+  it("refuses a menu that is not well formed before the host sees it", async () => {
+    const shown: unknown[] = [];
+    const p = await connected({ ...makeContext(), showMenu: async (checked) => (shown.push(checked), null) });
+    expect(await call(p, "ui.showMenu", { ...menu, items: [{ type: "item", id: "x", label: "<b>X</b>", html: true }] })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(shown).toEqual([]);
+  });
+
+  it("passes on that the panel did not just get a click", async () => {
+    const p = await connected({ ...makeContext(), showMenu: () => Promise.reject(new HostError("PERMISSION_DENIED", "ui.showMenu must be called right after a click or key press")) });
+    expect(await call(p, "ui.showMenu", menu)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED" } });
   });
 });
 

@@ -48,7 +48,7 @@ Paths (`entry`, `icon`, and the same fields of a panel type) are relative to the
 
 ## Panel types
 
-A module can offer several tools as separate panels, such as an Inventory, a Build planner and a Map tracker. Players add each one on its own from the module library, dock it anywhere and may open several copies side by side. All panel types of a module share its saved content (`storage`, `documents`, `blobs`) and its permissions; each open panel keeps its own `panel` state. Needs Tavora 0.17.9 or newer, so set `minTavora` to at least `0.17.9`.
+A module can offer several tools as separate panels, such as an Inventory, a Build planner and a Map tracker. Players add each one on its own from the module library, dock it anywhere and may open several copies side by side. All panel types of a module share its saved content (`storage`, `documents`, `blobs`) and its permissions; each open panel keeps its own `panel` state. Needs Tavora 0.17.12 or newer, so set `minTavora` to at least `0.17.12`.
 
 ```json
 "panels": [

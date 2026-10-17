@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { describeModules, discoverModules, type ModuleProblem } from "./registry";
+import { buildFolderName, describeModules, discoverModules, projectEntry, type ModuleProblem } from "./registry";
 
 async function makeModule(root: string, folder: string, id: string, name = id, permissions: Record<string, unknown> = { network: [] }): Promise<string> {
   const dir = path.join(root, folder);
@@ -131,6 +131,51 @@ describe("panel types", () => {
     expect(problems).toEqual([{ folder: "pageless", message: "the entry file b.html is missing (is it built?)" }]);
     const info = await describeModules(local, modules);
     expect(info.get("example.typed")!.panelIcons).toEqual({ a: null, b: `data:image/png;base64,${png.toString("base64")}` });
+
+describe("development folders", () => {
+  it("load one module straight from each project folder, ahead of an installed copy, with local data", async () => {
+    const projects = await mkdtemp(path.join(tmpdir(), "tavora-projects-"));
+    const own = await mkdtemp(path.join(tmpdir(), "tavora-own-"));
+    const project = await makeModule(projects, "my-tracker", "example.tracker", "Tracker (dev)");
+    await makeModule(own, "tracker", "example.tracker", "Tracker (installed)");
+    const problems: ModuleProblem[] = [];
+    const modules = await discoverModules({ development: [project], local: [own] }, problems);
+    expect(modules.get("example.tracker")).toMatchObject({ developmentFolder: project, provenance: "local", owner: "local", manifest: { name: "Tracker (dev)" } });
+    // The installed copy waits, and says why.
+    expect(problems).toEqual([{ folder: "tracker", message: "another module with the same id is already loaded" }]);
+    const info = await describeModules(own, modules);
+    expect(info.get("example.tracker")).toMatchObject({ origin: { kind: "dev", folder: project }, removable: false });
+  });
+
+  it("never look into the folders inside a project, and say what is wrong with it", async () => {
+    const projects = await mkdtemp(path.join(tmpdir(), "tavora-projects-"));
+    const empty = path.join(projects, "workspace");
+    await makeModule(empty, "inner", "example.inner");
+    const unbuilt = await makeModule(projects, "unbuilt", "example.unbuilt");
+    await rm(path.join(unbuilt, "index.html"));
+    const reserved = await makeModule(projects, "fake", "tavora.notes");
+    const problems: ModuleProblem[] = [];
+    const modules = await discoverModules({ development: [empty, unbuilt, reserved, path.join(projects, "gone")] }, problems);
+    expect(modules.size).toBe(0);
+    expect(problems).toEqual([
+      { folder: "workspace", message: "there is no tavora.module.json in this folder", developmentFolder: empty },
+      { folder: "unbuilt", message: "the entry file index.html is missing (is it built?)", developmentFolder: unbuilt },
+      { folder: "fake", message: "its id is reserved for Tavora's own modules", developmentFolder: reserved },
+      { folder: "gone", message: "this folder can't be found", developmentFolder: path.join(projects, "gone") },
+    ]);
+  });
+
+  it("find the folder a project builds into, even before its manifest is valid", async () => {
+    expect(buildFolderName("dist/index.html")).toBe("dist");
+    expect(buildFolderName("./build/web/index.html")).toBe("build");
+    expect(buildFolderName("index.html")).toBeUndefined();
+    expect(buildFolderName("../outside/index.html")).toBeUndefined();
+    const projects = await mkdtemp(path.join(tmpdir(), "tavora-projects-"));
+    const draft = path.join(projects, "draft");
+    await mkdir(draft);
+    await writeFile(path.join(draft, "tavora.module.json"), JSON.stringify({ entry: "dist/index.html" }));
+    expect(await projectEntry(draft)).toBe("dist/index.html");
+    expect(await projectEntry(path.join(projects, "gone"))).toBeUndefined();
   });
 });
 

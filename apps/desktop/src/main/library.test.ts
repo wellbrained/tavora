@@ -176,6 +176,13 @@ describe("Steam icons", () => {
     const folder = process.platform === "win32" ? "D:\\Pictures\\Tavora module files" : "/mnt/pictures/Tavora module files";
     expect(sanitizeLibrary({ moduleFilesFolder: folder }).moduleFilesFolder).toBe(folder);
     for (const bad of ["relative/folder", "", 4, null, "x".repeat(501)]) expect(sanitizeLibrary({ moduleFilesFolder: bad }).moduleFilesFolder).toBeNull();
+    // Development folders: absolute paths, each once, at most 20.
+    expect(emptyLibrary().developmentFolders).toEqual([]);
+    const project = process.platform === "win32" ? "D:\\Code\\my-tracker" : "/home/dev/my-tracker";
+    expect(sanitizeLibrary({ developmentFolders: [project, project, "relative/x", 7, "", "x".repeat(501)] }).developmentFolders).toEqual([project]);
+    const many = Array.from({ length: 25 }, (_, i) => (process.platform === "win32" ? `D:\\Code\\m${i}` : `/code/m${i}`));
+    expect(sanitizeLibrary({ developmentFolders: many }).developmentFolders).toHaveLength(20);
+    expect(sanitizeLibrary({ developmentFolders: "nope" }).developmentFolders).toEqual([]);
     expect(emptyLibrary().steamProfile).toBeNull();
     expect(sanitizeLibrary({ steamProfile: "  https://steamcommunity.com/id/me " }).steamProfile).toBe("https://steamcommunity.com/id/me");
     for (const bad of ["", "   ", 5, "x".repeat(201)]) expect(sanitizeLibrary({ steamProfile: bad }).steamProfile).toBeNull();

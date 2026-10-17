@@ -2,7 +2,7 @@
 
 Typed client for [Tavora](../../README.md) modules. A module is a web page that runs in a sandboxed panel inside Tavora Desktop; this package is how it talks to the host.
 
-**Status:** 0.2.1, bridge protocol v1. Not published to npm yet: inside this repository, depend on it as `"@tavora/sdk": "workspace:*"`. What changed in each version is in [CHANGELOG.md](./CHANGELOG.md).
+**Status:** 0.2.2, bridge protocol v1. Not published to npm yet: inside this repository, depend on it as `"@tavora/sdk": "workspace:*"`. What changed in each version is in [CHANGELOG.md](./CHANGELOG.md).
 
 ```ts
 import { connect, TavoraError } from "@tavora/sdk";
