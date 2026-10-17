@@ -1,7 +1,29 @@
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildReport, ErrorLog, scrub, Timings } from "./diagnostics";
+import { appendStartupLog, buildReport, ErrorLog, scrub, Timings } from "./diagnostics";
 
 const folders = { home: "C:\\Users\\wellbrained", userData: "C:\\Users\\wellbrained\\AppData\\Roaming\\@tavora\\desktop" };
+
+describe("appendStartupLog", () => {
+  const logFile = () => path.join(mkdtempSync(path.join(tmpdir(), "tavora-log-")), "logs", "startup.log");
+
+  it("creates the log and its folder, one line per failure, folders scrubbed", () => {
+    const file = logFile();
+    appendStartupLog(file, `refused --no-sandbox\nin ${folders.userData}`, folders, new Date("2026-10-17T12:00:00Z"));
+    expect(readFileSync(file, "utf8")).toBe("2026-10-17T12:00:00.000Z refused --no-sandbox in <data>\n");
+  });
+
+  it("keeps only the newest 50 lines", () => {
+    const file = logFile();
+    for (let i = 1; i <= 55; i++) appendStartupLog(file, `failure ${i}`);
+    const lines = readFileSync(file, "utf8").trim().split("\n");
+    expect(lines).toHaveLength(50);
+    expect(lines[0]).toContain("failure 6");
+    expect(lines[49]).toContain("failure 55");
+  });
+});
 
 describe("scrub", () => {
   it("hides the data folder, the home folder and any other user name", () => {
