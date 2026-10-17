@@ -102,3 +102,19 @@ The first run makes your publisher key in `~/.tavora/publisher-key.pem` (or the 
 
 While you build, keep loading the module from a folder: an unsigned folder module needs no key, and its data is kept apart from the signed version's.
 
+### Show your name instead of a fingerprint
+
+Players see who signed a module as the key's fingerprint, unless the key is linked to a Tavora account with a developer name. Then they see "by <name>" in Settings > Modules, in the dialog that asks for permissions, and when they install your zip.
+
+1. In Tavora, sign in under Settings > Account and choose a **developer name** under Module developer. It is public, unique (case, spaces, dots, dashes and underscores don't count) and can change once every 30 days.
+2. Press **Link a publisher key**. Tavora shows a one-time code, valid for 10 minutes.
+3. Run the command it shows, with the key you sign with:
+
+   ```sh
+   pnpm tavora-pack link ABCD-EFGH
+   ```
+
+   It signs the code with your publisher key and sends the signature and the key's public half to Tavora's service, which checks the signature before it links the key. The secret key never leaves your PC. Pass `--key` if you sign with another key file.
+
+An account can link several keys; a key belongs to one account. Link your key now, even before you need it: if you ever lose it, only a key that was linked can later be claimed back by your account.
+

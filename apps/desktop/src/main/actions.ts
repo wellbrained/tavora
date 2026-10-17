@@ -264,6 +264,13 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("code") && typeof a.code === "string" && /^\d{6}$/.test(a.code) ? { type: a.type, code: a.code } : null;
     case "account-profile-choice":
       return only("keep") && (a.keep === "account" || a.keep === "pc") ? { type: a.type, keep: a.keep } : null;
+    case "account-developer-name":
+      return only("name") && typeof a.name === "string" && a.name.trim() !== "" && a.name.length <= 32 ? { type: a.type, name: a.name } : null;
+    case "account-link-code":
+    case "account-copy-link-command":
+      return only() ? { type: a.type } : null;
+    case "account-unlink-key":
+      return only("fingerprint") && typeof a.fingerprint === "string" && /^[0-9a-f]{32}$/.test(a.fingerprint) ? { type: a.type, fingerprint: a.fingerprint } : null;
     case "account-sign-out-device":
       return only("deviceId") && typeof a.deviceId === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(a.deviceId) ? { type: a.type, deviceId: a.deviceId } : null;
     case "ai-usage-add":

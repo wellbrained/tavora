@@ -52,7 +52,12 @@ async function install() {
   const result = await act({ type: "install-module" });
   if (!result.ok || !result.id) return;
   const module = modules.value.find((item) => item.id === result.id);
-  if (module) showToast(t("settings.modules.installed", { name: module.name, version: module.version }));
+  if (!module) return;
+  showToast(
+    module.publisherName
+      ? t("settings.modules.installedBy", { name: module.name, version: module.version, publisher: module.publisherName })
+      : t("settings.modules.installed", { name: module.name, version: module.version }),
+  );
 }
 
 function moveLocal(module: ModuleView) {
@@ -183,7 +188,14 @@ function remove(module: ModuleView) {
               >{{ module.provenance === "official" ? t("common.official") : t("common.local") }}</span
             >
             <span
-              v-if="module.publisher"
+              v-if="module.publisher && module.publisherName"
+              class="text-muted-foreground min-w-0 flex-none truncate rounded-sm border px-1.5 text-xs"
+              :title="t('settings.modules.byNameHint', { name: module.publisherName, key: module.publisher })"
+              :data-testid="`module-publisher-${module.id}`"
+              >{{ t("settings.modules.byName", { name: module.publisherName }) }}</span
+            >
+            <span
+              v-else-if="module.publisher"
               class="text-muted-foreground flex-none rounded-sm border px-1.5 font-mono text-xs"
               :title="t('settings.modules.publisherHint', { key: module.publisher })"
               :data-testid="`module-publisher-${module.id}`"

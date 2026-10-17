@@ -1,6 +1,6 @@
 {
   "name": "tavora",
-  "version": "0.17.10",
+  "version": "0.17.11",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",
@@ -15,6 +15,7 @@
     "test:e2e": "pnpm --filter @tavora/desktop test:e2e",
     "release": "pnpm --filter @tavora/desktop release",
     "pack-module": "node --experimental-strip-types --disable-warning=ExperimentalWarning packages/pack/src/cli.ts",
+    "tavora-pack": "node --experimental-strip-types --disable-warning=ExperimentalWarning packages/pack/src/cli.ts",
     "check": "pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e"
   },
   "devDependencies": {

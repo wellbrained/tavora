@@ -34,6 +34,7 @@ watch(
 const from = computed(() => {
   const current = module.value;
   if (!current) return "";
+  if (current.publisher && current.publisherName) return t("grant.from.publisherName", { name: current.publisherName, key: current.publisher.slice(0, 8) });
   if (current.publisher) return t("grant.from.publisher", { key: current.publisher.slice(0, 8) });
   return current.provenance === "official" ? t("grant.from.official") : t("grant.from.local");
 });

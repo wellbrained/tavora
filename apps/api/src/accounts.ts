@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { DEVICE_OS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
+import { cleanDeveloperName, DEVICE_OS, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
 import { DiscordError, isDiscordCode, isPkceVerifier, type DiscordClient, type DiscordIdentity } from "./discord.ts";
 import { codeMail, emailChangedMail, MailLimitError, mailLanguage, type Mail, type Mailer } from "./mail.ts";
 import { inspectPng } from "./png.ts";
@@ -212,6 +212,43 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     return context.json({ profile: profileAnswer(store.setProfile(context.get("account").id, profile)) });
   });
 
+  // The developer side: a public name for modules, and the publisher keys linked to it. Only the
+  // public half of a key ever reaches the service (publishers.ts links it with a code from here).
+  const developerAnswer = (accountId: string) => {
+    const developer = store.developer(accountId);
+    return {
+      developer: developer ? { name: developer.name, changedAt: new Date(developer.changedAt).toISOString(), nextChangeAt: new Date(developer.changedAt + NAME_HOLD_MS).toISOString() } : null,
+      keys: store.keys(accountId),
+    };
+  };
+
+  signedIn.get("/developer", (context) => context.json(developerAnswer(context.get("account").id)));
+
+  signedIn.put("/developer", async (context) => {
+    const name = cleanDeveloperName((await body(context)).name);
+    if (!name) return context.json({ error: "A name is 3 to 32 letters, digits, spaces, dots, dashes or underscores.", reason: "bad-name" }, 400);
+    const account = context.get("account");
+    const result = store.setDeveloperName(account.id, name, now());
+    if (!result.ok) {
+      const messages = { "name-taken": "That name is taken.", "name-reserved": "That name cannot be used.", "name-too-soon": "The name can change once in 30 days." } as const;
+      return context.json({ error: messages[result.reason], reason: result.reason, ...(result.nextChangeAt ? { nextChangeAt: new Date(result.nextChangeAt).toISOString() } : {}) }, 409);
+    }
+    return context.json(developerAnswer(account.id));
+  });
+
+  // A one-time code the developer types into `tavora-pack link`, which signs it with the key.
+  signedIn.post("/keys/code", (context) => {
+    const account = context.get("account");
+    if (!store.developer(account.id)) return context.json({ error: "Choose a developer name first.", reason: "no-developer-name" }, 409);
+    const { code, expiresAt } = store.linkCode(account.id, now());
+    return context.json({ code, expiresAt: new Date(expiresAt).toISOString() });
+  });
+
+  signedIn.delete("/keys/:fingerprint", (context) => {
+    if (!store.unlinkKey(context.get("account").id, context.req.param("fingerprint") ?? "")) return context.json({ error: "Not found.", reason: "not-found" }, 404);
+    return context.json(developerAnswer(context.get("account").id));
+  });
+
   // Change the address: a code to the new one. Whether it already has an account
   // is only said once its code was right.
   signedIn.post("/email/code", async (context) => {
@@ -294,7 +331,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const account = context.get("account");
     if (typeof input.code !== "string" || !CODE.test(input.code)) return context.json({ error: "Send { code }.", reason: "bad-request" }, 400);
     if (!account.email || !store.checkCode(account.email, "delete", account.id, input.code, now(), true)) return wrongCode(context);
-    store.deleteAccount(account.id);
+    store.deleteAccount(account.id, now());
     return context.body(null, 204);
   });
 
@@ -422,7 +459,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (!account.discord || account.discord.id !== who.id) {
       return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
     }
-    store.deleteAccount(account.id);
+    store.deleteAccount(account.id, now());
     return context.body(null, 204);
   });
 

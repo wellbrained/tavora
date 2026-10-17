@@ -103,6 +103,12 @@ The Browser panel shows any website, so here the attacker is any page:
 
 Tavora accounts are optional. Modules learn nothing about them: no SDK call, bridge message or module view carries the player's email address, the sign-in or whether the player is signed in. How accounts handle data is on the [privacy page](https://mytavora.app/privacy/).
 
+A developer can link a publisher key to their account, so players see a developer name instead of the key's fingerprint:
+
+- **Only whoever holds the key can link it.** The signed-in app gets a one-time code (10 minutes, used once); `tavora-pack link` signs it with the secret key, and the service checks that signature against the public half it was sent. The secret key never leaves the developer's PC, and the service keeps only public halves.
+- **A name cannot pose as another.** Developer names are plain letters, digits, spaces, dots, dashes and underscores, unique when case and those separators are ignored, never Tavora's, changeable once every 30 days, and a name given up stays blocked for others for 30 days.
+- **Players learn a name, nothing else.** Tavora asks the service which name a key has (only while online features are on, at most once a day per key) and gets the name alone, never an account or an address. The name shown is a label: what a player installs is still decided by the key's signature, as before.
+
 ## Known limits
 
 - **The sandbox is Chromium's.** A Chromium renderer exploit would break the isolation guarantees, so Tavora follows Electron releases. Electron fuses turn off `RunAsNode`, `NODE_OPTIONS`, `--inspect` and extra `file://` privileges, and a packaged Tavora quits when started with switches that weaken the sandbox or the network rules.

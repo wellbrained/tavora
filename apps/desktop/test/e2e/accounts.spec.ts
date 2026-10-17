@@ -170,3 +170,56 @@ test("a player creates a Discord-only account in the browser, adds an email, and
     await app.close();
   }
 });
+test("a developer chooses a public name and links a publisher key with tavora-pack link", async () => {
+  const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: apiUrl } });
+  const keyFile = path.join(await mkdtemp(path.join(tmpdir(), "tavora-key-")), "publisher-key.pem");
+  try {
+    await page.getByTestId("rail-settings").click();
+    await page.getByTestId("settings-nav-account").click();
+    await page.getByTestId("account-email").fill("developer@example.com");
+    await page.getByTestId("account-send-code").click();
+    await page.getByTestId("account-code").fill(await codeFor("developer@example.com"));
+    await page.getByTestId("account-verify").click();
+    await page.getByTestId("account-age").check();
+    await page.getByTestId("account-create").click();
+
+    // Linking needs a name first.
+    const developer = page.getByTestId("account-developer");
+    await expect(developer).toBeVisible();
+    await expect(page.getByTestId("account-link-code")).toBeDisabled();
+    await expect(page.getByTestId("account-keys-none")).toBeVisible();
+    await page.getByTestId("account-developer-name").fill("Tavora Team");
+    await page.getByTestId("account-developer-save").click();
+    await expect(page.getByTestId("toast")).toContainText("can't be used");
+    await page.getByTestId("account-developer-name").fill("example-dev");
+    await page.getByTestId("account-developer-save").click();
+    await expect(page.getByTestId("account-developer-name-hint")).toContainText("can change again on");
+
+    // A one-time code, and the command that uses it.
+    await page.getByTestId("account-link-code").click();
+    const command = (await page.getByTestId("account-link-command").textContent()) ?? "";
+    expect(command).toMatch(/^tavora-pack link [A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    const code = command.split(" ").at(-1)!;
+
+    // The real pack command signs the code with a key on this PC and sends only its public half.
+    const linked = await new Promise<{ status: number | null; out: string }>((resolve) => {
+      const child = spawn(process.execPath, ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", path.resolve(desktopDir, "../../packages/pack/src/cli.ts"), "link", code, "--key", keyFile, "--api", apiUrl]);
+      let out = "";
+      child.stdout.on("data", (chunk: Buffer) => (out += chunk));
+      child.stderr.on("data", (chunk: Buffer) => (out += chunk));
+      child.on("close", (status) => resolve({ status, out }));
+    });
+    expect(linked.out).toContain('"by example-dev"');
+    expect(linked.status).toBe(0);
+    const fingerprint = /Linked publisher key ([0-9a-f]{32})/.exec(linked.out)?.[1] ?? "";
+
+    await page.getByTestId("account-link-refresh").click();
+    await expect(page.getByTestId(`account-key-${fingerprint}`)).toBeVisible();
+    await expect(page.getByTestId("account-link")).toHaveCount(0);
+    // Players' Tavora learns the name, and nothing else.
+    expect(await (await fetch(`${apiUrl}/v1/publishers/${fingerprint}`)).json()).toEqual({ name: "example-dev" });
+  } finally {
+    await app.close();
+    await rm(path.dirname(keyFile), { recursive: true, force: true }).catch(() => undefined);
+  }
+});
