@@ -67,6 +67,7 @@ const SAMPLE_BUILDS = [
 
 function describeLaunch(launch: PanelLaunch): string {
   if (launch.reason === "add") return "add: the player just added this panel, so it picked the build used last";
+  if (launch.reason === "open") return launch.content ? `open: another panel opened it on "${launch.content.title}"` : "open: another panel opened it";
   return launch.content ? `restore: it was open before and showed "${launch.content.title}"` : "restore: it was open before and showed nothing";
 }
 
@@ -107,7 +108,10 @@ async function contentSelector(tavora: TavoraSDK) {
   await load();
   const launch = await tavora.panel.getLaunch();
   el("launch").textContent = describeLaunch(launch);
-  if (launch.reason === "add") {
+  if (launch.reason === "open" && launch.content) {
+    // Opened by another panel: the build it asked for.
+    await pick(launch.content.id);
+  } else if (launch.reason === "add" || launch.reason === "open") {
     // A fresh panel: the build used last, else the first one.
     const last = await tavora.storage.get<string>("lastUsed");
     await pick(builds.some((item) => item.id === last) ? last : (builds[0]?.id ?? null));
@@ -128,6 +132,36 @@ async function contentSelector(tavora: TavoraSDK) {
     await load();
     await show();
   });
+
+  // Another panel asks this one to show a build. A real module would save pending edits first and throw when
+  // that fails; here a checkbox stands in for a failed save.
+  tavora.panel.onNavigate(async (content) => {
+    if (el<HTMLInputElement>("refuse-switch").checked) throw new Error("not saved");
+    await pick(content.id);
+  });
+
+  // One button for each other panel type, opening it on this panel's build.
+  const types = manifest.panels as PanelType[];
+  el("open-buttons").replaceChildren(
+    ...types
+      .filter((type) => type.id !== tavora.panel.type)
+      .map((type) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.testid = `open-${type.id}`;
+        button.textContent = `Open in ${type.name}`;
+        button.addEventListener("click", async () => {
+          const build = builds.find((item) => item.id === selected);
+          try {
+            el("open-result").textContent = await tavora.panels.open(type.id, build ? { content: { id: build.id, title: build.title } } : {});
+          } catch (error) {
+            // Without a real click or key press just before, Tavora refuses (PERMISSION_DENIED).
+            el("open-result").textContent = `refused: ${error instanceof Error ? error.message : String(error)}`;
+          }
+        });
+        return button;
+      }),
+  );
 }
 
 async function main() {

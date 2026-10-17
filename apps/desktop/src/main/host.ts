@@ -90,6 +90,7 @@ import { fetchSteamLibrary, importSteamGames, steamLibraryView } from "./steam-i
 import { isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, submitIcon } from "./share-icons";
 import { findSteamDir, removeSteamIcon } from "./steam-icons";
 import { ModuleView } from "./module-view";
+import { HostError } from "./errors";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { isWebUrl, siteOfUrl } from "./browser-url";
 import { defaultFilesRoot } from "./module-files";
@@ -134,6 +135,7 @@ import {
   type WorkspaceState,
 } from "./workspace";
 import type { PanelContent, PanelLaunch } from "./panel-content";
+import type { PanelOpenResult } from "@tavora/sdk/protocol";
 import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
 
 interface Rect {
@@ -250,8 +252,13 @@ export class Host {
   private readonly browsersByContents = new Map<number, BrowserPanel>();
   /** Browser tabs opened from another tab, so the host UI docks them beside it. Only used when a panel is first placed. */
   private readonly openedFrom = new Map<string, { instanceId: string; background: boolean }>();
-  /** Panels the player just added whose page has not asked why it opened yet (panel.getLaunch). */
-  private readonly added = new Set<string>();
+  /** Panels just added, or opened by another panel, whose page has not asked why it opened yet (panel.getLaunch). */
+  private readonly launches = new Map<string, PanelLaunch>();
+  /**
+   * A panel that panels.open asked to switch could not (it kept its content): the host UI offers to open the
+   * content in a new panel instead (navigation-choice). What opens is kept here, never taken from the answer.
+   */
+  private pendingNavigation: { gameId: string; moduleId: string; panelType: string; panelName: string; content: PanelContent } | null = null;
   /** What every browser session is made safe with; built when the first Browser panel opens. */
   private browserHooks: BrowserSessionHooks | undefined;
   /** The Discord connector: Tavora's Discord sign-in and the connection to the Discord app, for modules granted it. */
@@ -1090,6 +1097,8 @@ export class Host {
     switch (action.type) {
       case "link-choice":
         return this.chooseLink(action.choice);
+      case "navigation-choice":
+        return this.chooseNavigation(action.choice);
       case "module-files-change":
         return this.files.change();
       case "module-files-reset":
@@ -1411,6 +1420,7 @@ export class Host {
     if (this.screen === next && next !== "game") return;
     this.notice = null;
     this.pendingLink = null;
+    this.pendingNavigation = null;
     this.closeAllViews();
     this.screen = next;
   }
@@ -1638,7 +1648,10 @@ export class Host {
    * Opens a new panel; the host UI docks it. Returns its instance id. A module with panel types opens
    * the type asked for, or its continuing type.
    */
-  private openModule(moduleId: string, options: { openedFrom?: { instanceId: string; background: boolean }; panelType?: string } = {}): string | void {
+  private openModule(
+    moduleId: string,
+    options: { openedFrom?: { instanceId: string; background: boolean }; panelType?: string; launch?: PanelLaunch } = {},
+  ): string | void {
     const { openedFrom } = options;
     const game = this.game;
     const module = this.modules.get(moduleId);
@@ -1653,7 +1666,7 @@ export class Host {
     const record: InstanceRecord = { instanceId: randomUUID(), moduleId, ...(panelType ? { panelType } : {}) };
     records.push(record);
     if (openedFrom) this.openedFrom.set(record.instanceId, openedFrom);
-    this.added.add(record.instanceId);
+    this.launches.set(record.instanceId, options.launch ?? { reason: "add" });
     this.saveWorkspace();
     this.createView(record, game, performance.now());
     return record.instanceId;
@@ -1738,7 +1751,7 @@ export class Host {
   /** Removes a panel's view and its UI state; module settings and documents stay. */
   private closeView(instanceId: string): void {
     this.openedFrom.delete(instanceId);
-    this.added.delete(instanceId);
+    this.launches.delete(instanceId);
     this.destroyView(instanceId);
     this.panelBounds.delete(instanceId);
     void this.data.panelState.remove(instanceId).catch((error: unknown) => console.error("[tavora]", error));
@@ -2010,7 +2023,7 @@ export class Host {
     this.saveWorkspace();
     for (const record of plan.instances) {
       if (existing.has(record.instanceId)) continue;
-      this.added.add(record.instanceId);
+      this.launches.set(record.instanceId, { reason: "add" });
       this.createView(record, game);
     }
   }
@@ -2052,6 +2065,7 @@ export class Host {
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
       launch: () => this.launchOf(record),
       setContent: (content) => this.setPanelContent(record, content),
+      openPanel: (type, content) => this.openRelatedPanel(record, type, content),
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
@@ -2078,12 +2092,89 @@ export class Host {
   }
 
   /**
-   * Why a panel's page is loading (panel.getLaunch): added just now, or open before with what it last showed.
-   * A new panel counts as added until its page first asks.
+   * Why a panel's page is loading (panel.getLaunch): added just now, opened by another panel, or open before with
+   * what it last showed. A new panel keeps its reason until its page first asks.
    */
   private launchOf(record: InstanceRecord): PanelLaunch {
-    if (this.added.delete(record.instanceId)) return { reason: "add" };
+    const launch = this.launches.get(record.instanceId);
+    if (launch) {
+      this.launches.delete(record.instanceId);
+      return launch;
+    }
     return { reason: "restore", content: record.content ? { ...record.content } : null };
+  }
+
+  /**
+   * panels.open from a panel, after its click was taken (the decision log, named panels rounds 2, 3, 5 and 6): one
+   * of the module's own panel types, in the game shown now. A panel of that type already showing the content comes
+   * to the front; else the one used last is asked to switch, saving first; else a new panel opens. A switch that
+   * fails leaves that panel as it was, and the player is asked whether to open the content in a new panel.
+   */
+  private async openRelatedPanel(from: InstanceRecord, type: string, content: PanelContent | null): Promise<PanelOpenResult> {
+    const game = this.game;
+    const module = this.modules.get(from.moduleId);
+    if (!game || !module || !this.records(game.id).includes(from)) throw new HostError("PERMISSION_DENIED", "panels.open works only in the game shown now");
+    const target = panelTypes(module.manifest).find((item) => item.id === type);
+    if (!target) throw new HostError("INVALID_PARAMS", `this module has no panel type "${type}"`);
+    const others = this.records(game.id)
+      .map((record, order) => ({ record, order, view: this.views.get(record.instanceId) }))
+      .filter(
+        (item): item is { record: InstanceRecord; order: number; view: ModuleView } =>
+          item.record !== from && item.record.moduleId === from.moduleId && item.record.panelType === type && item.view instanceof ModuleView,
+      )
+      // The one used last first; of panels nobody used, the newest.
+      .sort((a, b) => b.view.usedAt - a.view.usedAt || b.order - a.order);
+    const showing = content ? others.find((item) => item.record.content?.id === content.id) : others[0];
+    if (showing) {
+      this.showPanel(showing.record.instanceId);
+      return "shown";
+    }
+    const last = others[0];
+    if (last && content) {
+      const outcome = await last.view.navigate(content);
+      // The player may have left the game while the panel saved.
+      if (this.game?.id !== game.id || !this.records(game.id).includes(last.record)) return "failed";
+      if (outcome === "switched") {
+        this.showPanel(last.record.instanceId);
+        return "switched";
+      }
+      if (outcome === "failed") {
+        this.pendingNavigation = { gameId: game.id, moduleId: from.moduleId, panelType: type, panelName: target.name, content };
+        this.pushState();
+        return "failed";
+      }
+      // The page takes no navigation: a new panel shows the content instead.
+    }
+    return this.openPanelOn(from.moduleId, type, content) ? "opened" : "failed";
+  }
+
+  /** A new panel of a module's panel type, told it was opened on `content`; false when the workspace is full. */
+  private openPanelOn(moduleId: string, panelType: string, content: PanelContent | null): boolean {
+    try {
+      return this.openModule(moduleId, { panelType, launch: { reason: "open", content } }) !== undefined;
+    } catch (error) {
+      // The workspace is full; the player is told, as for Add module.
+      if (error instanceof WorkspaceError) this.notice = error.message;
+      else throw error;
+      return false;
+    } finally {
+      this.pushState();
+    }
+  }
+
+  /** The player's answer to pendingNavigation. */
+  private chooseNavigation(choice: "new-panel" | "cancel"): void {
+    const pending = this.pendingNavigation;
+    this.pendingNavigation = null;
+    if (pending && choice === "new-panel" && this.game?.id === pending.gameId) this.openPanelOn(pending.moduleId, pending.panelType, pending.content);
+    else this.pushState();
+  }
+
+  /** Brings a panel to the front of its dock group; it counts as used. */
+  private showPanel(instanceId: string): void {
+    const view = this.views.get(instanceId);
+    if (view instanceof ModuleView) view.usedAt = Date.now();
+    this.window.webContents.send("host:shortcut", `panel:${instanceId}`);
   }
 
   /** What a panel shows now (panel.setContent, checked by the bridge); its tab's hover text says it. */
@@ -2466,6 +2557,7 @@ export class Host {
       layout: workspace.layout,
       layoutEpoch: this.layoutEpoch,
       pendingLink: this.pendingLink,
+      pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
       notice: this.notice,

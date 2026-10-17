@@ -102,8 +102,28 @@ export interface PanelContent {
  * - `add`: the player just added the panel. Pick the content yourself, such as the last one used, or show a picker.
  * - `restore`: the panel was open before (a restart, a game switch back, a reload). `content` is what it last
  *   showed through `panel.setContent`, or null.
+ * - `open`: another panel of this module opened it with `panels.open`. Show `content`, or pick yourself when it is null.
  */
-export type PanelLaunch = { reason: "add" } | { reason: "restore"; content: PanelContent | null };
+export type PanelLaunch =
+  | { reason: "add" }
+  | { reason: "restore"; content: PanelContent | null }
+  | { reason: "open"; content: PanelContent | null };
+
+/**
+ * What `panels.open` did.
+ * - `shown`: a panel of that type already showed the content (or none was asked for), and Tavora brought it to the front.
+ * - `switched`: an open panel of that type switched to the content (its `panel.onNavigate` handler succeeded).
+ * - `opened`: Tavora opened a new panel of that type.
+ * - `failed`: the panel that should switch could not save or did not answer in time. It keeps what it showed, and
+ *   Tavora offers the player to open the content in a new panel.
+ */
+export type PanelOpenResult = "shown" | "switched" | "opened" | "failed";
+
+/** Tavora asks this panel to show other content (the `panel.navigate` event); answer with `panel.navigated`. */
+export interface PanelNavigateRequest {
+  requestId: number;
+  content: PanelContent;
+}
 
 export interface DocumentSummary {
   id: string;
@@ -310,6 +330,16 @@ export interface Methods {
   "panel.getLaunch": { params: undefined; result: PanelLaunch };
   /** What the panel shows now, or null for nothing. Tavora 0.17.17 and newer. */
   "panel.setContent": { params: { content: PanelContent | null }; result: null };
+  /**
+   * The answer to a `panel.navigate` event: `handled` is false when the page takes no navigation (no handler), `ok`
+   * whether it now shows the content. Tavora 0.17.18 and newer.
+   */
+  "panel.navigated": { params: { requestId: number; handled: boolean; ok: boolean }; result: null };
+  /**
+   * Opens one of this module's own panel types in the current game, optionally on some content. Only right after a
+   * click or key press in the panel, once per click. Tavora 0.17.18 and newer.
+   */
+  "panels.open": { params: { type: string; content?: PanelContent }; result: PanelOpenResult };
   "workspace.getViewport": { params: undefined; result: TavoraViewport };
   "ui.getTheme": { params: undefined; result: TavoraTheme };
   /** The language of Tavora's own texts, as a code such as "en" or "de". */
@@ -367,6 +397,8 @@ export interface Events {
   "discord.state": DiscordState;
   /** A Discord event this panel subscribed to. Only with capability `discord`. */
   "discord.event": DiscordEvent;
+  /** Another panel of this module asked this one to show other content; answer with `panel.navigated` within navigateTimeoutMs. */
+  "panel.navigate": PanelNavigateRequest;
   "lifecycle.suspend": null;
   "lifecycle.resume": null;
   "lifecycle.dispose": null;
@@ -445,6 +477,8 @@ export const LIMITS = {
   maxTitleLength: 200,
   /** A panel content's id (panel.setContent); its title has maxTitleLength. */
   maxContentIdLength: 200,
+  /** How long a panel has to save and switch after a panel.navigate event before Tavora counts it as failed. */
+  navigateTimeoutMs: 5_000,
   /** UI state for one panel. */
   maxPanelStateBytes: 256 * 1024,
   /** One stored file (see Blobs). */
@@ -559,6 +593,12 @@ export const BLOB_ID = /^[a-f0-9]{32}$/;
 
 /** POST a PNG here, from the module's own page, to put it on the clipboard (see clipboard.writeImage). */
 export const CLIPBOARD_PATH = "/_clipboard/";
+
+/**
+ * POST a PNG here, from the module's own page, to save it as a file in Tavora's folder in the player's Pictures
+ * (see pictures.save). `?name=` suggests the file name; the answer is `{ fileName }`, the name it was saved under.
+ */
+export const PICTURES_PATH = "/_pictures/";
 
 /** Document ids: host-generated UUIDs or module-chosen slugs. */
 export const DOCUMENT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;

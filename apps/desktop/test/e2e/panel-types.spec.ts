@@ -2,11 +2,12 @@
 // module library lists a module's panel types, each opens its own page and
 // tells it which type it is, and a panel whose type an update removed keeps
 // its slot until the player picks another type. Each panel shows content of
-// its own, kept across restarts and named on its tab's hover text.
+// its own, kept across restarts and named on its tab's hover text, and can
+// open the module's other panels on it.
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { expectModuleText, inModule, launch, newUserData, panels } from "./harness";
+import { expectModuleText, inModule, launch, newUserData, panels, typeInModule } from "./harness";
 
 const PANELS = "local.example.panels-module";
 
@@ -98,4 +99,57 @@ test("each panel keeps the content it shows, and its tab names it on hover", asy
   await expect(after.nth(1)).not.toHaveAttribute("data-content");
   await expect(after.nth(0)).toHaveAttribute("data-content", "Lightning Arrow Invoker");
   await again.app.close();
+});
+
+/** Presses a button in a panel with a real key press, which panels.open needs. */
+async function press(app: import("@playwright/test").ElectronApplication, testId: string, index: number) {
+  await inModule(app, PANELS, `document.querySelector('[data-testid="${testId}"]').focus()`, index);
+  await typeInModule(app, PANELS, "\n", index);
+}
+
+test("a panel opens the module's other panels on its content, switching the one used last", async () => {
+  const userData = await newUserData();
+  const { app, page } = await launch(userData);
+  const planners = page.locator('[data-panel-tab][data-panel-type="planner"]');
+  const result = (index: number) => inModule<string>(app, PANELS, `document.querySelector('[data-testid="open-result"]').textContent`, index);
+
+  await addPanel(page, "overview");
+  await addPanel(page, "planner");
+  await expect(planners.nth(0)).toHaveAttribute("data-content", ICE_SHOT);
+
+  // The planner shows another build, so it is asked to switch, and does.
+  await pickBuild(app, "lightning-arrow", 0);
+  await press(app, "open-planner", 0);
+  await expect.poll(() => result(0)).toBe("switched");
+  await expect(planners.nth(0)).toHaveAttribute("data-content", "Lightning Arrow Invoker");
+  await expect(planners).toHaveCount(1);
+
+  // Already showing it: brought forward, nothing switches.
+  await press(app, "open-planner", 0);
+  await expect.poll(() => result(0)).toBe("shown");
+
+  // Without a real click or key press nothing happens.
+  await pickBuild(app, "ice-shot", 0);
+  await inModule(app, PANELS, `document.querySelector('[data-testid="open-planner"]').click()`, 0);
+  await page.waitForTimeout(500);
+  await expect(planners.nth(0)).toHaveAttribute("data-content", "Lightning Arrow Invoker");
+
+  // A planner that cannot switch keeps its build, and the player may open the build in a new panel.
+  await inModule(app, PANELS, `document.querySelector('[data-testid="refuse-switch"]').click()`, 1);
+  await pickBuild(app, "minion-witch", 0);
+  await press(app, "open-planner", 0);
+  await expect.poll(() => result(0)).toBe("failed");
+  await expect(page.getByTestId("navigation-choice")).toBeVisible();
+  await expect(page.getByTestId("navigation-choice-content")).toHaveText("Minion Witch for maps");
+  await expect(planners.nth(0)).toHaveAttribute("data-content", "Lightning Arrow Invoker");
+  await page.getByTestId("navigation-choice-new-panel").click();
+  await expect(planners).toHaveCount(2);
+  await expect(planners.nth(1)).toHaveAttribute("data-content", "Minion Witch for maps");
+  await expectModuleText(app, PANELS, "launch", 'open: another panel opened it on "Minion Witch for maps"', 2);
+
+  // No panel of that type yet: a new one opens on the build.
+  await press(app, "open-inventory", 0);
+  await expect.poll(() => result(0)).toBe("opened");
+  await expect(page.locator('[data-panel-tab][data-panel-type="inventory"]')).toHaveAttribute("data-content", "Minion Witch for maps");
+  await app.close();
 });

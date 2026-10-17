@@ -1,18 +1,21 @@
 import { readFile } from "node:fs/promises";
-import { clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
+import path from "node:path";
+import { app, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
 import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./gamedata";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
-import { BLOB_PATH, CLIPBOARD_PATH } from "@tavora/sdk/protocol";
+import { BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession, type BridgeContext } from "./bridge";
 import type { CheckedMenu } from "./module-menu";
 import type { PanelContent, PanelLaunch } from "./panel-content";
+import { LIMITS, type PanelOpenResult } from "@tavora/sdk/protocol";
 import type { DiscordConnector, DiscordListener } from "./discord";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
 import { serveClipboard } from "./clipboard-http";
+import { savePictureFile, servePictureSave } from "./picture-save-http";
 import { isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
 import { moduleFetch, type TestHosts } from "./network";
@@ -53,6 +56,8 @@ export interface ModuleViewOptions {
   launch(): PanelLaunch;
   /** What the panel shows now (panel.setContent), already checked. */
   setContent(content: PanelContent | null): void;
+  /** panels.open from this panel, after its click was taken: the host picks or opens the destination. */
+  openPanel(type: string, content: PanelContent | null): Promise<PanelOpenResult>;
   /** Hosts the player granted this module for network.fetch, as installed now; asked on every call and redirect. */
   networkHosts(): ReadonlySet<string>;
   /** Connectors the player granted this module, as installed now; asked on every call. */
@@ -95,6 +100,12 @@ async function writeClipboardPicture(png: Buffer): Promise<void> {
   await clipboard.write([new ClipboardItem({ "image/png": new Blob([new Uint8Array(png)], { type: "image/png" }) })]);
 }
 
+/** Where modules save pictures: a Tavora folder in the player's Pictures (tests point Pictures elsewhere, unpackaged only). */
+function picturesFolder(): string {
+  const pictures = !app.isPackaged && process.env.TAVORA_PICTURES_DIR ? path.resolve(process.env.TAVORA_PICTURES_DIR) : app.getPath("pictures");
+  return path.join(pictures, "Tavora");
+}
+
 /**
  * Every module gets its own session per game: separate cookies, web storage,
  * cache and a separate renderer process from the host and other modules.
@@ -116,6 +127,14 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
     if (url.pathname === CLIPBOARD_PATH) {
       const gesture = gestureOf(ses);
       return serveClipboard(request, { allowed: () => Date.now() - gesture.at <= GESTURE_MS, consume: () => void (gesture.at = 0), write: writeClipboardPicture });
+    }
+    if (url.pathname === PICTURES_PATH) {
+      const gesture = gestureOf(ses);
+      return servePictureSave(request, url, {
+        allowed: () => Date.now() - gesture.at <= GESTURE_MS,
+        consume: () => void (gesture.at = 0),
+        save: (png, name) => savePictureFile(picturesFolder(), png, name),
+      });
     }
     if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
     const file = await resolveAsset(module.root, url.pathname);
@@ -157,8 +176,16 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
 export const SETTLE_MS = 150;
 export const NO_BRIDGE_MS = 400;
 export const REVEAL_CAP_MS = 2_000;
+/** How a panel answered panel.navigate. */
+export type NavigateOutcome = "switched" | "failed" | "unhandled";
+
 /** How long after a click or key press a link may be opened. */
 export const GESTURE_MS = 2_000;
+/**
+ * How long panels.open waits for the click that allows it. The preload reports clicks on another channel than
+ * the bridge, so the report can land just after the call the click made.
+ */
+const GESTURE_LATE_MS = 250;
 
 /** Corner radius of a panel card in the host UI (dock.css), in px. */
 const PANEL_RADIUS = 10;
@@ -182,6 +209,11 @@ export class ModuleView {
   revealed = false;
   private revealTimers: ReturnType<typeof setTimeout>[] = [];
   private settleTimer: ReturnType<typeof setTimeout> | undefined;
+  /** When the player last clicked or typed in this panel, or when it opened; panels.open switches the one used last. */
+  usedAt = Date.now();
+  private nextNavigation = 1;
+  /** panel.navigate requests waiting for the page's answer. */
+  private readonly navigations = new Map<number, (outcome: NavigateOutcome) => void>();
 
   constructor(private readonly options: ModuleViewOptions) {
     const { module, game } = options;
@@ -285,15 +317,36 @@ export class ModuleView {
   /** When the player last clicked or pressed a key in the page (reported by the preload from real input only). */
   private gestureAt = 0;
 
+  /** Calls waiting for a click report that is still on its way (takeGestureSoon). */
+  private readonly gestureWaiters = new Set<() => void>();
+
   noteGesture(): void {
     this.gestureAt = Date.now();
+    this.usedAt = this.gestureAt;
     gestureOf(this.view.webContents.session).at = this.gestureAt;
+    for (const wake of this.gestureWaiters) wake();
   }
 
   /** Something only a click or key press in the page may do, once per click. */
   private takeGesture(what: string): void {
     if (Date.now() - this.gestureAt > GESTURE_MS) throw new HostError("PERMISSION_DENIED", `${what} must be called right after a click or key press`);
     this.gestureAt = 0;
+  }
+
+  /** As takeGesture, but first waits a moment for a click whose report has not arrived yet. */
+  private async takeGestureSoon(what: string): Promise<void> {
+    if (Date.now() - this.gestureAt > GESTURE_MS) {
+      await new Promise<void>((resolve) => {
+        const done = () => {
+          clearTimeout(timer);
+          this.gestureWaiters.delete(done);
+          resolve();
+        };
+        const timer = setTimeout(done, GESTURE_LATE_MS);
+        this.gestureWaiters.add(done);
+      });
+    }
+    this.takeGesture(what);
   }
 
   /** links.open: only a web address, and only right after the player did something in the page. */
@@ -365,6 +418,14 @@ export class ModuleView {
         panelType: this.options.panelType?.id ?? null,
         launch: this.options.launch(),
         setContent: this.options.setContent,
+        openPanel: async (type, content) => {
+          // One click opens or switches one panel, so a page cannot keep panels coming on its own.
+          await this.takeGestureSoon("panels.open");
+          return this.options.openPanel(type, content);
+        },
+        navigated: (requestId, handled, ok) => {
+          if (this.bridge === bridge) this.navigated(requestId, handled, ok);
+        },
         game,
         data,
         panelState,
@@ -603,7 +664,32 @@ export class ModuleView {
     if (!this.view.webContents.isDestroyed()) this.view.webContents.close();
   }
 
+  /**
+   * Asks the page to switch to other content (panel.onNavigate). It saves first; `failed` when it could not or did
+   * not answer within navigateTimeoutMs (it keeps what it showed), `unhandled` when the page takes no navigation.
+   */
+  navigate(content: PanelContent): Promise<NavigateOutcome> {
+    const bridge = this.bridge;
+    if (!bridge || !bridge.ready || this.status !== "ready") return Promise.resolve("failed");
+    const requestId = this.nextNavigation++;
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => finish("failed"), LIMITS.navigateTimeoutMs);
+      const finish = (outcome: NavigateOutcome) => {
+        clearTimeout(timer);
+        if (this.navigations.delete(requestId)) resolve(outcome);
+      };
+      this.navigations.set(requestId, finish);
+      bridge.emit("panel.navigate", { requestId, content: { ...content } });
+    });
+  }
+
+  private navigated(requestId: number, handled: boolean, ok: boolean): void {
+    this.navigations.get(requestId)?.(!handled ? "unhandled" : ok ? "switched" : "failed");
+  }
+
   private disconnect(): void {
+    // A page that goes away answers nothing more.
+    for (const finish of [...this.navigations.values()]) finish("failed");
     this.bridge?.close();
     this.bridge = undefined;
     this.options.discord.release(this.options.instanceId);

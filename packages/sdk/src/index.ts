@@ -5,6 +5,7 @@
 import {
   BLOB_PATH,
   CLIPBOARD_PATH,
+  PICTURES_PATH,
   HELLO_MESSAGE,
   LIMITS,
   PORT_MESSAGE,
@@ -36,6 +37,7 @@ import {
   type NetworkResponse,
   type PanelContent,
   type PanelLaunch,
+  type PanelOpenResult,
   type PutDocumentParams,
   type TavoraDocument,
   type TavoraGame,
@@ -67,6 +69,7 @@ export type {
   NetworkResponse,
   PanelContent,
   PanelLaunch,
+  PanelOpenResult,
   PutDocumentParams,
   TavoraDocument,
   TavoraGame,
@@ -80,14 +83,14 @@ export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, PROTOCOL
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.3";
+export const SDK_VERSION = "0.2.5";
 
 /**
  * The oldest Tavora that has everything this SDK version offers. Put it in your manifest as
  * `minTavora`, so an older Tavora says it needs an update instead of loading a module it cannot run
  * (the starter, `npm create @tavora/module`, does). The changelog names it for every version.
  */
-export const MIN_TAVORA = "0.17.17";
+export const MIN_TAVORA = "0.17.19";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -158,6 +161,23 @@ export interface TavoraSDK {
      * back through getLaunch after a restart. Needs Tavora 0.17.17 or newer.
      */
     setContent(content: PanelContent | null): Promise<void>;
+    /**
+     * Lets another panel of this module switch this one to other content (`panels.open`). The handler saves any
+     * pending edits and switches, then resolves; it throws (or rejects) when it cannot, and the panel keeps what it
+     * showed. It has 5 seconds. One handler per page: a new one replaces the last. Without one, Tavora opens a new
+     * panel instead of switching this one. Needs Tavora 0.17.18 or newer.
+     */
+    onNavigate(fn: (content: PanelContent) => void | Promise<void>): Unsubscribe;
+  };
+  /** The module's other panels. */
+  panels: {
+    /**
+     * Opens one of this module's own panel types in the current game, on `content` when given. Tavora brings
+     * forward a panel of that type already showing the content, else switches the one used last
+     * (`panel.onNavigate`), else opens a new one. Call it from the click or key press that asked for it: the host
+     * refuses it otherwise (PERMISSION_DENIED). Needs Tavora 0.17.18 or newer.
+     */
+    open(type: string, options?: { content?: PanelContent }): Promise<PanelOpenResult>;
   };
   workspace: {
     getViewport(): Promise<TavoraViewport>;
@@ -199,6 +219,16 @@ export interface TavoraSDK {
      * picture. PNG only, a complete one, at most 20 MB and 16384 pixels on a side (INVALID_PARAMS, QUOTA_EXCEEDED).
      */
     writeImage(png: Blob): Promise<void>;
+  };
+  pictures: {
+    /**
+     * Saves a picture as a .png file in Tavora's folder in the player's Pictures (Pictures\Tavora), right away,
+     * without a dialog. `name` suggests the file name: Tavora makes it safe and adds " (2)" and so on rather than
+     * replace a file. Resolves with the name it was saved under; the module never learns where the folder is.
+     * Call it from the click or key press that asked for it: the host refuses it otherwise (PERMISSION_DENIED), and
+     * one press saves one picture. The same PNG limits as clipboard.writeImage apply.
+     */
+    save(png: Blob, name?: string): Promise<{ fileName: string }>;
   };
   links: {
     /**
@@ -370,6 +400,24 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
 
   const host = await call("bridge.handshake", { protocol: PROTOCOL_VERSION, sdkVersion: SDK_VERSION });
 
+  // panel.onNavigate: Tavora asks, the handler saves and switches, and the answer says how it went.
+  let navigate: ((content: PanelContent) => void | Promise<void>) | null = null;
+  on("panel.navigate", ({ requestId, content }) => {
+    const handler = navigate;
+    void (async () => {
+      let ok = false;
+      if (handler) {
+        try {
+          await handler(content);
+          ok = true;
+        } catch (error) {
+          console.error("[tavora] panel.onNavigate handler failed", error);
+        }
+      }
+      await call("panel.navigated", { requestId, handled: handler !== null, ok }).catch(() => {});
+    })();
+  });
+
   return {
     host,
     game: {
@@ -415,6 +463,17 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       setContent: async (content) => {
         await call("panel.setContent", { content });
       },
+      onNavigate: (fn) => {
+        navigate = fn;
+        return () => {
+          if (navigate === fn) navigate = null;
+        };
+      },
+    },
+    panels: {
+      // Tavora may wait for another panel to save first.
+      open: (type, options = {}) =>
+        call("panels.open", { type, ...(options.content ? { content: options.content } : {}) }, LIMITS.navigateTimeoutMs + 5_000),
     },
     workspace: {
       getViewport: () => call("workspace.getViewport"),
@@ -465,6 +524,22 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         if (response.ok) return;
         const body = (await response.json().catch(() => null)) as { error?: ErrorPayload } | null;
         throw new TavoraError(body?.error ?? { code: "INTERNAL", message: `could not copy the picture (${response.status})` });
+      },
+    },
+    pictures: {
+      save: async (png, name = "") => {
+        if (png.type !== "image/png") throw new TavoraError({ code: "INVALID_PARAMS", message: "only a PNG picture can be saved" });
+        const address = new URL(PICTURES_PATH, window.location.href);
+        if (name) address.searchParams.set("name", name);
+        let response: Response;
+        try {
+          response = await fetch(address, { method: "POST", body: png, headers: { "Content-Type": "image/png" } });
+        } catch {
+          throw new TavoraError({ code: "INTERNAL", message: "could not save the picture" });
+        }
+        const body = (await response.json().catch(() => null)) as { fileName?: string; error?: ErrorPayload } | null;
+        if (response.ok && typeof body?.fileName === "string") return { fileName: body.fileName };
+        throw new TavoraError(body?.error ?? { code: "INTERNAL", message: `could not save the picture (${response.status})` });
       },
     },
     links: {

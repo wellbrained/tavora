@@ -1,6 +1,6 @@
 # Bridge protocol v1
 
-**Status:** Version 1 is what `@tavora/sdk` 0.2.3 speaks. It may still change before Tavora's first public release; after that, breaking changes need a new major version (see [Versioning](#versioning)). What changed when is in the [changelog](./changelog.md).
+**Status:** Version 1 is what `@tavora/sdk` 0.2.4 speaks. It may still change before Tavora's first public release; after that, breaking changes need a new major version (see [Versioning](#versioning)). What changed when is in the [changelog](./changelog.md).
 
 Module authors normally use `@tavora/sdk` and never see these messages. This page is for people writing another SDK, reviewing the host, or debugging.
 
@@ -61,7 +61,9 @@ Methods without params must be sent with `params` left out.
 | `documents.delete` | `{ id, ifRevision? }` | `null` (also when the document did not exist) |
 | `panel.getState` | none | this panel's state, or `null` |
 | `panel.setState` | `{ value }` | `null`; `value: null` removes the state |
-| `panel.getLaunch` | none | why this page is loading, the same on every call until it loads again: `{ reason: "add" }` for a panel the player just added, or `{ reason: "restore", content }` for one that was open before, with what it last showed through `panel.setContent` (or `null`). See [Content per panel](#content-per-panel) (Tavora 0.17.17 and newer) |
+| `panel.getLaunch` | none | why this page is loading, the same on every call until it loads again: `{ reason: "add" }` for a panel the player just added, `{ reason: "restore", content }` for one that was open before, with what it last showed through `panel.setContent` (or `null`), or `{ reason: "open", content }` for one another panel opened with `panels.open` (Tavora 0.17.18 and newer). See [Content per panel](#content-per-panel) (Tavora 0.17.17 and newer) |
+| `panels.open` | `{ type, content? }` | `"shown"`, `"switched"`, `"opened"` or `"failed"`: opens one of this module's own panel types in the current game, on `content` (`{ id, title }`) when given. See [Opening another panel](#opening-another-panel). Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for a type the module does not have (Tavora 0.17.18 and newer) |
+| `panel.navigated` | `{ requestId, handled, ok }` | `null`; the answer to a `panel.navigate` event. The SDK sends it for you from `panel.onNavigate` (Tavora 0.17.18 and newer) |
 | `panel.setContent` | `{ content }` | `null`; `content` is `{ id, title }` or `null`: what the panel shows now. `id` is your own, 1 to 200 characters; `title` is its full name, 1 to 200 characters, kept on one line. `INVALID_PARAMS` otherwise (Tavora 0.17.17 and newer) |
 | `workspace.getViewport` | none | `{ width, height }` of the panel in CSS pixels |
 | `ui.getLanguage` | none | the language of Tavora's own texts as a code, `"en"` or `"de"` for now; show your module in it, or in English when you have no translation |
@@ -109,6 +111,14 @@ A module can keep pictures that are too big for a document: up to 50 MB each and
 - **Only after the player did something:** it must follow a real click or key press in the module (within 2 seconds), and one press copies one picture; otherwise it is refused with `PERMISSION_DENIED`. Call it from the click handler of the button.
 - **Only a complete PNG:** the host checks every part of the file before using it (`INVALID_PARAMS` for anything else, such as a different format, a cut-off or damaged file, or a picture over 16384 pixels on a side or 100 million pixels), and a file over 20 MB is `QUOTA_EXCEEDED`.
 - **Write only:** a module cannot read the clipboard.
+
+### Saving pictures
+
+`sdk.pictures.save(png, name)` saves a picture as a `.png` file in Tavora's own folder in the player's Pictures (`Pictures\Tavora`), right away, without a dialog. The PNG is sent to the module's own address, `POST /_pictures/?name=…`, as the request body, and the answer is `{ fileName }`, the name the file was saved under.
+
+- **Only after the player did something:** the same as the clipboard, one picture per click or key press within 2 seconds, otherwise `PERMISSION_DENIED`. A press used for the clipboard is used up for saving too.
+- **Only a complete PNG,** with the same checks and limits as the clipboard (`INVALID_PARAMS`, `QUOTA_EXCEEDED`).
+- **Only that folder, only new files:** `name` is a suggestion. Tavora takes out anything a file name cannot hold (slashes, colons, control characters, leading and trailing dots), shortens it to 80 characters, uses `Picture` when nothing is left, adds `.png`, and adds ` (2)`, ` (3)` and so on rather than replace a file. A module cannot choose the folder, the type or overwrite anything, and never learns where the folder is.
 
 ### Menus
 
@@ -189,6 +199,16 @@ Each panel of a module can show something different: one build, character, run o
 - Show long titles shortened in your toolbar, with the full name on hover.
 - When the content a panel shows is deleted, keep the panel open: say so where the content was, keep the selector, and never switch to other content by yourself.
 
+#### Opening another panel
+
+A panel can open the module's other panel types on what it shows, such as the gear for the build in the planner: `panels.open(type, { content })`. Needs Tavora 0.17.18 or newer. Only right after a click or key press in the panel, once per click, and only the module's own types in the game shown now. Tavora picks the panel:
+
+1. A panel of that type that already shows `content` (by `id`, as its `panel.setContent` said) comes to the front: `"shown"`. Without `content`, the panel of that type used last comes to the front.
+2. Else the panel of that type the player used last is asked to switch: it gets a `panel.navigate` event, which the SDK hands to your `panel.onNavigate` handler. Save any pending edits there, switch, and resolve: `"switched"`, and it comes to the front. Other copies keep what they show.
+3. Else, or when that page has no `onNavigate` handler, a new panel of that type opens; its `panel.getLaunch()` says `{ reason: "open", content }`: `"opened"`.
+
+When the handler throws, or does not resolve within 5 seconds, the panel keeps its content and edits, the call answers `"failed"`, and Tavora tells the player and offers to open the content in a new panel instead. Never switch content without saving first.
+
 The Panel Types Example in Tavora's examples folder does all of this.
 
 ## Events
@@ -202,6 +222,7 @@ The Panel Types Example in Tavora's examples folder does all of this.
 | `aiUsage.accountsChanged` | `null` | the player added, renamed or removed an AI account; only with the `aiUsage` capability |
 | `discord.state` | `DiscordState` | the connection to the Discord app changed; only with the `discord` capability, after `discord.state` was asked |
 | `discord.event` | `{ event, data }` | a Discord event the panel subscribed to; only with the `discord` capability |
+| `panel.navigate` | `{ requestId, content }` | another panel of this module asked this one to show `content` (`panels.open`); answer with `panel.navigated` within 5 seconds. The SDK does it for you: use `panel.onNavigate` (Tavora 0.17.18 and newer) |
 | `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden, its tab is in the background, or another group is maximized); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
 | `lifecycle.resume` | `null` | the panel is visible again |
 | `lifecycle.dispose` | `null` | the panel is closing. Best effort only: it may never arrive, so never rely on it to save |
@@ -278,8 +299,10 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | All documents per module and game | 50 MiB, at most 1000 documents |
 | Document title | 200 characters |
 | Panel content (`panel.setContent`) | `id` 200 characters, `title` 200 characters |
+| `panels.open` | one per click or key press; the panel asked to switch has 5 s |
 | Stored files (`blobs`) | 50 MB each, 500 MB per module and game; PNG, JPEG, GIF and WebP only |
 | `clipboard.writeImage` | one PNG per click or key press, at most 20 MB, 16384 pixels on a side and 100 million pixels |
+| `pictures.save` | the same as `clipboard.writeImage`; names up to 80 characters |
 | Panel state | 256 KiB |
 | JSON nesting depth | 64 |
 | `network.fetch` answer | 5 MB of body, 15 s, 5 redirects, 6 requests at once per panel |

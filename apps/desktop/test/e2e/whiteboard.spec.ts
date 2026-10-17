@@ -201,8 +201,8 @@ async function click(app: ElectronApplication, testId: string) {
   );
 }
 
-test("whiteboard: Copy as picture puts the board with its pictures on the clipboard", async () => {
-  const { app, page } = await launch();
+test("whiteboard: Copy and Save as picture, and Clear board with Undo", async () => {
+  const { app, page, userData } = await launch();
   await openModule(page, WHITEBOARD);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`).catch(() => ""), { timeout: 20_000 }).toBe("Board 1");
   await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
@@ -260,14 +260,14 @@ test("whiteboard: Copy as picture puts the board with its pictures on the clipbo
 
   // The rectangle just drawn is selected, so only it is copied, twice its size.
   const selection = await copy();
-  expect(selection.notice).toContain("Copied the selection as a picture");
+  expect(selection.notice).toContain("Copied the selection as an image");
   expect(selection.size.width).toBeGreaterThan(400);
   expect(selection.size.width).toBeLessThan(1000);
 
   // A click on the locked picture clears the selection; then the whole board is copied, sharper than the 1440 px picture.
   await drag(app, { x: area.x + area.width * 0.7, y: area.y + area.height * 0.6 }, { x: area.x + area.width * 0.7, y: area.y + area.height * 0.6 });
   const board = await copy();
-  expect(board.notice).toContain("Copied the board as a picture");
+  expect(board.notice).toContain("Copied the board as an image");
   expect(board.size.width).toBeGreaterThan(1440);
   expect(Math.max(board.size.width, board.size.height)).toBeLessThanOrEqual(8192);
 
@@ -283,8 +283,32 @@ test("whiteboard: Copy as picture puts the board with its pictures on the clipbo
     },
     WHITEBOARD,
   );
-  await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Copied the board as a picture");
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Copied the board as an image");
   expect(await app.evaluate(async ({ clipboard }) => (await clipboard.read()).flatMap((item) => item.types))).toContain("image/png");
+
+  // Save as picture writes the same PNG into Pictures\Tavora, named after the board, and never replaces a file.
+  for (const expected of [/^Board 1 \d{4}-\d\d-\d\d \d\d-\d\d\.png$/, /^Board 1 \d{4}-\d\d-\d\d \d\d-\d\d( \(2\))?\.png$/]) {
+    await inModule(app, WHITEBOARD, `${q("notice-toast")}?.querySelector("button")?.click()`);
+    await click(app, "save-picture");
+    await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Saved the board as");
+    const notice = await inModule<string>(app, WHITEBOARD, `${q("notice-toast")}.textContent`);
+    expect(notice.match(/“(.+)”/)?.[1]).toMatch(expected);
+  }
+  const saved = await readdir(path.join(userData, "Pictures", "Tavora"));
+  expect(saved).toHaveLength(2);
+  const file = await readFile(path.join(userData, "Pictures", "Tavora", saved[0]!));
+  expect([...file.subarray(1, 4)].map((byte) => String.fromCharCode(byte)).join("")).toBe("PNG");
+  // Without a click it is refused.
+  const refused = await inModule<string>(app, WHITEBOARD, `fetch("/_pictures/?name=x", { method: "POST", body: new Blob([new Uint8Array(8)], { type: "image/png" }) }).then((r) => r.status)`);
+  expect(refused).toBe(403);
+
+  // Clear board takes everything off; Undo in the notice brings it back.
+  await inModule(app, WHITEBOARD, `${q("notice-toast")}?.querySelector("button")?.click()`);
+  await inModule(app, WHITEBOARD, `${q("clear-board")}.click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(true);
+  await inModule(app, WHITEBOARD, `${q("undo")}.click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(false);
+  expect(await inModule(app, WHITEBOARD, `${q("picture-lock")} !== null`)).toBe(true);
   await app.close();
 });
 
@@ -305,6 +329,16 @@ test("whiteboard: the style palette can be moved and folded away, and stays so f
   await expect.poll(async () => Math.round((await rect(".App-menu__left")).x - start.x)).toBe(200);
   expect(Math.round((await rect(".App-menu__left")).y - start.y)).toBe(30);
 
+  // Only the main options show; the stroke colour is called Color, and the rest waits under More options.
+  const visible = (name: string) => inModule<boolean>(app, WHITEBOARD, `(() => { const input = document.querySelector('.App-menu__left input[name="${name}"]'); return !!input && input.closest("fieldset").offsetParent !== null; })()`);
+  expect(await visible("strokeStyle")).toBe(true);
+  expect(await visible("sloppiness")).toBe(false);
+  expect(await inModule(app, WHITEBOARD, `document.querySelector(".App-menu__left .panelColumn h3")?.textContent ?? ""`)).toBe("Color");
+  await inModule(app, WHITEBOARD, `${q("palette-more")}.click()`);
+  await expect.poll(() => visible("sloppiness")).toBe(true);
+  await inModule(app, WHITEBOARD, `${q("palette-more")}.click()`);
+  await expect.poll(() => visible("sloppiness")).toBe(false);
+
   // Folded away, only the handle is left.
   await inModule(app, WHITEBOARD, `${q("palette-toggle")}.click()`);
   await expect.poll(async () => (await rect(".App-menu__left")).height).toBeLessThan(60);
@@ -321,4 +355,27 @@ test("whiteboard: the style palette can be moved and folded away, and stays so f
   await inModule(app, WHITEBOARD, `${q("palette-toggle")}.click()`);
   await expect.poll(async () => (await rect(".App-menu__left")).height).toBeGreaterThan(100);
   await app.close();
+});
+
+test("whiteboard: the toolbar can sit at the bottom, chosen once for every game", async () => {
+  const { app, page, userData } = await launch();
+  await openModule(page, WHITEBOARD);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`).catch(() => ""), { timeout: 20_000 }).toBe("Board 1");
+  await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
+  const toolbarTop = () => inModule<number>(app, WHITEBOARD, `Math.round(document.querySelector(".App-toolbar-container").getBoundingClientRect().top - document.querySelector(".excalidraw").getBoundingClientRect().top)`);
+  const height = await inModule<number>(app, WHITEBOARD, `document.querySelector(".excalidraw").getBoundingClientRect().height`);
+  expect(await toolbarTop()).toBeLessThan(60);
+
+  // The main menu moves it down, above the zoom and undo buttons.
+  await inModule(app, WHITEBOARD, `document.querySelector(".main-menu-trigger").click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("toolbar-place")}?.textContent ?? ""`)).toContain("Toolbar at the bottom");
+  await inModule(app, WHITEBOARD, `${q("toolbar-place")}.click()`);
+  await expect.poll(toolbarTop).toBeGreaterThan(height - 160);
+
+  // Kept: a new panel starts with it at the bottom.
+  await app.close();
+  const again = await launch(userData);
+  await expect.poll(() => inModule(again.app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`).catch(() => false), { timeout: 20_000 }).toBe(true);
+  await expect.poll(() => inModule<number>(again.app, WHITEBOARD, `Math.round(document.querySelector(".App-toolbar-container").getBoundingClientRect().top - document.querySelector(".excalidraw").getBoundingClientRect().top)`)).toBeGreaterThan(height - 160);
+  await again.app.close();
 });

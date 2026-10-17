@@ -124,6 +124,13 @@ export interface LinkChoiceRequest {
   url: string;
 }
 
+/** A panel could not switch to what another panel asked for; asking whether to open it in a new panel (HostViewState.pendingNavigation). */
+export interface NavigationChoiceRequest {
+  kind: "navigation-choice";
+  panel: string;
+  content: string;
+}
+
 /**
  * The consent dialog: what a module asks for that the player has not granted. Drawn by Tavora,
  * never by the module. `slot` is where the module goes once allowed; a review (an update that asks
@@ -143,12 +150,21 @@ export type DialogRequest =
   | ConfirmRequest
   | ShareIconsRequest
   | LinkChoiceRequest
+  | NavigationChoiceRequest
   | { kind: "add-game" }
   | { kind: "steam-import" }
   | AddModuleRequest
   | GrantRequest;
 
 export const dialog = shallowRef<DialogRequest | null>(null);
+
+// A panel could not switch to what another panel of its module asked for: ask whether to open it in a new one.
+watch(
+  () => state.value?.pendingNavigation ?? null,
+  (pending) => {
+    if (pending && dialog.value?.kind !== "navigation-choice") dialog.value = { kind: "navigation-choice", ...pending };
+  },
+);
 
 // A module asked to open a link and no Browser panel is open: ask where.
 watch(
@@ -176,9 +192,12 @@ export const railToggles = ref(0);
 
 /** Asks a Browser panel's toolbar to focus its address bar; a new object each time. */
 export const addressFocus = shallowRef<{ instanceId: string } | null>(null);
+/** Asks the workspace to bring a panel to the front of its group (panels.open); a new object each time. */
+export const panelToShow = shallowRef<{ instanceId: string } | null>(null);
 
 function runShortcut(shortcut: HostShortcut): void {
   if (shortcut.startsWith("address:")) addressFocus.value = { instanceId: shortcut.slice("address:".length) };
+  else if (shortcut.startsWith("panel:")) panelToShow.value = { instanceId: shortcut.slice("panel:".length) };
   else if (shortcut === "search") searchOpen.value = !searchOpen.value;
   else if (shortcut === "shortcuts") openSettings({ section: "shortcuts" });
   else if (shortcut === "settings") openSettings();

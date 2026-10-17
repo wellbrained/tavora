@@ -35,6 +35,7 @@ export default defineConfig({
           { text: "Permissions and consent", link: "/guide/permissions" },
           { text: "Saving data", link: "/guide/saving-data" },
           { text: "Look and languages", link: "/guide/look-and-languages" },
+          { text: "Several panels", link: "/guide/panels" },
           { text: "Your publisher key", link: "/guide/publisher-key" },
           { text: "Troubleshooting", link: "/guide/troubleshooting" },
           { text: "Security model", link: "/guide/security" },

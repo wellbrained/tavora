@@ -17,7 +17,7 @@ import {
 import { computed, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds } from "../../shared/host-api";
 import { Button } from "@/components/ui/button";
-import { act, api as host, dialog, dragging, nextPanelSlot, state } from "../host";
+import { act, api as host, dialog, dragging, nextPanelSlot, panelToShow, state } from "../host";
 import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import {
@@ -183,6 +183,12 @@ watch(
   () => view.value.panels.map((panel) => panel.instanceId).join(),
   () => dock && reconcile(dock),
 );
+// Another panel of the module opened this one (panels.open): bring it to the front of its group.
+watch(panelToShow, (request) => {
+  if (!request || !dock) return;
+  panelToShow.value = null;
+  dock.getPanel(request.instanceId)?.api.setActive();
+});
 watch(
   () => view.value.layoutEpoch,
   (epoch) => dock && epoch !== appliedEpoch && restore(dock),
