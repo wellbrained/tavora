@@ -1,12 +1,14 @@
 <script setup lang="ts">
 // The module library: every installed module, to open in the current game.
 import { computed, ref } from "vue";
-import { addModule, dialog, state, type AddModuleRequest } from "../host";
+import { addModule, dialog, openSettings, state, type AddModuleRequest } from "../host";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { t } from "../i18n";
-import ModalDialog from "./ModalDialog.vue";
+import { Search, Settings2 } from "@lucide/vue";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import SegmentedControl from "./settings/SegmentedControl.vue";
 import ModuleIcon from "./ModuleIcon.vue";
 
 /** Who publishes a module: Tavora itself, or a package found on this computer. */
@@ -26,24 +28,52 @@ function categoryOf(module: ModuleView): Exclude<Category, "all"> {
 
 const query = ref("");
 const category = ref<Category>("all");
+type GameFilter = "all" | "inGame" | "notInGame";
+const gameFilter = ref<GameFilter>("all");
+const FILTER_IDS: GameFilter[] = ["all", "inGame", "notInGame"];
+
+// Count modules, not panels: a module can have several panels in this game.
+const panelCounts = computed(() => {
+  const counts = new Map<string, number>();
+  for (const panel of state.value!.panels) counts.set(panel.moduleId, (counts.get(panel.moduleId) ?? 0) + 1);
+  return counts;
+});
+const searched = computed(() => {
+  const text = query.value.trim().toLocaleLowerCase();
+  return state.value!.modules.filter((module) =>
+    !text || [module.name, module.description ?? "", module.id].some((value) => value.toLocaleLowerCase().includes(text)),
+  );
+});
+function matchesGame(module: ModuleView, filter: GameFilter): boolean {
+  return filter === "all" || (filter === "inGame" ? openCount(module.id) > 0 : openCount(module.id) === 0);
+}
+const inCategory = computed(() => searched.value.filter((module) => category.value === "all" || categoryOf(module) === category.value));
+const filters = computed(() => FILTER_IDS.map((value) => ({
+  value,
+  label: t(`addModule.filter.${value}`) + " (" + inCategory.value.filter((module) => matchesGame(module, value)).length + ")",
+  testid: `module-filter-${value}`,
+})));
+const resultCount = computed(() => groups.value.reduce((total, group) => total + group.items.length, 0));
+
+function manage() {
+  dialog.value = null;
+  openSettings({ section: "modules" });
+}
 
 function count(id: Category): number {
-  return state.value!.modules.filter((module) => id === "all" || categoryOf(module) === id).length;
+  return searched.value.filter((module) => (id === "all" || categoryOf(module) === id) && matchesGame(module, gameFilter.value)).length;
 }
 
 const groups = computed(() => {
-  const text = query.value.trim().toLowerCase();
-  const matches = state.value!.modules.filter(
-    (module) => !text || module.name.toLowerCase().includes(text) || (module.description ?? "").toLowerCase().includes(text),
-  );
+  const matches = inCategory.value.filter((module) => matchesGame(module, gameFilter.value));
   return CATEGORIES.value.filter((item) => item.id !== "all")
-    .map((item) => ({ ...item, items: matches.filter((module) => categoryOf(module) === item.id) }))
-    .filter((group) => group.items.length && (category.value === "all" || category.value === group.id));
+    .map((item) => ({ ...item, items: matches.filter((module) => categoryOf(module) === item.id).sort((a, b) => a.name.localeCompare(b.name)) }))
+    .filter((group) => group.items.length);
 });
 
 /** How many panels of a module are already open in this game. */
 function openCount(moduleId: string): number {
-  return state.value!.panels.filter((panel) => panel.moduleId === moduleId).length;
+  return panelCounts.value.get(moduleId) ?? 0;
 }
 
 /** Adds it, or asks for what it needs first (the consent dialog takes this dialog's place). */
@@ -59,84 +89,73 @@ function submit() {
 </script>
 
 <template>
-  <ModalDialog :title="t('addModule.title')" class="sm:max-w-[720px]" testid="add-module-dialog" @close="dialog = null">
-    <form @submit.prevent="submit">
-      <label class="sr-only" for="module-search">{{ t("addModule.search") }}</label>
-      <Input id="module-search" v-model="query" :placeholder="t('addModule.search')" autocomplete="off" data-testid="module-search" autofocus />
-    </form>
-    <div class="flex min-h-0 gap-4">
-      <nav class="flex w-44 flex-none flex-col gap-0.5" :aria-label="t('addModule.categories')">
-        <button
-          v-for="item in CATEGORIES"
-          :key="item.id"
-          type="button"
-          :class="
-            cn(
-              'hover:bg-accent flex h-9 items-center justify-between rounded-md px-3 text-left text-sm',
-              category === item.id && 'bg-accent text-foreground ring-primary/40 font-medium ring-1',
-            )
-          "
-          :aria-pressed="category === item.id"
-          :data-testid="`module-category-${item.id}`"
-          @click="category = item.id"
-        >
-          <span class="truncate">{{ item.label }}</span>
-          <span class="text-muted-foreground text-xs tabular-nums">{{ count(item.id) }}</span>
-        </button>
-      </nav>
-      <div class="flex max-h-[min(440px,60vh)] min-w-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
-        <section v-for="group in groups" :key="group.id" :aria-label="group.label">
-          <h3 class="text-muted-foreground pb-1.5 text-xs font-medium">{{ group.label }}</h3>
-          <ul class="flex flex-col gap-2">
-            <li
-              v-for="module in group.items"
-              :key="module.id"
-              :class="cn('bg-card flex items-start gap-3 rounded-lg border p-3', !module.available && 'opacity-60')"
-              :data-testid="`module-${module.id}`"
-            >
-              <span
-                class="bg-background text-primary flex size-10 flex-none items-center justify-center rounded-[10px] border text-base font-semibold"
-                aria-hidden="true"
-                ><ModuleIcon :module-id="module.id" size="size-5" /></span
+  <Dialog :open="true" @update:open="(open: boolean) => !open && (dialog = null)">
+    <DialogContent
+      class="bg-card flex h-[min(760px,calc(100vh-48px))] w-[min(1040px,calc(100vw-48px))] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none sm:flex-row"
+      data-testid="add-module-dialog"
+      :aria-describedby="undefined"
+    >
+      <aside class="bg-background flex shrink-0 flex-col border-b p-3 sm:w-60 sm:border-r sm:border-b-0">
+        <form class="relative" @submit.prevent="submit">
+          <Search class="text-muted-foreground pointer-events-none absolute top-2.5 left-3 size-4" :stroke-width="1.5" aria-hidden="true" />
+          <label class="sr-only" for="module-search">{{ t("addModule.search") }}</label>
+          <Input id="module-search" v-model="query" class="pr-8 pl-9" :placeholder="t('addModule.search')" autocomplete="off" data-testid="module-search" autofocus />
+        </form>
+        <nav class="mt-4 flex gap-0.5 overflow-x-auto sm:flex-col" :aria-label="t('addModule.categories')">
+          <button
+            v-for="item in CATEGORIES" :key="item.id" type="button"
+            :class="cn('hover:bg-accent flex h-9 items-center justify-between gap-2 whitespace-nowrap rounded-md px-3 text-left text-sm', category === item.id && 'bg-accent text-foreground font-medium')"
+            :aria-pressed="category === item.id" :data-testid="`module-category-${item.id}`" @click="category = item.id"
+          >
+            <span class="truncate">{{ item.label }}</span>
+            <span class="text-muted-foreground text-xs tabular-nums">{{ count(item.id) }}</span>
+          </button>
+        </nav>
+        <Button variant="ghost" class="mt-3 justify-start sm:mt-auto" data-testid="manage-modules" @click="manage">
+          <Settings2 :stroke-width="1.5" /> {{ t("addModule.manage") }}
+        </Button>
+      </aside>
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header class="shrink-0 border-b px-5 pt-5 pb-4 sm:px-8">
+          <DialogTitle class="pr-6 text-xl">{{ t("addModule.title") }}</DialogTitle>
+          <p class="text-muted-foreground mt-1 hidden text-sm sm:block">{{ t("addModule.hint") }}</p>
+          <div class="mt-4 overflow-x-auto pb-1">
+            <SegmentedControl v-model="gameFilter" :options="filters" :label="t('addModule.filterLabel')" />
+          </div>
+          <p class="text-muted-foreground mt-3 text-xs" role="status" data-testid="module-result-count">{{ t("addModule.results", { count: resultCount }) }}</p>
+        </header>
+        <div class="min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-8" data-testid="module-results">
+          <section v-for="group in groups" :key="group.id" :aria-label="group.label" class="pt-5">
+            <h3 class="text-muted-foreground flex items-center gap-2 pb-1 text-sm font-medium">
+              {{ group.label }} <span class="text-xs tabular-nums">{{ group.items.length }}</span>
+            </h3>
+            <ul class="flex flex-col">
+              <li v-for="module in group.items" :key="module.id"
+                :class="cn('flex items-center gap-3 border-b py-3 last:border-b-0', !module.available && 'opacity-60')"
+                :data-testid="`module-${module.id}`"
               >
-              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span class="flex items-center gap-2">
-                  <span class="truncate font-medium">{{ module.name }}</span>
-                  <span
-                    :class="
-                      cn(
-                        'flex-none rounded-sm border px-1.5 text-xs',
-                        module.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground',
-                      )
-                    "
-                    :data-testid="`provenance-${module.id}`"
-                    >{{ provenanceLabel(module.provenance) }}</span
-                  >
-                </span>
-                <span v-if="!module.available" class="text-muted-foreground text-sm">{{ t("addModule.unsupported") }}</span>
-                <span v-else-if="module.description" class="text-muted-foreground line-clamp-2 text-sm">{{ module.description }}</span>
-              </span>
-              <span class="flex flex-none flex-col items-end gap-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary"
-                  :data-testid="`open-${module.id}`"
-                  :disabled="!module.available"
-                  :aria-label="t('addModule.addLabel', { name: module.name })"
-                  @click="add(module.id)"
-                >
-                  {{ t("common.add") }}
-                </Button>
-                <span v-if="openCount(module.id)" class="text-muted-foreground text-xs">{{ t("addModule.open", { count: openCount(module.id) }) }}</span>
-              </span>
-            </li>
-          </ul>
-        </section>
-        <p v-if="!groups.length" class="text-muted-foreground py-6 text-center text-sm" data-testid="module-search-empty">
-          {{ t("addModule.none", { query: query.trim() }) }}
-        </p>
+                <span class="bg-background text-primary flex size-9 shrink-0 items-center justify-center rounded-lg border" aria-hidden="true"><ModuleIcon :module-id="module.id" size="size-5" /></span>
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span class="max-w-full truncate font-medium" :title="module.name">{{ module.name }}</span>
+                    <span :class="cn('shrink-0 rounded-sm border px-1.5 text-xs', module.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')" :data-testid="`provenance-${module.id}`">{{ provenanceLabel(module.provenance) }}</span>
+                    <span v-if="openCount(module.id)" class="text-primary text-xs" :data-testid="`in-game-${module.id}`">{{ t("addModule.inGame", { count: openCount(module.id) }) }}</span>
+                  </div>
+                  <p v-if="module.description" class="text-muted-foreground line-clamp-2 text-sm" :title="module.description">{{ module.description }}</p>
+                  <p v-if="!module.available" class="text-muted-foreground text-xs">{{ t("addModule.unsupported") }}</p>
+                </div>
+                <Button size="sm" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary shrink-0"
+                  :data-testid="`open-${module.id}`" :disabled="!module.available" :aria-label="t('addModule.addLabel', { name: module.name })" @click="add(module.id)"
+                >{{ openCount(module.id) ? t("addModule.addAnother") : t("common.add") }}</Button>
+              </li>
+            </ul>
+          </section>
+          <div v-if="!groups.length" class="text-muted-foreground py-12 text-center text-sm" data-testid="module-search-empty">
+            <p>{{ query.trim() ? t("addModule.none", { query: query.trim() }) : t("addModule.emptyFilter") }}</p>
+            <Button variant="ghost" class="mt-3" @click="query = ''; category = 'all'; gameFilter = 'all'">{{ t("addModule.reset") }}</Button>
+          </div>
+        </div>
       </div>
-    </div>
-  </ModalDialog>
+    </DialogContent>
+  </Dialog>
 </template>
