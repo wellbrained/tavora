@@ -8,6 +8,26 @@ export interface ModuleViewport {
   preferredHeight?: number;
 }
 
+/**
+ * A named panel type (the decision log, named panels rows of 2026-10-17): one tool a module offers,
+ * such as Inventory or Build planner. Players add each type on its own and may open several copies;
+ * every type shares the module's saved content and permissions.
+ */
+export interface ModulePanelType {
+  /** Stable identity, never shown. Saved layouts keep it, so renaming `name` changes nothing for players. */
+  id: string;
+  /** Short name on the panel's tab, such as `Build planner`. */
+  name: string;
+  /** The page for this type; the module's own `entry` when left out, so one page may serve every type. */
+  entry?: string;
+  /** The tab icon for this type; the module's own `icon` when left out. */
+  icon?: string;
+  /** This type's sizes; the module's own `viewport` when left out. */
+  viewport?: ModuleViewport;
+  /** Panels opened before the module had panel types become this type. At most one type says so; without one, the first type. */
+  continues?: boolean;
+}
+
 export interface ModuleManifest {
   $schema?: string;
   id: string;
@@ -21,6 +41,8 @@ export interface ModuleManifest {
   icon?: string;
   games: string[];
   viewport: ModuleViewport;
+  /** Named panel types. Without them the module has one panel, made from `entry`, `icon` and `viewport`. */
+  panels?: ModulePanelType[];
   permissions: {
     /** Hosts the module asks to reach through network.fetch, such as `api.example.com`. Each needs the player's grant. */
     network: string[];
@@ -41,8 +63,55 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "games", "viewport", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "games", "viewport", "panels", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
+
+/** Most panel types one module may offer, and the longest short name a tab shows. */
+export const MAX_PANEL_TYPES = 16;
+export const MAX_PANEL_NAME = 24;
+const PANEL_TYPE_ID = /^[a-z][a-z0-9-]{0,31}$/;
+const PANEL_FIELDS = ["id", "name", "entry", "icon", "viewport", "continues"];
+
+export function isPanelTypeId(value: unknown): value is string {
+  return typeof value === "string" && PANEL_TYPE_ID.test(value);
+}
+
+/** A panel type with the module's own entry, icon and viewport filled in where the type has none. */
+export interface ResolvedPanelType {
+  id: string;
+  name: string;
+  entry: string;
+  icon: string | undefined;
+  viewport: ModuleViewport;
+}
+
+/** The module's panel types, resolved; empty for a module with one panel and no types. */
+export function panelTypes(manifest: ModuleManifest): ResolvedPanelType[] {
+  return (manifest.panels ?? []).map((type) => ({
+    id: type.id,
+    name: type.name,
+    entry: type.entry ?? manifest.entry,
+    icon: type.icon ?? manifest.icon,
+    viewport: type.viewport ?? manifest.viewport,
+  }));
+}
+
+/** The type a panel opened before the module had types becomes: the one marked `continues`, else the first. Null without types. */
+export function continuingPanelType(manifest: ModuleManifest): string | null {
+  const panels = manifest.panels ?? [];
+  return (panels.find((type) => type.continues) ?? panels[0])?.id ?? null;
+}
+
+/** Every page and icon the manifest names, its panel types' included, each once: the files a package must hold. */
+export function manifestFiles(manifest: ModuleManifest): { entries: string[]; icons: string[] } {
+  const entries = new Set([manifest.entry]);
+  const icons = new Set(manifest.icon === undefined ? [] : [manifest.icon]);
+  for (const type of manifest.panels ?? []) {
+    if (type.entry !== undefined) entries.add(type.entry);
+    if (type.icon !== undefined) icons.add(type.icon);
+  }
+  return { entries: [...entries], icons: [...icons] };
+}
 
 export function isModuleId(value: unknown): value is string {
   return typeof value === "string" && value.length <= 128 && MODULE_ID.test(value);
@@ -134,6 +203,55 @@ function isPackagePath(value: unknown): value is string {
   return value.split("/").every((part) => part !== "" && part !== "." && part !== "..");
 }
 
+function checkViewport(viewport: unknown, at: string, errors: string[]): void {
+  if (!isRecord(viewport)) {
+    errors.push(`${at} must be an object`);
+    return;
+  }
+  if (!isDimension(viewport.minWidth) || !isDimension(viewport.minHeight)) {
+    errors.push(`${at}.minWidth and ${at}.minHeight must be positive integers`);
+  }
+  for (const key of ["preferredWidth", "preferredHeight"] as const) {
+    if (viewport[key] !== undefined && !isDimension(viewport[key])) errors.push(`${at}.${key} must be a positive integer`);
+  }
+  const unknown = Object.keys(viewport).filter((key) => !VIEWPORT_FIELDS.includes(key));
+  if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
+}
+
+function checkPanels(panels: unknown, errors: string[]): void {
+  if (!Array.isArray(panels) || panels.length === 0 || panels.length > MAX_PANEL_TYPES) {
+    errors.push(`panels must be an array of 1 to ${MAX_PANEL_TYPES} panel types`);
+    return;
+  }
+  const ids = new Set<string>();
+  let continuing = 0;
+  panels.forEach((type: unknown, index) => {
+    const at = `panels[${index}]`;
+    if (!isRecord(type)) {
+      errors.push(`${at} must be an object`);
+      return;
+    }
+    if (!isPanelTypeId(type.id)) errors.push(`${at}.id must be lowercase letters, digits and -, starting with a letter, at most 32 characters`);
+    else if (ids.has(type.id)) errors.push(`panels lists the id ${type.id} twice`);
+    else ids.add(type.id);
+    if (!isText(type.name, MAX_PANEL_NAME)) errors.push(`${at}.name must be a non-empty string of at most ${MAX_PANEL_NAME} characters`);
+    if (type.entry !== undefined) {
+      if (!isPackagePath(type.entry)) errors.push(`${at}.entry must be a relative path inside the package`);
+      else if (!type.entry.endsWith(".html")) errors.push(`${at}.entry must be an .html file`);
+    }
+    if (type.icon !== undefined) {
+      if (!isPackagePath(type.icon)) errors.push(`${at}.icon must be a relative path inside the package`);
+      else if (!/\.(png|webp)$/.test(type.icon)) errors.push(`${at}.icon must be a .png or .webp file`);
+    }
+    if (type.viewport !== undefined) checkViewport(type.viewport, `${at}.viewport`, errors);
+    if (type.continues !== undefined && typeof type.continues !== "boolean") errors.push(`${at}.continues must be true or false`);
+    if (type.continues === true) continuing++;
+    const unknown = Object.keys(type).filter((key) => !PANEL_FIELDS.includes(key));
+    if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
+  });
+  if (continuing > 1) errors.push("only one panel type may set continues");
+}
+
 export function validateManifest(input: unknown): ManifestResult {
   const errors: string[] = [];
   if (!isRecord(input)) return { ok: false, errors: ["manifest must be a JSON object"] };
@@ -158,19 +276,8 @@ export function validateManifest(input: unknown): ManifestResult {
     errors.push("games must be an array of game ids (empty means any game)");
   }
 
-  const viewport = input.viewport;
-  if (!isRecord(viewport)) {
-    errors.push("viewport must be an object");
-  } else {
-    if (!isDimension(viewport.minWidth) || !isDimension(viewport.minHeight)) {
-      errors.push("viewport.minWidth and viewport.minHeight must be positive integers");
-    }
-    for (const key of ["preferredWidth", "preferredHeight"] as const) {
-      if (viewport[key] !== undefined && !isDimension(viewport[key])) errors.push(`viewport.${key} must be a positive integer`);
-    }
-    const unknown = Object.keys(viewport).filter((key) => !VIEWPORT_FIELDS.includes(key));
-    if (unknown.length > 0) errors.push(`unknown viewport fields: ${unknown.join(", ")}`);
-  }
+  checkViewport(input.viewport, "viewport", errors);
+  if (input.panels !== undefined) checkPanels(input.panels, errors);
 
   const permissions = input.permissions;
   if (!isRecord(permissions) || !Array.isArray(permissions.network)) {

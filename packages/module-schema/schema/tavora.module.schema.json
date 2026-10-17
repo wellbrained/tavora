@@ -107,25 +107,72 @@
       ]
     },
     "viewport": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "minWidth",
-        "minHeight"
-      ],
-      "description": "Panel sizes in CSS pixels. Tavora never makes the panel smaller than the minimum.",
-      "properties": {
-        "minWidth": {
-          "$ref": "#/definitions/dimension"
-        },
-        "minHeight": {
-          "$ref": "#/definitions/dimension"
-        },
-        "preferredWidth": {
-          "$ref": "#/definitions/dimension"
-        },
-        "preferredHeight": {
-          "$ref": "#/definitions/dimension"
+      "$ref": "#/definitions/viewport",
+      "description": "Panel sizes in CSS pixels. Tavora never makes the panel smaller than the minimum."
+    },
+    "panels": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "description": "Named panel types the module offers, such as Inventory and Build planner. Players add each on its own and may open several copies; all share the module's saved content and permissions. Ids must be unique and at most one type sets continues.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,31}$",
+            "description": "Stable identity of the panel type, never shown. Saved layouts keep it, so never change it after release.",
+            "examples": [
+              "build-planner"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24,
+            "pattern": "\\S",
+            "description": "Short name on the panel's tab.",
+            "examples": [
+              "Build planner"
+            ]
+          },
+          "entry": {
+            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/definitions/packagePath"
+              },
+              {
+                "pattern": "\\.html$"
+              }
+            ],
+            "description": "The page for this type. The module's entry when left out."
+          },
+          "icon": {
+            "type": "string",
+            "allOf": [
+              {
+                "$ref": "#/definitions/packagePath"
+              },
+              {
+                "pattern": "\\.(png|webp)$"
+              }
+            ],
+            "description": "Tab icon for this type. The module's icon when left out."
+          },
+          "viewport": {
+            "$ref": "#/definitions/viewport",
+            "description": "Sizes for this type. The module's viewport when left out."
+          },
+          "continues": {
+            "type": "boolean",
+            "description": "Panels opened before the module had panel types become this type. Without it, the first type."
+          }
         }
       }
     },
@@ -175,6 +222,28 @@
       "maxLength": 256,
       "pattern": "^(?!/)(?!.*//)(?!(.*/)?\\.\\.?(/|$))[^\\\\:\\u0000]+$",
       "description": "Relative path inside the package: no leading slash, no '.' or '..' segments, no backslashes or colons."
+    },
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minWidth",
+        "minHeight"
+      ],
+      "properties": {
+        "minWidth": {
+          "$ref": "#/definitions/dimension"
+        },
+        "minHeight": {
+          "$ref": "#/definitions/dimension"
+        },
+        "preferredWidth": {
+          "$ref": "#/definitions/dimension"
+        },
+        "preferredHeight": {
+          "$ref": "#/definitions/dimension"
+        }
+      }
     }
   }
 }

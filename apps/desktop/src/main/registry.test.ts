@@ -111,6 +111,29 @@ describe("minTavora", () => {
   });
 });
 
+describe("panel types", () => {
+  it("needs every panel type's page and icon, and gives each type its icon", async () => {
+    const local = await mkdtemp(path.join(tmpdir(), "tavora-local-"));
+    const png = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+    const write = async (folder: string, panels: unknown[]) => {
+      const dir = await makeModule(local, folder, `example.${folder}`);
+      const manifest = JSON.parse(await readFile(path.join(dir, "tavora.module.json"), "utf8"));
+      await writeFile(path.join(dir, "tavora.module.json"), JSON.stringify({ ...manifest, panels }));
+      return dir;
+    };
+    const typed = await write("typed", [{ id: "a", name: "A" }, { id: "b", name: "B", entry: "b.html", icon: "b.png" }]);
+    await writeFile(path.join(typed, "b.html"), "<!doctype html>");
+    await writeFile(path.join(typed, "b.png"), png);
+    await write("pageless", [{ id: "b", name: "B", entry: "b.html" }]);
+    const problems: ModuleProblem[] = [];
+    const modules = await discoverModules({ local: [local] }, problems);
+    expect([...modules.keys()]).toEqual(["example.typed"]);
+    expect(problems).toEqual([{ folder: "pageless", message: "the entry file b.html is missing (is it built?)" }]);
+    const info = await describeModules(local, modules);
+    expect(info.get("example.typed")!.panelIcons).toEqual({ a: null, b: `data:image/png;base64,${png.toString("base64")}` });
+  });
+});
+
 describe("development folders", () => {
   it("load one module straight from each project folder, ahead of an installed copy, with local data", async () => {
     const projects = await mkdtemp(path.join(tmpdir(), "tavora-projects-"));
@@ -169,9 +192,9 @@ describe("describeModules", () => {
     await makeModule(own, "nested/deeper", "local.me.deeper");
     const modules = await discoverModules({ official: [official], local: [dev, own] });
     const info = await describeModules(own, modules);
-    expect(info.get("tavora.notes")).toEqual({ origin: { kind: "official", folder: "notes" }, removable: false, icon: null });
-    expect(info.get("local.dev.tool")).toEqual({ origin: { kind: "dev", folder: "tool" }, removable: false, icon: null });
-    expect(info.get("local.me.mine")).toEqual({ origin: { kind: "own", folder: "mine" }, removable: true, icon: null });
+    expect(info.get("tavora.notes")).toEqual({ origin: { kind: "official", folder: "notes" }, removable: false, icon: null, panelIcons: {} });
+    expect(info.get("local.dev.tool")).toEqual({ origin: { kind: "dev", folder: "tool" }, removable: false, icon: null, panelIcons: {} });
+    expect(info.get("local.me.mine")).toEqual({ origin: { kind: "own", folder: "mine" }, removable: true, icon: null, panelIcons: {} });
     // Found two levels down: not a direct child, so Settings leaves it alone.
     expect(info.has("local.me.deeper")).toBe(false);
   });

@@ -76,14 +76,14 @@ export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, PROTOCOL
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.1";
+export const SDK_VERSION = "0.2.2";
 
 /**
  * The oldest Tavora that has everything this SDK version offers. Put it in your manifest as
  * `minTavora`, so an older Tavora says it needs an update instead of loading a module it cannot run
  * (the starter, `npm create @tavora/module`, does). The changelog names it for every version.
  */
-export const MIN_TAVORA = "0.17.9";
+export const MIN_TAVORA = "0.17.12";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -138,6 +138,8 @@ export interface TavoraSDK {
   };
   /** UI state for this one panel (selection, scroll, open tab). Cleared when the panel is closed. */
   panel: {
+    /** Which of the manifest's `panels` this panel is, by id; null for a module without panel types (or an older Tavora). */
+    readonly type: string | null;
     getState<T = JsonValue>(): Promise<T | null>;
     setState(value: JsonValue | null): Promise<void>;
   };
@@ -388,6 +390,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       onChange: (fn) => on("documents.changed", fn),
     },
     panel: {
+      type: host.panel?.type ?? null,
       getState: <T = JsonValue>() => call("panel.getState") as Promise<T | null>,
       setState: async (value) => {
         await call("panel.setState", { value });

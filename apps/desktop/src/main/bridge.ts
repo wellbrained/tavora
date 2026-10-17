@@ -41,6 +41,8 @@ export interface BridgeContext {
   moduleId: string;
   moduleVersion: string;
   instanceId: string;
+  /** The panel type this panel shows (one of the manifest's `panels` ids), or null for a module without types. */
+  panelType: string | null;
   game: TavoraGame;
   data: ModuleData;
   /** The module's settings shared by every game (storage.app). */
@@ -317,6 +319,7 @@ export class BridgeSession {
       host: { name: "tavora-desktop", version: this.context.hostVersion },
       module: { id: this.context.moduleId, version: this.context.moduleVersion },
       capabilities: [...this.context.capabilities()],
+      panel: { type: this.context.panelType },
     };
   }
 

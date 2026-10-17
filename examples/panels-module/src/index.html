@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Panel Types Example</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="./main.ts"></script>
+  </head>
+  <body>
+    <main data-page="index">
+      <p class="eyebrow" data-testid="page">Page: index.html</p>
+      <h1 data-testid="panel-type">Connecting…</h1>
+      <p data-testid="summary"></p>
+      <h2>This panel type's options</h2>
+      <dl data-testid="options"></dl>
+      <h2>Shared by every panel of this module</h2>
+      <p>Saved content and permissions belong to the module, so every panel type and every copy sees the same data.</p>
+      <p><button type="button" data-testid="bump" disabled>Add one</button> <span data-testid="shared">–</span> (stored with <code>storage</code>; reopen another panel to see it)</p>
+      <h2>All panel types</h2>
+      <ul data-testid="types"></ul>
+    </main>
+  </body>
+</html>
