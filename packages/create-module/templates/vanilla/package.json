@@ -1,0 +1,19 @@
+{
+  "name": "{{package}}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "zip": "tavora-pack ."
+  },
+  "dependencies": {
+    "@tavora/sdk": "^{{sdkVersion}}"
+  },
+  "devDependencies": {
+    "@tavora/pack": "^{{packVersion}}",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.4"
+  }
+}

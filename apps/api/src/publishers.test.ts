@@ -73,7 +73,7 @@ describe("the real tavora-pack link command", () => {
     try {
       const run = (code: string) =>
         new Promise<{ status: number | null; out: string }>((resolve) => {
-          const child = spawn(process.execPath, ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", cli, "link", code, "--key", keyFile, "--api", `http://127.0.0.1:${port}`]);
+          const child = spawn(process.execPath, ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "--conditions=source", cli, "link", code, "--key", keyFile, "--api", `http://127.0.0.1:${port}`]);
           let out = "";
           child.stdout.on("data", (chunk: Buffer) => (out += chunk));
           child.stderr.on("data", (chunk: Buffer) => (out += chunk));

@@ -2,19 +2,27 @@
 
 A Tavora module is a web page that runs in a sandboxed panel inside Tavora Desktop, next to a game. It talks to the host through `@tavora/sdk`, and it ships as a folder with a [`tavora.module.json`](../reference/manifest.md) manifest and its built files.
 
-::: warning Not released yet
-`@tavora/sdk` 0.2.0 speaks [bridge protocol v1](../reference/protocol.md); see the [changelog](../reference/changelog.md). It is not published to npm yet, and nothing here is a stable API before Tavora's first public release. For now, build modules inside the [Tavora repository](https://github.com/wellbrained/tavora) and depend on the SDK as `"@tavora/sdk": "workspace:*"`.
+::: warning Preview
+`@tavora/sdk` speaks [bridge protocol v1](../reference/protocol.md). Until Tavora's first public release it can still change in ways that break modules; the [changelog](../reference/changelog.md) marks each such change and says which Tavora a version needs.
 :::
 
-## Start from an example
-
-The same small module is built three ways: [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module), [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module) and [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module). A module that offers several panels is shown in the [panel types example](https://github.com/wellbrained/tavora/tree/main/examples/panels-module) (see [Panel types](../reference/manifest.md#panel-types)). Copy one into `examples/`, give it its own `id` in `tavora.module.json`, and run:
+## Make a project
 
 ```sh
-pnpm install
-pnpm build                              # SDK, host and example modules
-pnpm --filter @tavora/desktop start     # opens Tavora with the example modules
+npm create @tavora/module
 ```
+
+It asks for a folder, the module's name, its id (`publisher.module-name`) and a template: vanilla TypeScript, Vue or React. The project builds with Vite and depends on `@tavora/sdk` and `@tavora/pack`; its manifest already sets [`minTavora`](../reference/manifest.md) to the Tavora that SDK needs. pnpm works too: `pnpm create @tavora/module`.
+
+```sh
+cd my-module
+npm install
+npm run dev     # rebuilds on every change
+```
+
+In Tavora, open Settings > Modules, choose **Add a development folder** and pick the project folder. The module appears in Add module, and its panels reload by themselves when `npm run dev` rebuilds.
+
+To add the SDK to a project of your own instead: `npm install @tavora/sdk`, and follow [Build the module](#build-the-module). The same small module is also built three ways in Tavora's repository: [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module), [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module) and [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module). A module that offers several panels is shown in the [panel types example](https://github.com/wellbrained/tavora/tree/main/examples/panels-module) (see [Panel types](../reference/manifest.md#panel-types)).
 
 ## Talk to the host
 
@@ -56,15 +64,7 @@ Values you store must be JSON. Type parameters such as `get<number>()` are not c
 
 ## Where data lives
 
-| Scope | API | Shared by |
-| --- | --- | --- |
-| Settings | `tavora.storage` | All panels of this module in this game |
-| Settings for every game | `tavora.storage.app` | All panels of this module in every game |
-| Documents | `tavora.documents` | All panels of this module in this game, with revisions |
-| Pictures | `tavora.blobs` | All panels of this module in this game |
-| UI state | `tavora.panel` | This one panel; removed when it closes |
-
-Nothing is shared between modules, and nothing between games except `storage.app`. See [Where data lives](../reference/protocol.md#where-data-lives) for the details.
+Settings go in `tavora.storage`, the player's work in `tavora.documents`, pictures in `tavora.blobs` and where a panel is scrolled to in `tavora.panel`. Which to use when, and how two open panels avoid overwriting each other, is in [Saving data](./saving-data.md).
 
 ## More from the host
 
@@ -78,7 +78,7 @@ Nothing is shared between modules, and nothing between games except `storage.app
 | `tavora.connectors.aiUsage` | The usage of the player's Claude and Codex accounts, with the `ai-usage` connector. |
 | `tavora.connectors.discord` | The Discord app on this PC through Tavora's Discord sign-in, with the `discord` connector: voice channels, mute and deafen, voice events. |
 
-What needs the player's permission (`permissions.network` and `permissions.connectors` in the [manifest](../reference/manifest.md)) works only once the player has granted it: they are asked when they add the module and can take it back in Settings > Integrations. Until then the call fails with `PERMISSION_DENIED`; `tavora.host.capabilities` lists what was granted when the module connected. See [Capabilities](../reference/protocol.md#capabilities) and [Connectors](../reference/protocol.md#connectors).
+What reaches outside the panel needs the player's yes first; see [Permissions and consent](./permissions.md). Following the theme and the language is in [Look and languages](./look-and-languages.md).
 
 ## Build the module
 
@@ -93,28 +93,14 @@ What needs the player's permission (`permissions.network` and `permissions.conne
 Pack the built module into a zip signed with your publisher key:
 
 ```sh
-pnpm pack-module examples/vanilla-module
+npm run build
+npm run zip     # the same as npx tavora-pack .
 ```
 
 The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`) and the icon, plus `tavora.signature.json`. Your sources and `node_modules` stay out. Use `--out` to choose the file name.
 
-The first run makes your publisher key in `~/.tavora/publisher-key.pem` (or the file you pass with `--key`). It stays on your PC. **Back it up and never share it.** The key is who you are to Tavora: the settings and documents your module saves for players belong to your key, so only modules signed by it can see them. Lose the key and your next version counts as a different publisher, whose module starts with empty data. A module signed by another key can never read your module's data, even if it uses the same id.
+The first run makes your publisher key in `~/.tavora/publisher-key.pem`. **Back it up and never share it**: updates and your players' data depend on it. Read [Your publisher key](./publisher-key.md) before you send the first zip, and link the key to your account there so players see your name.
 
-While you build, keep loading the module from a folder: an unsigned folder module needs no key, and its data is kept apart from the signed version's.
+Players install the zip with **Settings > Modules > Install from zip**. While you build, keep loading the module from its development folder: it needs no key, and its data is kept apart from the signed version's.
 
-### Show your name instead of a fingerprint
-
-Players see who signed a module as the key's fingerprint, unless the key is linked to a Tavora account with a developer name. Then they see "by <name>" in Settings > Modules, in the dialog that asks for permissions, and when they install your zip.
-
-1. In Tavora, sign in under Settings > Account and choose a **developer name** under Module developer. It is public, unique (case, spaces, dots, dashes and underscores don't count) and can change once every 30 days.
-2. Press **Link a publisher key**. Tavora shows a one-time code, valid for 10 minutes.
-3. Run the command it shows, with the key you sign with:
-
-   ```sh
-   pnpm tavora-pack link ABCD-EFGH
-   ```
-
-   It signs the code with your publisher key and sends the signature and the key's public half to Tavora's service, which checks the signature before it links the key. The secret key never leaves your PC. Pass `--key` if you sign with another key file.
-
-An account can link several keys; a key belongs to one account. Link your key now, even before you need it: if you ever lose it, only a key that was linked can later be claimed back by your account.
-
+Something not working? See [Troubleshooting](./troubleshooting.md).

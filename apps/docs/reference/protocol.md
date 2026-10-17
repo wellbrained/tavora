@@ -61,8 +61,8 @@ Methods without params must be sent with `params` left out.
 | `documents.delete` | `{ id, ifRevision? }` | `null` (also when the document did not exist) |
 | `panel.getState` | none | this panel's state, or `null` |
 | `panel.setState` | `{ value }` | `null`; `value: null` removes the state |
-| `panel.getLaunch` | none | why this page is loading, the same on every call until it loads again: `{ reason: "add" }` for a panel the player just added, or `{ reason: "restore", content }` for one that was open before, with what it last showed through `panel.setContent` (or `null`). See [Content per panel](#content-per-panel) (Tavora 0.17.13 and newer) |
-| `panel.setContent` | `{ content }` | `null`; `content` is `{ id, title }` or `null`: what the panel shows now. `id` is your own, 1 to 200 characters; `title` is its full name, 1 to 200 characters, kept on one line. `INVALID_PARAMS` otherwise (Tavora 0.17.13 and newer) |
+| `panel.getLaunch` | none | why this page is loading, the same on every call until it loads again: `{ reason: "add" }` for a panel the player just added, or `{ reason: "restore", content }` for one that was open before, with what it last showed through `panel.setContent` (or `null`). See [Content per panel](#content-per-panel) (Tavora 0.17.14 and newer) |
+| `panel.setContent` | `{ content }` | `null`; `content` is `{ id, title }` or `null`: what the panel shows now. `id` is your own, 1 to 200 characters; `title` is its full name, 1 to 200 characters, kept on one line. `INVALID_PARAMS` otherwise (Tavora 0.17.14 and newer) |
 | `workspace.getViewport` | none | `{ width, height }` of the panel in CSS pixels |
 | `ui.getLanguage` | none | the language of Tavora's own texts as a code, `"en"` or `"de"` for now; show your module in it, or in English when you have no translation |
 | `ui.showMenu` | `{ items, at, side?, align? }` | the chosen item's `id`, or `null` when the player closed the menu; see [Menus](#menus) |
@@ -182,7 +182,7 @@ Writes are atomic: a crash leaves either the old or the new document, never a mi
 
 ### Content per panel
 
-Each panel of a module can show something different: one build, character, run or document of your own, picked in a selector in your panel's toolbar. Tavora has no model of its own for it; it only needs to know what each panel shows. Needs Tavora 0.17.13 or newer.
+Each panel of a module can show something different: one build, character, run or document of your own, picked in a selector in your panel's toolbar. Tavora has no model of its own for it; it only needs to know what each panel shows. Needs Tavora 0.17.14 or newer.
 
 - When the page loads, ask `panel.getLaunch()`. `{ reason: "add" }` means the player just added the panel: pick the content yourself, such as the one used last, or show a picker. `{ reason: "restore", content }` means the panel was open before (a restart, a switch back to this game, a reload); `content` is what it last showed, or `null`. Keep the panel's own choice in its `panel` state too, so each copy keeps its own.
 - Whenever the selection changes, call `panel.setContent({ id, title })`, or `panel.setContent(null)` for nothing. Tavora keeps it with the panel and shows `title` when the player hovers the tab, below the panel's and the module's names. Tabs stay short, so copies of one panel type look the same; the hover text and your toolbar tell them apart.
