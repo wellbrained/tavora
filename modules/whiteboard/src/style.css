@@ -216,3 +216,61 @@ body {
   font-size: 18px;
   line-height: 1;
 }
+
+/* The handle Palette.tsx puts at the top of Excalidraw's style palette: drag it to move the palette, fold it away. */
+.excalidraw .App-menu__left .palette-handle {
+  position: sticky;
+  z-index: 1;
+  top: -0.75rem;
+  margin: -0.75rem -0.75rem 0.25rem;
+  background: inherit;
+}
+.palette-grip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 8px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  font-size: 0.75rem;
+  color: var(--color-on-surface, inherit);
+  border-bottom: 1px solid var(--default-border-color, transparent);
+}
+.palette-grip:active {
+  cursor: grabbing;
+}
+.palette-dots {
+  letter-spacing: -3px;
+  opacity: 0.5;
+}
+.palette-title {
+  flex: 1;
+  font-weight: 600;
+}
+.palette-toggle {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+}
+.palette-toggle:hover {
+  background: var(--button-hover-bg, var(--accent));
+}
+.excalidraw .App-menu__left.palette-collapsed {
+  overflow: hidden;
+}
+.excalidraw .App-menu__left.palette-collapsed > :not(.palette-handle) {
+  display: none;
+}
+.excalidraw .App-menu__left.palette-collapsed .palette-handle {
+  margin-bottom: -0.75rem;
+}
+.excalidraw .App-menu__left.palette-collapsed .palette-grip {
+  border-bottom: 0;
+}

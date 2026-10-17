@@ -103,7 +103,7 @@ async function storedBoard(userData: string, name: string): Promise<{ elements: 
   return undefined;
 }
 
-test("whiteboard: a pasted picture is kept in the file store, locked, and comes back with the board", async () => {
+test("whiteboard: a pasted picture can be dragged into place, is then locked, kept in the file store, and comes back with the board", async () => {
   const { app, page, userData } = await launch();
   await openModule(page, WHITEBOARD);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`).catch(() => ""), { timeout: 20_000 }).toBe("Board 1");
@@ -129,12 +129,25 @@ test("whiteboard: a pasted picture is kept in the file store, locked, and comes 
       document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
     })()`,
   );
+  // The new picture stays free while it is selected, so it can be dragged into place.
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock")}?.dataset.locked ?? ""`), { timeout: 15_000 }).toBe("false");
+  await expect.poll(async () => Object.keys((await storedBoard(userData, "Board 1"))?.files ?? {}).length, { timeout: 15_000 }).toBe(1);
+  const before = (await storedBoard(userData, "Board 1"))!.elements.find((element) => element.type === "image") as unknown as { x: number; y: number };
+  const middle = { x: area.x + area.width / 2, y: area.y + area.height / 2 };
+  await drag(app, middle, { x: middle.x - 80, y: middle.y + 40 });
+  await expect.poll(async () => ((await storedBoard(userData, "Board 1"))?.elements.find((element) => element.type === "image") as unknown as { x: number } | undefined)?.x, { timeout: 15_000 }).toBeLessThan(before.x - 40);
+  const moved = (await storedBoard(userData, "Board 1"))!.elements.find((element) => element.type === "image") as unknown as { x: number; y: number };
+  expect(moved.y).toBeGreaterThan(before.y + 20);
+  // Letting go of it (a click on an empty spot above it) locks it.
+  const empty = { x: middle.x + 150, y: middle.y - 120 };
+  await drag(app, empty, empty);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock")}?.dataset.locked ?? ""`), { timeout: 15_000 }).toBe("true");
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("save-state")}.dataset.state`), { timeout: 15_000 }).toBe("saved");
 
   // The picture's pixels arrive a moment after its element, and that is saved too.
   await expect.poll(async () => Object.keys((await storedBoard(userData, "Board 1"))?.files ?? {}).length, { timeout: 15_000 }).toBe(1);
   // The board holds a locked picture and the id of a file in the file store; the pixels are not in the board.
+  await expect.poll(async () => (await storedBoard(userData, "Board 1"))?.elements.find((element) => element.type === "image")?.locked, { timeout: 15_000 }).toBe(true);
   const board = (await storedBoard(userData, "Board 1"))!;
   const picture = board.elements.find((element) => element.type === "image")!;
   expect(picture.locked).toBe(true);
@@ -210,8 +223,10 @@ test("whiteboard: Copy as picture puts the board with its pictures on the clipbo
       document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
     })()`,
   );
-  await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock")}?.dataset.locked ?? ""`), { timeout: 15_000 }).toBe("true");
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock")}?.dataset.locked ?? ""`), { timeout: 15_000 }).toBe("false");
+  // Picking a tool lets go of the picture, which locks it.
   await inModule(app, WHITEBOARD, `document.querySelector('[data-testid="toolbar-rectangle"]').click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock")}?.dataset.locked ?? ""`), { timeout: 15_000 }).toBe("true");
   await drag(app, { x: area.x + 60, y: area.y + 60 }, { x: area.x + 260, y: area.y + 200 });
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(false);
 
@@ -261,5 +276,40 @@ test("whiteboard: Copy as picture puts the board with its pictures on the clipbo
   );
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Copied the board as a picture");
   expect(await app.evaluate(async ({ clipboard }) => (await clipboard.read()).flatMap((item) => item.types))).toContain("image/png");
+  await app.close();
+});
+
+test("whiteboard: the style palette can be moved and folded away, and stays so for the panel", async () => {
+  const { app, page } = await launch();
+  await openModule(page, WHITEBOARD);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`).catch(() => ""), { timeout: 20_000 }).toBe("Board 1");
+  await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
+
+  // The palette shows with a tool picked, with its handle on top.
+  await inModule(app, WHITEBOARD, `document.querySelector('[data-testid="toolbar-rectangle"]').click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `!!${q("palette-handle")}`), { timeout: 10_000 }).toBe(true);
+  const rect = (selector: string) => inModule<{ x: number; y: number; width: number; height: number }>(app, WHITEBOARD, `(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
+  const start = await rect(".App-menu__left");
+  const handle = await rect('[data-testid="palette-handle"]');
+  const grab = { x: handle.x + 20, y: handle.y + handle.height / 2 };
+  await drag(app, grab, { x: grab.x + 200, y: grab.y + 30 });
+  await expect.poll(async () => Math.round((await rect(".App-menu__left")).x - start.x)).toBe(200);
+  expect(Math.round((await rect(".App-menu__left")).y - start.y)).toBe(30);
+
+  // Folded away, only the handle is left.
+  await inModule(app, WHITEBOARD, `${q("palette-toggle")}.click()`);
+  await expect.poll(async () => (await rect(".App-menu__left")).height).toBeLessThan(60);
+
+  // Another board: the palette is where it was left, still folded.
+  await inModule(app, WHITEBOARD, `${q("board-menu")}.click()`);
+  await inModule(app, WHITEBOARD, `${q("board-new")}.click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`)).toBe("Board 2");
+  await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
+  await inModule(app, WHITEBOARD, `document.querySelector('[data-testid="toolbar-rectangle"]').click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `!!${q("palette-handle")}`), { timeout: 10_000 }).toBe(true);
+  await expect.poll(async () => Math.round((await rect(".App-menu__left")).x - start.x)).toBe(200);
+  expect((await rect(".App-menu__left")).height).toBeLessThan(60);
+  await inModule(app, WHITEBOARD, `${q("palette-toggle")}.click()`);
+  await expect.poll(async () => (await rect(".App-menu__left")).height).toBeGreaterThan(100);
   await app.close();
 });
