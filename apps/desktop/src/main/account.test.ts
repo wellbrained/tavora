@@ -35,6 +35,8 @@ function service(answers: Record<string, (body: Record<string, unknown> | undefi
     const key = `${method} ${url.replace("https://api.test/v1/account", "") || "/"}`;
     // The profile read at every start, unless a test asks about it: none, and not recorded.
     if (key === "GET /profile" && !answers[key]) return json({ profile: null });
+    // The developer side, read with the account: none, and not recorded.
+    if (key === "GET /developer" && !answers[key]) return json({ developer: null, keys: [] });
     calls.push({ method, url, body, auth: new Headers(init?.headers).get("authorization") });
     const answer = answers[key];
     return answer ? answer(body) : json({ error: "Not found." }, 404);
@@ -103,7 +105,7 @@ describe("signing in", () => {
     // The token never reaches the host UI; a malformed device is dropped.
     const view = account.view();
     expect(JSON.stringify(view)).not.toContain(TOKEN);
-    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", discord: null, createdAt: SAVED.createdAt }, discordLogin: false, devices: [DEVICE], pending: null, profileChoice: null });
+    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", discord: null, createdAt: SAVED.createdAt }, discordLogin: false, devices: [DEVICE], pending: null, profileChoice: null, developer: null, publisherKeys: [], linkCode: null });
   });
 
   it("asks before creating an account for a new address, then creates it with the same code", async () => {
@@ -437,5 +439,72 @@ describe("Discord login", () => {
     const old = { token: TOKEN, email: "me@example.com", createdAt: SAVED.createdAt };
     await saveAccount(where, encryptor(), old as unknown as SavedAccount);
     expect(await loadAccount(where, encryptor())).toEqual({ ...old, discord: null });
+  });
+});
+describe("the developer side", () => {
+  const FINGERPRINT = "0123456789abcdef0123456789abcdef";
+  const developer = (keys: unknown[] = []) => json({ developer: { name: "example-dev", changedAt: "2026-10-17T12:00:00.000Z", nextChangeAt: "2026-11-16T12:00:00.000Z" }, keys });
+
+  it("reads the name and keys with the account, sets the name, makes a link code and unlinks a key", async () => {
+    const { calls, fetchImpl } = service({
+      "GET /": () => json({ account: { email: "me@example.com", createdAt: SAVED.createdAt }, devices: [DEVICE] }),
+      "GET /developer": () => json({ developer: null, keys: [] }),
+      "PUT /developer": (body) => (body?.name === "example-dev" ? developer() : json({ reason: "name-taken" }, 409)),
+      "POST /keys/code": () => json({ code: "ABCDEFGH", expiresAt: new Date(Date.now() + 600_000).toISOString() }),
+      [`DELETE /keys/${FINGERPRINT}`]: () => developer(),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.refresh();
+    expect(account.view()).toMatchObject({ developer: null, publisherKeys: [], linkCode: null });
+
+    await account.setDeveloperName("  example-dev ");
+    expect(calls.find((call) => call.method === "PUT")?.body).toEqual({ name: "example-dev" });
+    expect(account.view().developer).toEqual({ name: "example-dev", nextChangeAt: "2026-11-16T12:00:00.000Z" });
+    await expect(account.setDeveloperName("taken")).rejects.toMatchObject({ key: "account.error.nameTaken" });
+
+    await account.newLinkCode();
+    expect(account.view().linkCode?.code).toBe("ABCDEFGH");
+    await account.unlinkKey(FINGERPRINT);
+    expect(calls.at(-1)).toMatchObject({ method: "DELETE", auth: `Bearer ${TOKEN}` });
+  });
+
+  it("says when the name can change again, in the player's own words", async () => {
+    const { fetchImpl } = service({ "PUT /developer": () => json({ reason: "name-too-soon", nextChangeAt: "2026-11-16T12:00:00.000Z" }, 409) });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    const error = await account.setDeveloperName("brainwell").catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(PlayerError);
+    expect(error).toMatchObject({ key: "account.error.nameTooSoon", params: { date: "16. November 2026" } });
+  });
+
+  it("drops a used link code once the new key shows up, and forgets everything on sign-out", async () => {
+    let keys: unknown[] = [];
+    const { fetchImpl } = service({
+      "GET /": () => json({ account: { email: "me@example.com", createdAt: SAVED.createdAt }, devices: [DEVICE] }),
+      "GET /developer": () => developer(keys),
+      "POST /keys/code": () => json({ code: "ABCDEFGH", expiresAt: new Date(Date.now() + 600_000).toISOString() }),
+      "POST /sign-out": () => new Response(null, { status: 204 }),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.refresh();
+    await account.newLinkCode();
+    keys = [{ fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z" }];
+    await account.refresh();
+    expect(account.view()).toMatchObject({ linkCode: null, publisherKeys: [{ fingerprint: FINGERPRINT }] });
+    await account.signOut();
+    expect(account.view()).toMatchObject({ developer: null, publisherKeys: null, linkCode: null });
+  });
+
+  it("keeps only well-formed keys and names from the service", async () => {
+    const { fetchImpl } = service({
+      "GET /": () => json({ account: { email: "me@example.com", createdAt: SAVED.createdAt }, devices: [] }),
+      "GET /developer": () => json({ developer: { name: "x".repeat(40), nextChangeAt: "y" }, keys: [{ fingerprint: "NOPE", linkedAt: "z" }, { fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:00:00.000Z" }] }),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.refresh();
+    expect(account.view()).toMatchObject({ developer: null, publisherKeys: [{ fingerprint: FINGERPRINT }] });
   });
 });

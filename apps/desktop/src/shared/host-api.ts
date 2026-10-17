@@ -140,6 +140,12 @@ export interface AccountView {
   pending: AccountPending | null;
   /** On a first sign-in here, the account's profile when it differs from this PC's: the player picks one, once. */
   profileChoice: { name: string; initials: string; picture: boolean } | null;
+  /** The public name players see on modules signed with the account's linked keys, and when it can change again; null without one. */
+  developer: { name: string; nextChangeAt: string } | null;
+  /** Publisher keys linked to the account (fingerprints only); null until read from the service. */
+  publisherKeys: { fingerprint: string; linkedAt: string }[] | null;
+  /** A one-time code for `tavora-pack link`, while it is valid. */
+  linkCode: { code: string; expiresAt: string } | null;
 }
 
 /** Settings > Integrations > Discord: the Discord connector's sign-in. Sent on its own channel. */
@@ -319,6 +325,8 @@ export interface HostViewState {
     removable: boolean;
     /** The fingerprint of the key that signed it, for a module installed from a signed zip; null otherwise. */
     publisher: string | null;
+    /** The developer name the publisher key is linked to, as Tavora's service said ("by <name>"); null when unknown or unlinked. */
+    publisherName: string | null;
     /** Signed, and an unsigned local copy of the same id left data that can be moved to it. */
     localDataWaiting: boolean;
     /** The icon from the module's manifest as a data address (PNG or WebP), or null. */
@@ -511,6 +519,12 @@ export type HostAction =
   | { type: "account-delete-discord" }
   /** The answer to "Which profile?" on a first sign-in. */
   | { type: "account-profile-choice"; keep: "account" | "pc" }
+  /** The developer side: the public name, a code to link a publisher key, and unlinking one. */
+  | { type: "account-developer-name"; name: string }
+  | { type: "account-link-code" }
+  /** Copies `tavora-pack link <code>` for the code shown now. */
+  | { type: "account-copy-link-command" }
+  | { type: "account-unlink-key"; fingerprint: string }
   /** Adds an account for a CLI profile folder. */
   | { type: "ai-usage-add"; provider: AiProvider; label: string; directory: string }
   /** Renames an account or points it at another profile folder. */

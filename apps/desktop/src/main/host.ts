@@ -81,6 +81,7 @@ import { MODULE_FONTS } from "./module-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir, keepNewerFile, SUPPORTED_VERSIONS } from "./backup";
 import { DEFAULT_API_URL, OnlineSearch } from "./online";
+import { PublisherNames } from "./publisher-names";
 import { UpdateManager, type UpdaterLike } from "./updates";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
 import { createToneReader, iconVersion } from "./icon-tone";
@@ -102,7 +103,7 @@ import { readClaudeEmail } from "./ai-usage-claude";
 import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
-import { AccountClient, deviceOs, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
+import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
 import { discordLogin } from "./discord-login";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
 import {
@@ -247,6 +248,8 @@ export class Host {
   private readonly aiUsage: AiUsageConnector;
   /** The player's Tavora account; the sign-in never leaves the main process. */
   private readonly account: AccountClient;
+  /** The developer names players see for publisher keys (publisher-names.ts). */
+  private readonly publisherNames: PublisherNames;
   private screen: Screen = "welcome";
   private notice: string | null = null;
   /** Every (owner, module) with saved settings or documents, for Settings > Modules. */
@@ -312,6 +315,13 @@ export class Host {
     });
     this.account = Host.accountClient(options, () => this.language, { get: () => this.profileData(), apply: (remote) => this.applyProfile(remote) }, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:account", view);
+    });
+    this.publisherNames = new PublisherNames({
+      file: path.join(options.userData, "publisher-names.json"),
+      baseUrl: options.apiUrl ?? DEFAULT_API_URL,
+      fetch: (input, init) => fetch(input, init),
+      online: () => this.library.onlineSearch,
+      onChange: () => this.pushState(),
     });
     this.window = new BrowserWindow({
       ...windowState.bounds,
@@ -398,6 +408,8 @@ export class Host {
     // Native menus, dialogs and scrollbars follow the theme's mode.
     host.syncNativeTheme();
     await host.account.init();
+    await host.publisherNames.load();
+    void host.refreshPublisherNames();
     // The system's light or dark setting changed (or Tavora's own native theme did, which applyTheme ignores).
     nativeTheme.on("updated", () => {
       if (host.library.followSystem) host.applyTheme();
@@ -516,6 +528,7 @@ export class Host {
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
     await this.watchDevelopmentFolders();
+    void this.refreshPublisherNames();
   }
 
   // ── Development folders ──────────────────────────────────────────────
@@ -639,6 +652,12 @@ export class Host {
     return this.publisherOf(module) !== null && this.moduleData.some((entry) => entry.owner === LOCAL_OWNER && entry.moduleId === module.manifest.id);
   }
 
+  /** Asks for the developer names of the installed modules' keys (each at most once a day). Quietly: offline is fine. */
+  private refreshPublisherNames(): Promise<void> {
+    const keys = [...this.modules.values()].map((module) => this.publisherOf(module)).filter((key): key is string => key !== null);
+    return this.publisherNames.refresh(keys).catch((error: unknown) => console.warn("[tavora] publisher names", error));
+  }
+
   /** The key fingerprint of a module from a signed zip, or null. */
   private publisherOf(module: InstalledModule): string | null {
     return isOwnerId(module.owner) && module.owner !== OFFICIAL_OWNER && module.owner !== LOCAL_OWNER ? module.owner : null;
@@ -749,6 +768,8 @@ export class Host {
     const file = picked.filePaths[0];
     if (picked.canceled || !file) return;
     const installed = await installZip(file, { userData: this.options.userData, userModules: await realUserModulesDir(this.options), modules: this.modules, tavoraVersion: app.getVersion() });
+    // The developer name comes with the install, so it is said at once (it waits for the service at most a few seconds).
+    if (installed.owner !== LOCAL_OWNER) await this.publisherNames.refresh([installed.owner]).catch(() => undefined);
     await this.reloadModules();
     if (installed.updated) {
       for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === installed.manifest.id) view.reload();
@@ -1249,6 +1270,18 @@ export class Host {
         return this.account.deleteWithDiscord();
       case "account-profile-choice":
         return this.account.chooseProfile(action.keep);
+      case "account-developer-name":
+        return this.account.setDeveloperName(action.name);
+      case "account-link-code":
+        return this.account.newLinkCode();
+      case "account-copy-link-command": {
+        const code = this.account.view().linkCode?.code;
+        if (!code) throw new PlayerError("account.error.noCode");
+        clipboard.writeText(linkCommand(code));
+        return;
+      }
+      case "account-unlink-key":
+        return this.account.unlinkKey(action.fingerprint);
       case "ai-usage-add":
         return this.aiUsage.add(action.provider, action.label, action.directory);
       case "ai-usage-update":
@@ -2229,6 +2262,7 @@ export class Host {
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
         publisher: this.publisherOf(module),
+        publisherName: ((key) => (key ? this.publisherNames.name(key) : null))(this.publisherOf(module)),
         localDataWaiting: this.localDataWaiting(module),
         icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null,
         permissions: {

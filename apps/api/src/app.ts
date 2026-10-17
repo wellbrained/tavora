@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { accountRoutes, type AccountOptions } from "./accounts.ts";
+import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { MAX_UPLOAD_BODY, type Submissions } from "./submissions.ts";
@@ -178,6 +179,9 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   // Accounts: the only player data the service keeps, and only once it can send email.
   if (accounts) app.route("/v1/account", accountRoutes(accounts, limiter, (request) => (clientKey ? clientKey(request) : "local")));
   else app.all("/v1/account/*", (context) => context.json({ error: "Accounts are not available right now.", reason: "unavailable" }, 503));
+  // Publisher keys belong to accounts, so they come and go with them.
+  if (accounts) app.route("/v1/publishers", publisherRoutes({ store: accounts.store, ...(accounts.verifyRateLimiter ? { linkRateLimiter: accounts.verifyRateLimiter } : {}), ...(accounts.now ? { now: accounts.now } : {}) }, limiter, (request) => (clientKey ? clientKey(request) : "local")));
+  else app.all("/v1/publishers/*", (context) => context.json({ error: "Publishers are not available right now.", reason: "unavailable" }, 503));
 
   app.notFound((context) => context.json({ error: "Not found." }, 404));
   app.onError((error, context) => {
