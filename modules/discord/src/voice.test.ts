@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { avatarUrl, cleanName, imageUrl, parseChannel, parseGuild, parseUser, parseVoiceChannelIds, parseVoiceState, pngDataUrl, speakingUser } from "./discord-voice";
+import { avatarUrl, cleanName, eventChannel, parseChannel, parseGameServer, parseGuild, parseGuilds, parseLast, parseVoiceChannelIds, parseVoiceState, speakingUser } from "./voice";
 
 const state = (id: string, extra: Record<string, unknown> = {}) => ({
   nick: null,
@@ -15,10 +15,11 @@ describe("Discord voice data", () => {
     expect(parseVoiceState({ ...state("1"), nick: "Lenchen", user: { id: "1", username: "u", global_name: "Lena" } })?.name).toBe("Lenchen");
   });
 
-  it("tells self mute from a moderator's", () => {
+  it("tells self mute from a moderator's, and reads the player's own volume and mute for each person", () => {
     const person = parseVoiceState(state("2", { voice_state: { self_mute: true, self_deaf: true, mute: false, deaf: true } }))!;
-    expect(person).toMatchObject({ selfMute: true, selfDeaf: true, serverMute: false, serverDeaf: true });
+    expect(person).toMatchObject({ selfMute: true, selfDeaf: true, serverMute: false, serverDeaf: true, volume: 100, mutedForMe: false });
     expect(parseVoiceState(state("2", { voice_state: { suppress: true } }))!.serverMute).toBe(true);
+    expect(parseVoiceState({ ...state("2"), volume: 999, mute: true })).toMatchObject({ volume: 200, mutedForMe: true });
   });
 
   it("drops entries without a Discord id and keeps only real avatar hashes", () => {
@@ -44,42 +45,34 @@ describe("Discord voice data", () => {
   });
 
   it("lists only voice and stage channels of a server", () => {
-    expect(
-      parseVoiceChannelIds({
-        channels: [
-          { id: "1", type: 0 },
-          { id: "2", type: 2 },
-          { id: "3", type: 13 },
-          { id: "x", type: 2 },
-        ],
-      }),
-    ).toEqual(["2", "3"]);
+    expect(parseVoiceChannelIds({ channels: [{ id: "1", type: 0 }, { id: "2", type: 2 }, { id: "3", type: 13 }, { id: "x", type: 2 }] })).toEqual(["2", "3"]);
     expect(parseVoiceChannelIds(undefined)).toEqual([]);
   });
 
-  it("only accepts Discord's own icon addresses", () => {
+  it("keeps a server icon only on Discord's image server, and builds avatar addresses from real hashes", () => {
     const hash = "0123456789abcdef0123456789abcdef";
-    expect(imageUrl(`https://cdn.discordapp.com/icons/20/${hash}.webp?size=1024`)).toBe(`https://cdn.discordapp.com/icons/20/${hash}.png?size=64`);
-    expect(imageUrl(`https://evil.example/icons/20/${hash}.png`)).toBeNull();
-    expect(imageUrl(`https://cdn.discordapp.com.evil.example/icons/20/${hash}.png`)).toBeNull();
-    expect(imageUrl(`http://cdn.discordapp.com/icons/20/${hash}.png`)).toBeNull();
-    expect(imageUrl(`https://cdn.discordapp.com/attachments/1/2/x.png`)).toBeNull();
     expect(parseGuild({ id: "20", name: "Crew", icon_url: "javascript:alert(1)" })).toEqual({ id: "20", name: "Crew", iconUrl: null });
-    expect(avatarUrl("1", hash)).toBe(`https://cdn.discordapp.com/avatars/1/${hash}.png?size=64`);
+    expect(parseGuild({ id: "20", name: "Crew", icon_url: `https://cdn.discordapp.com/icons/20/${hash}.png` })?.iconUrl).toBe(`https://cdn.discordapp.com/icons/20/${hash}.png`);
+    expect(parseGuilds({ guilds: [{ id: "20", name: "Crew" }, { id: "nope" }] })).toEqual([{ id: "20", name: "Crew" }]);
+    expect(avatarUrl("1", hash)).toBe(`https://cdn.discordapp.com/avatars/1/${hash}.png`);
     expect(avatarUrl("1", "nope")).toBeNull();
   });
 
-  it("keeps only small PNGs as pictures", () => {
-    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(10)]);
-    expect(pngDataUrl(png)).toMatch(/^data:image\/png;base64,/);
-    expect(pngDataUrl(Buffer.from("<svg onload=alert(1)>"))).toBeNull();
-    expect(pngDataUrl(Buffer.concat([png, Buffer.alloc(300 * 1024)]))).toBeNull();
-  });
-
-  it("reads speaking events and the signed-in user", () => {
+  it("reads speaking events and the channel an event names", () => {
     expect(speakingUser({ user_id: "5", channel_id: "10" })).toBe("5");
     expect(speakingUser({ user_id: 5 })).toBeNull();
-    expect(parseUser({ user: { id: "7", username: "brain", global_name: "Brain" } })).toEqual({ id: "7", name: "Brain" });
-    expect(parseUser({})).toBeNull();
+    expect(eventChannel({ channel_id: "10" })).toBe("10");
+    expect(eventChannel({ channel_id: null })).toBeNull();
+  });
+
+  it("reads what the panel saved, dropping what is damaged", () => {
+    const last = { channelId: "10", guildId: "20", name: "Factory Floor", serverName: "Crew" };
+    expect(parseLast(last)).toEqual(last);
+    expect(parseLast({ ...last, channelId: "x" })).toBeNull();
+    expect(parseLast(null)).toBeNull();
+    expect(parseGameServer({ guildId: "20", serverName: "Crew", channelId: "y", channelName: null })).toEqual({ guildId: "20", serverName: "Crew", channelId: null, channelName: null });
+    // Remembered without a server yet is still remembered; nothing saved is not.
+    expect(parseGameServer({})).toEqual({ guildId: null, serverName: null, channelId: null, channelName: null });
+    expect(parseGameServer(null)).toBeNull();
   });
 });

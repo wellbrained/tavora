@@ -40,6 +40,21 @@ Every failed call rejects with a `TavoraError`. Check `error.code`, not the mess
 
 Values you store must be JSON. Type parameters such as `get<number>()` are not checked at runtime.
 
+## More from the host
+
+| API | What it does |
+| --- | --- |
+| `tavora.storage.app` | The same small settings, shared by every game: for choices the player expects to stay the same from game to game. |
+| `tavora.ui.getLanguage()`, `onLanguageChange` | The language of Tavora's own texts (`"en"`, `"de"`). Show your module in it, or in English when you have no translation. |
+| `tavora.blobs` | Pictures too big for a document: up to 50 MB each and 500 MB per module and game. `put` a file, show it with `url(id)`. See [Files](../../apps/docs/reference/protocol.md#files-blobs). |
+| `tavora.clipboard.writeImage(png)` | Puts a PNG on the system clipboard. Call it from the click or key press that asked for it. See [Clipboard](../../apps/docs/reference/protocol.md#clipboard). |
+| `tavora.links.open(url)` | Opens a web address in the game's Browser panel, from a click or key press. |
+| `tavora.network.fetch(url, init)` | A web request to a host listed in `permissions.network`, once the player granted it. See [Network](../../apps/docs/reference/protocol.md#network). |
+| `tavora.connectors.aiUsage` | The usage of the player's Claude and Codex accounts, with the `ai-usage` connector. |
+| `tavora.connectors.discord` | The Discord app on this PC through Tavora's Discord sign-in, with the `discord` connector: voice channels, mute and deafen, voice events. |
+
+What needs the player's permission (`permissions.network` and `permissions.connectors` in the [manifest](../../apps/docs/reference/manifest.md)) works only once the player has granted it: they are asked when they add the module and can take it back in Settings > Integrations. Until then the call fails with `PERMISSION_DENIED`; `tavora.host.capabilities` lists what was granted when the module connected. See [Capabilities](../../apps/docs/reference/protocol.md#capabilities) and [Connectors](../../apps/docs/reference/protocol.md#connectors).
+
 ## Examples
 
 The same small module built three ways: [vanilla TypeScript](../../examples/vanilla-module), [React](../../examples/react-module) and [Vue](../../examples/vue-module).

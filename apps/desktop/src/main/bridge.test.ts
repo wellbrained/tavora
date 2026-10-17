@@ -34,6 +34,9 @@ let nextId: number;
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 30));
 
+const offline = () => Promise.reject(new Error("no Discord in this test"));
+const noDiscord: BridgeContext["discord"] = { state: offline, connect: offline, allowControl: offline, command: offline, subscribe: offline, unsubscribe: offline, image: offline };
+
 function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): BridgeContext {
   return {
     hostVersion: "0.0.0-test",
@@ -44,6 +47,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     data: registry.get("local", moduleId, "poe2"),
     appSettings: registry.appSettings("local", moduleId),
     aiUsage: { accounts: () => Promise.reject(new Error("no AI accounts in this test")), read: () => Promise.reject(new Error("no AI accounts in this test")) },
+    discord: noDiscord,
     panelState: registry.panelState,
     capabilities: () => new Set(),
     getViewport: () => ({ width: 400, height: 300 }),
@@ -435,6 +439,72 @@ describe("aiUsage", () => {
   it("passes on that an account does not exist", async () => {
     const p = await granted({ aiUsage: { accounts: async () => [], read: async () => Promise.reject(new HostError("INVALID_PARAMS", "there is no AI account with that id")) } });
     expect(await call(p, "aiUsage.read", { accountId: "gone" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+});
+
+describe("discord", () => {
+  const STATE = { status: "connected" as const, error: null, user: { id: "1", name: "Nik" }, canControl: true, canSaveSignIn: true };
+  function granted() {
+    const sent: unknown[][] = [];
+    const discord: BridgeContext["discord"] = {
+      state: async () => STATE,
+      connect: async () => void sent.push(["connect"]),
+      allowControl: async () => void sent.push(["allowControl"]),
+      command: async (command, args) => (sent.push([command, args]), { ok: true, data: { id: "10" } }),
+      subscribe: async (event, channelId) => void sent.push(["subscribe", event, channelId]),
+      unsubscribe: async (event, channelId) => void sent.push(["unsubscribe", event, channelId]),
+      image: async (url) => (sent.push(["image", url]), null),
+    };
+    return { sent, port: connected({ ...makeContext(), capabilities: () => new Set(["discord"] as const), discord }) };
+  }
+
+  it.each(["discord.state", "discord.connect", "discord.allowControl", "discord.command", "discord.subscribe", "discord.unsubscribe", "discord.image"])("denies %s without the discord connector", async (method) => {
+    expect(await call(port, method, method === "discord.command" ? { command: "GET_GUILDS" } : undefined)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "discord" } });
+  });
+
+  it("passes checked commands, subscriptions and pictures on to the connector", async () => {
+    const { sent, port: p } = granted();
+    const target = await p;
+    expect(await call(target, "discord.state")).toMatchObject({ ok: true, result: STATE });
+    expect(await call(target, "discord.command", { command: "GET_CHANNEL", args: { channel_id: "10" } })).toMatchObject({ ok: true, result: { ok: true, data: { id: "10" } } });
+    expect(await call(target, "discord.command", { command: "GET_GUILDS" })).toMatchObject({ ok: true });
+    expect(await call(target, "discord.command", { command: "SET_USER_VOICE_SETTINGS", args: { user_id: "2", volume: 150 } })).toMatchObject({ ok: true });
+    expect(await call(target, "discord.subscribe", { event: "SPEAKING_START", channelId: "10" })).toMatchObject({ ok: true, result: null });
+    expect(await call(target, "discord.subscribe", { event: "VOICE_CHANNEL_SELECT" })).toMatchObject({ ok: true, result: null });
+    expect(await call(target, "discord.image", { url: "https://cdn.discordapp.com/avatars/1/x.png" })).toMatchObject({ ok: true, result: null });
+    expect(sent).toEqual([
+      ["GET_CHANNEL", { channel_id: "10" }],
+      ["GET_GUILDS", {}],
+      ["SET_USER_VOICE_SETTINGS", { user_id: "2", volume: 150 }],
+      ["subscribe", "SPEAKING_START", "10"],
+      ["subscribe", "VOICE_CHANNEL_SELECT", null],
+      ["image", "https://cdn.discordapp.com/avatars/1/x.png"],
+    ]);
+  });
+
+  it.each([
+    { command: "AUTHORIZE", args: {} },
+    { command: "GET_CHANNEL", args: { channel_id: "general" } },
+    { command: "GET_CHANNEL", args: { channel_id: "10", extra: true } },
+    { command: "GET_GUILDS", args: { guild_id: "1" } },
+    { command: "SELECT_VOICE_CHANNEL", args: {} },
+    { command: "SET_VOICE_SETTINGS", args: {} },
+    { command: "SET_VOICE_SETTINGS", args: { mute: "yes" } },
+    { command: "SET_VOICE_SETTINGS", args: { input: { volume: 0 } } },
+    { command: "SET_USER_VOICE_SETTINGS", args: { user_id: "2", volume: 201 } },
+    { command: "SET_USER_VOICE_SETTINGS", args: { user_id: "2", volume: 50.5 } },
+    { command: "SET_USER_VOICE_SETTINGS", args: { user_id: "2" } },
+    { command: "GET_CHANNEL", args: [] },
+  ])("refuses %j", async (params) => {
+    const { sent, port: p } = granted();
+    expect(await call(await p, "discord.command", params)).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(sent).toEqual([]);
+  });
+
+  it.each([{ event: "MESSAGE_CREATE", channelId: "10" }, { event: "SPEAKING_START" }, { event: "VOICE_CHANNEL_SELECT", channelId: "10" }, { event: "SPEAKING_START", channelId: "x" }])("refuses the subscription %j", async (params) => {
+    const { sent, port: p } = granted();
+    expect(await call(await p, "discord.subscribe", params)).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(sent).toEqual([]);
   });
 });
 

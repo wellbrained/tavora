@@ -71,6 +71,11 @@ Methods without params must be sent with `params` left out.
 | `network.fetch` | `{ url, method?, headers?, body?, responseType? }` | `{ status, url, headers, body }`; needs the `network` capability, see [Network](#network) |
 | `aiUsage.accounts` | none | `AiUsageAccountInfo[]` in the player's order; needs the `aiUsage` capability, see [Connectors](#connectors) |
 | `aiUsage.read` | `{ accountId }` | `AiUsageReading`; needs the `aiUsage` capability |
+| `discord.state` | none | `DiscordState`; starts the connection for this panel. Needs the `discord` capability, see [Connectors](#connectors) |
+| `discord.connect`, `discord.allowControl` | none | `null`; only right after a real click or key press in the panel (`PERMISSION_DENIED` otherwise) |
+| `discord.command` | `{ command, args }` | `DiscordResult`; one of `DISCORD_COMMANDS` |
+| `discord.subscribe`, `discord.unsubscribe` | `{ event, channelId? }` | `null`; one of `DISCORD_EVENTS` |
+| `discord.image` | `{ url }` | a small PNG as a `data:` address, or `null` |
 
 ### Where data lives
 
@@ -122,6 +127,15 @@ A connector is a part of Tavora that holds a sign-in and lets a module use it wi
 - `aiUsage.read` gives `{ status, retryAfterMs, answer, email, plan, readAt }`. `status` is `ok`, `sign-in` (no usable subscription login), `rate-limited` (wait `retryAfterMs`), `api-key` (the profile uses an API key, which has no subscription allowance), `cli-missing` (the Codex command line is not installed) or `unavailable`. For `ok`, `answer` is the provider's answer as it came: Claude's usage answer (undocumented, it may change) or the result of the Codex app-server's `account/rateLimits/read`. `email` is who is signed in, when the provider says; keep it in memory only. `readAt` is an ISO 8601 time.
 - Tavora reads each account at most once a minute for all modules together; asking sooner gives the last reading again, and a provider's wait applies to every module. One read can take up to 40 seconds while the Codex command starts. An unknown `accountId` is `INVALID_PARAMS`.
 
+**`discord`** (capability `discord`, `sdk.connectors.discord`): the Discord app on this PC, through Tavora's own Discord sign-in (PKCE, no Client Secret). Tavora keeps the local connection, the sign-in and the token; a module sends a fixed list of RPC commands and gets Discord's answers as they came. Nothing goes through Tavora's service, and Tavora can't hear, talk or read messages.
+
+- `discord.state` gives `{ status, error, user, canControl, canSaveSignIn }` and makes the panel a user of the connection, which runs while at least one panel uses it and stops with the last one. `status` is `connecting`, `not-running` (no Discord app found; Tavora keeps looking), `signed-out`, `approving` (Discord shows its pop-up), `connected` or `error`; `error` is then `not-approved`, `no-code`, `offline`, `no-sign-in` or `failed`. `canControl` says the sign-in may mute and deafen; one made before Tavora 0.5.11 can't until the player presses a button that calls `discord.allowControl`. The `discord.state` event tells every change.
+- `discord.connect` signs in, asking for approval in Discord the first time. It and `discord.allowControl` only work right after a real click or key press in the panel, once per click.
+- `discord.command` sends one of these, with exactly these arguments (anything else is `INVALID_PARAMS`): `GET_SELECTED_VOICE_CHANNEL` and `GET_GUILDS` (no arguments), `GET_GUILD` and `GET_CHANNELS` (`guild_id`), `GET_CHANNEL` (`channel_id`), `SELECT_VOICE_CHANNEL` (`channel_id`, or `null` to leave; only right after a real click or key press, once per click), `SET_VOICE_SETTINGS` (`mute` and/or `deaf`; needs `canControl`) and `SET_USER_VOICE_SETTINGS` (`user_id` with `volume` 0 to 200 and/or `mute`). Ids are Discord ids (digits). The result is `{ ok: true, data }` with Discord's answer, or `{ ok: false, reason, code, message }`: `not-connected`, `refused` (Discord's error `code` and `message`) or `no-answer` (no answer in 15 seconds, the connection ended, or an answer over 512 KB). Joining takes the player out of a call they are in, as Discord's own list does.
+- `discord.subscribe` sends a Discord event to this panel as the `discord.event` event (`{ event, data }`, the data as Discord sent it) until `discord.unsubscribe` or the panel goes. `VOICE_CHANNEL_SELECT` (the player joined, moved or left) takes no `channelId`; `VOICE_STATE_CREATE`, `VOICE_STATE_UPDATE`, `VOICE_STATE_DELETE`, `SPEAKING_START` and `SPEAKING_STOP` need the voice channel's id. Subscriptions are kept across reconnects and shared: Discord is asked once, whichever panels want it. At most 32 per panel.
+- `discord.image` fetches a picture from Discord's image server, an avatar (`https://cdn.discordapp.com/avatars/<user id>/<hash>.<ext>`) or a server icon (`…/icons/<server id>/<hash>.<ext>`, as `GET_GUILD` gives it), and gives it as a small PNG `data:` address; any other address, or any problem, gives `null`.
+- Names and everything else from Discord are Discord's: show them as text only.
+
 ### Documents
 
 A document is a named JSON value with a title and a revision. `DocumentSummary` is `{ id, title, revision, updatedAt, bytes }`; `updatedAt` is an ISO 8601 timestamp and `bytes` the size of `data` as stored.
@@ -142,6 +156,8 @@ Writes are atomic: a crash leaves either the old or the new document, never a mi
 | `ui.language` | language code, as `ui.getLanguage` | the player changed the language |
 | `documents.changed` | `{ id, revision, deleted }` | another panel of this module changed a document |
 | `aiUsage.accountsChanged` | `null` | the player added, renamed or removed an AI account; only with the `aiUsage` capability |
+| `discord.state` | `DiscordState` | the connection to the Discord app changed; only with the `discord` capability, after `discord.state` was asked |
+| `discord.event` | `{ event, data }` | a Discord event the panel subscribed to; only with the `discord` capability |
 | `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden, its tab is in the background, or another group is maximized); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
 | `lifecycle.resume` | `null` | the panel is visible again |
 | `lifecycle.dispose` | `null` | the panel is closing. Best effort only: it may never arrive, so never rely on it to save |
@@ -198,6 +214,7 @@ Some methods need a capability the player grants. A module asks for it in its ma
 | --- | --- | --- |
 | `network.fetch` | `network` | granted per host, see [Network](#network) |
 | `aiUsage.accounts`, `aiUsage.read` | `aiUsage` | granted for the `ai-usage` connector, see [Connectors](#connectors) |
+| `discord.*` | `discord` | granted for the `discord` connector, see [Connectors](#connectors) |
 | `files.open`, `files.save` | `files` | reserved |
 | `clipboard.writeText`, `clipboard.readText` | `clipboard` | reserved |
 | `sharedData.publish`, `sharedData.read`, `sharedData.subscribe` | `sharedData` | reserved |
@@ -216,10 +233,13 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | One document's `data` | 4 MiB |
 | All documents per module and game | 50 MiB, at most 1000 documents |
 | Document title | 200 characters |
+| Stored files (`blobs`) | 50 MB each, 500 MB per module and game; PNG, JPEG, GIF and WebP only |
+| `clipboard.writeImage` | one PNG per click or key press, at most 20 MB, 16384 pixels on a side and 100 million pixels |
 | Panel state | 256 KiB |
 | JSON nesting depth | 64 |
 | `network.fetch` answer | 5 MB of body, 15 s, 5 redirects, 6 requests at once per panel |
 | `aiUsage.read` | one reading per account and minute for all modules, 40 s, answers up to 256 KB |
+| `discord.command` | 15 s, answers and events up to 512 KB; 32 subscriptions per panel |
 
 These limits are checked first inside your own page, by the preload Tavora gives it, before a message reaches the host. A request over a limit is answered with `BAD_REQUEST` (`INVALID_PARAMS` for data that is not plain JSON) and never sent on, so a module that sends something huge can only slow itself down. A request id cannot be reused while its answer is pending.
 

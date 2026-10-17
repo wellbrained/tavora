@@ -27,6 +27,16 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
+    version: "0.16.11",
+    date: "2026-10-17",
+    title: "Discord is a module",
+    notes: [
+      "Discord is now a module like Notes and To-Dos. The first time you open it, Tavora asks whether it may use Discord with Tavora's sign-in. The module never sees the sign-in: Tavora keeps it and passes on only what Discord answers.",
+      "Everything works as before: who is in your voice channel and who is talking, joining and leaving, muting, each person's volume and the server each game remembers. Your remembered servers and the channel to rejoin come along, and you don't need to sign in again.",
+      "Settings > Integrations > Discord lists which modules may use Discord, and you can take it back there.",
+    ],
+  },
+  {
     version: "0.16.10",
     date: "2026-10-17",
     title: "AI Usage is a module",

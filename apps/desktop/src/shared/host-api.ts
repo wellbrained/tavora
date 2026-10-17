@@ -92,34 +92,11 @@ export interface BrowserState {
   downloadsRefused: number;
 }
 
-/** Someone in a Discord voice channel, as the Discord panel shows them. Names come from Discord and are shown as text only. */
-export interface DiscordMember {
-  id: string;
-  name: string;
-  /** Their Discord picture as a data address, or null until it is loaded (or when they have none). */
-  avatar: string | null;
-  speaking: boolean;
-  selfMute: boolean;
-  selfDeaf: boolean;
-  /** Muted or deafened by a moderator. */
-  serverMute: boolean;
-  serverDeaf: boolean;
-  /** The player's own volume for this person (0 to 200, 100 normally) and whether the player muted them for themselves. */
-  volume: number;
-  mutedForMe: boolean;
-}
-
-export interface DiscordChannel {
-  id: string;
-  name: string;
-  members: DiscordMember[];
-}
-
 /**
- * off: no Discord panel is open. signed-out: Tavora was never approved, or the
- * player signed out. not-running:
- * the Discord app was not found (Tavora keeps looking). approving: Discord shows
- * its pop-up. error: `error` says what went wrong.
+ * The Discord connector's connection. off: no module panel uses it. signed-out:
+ * Tavora was never approved, or the player signed out. not-running: the Discord
+ * app was not found (Tavora keeps looking). approving: Discord shows its pop-up.
+ * error: `error` says what went wrong.
  */
 export type DiscordStatus = "off" | "signed-out" | "connecting" | "not-running" | "approving" | "connected" | "error";
 
@@ -160,7 +137,7 @@ export interface AccountView {
   profileChoice: { name: string; initials: string; picture: boolean } | null;
 }
 
-/** The Discord panel and Settings > Discord. Sent on its own channel, because speaking changes often. */
+/** Settings > Integrations > Discord: the Discord connector's sign-in. Sent on its own channel. */
 export interface DiscordView {
   status: DiscordStatus;
   /** The key of the text that says what went wrong; the host UI words it. */
@@ -169,24 +146,6 @@ export interface DiscordView {
   canSaveSignIn: boolean;
   /** Who Tavora is signed in to Discord as. */
   user: { id: string; name: string } | null;
-  /** The server of the voice channel the player is in; null in a direct or group call. */
-  server: { id: string; name: string; icon: string | null } | null;
-  /** The voice channel or call the player is in, or null. */
-  call: DiscordChannel | null;
-  /** The server the panel lists channels of: the open game's remembered server, else the one of the call. */
-  browseServer: { id: string; name: string; icon: string | null } | null;
-  /** All of that server's voice channels in the server's own order, read again every 5 minutes. The panel shows the call's channel live, in its place. */
-  channels: DiscordChannel[];
-  /** The channel the panel offers to join again: the open game's last one, or the last one anywhere. */
-  last: { channelId: string; name: string; serverName: string | null } | null;
-  /** "Remember the server on this game" for the open game, and the server it remembers. */
-  game: { remember: boolean; serverId: string | null };
-  /** The servers the player is on, to choose one for a game. */
-  servers: { id: string; name: string }[];
-  /** Tavora may mute and deafen the player; false until the player approves that in Discord. */
-  canControl: boolean;
-  /** The player's own mute and deafen state while in a call. */
-  self: { mute: boolean; deaf: boolean } | null;
 }
 
 /** Which subscription an AI usage account belongs to. */
@@ -401,7 +360,7 @@ export interface ModulePermissions {
 }
 
 /** The connectors Tavora has (module-schema CONNECTORS). */
-export type ModuleConnector = "ai-usage";
+export type ModuleConnector = "ai-usage" | "discord";
 
 /** Everything the host UI can ask the main process to do. Parsed strictly in main. */
 export type HostAction =
@@ -512,22 +471,6 @@ export type HostAction =
   | { type: "clear-browser-data"; scope: "game" | "shared" }
   /** Connects to the Discord app, asking for approval in Discord if Tavora was never approved. */
   | { type: "discord-connect" }
-  /** Join a voice channel in the Discord app: the last one, or one of the server's listed channels. */
-  | { type: "discord-join"; channelId: string }
-  /** Leaves the voice channel in the Discord app. */
-  | { type: "discord-leave" }
-  /** Mutes or deafens the player in the Discord app (turning either on or off). */
-  | { type: "discord-voice"; mute?: boolean; deaf?: boolean }
-  /** Sets how loud a person in the player's call is (0 to 200) and/or mutes them for the player only. */
-  | { type: "discord-user-voice"; userId: string; volume?: number; mute?: boolean }
-  /** Asks Discord to approve muting and deafening, for sign-ins made before it existed. */
-  | { type: "discord-allow-control" }
-  /** Reads the server list and the browsed server's channels now. */
-  | { type: "discord-refresh" }
-  /** The tick box "Remember the server on this game". */
-  | { type: "discord-game-remember"; gameId: string; remember: boolean }
-  /** Chooses the server of a game from the servers the player is on. */
-  | { type: "discord-game-server"; gameId: string; guildId: string }
   /** Forgets Tavora's Discord sign-in on this PC. */
   | { type: "discord-sign-out" }
   /** Mails a sign-in code to an address. */
