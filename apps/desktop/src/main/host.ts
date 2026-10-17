@@ -132,6 +132,7 @@ import {
   type Snapshot,
   type WorkspaceState,
 } from "./workspace";
+import type { PanelContent, PanelLaunch } from "./panel-content";
 import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
 
 interface Rect {
@@ -240,6 +241,8 @@ export class Host {
   private readonly browsersByContents = new Map<number, BrowserPanel>();
   /** Browser tabs opened from another tab, so the host UI docks them beside it. Only used when a panel is first placed. */
   private readonly openedFrom = new Map<string, { instanceId: string; background: boolean }>();
+  /** Panels the player just added whose page has not asked why it opened yet (panel.getLaunch). */
+  private readonly added = new Set<string>();
   /** What every browser session is made safe with; built when the first Browser panel opens. */
   private browserHooks: BrowserSessionHooks | undefined;
   /** The Discord connector: Tavora's Discord sign-in and the connection to the Discord app, for modules granted it. */
@@ -1559,6 +1562,7 @@ export class Host {
     const record: InstanceRecord = { instanceId: randomUUID(), moduleId, ...(panelType ? { panelType } : {}) };
     records.push(record);
     if (openedFrom) this.openedFrom.set(record.instanceId, openedFrom);
+    this.added.add(record.instanceId);
     this.saveWorkspace();
     this.createView(record, game, performance.now());
     return record.instanceId;
@@ -1643,6 +1647,7 @@ export class Host {
   /** Removes a panel's view and its UI state; module settings and documents stay. */
   private closeView(instanceId: string): void {
     this.openedFrom.delete(instanceId);
+    this.added.delete(instanceId);
     this.destroyView(instanceId);
     this.panelBounds.delete(instanceId);
     void this.data.panelState.remove(instanceId).catch((error: unknown) => console.error("[tavora]", error));
@@ -1912,7 +1917,11 @@ export class Host {
     workspace.layout = plan.layout;
     this.layoutEpoch++;
     this.saveWorkspace();
-    for (const record of plan.instances) if (!existing.has(record.instanceId)) this.createView(record, game);
+    for (const record of plan.instances) {
+      if (existing.has(record.instanceId)) continue;
+      this.added.add(record.instanceId);
+      this.createView(record, game);
+    }
   }
 
   // ── Views ────────────────────────────────────────────────────────────
@@ -1950,6 +1959,8 @@ export class Host {
       onReveal: () => this.applyBounds(),
       onOpenLink: (url) => this.openLinkFromModule(url),
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
+      launch: () => this.launchOf(record),
+      setContent: (content) => this.setPanelContent(record, content),
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
@@ -1973,6 +1984,24 @@ export class Host {
     view.view.setVisible(false);
     view.suspend();
     this.window.contentView.addChildView(view.view);
+  }
+
+  /**
+   * Why a panel's page is loading (panel.getLaunch): added just now, or open before with what it last showed.
+   * A new panel counts as added until its page first asks.
+   */
+  private launchOf(record: InstanceRecord): PanelLaunch {
+    if (this.added.delete(record.instanceId)) return { reason: "add" };
+    return { reason: "restore", content: record.content ? { ...record.content } : null };
+  }
+
+  /** What a panel shows now (panel.setContent, checked by the bridge); its tab's hover text says it. */
+  private setPanelContent(record: InstanceRecord, content: PanelContent | null): void {
+    if (content?.id === record.content?.id && content?.title === record.content?.title) return;
+    if (content) record.content = content;
+    else delete record.content;
+    this.saveWorkspace();
+    this.pushState();
   }
 
   /** Connectors a module may use now: its grant, as far as the module installed now still asks for them. */
@@ -2320,12 +2349,13 @@ export class Host {
         const name = type?.name ?? this.modules.get(record.moduleId)!.manifest.name;
         const panelType = record.panelType ?? null;
         const openedFrom = this.openedFrom.get(record.instanceId);
-        if (type === undefined) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: record.panelType ?? name, status: "unavailable" as const };
-        if (!(view instanceof BrowserPanel)) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status: view?.status ?? "loading" };
+        if (type === undefined) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: record.panelType ?? name, status: "unavailable" as const, content: null };
+        const content = record.content?.title ?? null;
+        if (!(view instanceof BrowserPanel)) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status: view?.status ?? "loading", content };
         const browser = view.state;
         // A Browser tab is named after its page, like a browser tab.
         const title = (browser.title || browser.host).trim().slice(0, 80);
-        return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: title || name, status: view.status, browser, ...(openedFrom ? { openedFrom } : {}) };
+        return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: title || name, status: view.status, content: null, browser, ...(openedFrom ? { openedFrom } : {}) };
       }),
       layout: workspace.layout,
       layoutEpoch: this.layoutEpoch,

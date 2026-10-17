@@ -9,3 +9,7 @@ h2 { margin: 16px 0 6px; font-size: 1em; }
 dt { font-size: 0.85em; }
 dd { margin: 0 0 8px; }
 p { margin: 4px 0; }
+.toolbar { display: flex; gap: 8px; align-items: center; }
+/* Long build names are shortened here; the full name is on hover (the select's title). */
+.toolbar select { max-width: 16em; text-overflow: ellipsis; }
+.gone { color: var(--accent); }

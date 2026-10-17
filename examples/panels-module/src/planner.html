@@ -13,6 +13,14 @@
       <p data-testid="summary"></p>
       <h2>This panel type's options</h2>
       <dl data-testid="options"></dl>
+      <h2>What this panel shows</h2>
+      <p>Each panel picks its own build in its toolbar and tells Tavora with <code>panel.setContent</code>. Hover the tab to see the full name; copies of the same type can show different builds.</p>
+      <div class="toolbar">
+        <select data-testid="content-select" disabled></select>
+        <button type="button" data-testid="delete-content" disabled>Delete this build</button>
+      </div>
+      <p class="gone" data-testid="content-gone" hidden>This build was deleted. The panel stays open: pick another one above.</p>
+      <p class="eyebrow">Why this page opened (<code>panel.getLaunch</code>): <span data-testid="launch">–</span></p>
       <h2>Shared by every panel of this module</h2>
       <p>Saved content and permissions belong to the module, so every panel type and every copy sees the same data.</p>
       <p><button type="button" data-testid="bump" disabled>Add one</button> <span data-testid="shared">–</span> (stored with <code>storage</code>; reopen another panel to see it)</p>

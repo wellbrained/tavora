@@ -8,6 +8,7 @@ import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets
 import { BLOB_PATH, CLIPBOARD_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession, type BridgeContext } from "./bridge";
 import type { CheckedMenu } from "./module-menu";
+import type { PanelContent, PanelLaunch } from "./panel-content";
 import type { DiscordConnector, DiscordListener } from "./discord";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
@@ -48,6 +49,10 @@ export interface ModuleViewOptions {
   onOpenLink(url: string): void;
   /** Shows a module's menu in the host UI, over this panel (host.ts); resolves with the chosen id, or null. */
   showMenu(menu: CheckedMenu): Promise<string | null>;
+  /** Why the panel's page is loading (panel.getLaunch); asked once for each page load. */
+  launch(): PanelLaunch;
+  /** What the panel shows now (panel.setContent), already checked. */
+  setContent(content: PanelContent | null): void;
   /** Hosts the player granted this module for network.fetch, as installed now; asked on every call and redirect. */
   networkHosts(): ReadonlySet<string>;
   /** Connectors the player granted this module, as installed now; asked on every call. */
@@ -358,6 +363,8 @@ export class ModuleView {
         moduleVersion: module.manifest.version,
         instanceId,
         panelType: this.options.panelType?.id ?? null,
+        launch: this.options.launch(),
+        setContent: this.options.setContent,
         game,
         data,
         panelState,

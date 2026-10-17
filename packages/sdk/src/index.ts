@@ -34,6 +34,8 @@ import {
   type Methods,
   type NetworkRequest,
   type NetworkResponse,
+  type PanelContent,
+  type PanelLaunch,
   type PutDocumentParams,
   type TavoraDocument,
   type TavoraGame,
@@ -63,6 +65,8 @@ export type {
   MenuRequest,
   NetworkRequest,
   NetworkResponse,
+  PanelContent,
+  PanelLaunch,
   PutDocumentParams,
   TavoraDocument,
   TavoraGame,
@@ -76,7 +80,7 @@ export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, PROTOCOL
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.2";
+export const SDK_VERSION = "0.2.3";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -135,6 +139,18 @@ export interface TavoraSDK {
     readonly type: string | null;
     getState<T = JsonValue>(): Promise<T | null>;
     setState(value: JsonValue | null): Promise<void>;
+    /**
+     * Why this page is loading: `{ reason: "add" }` for a panel the player just added (pick its content
+     * yourself, such as the last one used, or show a picker), or `{ reason: "restore", content }` for a panel
+     * that was open before, with what it last showed. Needs Tavora 0.17.13 or newer.
+     */
+    getLaunch(): Promise<PanelLaunch>;
+    /**
+     * Tells Tavora what this panel shows now, such as the build picked in your toolbar's selector, or null for
+     * nothing. Tavora keeps it with the panel, shows the title when the player hovers the tab, and gives it
+     * back through getLaunch after a restart. Needs Tavora 0.17.13 or newer.
+     */
+    setContent(content: PanelContent | null): Promise<void>;
   };
   workspace: {
     getViewport(): Promise<TavoraViewport>;
@@ -387,6 +403,10 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       getState: <T = JsonValue>() => call("panel.getState") as Promise<T | null>,
       setState: async (value) => {
         await call("panel.setState", { value });
+      },
+      getLaunch: () => call("panel.getLaunch"),
+      setContent: async (content) => {
+        await call("panel.setContent", { content });
       },
     },
     workspace: {

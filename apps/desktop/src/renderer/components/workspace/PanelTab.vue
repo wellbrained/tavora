@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // A panel's tab: module name (or its panel type's short name, with the
-// module's name on hover), its state, and Reload, Stop and Close. Right-
-// click opens the same menu as the group's ⋯ button.
+// module's name on hover), its state, and Reload, Stop and Close. Hover also
+// shows what the panel shows. Right-click opens the same menu as the group's
+// ⋯ button.
 import { RotateCw, Square, X } from "@lucide/vue";
 import type { IDockviewPanelHeaderProps } from "dockview-vue";
 import { computed, inject } from "vue";
@@ -21,12 +22,16 @@ const dock = inject(DOCK)!;
 const id = props.params.api.id;
 const panel = computed(() => state.value?.panels.find((item) => item.instanceId === id));
 const status = computed<InstanceStatus>(() => panel.value?.status ?? "loading");
-/** Hover text: a panel type's tab names the module too (the decision log, named panels round 4). */
+/**
+ * A panel type's tab names the module too, on hover and as its menu's heading; the hover text adds the
+ * full name of what the panel shows on a line below (the decision log, named panels round 4).
+ */
 const title = computed(() => {
-  if (!panel.value?.panelType) return panel.value?.name ?? "";
-  const module = state.value?.modules.find((item) => item.id === panel.value!.moduleId);
+  if (!panel.value) return "";
+  const module = panel.value.panelType ? state.value?.modules.find((item) => item.id === panel.value!.moduleId) : undefined;
   return module ? `${panel.value.name} · ${module.name}` : panel.value.name;
 });
+const hover = computed(() => (panel.value?.content ? `${title.value}\n${panel.value.content}` : title.value));
 
 function items() {
   const docked = props.params.containerApi.getPanel(id);
@@ -42,6 +47,8 @@ function items() {
       data-panel-tab
       :data-module-id="panel?.moduleId"
       :data-panel-type="panel?.panelType ?? undefined"
+      :data-content="panel?.content ?? undefined"
+      :title="hover"
       :data-status="status"
     >
       <ModuleIcon v-if="state?.library.moduleIcons" :module-id="panel?.moduleId" :panel-type="panel?.panelType" />

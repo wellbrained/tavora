@@ -60,13 +60,14 @@ export interface PanelView {
   /** The tab's name: the panel type's short name, or the module's name. */
   name: string;
   status: InstanceStatus;
+  /** The full name of what the panel shows, as the module last set it (panel.setContent); the tab's hover text. */
+  content: string | null;
   /** Set for Browser panels: what their toolbar shows. */
   browser?: BrowserState;
   /** A Browser tab opened from another one: docked beside it, and left in the background when asked. */
   openedFrom?: { instanceId: string; background: boolean };
 }
 
-/** A Browser panel's page, as its toolbar shows it. Nothing here comes from the page but its title. */
 /** One of a module's named panel types, as Add module and the tabs show it. */
 export interface PanelTypeView {
   id: string;
@@ -77,6 +78,7 @@ export interface PanelTypeView {
   minHeight: number;
 }
 
+/** A Browser panel's page, as its toolbar shows it. Nothing here comes from the page but its title. */
 export interface BrowserState {
   /** The page's address; empty before anything was opened. */
   url: string;
