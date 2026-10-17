@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { fingerprint, loadOrCreateKey, packModule, PackError, readZip, SIGNATURE_FILE, signFiles, verifyFiles, writeZip, ZIP_LIMITS, ZipError, type ZipFile } from "./index.ts";
 
 const manifest = {
-  id: "nik.tracker",
+  id: "wellbrained.tracker",
   name: "Tracker",
   version: "1.0.0",
   apiVersion: "1",

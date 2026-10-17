@@ -56,18 +56,18 @@ describe("installZip", () => {
   it("installs a signed zip into a folder named after its id and records its owner", async () => {
     const { userData, userModules } = await setup();
     const key = generateKeyPairSync("ed25519").privateKey;
-    const files = packageFiles("nik.tracker");
+    const files = packageFiles("wellbrained.tracker");
     const installed = await installZip(await zipFile(userData, [...files, signFiles(files, key)]), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
     expect(installed).toMatchObject({ owner: fingerprint(key), updated: false });
-    expect(await readFile(path.join(userModules, "nik.tracker", "dist", "index.html"), "utf8")).toBe("<p>hi</p>");
-    expect(await readOwnerRecords(userData)).toEqual({ "nik.tracker": { id: "nik.tracker", owner: fingerprint(key) } });
+    expect(await readFile(path.join(userModules, "wellbrained.tracker", "dist", "index.html"), "utf8")).toBe("<p>hi</p>");
+    expect(await readOwnerRecords(userData)).toEqual({ "wellbrained.tracker": { id: "wellbrained.tracker", owner: fingerprint(key) } });
     // Nothing is left half-way.
     expect(await readdir(path.join(userData, "module-staging"))).toEqual([]);
   });
 
   it("installs an unsigned zip as local", async () => {
     const { userData, userModules } = await setup();
-    const installed = await installZip(await zipFile(userData, packageFiles("nik.tracker")), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
+    const installed = await installZip(await zipFile(userData, packageFiles("wellbrained.tracker")), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
     expect(installed.owner).toBe("local");
     expect(await readOwnerRecords(userData)).toEqual({});
   });
@@ -75,18 +75,18 @@ describe("installZip", () => {
   it("updates only from the same publisher (S5)", async () => {
     const { userData, userModules } = await setup();
     const key = generateKeyPairSync("ed25519").privateKey;
-    const first = packageFiles("nik.tracker");
+    const first = packageFiles("wellbrained.tracker");
     await installZip(await zipFile(userData, [...first, signFiles(first, key)]), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
-    const root = path.join(userModules, "nik.tracker");
-    const modules = new Map([["nik.tracker", loaded("nik.tracker", root, fingerprint(key))]]);
+    const root = path.join(userModules, "wellbrained.tracker");
+    const modules = new Map([["wellbrained.tracker", loaded("wellbrained.tracker", root, fingerprint(key))]]);
 
-    const next = packageFiles("nik.tracker", "1.1.0", "<p>new</p>");
+    const next = packageFiles("wellbrained.tracker", "1.1.0", "<p>new</p>");
     const updated = await installZip(await zipFile(userData, [...next, signFiles(next, key)]), { userData, userModules, tavoraVersion: TAVORA, modules });
     expect(updated.updated).toBe(true);
     expect(await readFile(path.join(root, "dist", "index.html"), "utf8")).toBe("<p>new</p>");
 
     const other = generateKeyPairSync("ed25519").privateKey;
-    const copycat = packageFiles("nik.tracker", "9.0.0", "<p>evil</p>");
+    const copycat = packageFiles("wellbrained.tracker", "9.0.0", "<p>evil</p>");
     await expect(installZip(await zipFile(userData, [...copycat, signFiles(copycat, other)]), { userData, userModules, tavoraVersion: TAVORA, modules })).rejects.toMatchObject({ key: "error.installOtherPublisher" });
     await expect(installZip(await zipFile(userData, copycat), { userData, userModules, tavoraVersion: TAVORA, modules })).rejects.toMatchObject({ key: "error.installOtherPublisher" });
     expect(await readFile(path.join(root, "dist", "index.html"), "utf8")).toBe("<p>new</p>");
@@ -94,12 +94,12 @@ describe("installZip", () => {
 
   it("refuses an id loaded from somewhere else, a reserved id, a tampered zip and a missing entry", async () => {
     const { userData, userModules } = await setup();
-    const elsewhere = new Map([["nik.tracker", loaded("nik.tracker", "/dev/modules/tracker", "local")]]);
-    await expect(installZip(await zipFile(userData, packageFiles("nik.tracker")), { userData, userModules, tavoraVersion: TAVORA, modules: elsewhere })).rejects.toMatchObject({ key: "error.installTaken" });
+    const elsewhere = new Map([["wellbrained.tracker", loaded("wellbrained.tracker", "/dev/modules/tracker", "local")]]);
+    await expect(installZip(await zipFile(userData, packageFiles("wellbrained.tracker")), { userData, userModules, tavoraVersion: TAVORA, modules: elsewhere })).rejects.toMatchObject({ key: "error.installTaken" });
     await expect(installZip(await zipFile(userData, packageFiles("tavora.notes")), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() })).rejects.toMatchObject({ key: "error.installRefused" });
 
     const key = generateKeyPairSync("ed25519").privateKey;
-    const files = packageFiles("nik.tracker");
+    const files = packageFiles("wellbrained.tracker");
     const signature = signFiles(files, key);
     const tampered = [files[0]!, { name: "dist/index.html", data: Buffer.from("<p>changed</p>") }, signature];
     await expect(installZip(await zipFile(userData, tampered), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() })).rejects.toMatchObject({ key: "error.installRefused" });
@@ -111,10 +111,10 @@ describe("installZip", () => {
 
   it("never replaces a folder that is in the way", async () => {
     const { userData, userModules } = await setup();
-    await mkdir(path.join(userModules, "nik.tracker"));
-    await writeFile(path.join(userModules, "nik.tracker", "mine.txt"), "keep");
-    await expect(installZip(await zipFile(userData, packageFiles("nik.tracker")), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() })).rejects.toMatchObject({ key: "error.installFolderTaken" });
-    expect(await readdir(path.join(userModules, "nik.tracker"))).toEqual(["mine.txt"]);
+    await mkdir(path.join(userModules, "wellbrained.tracker"));
+    await writeFile(path.join(userModules, "wellbrained.tracker", "mine.txt"), "keep");
+    await expect(installZip(await zipFile(userData, packageFiles("wellbrained.tracker")), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() })).rejects.toMatchObject({ key: "error.installFolderTaken" });
+    expect(await readdir(path.join(userModules, "wellbrained.tracker"))).toEqual(["mine.txt"]);
   });
 });
 
@@ -123,15 +123,15 @@ describe("applyOwners", () => {
     const { userData, userModules } = await setup();
     const owner = "0123456789abcdef0123456789abcdef";
     const modules = new Map([
-      ["nik.tracker", loaded("nik.tracker", path.join(userModules, "nik.tracker"), "local")],
-      ["nik.other", loaded("nik.other", path.join(userModules, "nik.other"), "local")],
-      ["nik.dev", loaded("nik.dev", "/dev/nik.dev", "local")],
+      ["wellbrained.tracker", loaded("wellbrained.tracker", path.join(userModules, "wellbrained.tracker"), "local")],
+      ["wellbrained.other", loaded("wellbrained.other", path.join(userModules, "wellbrained.other"), "local")],
+      ["wellbrained.dev", loaded("wellbrained.dev", "/dev/wellbrained.dev", "local")],
     ]);
-    applyOwners(modules, userModules, { "nik.tracker": { id: "nik.tracker", owner }, "nik.other": { id: "nik.renamed", owner }, "nik.dev": { id: "nik.dev", owner } });
+    applyOwners(modules, userModules, { "wellbrained.tracker": { id: "wellbrained.tracker", owner }, "wellbrained.other": { id: "wellbrained.renamed", owner }, "wellbrained.dev": { id: "wellbrained.dev", owner } });
     expect([...modules.values()].map((module) => module.owner)).toEqual([owner, "local", "local"]);
 
-    await installZip(await zipFile(userData, packageFiles("nik.x")), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
-    await forgetOwner(userData, "nik.x");
+    await installZip(await zipFile(userData, packageFiles("wellbrained.x")), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
+    await forgetOwner(userData, "wellbrained.x");
     expect(await readOwnerRecords(userData)).toEqual({});
   });
 });
