@@ -83,8 +83,17 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "The installer exited with $($p.ExitCode)." }
       - name: Start the installed Tavora
         shell: pwsh
+        env:
+          START_CHECK_SCREENSHOT: ${{ runner.temp }}\start-check.png
         run: node apps/desktop/scripts/start-check.mjs "$env:LOCALAPPDATA\Programs\Tavora\Tavora.exe"
       - if: failure()
         name: Startup log
         shell: pwsh
         run: Get-Content "$env:APPDATA\@tavora\desktop\logs\startup.log" -ErrorAction SilentlyContinue
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: start-check-screen
+          path: ${{ runner.temp }}\start-check.png
+          if-no-files-found: ignore
+          retention-days: 7
