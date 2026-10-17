@@ -11,14 +11,14 @@ import { findUnsafeSwitch } from "./unsafe-switches";
 // The last errors of this run, for Settings > Copy diagnostic info.
 errorLog.capture();
 
-// The data folder is fixed, not derived from the app's name: it has always been
-// %APPDATA%\@tavora\desktop (the package name), and the installed app is named
-// Tavora, which would otherwise move everyone's games and settings.
+// Installed and development runs keep separate state, independent of the app name.
+// Installed data stays in %APPDATA%\@tavora\desktop; dev uses desktop-dev.
+// Explicit development/test profiles still take precedence.
 // Like every switch below, only a development run honours the environment: whoever can set it for a packaged Tavora
 // could otherwise point it at their own data folder or modules, or have a module listed as Official.
 const userData = !app.isPackaged && process.env.TAVORA_USER_DATA
   ? path.resolve(process.env.TAVORA_USER_DATA)
-  : path.join(app.getPath("appData"), "@tavora", "desktop");
+  : path.join(app.getPath("appData"), "@tavora", app.isPackaged ? "desktop" : "desktop-dev");
 
 // A packaged Tavora started with a switch that opens it up quits before any page or port exists (unsafe-switches.ts).
 const unsafe = app.isPackaged ? findUnsafeSwitch(process.argv.slice(1)) : undefined;
