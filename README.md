@@ -31,7 +31,7 @@ Planned later, not created yet: `apps/{api,portal}`, `packages/{cli,module-runti
 
 ## Getting started
 
-Requires Node 22+ and pnpm (via `corepack enable`).
+Requires Node 24 LTS or newer and pnpm (via `corepack enable`).
 
 ```sh
 pnpm install
