@@ -112,4 +112,5 @@ Tavora accounts are optional. Modules learn nothing about them: no SDK call, bri
 - **The Browser panel has no Safe Browsing.** A phishing page still renders. A public name that resolves to a local address (DNS rebinding) is not caught there, because the panel checks names, not resolved addresses. Sign-in popups that need `window.opener` do not work.
 - **Discord's local connection is trusted.** Whatever listens where the Discord app listens gets the Discord token. A program that can do that is already running as the player.
 - **Unsigned local modules are known only by their id.** Another local module put in the same folder under the same id gets its grants.
+- **A development folder is a module's whole bundle.** A module loaded from a development folder (Settings > Modules) can read every file in that project folder, such as its sources or a `.env` file, because G6 is measured from that folder. It is an unsigned local module, known only by its id. Add only your own projects.
 - **WebAssembly is allowed only for Tavora's own modules** that ask for it, because the Whiteboard needs it. Community modules do not get it.

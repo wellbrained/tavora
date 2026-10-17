@@ -330,6 +330,8 @@ export interface HostViewState {
   }[];
   /** Folders in the modules folder that could not be loaded, and why, for module authors. */
   moduleProblems: { folder: string; message: string }[];
+  /** Module project folders added in Settings > Modules: the module each one loads, or why it could not be loaded (null while it simply has none yet). */
+  developmentFolders: { folder: string; moduleId: string | null; problem: string | null }[];
   /** Saved data of modules that are not installed (or of another publisher than the installed one), kept until deleted. */
   leftoverModuleData: { owner: string; moduleId: string; publisher: string | null }[];
   /** Panels of the current game, in the order they were opened. */
@@ -435,6 +437,9 @@ export type HostAction =
   | { type: "open-themes-folder" }
   /** Opens the player's modules folder in the file manager, creating it first. */
   | { type: "open-modules-folder" }
+  /** Picks a module project folder to load from (answers with the folder), or forgets one. */
+  | { type: "add-development-folder" }
+  | { type: "remove-development-folder"; folder: string }
   /** Looks for modules again, after the player changed their modules folder. */
   | { type: "reload-modules" }
   /** Moves a module from the player's modules folder to the recycle bin, after removing its panels in every game; its data stays. */
