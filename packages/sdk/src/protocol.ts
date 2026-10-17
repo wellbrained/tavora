@@ -167,6 +167,87 @@ export interface AiUsageReading {
   readAt: string;
 }
 
+/**
+ * The discord connector's connection to the Discord app on this PC, with Tavora's Discord sign-in.
+ * The connection runs while a panel of a module granted the connector has asked for it.
+ */
+export interface DiscordState {
+  /**
+   * connecting: looking for the Discord app and signing in. not-running: no Discord app was found;
+   * Tavora keeps looking. signed-out: Tavora was never approved in Discord, or the player signed out;
+   * connect() asks. approving: Discord shows its approval pop-up. connected: commands and events work.
+   * error: the last sign-in failed (see `error`); connect() tries again.
+   */
+  status: "connecting" | "not-running" | "signed-out" | "approving" | "connected" | "error";
+  /**
+   * For error: not-approved (the player declined in Discord), no-code (Discord gave no sign-in code),
+   * offline (discord.com could not be reached), no-sign-in (discord.com refused the sign-in), failed.
+   */
+  error: "not-approved" | "no-code" | "offline" | "no-sign-in" | "failed" | null;
+  /** Who Tavora is signed in to Discord as, once connected. Names come from Discord; show them as text only. */
+  user: { id: string; name: string } | null;
+  /** The sign-in may mute and deafen the player (SET_VOICE_SETTINGS). Sign-ins made before Tavora 0.5.11 can't until allowControl(). */
+  canControl: boolean;
+  /** False where this PC can't keep the sign-in safely, so it lasts only until Tavora closes. */
+  canSaveSignIn: boolean;
+}
+
+/**
+ * The Discord RPC commands a module may send through the discord connector, and their arguments.
+ * Tavora checks every argument and sends exactly these fields; Discord's answer comes back as it came.
+ */
+export interface DiscordCommands {
+  /** The voice channel the player is in, with its `voice_states`, or null. */
+  GET_SELECTED_VOICE_CHANNEL: Record<string, never>;
+  /** The servers the player is on. */
+  GET_GUILDS: Record<string, never>;
+  GET_GUILD: { guild_id: string };
+  /** A server's channels (ids, names and types; voice channels are type 2, stage channels 13). */
+  GET_CHANNELS: { guild_id: string };
+  /** One channel, with who is in it when it is a voice channel. */
+  GET_CHANNEL: { channel_id: string };
+  /** Joins a voice channel (an id) or leaves (null). Only right after a click or key press in the panel, one per click. */
+  SELECT_VOICE_CHANNEL: { channel_id: string | null };
+  /** Mutes or deafens the player. Needs DiscordState.canControl. */
+  SET_VOICE_SETTINGS: { mute?: boolean; deaf?: boolean };
+  /** How loud someone is for the player (0 to 200) and/or muted for the player only: Discord's own per-person settings. */
+  SET_USER_VOICE_SETTINGS: { user_id: string; volume?: number; mute?: boolean };
+}
+
+export type DiscordCommand = keyof DiscordCommands;
+export const DISCORD_COMMANDS = [
+  "GET_SELECTED_VOICE_CHANNEL",
+  "GET_GUILDS",
+  "GET_GUILD",
+  "GET_CHANNELS",
+  "GET_CHANNEL",
+  "SELECT_VOICE_CHANNEL",
+  "SET_VOICE_SETTINGS",
+  "SET_USER_VOICE_SETTINGS",
+] as const satisfies readonly DiscordCommand[];
+
+/**
+ * Discord's answer to a command. not-connected: the connection is not `connected` right now.
+ * refused: Discord answered with an error (`code` and `message` are Discord's). no-answer: Discord
+ * did not answer in time, the connection ended, or the answer was too large (LIMITS.maxDiscordAnswerBytes).
+ */
+export type DiscordResult =
+  | { ok: true; data: JsonValue }
+  | { ok: false; reason: "not-connected" | "refused" | "no-answer"; code: number | null; message: string | null };
+
+/**
+ * Discord RPC events a module may subscribe to. VOICE_CHANNEL_SELECT (the player joined, moved or left)
+ * takes no channel; the others are for one voice channel and need its id.
+ */
+export const DISCORD_EVENTS = ["VOICE_CHANNEL_SELECT", "VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_DELETE", "SPEAKING_START", "SPEAKING_STOP"] as const;
+export type DiscordEventName = (typeof DISCORD_EVENTS)[number];
+
+/** One Discord event, with its data as Discord sent it. */
+export interface DiscordEvent {
+  event: DiscordEventName;
+  data: JsonValue;
+}
+
 export interface DocumentChange {
   id: string;
   revision: number;
@@ -176,11 +257,11 @@ export interface DocumentChange {
 /**
  * Capabilities gate methods beyond the always-available core. A module has a
  * capability once the player granted one of its permissions for it (`network`:
- * a host in `permissions.network`; `aiUsage`: the `ai-usage` connector); calling
- * a gated method without it fails with PERMISSION_DENIED. The others cannot be
- * granted yet.
+ * a host in `permissions.network`; `aiUsage`: the `ai-usage` connector; `discord`:
+ * the `discord` connector); calling a gated method without it fails with
+ * PERMISSION_DENIED. The others cannot be granted yet.
  */
-export type Capability = "network" | "aiUsage" | "files" | "clipboard" | "sharedData";
+export type Capability = "network" | "aiUsage" | "discord" | "files" | "clipboard" | "sharedData";
 
 /** Request methods and their params/result types. */
 export interface Methods {
@@ -216,6 +297,19 @@ export interface Methods {
   "aiUsage.accounts": { params: undefined; result: AiUsageAccountInfo[] };
   /** Reads one account's usage (capability `aiUsage`). */
   "aiUsage.read": { params: { accountId: string }; result: AiUsageReading };
+  /** The connection to the Discord app; starts it for this panel (capability `discord`). */
+  "discord.state": { params: undefined; result: DiscordState };
+  /** Signs in, asking for approval in Discord when needed. Only right after a click or key press (capability `discord`). */
+  "discord.connect": { params: undefined; result: null };
+  /** Asks Discord to approve muting and deafening for an older sign-in. Only right after a click or key press (capability `discord`). */
+  "discord.allowControl": { params: undefined; result: null };
+  /** One Discord RPC command from DISCORD_COMMANDS (capability `discord`). */
+  "discord.command": { params: { command: DiscordCommand; args: DiscordCommands[DiscordCommand] }; result: DiscordResult };
+  /** Starts sending one Discord event to this panel; kept across reconnects until unsubscribed (capability `discord`). */
+  "discord.subscribe": { params: { event: DiscordEventName; channelId?: string }; result: null };
+  "discord.unsubscribe": { params: { event: DiscordEventName; channelId?: string }; result: null };
+  /** A picture from Discord's image server (someone's avatar, a server icon) as a small PNG data address, or null (capability `discord`). */
+  "discord.image": { params: { url: string }; result: string | null };
 }
 
 export type MethodName = keyof Methods;
@@ -239,6 +333,10 @@ export interface Events {
   "documents.changed": DocumentChange;
   /** The player added, renamed or removed an AI account; ask aiUsage.accounts again. Only with capability `aiUsage`. */
   "aiUsage.accountsChanged": null;
+  /** The connection to the Discord app changed. Only with capability `discord`, after discord.state. */
+  "discord.state": DiscordState;
+  /** A Discord event this panel subscribed to. Only with capability `discord`. */
+  "discord.event": DiscordEvent;
   "lifecycle.suspend": null;
   "lifecycle.resume": null;
   "lifecycle.dispose": null;
@@ -335,6 +433,12 @@ export const LIMITS = {
   aiUsageMinReadMs: 60_000,
   /** How long one aiUsage.read may take; the Codex command line can be slow to start. */
   aiUsageTimeoutMs: 40_000,
+  /** How long one discord.command may take; a slower answer is `no-answer`. */
+  discordTimeoutMs: 15_000,
+  /** Largest Discord answer or event passed on, as JSON; a larger one is `no-answer` (or dropped, for an event). */
+  maxDiscordAnswerBytes: 512 * 1024,
+  /** Discord events one panel may subscribe to at once. */
+  maxDiscordSubscriptions: 32,
 } as const;
 
 /** The kinds of file a module can keep with blobs.put, found by looking at the file itself. */

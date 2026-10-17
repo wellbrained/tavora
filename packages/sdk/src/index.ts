@@ -14,6 +14,12 @@ import {
   type BlobInfo,
   type BlobUsage,
   type Capability,
+  type DiscordCommand,
+  type DiscordCommands,
+  type DiscordEvent,
+  type DiscordEventName,
+  type DiscordResult,
+  type DiscordState,
   type DocumentChange,
   type DocumentSummary,
   type ErrorCode,
@@ -41,6 +47,12 @@ export type {
   BlobType,
   BlobUsage,
   Capability,
+  DiscordCommand,
+  DiscordCommands,
+  DiscordEvent,
+  DiscordEventName,
+  DiscordResult,
+  DiscordState,
   DocumentChange,
   DocumentSummary,
   ErrorCode,
@@ -55,7 +67,7 @@ export type {
   TavoraViewport,
   ThemeToken,
 } from "./protocol.js";
-export { BLOB_ID, BLOB_TYPES, LIMITS, PROTOCOL_VERSION, THEME_TOKENS } from "./protocol.js";
+export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, PROTOCOL_VERSION, THEME_TOKENS } from "./protocol.js";
 
 /** Version of this SDK package, sent to the host during the handshake. */
 export const SDK_VERSION = "0.1.0";
@@ -176,6 +188,27 @@ export interface TavoraSDK {
       read(accountId: string): Promise<AiUsageReading>;
       /** Fires when the player adds, renames or removes an account. */
       onAccountsChange(fn: () => void): Unsubscribe;
+    };
+    /**
+     * `discord`: the Discord app on this PC, through Tavora's Discord sign-in. The connection runs while a
+     * panel has asked for state(); Tavora keeps the sign-in and sends only the commands in DISCORD_COMMANDS.
+     */
+    discord: {
+      /** The connection now. The first call starts it for this panel. */
+      state(): Promise<DiscordState>;
+      onStateChange(fn: (state: DiscordState) => void): Unsubscribe;
+      /** Signs in, asking for approval in Discord the first time. Call it from a click or key press handler. */
+      connect(): Promise<void>;
+      /** Asks Discord to approve muting and deafening, for a sign-in that can't yet (canControl false). From a click or key press. */
+      allowControl(): Promise<void>;
+      /** Sends one command; resolves with Discord's answer as it came, or why there is none. SELECT_VOICE_CHANNEL only from a click or key press. */
+      command<C extends DiscordCommand>(command: C, args: DiscordCommands[C]): Promise<DiscordResult>;
+      /** Starts sending an event to this panel (VOICE_CHANNEL_SELECT without a channel, the others for one voice channel). Kept across reconnects. */
+      subscribe(event: DiscordEventName, channelId?: string): Promise<void>;
+      unsubscribe(event: DiscordEventName, channelId?: string): Promise<void>;
+      onEvent(fn: (event: DiscordEvent) => void): Unsubscribe;
+      /** A picture from cdn.discordapp.com (an avatar or server icon address) as a small PNG data address, or null. */
+      image(url: string): Promise<string | null>;
     };
   };
   lifecycle: {
@@ -404,6 +437,25 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         accounts: () => call("aiUsage.accounts"),
         read: (accountId) => call("aiUsage.read", { accountId }, LIMITS.aiUsageTimeoutMs + 5000),
         onAccountsChange: (fn) => on("aiUsage.accountsChanged", () => fn()),
+      },
+      discord: {
+        state: () => call("discord.state"),
+        onStateChange: (fn) => on("discord.state", fn),
+        connect: async () => {
+          await call("discord.connect");
+        },
+        allowControl: async () => {
+          await call("discord.allowControl");
+        },
+        command: (command, args) => call("discord.command", { command, args }, LIMITS.discordTimeoutMs + 5000),
+        subscribe: async (event, channelId) => {
+          await call("discord.subscribe", channelId === undefined ? { event } : { event, channelId });
+        },
+        unsubscribe: async (event, channelId) => {
+          await call("discord.unsubscribe", channelId === undefined ? { event } : { event, channelId });
+        },
+        onEvent: (fn) => on("discord.event", fn),
+        image: (url) => call("discord.image", { url }),
       },
     },
     lifecycle: {

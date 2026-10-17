@@ -119,8 +119,8 @@ describe("connector grants", () => {
   });
 
   it("drops connectors Tavora does not have", () => {
-    const owners = sanitizeGrants({ version: 1, owners: { official: { "tavora.ai-usage": { version: "1.0.0", grantedAt: "x", network: [], connectors: ["ai-usage", "discord", 7] } } } });
-    expect(owners.get("official")?.get("tavora.ai-usage")?.connectors).toEqual(["ai-usage"]);
+    const owners = sanitizeGrants({ version: 1, owners: { official: { "tavora.ai-usage": { version: "1.0.0", grantedAt: "x", network: [], connectors: ["ai-usage", "discord", "steam", 7] } } } });
+    expect(owners.get("official")?.get("tavora.ai-usage")?.connectors).toEqual(["ai-usage", "discord"]);
   });
 });
 

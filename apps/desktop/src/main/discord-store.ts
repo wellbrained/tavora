@@ -1,20 +1,51 @@
 import { readFile, rm } from "node:fs/promises";
 import { isGameId } from "@tavora/module-schema";
-import type { DiscordGame, DiscordLast, DiscordSecrets, DiscordToken } from "./discord";
-import { isSnowflake } from "./discord-voice";
+import { isSnowflake } from "./discord-parse";
 import { writeFileAtomic } from "./fsutil";
 
-// The Discord sign-in (token), the voice channel last joined and the server each
-// game remembers, kept in discord.json in the user data folder and encrypted
-// with the operating system's key store (Electron's safeStorage: DPAPI on
-// Windows, the Keychain on macOS, the secret service on Linux). Where that is
+// The Discord sign-in (token), kept in discord.json in the user data folder and
+// encrypted with the operating system's key store (Electron's safeStorage: DPAPI
+// on Windows, the Keychain on macOS, the secret service on Linux). Where that is
 // not available nothing is saved. Before 0.6.1 the file also held a Client
 // Secret; it is dropped when the file is read and the file is written again.
+// Before 0.16.11 it also held the voice channel last joined and the server each
+// game remembers; Tavora moves those into the Discord module once (host.ts).
 
 export interface Encryptor {
   isAvailable(): boolean;
   encrypt(text: string): Buffer;
   decrypt(data: Buffer): string;
+}
+
+export interface DiscordToken {
+  accessToken: string;
+  refreshToken: string;
+  /** Milliseconds since 1970. */
+  expiresAt: number;
+}
+
+/** Before 0.16.11: the voice channel the player was last in on a server, to rejoin from the panel. */
+export interface DiscordLast {
+  channelId: string;
+  guildId: string;
+  name: string;
+  serverName: string | null;
+}
+
+/** Before 0.16.11: the server a game remembered, and the channel the player was last in there. */
+export interface DiscordGame {
+  guildId: string | null;
+  serverName: string | null;
+  channelId: string | null;
+  channelName: string | null;
+}
+
+export interface DiscordSecrets {
+  token: DiscordToken | null;
+  /** Left by Discord panels before 0.16.11, until moved into the module. */
+  last?: DiscordLast | null;
+  /** Left by Discord panels before 0.16.11, by game id, until moved into the module. */
+  games?: Record<string, DiscordGame>;
 }
 
 const EMPTY: DiscordSecrets = { token: null, last: null, games: {} };

@@ -1,15 +1,15 @@
-// Discord panel (docs/threat-model.md, D1 to D7). A pretend Discord app
-// listens where the real one would, and a local server stands in for
-// Discord's token address, so nothing here reaches Discord.
+// The Discord module and the discord connector (docs/threat-model.md, D1 to D9).
+// A pretend Discord app listens where the real one would, and a local server
+// stands in for Discord's token address, so nothing here reaches Discord.
 
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test, type ElectronApplication } from "@playwright/test";
 import { fakeDiscord, type FakeDiscord } from "../../src/main/discord-fake.test-helper";
-import { launch, openModule } from "./harness";
+import { clickInModule, expectModuleText, inModule, launch } from "./harness";
 
 const DISCORD = "tavora.discord";
 
@@ -56,25 +56,47 @@ test.beforeAll(async () => {
   tokenUrl = `http://127.0.0.1:${(tokens.address() as AddressInfo).port}/api/oauth2/token`;
 });
 
+/** A real key press in the module's page, so what follows counts as the player's own click (D8). */
+async function gesture(app: ElectronApplication) {
+  await app.evaluate(({ webContents }, moduleId) => {
+    const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
+    if (!target) throw new Error("no panel");
+    target.sendInputEvent({ type: "keyDown", keyCode: "Shift" });
+    target.sendInputEvent({ type: "keyUp", keyCode: "Shift" });
+  }, DISCORD);
+}
+
+const count = (app: ElectronApplication, selector: string) => inModule<number>(app, DISCORD, `document.querySelectorAll('${selector}').length`).catch(() => -1);
+const attribute = (app: ElectronApplication, testId: string, name: string) =>
+  inModule<string | null>(app, DISCORD, `document.querySelector('[data-testid="${testId}"]')?.getAttribute("${name}") ?? null`).catch(() => null);
+
 test.afterAll(async () => {
   await fake.close();
   await new Promise((resolve) => tokens.close(resolve));
 });
 
-test("the Discord panel connects once approved and shows who is in the voice channel and who is talking", async () => {
+test("the Discord module asks first, connects once approved and shows who is in the voice channel and who is talking", async () => {
   const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_DISCORD_IPC: fake.path, TAVORA_DISCORD_TOKEN_URL: tokenUrl } });
   try {
-    await openModule(page, DISCORD);
-    const panel = page.getByTestId("discord-panel");
-    await expect(panel).toContainText("See who is in your voice channel");
+    // Adding it asks to let it use Discord with Tavora's sign-in (the module grants row of 2026-10-16).
+    await page.getByTestId("add-module").click();
+    await page.getByTestId(`open-${DISCORD}`).click();
+    await expect(page.getByTestId("grant-dialog")).toBeVisible();
+    await expect(page.getByTestId("grant-discord")).toContainText("Join or leave a voice channel when you click");
+    await page.getByTestId("grant-allow").click();
+    await expectModuleText(app, DISCORD, "discord-connect", "Connect");
     // Nothing is asked of Discord before the player connects.
     expect(fake.commands).toEqual([]);
 
-    await panel.getByTestId("discord-connect").click();
-    await expect(page.getByTestId("discord-server")).toHaveText("Wellbrained Crew");
-    await expect(page.getByTestId("discord-current")).toContainText("Factory Floor");
-    await expect(panel.locator("[data-testid^=discord-member-]")).toHaveCount(7);
-    await expect(panel).toContainText("Lobby");
+    // Connecting needs the player's own click (D8).
+    await clickInModule(app, DISCORD, "discord-connect");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(fake.commands.some((c) => c.cmd === "AUTHORIZE")).toBe(false);
+    await gesture(app);
+    await clickInModule(app, DISCORD, "discord-connect");
+    await expectModuleText(app, DISCORD, "discord-server", "Wellbrained Crew");
+    await expect.poll(() => count(app, '[data-testid="discord-current"]')).toBe(1);
+    await expect.poll(() => count(app, "[data-testid^=discord-member-]")).toBe(7);
     // D2: only voice is read.
     expect(fake.commands.find((c) => c.cmd === "AUTHORIZE")?.args.scopes).toEqual(["rpc", "rpc.voice.read", "rpc.voice.write", "identify"]);
     // D1: no secret exists; the one-time verifier only goes to the token address, and it matches the challenge the Discord app got.
@@ -91,20 +113,33 @@ test("the Discord panel connects once approved and shows who is in the voice cha
     expect(onDisk).not.toContain("refresh");
 
     fake.dispatch("SPEAKING_START", { user_id: "2", channel_id: "10" });
-    await expect(page.getByTestId("discord-member-2")).toHaveAttribute("data-speaking", "true");
+    await expect.poll(() => attribute(app, "discord-member-2", "data-speaking")).toBe("true");
     fake.dispatch("SPEAKING_START", { user_id: "1", channel_id: "10" });
-    await expect(page.getByTestId("discord-member-1")).toHaveAttribute("data-speaking", "true");
+    await expect.poll(() => attribute(app, "discord-member-1", "data-speaking")).toBe("true");
     if (process.env.TAVORA_DISCORD_SCREENSHOT) await page.screenshot({ path: process.env.TAVORA_DISCORD_SCREENSHOT });
     fake.dispatch("SPEAKING_STOP", { user_id: "2", channel_id: "10" });
-    await expect(page.getByTestId("discord-member-2")).not.toHaveAttribute("data-speaking", "true");
+    await expect.poll(() => attribute(app, "discord-member-2", "data-speaking")).toBeNull();
 
     fake.dispatch("VOICE_STATE_DELETE", person("5", "Sarah"));
-    await expect(page.getByTestId("discord-member-5")).toHaveCount(0);
+    await expect.poll(() => count(app, '[data-testid="discord-member-5"]')).toBe(0);
+
+    // Joining a channel needs the player's own click too (D8).
+    await clickInModule(app, DISCORD, "discord-join-11");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(fake.commands.some((c) => c.cmd === "SELECT_VOICE_CHANNEL")).toBe(false);
+    await gesture(app);
+    await clickInModule(app, DISCORD, "discord-join-11");
+    await expect.poll(() => fake.commands.find((c) => c.cmd === "SELECT_VOICE_CHANNEL")?.args).toEqual({ channel_id: "11", force: true });
 
     // Leaving voice in Discord.
     fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: null }));
     fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: null });
-    await expect(page.getByTestId("discord-no-call")).toBeVisible();
+    await expect.poll(() => count(app, '[data-testid="discord-no-call"]')).toBe(1);
+
+    // Settings > Integrations > Discord lists the module, which can be taken back.
+    await page.getByTestId("rail-settings").click();
+    await page.getByTestId("settings-nav-integrations").click();
+    await expect(page.getByTestId(`discord-user-${DISCORD}`)).toBeVisible();
   } finally {
     await app.close();
   }
