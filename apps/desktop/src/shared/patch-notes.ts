@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.16.12",
+    date: "2026-10-17",
+    title: "Tavora's own icon",
+    notes: [
+      "Tavora's program, taskbar button and shortcuts now show the Tavora flame instead of the Electron logo.",
+    ],
+  },
+  {
     version: "0.16.10",
     date: "2026-10-17",
     title: "AI Usage is a module",

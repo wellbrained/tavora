@@ -116,7 +116,8 @@ if (!app.requestSingleInstanceLock()) {
         rendererDir: path.join(__dirname, "../renderer"),
         modulePreload: path.join(__dirname, "../preload/module.cjs"),
         hostPreload: path.join(__dirname, "../preload/host.cjs"),
-        icon: path.join(__dirname, "../../assets/icon-256.png"),
+        // The installer's .ico on Windows, so the taskbar gets every size; the 256 px PNG elsewhere.
+        icon: path.join(__dirname, "../../assets", process.platform === "win32" ? "tavora.ico" : "icon-256.png"),
         devTools: !app.isPackaged && process.env.TAVORA_DEVTOOLS === "1",
         grayscaleText,
         restart,
