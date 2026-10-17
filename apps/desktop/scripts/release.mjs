@@ -1,5 +1,5 @@
 // `pnpm release`: publishes a minor version of the Windows app to updates.mytavora.app.
-// Run on Nik's PC from a clean, up-to-date main whose version is x.y.0.
+// Run on the maintainer's PC from a clean, up-to-date main whose version is x.y.0.
 //
 //   pnpm release              checks, builds, uploads, tags and pushes the tag
 //   pnpm release --dry-run    checks and builds, then stops before the upload
@@ -36,10 +36,15 @@ const skipE2e = process.argv.includes("--skip-e2e");
 const allowPatch = process.argv.includes("--allow-patch");
 const skipCi = process.argv.includes("--skip-ci-check");
 
-// Same server and key as the docs and the service use.
-const key = "D:\\Server\\vpn ssh-key-2026-10-05.key";
-const remote = "root@100.92.36.114";
+// Same server and key as the docs and the service use, from the maintainer's environment:
+// TAVORA_DEPLOY_HOST (user@host) and TAVORA_DEPLOY_SSH_KEY (path to the private key).
+const key = process.env.TAVORA_DEPLOY_SSH_KEY ?? "";
+const remote = process.env.TAVORA_DEPLOY_HOST ?? "";
 const sshOptions = ["-i", key, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15"];
+if (!dryRun && (!key || !remote)) {
+  console.error("Set TAVORA_DEPLOY_HOST and TAVORA_DEPLOY_SSH_KEY first. Nothing was built or published.");
+  process.exit(1);
+}
 const feed = "https://updates.mytavora.app";
 
 function run(command, args, options = {}) {

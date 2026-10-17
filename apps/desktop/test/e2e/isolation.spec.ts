@@ -1,4 +1,4 @@
-// Isolation gate tests (docs/threat-model.md, G1 to G9). A hostile module
+// Isolation gate tests (the threat model, G1 to G9). A hostile module
 // attacks the host while a well-behaved module holds data worth stealing.
 
 import { createServer, type Server } from "node:http";

@@ -4,10 +4,10 @@ import { clientOf, createRateLimiter } from "./rate-limit.ts";
 describe("clientOf", () => {
   it("keeps an IPv4 address and counts IPv6 by its /64", () => {
     expect(clientOf("203.0.113.7")).toBe("203.0.113.7");
-    expect(clientOf("2a01:4f8:c013:d350::1")).toBe("2a01:4f8:c013:d350::/64");
-    expect(clientOf("2a01:04f8:c013:d350:ffff:1:2:3")).toBe("2a01:4f8:c013:d350::/64");
-    expect(clientOf("2a01:4f8::1")).toBe("2a01:4f8:0:0::/64");
-    expect(clientOf("[2a01:4f8:c013:d350::abcd]")).toBe("2a01:4f8:c013:d350::/64");
+    expect(clientOf("2001:db8:c013:d350::1")).toBe("2001:db8:c013:d350::/64");
+    expect(clientOf("2001:0db8:c013:d350:ffff:1:2:3")).toBe("2001:db8:c013:d350::/64");
+    expect(clientOf("2001:db8::1")).toBe("2001:db8:0:0::/64");
+    expect(clientOf("[2001:db8:c013:d350::abcd]")).toBe("2001:db8:c013:d350::/64");
     expect(clientOf("::ffff:198.51.100.4")).toBe("198.51.100.4");
   });
 

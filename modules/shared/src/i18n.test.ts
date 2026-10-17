@@ -7,12 +7,12 @@ const de = { hello: "Hallo {name}", "left.one": "{count} übrig", "left.other": 
 describe("createTranslator", () => {
   it("starts in English, switches to German, and treats anything else as English", () => {
     const { t, setLanguage, locale } = createTranslator(en, de);
-    expect(t("hello", { name: "Nik" })).toBe("Hello Nik");
+    expect(t("hello", { name: "Alex" })).toBe("Hello Alex");
     setLanguage("de-AT");
-    expect(t("hello", { name: "Nik" })).toBe("Hallo Nik");
+    expect(t("hello", { name: "Alex" })).toBe("Hallo Alex");
     expect(locale()).toBe("de-DE");
     setLanguage("fr");
-    expect(t("hello", { name: "Nik" })).toBe("Hello Nik");
+    expect(t("hello", { name: "Alex" })).toBe("Hello Alex");
     expect(locale()).toBe("en-GB");
   });
 

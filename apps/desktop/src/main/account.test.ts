@@ -265,58 +265,58 @@ describe("the sign-in on disk", () => {
 });
 
 describe("the profile in the account", () => {
-  const NIK: ProfileData = { name: "Nik", initials: "NK", picture: "cGlj", updatedAt: "2026-10-16T10:00:00.000Z" };
-  const OTHER = { name: "Dominik", initials: "DK", picture: null, updatedAt: "2026-10-16T11:00:00.000Z" };
+  const ALEX: ProfileData = { name: "Alex", initials: "AX", picture: "cGlj", updatedAt: "2026-10-16T10:00:00.000Z" };
+  const OTHER = { name: "Sam", initials: "SM", picture: null, updatedAt: "2026-10-16T11:00:00.000Z" };
   const signInWith = (answers: Record<string, (body: Record<string, unknown> | undefined) => Response>) =>
     service({ "POST /code": () => json({}, 202), "POST /verify": signedInAnswer("signed-in"), "GET /": () => json({ devices: [] }), ...answers });
 
   it("a new account takes this PC's profile", async () => {
     const { calls, fetchImpl } = signInWith({ "GET /profile": () => json({ profile: null }), "PUT /profile": (body) => json({ profile: body }) });
-    const { account, local } = client(fetchImpl, { profile: NIK });
+    const { account, local } = client(fetchImpl, { profile: ALEX });
     await account.sendCode("me@example.com");
     await account.verify("123456");
-    expect(calls.find((call) => call.method === "PUT")?.body).toEqual(NIK);
+    expect(calls.find((call) => call.method === "PUT")?.body).toEqual(ALEX);
     expect(local.applied).toEqual([]);
   });
 
   it("a PC with the empty default takes the account's quietly", async () => {
-    const { fetchImpl } = signInWith({ "GET /profile": () => json({ profile: NIK }) });
+    const { fetchImpl } = signInWith({ "GET /profile": () => json({ profile: ALEX }) });
     const { account, local } = client(fetchImpl);
     await account.sendCode("me@example.com");
     await account.verify("123456");
-    expect(local.applied).toEqual([NIK]);
+    expect(local.applied).toEqual([ALEX]);
     expect(account.view().profileChoice).toBeNull();
   });
 
   it("asks once when both have a different profile, and keeps the answer", async () => {
     const { calls, fetchImpl } = signInWith({ "GET /profile": () => json({ profile: OTHER }), "PUT /profile": (body) => json({ profile: body }) });
-    const first = client(fetchImpl, { profile: NIK });
+    const first = client(fetchImpl, { profile: ALEX });
     await first.account.sendCode("me@example.com");
     await first.account.verify("123456");
-    expect(first.account.view().profileChoice).toEqual({ name: "Dominik", initials: "DK", picture: false });
+    expect(first.account.view().profileChoice).toEqual({ name: "Sam", initials: "SM", picture: false });
     expect(first.local.applied).toEqual([]);
     await first.account.chooseProfile("account");
     expect(first.local.applied).toEqual([OTHER]);
     expect(first.account.view().profileChoice).toBeNull();
 
-    const second = client(fetchImpl, { profile: NIK });
+    const second = client(fetchImpl, { profile: ALEX });
     await second.account.sendCode("me@example.com");
     await second.account.verify("123456");
     await second.account.chooseProfile("pc");
     const put = calls.filter((call) => call.method === "PUT").at(-1)!;
     // This PC's profile, made the newest so every other PC takes it.
-    expect(put.body).toMatchObject({ name: "Nik", initials: "NK", picture: "cGlj" });
+    expect(put.body).toMatchObject({ name: "Alex", initials: "AX", picture: "cGlj" });
     expect(Date.parse(String(put.body!.updatedAt))).toBeGreaterThan(Date.parse(OTHER.updatedAt));
   });
 
   it("at a start, the newer one wins", async () => {
     const newer = service({ "GET /profile": () => json({ profile: OTHER }) });
-    const pcOlder = client(newer.fetchImpl, { saved: SAVED, profile: NIK });
+    const pcOlder = client(newer.fetchImpl, { saved: SAVED, profile: ALEX });
     await pcOlder.account.init();
     await expect.poll(() => pcOlder.local.applied).toEqual([OTHER]);
 
     const older = service({ "GET /profile": () => json({ profile: { ...OTHER, updatedAt: "2026-10-16T09:00:00.000Z" } }), "PUT /profile": (body) => json({ profile: body }) });
-    const pcNewer = client(older.fetchImpl, { saved: SAVED, profile: NIK });
+    const pcNewer = client(older.fetchImpl, { saved: SAVED, profile: ALEX });
     await pcNewer.account.init();
     await expect.poll(() => older.calls.some((call) => call.method === "PUT")).toBe(true);
     expect(pcNewer.local.applied).toEqual([]);
@@ -324,7 +324,7 @@ describe("the profile in the account", () => {
 
   it("sends a change up, and takes a newer one the account already had", async () => {
     const { calls, fetchImpl } = service({ "PUT /profile": () => json({ profile: OTHER }) });
-    const { account, local } = client(fetchImpl, { saved: SAVED, profile: NIK });
+    const { account, local } = client(fetchImpl, { saved: SAVED, profile: ALEX });
     (account as unknown as { saved: SavedAccount }).saved = SAVED;
     await account.profileChanged();
     expect(calls.map((call) => call.method)).toEqual(["PUT"]);
@@ -333,7 +333,7 @@ describe("the profile in the account", () => {
 
   it("sends nothing while signed out", async () => {
     const { calls, fetchImpl } = service({});
-    const { account } = client(fetchImpl, { profile: NIK });
+    const { account } = client(fetchImpl, { profile: ALEX });
     await account.profileChanged();
     expect(calls).toEqual([]);
   });
@@ -345,36 +345,36 @@ describe("Discord login", () => {
 
   it("signs a known Discord login in, keeping its username and no email", async () => {
     const { calls, fetchImpl } = service({
-      "POST /discord/sign-in": () => json({ status: "signed-in", token: TOKEN, device: "dev1", account: discordAccount(null, "nik") }),
-      "GET /": () => json({ account: discordAccount(null, "nik"), devices: [] }),
+      "POST /discord/sign-in": () => json({ status: "signed-in", token: TOKEN, device: "dev1", account: discordAccount(null, "alex") }),
+      "GET /": () => json({ account: discordAccount(null, "alex"), devices: [] }),
     });
     const { account, kept } = client(fetchImpl, { discordLogin: async () => LOGIN });
     await account.discordSignIn();
     expect(calls[0]!.body).toEqual({ ...LOGIN, os: "windows" });
-    expect(account.view()).toMatchObject({ discordLogin: true, account: { email: null, discord: { name: "nik" } } });
-    expect(kept[0]).toEqual({ token: TOKEN, email: null, discord: "nik", createdAt: SAVED.createdAt });
+    expect(account.view()).toMatchObject({ discordLogin: true, account: { email: null, discord: { name: "alex" } } });
+    expect(kept[0]).toEqual({ token: TOKEN, email: null, discord: "alex", createdAt: SAVED.createdAt });
   });
 
   it("asks before making an account for a new Discord login, and needs the age tick", async () => {
     const { calls, fetchImpl } = service({
-      "POST /discord/sign-in": () => json({ status: "no-account", ticket: "t".repeat(43), discord: { name: "nik" } }),
-      "POST /discord/create": () => json({ status: "created", token: TOKEN, device: "dev1", account: discordAccount(null, "nik") }),
+      "POST /discord/sign-in": () => json({ status: "no-account", ticket: "t".repeat(43), discord: { name: "alex" } }),
+      "POST /discord/create": () => json({ status: "created", token: TOKEN, device: "dev1", account: discordAccount(null, "alex") }),
     });
     const { account } = client(fetchImpl, { discordLogin: async () => LOGIN });
     await account.discordSignIn();
-    expect(account.view().pending).toEqual({ kind: "discord-create", name: "nik" });
+    expect(account.view().pending).toEqual({ kind: "discord-create", name: "alex" });
     await expect(account.create(false)).rejects.toMatchObject({ key: "account.error.ageRequired" });
     await account.create(true);
     expect(calls.find((call) => call.url.endsWith("/discord/create"))!.body).toEqual({ ticket: "t".repeat(43), os: "windows" });
-    expect(account.view().account).toMatchObject({ discord: { name: "nik" } });
+    expect(account.view().account).toMatchObject({ discord: { name: "alex" } });
   });
 
   it("connects and disconnects Discord, removes the email with a code, and says why the last method stays", async () => {
     const { calls, fetchImpl } = service({
       "POST /discord/code": () => json({ status: "sent" }, 202),
-      "POST /discord": () => json({ account: discordAccount("me@example.com", "nik") }),
+      "POST /discord": () => json({ account: discordAccount("me@example.com", "alex") }),
       "POST /email/remove/code": () => json({ status: "sent" }, 202),
-      "POST /email/remove": () => json({ account: discordAccount(null, "nik") }),
+      "POST /email/remove": () => json({ account: discordAccount(null, "alex") }),
       "POST /discord/remove/code": () => json({ status: "sent" }, 202),
       "POST /discord/remove": () => json({ reason: "last-method" }, 409),
     });
@@ -387,7 +387,7 @@ describe("Discord login", () => {
     await account.connectDiscord("654321");
     expect(calls.find((call) => call.url.endsWith("/discord"))!.body).toEqual({ ...LOGIN, emailCode: "654321" });
     expect(account.view().pending).toBeNull();
-    expect(account.view().account).toMatchObject({ email: "me@example.com", discord: { name: "nik" } });
+    expect(account.view().account).toMatchObject({ email: "me@example.com", discord: { name: "alex" } });
     // No code asked for yet: nothing is removed.
     await expect(account.removeEmail("123456")).rejects.toMatchObject({ key: "account.error.noCode" });
     await account.sendRemoveEmailCode();
@@ -395,14 +395,14 @@ describe("Discord login", () => {
     await account.removeEmail("123456");
     expect(calls.find((call) => call.url.endsWith("/email/remove"))!.body).toEqual({ code: "123456" });
     expect(account.view().pending).toBeNull();
-    expect(kept.at(-1)).toMatchObject({ email: null, discord: "nik" });
+    expect(kept.at(-1)).toMatchObject({ email: null, discord: "alex" });
     // Disconnecting needs a code to the address too; no Discord sign-in, so a lost login can always go.
     await expect(account.disconnectDiscord("111111")).rejects.toMatchObject({ key: "account.error.noCode" });
     await account.sendDisconnectDiscordCode();
     expect(account.view().pending).toEqual({ kind: "remove-discord" });
     await expect(account.disconnectDiscord("111111")).rejects.toMatchObject({ key: "account.error.lastMethod" });
     expect(calls.find((call) => call.url.endsWith("/discord/remove"))!.body).toEqual({ code: "111111" });
-    expect(account.view().account).toMatchObject({ discord: { name: "nik" } });
+    expect(account.view().account).toMatchObject({ discord: { name: "alex" } });
   });
 
   it("says when the account already has another Discord login", async () => {
@@ -422,7 +422,7 @@ describe("Discord login", () => {
 
   it("deletes a Discord-only account with a fresh Discord sign-in", async () => {
     const { calls, fetchImpl } = service({ "POST /delete/discord": () => new Response(null, { status: 204 }) });
-    const { account, kept } = client(fetchImpl, { saved: { ...SAVED, email: null, discord: "nik" }, discordLogin: async () => LOGIN });
+    const { account, kept } = client(fetchImpl, { saved: { ...SAVED, email: null, discord: "alex" }, discordLogin: async () => LOGIN });
     await account.init();
     await account.deleteWithDiscord();
     expect(calls[0]!.body).toEqual(LOGIN);

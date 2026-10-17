@@ -11,7 +11,7 @@ import { build, createServer } from "vite";
 import { buildFilterEngine } from "./filters.mjs";
 import { rendererConfig, root, targets } from "./targets.mjs";
 
-// `pnpm dev --port <n>` picks the port, so a tool like CoreHub can decide it.
+// `pnpm dev --port <n>` picks the port, so a process manager can decide it.
 const { values } = parseArgs({ options: { port: { type: "string", default: "4000" } }, strict: false });
 const port = Number(values.port);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {

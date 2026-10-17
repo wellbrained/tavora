@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createPanel, OTHERS_MS } from "./panel";
 
 const HASH = "0123456789abcdef0123456789abcdef";
-const CONNECTED: DiscordState = { status: "connected", error: null, user: { id: "1", name: "Brain" }, canControl: true, canSaveSignIn: true };
+const CONNECTED: DiscordState = { status: "connected", error: null, user: { id: "1", name: "Robin" }, canControl: true, canSaveSignIn: true };
 
 const person = (id: string, name: string, voice: Record<string, boolean> = {}, extra: Record<string, unknown> = {}) => ({
   nick: null,
@@ -24,7 +24,7 @@ function fakeSdk(state: DiscordState = CONNECTED) {
   const sent: { command: DiscordCommand; args: Record<string, unknown> }[] = [];
   const subscriptions = new Set<string>();
   const answers = new Map<DiscordCommand, Answer>([
-    ["GET_SELECTED_VOICE_CHANNEL", () => ok({ id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain"), person("2", "Lena", { self_mute: true })] })],
+    ["GET_SELECTED_VOICE_CHANNEL", () => ok({ id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Robin"), person("2", "Lena", { self_mute: true })] })],
     ["GET_GUILD", (args) => ok({ id: args.guild_id, name: args.guild_id === "21" ? "Other Crew" : "Wellbrained Crew", icon_url: `https://cdn.discordapp.com/icons/20/${HASH}.png` })],
     ["GET_GUILDS", () => ok({ guilds: [{ id: "20", name: "Wellbrained Crew" }, { id: "21", name: "Other Crew" }] })],
     ["GET_CHANNELS", () => ok({ channels: [{ id: "10", type: 2 }, { id: "11", type: 2 }, { id: "12", type: 0 }] })],
@@ -73,7 +73,7 @@ describe("Discord panel", () => {
   it("shows the voice channel, who is in it and the server's other voice channels", async () => {
     const { view, subscriptions, discord } = await started();
     expect(view()).toMatchObject({ server: { id: "20", name: "Wellbrained Crew" }, call: { id: "10", name: "Factory Floor" }, canControl: true, self: { mute: false, deaf: false }, userId: "1" });
-    expect(view().call!.members.map((m) => [m.name, m.selfMute])).toEqual([["Brain", false], ["Lena", true]]);
+    expect(view().call!.members.map((m) => [m.name, m.selfMute])).toEqual([["Robin", false], ["Lena", true]]);
     expect(view().channels.map((c) => [c.id, c.name])).toEqual([["10", "Factory Floor"], ["11", "Lobby"]]);
     expect(view().servers.map((s) => s.name)).toEqual(["Wellbrained Crew", "Other Crew"]);
     for (const event of ["VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_DELETE", "SPEAKING_START", "SPEAKING_STOP"]) expect(subscriptions).toContain(`${event}:10`);
@@ -95,7 +95,7 @@ describe("Discord panel", () => {
     await settle();
     expect(members().find((m) => m.id === "2")?.speaking).toBe(false);
     expect(members()[2]).toMatchObject({ name: "Max", serverMute: true });
-    dispatch("VOICE_STATE_UPDATE", person("1", "Brain", { self_mute: true }));
+    dispatch("VOICE_STATE_UPDATE", person("1", "Robin", { self_mute: true }));
     await settle();
     expect(view().self).toEqual({ mute: true, deaf: false });
     dispatch("VOICE_STATE_DELETE", person("4", "Max"));
@@ -108,7 +108,7 @@ describe("Discord panel", () => {
 
   it("switches channels and shows a direct call without a server", async () => {
     const { view, answers, dispatch, subscriptions } = await started();
-    answers.set("GET_SELECTED_VOICE_CHANNEL", () => ok({ id: "30", name: null, voice_states: [person("1", "Brain"), person("5", "Kira")] }));
+    answers.set("GET_SELECTED_VOICE_CHANNEL", () => ok({ id: "30", name: null, voice_states: [person("1", "Robin"), person("5", "Kira")] }));
     dispatch("VOICE_CHANNEL_SELECT", { channel_id: "30" });
     await settle();
     expect(view()).toMatchObject({ server: null, channels: [], call: { id: "30", name: "Call" } });
@@ -162,7 +162,7 @@ describe("Discord panel", () => {
     await expect(panel.setGameServer("99")).rejects.toMatchObject({ key: "serverUnknown" });
 
     // A call on another server does not replace the game's server.
-    answers.set("GET_SELECTED_VOICE_CHANNEL", () => ok({ id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain")] }));
+    answers.set("GET_SELECTED_VOICE_CHANNEL", () => ok({ id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Robin")] }));
     dispatch("VOICE_CHANNEL_SELECT", { channel_id: "10" });
     await settle();
     expect(view()).toMatchObject({ server: { id: "20" }, browseServer: { id: "21" } });
@@ -205,7 +205,7 @@ describe("Discord panel", () => {
 
   it("changes someone's volume and mute for the player only, and puts back what Discord says when it refuses", async () => {
     const fake = fakeSdk();
-    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ok({ id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain"), person("2", "Lena", {}, { volume: 150, mute: true })] }));
+    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ok({ id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Robin"), person("2", "Lena", {}, { volume: 150, mute: true })] }));
     const { view, sent, answers, panel } = await started(fake);
     const lena = () => view().call!.members.find((m) => m.id === "2")!;
     expect([lena().volume, lena().mutedForMe]).toEqual([150, true]);

@@ -9,7 +9,7 @@ import { HostError } from "./errors";
 import { isJsonValue } from "./json";
 import { PlayerError } from "./messages";
 
-// The AI Usage connector (docs/decisions.md, AI Usage rows of 2026-10-17): the Claude and Codex
+// The AI Usage connector (the decision log, AI Usage rows of 2026-10-17): the Claude and Codex
 // accounts the player set up in Settings > Integrations, and their usage read for a granted module.
 // Claude: one request to Anthropic's usage address with the access token of the profile's login,
 // held in memory for that request only. Codex: its own command line (ai-usage-codex.ts). Tokens

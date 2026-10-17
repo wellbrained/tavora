@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs on the Hetzner server for `pnpm release`: files uploaded to /root/tavora-incoming/updates
+# Runs on the server for `pnpm release`: files uploaded to /root/tavora-incoming/updates
 # (root's own home, so no other user can put or swap a file there)
 # become the feed's newest version. The installer and its blockmap go in first and
 # latest.yml last (replaced in one step), so nobody ever sees a manifest that points at a

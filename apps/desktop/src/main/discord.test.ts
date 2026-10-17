@@ -48,10 +48,10 @@ async function setup({ secrets = { token: null }, running = true, tokenStatus = 
   discord.answers.set("AUTHORIZE", () => ({ data: { code: "code123" } }));
   discord.answers.set("AUTHENTICATE", (args) =>
     args.access_token === "good" || args.access_token === "fresh"
-      ? { data: { user: { id: "1", username: "brain", global_name: "Brain" }, scopes: SCOPES } }
+      ? { data: { user: { id: "1", username: "robin", global_name: "Robin" }, scopes: SCOPES } }
       : { error: { code: 4009, message: "Invalid token" } },
   );
-  discord.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain")] } }));
+  discord.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Robin")] } }));
   const requests: { url: string; body: string }[] = [];
   const saved: DiscordSecrets[] = [];
   const timers: (() => void)[] = [];
@@ -114,7 +114,7 @@ describe("DiscordConnector", () => {
     expect(body.get("code_verifier")!.length).toBeGreaterThanOrEqual(43);
     expect(requests.every((r) => !r.body.includes("client_secret"))).toBe(true);
     expect(saved.at(-1)?.token).toMatchObject({ accessToken: "good", refreshToken: "r1" });
-    expect(connector.state()).toEqual({ status: "connected", error: null, user: { id: "1", name: "Brain" }, canControl: true, canSaveSignIn: true });
+    expect(connector.state()).toEqual({ status: "connected", error: null, user: { id: "1", name: "Robin" }, canControl: true, canSaveSignIn: true });
     // The panel hears it (changes are told after a short wait), and never the token.
     for (const fn of timers.splice(0)) fn();
     expect(one.states.at(-1)?.status).toBe("connected");
@@ -125,7 +125,7 @@ describe("DiscordConnector", () => {
     const { connector, fake } = await setup({ secrets: SIGNED_IN });
     await connector.use("p1", panel().listener);
     await until(() => connector.state().status === "connected");
-    expect(await connector.command("GET_SELECTED_VOICE_CHANNEL", {})).toEqual({ ok: true, data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Brain")] } });
+    expect(await connector.command("GET_SELECTED_VOICE_CHANNEL", {})).toEqual({ ok: true, data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Robin")] } });
 
     // Joining takes the player out of another call, as Discord's own list does; leaving does not need to.
     await connector.command("SELECT_VOICE_CHANNEL", { channel_id: "11" });
@@ -146,14 +146,14 @@ describe("DiscordConnector", () => {
 
   it("does not mute with a sign-in that lacks the permission, until the player allows it", async () => {
     const { connector, fake } = await setup({ secrets: SIGNED_IN });
-    fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "brain", global_name: "Brain" }, scopes: ["rpc", "rpc.voice.read", "identify"] } }));
+    fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "robin", global_name: "Robin" }, scopes: ["rpc", "rpc.voice.read", "identify"] } }));
     await connector.use("p1", panel().listener);
     await until(() => connector.state().status === "connected");
     expect(connector.state().canControl).toBe(false);
     expect(await connector.command("SET_VOICE_SETTINGS", { mute: true })).toMatchObject({ ok: false, reason: "refused" });
     expect(fake.commands.some((c) => c.cmd === "SET_VOICE_SETTINGS")).toBe(false);
 
-    fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "brain", global_name: "Brain" }, scopes: SCOPES } }));
+    fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "robin", global_name: "Robin" }, scopes: SCOPES } }));
     await connector.allowControl();
     await until(() => connector.state().canControl);
     expect(fake.commands.some((c) => c.cmd === "AUTHORIZE")).toBe(true);

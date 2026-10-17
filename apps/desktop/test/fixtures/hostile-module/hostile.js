@@ -146,7 +146,7 @@ window.tryNavigate = (url) => {
   location.href = url;
 };
 
-// ── Sandbox review probes (docs/threat-model.md, "Sandbox review 2026-10-16") ──
+// ── Sandbox review probes (the threat model, "Sandbox review 2026-10-16") ──
 
 const random = (bytes) => {
   const data = new Uint8Array(bytes);

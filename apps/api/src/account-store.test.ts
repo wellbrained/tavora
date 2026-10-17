@@ -23,7 +23,7 @@ function oldDatabase(): string {
     );
     insert into accounts values ('acc1', 'me@example.com', 1760000000000), ('acc2', 'you@example.com', 1760000000001);
     insert into sessions values ('s1', 'hash1', 'acc1', 'windows', 1760000000000, 1760000000000);
-    insert into profiles values ('acc1', 'Nik', 'NK', null, 1760000000000);
+    insert into profiles values ('acc1', 'Alex', 'AX', null, 1760000000000);
   `);
   db.close();
   return file;
@@ -36,9 +36,9 @@ describe("the accounts file from before Discord logins", () => {
     expect(store.accountByEmail("me@example.com")).toEqual({ id: "acc1", email: "me@example.com", discord: null, createdAt: new Date(1760000000000).toISOString() });
     expect(store.accountByEmail("you@example.com")?.id).toBe("acc2");
     expect(store.devices("acc1")).toHaveLength(1);
-    expect(store.profile("acc1")).toMatchObject({ name: "Nik", initials: "NK" });
+    expect(store.profile("acc1")).toMatchObject({ name: "Alex", initials: "AX" });
     // The email is optional now, and the links to sign-ins and profiles still hold.
-    expect(store.createAccount({ discord: { id: "123456789012345678", name: "nik" } }, 1760000000002).email).toBeNull();
+    expect(store.createAccount({ discord: { id: "123456789012345678", name: "alex" } }, 1760000000002).email).toBeNull();
     store.deleteAccount("acc1");
     expect(store.devices("acc1")).toEqual([]);
     expect(store.profile("acc1")).toBeNull();
@@ -47,7 +47,7 @@ describe("the accounts file from before Discord logins", () => {
     // Opening it again changes nothing.
     const again = new AccountStore(file);
     expect(again.accountByEmail("you@example.com")?.id).toBe("acc2");
-    expect(again.accountByDiscord("123456789012345678")?.discord).toEqual({ id: "123456789012345678", name: "nik" });
+    expect(again.accountByDiscord("123456789012345678")?.discord).toEqual({ id: "123456789012345678", name: "alex" });
     again.close();
   });
 

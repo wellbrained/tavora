@@ -144,7 +144,7 @@ if (!app.requestSingleInstanceLock()) {
         devServer,
         // A packaged app only ever talks to api.mytavora.app.
         apiUrl: !app.isPackaged ? process.env.TAVORA_API_URL : undefined,
-        // Accounts are on for everyone since 0.16.4 (Nik, 2026-10-16: testers try them in the installed app).
+        // Accounts are on for everyone since 0.16.4 (2026-10-16: testers try them in the installed app).
         accounts: true,
         // Development only: another account service, such as a local apps/api with TAVORA_TEST_INBOX_PORT (its codes show on that inbox page).
         accountUrl: !app.isPackaged ? process.env.TAVORA_ACCOUNT_URL : undefined,

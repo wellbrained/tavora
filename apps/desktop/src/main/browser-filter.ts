@@ -1,4 +1,4 @@
-// Which requests a Browser panel's page may make (docs/browser-security.md):
+// Which requests a Browser panel's page may make (the Browser security notes):
 // only web schemes, nothing on this PC or the local network from a public
 // page, and no ads or trackers where ad blocking is on.
 import { readFileSync } from "node:fs";

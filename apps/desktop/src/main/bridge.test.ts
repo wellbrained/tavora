@@ -443,7 +443,7 @@ describe("aiUsage", () => {
 });
 
 describe("discord", () => {
-  const STATE = { status: "connected" as const, error: null, user: { id: "1", name: "Nik" }, canControl: true, canSaveSignIn: true };
+  const STATE = { status: "connected" as const, error: null, user: { id: "1", name: "Alex" }, canControl: true, canSaveSignIn: true };
   function granted() {
     const sent: unknown[][] = [];
     const discord: BridgeContext["discord"] = {

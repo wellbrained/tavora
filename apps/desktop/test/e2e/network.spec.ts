@@ -1,4 +1,4 @@
-// Network grants (docs/threat-model.md, N1–N7): a module reaches the hosts the player granted
+// Network grants (the threat model, N1–N7): a module reaches the hosts the player granted
 // through network.fetch, nothing else, and its page still has no network of its own.
 
 import { writeFile } from "node:fs/promises";

@@ -25,11 +25,11 @@ describe("sanitizeProfile", () => {
 
   it("keeps a saved profile and drops what it does not recognise", () => {
     const id = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b";
-    expect(sanitizeProfile({ id, name: "Brain", initials: "BR", picture: "avatar-0a1b2c3d.png", updatedAt: "2026-10-16T10:00:00.000Z", email: "x" })).toEqual({
+    expect(sanitizeProfile({ id, name: "Robin", initials: "RO", picture: "avatar-0a1b2c3d.png", updatedAt: "2026-10-16T10:00:00.000Z", email: "x" })).toEqual({
       version: 1,
       id,
-      name: "Brain",
-      initials: "BR",
+      name: "Robin",
+      initials: "RO",
       picture: "avatar-0a1b2c3d.png",
       updatedAt: "2026-10-16T10:00:00.000Z",
     });

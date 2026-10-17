@@ -1,4 +1,4 @@
-// The Browser panel's page (docs/browser-security.md). Unlike a module view
+// The Browser panel's page (the Browser security notes). Unlike a module view
 // it has no preload, no bridge and no IPC: the toolbar is drawn by the host
 // UI, and the page is only ever told where to go by the main process.
 import { session, WebContentsView, type Session, type WebContents } from "electron";

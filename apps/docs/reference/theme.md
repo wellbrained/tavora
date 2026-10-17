@@ -62,7 +62,7 @@ Each variation:
 
 ## Tokens
 
-The names are shadcn-vue's semantic tokens plus four of Tavora's. Modules get the same values as `--tavora-<name>` properties and through `ui.getTheme`, and `ui.onThemeChange` tells them when the player picks another theme. The [style guide](https://github.com/wellbrained/tavora/blob/main/docs/design/style-guide.md) says what each one is for.
+The names are shadcn-vue's semantic tokens plus four of Tavora's. Modules get the same values as `--tavora-<name>` properties and through `ui.getTheme`, and `ui.onThemeChange` tells them when the player picks another theme.
 
 `background`, `foreground`, `card`, `card-foreground`, `popover`, `popover-foreground`, `primary`, `primary-hover`, `primary-foreground`, `secondary`, `secondary-foreground`, `muted`, `muted-foreground`, `accent`, `accent-foreground`, `destructive`, `border`, `input`, `ring`, `rail`, `success`, `warning`, `info`.
 

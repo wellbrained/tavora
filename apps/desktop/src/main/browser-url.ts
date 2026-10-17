@@ -1,4 +1,4 @@
-// Address rules of the Browser panel (docs/browser-security.md). Pure
+// Address rules of the Browser panel (the Browser security notes). Pure
 // functions only, so every rule is unit tested without Electron.
 import { domainToUnicode } from "node:url";
 import { getDomain } from "tldts";
@@ -84,7 +84,7 @@ const LOCAL_NAMES = new Set(["fritz.box", "speedport.ip", "myfritz.box", "router
  * without a dot (`http://router/`, which only the local network's DNS knows),
  * local endings such as `.local`, `.lan` and `.home.arpa`, and common router
  * names. Other names that resolve to such an address are not caught (see DNS
- * rebinding in docs/browser-security.md).
+ * rebinding in the Browser security notes).
  */
 export function isPrivateHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, "");

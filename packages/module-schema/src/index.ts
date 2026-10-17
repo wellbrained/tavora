@@ -47,7 +47,7 @@ export function isModuleId(value: unknown): value is string {
 }
 
 /**
- * Who owns a module's data (docs/decisions.md, publisher row of 2026-10-16):
+ * Who owns a module's data (the decision log, publisher row of 2026-10-16):
  * Tavora's own modules, unsigned local ones, or a publisher's signing key,
  * named by the hex fingerprint of the publisher's first key. Owners end up in
  * paths and session partitions, so no dots or other separators.
@@ -81,7 +81,7 @@ export const MAX_NETWORK_HOSTS = 32;
 const HOST_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 /**
- * A host a module may ask to reach (docs/decisions.md, module grants row of 2026-10-16): an exact,
+ * A host a module may ask to reach (the decision log, module grants row of 2026-10-16): an exact,
  * lowercase public name such as `api.example.com`. No wildcards, ports, schemes, IP addresses or
  * names of this PC or the local network (`localhost`, `.local`), so a grant always names one site.
  */
