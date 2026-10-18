@@ -19,11 +19,26 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.18.5",
+    version: "0.18.6",
     date: "2026-10-18",
     title: "Games open all at once",
     notes: [
       "Switching to a game or workspace no longer fills in panel by panel: Tavora waits until every panel you can see has loaded and then shows them together. A small spinner appears while a busy workspace is still loading.",
+    ],
+  },
+  {
+    version: "0.18.5",
+    date: "2026-10-18",
+    title: "Safety lists switched on",
+    notes: ["Tavora now checks its safety lists with its own key, so a blocked module or a revoked publisher key takes effect as soon as you are online."],
+  },
+  {
+    version: "0.18.4",
+    date: "2026-10-18",
+    title: "Safety lists for modules",
+    notes: [
+      "Tavora can now stop a harmful module that is already installed. It gets a list signed by Tavora (only while online features are on); a module on it stops, says why in Settings > Modules and keeps its data, and comes back when you install a version that is not blocked.",
+      "A developer who loses their publisher key can revoke it and move to a new one. Tavora then refuses new zips from the old key, and updates from the new key keep your module's data.",
     ],
   },
   {

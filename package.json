@@ -1,6 +1,6 @@
 {
   "name": "tavora",
-  "version": "0.18.5",
+  "version": "0.18.6",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",
@@ -17,6 +17,7 @@
     "release:sdk": "node scripts/release-sdk.mjs",
     "pack-module": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source packages/pack/src/cli.ts",
     "tavora-pack": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source packages/pack/src/cli.ts",
+    "tavora-catalog-sign": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source scripts/catalog-sign.ts",
     "check": "pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e"
   },
   "devDependencies": {

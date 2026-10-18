@@ -28,18 +28,21 @@ function rawKey(value: unknown): Buffer | null {
   return raw.length === 32 && raw.toString("base64") === value ? raw : null;
 }
 
-/** Whether `signature` (base64) is the key's signature over the link statement for `code`. */
-export function signedCode(raw: Buffer, code: string, signature: unknown): boolean {
+/** Whether `signature` (base64) is the key's signature over `text`. */
+export function signedStatement(raw: Buffer, text: string, signature: unknown): boolean {
   if (typeof signature !== "string" || signature.length !== 88) return false;
   const bytes = Buffer.from(signature, "base64");
   if (bytes.length !== 64 || bytes.toString("base64") !== signature) return false;
   try {
     const key = createPublicKey({ key: Buffer.concat([ED25519_SPKI, raw]), format: "der", type: "spki" });
-    return verify(null, Buffer.from(`${LINK_STATEMENT}\n${code}`, "utf8"), key, bytes);
+    return verify(null, Buffer.from(text, "utf8"), key, bytes);
   } catch {
     return false;
   }
 }
+
+/** Whether `signature` (base64) is the key's signature over the link statement for `code`. */
+export const signedCode = (raw: Buffer, code: string, signature: unknown) => signedStatement(raw, `${LINK_STATEMENT}\n${code}`, signature);
 
 export interface PublisherOptions {
   store: AccountStore;
