@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.4",
+    date: "2026-10-18",
+    title: "Safety lists for modules",
+    notes: [
+      "Tavora can now stop a harmful module that is already installed. It gets a list signed by Tavora (only while online features are on); a module on it stops, says why in Settings > Modules and keeps its data, and comes back when you install a version that is not blocked.",
+      "A developer who loses their publisher key can revoke it and move to a new one. Tavora then refuses new zips from the old key, and updates from the new key keep your module's data.",
+    ],
+  },
+  {
     version: "0.18.3",
     date: "2026-10-18",
     title: "Browse the module catalog",
