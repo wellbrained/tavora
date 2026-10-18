@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.5",
+    date: "2026-10-18",
+    title: "Safety lists switched on",
+    notes: ["Tavora now checks its safety lists with its own key, so a blocked module or a revoked publisher key takes effect as soon as you are online."],
+  },
+  {
     version: "0.18.4",
     date: "2026-10-18",
     title: "Safety lists for modules",
