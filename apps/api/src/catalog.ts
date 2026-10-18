@@ -7,8 +7,8 @@ import { MANIFEST_FILE, readZip, verifyFiles, ZIP_LIMITS, ZipError } from "@tavo
 
 /**
  * The module catalog (Milestone E, docs/catalog-threat-model.md): community modules, each with the
- * versions that were added, and their zips stored under their SHA-256. This step is read-only for the
- * service: modules are added by hand with `scripts/catalog.ts`. Every zip is checked the way the app's
+ * versions that were added, and their zips stored under their SHA-256. Publishers upload with
+ * `tavora-pack publish` (catalog-publish.ts); the maintainer can add by hand with `scripts/catalog.ts`. Every zip is checked the way the app's
  * zip installer checks it (C1, C8) before anything is stored, and nothing in it is ever unpacked to
  * disk or run. The app still checks each zip again itself; the service is never what makes one trusted.
  */
@@ -200,19 +200,24 @@ export class CatalogStore {
         seq integer primary key autoincrement,
         module_id text not null references modules (id), version text not null,
         sha256 text not null unique, size integer not null, manifest text not null, notes text not null,
-        published_at text not null,
+        published_at text not null, account_id text,
         unique (module_id, version)
       );
     `);
+    // Catalogs from before signed uploads have no account_id: those versions were added by hand.
+    const columns = (this.db.prepare("pragma table_info(versions)").all() as unknown as { name: string }[]).map((column) => column.name);
+    if (!columns.includes("account_id")) this.db.exec("alter table versions add column account_id text");
   }
 
   close(): void {
     this.db.close();
   }
 
-  /** Adds a checked zip as a module's newest version, and stores the zip under its hash. */
-  add(bytes: Buffer, now: Date = new Date()): CheckedZip {
-    const checked = checkCatalogZip(bytes);
+  /**
+   * Adds a checked zip as a module's newest version, and stores the zip under its hash. `uploadedBy`
+   * is the account a publisher's upload came from; versions added by hand have none.
+   */
+  add(bytes: Buffer, now: Date = new Date(), uploadedBy: string | null = null, checked: CheckedZip = checkCatalogZip(bytes)): CheckedZip {
     const { manifest, owner, sha256 } = checked;
     const module = this.db.prepare("select owner from modules where id = ?").get(manifest.id) as { owner: string } | undefined;
     if (module && module.owner !== owner) throw new CatalogError(`${manifest.id} belongs to another publisher key.`);
@@ -232,14 +237,27 @@ export class CatalogStore {
     try {
       if (!module) this.db.prepare("insert into modules (id, owner, created_at) values (?, ?, ?)").run(manifest.id, owner, at);
       this.db
-        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at) values (?, ?, ?, ?, ?, ?, ?)")
-        .run(manifest.id, manifest.version, sha256, checked.size, JSON.stringify(manifest), JSON.stringify(checked.notes), at);
+        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id) values (?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(manifest.id, manifest.version, sha256, checked.size, JSON.stringify(manifest), JSON.stringify(checked.notes), at, uploadedBy);
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
       throw error;
     }
     return checked;
+  }
+
+  /** How many versions an account uploaded since a moment (ISO time). */
+  uploadsSince(accountId: string, since: Date): number {
+    return (this.db.prepare("select count(*) as n from versions where account_id = ? and published_at >= ?").get(accountId, since.toISOString()) as { n: number }).n;
+  }
+
+  /** The bytes of every zip an account uploaded, or of the whole catalog. */
+  storedBytes(accountId?: string): number {
+    const row = (accountId === undefined
+      ? this.db.prepare("select coalesce(sum(size), 0) as n from versions").get()
+      : this.db.prepare("select coalesce(sum(size), 0) as n from versions where account_id = ?").get(accountId)) as { n: number };
+    return row.n;
   }
 
   /** Takes a module out of the catalog or puts it back. Its versions and zips are kept. */

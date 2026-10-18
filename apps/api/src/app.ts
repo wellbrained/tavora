@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { accountRoutes, type AccountOptions } from "./accounts.ts";
+import { publishHandlers, type PublishLimits } from "./catalog-publish.ts";
 import { catalogFilter, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
 import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
@@ -35,9 +36,12 @@ export interface AppOptions {
   accounts?: AccountOptions;
   /** The module catalog. Absent: the catalog routes answer 503. */
   catalog?: CatalogStore;
+  /** Publishing: uploads per client, and the catalog's size limits. Publishing also needs accounts. */
+  publishRateLimiter?: RateLimiter;
+  publishLimits?: Partial<PublishLimits>;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 10, windowMs: 3_600_000 });
   const steamLimiter = steamRateLimiter ?? createRateLimiter({ limit: 6, windowMs: 60_000 });
@@ -184,6 +188,16 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   // "by <name>" comes from the account the key is linked to, never from the listing (C13).
   const listed = (entry: CatalogEntry) => ({ ...entry, publisher: accounts?.store.publisherName(entry.owner) ?? null });
   const catalogApp = new Hono();
+  // Publishing has its own limits per client and per account, so it comes before the read limiter.
+  const publish = publishHandlers({
+    catalog,
+    store: accounts?.store,
+    clientKey: (request) => (clientKey ? clientKey(request) : "local"),
+    ...(publishRateLimiter ? { rateLimiter: publishRateLimiter } : {}),
+    ...(publishLimits ? { limits: publishLimits } : {}),
+    ...(accounts?.now ? { now: accounts.now } : {}),
+  });
+  catalogApp.post("/publish", publish.limit, publish.handler);
   catalogApp.use("*", async (context, next) => {
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
     if (wait > 0) {

@@ -73,6 +73,8 @@ export const NAME_HOLD_MS = 30 * 24 * 60 * 60_000;
 export const LINK_CODE_TTL_MS = 10 * 60_000;
 /** Publisher keys one account can link. */
 export const MAX_KEYS = 20;
+/** Module id prefixes (the part before the first dot) an account may hold in the catalog (C5). */
+export const MAX_PREFIXES = 3;
 /** The letters a link code is made of: no 0/O, 1/I/L, so it can be typed from the screen. */
 const LINK_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 export const LINK_CODE = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/;
@@ -165,6 +167,8 @@ export class AccountStore {
         public_key text not null, linked_at integer not null
       );
       create index if not exists publisher_keys_account on publisher_keys (account_id);
+      create table if not exists module_prefixes (prefix text primary key, account_id text not null, reserved_at integer not null);
+      create index if not exists module_prefixes_account on module_prefixes (account_id);
       create table if not exists link_codes (
         code_hash text primary key, account_id text not null references accounts (id) on delete cascade, expires_at integer not null
       );
@@ -382,6 +386,36 @@ export class AccountStore {
   /** Unlinks one of the account's keys; false when it has no such key. */
   unlinkKey(accountId: string, fingerprint: string): boolean {
     return Number(this.db.prepare("delete from publisher_keys where fingerprint = ? and account_id = ?").run(fingerprint, accountId).changes) > 0;
+  }
+
+  /** The account a publisher key is linked to, with the key's public half (base64), or null. */
+  publisherKey(fingerprint: string): { accountId: string; publicKey: string } | null {
+    const row = this.db.prepare("select account_id, public_key from publisher_keys where fingerprint = ?").get(fingerprint) as { account_id: string; public_key: string } | undefined;
+    return row ? { accountId: row.account_id, publicKey: row.public_key } : null;
+  }
+
+  // ── Module id prefixes ─────────────────────────────────────────────────
+
+  /**
+   * Whether an account may publish under a module id prefix: it holds it, or may reserve it now.
+   * First come; words reserved for developer names (anything with "tavora", "official", "local", …)
+   * are refused, and an account holds at most MAX_PREFIXES. Prefixes are not kept with the account:
+   * a deleted account's prefixes stay held, so nobody can publish new modules under its name.
+   */
+  prefixCheck(accountId: string, prefix: string): "held" | "free" | "taken" | "reserved" | "too-many" {
+    const owner = this.db.prepare("select account_id from module_prefixes where prefix = ?").get(prefix) as { account_id: string } | undefined;
+    if (owner) return owner.account_id === accountId ? "held" : "taken";
+    if (isReservedName(nameKey(prefix))) return "reserved";
+    return this.prefixes(accountId).length >= MAX_PREFIXES ? "too-many" : "free";
+  }
+
+  /** Reserves a prefix that prefixCheck called free. */
+  reservePrefix(accountId: string, prefix: string, now: number): void {
+    this.db.prepare("insert into module_prefixes (prefix, account_id, reserved_at) values (?, ?, ?)").run(prefix, accountId, now);
+  }
+
+  prefixes(accountId: string): string[] {
+    return (this.db.prepare("select prefix from module_prefixes where account_id = ? order by prefix").all(accountId) as unknown as { prefix: string }[]).map((row) => row.prefix);
   }
 
   /** The developer name players see for a key, or null when the key is not linked or its account has no name. */
