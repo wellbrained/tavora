@@ -96,6 +96,11 @@ export interface InstallOptions {
   modules: ReadonlyMap<string, InstalledModule>;
   /** This Tavora's version; a zip whose `minTavora` is newer is refused before anything is unpacked. */
   tavoraVersion: string;
+  /**
+   * What the zip must be, checked before anything is written: a catalog install asks for the module
+   * id and publisher key its listing named, so a zip signed by anyone else is refused.
+   */
+  expect?: { id: string; owner: string };
 }
 
 export interface Installed {
@@ -105,14 +110,19 @@ export interface Installed {
   updated: boolean;
 }
 
-export async function installZip(zipFile: string, { userData, userModules, modules, tavoraVersion }: InstallOptions): Promise<Installed> {
+export async function installZip(zipFile: string, options: InstallOptions): Promise<Installed> {
   const size = await stat(zipFile).then((info) => (info.isFile() ? info.size : -1));
   if (size < 0) throw new InstallError("error.installNotZip");
   if (size > ZIP_LIMITS.maxArchiveBytes) throw new InstallError("error.installRefused", { reason: "the zip is too big" });
+  return installZipData(await readFile(zipFile), options);
+}
 
+/** Installs a zip already in memory, such as one downloaded from the catalog, by the same rules as a picked file. */
+export async function installZipData(zip: Buffer, { userData, userModules, modules, tavoraVersion, expect }: InstallOptions): Promise<Installed> {
+  if (zip.length > ZIP_LIMITS.maxArchiveBytes) throw new InstallError("error.installRefused", { reason: "the zip is too big" });
   let files;
   try {
-    files = readZip(await readFile(zipFile));
+    files = readZip(zip);
   } catch (error) {
     if (error instanceof ZipError) throw new InstallError("error.installRefused", { reason: error.message });
     throw error;
@@ -139,6 +149,8 @@ export async function installZip(zipFile: string, { userData, userModules, modul
   const verified = verifyFiles(files);
   if (!verified.ok) throw new InstallError("error.installRefused", { reason: verified.reason });
   const { owner } = verified;
+  if (expect && manifest.id !== expect.id) throw new InstallError("error.installRefused", { reason: `it is ${manifest.id}, not the module that was listed` });
+  if (expect && owner !== expect.owner) throw new InstallError("error.installRefused", { reason: "it is not signed by the publisher key that was listed" });
 
   // An id already loaded is replaced only by a newer zip from the same
   // publisher in the player's own folder (an update); two modules with one id never run together.

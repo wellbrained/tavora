@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // The module library: every installed module, to open in the current game. A module with panel
 // types lists them under its row, each with its own Add (the decision log, named panels round 1).
-// A module made for other games (its manifest's `games`) is not listed at all.
+// A module made for other games (its manifest's `games`) is not listed at all. The Browse tab lists
+// modules from Tavora's catalog instead (CatalogBrowse.vue).
 import { computed, ref } from "vue";
 import { addModule, dialog, openSettings, state, type AddModuleRequest } from "../host";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { Search, Settings2 } from "@lucide/vue";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import SegmentedControl from "./settings/SegmentedControl.vue";
 import ModuleIcon from "./ModuleIcon.vue";
+import CatalogBrowse from "./CatalogBrowse.vue";
 
 /** Who publishes a module: Tavora itself, or a package found on this computer. */
 const provenanceLabel = (provenance: "official" | "local") => (provenance === "official" ? t("common.official") : t("common.local"));
@@ -27,6 +29,10 @@ type ModuleView = NonNullable<typeof state.value>["modules"][number];
 function categoryOf(module: ModuleView): Exclude<Category, "all"> {
   return module.development ? "development" : module.provenance;
 }
+
+type Tab = "installed" | "browse";
+const tab = ref<Tab>("installed");
+const TABS = computed(() => (["installed", "browse"] as const).map((value) => ({ value, label: t(`addModule.tab.${value}`), testid: `module-tab-${value}` })));
 
 const query = ref("");
 const category = ref<Category>("all");
@@ -86,6 +92,7 @@ function add(moduleId: string, panelType?: string) {
 
 /** Enter opens the first module listed. */
 function submit() {
+  if (tab.value === "browse") return;
   const first = groups.value[0]?.items[0];
   if (first) add(first.id);
 }
@@ -99,12 +106,15 @@ function submit() {
       :aria-describedby="undefined"
     >
       <aside class="bg-background flex shrink-0 flex-col border-b p-3 sm:w-60 sm:border-r sm:border-b-0">
+        <div class="mb-3">
+          <SegmentedControl v-model="tab" :options="TABS" :label="t('addModule.tabs')" />
+        </div>
         <form class="relative" @submit.prevent="submit">
           <Search class="text-muted-foreground pointer-events-none absolute top-2.5 left-3 size-4" :stroke-width="1.5" aria-hidden="true" />
           <label class="sr-only" for="module-search">{{ t("addModule.search") }}</label>
           <Input id="module-search" v-model="query" class="pr-8 pl-9" :placeholder="t('addModule.search')" autocomplete="off" data-testid="module-search" autofocus />
         </form>
-        <nav class="mt-4 flex gap-0.5 overflow-x-auto sm:flex-col" :aria-label="t('addModule.categories')">
+        <nav v-if="tab === 'installed'" class="mt-4 flex gap-0.5 overflow-x-auto sm:flex-col" :aria-label="t('addModule.categories')">
           <button
             v-for="item in CATEGORIES" :key="item.id" type="button"
             :class="cn('hover:bg-accent flex h-9 items-center justify-between gap-2 whitespace-nowrap rounded-md px-3 text-left text-sm', category === item.id && 'bg-accent text-foreground font-medium')"
@@ -118,7 +128,14 @@ function submit() {
           <Settings2 :stroke-width="1.5" /> {{ t("addModule.manage") }}
         </Button>
       </aside>
-      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div v-if="tab === 'browse'" class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header class="shrink-0 border-b px-5 pt-5 pb-4 sm:px-8">
+          <DialogTitle class="pr-6 text-xl">{{ t("addModule.title") }}</DialogTitle>
+          <p class="text-muted-foreground mt-1 text-sm">{{ t("catalog.hint") }}</p>
+        </header>
+        <CatalogBrowse :query="query" />
+      </div>
+      <div v-else class="flex min-h-0 min-w-0 flex-1 flex-col">
         <header class="shrink-0 border-b px-5 pt-5 pb-4 sm:px-8">
           <DialogTitle class="pr-6 text-xl">{{ t("addModule.title") }}</DialogTitle>
           <p class="text-muted-foreground mt-1 hidden text-sm sm:block">{{ t("addModule.hint") }}</p>

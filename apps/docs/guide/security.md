@@ -92,6 +92,15 @@ A zip is checked before anything is extracted:
 6. The module is unpacked into a temporary folder and moved into place, so a half-extracted module never loads.
 7. Nothing from the archive is ever run.
 
+### From the catalog
+
+The Browse tab of the module library lists modules from Tavora's catalog and installs them. The catalog is a new way for the app to reach the network, so it follows these rules:
+
+- **The app asks, never a module or page.** The main process fetches the list and the zip; the host UI gets checked plain values, and modules and Browser pages cannot reach the catalog at all. It is asked only while online features (Online game search) are on, with no cookies, referrer or sign-in, and it learns only which game or workspace the list is for and which zip is downloaded.
+- **The server is not trusted.** Every listing is checked field by field, and its text is shown as plain text, never HTML or Markdown. The name shown after "by" is only the developer name the service gives for the publisher key, in the same plain name form as above.
+- **A zip is installed only if it is the listed one.** Tavora asks for the listing again itself, downloads the zip into memory with its listed size as a cap, and checks its SHA-256 against the listing before anything uses it. The zip then goes through every check of [Installing modules](#installing-modules), and must also be the listed module id and be signed by the listed publisher key, all before a file is written. An unsigned zip is refused.
+- **Installing grants nothing.** A module installed from the catalog asks for its network hosts and connectors when it is added, like any other.
+
 ## The Browser panel
 
 The Browser panel shows any website, so here the attacker is any page:
