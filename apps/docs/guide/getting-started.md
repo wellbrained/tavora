@@ -119,7 +119,7 @@ Players install the zip with **Settings > Modules > Install from zip**. To list 
 npx tavora-pack publish <id>-<version>.zip
 ```
 
-The part of your module id before the first dot is your prefix: the first time you publish under it, it becomes yours, and nobody else can publish under it (an account holds up to 3). A module stays with the key that published its first version, and each new version must be newer. An account can publish 10 versions a day.
+The part of your module id before the first dot is your prefix: the first time you publish under it, it becomes yours, and nobody else can publish under it (an account holds up to 3). A module stays with the key that published its first version, and each new version must be newer. An account can publish 10 versions a day. [Publishing to the catalog](./publishing.md) covers the listing, updates, limits and reports.
 
 While you build, keep loading the module from its development folder: it needs no key, and its data is kept apart from the signed version's.
 
