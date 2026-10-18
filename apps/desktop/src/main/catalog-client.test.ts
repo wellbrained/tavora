@@ -129,6 +129,36 @@ describe("CatalogClient.download", () => {
   });
 });
 
+describe("CatalogClient.report", () => {
+  const report = { id: "wellbrained.tracker", owner: OWNER, sha256: SHA };
+
+  it("sends exactly the module id, the key and the zip's hash, with no cookies or referrer (C12)", async () => {
+    const { impl, calls } = fakeFetch(() => json({ status: "received" }, 202));
+    await new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl }).report(report);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe("https://catalog.test/v1/catalog/report");
+    expect(calls[0]!.init).toMatchObject({ method: "POST", credentials: "omit", referrerPolicy: "no-referrer", redirect: "error" });
+    expect(JSON.parse(String(calls[0]!.init!.body))).toEqual(report);
+  });
+
+  it("says plainly when the module is not listed, the catalog is busy or the service is away", async () => {
+    const client = (answer: () => Response) => new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: fakeFetch(answer).impl });
+    await expect(client(() => json({}, 404)).report(report)).rejects.toMatchObject({ key: "error.catalogNotListed" });
+    await expect(client(() => json({}, 429)).report(report)).rejects.toMatchObject({ key: "error.catalogBusy" });
+    await expect(client(() => json({}, 503)).report(report)).rejects.toMatchObject({ key: "error.catalogUnavailable" });
+    const offline = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: (async () => Promise.reject(new TypeError("offline"))) as typeof fetch });
+    await expect(offline.report(report)).rejects.toMatchObject({ key: "error.catalogUnreachable" });
+  });
+
+  it("sends nothing for values that are not an id, a key and a hash", async () => {
+    const { impl, calls } = fakeFetch(() => json({}, 202));
+    const client = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl });
+    await expect(client.report({ ...report, owner: "me@example.com" })).rejects.toMatchObject({ key: "error.catalogNotListed" });
+    await expect(client.report({ ...report, sha256: "x" })).rejects.toMatchObject({ key: "error.catalogNotListed" });
+    expect(calls).toEqual([]);
+  });
+});
+
 describe("a catalog install", () => {
   const manifest = JSON.stringify({ id: "wellbrained.tracker", name: "Tracker", version: "1.0.0", apiVersion: "1", entry: "dist/index.html", games: [], viewport: { minWidth: 100, minHeight: 100 }, permissions: { network: [] } });
   const files: ZipFile[] = [
