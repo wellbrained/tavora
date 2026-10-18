@@ -132,6 +132,18 @@ export interface CatalogVersion {
 
 export type CatalogFilter = { game: string } | { workspace: true } | Record<string, never>;
 
+export interface CatalogReport {
+  sha256: string;
+  id: string;
+  name: string;
+  version: string;
+  owner: string;
+  count: number;
+  firstAt: string;
+  lastAt: string;
+  listed: boolean;
+}
+
 export interface CatalogModuleRow {
   id: string;
   owner: string;
@@ -204,6 +216,14 @@ export class CatalogStore {
         unique (module_id, version)
       );
     `);
+    // Reports (C12): the module, key and zip a player pressed Report on, counted, never who pressed it.
+    this.db.exec(`
+      create table if not exists reports (
+        sha256 text primary key, module_id text not null, owner text not null,
+        count integer not null, first_at text not null, last_at text not null
+      );
+      create table if not exists report_notices (owner text primary key, notified_at text not null);
+    `);
     // Catalogs from before signed uploads have no account_id: those versions were added by hand.
     const columns = (this.db.prepare("pragma table_info(versions)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (!columns.includes("account_id")) this.db.exec("alter table versions add column account_id text");
@@ -263,6 +283,58 @@ export class CatalogStore {
   /** Takes a module out of the catalog or puts it back. Its versions and zips are kept. */
   setListed(id: string, listed: boolean): boolean {
     return Number(this.db.prepare("update modules set listed = ? where id = ?").run(listed ? 1 : 0, id).changes) > 0;
+  }
+
+  /**
+   * Records a player's report of a zip. Only a zip the catalog lists, under that module id and key,
+   * can be reported. Reports hide nothing: a person decides on the admin page (C12).
+   */
+  report(input: { id: string; owner: string; sha256: string }, now: Date = new Date()): boolean {
+    const known = this.db
+      .prepare("select 1 from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.id = ? and m.owner = ? and m.listed = 1")
+      .get(input.sha256, input.id, input.owner);
+    if (!known) return false;
+    const at = now.toISOString();
+    this.db
+      .prepare("insert into reports (sha256, module_id, owner, count, first_at, last_at) values (?, ?, ?, 1, ?, ?) on conflict (sha256) do update set count = count + 1, last_at = excluded.last_at")
+      .run(input.sha256, input.id, input.owner, at, at);
+    return true;
+  }
+
+  /** Whether a key's owner may be told about reports now: at most once a day. Saying yes counts as telling. */
+  takeReportNotice(owner: string, now: Date = new Date()): boolean {
+    const last = this.db.prepare("select notified_at from report_notices where owner = ?").get(owner) as { notified_at: string } | undefined;
+    if (last && now.getTime() - Date.parse(last.notified_at) < 86_400_000) return false;
+    this.db.prepare("insert into report_notices (owner, notified_at) values (?, ?) on conflict (owner) do update set notified_at = excluded.notified_at").run(owner, now.toISOString());
+    return true;
+  }
+
+  /** Open reports, most reported first, with what the maintainer needs to decide. */
+  reports(): CatalogReport[] {
+    return (
+      this.db
+        .prepare(
+          `select r.sha256, r.module_id, r.owner, r.count, r.first_at, r.last_at, v.version, v.manifest, m.listed
+           from reports r join versions v on v.sha256 = r.sha256 join modules m on m.id = r.module_id
+           order by r.count desc, r.last_at desc`,
+        )
+        .all() as unknown as { sha256: string; module_id: string; owner: string; count: number; first_at: string; last_at: string; version: string; manifest: string; listed: number }[]
+    ).map((row) => ({
+      sha256: row.sha256,
+      id: row.module_id,
+      name: (JSON.parse(row.manifest) as ModuleManifest).name,
+      version: row.version,
+      owner: row.owner,
+      count: row.count,
+      firstAt: row.first_at,
+      lastAt: row.last_at,
+      listed: row.listed === 1,
+    }));
+  }
+
+  /** Closes a report once a person has looked at it. */
+  dismissReport(sha256: string): boolean {
+    return Number(this.db.prepare("delete from reports where sha256 = ?").run(sha256).changes) > 0;
   }
 
   /** Every module, listed or not, for the maintainer. */

@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { accountRoutes, type AccountOptions } from "./accounts.ts";
 import { publishHandlers, type PublishLimits } from "./catalog-publish.ts";
+import { reportHandlers } from "./catalog-report.ts";
 import { catalogFilter, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
 import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
@@ -39,9 +40,11 @@ export interface AppOptions {
   /** Publishing: uploads per client, and the catalog's size limits. Publishing also needs accounts. */
   publishRateLimiter?: RateLimiter;
   publishLimits?: Partial<PublishLimits>;
+  /** Reports per client. */
+  reportRateLimiter?: RateLimiter;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, reportRateLimiter }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 100, windowMs: 3_600_000 });
@@ -199,6 +202,14 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     ...(accounts?.now ? { now: accounts.now } : {}),
   });
   catalogApp.post("/publish", publish.limit, publish.handler);
+  const report = reportHandlers({
+    catalog,
+    accounts,
+    clientKey: (request) => (clientKey ? clientKey(request) : "local"),
+    ...(reportRateLimiter ? { rateLimiter: reportRateLimiter } : {}),
+    ...(accounts?.now ? { now: accounts.now } : {}),
+  });
+  catalogApp.post("/report", report.limit, report.handler);
   catalogApp.use("*", async (context, next) => {
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
     if (wait > 0) {
