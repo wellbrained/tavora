@@ -119,6 +119,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "add-game":
       if (only("catalogId") && isGameId(a.catalogId)) return { type: a.type, catalogId: a.catalogId };
       if (only("name") && text(a.name)) return { type: a.type, name: a.name };
+      if (only("workspace") && text(a.workspace)) return { type: a.type, workspace: a.workspace };
       if (only("online")) {
         const game = a.online as Fields | null;
         if (

@@ -27,6 +27,8 @@ export type DevelopmentProblemKind = "not-built" | "no-module" | "missing";
 
 export interface GameView {
   id: string;
+  /** A game, or a personal workspace that belongs to no game. */
+  kind: "game" | "workspace";
   name: string;
   icon: IconView;
   /**
@@ -431,6 +433,7 @@ export type HostAction =
   | { type: "open-game"; gameId: string }
   | { type: "add-game"; catalogId: string }
   | { type: "add-game"; name: string }
+  | { type: "add-game"; workspace: string }
   /** A game found by the online search. */
   | { type: "add-game"; online: OnlineGame }
   | { type: "rename-game"; gameId: string; name: string }
