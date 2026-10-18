@@ -91,7 +91,7 @@ import { syncIcons } from "./icon-sync";
 import { fetchSteamLibrary, importSteamGames, steamLibraryView } from "./steam-import";
 import { isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, submitIcon } from "./share-icons";
 import { findSteamDir, removeSteamIcon } from "./steam-icons";
-import { ModuleView } from "./module-view";
+import { ModuleView, REVEAL_CAP_MS } from "./module-view";
 import { HostError } from "./errors";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { isWebUrl, siteOfUrl } from "./browser-url";
@@ -147,6 +147,8 @@ interface Rect {
   height: number;
 }
 
+/** How long a game's panels may keep each other waiting when it opens; past it, every panel shows (each one gives up after REVEAL_CAP_MS). */
+const OPENING_CAP_MS = REVEAL_CAP_MS + 250;
 /** How long to wait for a still image of a panel before hiding it anyway. */
 const FREEZE_TIMEOUT_MS = 250;
 /** How long a development folder's build must be quiet before its panels reload. */
@@ -291,6 +293,11 @@ export class Host {
   private windowHidden = false;
   /** Bumped whenever the main process replaces the current layout. */
   private layoutEpoch = 0;
+  /**
+   * Set while a game just opened and its panels load: none is shown until every visible one has its data, so
+   * the workspace appears at once rather than panel by panel.
+   */
+  private opening: { startedAt: number; timer: ReturnType<typeof setTimeout> } | null = null;
   private readonly onlineSearch: OnlineSearch;
   /** Tavora's module catalog (catalog-client.ts). */
   private readonly catalog: CatalogClient;
@@ -2115,6 +2122,32 @@ export class Host {
     if (!game) return;
     for (const record of this.records(game.id)) this.createView(record, game);
     this.layoutEpoch++;
+    if ([...this.views.values()].some((view) => view instanceof ModuleView)) {
+      this.endOpening();
+      this.opening = { startedAt: performance.now(), timer: setTimeout(() => this.endOpening(true), OPENING_CAP_MS) };
+    }
+  }
+
+  /** The game has opened once the host UI placed its panels and every visible module page has its data. */
+  private openingDone(): boolean {
+    if (this.panelBounds.size === 0) return false;
+    for (const instanceId of this.panelBounds.keys()) {
+      const view = this.views.get(instanceId);
+      if (view instanceof ModuleView && !view.revealed) return false;
+    }
+    return true;
+  }
+
+  /** Ends the wait for a game's panels; `show` places them and tells the host UI, which takes its loading cover away. */
+  private endOpening(show = false): void {
+    if (!this.opening) return;
+    clearTimeout(this.opening.timer);
+    const took = performance.now() - this.opening.startedAt;
+    this.opening = null;
+    if (!show) return;
+    timings.record("game-open", took);
+    this.applyBounds();
+    this.pushState();
   }
 
   /** openedAt is when the player asked for the panel; its time to a loaded page is measured from there. */
@@ -2157,7 +2190,7 @@ export class Host {
           measured = true;
           timings.record("panel-open", performance.now() - openedAt!);
         }
-        this.pushState();
+        this.pushStateSoon();
       },
     });
     const contentsId = view.webContentsId;
@@ -2386,6 +2419,7 @@ export class Host {
   }
 
   private closeAllViews(): void {
+    this.endOpening();
     for (const instanceId of [...this.views.keys()]) this.destroyView(instanceId);
     this.panelBounds.clear();
   }
@@ -2418,11 +2452,13 @@ export class Host {
    * tab are hidden and paused, as are all panels while the window is.
    */
   private applyBounds(): void {
+    if (this.opening && this.openingDone()) return this.endOpening(true);
     for (const [instanceId, view] of this.views) {
       const rect = this.panelBounds.get(instanceId);
       if (rect) view.setBounds(rect);
-      // A module page stays hidden until it has its data, so switching games does not show it building itself.
-      view.setVisible(rect !== undefined && !this.overlay && (!(view instanceof ModuleView) || view.revealed));
+      // A module page stays hidden until it has its data, so switching games does not show it building itself;
+      // while a game opens, every panel waits for the others.
+      view.setVisible(rect !== undefined && !this.overlay && !this.opening && (!(view instanceof ModuleView) || view.revealed));
       if (rect && !this.windowHidden) view.resume();
       else view.suspend();
     }
@@ -2641,6 +2677,7 @@ export class Host {
       }),
       layout: workspace.layout,
       layoutEpoch: this.layoutEpoch,
+      opening: this.opening !== null,
       pendingLink: this.pendingLink,
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
@@ -2687,7 +2724,16 @@ export class Host {
   }
 
   private pushState(): void {
+    clearImmediate(this.statePush);
+    this.statePush = undefined;
     if (!this.window.isDestroyed()) this.window.webContents.send("host:state", this.viewState());
+  }
+
+  private statePush: ReturnType<typeof setImmediate> | undefined;
+
+  /** Pushes the state once for a burst of changes, such as every panel of a game that just opened loading at once. */
+  private pushStateSoon(): void {
+    this.statePush ??= setImmediate(() => this.pushState());
   }
 
   private enqueue(write: () => Promise<void>, what: string): void {

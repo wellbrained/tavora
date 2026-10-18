@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.5",
+    date: "2026-10-18",
+    title: "Games open all at once",
+    notes: [
+      "Switching to a game or workspace no longer fills in panel by panel: Tavora waits until every panel you can see has loaded and then shows them together. A small spinner appears while a busy workspace is still loading.",
+    ],
+  },
+  {
     version: "0.18.3",
     date: "2026-10-18",
     title: "Browse the module catalog",

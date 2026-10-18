@@ -746,6 +746,7 @@ export const en = {
   "navigationChoice.title": "{panel} couldn't switch",
   "navigationChoice.message": "It couldn't save its changes, or took too long, so it still shows what it showed before. Open this in a new panel instead?",
   "navigationChoice.newPanel": "Open in a new panel",
+  "workspace.loading": "Loading the workspace",
   "workspace.addModule": "Add module",
   "workspace.startTitle": "Start building your workspace",
   "workspace.startText": "Choose a layout. Then add a module to each pane. You can change the layout and the modules at any time, or move them around.",
