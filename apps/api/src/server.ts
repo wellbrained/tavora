@@ -3,6 +3,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { serve } from "@hono/node-server";
 import { AccountStore } from "./account-store.ts";
+import { CatalogStore } from "./catalog.ts";
 import { createAdminApp } from "./admin-app.ts";
 import { createDiscordClient } from "./discord.ts";
 import { createApp } from "./app.ts";
@@ -74,11 +75,15 @@ if (!mailer && brevoKey) {
 }
 if (!mailer) console.log("[tavora-api] No way to send email: accounts are off.");
 const accountStore = mailer ? new AccountStore(path.join(stateDir, "accounts.sqlite")) : undefined;
+// The module catalog, read-only here: modules are added by hand with catalog.mjs (scripts/catalog.ts).
+const catalog = new CatalogStore(path.join(stateDir, "catalog"));
+console.log(`[tavora-api] ${catalog.index().length} modules in the catalog.`);
 
 const app = createApp({
   db,
   icons,
   submissions,
+  catalog,
   ...(mailer && accountStore
     ? {
         accounts: {
