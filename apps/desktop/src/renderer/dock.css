@@ -96,6 +96,42 @@
   left: calc(100% - 3px) !important;
 }
 
+/* A drop that only reorders groups (dropReorders in dock.ts): a bar on the
+   side where it lands, since the target keeps its size. */
+[data-drop-line] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
+  border: 0 !important;
+  border-radius: 2px;
+  background: var(--primary) !important;
+  transition: none !important;
+}
+[data-drop-line] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection::after {
+  display: none;
+}
+[data-drop-line="left"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection,
+[data-drop-line="right"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
+  top: 0 !important;
+  height: 100% !important;
+  width: 4px !important;
+}
+[data-drop-line="left"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
+  left: 0 !important;
+}
+[data-drop-line="right"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
+  left: calc(100% - 4px) !important;
+}
+[data-drop-line="top"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection,
+[data-drop-line="bottom"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
+  left: 0 !important;
+  width: 100% !important;
+  height: 4px !important;
+}
+[data-drop-line="top"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
+  top: 0 !important;
+}
+[data-drop-line="bottom"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
+  top: calc(100% - 4px) !important;
+}
+
 /* Each group is a card: rounded, outlined and set apart from its
    neighbours by the dock's gap. The corner radius matches PANEL_RADIUS in
    src/main/module-view.ts, which rounds the module's native view to fit. */

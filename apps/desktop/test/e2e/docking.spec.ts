@@ -101,6 +101,25 @@ test("panels are moved, split and maximized from their menu, and the layout is k
   await again.app.close();
 });
 
+test("a module is removed from one game from its panel menu, leaving empty slots", async () => {
+  const { app, page } = await launch();
+  await setContentSize(app, RAIL_WIDTH + 1000, 500);
+  await openModule(page, VANILLA);
+  await openModule(page, REACT);
+  await openModule(page, VANILLA);
+  await expect(groups(page)).toHaveCount(3);
+  const react = (await panels(page, REACT).boundingBox())!;
+
+  // Both vanilla panels go; their columns stay as empty slots, so React keeps its place.
+  await panels(page, VANILLA).first().click({ button: "right" });
+  await page.locator('[role="menu"][data-state="open"] [data-testid="panel-remove-module"]').click();
+  await expect(panels(page, VANILLA)).toHaveCount(0);
+  await expect(page.locator("[data-testid^='empty-slot-']")).toHaveCount(2);
+  await expect(groups(page)).toHaveCount(3);
+  expect((await panels(page, REACT).boundingBox())!.x).toBeCloseTo(react.x, -1);
+  await app.close();
+});
+
 test("a tab dragged to the edge of another group splits it", async () => {
   const { app, page } = await launch();
   await openModule(page, VANILLA);
@@ -133,6 +152,39 @@ test("a tab dragged to the edge of another group splits it", async () => {
   const left = (await panels(page, VANILLA).boundingBox())!;
   const right = (await panels(page, REACT).boundingBox())!;
   expect(right.x).toBeGreaterThan(left.x + 300);
+  await app.close();
+});
+
+test("dragging a column beside another in its row moves it there and shows a bar, keeping widths", async () => {
+  const { app, page } = await launch();
+  await setContentSize(app, RAIL_WIDTH + 1500, 800);
+  await openModule(page, VANILLA);
+  await openModule(page, REACT);
+  await openModule(page, VUE);
+  await expect(groups(page)).toHaveCount(3);
+  const column = (id: string) => groups(page).filter({ has: panels(page, id) });
+  const width = (await column(VANILLA).boundingBox())!.width;
+
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  const tab = page.locator(".dv-tab", { has: panels(page, VANILLA) });
+  const content = column(VUE).locator(".dv-content-container");
+  const box = (await content.boundingBox())!;
+  // The guide's right cell.
+  const right = { dataTransfer, clientX: box.x + box.width / 2 + 46, clientY: box.y + box.height / 2 };
+  await tab.dispatchEvent("dragstart", { dataTransfer });
+  await content.dispatchEvent("dragenter", right);
+  await content.dispatchEvent("dragover", right);
+  await expect(page.locator("[data-drop-line='right']")).toHaveCount(1);
+  await content.dispatchEvent("drop", right);
+  await tab.dispatchEvent("dragend", { dataTransfer });
+  await expect(page.locator("[data-drop-line]")).toHaveCount(0);
+
+  // Vanilla is now the last column, and every column kept its width.
+  await expect(groups(page)).toHaveCount(3);
+  const after = await Promise.all([REACT, VUE, VANILLA].map(async (id) => (await column(id).boundingBox())!));
+  expect(after[0]!.x).toBeLessThan(after[1]!.x);
+  expect(after[1]!.x).toBeLessThan(after[2]!.x);
+  expect(Math.abs(after[2]!.width - width)).toBeLessThanOrEqual(10);
   await app.close();
 });
 

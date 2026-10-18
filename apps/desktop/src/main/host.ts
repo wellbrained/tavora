@@ -941,18 +941,29 @@ export class Host {
   /** Removes a module's panels in every game; a slot left with nothing stays as an empty slot. */
   private removeModulePanels(moduleId: string): void {
     let changed = false;
-    for (const workspace of Object.values(this.workspace.games)) {
-      const gone = new Set(workspace.instances.filter((record) => record.moduleId === moduleId).map((record) => record.instanceId));
-      if (gone.size === 0) continue;
-      changed = true;
-      workspace.instances = workspace.instances.filter((record) => !gone.has(record.instanceId));
-      workspace.layout = vacateLayout(workspace.layout, (id) => gone.has(id));
-      for (const instanceId of gone) this.closeView(instanceId);
-    }
+    for (const workspace of Object.values(this.workspace.games)) changed = this.vacateModule(workspace, moduleId) || changed;
     if (changed) {
       this.layoutEpoch++;
       this.saveWorkspace();
     }
+  }
+
+  /** Takes a module out of the current game only: its panels close the same way, so the layout stays. Module data stays. */
+  private removeModuleFromGame(moduleId: string): void {
+    const game = this.game;
+    if (!game || !this.vacateModule(this.gameWorkspace(game.id), moduleId)) return;
+    this.layoutEpoch++;
+    this.saveWorkspace();
+  }
+
+  /** Closes a module's panels in one workspace, leaving empty slots; false when it had none. */
+  private vacateModule(workspace: GameWorkspace, moduleId: string): boolean {
+    const gone = new Set(workspace.instances.filter((record) => record.moduleId === moduleId).map((record) => record.instanceId));
+    if (gone.size === 0) return false;
+    workspace.instances = workspace.instances.filter((record) => !gone.has(record.instanceId));
+    workspace.layout = vacateLayout(workspace.layout, (id) => gone.has(id));
+    for (const instanceId of gone) this.closeView(instanceId);
+    return true;
   }
 
   /**
@@ -1589,6 +1600,8 @@ export class Host {
         return this.choosePanelType(action.instanceId, action.panelType);
       case "close-panel":
         return this.closePanel(action.instanceId);
+      case "remove-module-from-game":
+        return this.removeModuleFromGame(action.moduleId);
       case "reload-panel":
         return this.views.get(action.instanceId)?.reload();
       case "stop-panel":
@@ -2935,7 +2948,7 @@ export class Host {
           this.catalogUpdates.pending(module.manifest.id),
         ),
       })),
-      moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder).map(({ folder, message }) => ({ folder, message })),
+      moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder).map(({ folder, message, kind }) => ({ folder, message, ...(kind ? { kind } : {}) })),
       developmentFolders: this.library.developmentFolders.map((folder) => {
         const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
         const projects = new Map<string, { project: string; moduleId: string | null; problem: string | null; kind: NonNullable<ModuleProblem["kind"]> | null }>();

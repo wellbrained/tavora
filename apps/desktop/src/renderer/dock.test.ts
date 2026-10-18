@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Position } from "dockview-vue";
-import { GUIDE, resolveDropPosition, resolveOuterEdge, shareOut } from "./dock";
+import { dropReorders, GUIDE, resolveDropPosition, resolveOuterEdge, shareOut } from "./dock";
 import { gridName, gridTemplate, LAYOUT_TEMPLATES, templateRects } from "../shared/layout-templates";
 
 describe("shareOut", () => {
@@ -44,6 +44,28 @@ describe("resolveDropPosition", () => {
   it("keeps the dock's outer edges thin", () => {
     expect(resolveOuterEdge(5, 300, 800, 600, all)).toBe("left");
     expect(resolveOuterEdge(100, 300, 800, 600, new Set<Position>(["left", "right"]))).toBeNull();
+  });
+});
+
+describe("dropReorders", () => {
+  const box = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
+  const a = box(0, 0, 300, 600);
+  const c = box(620, 0, 300, 600);
+
+  it("is true for a lone panel moved beside a group in its row", () => {
+    expect(dropReorders(a, true, c, "right")).toBe(true);
+    expect(dropReorders(a, true, c, "left")).toBe(true);
+  });
+
+  it("is false when the dragged panel leaves others behind, or as a tab", () => {
+    expect(dropReorders(a, false, c, "right")).toBe(false);
+    expect(dropReorders(a, true, c, "center")).toBe(false);
+  });
+
+  it("is false when the groups are not in the same row or column", () => {
+    expect(dropReorders(box(0, 0, 300, 290), true, c, "right")).toBe(false);
+    expect(dropReorders(a, true, c, "bottom")).toBe(false);
+    expect(dropReorders(box(0, 0, 300, 290), true, box(0, 310, 300, 290), "bottom")).toBe(true);
   });
 });
 

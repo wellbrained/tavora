@@ -185,8 +185,8 @@ const showVariation = computed(() => {
       <template #below>
         <ul v-if="appearance.problems.length" class="mt-2 flex flex-col gap-1.5" :aria-label="t('settings.appearance.problems')" data-testid="theme-problems">
           <li v-for="problem in appearance.problems" :key="problem.folder" class="text-sm">
-            <span class="text-destructive font-medium">{{ problem.folder }}</span>
-            <span class="text-muted-foreground"> {{ t("settings.appearance.problem", { folder: "", message: problem.message }).trim() }}</span>
+            <span class="text-destructive font-medium">{{ problem.folder }}</span>{{ " " }}
+            <span class="text-muted-foreground">{{ t("settings.appearance.problem", { message: problem.message }) }}</span>
           </li>
         </ul>
       </template>

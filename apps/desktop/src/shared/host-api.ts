@@ -381,7 +381,8 @@ export interface HostViewState {
     update: { version: string; asks: ModulePermissions; notes: ModuleNote[] } | null;
   }[];
   /** Folders in the modules folder that could not be loaded, and why, for module authors. */
-  moduleProblems: { folder: string; message: string }[];
+  /** `kind` "not-built" gets its own text in Settings; the others show `message`. */
+  moduleProblems: { folder: string; message: string; kind?: "not-built" | "no-module" | "missing" }[];
   /**
    * Folders added in Settings > Development: a module project, or a folder of projects. `problem` is
    * set when the folder itself has none or is gone; each project says the module it loads or why not.
@@ -559,6 +560,8 @@ export type HostAction =
   /** Gives a panel whose type an update removed another type of the same module. */
   | { type: "choose-panel-type"; instanceId: string; panelType: string }
   | { type: "close-panel"; instanceId: string }
+  /** Closes all of a module's panels in the current game, leaving empty slots; it stays installed. */
+  | { type: "remove-module-from-game"; moduleId: string }
   | { type: "reload-panel"; instanceId: string }
   | { type: "stop-panel"; instanceId: string }
   /** An empty Browser tab beside this one. */

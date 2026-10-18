@@ -2,7 +2,7 @@
 // up a module put into the player's modules folder and explains one that
 // cannot be loaded, and Remove takes a module away together with its panels.
 import { generateKeyPairSync } from "node:crypto";
-import { access, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
@@ -46,10 +46,12 @@ test("the modules page lists where modules came from, reloads, and removes one w
   await addModule(userData, "later", "local.test.later");
   await mkdir(path.join(userData, "modules", "broken"));
   await writeFile(path.join(userData, "modules", "broken", "tavora.module.json"), "{ nope");
+  await rm(path.join(await addModule(userData, "unbuilt", "local.test.unbuilt"), "index.html"));
   await expect(page.getByTestId("module-local.test.later")).toHaveCount(0);
   await page.getByTestId("reload-modules").click();
   await expect(page.getByTestId("module-local.test.later")).toBeVisible();
-  await expect(page.getByTestId("module-problems")).toContainText("broken");
+  await expect(page.getByTestId("module-problems")).toContainText("broken can't load:");
+  await expect(page.getByTestId("module-problems")).toContainText("unbuilt isn't built yet.");
 
   // Open a panel of the module in a game, then remove the module.
   await page.getByTestId("settings-close").click();

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Loader } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import type { HostAction } from "../../shared/host-api";
@@ -37,6 +38,13 @@ const progress = ref<{ done: number; total: number } | null>(null);
 const error = ref<string | null>(null);
 const chosen = computed(() => rows.value.filter((row) => ticked.value.has(row.key)));
 const count = computed(() => chosen.value.length);
+/** Nothing found to share: the dialog says just that and offers Close. */
+const empty = computed(() => !looking.value && !error.value && rows.value.length === 0);
+const description = computed(() => {
+  if (looking.value || error.value) return undefined;
+  if (empty.value) return t("shareIcons.empty");
+  return t(steam ? "shareIcons.foundSteam" : "shareIcons.found", { count: rows.value.length });
+});
 
 onMounted(async () => {
   if (!steam) return;
@@ -103,7 +111,7 @@ async function share() {
 <template>
   <ModalDialog
     :title="t('shareIcons.title')"
-    :description="steam ? t('shareIcons.steamDescription') : t('shareIcons.description')"
+    :description="description"
     testid="share-icons-dialog"
     class="sm:max-w-[460px]"
     @close="dialog = null"
@@ -135,9 +143,6 @@ async function share() {
         </li>
       </ul>
     </template>
-    <p v-else-if="!error" class="text-muted-foreground text-sm" data-testid="share-icons-empty">
-      {{ steam ? t("shareIcons.steamEmpty") : t("shareIcons.empty") }}
-    </p>
 
     <div v-if="!steam" class="flex items-center justify-between gap-3">
       <p class="text-muted-foreground text-xs">{{ t("shareIcons.fromSteamHelp") }}</p>
@@ -146,16 +151,17 @@ async function share() {
       </Button>
     </div>
 
-    <p class="text-muted-foreground text-xs leading-relaxed">
+    <p v-if="!empty" class="text-muted-foreground text-xs leading-relaxed">
       {{ t("shareIcons.notice") }}
     </p>
     <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="share-icons-error">{{ error }}</p>
     <div class="flex items-center justify-end gap-2">
-      <span v-if="progress" class="text-muted-foreground mr-auto text-sm tabular-nums" role="status" data-testid="share-icons-progress">
+      <span v-if="progress" class="text-muted-foreground mr-auto flex items-center gap-2 text-sm tabular-nums" role="status" data-testid="share-icons-progress">
+        <Loader class="size-4 animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
         {{ t("shareIcons.progress", progress) }}
       </span>
-      <Button type="button" variant="secondary" :disabled="busy" @click="dialog = null">{{ t("common.cancel") }}</Button>
-      <Button type="button" data-testid="share-icons-submit" :disabled="busy || looking || count === 0" @click="share">
+      <Button type="button" variant="secondary" :disabled="busy" @click="dialog = null">{{ empty ? t("common.close") : t("common.cancel") }}</Button>
+      <Button v-if="!empty" type="button" data-testid="share-icons-submit" :disabled="busy || looking || count === 0" @click="share">
         {{ t("shareIcons.submit", { count: Math.max(count, 1) }) }}
       </Button>
     </div>
