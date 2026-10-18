@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.9",
+    date: "2026-10-18",
+    title: "Report a module",
+    notes: [
+      "A module in the catalog that does something harmful, or isn't what it says, can be reported to Tavora: Report in the Browse tab of the module library, or in Settings > Modules for one you installed from the catalog.",
+      "A person at Tavora looks at every report. The report names only the module, its publisher key and its file, nothing about you.",
+    ],
+  },
+  {
     version: "0.18.8",
     date: "2026-10-18",
     title: "Quicker module library and file dialogs",
