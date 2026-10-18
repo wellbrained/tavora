@@ -6,12 +6,13 @@
 // to the recycle bin. A module's data stays, so adding it again finds it.
 // What module developers use (development folders, the examples) is in
 // Settings > Development instead.
-import { ArrowRightLeft, FileArchive, FolderInput, FolderOpen, RefreshCw, Trash2 } from "@lucide/vue";
-import { computed } from "vue";
+import { ArrowRightLeft, FileArchive, FolderInput, FolderOpen, NotebookText, RefreshCw, Trash2 } from "@lucide/vue";
+import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { act, confirmAction, gamesUsing, listOf, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";
+import ModuleNotes from "./ModuleNotes.vue";
 import ModuleRow from "./ModuleRow.vue";
 import SettingRow from "./SettingRow.vue";
 
@@ -28,6 +29,9 @@ const sorted = computed(() => {
   const rank = (module: ModuleView) => (module.provenance === "official" ? 0 : 1);
   return modules.value.filter((module) => !module.development).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 });
+
+/** The module whose patch notes are open under its row, if any. */
+const notesOpen = ref<string | null>(null);
 
 /** Panels of a module that are open in the current game, so Remove can say what closes. */
 function openCount(moduleId: string): number {
@@ -131,6 +135,18 @@ function remove(module: ModuleView) {
     <ul class="mt-2 flex flex-col" :aria-label="t('settings.installed-modules.label')" data-testid="module-list">
       <ModuleRow v-for="module in sorted" :key="module.id" :module="module">
         <Button
+          v-if="module.notes.latest"
+          variant="ghost"
+          :aria-expanded="notesOpen === module.id"
+          :data-testid="`module-notes-toggle-${module.id}`"
+          @click="notesOpen = notesOpen === module.id ? null : module.id"
+        >
+          <NotebookText :stroke-width="1.5" /> {{ t("settings.modules.notes") }}
+          <span v-if="module.notes.unseen" class="bg-primary text-primary-foreground rounded-sm px-1.5 text-xs" :data-testid="`module-notes-new-${module.id}`">{{
+            t("settings.modules.notesNew")
+          }}</span>
+        </Button>
+        <Button
           v-if="module.localDataWaiting"
           variant="secondary"
           :data-testid="`move-local-data-${module.id}`"
@@ -148,6 +164,9 @@ function remove(module: ModuleView) {
         >
           <Trash2 :stroke-width="1.5" /> {{ t("common.remove") }}
         </Button>
+        <template v-if="notesOpen === module.id" #details>
+          <ModuleNotes :module-id="module.id" :version="module.version" :unseen="module.notes.unseen" />
+        </template>
       </ModuleRow>
     </ul>
   </div>

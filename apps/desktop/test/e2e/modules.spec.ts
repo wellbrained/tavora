@@ -224,3 +224,45 @@ test("a pictures folder that moved to a drive that is gone gives a notice; Use d
   await expect(running.page.getByTestId("reset-module-files")).toHaveCount(0);
   await running.app.close();
 });
+
+test("a module's patch notes show in Settings, and an update marks the new ones until they are read", async () => {
+  const userData = await newUserData();
+  const work = path.join(userData, "..", `${path.basename(userData)}-notes`);
+  const dir = await addModule(work, "mini", "wellbrained.mini");
+  const key = generateKeyPairSync("ed25519").privateKey;
+  async function release(version: string, changelog: { version: string; notes: string[] }[]): Promise<string> {
+    const manifest = JSON.parse(await readFile(path.join(dir, "tavora.module.json"), "utf8"));
+    await writeFile(path.join(dir, "tavora.module.json"), JSON.stringify({ ...manifest, version, changelog: "changelog.json" }));
+    await writeFile(path.join(dir, "changelog.json"), JSON.stringify(changelog));
+    const zip = path.join(work, `mini-${version}.zip`);
+    await writeFile(zip, (await packModule(dir, key)).zip);
+    return zip;
+  }
+  const first = await release("1.0.0", [{ version: "1.0.0", notes: ["First version."] }]);
+
+  const { app, page } = await launch(userData);
+  await page.getByTestId("rail-settings").click();
+  await page.getByTestId("settings-nav-modules").click();
+  await pickFile(app, first);
+  await page.getByTestId("install-module").click();
+  // A fresh install has nothing new to read.
+  await expect(page.getByTestId("module-notes-toggle-wellbrained.mini")).toBeVisible();
+  await expect(page.getByTestId("module-notes-new-wellbrained.mini")).toHaveCount(0);
+
+  const second = await release("1.1.0", [
+    { version: "1.1.0", notes: ["<b>Filters</b> by tag."] },
+    { version: "1.0.0", notes: ["First version."] },
+  ]);
+  await pickFile(app, second);
+  await page.getByTestId("install-module").click();
+  await expect(page.getByTestId("module-notes-new-wellbrained.mini")).toBeVisible();
+  await page.getByTestId("module-notes-toggle-wellbrained.mini").click();
+  // Newest first, as plain text.
+  await expect(page.getByTestId("module-notes-wellbrained.mini-1.1.0")).toContainText("<b>Filters</b> by tag.");
+  await expect(page.getByTestId("module-notes-wellbrained.mini-1.0.0")).toContainText("First version.");
+  await expect(page.getByTestId("module-notes-new-wellbrained.mini")).toHaveCount(0);
+
+  // Tavora's own modules have patch notes too.
+  await expect(page.getByTestId("module-notes-toggle-tavora.notes")).toBeVisible();
+  await app.close();
+});

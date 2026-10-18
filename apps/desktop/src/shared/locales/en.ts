@@ -357,6 +357,8 @@ export const en = {
   "settings.modules.removeMessage": "Its folder moves to the recycle bin. Its notes and other data stay on this PC, so adding the module again brings them back.",
   "settings.modules.removeMessageUsed": "It is used in {games}: its panels there are removed, leaving an empty slot where nothing else was. Its folder moves to the recycle bin; its notes and other data stay on this PC, so adding the module again brings them back.",
   "settings.modules.removeLabel": "Remove {name}",
+  "settings.modules.notes": "Patch notes",
+  "settings.modules.notesNew": "New",
   "settings.modules.removeHint": "Its open panels close",
   "settings.modules.install": "Install from zip",
   "settings.modules.leftover": "Data from modules that are not installed",

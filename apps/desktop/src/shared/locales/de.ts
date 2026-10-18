@@ -359,6 +359,8 @@ export const de: Record<keyof typeof en, string> = {
   "settings.modules.removeMessage": "Sein Ordner wandert in den Papierkorb. Seine Notizen und anderen Daten bleiben auf diesem PC, sodass sie zurückkommen, wenn du das Modul wieder hinzufügst.",
   "settings.modules.removeMessageUsed": "Es wird in {games} verwendet: Seine Panels dort werden entfernt, und wo sonst nichts war, bleibt ein leerer Platz. Sein Ordner wandert in den Papierkorb; seine Notizen und anderen Daten bleiben auf diesem PC, sodass sie zurückkommen, wenn du das Modul wieder hinzufügst.",
   "settings.modules.removeLabel": "{name} entfernen",
+  "settings.modules.notes": "Patch Notes",
+  "settings.modules.notesNew": "Neu",
   "settings.modules.removeHint": "Seine offenen Panels werden geschlossen",
   "settings.modules.install": "Aus Zip installieren",
   "settings.modules.leftover": "Daten von Modulen, die nicht installiert sind",

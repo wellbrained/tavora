@@ -61,6 +61,22 @@ describe("packModule", () => {
   });
 });
 
+describe("packModule with a changelog", () => {
+  const withChangelog = { ...manifest, changelog: "changelog.json" };
+
+  it("packs the changelog the manifest names", async () => {
+    const dir = await moduleFolder({ "tavora.module.json": JSON.stringify(withChangelog), "changelog.json": JSON.stringify([{ version: "1.0.0", notes: ["First release."] }]) });
+    const names = readZip((await packModule(dir, key())).zip).map((file) => file.name);
+    expect(names).toContain("changelog.json");
+  });
+
+  it("refuses a missing or invalid changelog, so players never get one Tavora cannot show", async () => {
+    await expect(packModule(await moduleFolder({ "tavora.module.json": JSON.stringify(withChangelog) }), key())).rejects.toThrow("the changelog changelog.json is missing");
+    await expect(packModule(await moduleFolder({ "tavora.module.json": JSON.stringify(withChangelog), "changelog.json": "{" }), key())).rejects.toThrow(/not valid JSON/);
+    await expect(packModule(await moduleFolder({ "tavora.module.json": JSON.stringify(withChangelog), "changelog.json": JSON.stringify([{ version: "1", notes: ["x"] }]) }), key())).rejects.toThrow(/version must be semver/);
+  });
+});
+
 describe("verifyFiles", () => {
   const files: ZipFile[] = [
     { name: "tavora.module.json", data: Buffer.from(JSON.stringify(manifest)) },

@@ -89,6 +89,8 @@ export interface Library {
   moduleFilesFolder: string | null;
   /** Module project folders a developer added in Settings > Modules; loaded straight from there (registry.ts). */
   developmentFolders: string[];
+  /** Per `owner:module id`, the module version whose patch notes the player has seen; newer notes are marked new. */
+  moduleNotesSeen: Record<string, string>;
   /** The Steam profile link or id the player chose to remember for the Steam import, or null. Kept only on this PC. */
   steamProfile: string | null;
   /** The language of Tavora's texts: one of them, or the system's. */
@@ -111,6 +113,8 @@ export const MAX_LABEL = 3;
 
 /** Most development folders kept. */
 export const MAX_DEVELOPMENT_FOLDERS = 20;
+/** Modules whose seen patch notes are remembered; more than anyone installs. */
+export const MAX_NOTES_SEEN = 1000;
 
 /** Absolute paths only, each once (ignoring case on Windows), at most MAX_DEVELOPMENT_FOLDERS. */
 export function cleanDevelopmentFolders(values: unknown[]): string[] {
@@ -148,6 +152,7 @@ export function emptyLibrary(): Library {
     moduleIcons: true,
     moduleFilesFolder: null,
     developmentFolders: [],
+    moduleNotesSeen: {},
     steamProfile: null,
     language: "system",
     theme: { ...DEFAULT_THEME },
@@ -651,6 +656,9 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.moduleIcons === "boolean") library.moduleIcons = saved.moduleIcons;
   if (typeof saved.moduleFilesFolder === "string" && saved.moduleFilesFolder.length <= 500 && path.isAbsolute(saved.moduleFilesFolder)) library.moduleFilesFolder = saved.moduleFilesFolder;
   if (Array.isArray(saved.developmentFolders)) library.developmentFolders = cleanDevelopmentFolders(saved.developmentFolders);
+  for (const [key, version] of Object.entries(asRecord(saved.moduleNotesSeen)).slice(0, MAX_NOTES_SEEN)) {
+    if (key.length <= 200 && /^[^:]+:[^:]+$/.test(key) && typeof version === "string" && version.length <= 64) library.moduleNotesSeen[key] = version;
+  }
   if (isLanguageSetting(saved.language)) library.language = saved.language;
   if (typeof saved.steamProfile === "string" && saved.steamProfile.trim() && saved.steamProfile.length <= 200) library.steamProfile = saved.steamProfile.trim();
   const theme = asRecord(saved.theme);

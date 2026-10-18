@@ -1,6 +1,6 @@
 {
   "name": "@tavora/desktop",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -75,6 +75,7 @@
         "to": "modules",
         "filter": [
           "*/tavora.module.json",
+          "*/changelog.json",
           "*/dist/**"
         ]
       },
@@ -83,6 +84,7 @@
         "to": "official-modules",
         "filter": [
           "*/tavora.module.json",
+          "*/changelog.json",
           "*/dist/**"
         ]
       },

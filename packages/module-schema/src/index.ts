@@ -39,6 +39,8 @@ export interface ModuleManifest {
   minTavora?: string;
   entry: string;
   icon?: string;
+  /** A JSON file inside the package with the module's patch notes (see validateChangelog), shown to players in Settings > Modules. */
+  changelog?: string;
   games: string[];
   /**
    * Whether the module may be added to a personal workspace, which belongs to no game. Only modules for any game
@@ -68,7 +70,7 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "games", "workspaces", "viewport", "panels", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "games", "workspaces", "viewport", "panels", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
 
 /** Most panel types one module may offer, and the longest short name a tab shows. */
@@ -105,6 +107,51 @@ export function panelTypes(manifest: ModuleManifest): ResolvedPanelType[] {
 export function continuingPanelType(manifest: ModuleManifest): string | null {
   const panels = manifest.panels ?? [];
   return (panels.find((type) => type.continues) ?? panels[0])?.id ?? null;
+}
+
+/** One version in a module's patch notes. */
+export interface ChangelogEntry {
+  /** The module version, semver as in the manifest. */
+  version: string;
+  /** YYYY-MM-DD, when the version came out. */
+  date?: string;
+  /** What players notice, one line each, as plain text. */
+  notes: string[];
+}
+
+/** Limits of a changelog file: it is read by the host and shown as plain text. */
+export const CHANGELOG_LIMITS = { maxBytes: 64 * 1024, maxEntries: 100, maxNotes: 20, maxNoteLength: 500 } as const;
+
+const DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+export type ChangelogResult = { ok: true; entries: ChangelogEntry[] } | { ok: false; errors: string[] };
+
+/**
+ * Checks the contents of a changelog file: an array of `{ version, date?, notes }`, newest first, each version once.
+ * Notes are plain text: Tavora never reads them as HTML or Markdown.
+ */
+export function validateChangelog(input: unknown): ChangelogResult {
+  if (!Array.isArray(input)) return { ok: false, errors: ["the changelog must be an array of versions, newest first"] };
+  const errors: string[] = [];
+  if (input.length > CHANGELOG_LIMITS.maxEntries) errors.push(`the changelog may list at most ${CHANGELOG_LIMITS.maxEntries} versions`);
+  const seen = new Set<string>();
+  input.slice(0, CHANGELOG_LIMITS.maxEntries).forEach((entry: unknown, index) => {
+    const at = `changelog[${index}]`;
+    if (!isRecord(entry)) return void errors.push(`${at} must be an object`);
+    const extra = Object.keys(entry).filter((key) => key !== "version" && key !== "date" && key !== "notes");
+    if (extra.length > 0) errors.push(`${at} has unknown fields: ${extra.join(", ")}`);
+    if (typeof entry.version !== "string" || !SEMVER.test(entry.version)) errors.push(`${at}.version must be semver, e.g. 1.0.0`);
+    else if (seen.has(entry.version)) errors.push(`${at}.version ${entry.version} is listed twice`);
+    else seen.add(entry.version);
+    if (entry.date !== undefined && (typeof entry.date !== "string" || !DATE.test(entry.date))) errors.push(`${at}.date must be YYYY-MM-DD`);
+    const notes = entry.notes;
+    if (!Array.isArray(notes) || notes.length === 0 || notes.length > CHANGELOG_LIMITS.maxNotes) {
+      errors.push(`${at}.notes must be an array of 1 to ${CHANGELOG_LIMITS.maxNotes} lines`);
+    } else if (!notes.every((note) => typeof note === "string" && note.trim() !== "" && note.length <= CHANGELOG_LIMITS.maxNoteLength && !/[\u0000-\u001f]/.test(note))) {
+      errors.push(`${at}.notes must be lines of 1 to ${CHANGELOG_LIMITS.maxNoteLength} characters, without line breaks`);
+    }
+  });
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, entries: input as ChangelogEntry[] };
 }
 
 /** Every page and icon the manifest names, its panel types' included, each once: the files a package must hold. */
@@ -275,6 +322,11 @@ export function validateManifest(input: unknown): ManifestResult {
   if (input.icon !== undefined) {
     if (!isPackagePath(input.icon)) errors.push("icon must be a relative path inside the package");
     else if (!/\.(png|webp)$/.test(input.icon)) errors.push("icon must be a .png or .webp file");
+  }
+
+  if (input.changelog !== undefined) {
+    if (!isPackagePath(input.changelog)) errors.push("changelog must be a relative path inside the package");
+    else if (!input.changelog.endsWith(".json")) errors.push("changelog must be a .json file");
   }
 
   if (!Array.isArray(input.games) || !input.games.every(isGameId)) {

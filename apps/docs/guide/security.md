@@ -69,6 +69,8 @@ A module can still label a button misleadingly and get the player to click it. T
 
 One call puts a module's text outside its panel without a click: **`panel.setContent`** names what the panel shows, and Tavora shows that name when the player hovers the panel's own tab. Tavora checks it first and shows only one line of plain text, at most 200 characters, below the panel's and the module's names, on that tab and nowhere else. The module learns nothing back.
 
+A module's **patch notes** also show outside its panel, in Settings > Modules. They come from the changelog file in its package, not from the running page. Tavora reads at most 64 KB, checks the file first and shows only plain text lines (never HTML, Markdown or links), only for versions up to the installed one, and only when the player opens them.
+
 ## Module files
 
 `blobs` keeps pictures for a module, per game:

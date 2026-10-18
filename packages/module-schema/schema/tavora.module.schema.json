@@ -93,6 +93,21 @@
         "assets/icon.png"
       ]
     },
+    "changelog": {
+      "type": "string",
+      "allOf": [
+        {
+          "$ref": "#/definitions/packagePath"
+        },
+        {
+          "pattern": "\\.json$"
+        }
+      ],
+      "description": "A JSON file inside the package with the module's patch notes: an array of { version, date, notes } objects, newest first. Players see them in Settings > Modules. Needs Tavora 0.18.2 or newer.",
+      "examples": [
+        "changelog.json"
+      ]
+    },
     "games": {
       "type": "array",
       "items": {
@@ -205,7 +220,10 @@
           "uniqueItems": true,
           "description": "Parts of Tavora that hold a sign-in, which the module asks to use without seeing the token. ai-usage reads the usage of the player's Claude and Codex accounts; discord talks to the Discord app on this PC (voice channels, who is talking, joining and muting).",
           "items": {
-            "enum": ["ai-usage", "discord"]
+            "enum": [
+              "ai-usage",
+              "discord"
+            ]
           }
         },
         "webAssembly": {

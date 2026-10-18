@@ -25,6 +25,13 @@ export type DeveloperLink = "docs" | "discussions" | "issue";
 /** Why a development project did not load, for the fix Settings suggests. */
 export type DevelopmentProblemKind = "not-built" | "no-module" | "missing";
 
+/** One version of a module's patch notes, as its changelog file says; plain text. */
+export interface ModuleNote {
+  version: string;
+  date?: string;
+  notes: string[];
+}
+
 export interface GameView {
   id: string;
   /** A game, or a personal workspace that belongs to no game. */
@@ -361,6 +368,8 @@ export interface HostViewState {
     permissions: { asks: ModulePermissions; granted: ModulePermissions; missing: ModulePermissions };
     /** Games (ids in the library) with a panel of this module, for the dialogs that remove them. */
     usedIn: string[];
+    /** The newest version the module's patch notes cover (null without any), and whether some are new to the player. */
+    notes: { latest: string | null; unseen: boolean };
   }[];
   /** Folders in the modules folder that could not be loaded, and why, for module authors. */
   moduleProblems: { folder: string; message: string }[];
@@ -506,6 +515,8 @@ export type HostAction =
   | { type: "delete-module-data"; owner: string; moduleId: string }
   /** Moves a signed module's data from its unsigned local copy to it; Tavora restarts to do it. */
   | { type: "move-local-data"; moduleId: string }
+  /** The player opened a module's patch notes: none of them are new any more. */
+  | { type: "seen-module-notes"; moduleId: string }
   /** Copies the Tavora theme into the themes folder as a new theme to change; answers with its id. */
   | { type: "create-starter-theme" }
   /** Done ends the first-run welcome; false shows it again. */
@@ -656,6 +667,8 @@ export interface TavoraHostApi {
   getState(): Promise<HostViewState | null>;
   act(action: HostAction): Promise<ActionResult>;
   searchCatalog(query: string): Promise<CatalogMatch[]>;
+  /** A module's patch notes, newest first, up to the installed version; empty without any. */
+  moduleNotes(moduleId: string): Promise<ModuleNote[]>;
   /** Asks the Tavora service; a newer call cancels an older one. Never rejects. */
   searchOnline(query: string): Promise<OnlineSearchResult>;
   /** The games a Steam profile (link or SteamID64) owns, through the Tavora service. Never rejects. */

@@ -12,6 +12,7 @@ A [Tavora](https://mytavora.app) module, made with `@tavora/create-module`. Tavo
 `dev` builds the module into `dist/` and builds it again on every change. Leave it running. In Tavora, open **Settings > Development > Add a development folder…** and choose this folder, or the folder you keep all your module projects in. Add the module to a game with **Add module**; its panels reload by themselves after every build.
 
 - `tavora.module.json` is the manifest: its id, name, the panel's smallest size, and what it asks the player for (websites to reach, connectors). See the [manifest reference](https://docs.mytavora.app/reference/manifest).
+- `changelog.json` holds your patch notes, newest version first. Players read them under the module in **Settings > Modules**, marked New after an update, so add an entry whenever you raise `version`.
 - `minTavora` is the oldest Tavora the module works with. Raise it when you use something newer from the SDK (the [changelog](https://docs.mytavora.app/reference/changelog) says which Tavora added what).
 
 ## Share
