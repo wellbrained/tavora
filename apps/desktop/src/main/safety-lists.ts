@@ -26,11 +26,11 @@ import type { InstalledModule, ModuleProblem } from "./registry";
 // with no cookies, no referrer and nothing that says who asks.
 
 /**
- * Tavora's catalogue public key: the raw Ed25519 public half, base64.
- * TODO(Dom): fill in with the output of `pnpm tavora-catalog-sign key <file>`, made offline
- * on your PC. While it is empty, no list is ever accepted, so nothing is revoked or blocked.
+ * Tavora's catalogue public key: the raw Ed25519 public half, base64, made offline with
+ * `pnpm tavora-catalog-sign key <file>` (2026-10-18). Only lists signed by its secret half count.
+ * A new key here makes every list signed by the old one count for nothing.
  */
-export const CATALOGUE_PUBLIC_KEY = "";
+export const CATALOGUE_PUBLIC_KEY = "u44xg/sgGpnPfBN5o8n/xyBU5Xrv3G/ZJC20+phjWIU=";
 
 export const SAFETY_TIMEOUT_MS = 10_000;
 /** How often a running Tavora asks again. */

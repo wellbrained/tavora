@@ -2,7 +2,7 @@ import { createHash, generateKeyPairSync, type KeyObject } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { catalogPublicKey, fingerprint, signCatalogList, signFiles, writeZip, type CatalogList, type ZipFile } from "@tavora/pack";
+import { catalogPublicKey, fingerprint, publicKeyFromRaw, signCatalogList, signFiles, writeZip, type CatalogList, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { installZip, readOwnerRecords } from "./installer";
 import type { InstalledModule, ModuleProblem } from "./registry";
@@ -71,11 +71,19 @@ function loaded(root: string, owner: string, version = "1.0.0"): InstalledModule
 }
 
 describe("SafetyLists", () => {
-  it("ships without a catalogue key until Dom fills it in, and then accepts nothing", async () => {
-    expect(CATALOGUE_PUBLIC_KEY).toBe("");
+  it("ships with a real Ed25519 catalogue key, which a list signed by a test key does not satisfy", async () => {
+    expect(publicKeyFromRaw(CATALOGUE_PUBLIC_KEY)?.asymmetricKeyType).toBe("ed25519");
+    const { userData } = await setup();
+    const { fetchImpl } = service({ blocks: blocks(1, ["a".repeat(64)]) });
+    const safety = new SafetyLists({ file: path.join(userData, "l.json"), baseUrl: "https://api.example.test", publicKey: CATALOGUE_PUBLIC_KEY, online: () => true, fetchImpl });
+    expect(await safety.refresh()).toBe(false);
+    expect(safety.blocked("a".repeat(64))).toBeNull();
+  });
+
+  it("asks for nothing without a catalogue key", async () => {
     const { userData } = await setup();
     const { fetchImpl, asked } = service({ blocks: blocks(1, ["a".repeat(64)]) });
-    const safety = new SafetyLists({ file: path.join(userData, "l.json"), baseUrl: "https://api.example.test", publicKey: CATALOGUE_PUBLIC_KEY, online: () => true, fetchImpl });
+    const safety = new SafetyLists({ file: path.join(userData, "l.json"), baseUrl: "https://api.example.test", publicKey: "", online: () => true, fetchImpl });
     expect(await safety.refresh()).toBe(false);
     expect(asked).toEqual([]);
   });
