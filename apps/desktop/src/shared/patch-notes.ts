@@ -19,7 +19,7 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.18.6",
+    version: "0.18.7",
     date: "2026-10-18",
     title: "Tidy up many games at once",
     notes: [
