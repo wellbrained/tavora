@@ -785,6 +785,7 @@ export const de: Record<keyof typeof en, string> = {
   "panel.status.unresponsive": "Reagiert nicht",
   "panel.status.crashed": "Funktioniert nicht mehr",
   "panel.status.unavailable": "Nicht verfügbar",
+  "panel.loading": "{name} wird geladen…",
   "panel.typeGone": "{module} bietet das Panel „{type}“ nicht mehr an. Seine gespeicherten Inhalte bleiben erhalten.",
   "panel.typeGoneChoose": "Wähle ein anderes Panel von {module}:",
   "panel.remove": "Entfernen",

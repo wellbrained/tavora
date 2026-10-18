@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.10",
+    date: "2026-10-18",
+    title: "Games open all at once",
+    notes: [
+      "Switching to a game or workspace no longer fills in panel by panel: Tavora's campfire, with embers rising from it, covers the workspace until every panel you can see has loaded, and then they all show together.",
+      "A panel you add shows the same campfire while it loads.",
+    ],
+  },
+  {
     version: "0.18.9",
     date: "2026-10-18",
     title: "Report a module",

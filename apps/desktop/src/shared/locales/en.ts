@@ -783,6 +783,7 @@ export const en = {
   "panel.status.unresponsive": "Not responding",
   "panel.status.crashed": "Stopped working",
   "panel.status.unavailable": "Not available",
+  "panel.loading": "Loading {name}…",
   "panel.typeGone": "{module} no longer offers the panel \"{type}\". Its saved content is kept.",
   "panel.typeGoneChoose": "Choose another panel of {module}:",
   "panel.remove": "Remove",
