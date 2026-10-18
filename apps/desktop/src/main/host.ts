@@ -2407,7 +2407,7 @@ export class Host {
     return true;
   }
 
-  /** Ends the wait for a game's panels; `show` places them and tells the host UI, which takes its loading cover away. */
+  /** Ends the wait for a game's panels; `show` places them and tells the host UI, which takes their loaders away. */
   private endOpening(show = false): void {
     if (!this.opening) return;
     clearTimeout(this.opening.timer);
@@ -2442,7 +2442,10 @@ export class Host {
       baseCss: (moduleCss ??= moduleBaseCss(MODULE_FONTS)),
       ...(this.options.moduleStorageLimit === undefined ? {} : { storageLimit: this.options.moduleStorageLimit }),
       onStorageOver: () => void this.purgeModuleStorage(module.manifest.id, game.id),
-      onReveal: () => this.applyBounds(),
+      onReveal: () => {
+        this.applyBounds();
+        this.pushStateSoon();
+      },
       onOpenLink: (url) => this.openLinkFromModule(url),
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
       launch: () => this.launchOf(record),
@@ -2939,17 +2942,21 @@ export class Host {
         const name = type?.name ?? this.modules.get(record.moduleId)!.manifest.name;
         const panelType = record.panelType ?? null;
         const openedFrom = this.openedFrom.get(record.instanceId);
-        if (type === undefined) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: record.panelType ?? name, status: "unavailable" as const, content: null };
+        if (type === undefined) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: record.panelType ?? name, status: "unavailable" as const, waiting: false, content: null };
         const content = record.content?.title ?? null;
-        if (!(view instanceof BrowserPanel)) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status: view?.status ?? "loading", content };
+        if (!(view instanceof BrowserPanel)) {
+          const status = view?.status ?? "loading";
+          // Hidden until its page has its data, and while the game opens until every panel has.
+          const waiting = (status === "loading" || status === "ready") && (!view?.revealed || this.opening !== null);
+          return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status, waiting, content };
+        }
         const browser = view.state;
         // A Browser tab is named after its page, like a browser tab.
         const title = (browser.title || browser.host).trim().slice(0, 80);
-        return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: title || name, status: view.status, content: null, browser, ...(openedFrom ? { openedFrom } : {}) };
+        return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: title || name, status: view.status, waiting: false, content: null, browser, ...(openedFrom ? { openedFrom } : {}) };
       }),
       layout: workspace.layout,
       layoutEpoch: this.layoutEpoch,
-      opening: this.opening !== null,
       pendingLink: this.pendingLink,
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },

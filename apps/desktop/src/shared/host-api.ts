@@ -75,6 +75,8 @@ export interface PanelView {
   /** The tab's name: the panel type's short name, or the module's name. */
   name: string;
   status: InstanceStatus;
+  /** A module panel whose page is still loading, or waiting for the game's other panels: the host UI shows a loader in its place. */
+  waiting: boolean;
   /** The full name of what the panel shows, as the module last set it (panel.setContent); the tab's hover text. */
   content: string | null;
   /** Set for Browser panels: what their toolbar shows. */
@@ -397,8 +399,6 @@ export interface HostViewState {
   layout: SavedLayout | null;
   /** Changes whenever `layout` was replaced by the main process, e.g. by applying a snapshot. */
   layoutEpoch: number;
-  /** The game was just opened and its panels are still loading; they are shown together once all have their data. */
-  opening: boolean;
   /** Where modules keep their pictures, and how that stands. */
   moduleFiles: { folder: string; custom: boolean; /** The folder is there (a custom one on a drive that is unplugged is not). */ available: boolean; moving: boolean };
   /** A web address a module asked to open while the game has no Browser panel; the host UI asks where it should open (link-choice). */

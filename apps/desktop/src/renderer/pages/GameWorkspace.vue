@@ -3,7 +3,7 @@
 // lays out tabs, groups and splits in this page; each panel's module runs in
 // a native view that the main process draws over the panel's content area,
 // at the bounds this page reports.
-import { LayoutGrid, Loader, Plus } from "@lucide/vue";
+import { LayoutGrid, Plus } from "@lucide/vue";
 import {
   DockviewVue,
   type DockviewApi,
@@ -342,16 +342,6 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         @ready="onReady"
       />
       <DropGuide v-if="guide" :guide="guide" />
-      <!-- The game just opened: its panels are shown together once all have their data, not one by one. -->
-      <div
-        v-if="view.opening"
-        class="bg-background absolute inset-0 z-20 flex items-center justify-center"
-        role="status"
-        :aria-label="t('workspace.loading')"
-        data-testid="workspace-loading"
-      >
-        <Loader class="workspace-loading text-muted-foreground size-6" :stroke-width="1.5" aria-hidden="true" />
-      </div>
       <div
         v-if="!view.panels.length && !view.layout"
         class="bg-background absolute inset-x-2 top-0 bottom-2 z-10 flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed text-center"
@@ -380,28 +370,3 @@ const emptySlot = EmptySlot as unknown as VueComponent;
     </div>
   </main>
 </template>
-
-<style scoped>
-/* A game that opens quickly shows no spinner at all. */
-.workspace-loading {
-  opacity: 0;
-  animation:
-    workspace-loading-in 200ms ease-out 300ms forwards,
-    workspace-loading-spin 1s linear infinite;
-}
-@keyframes workspace-loading-in {
-  to {
-    opacity: 1;
-  }
-}
-@keyframes workspace-loading-spin {
-  to {
-    rotate: 360deg;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .workspace-loading {
-    animation: workspace-loading-in 200ms ease-out 300ms forwards;
-  }
-}
-</style>
