@@ -103,7 +103,7 @@ test("modules receive resize events matching their panel size", async () => {
   await app.close();
 });
 
-test("a game opens with all its panels at once, each showing the campfire loader until the slowest has loaded", async () => {
+test("a game opens with all its panels at once, behind one loader until the slowest has loaded", async () => {
   // Two modules for any game: one page loads at once, the other keeps its page busy for most of the time a page
   // may be held back (REVEAL_CAP_MS), well after the workspace has placed its panels.
   const root = await mkdtemp(path.join(tmpdir(), "tavora-modules-"));
@@ -138,10 +138,10 @@ test("a game opens with all its panels at once, each showing the campfire loader
       const timer = setInterval(() => samples.push(`${shown("devtest.quick")}/${shown("devtest.slow")}`), 10);
       Object.assign(globalThis, { switchSamples: samples, switchTimer: timer });
     });
-    // Notes whether both panels showed the loader, however briefly.
+    // Notes whether the workspace's loader came up, however briefly.
     await page.evaluate(() => {
       const seen = { loaders: false };
-      new MutationObserver(() => (seen.loaders ||= document.querySelectorAll('[data-testid^="panel-loading-"]').length === 2)).observe(document.body, { childList: true, subtree: true });
+      new MutationObserver(() => (seen.loaders ||= !!document.querySelector('[data-testid="workspace-loading"]'))).observe(document.body, { childList: true, subtree: true });
       Object.assign(window, { switchSeen: seen });
     });
     await openGame(page, "poe2");
@@ -149,7 +149,7 @@ test("a game opens with all its panels at once, each showing the campfire loader
     await page.mouse.move(700, 28);
     await waitForShown(app, "devtest.slow");
     await waitForShown(app, "devtest.quick");
-    await expect(page.locator('[data-testid^="panel-loading-"]')).toHaveCount(0);
+    await expect(page.getByTestId("workspace-loading")).toHaveCount(0);
     expect(await page.evaluate(() => (window as unknown as { switchSeen: { loaders: boolean } }).switchSeen.loaders)).toBe(true);
     const samples = await app.evaluate(() => {
       const state = globalThis as unknown as { switchSamples: string[]; switchTimer: ReturnType<typeof setInterval> };

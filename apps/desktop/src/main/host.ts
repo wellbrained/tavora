@@ -2407,7 +2407,7 @@ export class Host {
     return true;
   }
 
-  /** Ends the wait for a game's panels; `show` places them and tells the host UI, which takes their loaders away. */
+  /** Ends the wait for a game's panels; `show` places them and tells the host UI, which takes its loading cover away. */
   private endOpening(show = false): void {
     if (!this.opening) return;
     clearTimeout(this.opening.timer);
@@ -2946,8 +2946,8 @@ export class Host {
         const content = record.content?.title ?? null;
         if (!(view instanceof BrowserPanel)) {
           const status = view?.status ?? "loading";
-          // Hidden until its page has its data, and while the game opens until every panel has.
-          const waiting = (status === "loading" || status === "ready") && (!view?.revealed || this.opening !== null);
+          // Hidden until its page has its data.
+          const waiting = (status === "loading" || status === "ready") && !view?.revealed;
           return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status, waiting, content };
         }
         const browser = view.state;
@@ -2957,6 +2957,7 @@ export class Host {
       }),
       layout: workspace.layout,
       layoutEpoch: this.layoutEpoch,
+      opening: this.opening !== null,
       pendingLink: this.pendingLink,
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },

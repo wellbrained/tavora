@@ -40,6 +40,7 @@ import GroupActions from "../components/workspace/GroupActions.vue";
 import LayoutsMenu from "../components/workspace/LayoutsMenu.vue";
 import GridPicker from "../components/workspace/GridPicker.vue";
 import TemplatePreview from "../components/workspace/TemplatePreview.vue";
+import CampfireLoader from "../components/workspace/CampfireLoader.vue";
 import PanelContent from "../components/workspace/PanelContent.vue";
 import PanelTab from "../components/workspace/PanelTab.vue";
 import { DOCK } from "../components/workspace/dock-context";
@@ -342,6 +343,10 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         @ready="onReady"
       />
       <DropGuide v-if="guide" :guide="guide" />
+      <!-- The game just opened: one loader over the whole workspace, until every panel has its data and all show at once. -->
+      <div v-if="view.opening" class="bg-background absolute inset-0 z-20" data-testid="workspace-loading">
+        <CampfireLoader :name="game?.name ?? ''" />
+      </div>
       <div
         v-if="!view.panels.length && !view.layout"
         class="bg-background absolute inset-x-2 top-0 bottom-2 z-10 flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed text-center"
