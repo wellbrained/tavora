@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { generateKeyPairSync } from "node:crypto";
+import { signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { createAdminApp } from "./admin-app.ts";
+import { CatalogStore } from "./catalog.ts";
 import { ADMIN_JS } from "./admin-page.ts";
 import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
@@ -57,10 +63,12 @@ describe("the page", () => {
     expect(html).not.toMatch(/<script>|onclick=|style=/);
   });
 
-  it("has two tabs, opens on the ones to review, and has no token button", async () => {
+  it("has three tabs, opens on the ones to review, and has no token button", async () => {
     const html = await (await call("/", { token: null })).text();
     expect(html).toContain('data-tab="pending"');
     expect(html).toContain('data-tab="hosted"');
+    expect(html).toContain('data-tab="reports"');
+    expect(html).toMatch(/id="panel-reports"[^>]*hidden/);
     expect(html).toMatch(/id="panel-hosted"[^>]*hidden/);
     expect(html).not.toMatch(/id="panel-pending"[^>]*hidden/);
     expect(html).toContain('id="search"');
@@ -165,5 +173,38 @@ describe("approve, deny and takedown", () => {
   it("answers 404 for other paths and never leaks an error's details", async () => {
     expect((await call("/api/nothing")).status).toBe(404);
     expect((await call("/nothing", { token: null })).status).toBe(404);
+  });
+});
+
+describe("reports", () => {
+  it("lists reported modules, delists and relists them, and dismisses reports, all with the token", async () => {
+    const catalog = new CatalogStore(mkdtempSync(path.join(tmpdir(), "tavora-catalog-")));
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const manifest = { id: "wellbrained.timer", name: "Timer", version: "1.0.0", apiVersion: "1", entry: "index.html", games: [], viewport: { minWidth: 200, minHeight: 150 }, permissions: { network: [] } };
+    const files: ZipFile[] = [{ name: "tavora.module.json", data: Buffer.from(JSON.stringify(manifest)) }, { name: "index.html", data: Buffer.from("<p>timer</p>") }];
+    const added = catalog.add(writeZip([...files, signFiles(files, key)]));
+    app = createAdminApp({ token: TOKEN, submissions, state, store: createHostedStore({ list: () => [], file: () => null }, state), catalog });
+    expect(catalog.report({ id: added.manifest.id, owner: added.owner, sha256: added.sha256 })).toBe(true);
+
+    expect((await call("/api/reports", { token: null })).status).toBe(401);
+    expect((await call("/api/reports", { method: "POST", token: null, body: {} })).status).toBe(401);
+    const listed = (await (await call("/api/reports")).json()) as { reports: { sha256: string; id: string; count: number; listed: boolean }[] };
+    expect(listed.reports).toEqual([expect.objectContaining({ sha256: added.sha256, id: "wellbrained.timer", count: 1, listed: true })]);
+
+    expect((await post("/api/catalog/listed", { id: "wellbrained.timer", listed: false })).status).toBe(200);
+    expect(catalog.index()).toEqual([]);
+    expect(((await (await call("/api/reports")).json()) as { reports: { listed: boolean }[] }).reports[0]!.listed).toBe(false);
+    expect((await post("/api/catalog/listed", { id: "wellbrained.timer", listed: true })).status).toBe(200);
+    expect(catalog.index()).toHaveLength(1);
+    expect((await post("/api/catalog/listed", { id: "nobody.here", listed: true })).status).toBe(404);
+    expect((await post("/api/catalog/listed", { id: "wellbrained.timer" })).status).toBe(400);
+
+    expect((await post("/api/reports/dismiss", { sha256: added.sha256 })).status).toBe(200);
+    expect(((await (await call("/api/reports")).json()) as { reports: unknown[] }).reports).toEqual([]);
+    expect((await post("/api/reports/dismiss", { sha256: added.sha256 })).status).toBe(404);
+  });
+
+  it("answers with no reports when there is no catalog", async () => {
+    expect(await (await call("/api/reports")).json()).toEqual({ reports: [] });
   });
 });

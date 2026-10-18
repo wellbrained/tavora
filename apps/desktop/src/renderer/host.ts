@@ -143,9 +143,11 @@ export interface NavigationChoiceRequest {
 export interface GrantRequest {
   kind: "grant";
   moduleId: string;
-  /** The panel type to open once allowed, for a module with panel types. */
-  panelType?: string;
+  /** The panel types to open once allowed, for a module with panel types; one panel of each. */
+  panelTypes?: string[];
   slot: string | null;
+  /** Back to the module library once the panels are open, so more can be added (AddModuleDialog.vue). */
+  backToLibrary?: boolean;
   review: boolean;
   /** A catalog update that asks for more (ModuleState.update): allowing it installs the update. */
   update?: boolean;
@@ -247,20 +249,29 @@ export function needsGrant(module: ModuleState): boolean {
 }
 
 /**
- * Adds a module to the current game, into `slot` if given; `panelType` picks one of its panel types
- * (its continuing type when left out). A module that asks for something not granted yet goes through
- * the consent dialog first; once granted, it is added without asking.
+ * Adds a module to the current game, into `slot` if given; `panelTypes` picks which of its panel
+ * types to open, one panel each (its continuing type when left out). A module that asks for something
+ * not granted yet goes through the consent dialog first; once granted, it is added without asking.
+ * `stay` keeps the module library open afterwards, so more panels can be added from it.
  */
-export function addModule(moduleId: string, slot: string | null = null, panelType?: string): void {
+export function addModule(moduleId: string, slot: string | null = null, panelTypes: string[] = [], { stay = false } = {}): void {
   const module = state.value?.modules.find((item) => item.id === moduleId);
   if (!module) return;
   if (needsGrant(module)) {
-    dialog.value = { kind: "grant", moduleId, slot, review: false, ...(panelType ? { panelType } : {}) };
+    dialog.value = { kind: "grant", moduleId, slot, review: false, ...(panelTypes.length ? { panelTypes } : {}), ...(stay ? { backToLibrary: true } : {}) };
     return;
   }
-  dialog.value = null;
+  if (!stay) dialog.value = null;
+  void openPanels(moduleId, slot, panelTypes);
+}
+
+/** Opens a module's panels one after another, the first into `slot`; stops at the first that fails (its error is shown). */
+export async function openPanels(moduleId: string, slot: string | null, panelTypes: string[]): Promise<void> {
   nextPanelSlot.value = slot;
-  void act({ type: "open-module", moduleId, ...(panelType ? { panelType } : {}) });
+  for (const panelType of panelTypes.length ? panelTypes : [undefined]) {
+    const result = await act({ type: "open-module", moduleId, ...(panelType ? { panelType } : {}) });
+    if (!result.ok) return;
+  }
 }
 
 /** Names joined as a sentence in Tavora's language: "A, B and C". */

@@ -454,6 +454,8 @@ export const en = {
   "addModule.results": "Modules shown: {count}",
   "addModule.inGame": "In this game · {count} open",
   "addModule.addAnother": "Add another",
+  "addModule.addAll": "Add all panels",
+  "addModule.addAllLabel": "Add all panels of {name}",
   "addModule.emptyFilter": "No modules in this view.",
   "addModule.reset": "Show all modules",
   "addModule.title": "Module library",

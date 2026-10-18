@@ -214,6 +214,9 @@ describe("Steam icons", () => {
     const folder = process.platform === "win32" ? "D:\\Pictures\\Tavora module files" : "/mnt/pictures/Tavora module files";
     expect(sanitizeLibrary({ moduleFilesFolder: folder }).moduleFilesFolder).toBe(folder);
     for (const bad of ["relative/folder", "", 4, null, "x".repeat(501)]) expect(sanitizeLibrary({ moduleFilesFolder: bad }).moduleFilesFolder).toBeNull();
+    // The folders file dialogs open in: absolute paths, for the dialogs Tavora has.
+    expect(emptyLibrary().dialogFolders).toEqual({});
+    expect(sanitizeLibrary({ dialogFolders: { "install-module": folder, "game-image": "relative/x", other: folder, "module-files": 4 } }).dialogFolders).toEqual({ "install-module": folder });
     // Development folders: absolute paths, each once, at most 20.
     expect(emptyLibrary().developmentFolders).toEqual([]);
     const project = process.platform === "win32" ? "D:\\Code\\my-tracker" : "/home/dev/my-tracker";
