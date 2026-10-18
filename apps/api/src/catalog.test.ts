@@ -190,6 +190,22 @@ describe("catalog routes", () => {
     expect(body.modules.map((entry) => entry.publisher)).toEqual(["Wellbrained"]);
   });
 
+  it("serves the signed lists unchanged, and nothing before they exist", async () => {
+    const { catalog, get } = setup();
+    expect((await get("/v1/catalog/lists/revocations.json")).status).toBe(404);
+    const signed = Buffer.from('{"format":"tavora-revocations-1","sequence":3,  "signature":"..."}\n');
+    catalog.setList("revocations", signed);
+    const answer = await get("/v1/catalog/lists/revocations.json");
+    expect(answer.status).toBe(200);
+    expect(answer.headers.get("content-type")).toBe("application/json");
+    expect(answer.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(Buffer.from(await answer.arrayBuffer())).toEqual(signed);
+    expect((await get("/v1/catalog/lists/blocks.json")).status).toBe(404);
+    expect((await get("/v1/catalog/lists/other.json")).status).toBe(404);
+    expect(() => catalog.setList("blocks", Buffer.from("not json"))).toThrow(/not JSON/);
+    expect(() => catalog.setList("blocks", Buffer.alloc(1024 * 1024 + 1, 32))).toThrow(/at most/);
+  });
+
   it("refuses filters it does not know", async () => {
     const { get } = setup();
     expect((await get("/v1/catalog?game=Elden%20Ring")).status).toBe(400);
