@@ -1,15 +1,17 @@
 <script setup lang="ts">
 // A module's patch notes under its row in Settings > Modules, newest first, as plain text from its changelog file.
-// Opening them tells the host they were seen, so the New mark goes away.
+// Opening them tells the host they were seen, so the New mark goes away. Given `entries` (the notes
+// of a catalog update that waits for the player), it shows those instead and marks nothing seen.
 import { onMounted, ref } from "vue";
 import type { ModuleNote } from "../../../shared/host-api";
 import { act, api } from "../../host";
 import { formatDate, t } from "../../i18n";
 
-const props = defineProps<{ moduleId: string; version: string; unseen: boolean }>();
-const entries = ref<ModuleNote[] | null>(null);
+const props = defineProps<{ moduleId: string; version: string; unseen: boolean; entries?: ModuleNote[] }>();
+const entries = ref<ModuleNote[] | null>(props.entries ?? null);
 
 onMounted(async () => {
+  if (props.entries) return;
   entries.value = await api.moduleNotes(props.moduleId);
   if (props.unseen) await act({ type: "seen-module-notes", moduleId: props.moduleId }, { quiet: true });
 });

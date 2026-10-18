@@ -7,7 +7,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, validateManifest, type ModuleManifest } from "@tavora/module-schema";
-import { MANIFEST_FILE, readZip, verifyFiles, ZIP_LIMITS, ZipError } from "@tavora/pack";
+import { MANIFEST_FILE, readZip, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
 import { PlayerError } from "./messages";
@@ -47,9 +47,10 @@ export function compareModuleVersions(a: string, b: string): number {
  * Who signed each module the installer put into the player's modules folder, by folder name.
  * `owner` is whose data it uses: the first key of the publisher's account. `signer` is the key
  * that signed the zip installed now, when a succession made it another key, and `sha256` the
- * zip's hash, so a blocked zip can be stopped (catalog threat model, C7, C14).
+ * zip's hash, so a blocked zip can be stopped (catalog threat model, C7, C14). `catalog` marks a
+ * module installed from the catalog: only those are kept up to date from it (catalog-updates.ts).
  */
-export type OwnerRecords = Record<string, { id: string; owner: string; signer?: string; sha256?: string }>;
+export type OwnerRecords = Record<string, { id: string; owner: string; signer?: string; sha256?: string; catalog?: true }>;
 
 const RECORDS = "module-owners.json";
 
@@ -63,11 +64,12 @@ export async function readOwnerRecords(userData: string): Promise<OwnerRecords> 
   const folders = parsed?.folders;
   if (typeof folders !== "object" || folders === null) return records;
   for (const [folder, value] of Object.entries(folders)) {
-    const { id, owner, signer, sha256 } = (value ?? {}) as { id?: unknown; owner?: unknown; signer?: unknown; sha256?: unknown };
+    const { id, owner, signer, sha256, catalog } = (value ?? {}) as { id?: unknown; owner?: unknown; signer?: unknown; sha256?: unknown; catalog?: unknown };
     if (!isModuleId(folder) || !isModuleId(id) || !isOwnerId(owner)) continue;
     records[folder] = { id, owner };
     if (isOwnerId(signer) && signer !== owner) records[folder].signer = signer;
     if (typeof sha256 === "string" && /^[0-9a-f]{64}$/.test(sha256)) records[folder].sha256 = sha256;
+    if (catalog === true) records[folder].catalog = true;
   }
   return records;
 }
@@ -112,6 +114,8 @@ export interface InstallOptions {
    * id and publisher key its listing named, so a zip signed by anyone else is refused.
    */
   expect?: { id: string; owner: string };
+  /** It comes from the catalog, so the catalog keeps it up to date; any other install stops that. */
+  catalog?: boolean;
 }
 
 export interface Installed {
@@ -132,7 +136,23 @@ export async function installZip(zipFile: string, options: InstallOptions): Prom
 }
 
 /** Installs a zip already in memory, such as one downloaded from the catalog, by the same rules as a picked file. */
-export async function installZipData(zip: Buffer, { userData, userModules, modules, tavoraVersion, expect, safety }: InstallOptions): Promise<Installed> {
+export async function installZipData(zip: Buffer, options: InstallOptions): Promise<Installed> {
+  return writeChecked(await checkZipData(zip, options), options);
+}
+
+/** A zip that passed every check of the installer, ready to be written. Nothing is on disk yet. */
+export interface CheckedZip extends Installed {
+  files: ZipFile[];
+  /** The key that signed it, when a succession makes it another key than `owner`. */
+  signer: string;
+}
+
+/**
+ * Every check of the installer, with nothing written: what the zip is, who signed it, whether the
+ * safety lists allow it and whether it may replace what is installed. A catalog update is checked
+ * like this before the player is asked.
+ */
+export async function checkZipData(zip: Buffer, { userModules, modules, tavoraVersion, expect, safety }: InstallOptions): Promise<CheckedZip> {
   if (zip.length > ZIP_LIMITS.maxArchiveBytes) throw new InstallError("error.installRefused", { reason: "the zip is too big" });
   const sha256 = createHash("sha256").update(zip).digest("hex");
   let files;
@@ -198,6 +218,13 @@ export async function installZipData(zip: Buffer, { userData, userModules, modul
     throw new InstallError("error.installFolderTaken", { folder });
   }
 
+  return { manifest, owner, sha256, updated, files, signer };
+}
+
+/** Writes a checked zip into place and records its owner. */
+async function writeChecked({ files, manifest, owner, signer, sha256, updated }: CheckedZip, { userData, userModules, catalog }: InstallOptions): Promise<Installed> {
+  const folder = manifest.id;
+  const target = path.join(userModules, folder);
   // Staged next to the modules folder, so the rename into place stays on one disk.
   const stagingRoot = path.join(userData, "module-staging");
   await mkdir(stagingRoot, { recursive: true });
@@ -228,7 +255,7 @@ export async function installZipData(zip: Buffer, { userData, userModules, modul
 
   const records = await readOwnerRecords(userData);
   if (owner === LOCAL_OWNER) delete records[folder];
-  else records[folder] = { id: manifest.id, owner, ...(signer !== owner ? { signer } : {}), sha256 };
+  else records[folder] = { id: manifest.id, owner, ...(signer !== owner ? { signer } : {}), sha256, ...(catalog ? { catalog: true as const } : {}) };
   await writeOwnerRecords(userData, records);
   return { manifest, owner, sha256, updated };
 }

@@ -6,11 +6,11 @@
 // to the recycle bin. A module's data stays, so adding it again finds it.
 // What module developers use (development folders, the examples) is in
 // Settings > Development instead.
-import { ArrowRightLeft, FileArchive, FolderInput, FolderOpen, NotebookText, RefreshCw, Trash2 } from "@lucide/vue";
+import { ArrowRightLeft, CloudDownload, FileArchive, FolderInput, FolderOpen, NotebookText, RefreshCw, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { act, confirmAction, gamesUsing, listOf, showToast, state, submitAction } from "../../host";
+import { act, confirmAction, dialog, gamesUsing, listOf, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleNotes from "./ModuleNotes.vue";
 import ModuleRow from "./ModuleRow.vue";
@@ -48,6 +48,18 @@ async function install() {
       ? t("settings.modules.installedBy", { name: module.name, version: module.version, publisher: module.publisherName })
       : t("settings.modules.installed", { name: module.name, version: module.version }),
   );
+}
+
+/** Asks the catalog for updates of the modules installed from it now. */
+const checking = ref(false);
+async function checkUpdates() {
+  checking.value = true;
+  const result = await act({ type: "check-module-updates" });
+  checking.value = false;
+  if (!result.ok) return;
+  const updated = result.updated ?? 0;
+  const waiting = result.waiting ?? 0;
+  showToast(updated + waiting === 0 ? t("settings.modules.updatesNone") : t("settings.modules.updatesFound", { updated: String(updated), waiting: String(waiting) }));
 }
 
 function moveLocal(module: ModuleView) {
@@ -92,6 +104,9 @@ function remove(module: ModuleView) {
       <Button variant="secondary" data-testid="install-module" @click="install">
         <FileArchive :stroke-width="1.5" /> {{ t("settings.modules.install") }}
       </Button>
+      <Button v-if="state!.library.onlineSearch" variant="secondary" data-testid="check-module-updates" :disabled="checking" @click="checkUpdates">
+        <CloudDownload :stroke-width="1.5" /> {{ t("settings.modules.checkUpdates") }}
+      </Button>
       <Button variant="secondary" data-testid="open-modules-folder" @click="act({ type: 'open-modules-folder' })">
         <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
       </Button>
@@ -134,6 +149,14 @@ function remove(module: ModuleView) {
     <p class="font-medium">{{ t("settings.installed-modules.label") }}</p>
     <ul class="mt-2 flex flex-col" :aria-label="t('settings.installed-modules.label')" data-testid="module-list">
       <ModuleRow v-for="module in sorted" :key="module.id" :module="module">
+        <Button
+          v-if="module.update"
+          variant="default"
+          :data-testid="`module-update-${module.id}`"
+          @click="dialog = { kind: 'grant', moduleId: module.id, slot: null, review: true, update: true }"
+        >
+          <CloudDownload :stroke-width="1.5" /> {{ t("settings.modules.update", { version: module.update.version }) }}
+        </Button>
         <Button
           v-if="module.notes.latest"
           variant="ghost"
