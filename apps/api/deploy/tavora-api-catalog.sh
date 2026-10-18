@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# For the maintainer, on the server: adds community modules to the catalog by hand until publishers
-# upload their own (Milestone E, step 3). It runs the release's catalog.mjs as the service's user, so
+# For the maintainer, on the server: adds community modules to the catalog by hand, next to what
+# publishers upload with tavora-pack publish. It runs the release's catalog.mjs as the service's user, so
 # the catalog's files stay the service's own. The zip is read from stdin, so it can sit anywhere root can read.
 #
 #   tavora-api-catalog add <module.zip>     a zip packed and signed with tavora-pack

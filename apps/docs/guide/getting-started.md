@@ -113,7 +113,15 @@ The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist
 
 The first run makes your publisher key in `~/.tavora/publisher-key.pem`. **Back it up and never share it**: updates and your players' data depend on it. Read [Your publisher key](./publisher-key.md) before you send the first zip, and link the key to your account there so players see your name.
 
-Players install the zip with **Settings > Modules > Install from zip**. While you build, keep loading the module from its development folder: it needs no key, and its data is kept apart from the signed version's.
+Players install the zip with **Settings > Modules > Install from zip**. To list it in Tavora's module catalog, where players find it under **Browse** in the module library, publish it with your linked key:
+
+```sh
+npx tavora-pack publish <id>-<version>.zip
+```
+
+The part of your module id before the first dot is your prefix: the first time you publish under it, it becomes yours, and nobody else can publish under it (an account holds up to 3). A module stays with the key that published its first version, and each new version must be newer. An account can publish 10 versions a day.
+
+While you build, keep loading the module from its development folder: it needs no key, and its data is kept apart from the signed version's.
 
 ## Patch notes
 

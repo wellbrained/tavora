@@ -6,18 +6,23 @@
 //   Links your publisher key to your Tavora account with a code from Tavora
 //   (Settings > Account > Link a publisher key), so players see your
 //   developer name. Only the key's public half leaves this PC.
+// tavora-pack publish <file.zip> [--key <key file>]
+//   Publishes a zip packed with your key to Tavora's module catalog. The key
+//   must be linked first; its first module id prefix is yours from then on.
 // Installed from npm as @tavora/pack; in Tavora's own repository: pnpm tavora-pack ...
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { defaultKeyFile, loadOrCreateKey } from "./keys.ts";
+import { defaultKeyFile, loadExistingKey, loadOrCreateKey } from "./keys.ts";
 import { DEFAULT_API_URL, LinkError, linkKey } from "./link.ts";
 import { packModule, PackError } from "./pack.ts";
+import { PublishError, publishZip } from "./publish.ts";
 import { fingerprint } from "./signature.ts";
 
 const USAGE = [
   "usage: tavora-pack <module folder> [--out <file.zip>] [--key <key file>]",
   "       tavora-pack link <code> [--key <key file>]",
+  "       tavora-pack publish <file.zip> [--key <key file>]",
 ].join("\n");
 
 async function main(): Promise<number> {
@@ -25,7 +30,7 @@ async function main(): Promise<number> {
   try {
     parsed = parseArgs({
       allowPositionals: true,
-      // --api points link at another copy of Tavora's service, for testing.
+      // --api points link and publish at another copy of Tavora's service, for testing.
       options: { out: { type: "string" }, key: { type: "string" }, api: { type: "string" }, help: { type: "boolean", short: "h" } },
     });
   } catch (error) {
@@ -34,11 +39,27 @@ async function main(): Promise<number> {
   }
   const { values, positionals } = parsed;
   const linking = positionals[0] === "link";
-  if (values.help || positionals.length !== (linking ? 2 : 1) || (linking && values.out) || (!linking && values.api)) {
+  const publishing = positionals[0] === "publish";
+  const command = linking || publishing;
+  if (values.help || positionals.length !== (command ? 2 : 1) || (command && values.out) || (!command && values.api)) {
     console.error(USAGE);
     return values.help ? 0 : 2;
   }
   const keyFile = path.resolve(values.key ?? defaultKeyFile());
+  if (publishing) {
+    // Never makes a key: a zip to publish was packed with one already.
+    const zipFile = path.resolve(positionals[1]!);
+    const zip = await readFile(zipFile).catch(() => {
+      throw new PublishError(`Cannot read ${zipFile}.`);
+    });
+    const { key } = await loadExistingKey(keyFile).catch((error: unknown) => {
+      throw new PublishError((error as Error).message);
+    });
+    const published = await publishZip({ key, zip, apiUrl: values.api ?? DEFAULT_API_URL });
+    console.log(`Published ${published.id} ${published.version} to Tavora's module catalog.`);
+    console.log(`Players find it under Browse in the module library. Zip sha256 ${published.sha256}`);
+    return 0;
+  }
   const { key, created } = await loadOrCreateKey(keyFile);
   const owner = fingerprint(key);
   if (created) {
@@ -65,7 +86,7 @@ async function main(): Promise<number> {
 main().then(
   (code) => (process.exitCode = code),
   (error: unknown) => {
-    console.error(error instanceof PackError || error instanceof LinkError ? `tavora-pack: ${error.message}` : error);
+    console.error(error instanceof PackError || error instanceof LinkError || error instanceof PublishError ? `tavora-pack: ${error.message}` : error);
     process.exitCode = 1;
   },
 );

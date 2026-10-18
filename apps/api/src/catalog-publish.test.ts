@@ -1,0 +1,146 @@
+import { generateKeyPairSync, createPublicKey, type KeyObject } from "node:crypto";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { publishSignature, signFiles, writeZip, type ZipFile } from "@tavora/pack";
+import { describe, expect, it } from "vitest";
+import { AccountStore } from "./account-store.ts";
+import { createApp } from "./app.ts";
+import type { PublishLimits } from "./catalog-publish.ts";
+import { CatalogStore } from "./catalog.ts";
+import { buildDataset, writeDatabase } from "./dataset.ts";
+import { createTestInbox } from "./mail.ts";
+import { keyFingerprint } from "./publishers.ts";
+import { createRateLimiter } from "./rate-limit.ts";
+
+const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
+const roomy = () => createRateLimiter({ limit: 1000, windowMs: 60_000 });
+const rawKey = (key: KeyObject) => createPublicKey(key).export({ format: "der", type: "spki" }).subarray(12);
+
+function moduleZip(key: KeyObject, id = "wellbrained.timer", version = "1.0.0", extra: ZipFile[] = []): Buffer {
+  const manifest = { id, name: "Timer", version, apiVersion: "1", entry: "index.html", games: [], viewport: { minWidth: 200, minHeight: 150 }, permissions: { network: [] } };
+  const files: ZipFile[] = [{ name: "tavora.module.json", data: Buffer.from(JSON.stringify(manifest)) }, { name: "index.html", data: Buffer.from("<p>timer</p>") }, ...extra];
+  return writeZip([...files, signFiles(files, key)]);
+}
+
+function setup(limits: Partial<PublishLimits> = {}) {
+  const store = new AccountStore(":memory:");
+  const catalog = new CatalogStore(mkdtempSync(path.join(tmpdir(), "tavora-catalog-")));
+  const clock = { now: Date.parse("2026-10-18T12:00:00Z") };
+  const app = createApp({ db, catalog, rateLimiter: roomy(), publishRateLimiter: roomy(), publishLimits: limits, accounts: { store, mailer: createTestInbox(), now: () => clock.now } });
+  /** An account with a linked key. */
+  const developer = (email: string) => {
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const account = store.createAccount({ email }, clock.now);
+    store.linkKey(account.id, keyFingerprint(rawKey(key)), rawKey(key).toString("base64"), clock.now);
+    return { key, accountId: account.id };
+  };
+  const publish = (zip: Buffer, signature?: string, type = "application/zip") =>
+    app.request("http://tavora.test/v1/catalog/publish", {
+      method: "POST",
+      headers: { "content-type": type, ...(signature === undefined ? {} : { "x-tavora-signature": signature }) },
+      body: new Uint8Array(zip),
+    });
+  const send = (key: KeyObject, zip: Buffer) => publish(zip, publishSignature(key, zip));
+  const reason = async (response: Response) => ((await response.json()) as { reason?: string }).reason;
+  return { store, catalog, clock, developer, publish, send, reason };
+}
+
+describe("publishing to the catalog", () => {
+  it("lists a zip signed and sent by a linked key, and gives its account the id prefix", async () => {
+    const { store, catalog, developer, send } = setup();
+    const { key, accountId } = developer("dev@example.com");
+    const response = await send(key, moduleZip(key));
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ status: "published", id: "wellbrained.timer", version: "1.0.0" });
+    expect(catalog.index().map((entry) => entry.id)).toEqual(["wellbrained.timer"]);
+    expect(store.prefixes(accountId)).toEqual(["wellbrained"]);
+    expect(catalog.uploadsSince(accountId, new Date(0))).toBe(1);
+  });
+
+  it("refuses an upload not signed by the zip's own key, so a zip shared by hand cannot be published by others", async () => {
+    const { catalog, developer, publish, send, reason } = setup();
+    const { key } = developer("dev@example.com");
+    const other = developer("other@example.com").key;
+    const zip = moduleZip(key);
+    expect(await reason(await publish(zip))).toBe("bad-signature");
+    expect(await reason(await send(other, zip))).toBe("bad-signature");
+    // A signature over another zip's hash does not carry over.
+    expect(await reason(await publish(zip, publishSignature(key, moduleZip(key, "wellbrained.other"))))).toBe("bad-signature");
+    expect(catalog.modules()).toEqual([]);
+  });
+
+  it("refuses unlinked keys, unsigned or broken zips and other content types", async () => {
+    const { developer, publish, send, reason } = setup();
+    const unlinked = generateKeyPairSync("ed25519").privateKey;
+    const unlinkedAnswer = await send(unlinked, moduleZip(unlinked));
+    expect(unlinkedAnswer.status).toBe(403);
+    expect(await reason(unlinkedAnswer)).toBe("key-not-linked");
+    const { key } = developer("dev@example.com");
+    const unsigned = writeZip([{ name: "tavora.module.json", data: Buffer.from("{}") }]);
+    const invalid = await send(key, unsigned);
+    expect(invalid.status).toBe(400);
+    expect(await reason(invalid)).toBe("invalid");
+    expect((await publish(moduleZip(key), publishSignature(key, moduleZip(key)), "application/json")).status).toBe(415);
+  });
+
+  it("keeps a prefix to the account that has it, refuses reserved ones and holds at most three", async () => {
+    const { developer, send, reason } = setup();
+    const first = developer("first@example.com");
+    const second = developer("second@example.com");
+    expect((await send(first.key, moduleZip(first.key, "wellbrained.timer"))).status).toBe(201);
+    expect(await reason(await send(second.key, moduleZip(second.key, "wellbrained.notes")))).toBe("prefix-taken");
+    expect(await reason(await send(second.key, moduleZip(second.key, "tavoratools.notes")))).toBe("prefix-reserved");
+    expect(await reason(await send(second.key, moduleZip(second.key, "official.notes")))).toBe("prefix-reserved");
+    for (const prefix of ["alpha", "beta", "gamma"]) expect((await send(second.key, moduleZip(second.key, `${prefix}.notes`))).status).toBe(201);
+    expect(await reason(await send(second.key, moduleZip(second.key, "delta.notes")))).toBe("too-many-prefixes");
+    // Another module under a prefix the account holds needs nothing new.
+    expect((await send(second.key, moduleZip(second.key, "alpha.timer"))).status).toBe(201);
+  });
+
+  it("takes only newer versions, from the module's own key", async () => {
+    const { store, developer, send, reason } = setup();
+    const { key, accountId } = developer("dev@example.com");
+    expect((await send(key, moduleZip(key, "wellbrained.timer", "1.1.0"))).status).toBe(201);
+    const older = await send(key, moduleZip(key, "wellbrained.timer", "1.0.0"));
+    expect(older.status).toBe(409);
+    expect(await reason(older)).toBe("conflict");
+    // A second key of the same account holds the prefix, but the module stays its first key's (C3).
+    const second = generateKeyPairSync("ed25519").privateKey;
+    store.linkKey(accountId, keyFingerprint(rawKey(second)), rawKey(second).toString("base64"), Date.now());
+    expect(await reason(await send(second, moduleZip(second, "wellbrained.timer", "2.0.0")))).toBe("conflict");
+  });
+
+  it("limits uploads per day, room per account and room in the whole catalog", async () => {
+    const daily = setup({ uploadsPerDay: 2 });
+    const dev = daily.developer("dev@example.com");
+    expect((await daily.send(dev.key, moduleZip(dev.key, "wellbrained.timer", "1.0.0"))).status).toBe(201);
+    expect((await daily.send(dev.key, moduleZip(dev.key, "wellbrained.timer", "1.0.1"))).status).toBe(201);
+    expect(await daily.reason(await daily.send(dev.key, moduleZip(dev.key, "wellbrained.timer", "1.0.2")))).toBe("daily-limit");
+    daily.clock.now += 86_400_001;
+    expect((await daily.send(dev.key, moduleZip(dev.key, "wellbrained.timer", "1.0.2"))).status).toBe(201);
+
+    const small = moduleZip(dev.key);
+    const room = setup({ accountBytes: small.length + 10 });
+    const roomDev = room.developer("dev@example.com");
+    expect((await room.send(roomDev.key, moduleZip(roomDev.key, "wellbrained.timer", "1.0.0"))).status).toBe(201);
+    expect(await room.reason(await room.send(roomDev.key, moduleZip(roomDev.key, "wellbrained.timer", "1.0.1")))).toBe("account-full");
+
+    const full = setup({ catalogBytes: 10 });
+    const fullDev = full.developer("dev@example.com");
+    const answer = await full.send(fullDev.key, moduleZip(fullDev.key));
+    expect(answer.status).toBe(507);
+    expect(await full.reason(answer)).toBe("catalog-full");
+  });
+
+  it("answers 503 without accounts, and 429 when a client uploads too often", async () => {
+    const catalog = new CatalogStore(mkdtempSync(path.join(tmpdir(), "tavora-catalog-")));
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const zip = moduleZip(key);
+    const request = () => ({ method: "POST", headers: { "content-type": "application/zip", "x-tavora-signature": publishSignature(key, zip) }, body: new Uint8Array(zip) });
+    expect((await createApp({ db, catalog }).request("http://tavora.test/v1/catalog/publish", request())).status).toBe(503);
+    const busy = createApp({ db, catalog, publishRateLimiter: createRateLimiter({ limit: 1, windowMs: 60_000 }), accounts: { store: new AccountStore(":memory:"), mailer: createTestInbox() } });
+    await busy.request("http://tavora.test/v1/catalog/publish", request());
+    expect((await busy.request("http://tavora.test/v1/catalog/publish", request())).status).toBe(429);
+  });
+});
