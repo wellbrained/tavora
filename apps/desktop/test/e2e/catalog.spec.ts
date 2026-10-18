@@ -305,7 +305,7 @@ test("a player reports a module from Browse and from Settings, and only its id, 
     await page.getByTestId("settings-nav-modules").click();
     await page.getByTestId("report-module-wellbrained.tracker").click();
     await page.getByTestId("confirm-submit").click();
-    await expect(page.getByTestId("toast")).toHaveText("Reported Tracker. Thank you.");
+    await expect(page.getByTestId("toast")).toHaveText("Reported Tracker. Thanks!");
     expect(reports).toEqual([sent, sent]);
   } finally {
     await app.close();
