@@ -22,6 +22,7 @@ import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import {
   dropAllowed,
+  dropReorders,
   fromDockview,
   groupMinimum,
   guardDrop,
@@ -63,7 +64,12 @@ function info(instanceId: string): PanelInfo | undefined {
   const size = module?.panels.find((type) => type.id === panel?.panelType) ?? module;
   // A panel card's 1 px border on each side comes out of the module's room.
   return panel && size
-    ? { title: panel.name, minWidth: size.minWidth + 2 * CARD_BORDER, minHeight: size.minHeight + 2 * CARD_BORDER }
+    ? {
+        title: panel.name,
+        minWidth: size.minWidth + 2 * CARD_BORDER,
+        minHeight: size.minHeight + 2 * CARD_BORDER,
+        ...(module ? { module: { id: module.id, name: module.name } } : {}),
+      }
     : undefined;
 }
 
@@ -207,11 +213,14 @@ function endDrag() {
   resizing = false;
   dragging.value = false;
   guide.value = null;
+  dropLine.value = null;
 }
 
 // ── The drop guide ─────────────────────────────────────────────────────
 
 const guide = ref<GuideState | null>(null);
+/** Set while a drop would only reorder groups: the preview is then a bar on that side of the target. */
+const dropLine = ref<Position | null>(null);
 const POSITIONS: Position[] = ["top", "left", "center", "right", "bottom"];
 
 /**
@@ -231,6 +240,12 @@ const dropResolver: PositionResolver = {
 function onWillShowOverlay(event: DockviewWillShowOverlayLocationEvent, api: DockviewApi) {
   const data = event.getData();
   if (!dropAllowed(api, info, data, event.group, event.position)) event.preventDefault();
+  const source = data ? (api.getGroup(data.groupId) as DockviewGroupPanel | undefined) : undefined;
+  const alone = !!source && (!data?.panelId || source.panels.length === 1) && source !== event.group;
+  dropLine.value =
+    event.kind === "content" && event.group && dropReorders(source?.element.getBoundingClientRect(), alone, event.group.element.getBoundingClientRect(), event.position)
+      ? event.position
+      : null;
   const content = event.kind === "content" ? event.group?.element.querySelector(".dv-content-container") : null;
   const container = root.value;
   if (!content || !container) {
@@ -329,7 +344,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
       </div>
     </header>
 
-    <div ref="root" class="relative min-h-0 flex-1" @pointerdown.capture="onPointerDown">
+    <div ref="root" class="relative min-h-0 flex-1" :data-drop-line="dropLine ?? undefined" @pointerdown.capture="onPointerDown">
       <DockviewVue
         class="absolute inset-x-2 top-0 bottom-2"
         :theme="THEME"

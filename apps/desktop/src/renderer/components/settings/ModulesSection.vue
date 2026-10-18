@@ -120,8 +120,10 @@ function remove(module: ModuleView) {
       <template #below>
         <ul v-if="problems.length" class="mt-2 flex flex-col gap-1.5" :aria-label="t('settings.modules.problems')" data-testid="module-problems">
           <li v-for="problem in problems" :key="problem.folder" class="text-sm">
-            <span class="text-destructive font-medium">{{ problem.folder }}</span>
-            <span class="text-muted-foreground"> {{ t("settings.modules.problem", { folder: "", message: problem.message }).trim() }}</span>
+            <span class="text-destructive font-medium">{{ problem.folder }}</span>{{ " " }}
+            <span class="text-muted-foreground" :title="problem.message">{{
+              problem.kind === "not-built" ? t("settings.modules.notBuilt") : t("settings.modules.problem", { message: problem.message })
+            }}</span>
           </li>
         </ul>
       </template>

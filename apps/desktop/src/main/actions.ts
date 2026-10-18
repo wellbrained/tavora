@@ -322,6 +322,8 @@ export function parseAction(raw: unknown): HostAction | null {
       if (!only("moduleId", "panelType") || !isModuleId(a.moduleId)) return null;
       if (a.panelType === undefined) return { type: a.type, moduleId: a.moduleId };
       return isPanelTypeId(a.panelType) ? { type: a.type, moduleId: a.moduleId, panelType: a.panelType } : null;
+    case "remove-module-from-game":
+      return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
     case "choose-panel-type":
       return only("instanceId", "panelType") && uuid(a.instanceId) && isPanelTypeId(a.panelType)
         ? { type: a.type, instanceId: a.instanceId, panelType: a.panelType }

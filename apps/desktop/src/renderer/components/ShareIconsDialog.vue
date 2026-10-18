@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Loader } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import type { HostAction } from "../../shared/host-api";
@@ -151,7 +152,8 @@ async function share() {
     </p>
     <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="share-icons-error">{{ error }}</p>
     <div class="flex items-center justify-end gap-2">
-      <span v-if="progress" class="text-muted-foreground mr-auto text-sm tabular-nums" role="status" data-testid="share-icons-progress">
+      <span v-if="progress" class="text-muted-foreground mr-auto flex items-center gap-2 text-sm tabular-nums" role="status" data-testid="share-icons-progress">
+        <Loader class="size-4 animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
         {{ t("shareIcons.progress", progress) }}
       </span>
       <Button type="button" variant="secondary" :disabled="busy" @click="dialog = null">{{ t("common.cancel") }}</Button>

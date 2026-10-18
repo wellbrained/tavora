@@ -42,6 +42,7 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
     panel.api.moveTo({ group: target });
   };
   const maximized = group.api.isMaximized();
+  const module = info(panel.id)?.module;
   return [
     {
       label: t("dock.splitRight"),
@@ -82,5 +83,14 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
       separator: true,
       run: () => act({ type: "close-panel", instanceId: panel.id }),
     },
+    ...(module
+      ? [
+          {
+            label: t("dock.removeModule", { name: module.name }),
+            testid: "panel-remove-module",
+            run: () => act({ type: "remove-module-from-game", moduleId: module.id }),
+          },
+        ]
+      : []),
   ];
 }

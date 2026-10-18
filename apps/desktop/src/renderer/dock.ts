@@ -21,6 +21,8 @@ type GroupState = Exclude<GridNode["data"], GridNode[]>;
 
 export interface PanelInfo {
   title: string;
+  /** The module the panel belongs to, for its menu. */
+  module?: { id: string; name: string };
   minWidth: number;
   minHeight: number;
 }
@@ -274,6 +276,27 @@ export function dropAllowed(
   if (target === source && target.panels.length === 1) return true;
   const leaving = source && (!data.panelId || source.panels.length === 1) ? source.id : undefined;
   return fits(api, target, sideways ? "right" : "below", dragged, info, leaving);
+}
+
+/** A group's place on screen, as getBoundingClientRect gives it. */
+export interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Whether a drop beside a group only changes the order: the dragged panel leaves a group of its
+ * own in the target's row (left, right) or column (top, bottom), so the groups swap places and
+ * keep their sizes. The preview then shows a bar where it lands instead of half of the target.
+ */
+export function dropReorders(source: Box | undefined, alone: boolean, target: Box, position: Position): boolean {
+  if (!source || !alone || position === "center") return false;
+  const near = (a: number, b: number) => Math.abs(a - b) <= 1;
+  return position === "left" || position === "right"
+    ? near(source.y, target.y) && near(source.height, target.height)
+    : near(source.x, target.x) && near(source.width, target.width);
 }
 
 /** Refuses drops that would split a group too small for its panels or the one dropped. */
