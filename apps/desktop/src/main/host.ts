@@ -23,7 +23,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, DeveloperLink, GameView, HostAction, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, DeveloperLink, GameView, HostAction, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
 import { resolveLanguage, translate, type Language } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -33,7 +33,7 @@ import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/lay
 import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
-import { applyOwners, forgetOwner, installZip, readOwnerRecords } from "./installer";
+import { applyOwners, forgetOwner, installZip, installZipData, readOwnerRecords, type Installed } from "./installer";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
 import type { TestHosts } from "./network";
@@ -81,6 +81,7 @@ import {
 import { MODULE_FONTS } from "./module-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir, keepNewerFile, SUPPORTED_VERSIONS } from "./backup";
+import { CatalogClient, type CatalogScope } from "./catalog-client";
 import { DEFAULT_API_URL, OnlineSearch } from "./online";
 import { PublisherNames } from "./publisher-names";
 import { UpdateManager, type UpdaterLike } from "./updates";
@@ -296,6 +297,8 @@ export class Host {
   /** Bumped whenever the main process replaces the current layout. */
   private layoutEpoch = 0;
   private readonly onlineSearch: OnlineSearch;
+  /** Tavora's module catalog (catalog-client.ts). */
+  private readonly catalog: CatalogClient;
   /** Looks for new versions; only in an installed (packaged) app. */
   private updates: UpdateManager | null = null;
   private saving: Promise<void> = Promise.resolve();
@@ -331,6 +334,7 @@ export class Host {
     });
     this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
+    this.catalog = new CatalogClient(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.discord = Host.discordConnector(options, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:discord", view);
     });
@@ -926,15 +930,45 @@ export class Host {
     });
     const file = picked.filePaths[0];
     if (picked.canceled || !file) return;
-    // The newest revocations and blocks count for this install (C6, C14); offline, the ones held do.
+    return this.finishInstall(await installZip(file, await this.installOptions()));
+  }
+
+  /**
+   * What every install goes by. The newest revocations and blocks count (C6, C14; offline, the ones
+   * held do), and a module stopped by a block still counts as installed, so a fixed zip is its update.
+   */
+  private async installOptions() {
     await this.refreshSafetyLists();
-    const installed = await installZip(file, {
+    return {
       userData: this.options.userData,
       userModules: await realUserModulesDir(this.options),
       modules: new Map([...this.blockedModules, ...this.modules]),
       tavoraVersion: app.getVersion(),
       safety: this.safetyLists,
-    });
+    };
+  }
+
+  /** Where the Browse tab of the module library looks: the current game, or the personal workspace. */
+  private catalogScope(): CatalogScope | null {
+    const id = this.gameId;
+    const game = id ? this.library.games[id] : undefined;
+    if (!game) return null;
+    return game.kind === "workspace" ? { workspace: true } : { game: game.catalogId ?? game.id };
+  }
+
+  /**
+   * Installs a module from the catalog: its listing is asked for again here, never taken from the
+   * host UI, and its zip must match the listed hash and be signed by the listed key (C1) before the
+   * installer writes anything.
+   */
+  private async installCatalogModule(moduleId: string): Promise<string> {
+    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    const entry = await this.catalog.module(moduleId);
+    const zip = await this.catalog.download(entry.zip);
+    return this.finishInstall(await installZipData(zip, { ...(await this.installOptions()), expect: { id: entry.id, owner: entry.owner } }));
+  }
+
+  private async finishInstall(installed: Installed): Promise<string> {
     // The developer name comes with the install, so it is said at once (it waits for the service at most a few seconds).
     if (installed.owner !== LOCAL_OWNER) await this.publisherNames.refresh([installed.owner]).catch(() => undefined);
     await this.reloadModules();
@@ -1125,6 +1159,12 @@ export class Host {
       const result = await this.onlineSearch.search(query);
       // Games the player already has (Trash included) are not offered again.
       return { ...result, games: result.games.filter((game) => !this.library.games[game.id]) };
+    });
+    ipcMain.handle("host:browse-catalog", async (event): Promise<CatalogListResult> => {
+      if (!fromHost(event)) return { status: "unreachable" };
+      if (!this.library.onlineSearch) return { status: "off" };
+      const scope = this.catalogScope();
+      return scope ? this.catalog.list(scope) : { status: "ok", modules: [] };
     });
     ipcMain.handle("host:steam-library", async (event, profile: unknown): Promise<SteamLibraryResult> => {
       if (!fromHost(event) || typeof profile !== "string") return { status: "error", error: translate(this.language, "error.notUnderstood") };
@@ -1350,6 +1390,8 @@ export class Host {
         return this.revokeModule(action.moduleId);
       case "install-module":
         return this.installModule();
+      case "install-catalog-module":
+        return this.installCatalogModule(action.moduleId);
       case "delete-module-data":
         return this.deleteLeftoverData(action.owner, action.moduleId);
       case "seen-module-notes": {

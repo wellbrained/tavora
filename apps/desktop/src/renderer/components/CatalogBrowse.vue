@@ -1,0 +1,97 @@
+<script setup lang="ts">
+// The Browse tab of the module library: modules from Tavora's catalog for this game or personal
+// workspace. The main process fetches and checks the list and does the install (catalog-client.ts);
+// every text here is shown as plain text, and "by <name>" is only the developer name the service gave.
+import { computed, onMounted, ref } from "vue";
+import type { CatalogListResult, CatalogModuleView } from "../../shared/host-api";
+import { act, addModule, api, dialog, openSettings, state, type AddModuleRequest } from "../host";
+import { Button } from "@/components/ui/button";
+import { t } from "../i18n";
+
+const props = defineProps<{ query: string }>();
+
+const result = ref<CatalogListResult | null>(null);
+const installing = ref<string | null>(null);
+const errors = ref<Record<string, string>>({});
+
+async function load() {
+  result.value = null;
+  result.value = await api.browseCatalog();
+}
+onMounted(load);
+
+const installed = computed(() => new Set(state.value!.modules.map((module) => module.id)));
+const shown = computed(() => {
+  if (result.value?.status !== "ok") return [];
+  const text = props.query.trim().toLocaleLowerCase();
+  return result.value.modules.filter((module) => !text || [module.name, module.description ?? "", module.id, module.publisher ?? ""].some((value) => value.toLocaleLowerCase().includes(text)));
+});
+
+/** What the module asks to reach, in a few words, so the player sees it before installing. */
+function asks(module: CatalogModuleView): string | null {
+  const parts = [...module.permissions.network, ...module.permissions.connectors.map((id) => t(`catalog.connector.${id}`))];
+  return parts.length ? t("catalog.asks", { list: parts.join(", ") }) : null;
+}
+
+function size(bytes: number): string {
+  return bytes < 1024 * 1024 ? t("catalog.sizeKb", { size: Math.max(1, Math.round(bytes / 1024)) }) : t("catalog.sizeMb", { size: (bytes / 1024 / 1024).toFixed(1) });
+}
+
+async function install(module: CatalogModuleView) {
+  installing.value = module.id;
+  const { [module.id]: _, ...rest } = errors.value;
+  errors.value = rest;
+  const outcome = await act({ type: "install-catalog-module", moduleId: module.id }, { quiet: true });
+  installing.value = null;
+  if (!outcome.ok) errors.value = { ...errors.value, [module.id]: outcome.error };
+}
+
+function add(moduleId: string) {
+  addModule(moduleId, (dialog.value as AddModuleRequest).slot ?? null);
+}
+
+function settings() {
+  dialog.value = null;
+  openSettings({ section: "general", setting: "online-search" });
+}
+</script>
+
+<template>
+  <div class="min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-8" data-testid="catalog-results">
+    <p v-if="!result" class="text-muted-foreground py-12 text-center text-sm" role="status" data-testid="catalog-loading">{{ t("catalog.loading") }}</p>
+    <div v-else-if="result.status !== 'ok'" class="text-muted-foreground py-12 text-center text-sm" role="status" :data-testid="`catalog-${result.status}`">
+      <p>{{ t(`catalog.status.${result.status}`) }}</p>
+      <Button v-if="result.status === 'off'" variant="ghost" class="mt-3" data-testid="catalog-settings" @click="settings">{{ t("catalog.openSettings") }}</Button>
+      <Button v-else variant="ghost" class="mt-3" data-testid="catalog-retry" @click="load">{{ t("catalog.retry") }}</Button>
+    </div>
+    <template v-else>
+      <p class="text-muted-foreground pt-4 text-xs" role="status" data-testid="catalog-count">{{ t("addModule.results", { count: shown.length }) }}</p>
+      <ul class="flex flex-col">
+        <li v-for="module in shown" :key="module.id" class="flex flex-wrap items-center gap-3 border-b py-3 last:border-b-0" :data-testid="`catalog-${module.id}`">
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span class="max-w-full truncate font-medium" :title="module.name" data-testid="catalog-name">{{ module.name }}</span>
+              <span class="text-muted-foreground text-xs tabular-nums">{{ module.version }}</span>
+              <span class="text-muted-foreground text-xs" :title="module.owner" data-testid="catalog-publisher">{{ module.publisher ? t("catalog.by", { name: module.publisher }) : t("catalog.byKey", { key: module.owner.slice(0, 8) }) }}</span>
+            </div>
+            <p v-if="module.description" class="text-muted-foreground line-clamp-2 text-sm" :title="module.description" data-testid="catalog-description">{{ module.description }}</p>
+            <p class="text-muted-foreground mt-0.5 text-xs">
+              <span>{{ size(module.size) }}</span>
+              <span v-if="asks(module)"> · {{ asks(module) }}</span>
+            </p>
+            <p v-if="errors[module.id]" class="text-destructive mt-1 text-sm" role="alert" :data-testid="`catalog-error-${module.id}`">{{ errors[module.id] }}</p>
+          </div>
+          <Button v-if="installed.has(module.id)" size="sm" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary shrink-0"
+            :data-testid="`catalog-add-${module.id}`" :aria-label="t('addModule.addLabel', { name: module.name })" @click="add(module.id)"
+          >{{ t("common.add") }}</Button>
+          <Button v-else size="sm" variant="outline" class="shrink-0" :disabled="installing !== null"
+            :data-testid="`catalog-install-${module.id}`" :aria-label="t('catalog.installLabel', { name: module.name })" @click="install(module)"
+          >{{ installing === module.id ? t("catalog.installing") : t("catalog.install") }}</Button>
+        </li>
+      </ul>
+      <p v-if="!shown.length" class="text-muted-foreground py-12 text-center text-sm" data-testid="catalog-empty">
+        {{ query.trim() ? t("addModule.none", { query: query.trim() }) : t("catalog.empty") }}
+      </p>
+    </template>
+  </div>
+</template>

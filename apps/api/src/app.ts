@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { accountRoutes, type AccountOptions } from "./accounts.ts";
+import { catalogFilter, type CatalogEntry, type CatalogStore } from "./catalog.ts";
 import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
@@ -32,9 +33,11 @@ export interface AppOptions {
   submitRateLimiter?: RateLimiter;
   /** Accounts, only when the service can send email. Absent: the account routes answer 503. */
   accounts?: AccountOptions;
+  /** The module catalog. Absent: the catalog routes answer 503. */
+  catalog?: CatalogStore;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 10, windowMs: 3_600_000 });
   const steamLimiter = steamRateLimiter ?? createRateLimiter({ limit: 6, windowMs: 60_000 });
@@ -175,6 +178,43 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
       throw error;
     }
   });
+
+  // The module catalog, read-only and without sign-in. The app takes the whole index (for a game, or
+  // all of it) and decides on the PC what to update, so it never sends what a player has installed (C11).
+  // "by <name>" comes from the account the key is linked to, never from the listing (C13).
+  const listed = (entry: CatalogEntry) => ({ ...entry, publisher: accounts?.store.publisherName(entry.owner) ?? null });
+  const catalogApp = new Hono();
+  catalogApp.use("*", async (context, next) => {
+    const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
+    if (wait > 0) {
+      context.header("Retry-After", String(wait));
+      return context.json({ error: "Too many requests." }, 429);
+    }
+    if (!catalog) return context.json({ error: "The module catalog is not available right now." }, 503);
+    await next();
+  });
+  catalogApp.get("/", (context) => {
+    const filter = catalogFilter(context.req.query("game"), context.req.query("workspace"));
+    if (!filter) return context.json({ error: "Ask for ?game=<game id>, ?workspace=1 or neither." }, 400);
+    context.header("Cache-Control", "public, max-age=300");
+    return context.json({ modules: catalog!.index(filter).map(listed) });
+  });
+  catalogApp.get("/modules/:id", (context) => {
+    const found = catalog!.module(context.req.param("id"));
+    if (!found) return context.json({ error: "Not found." }, 404);
+    context.header("Cache-Control", "public, max-age=300");
+    return context.json({ module: listed(found.module), versions: found.versions });
+  });
+  catalogApp.get("/zips/:file", (context) => {
+    const match = /^([0-9a-f]{64})\.zip$/.exec(context.req.param("file"));
+    const bytes = match ? catalog!.zip(match[1]!) : null;
+    if (!bytes) return context.json({ error: "Not found." }, 404);
+    // Named by its hash, so it never changes.
+    return new Response(new Uint8Array(bytes), {
+      headers: { "Content-Type": "application/zip", "Content-Disposition": "attachment", "Cache-Control": "public, max-age=31536000, immutable" },
+    });
+  });
+  app.route("/v1/catalog", catalogApp);
 
   // Accounts: the only player data the service keeps, and only once it can send email.
   if (accounts) app.route("/v1/account", accountRoutes(accounts, limiter, (request) => (clientKey ? clientKey(request) : "local")));

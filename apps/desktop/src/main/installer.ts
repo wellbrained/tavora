@@ -107,6 +107,11 @@ export interface InstallOptions {
   tavoraVersion: string;
   /** The catalog's signed safety lists: blocked zips, revoked keys and successions. None: nothing is revoked or blocked. */
   safety?: SafetyCheck;
+  /**
+   * What the zip must be, checked before anything is written: a catalog install asks for the module
+   * id and publisher key its listing named, so a zip signed by anyone else is refused.
+   */
+  expect?: { id: string; owner: string };
 }
 
 export interface Installed {
@@ -119,16 +124,20 @@ export interface Installed {
   updated: boolean;
 }
 
-export async function installZip(zipFile: string, { userData, userModules, modules, tavoraVersion, safety }: InstallOptions): Promise<Installed> {
+export async function installZip(zipFile: string, options: InstallOptions): Promise<Installed> {
   const size = await stat(zipFile).then((info) => (info.isFile() ? info.size : -1));
   if (size < 0) throw new InstallError("error.installNotZip");
   if (size > ZIP_LIMITS.maxArchiveBytes) throw new InstallError("error.installRefused", { reason: "the zip is too big" });
+  return installZipData(await readFile(zipFile), options);
+}
 
-  const bytes = await readFile(zipFile);
-  const sha256 = createHash("sha256").update(bytes).digest("hex");
+/** Installs a zip already in memory, such as one downloaded from the catalog, by the same rules as a picked file. */
+export async function installZipData(zip: Buffer, { userData, userModules, modules, tavoraVersion, expect, safety }: InstallOptions): Promise<Installed> {
+  if (zip.length > ZIP_LIMITS.maxArchiveBytes) throw new InstallError("error.installRefused", { reason: "the zip is too big" });
+  const sha256 = createHash("sha256").update(zip).digest("hex");
   let files;
   try {
-    files = readZip(bytes);
+    files = readZip(zip);
   } catch (error) {
     if (error instanceof ZipError) throw new InstallError("error.installRefused", { reason: error.message });
     throw error;
@@ -162,6 +171,8 @@ export async function installZip(zipFile: string, { userData, userModules, modul
   // A revoked key installs only what it signed before (C6); a successor key's modules use its first key's data (C7).
   if (signed && safety?.revoked(signer, sha256)) throw new InstallError("error.installRevoked", { name: manifest.name });
   const owner = signed && safety ? safety.firstKey(signer) : signer;
+  if (expect && manifest.id !== expect.id) throw new InstallError("error.installRefused", { reason: `it is ${manifest.id}, not the module that was listed` });
+  if (expect && signer !== expect.owner) throw new InstallError("error.installRefused", { reason: "it is not signed by the publisher key that was listed" });
 
   // An id already loaded is replaced only by a newer zip from the same
   // publisher in the player's own folder (an update); two modules with one id never run together.

@@ -511,6 +511,8 @@ export type HostAction =
   | { type: "revoke-module"; moduleId: string }
   /** Asks for a module zip and installs it into the player's modules folder; answers with the module's id. */
   | { type: "install-module" }
+  /** Downloads a module from the catalog, checks it and installs it like a zip. */
+  | { type: "install-catalog-module"; moduleId: string }
   /** Deletes the data a module that is not installed left behind (owner as in leftoverModuleData). */
   | { type: "delete-module-data"; owner: string; moduleId: string }
   /** Moves a signed module's data from its unsigned local copy to it; Tavora restarts to do it. */
@@ -662,6 +664,30 @@ export interface SteamGameView extends SteamImportGame {
 
 export type SteamLibraryResult = { status: "ok"; games: SteamGameView[] } | { status: "error"; error: string };
 
+/** A module listed in Tavora's module catalog, as the main process checked it. Every text is plain text. */
+export interface CatalogModuleView {
+  id: string;
+  name: string;
+  description: string | null;
+  version: string;
+  minTavora: string | null;
+  /** What its manifest asks for; the player is asked again when it is added. */
+  permissions: ModulePermissions;
+  /** The fingerprint of the publisher key that signed it. */
+  owner: string;
+  /** The developer name of that key's account, for "by <name>"; null when it has none. */
+  publisher: string | null;
+  /** The zip's size in bytes. */
+  size: number;
+  publishedAt: string;
+}
+
+/**
+ * `off`: the player turned the online features off. `unavailable`: the catalog is switched off on the
+ * service. `busy`: too many requests, try later. `unreachable`: no usable answer.
+ */
+export type CatalogListResult = { status: "ok"; modules: CatalogModuleView[] } | { status: "off" | "unavailable" | "busy" | "unreachable" };
+
 /** Exposed to the host UI as `window.tavoraHost` by the host preload. */
 export interface TavoraHostApi {
   getState(): Promise<HostViewState | null>;
@@ -673,6 +699,8 @@ export interface TavoraHostApi {
   searchOnline(query: string): Promise<OnlineSearchResult>;
   /** The games a Steam profile (link or SteamID64) owns, through the Tavora service. Never rejects. */
   steamLibrary(profile: string): Promise<SteamLibraryResult>;
+  /** The catalog modules for the current game or personal workspace. Never rejects. */
+  browseCatalog(): Promise<CatalogListResult>;
   /** Where the visible panels are. Panels not listed are hidden. */
   setPanelBounds(bounds: PanelBounds[]): void;
   /**

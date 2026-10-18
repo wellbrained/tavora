@@ -8,12 +8,13 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "start": "node src/server.ts",
-    "dev": "node --watch src/server.ts",
+    "start": "node --conditions=source src/server.ts",
+    "dev": "node --watch --conditions=source src/server.ts",
     "dataset": "node scripts/build-dataset.ts",
     "icon": "node scripts/icon.ts",
+    "catalog": "node --conditions=source scripts/catalog.ts",
     "typecheck": "tsc --noEmit -p .",
-    "build": "esbuild src/server.ts --bundle --platform=node --format=esm --target=node22 --external:node:sqlite --outfile=dist/server.mjs"
+    "build": "esbuild src/server.ts --bundle --platform=node --format=esm --target=node22 --external:node:sqlite --conditions=source --outfile=dist/server.mjs && esbuild scripts/catalog.ts --bundle --platform=node --format=esm --target=node22 --external:node:sqlite --conditions=source --outfile=dist/catalog.mjs"
   },
   "license": "MIT",
   "dependencies": {
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@tavora/module-schema": "workspace:*",
+    "@tavora/pack": "workspace:*",
     "@types/node": "^22.20.5",
     "esbuild": "^0.28.2"
   }
