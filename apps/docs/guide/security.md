@@ -100,7 +100,7 @@ The Browse tab of the module library lists modules from Tavora's catalog and ins
 - **The server is not trusted.** Every listing is checked field by field, and its text is shown as plain text, never HTML or Markdown. The name shown after "by" is only the developer name the service gives for the publisher key, in the same plain name form as above.
 - **A zip is installed only if it is the listed one.** Tavora asks for the listing again itself, downloads the zip into memory with its listed size as a cap, and checks its SHA-256 against the listing before anything uses it. The zip then goes through every check of [Installing modules](#installing-modules), and must also be the listed module id and be signed by the listed publisher key, all before a file is written. An unsigned zip is refused.
 - **Installing grants nothing.** A module installed from the catalog asks for its network hosts and connectors when it is added, like any other.
-- **Updates come only from the same publisher, only forward, and never widen a module quietly.** While online features are on, Tavora downloads the whole catalog index (never a list of what you have installed) and compares it on your PC with the modules you installed from the catalog. An update is installed only if its zip passes every check above, is signed by the same publisher key as the installed module and has a higher version; an older version, the same version or another key's zip is refused. An update that asks for nothing new installs at once and its panels reload. One that asks for network hosts or connectors the installed version did not waits for your yes, and the installed version keeps running until then; allowing it grants exactly what the dialog showed. A module installed or replaced from a zip by hand is not updated from the catalog.
+- **Updates come only from the same publisher, only forward, and never widen a module quietly.** While online features are on, Tavora downloads the whole catalog index (never a list of what you have installed) and compares it on your PC with the modules you installed from the catalog. An update is installed only if its zip passes every check above, including the safety lists, is signed by the same publisher key as the installed module (or its successor by a signed succession) and has a higher version; an older version, the same version or another key's zip is refused. An update that asks for nothing new installs at once and its panels reload. One that asks for network hosts or connectors the installed version did not waits for your yes, and the installed version keeps running until then; allowing it grants exactly what the dialog showed. A module installed or replaced from a zip by hand is not updated from the catalog.
 
 ## The Browser panel
 
@@ -125,6 +125,16 @@ A developer can link a publisher key to their account, so players see a develope
 - **A name cannot pose as another.** Developer names are plain letters, digits, spaces, dots, dashes and underscores, unique when case and those separators are ignored, never Tavora's, changeable once every 30 days, and a name given up stays blocked for others for 30 days.
 - **Players learn a name, nothing else.** Tavora asks the service which name a key has (only while online features are on, at most once a day per key) and gets the name alone, never an account or an address. The name shown is a label: what a player installs is still decided by the key's signature, as before.
 
+## Revoked keys, blocked modules and lost keys
+
+Tavora keeps three lists for modules from other people: publisher keys that were revoked, module zips it blocked, and new keys that replace an account's lost one. They are signed with Tavora's catalogue key, which is kept offline and never on the service.
+
+- **Only Tavora's signature counts.** The app checks every list against the catalogue key built into it. A list signed by any other key, or older than the one the app already has, is ignored, so a service that was broken into can hold a new list back but cannot lift a block or revoke a key.
+- **The lists come only while online features are on**, from the Tavora service, like hosted game icons: no cookies, no referrer and nothing that says who asks. The app never sends which modules it has.
+- **A revoked key installs nothing new.** A zip signed by it is refused, for a first install and for an update, unless Tavora listed that exact zip as signed before the revocation. A module already installed keeps running.
+- **A blocked zip stops at once.** Its panels close, it does not load, and Settings > Modules says why. Its data is kept, and it comes back only with a zip that is not blocked.
+- **A new key replaces a lost one only by a signed statement.** Updates signed by the new key are accepted for the old key's modules, and their data stays where it was. Without a statement, a zip from another key is another publisher, as before.
+
 ## Known limits
 
 - **The sandbox is Chromium's.** A Chromium renderer exploit would break the isolation guarantees, so Tavora follows Electron releases. Electron fuses turn off `RunAsNode`, `NODE_OPTIONS`, `--inspect` and extra `file://` privileges, and a packaged Tavora quits when started with switches that weaken the sandbox or the network rules.
@@ -134,6 +144,7 @@ A developer can link a publisher key to their account, so players see a develope
 - **Side channels** such as DNS prefetch or timing between modules are not fully addressed.
 - **The Browser panel has no Safe Browsing.** A phishing page still renders. A public name that resolves to a local address (DNS rebinding) is not caught there, because the panel checks names, not resolved addresses. Sign-in popups that need `window.opener` do not work.
 - **Discord's local connection is trusted.** Whatever listens where the Discord app listens gets the Discord token. A program that can do that is already running as the player.
+- **Players who stay offline, or turn online features off, do not get new safety lists.** A revoked key or a blocked zip still works for them until they go online, and an unsigned module that is already installed is not stopped by a block.
 - **Unsigned local modules are known only by their id.** Another local module put in the same folder under the same id gets its grants.
 - **A development folder is a module's whole bundle.** A module loaded from a development folder (Settings > Development) can read every file in its project folder, such as its sources or a `.env` file, because G6 is measured from that folder. It is an unsigned local module, known only by its id. Add only your own projects.
 - **WebAssembly is allowed only for Tavora's own modules** that ask for it, because the Whiteboard needs it. Community modules do not get it.

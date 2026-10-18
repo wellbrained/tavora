@@ -20,6 +20,7 @@ if [ -f "$state/catalog/catalog.sqlite" ]; then
   mkdir -p "$work/catalog"
   sqlite3 "$state/catalog/catalog.sqlite" ".backup '$work/catalog/catalog.sqlite'"
   cp -a "$state/catalog/zips" "$work/catalog/zips"
+  if [ -d "$state/catalog/lists" ]; then cp -a "$state/catalog/lists" "$work/catalog/lists"; fi
 fi
 tar -czf "$dir/tavora-api-$stamp.tar.gz" -C "$work" .
 find "$dir" -maxdepth 1 -type f -name 'tavora-api-*.tar.gz' -mtime +14 -delete

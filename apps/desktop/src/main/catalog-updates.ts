@@ -16,6 +16,7 @@ export const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 /** A module the catalog keeps up to date: what is installed now. */
 export interface CatalogInstalled {
   id: string;
+  /** Whose data it uses: the first key of its publisher's account (installer.ts). */
   owner: string;
   version: string;
   /** What the installed version asks for. */
@@ -25,6 +26,9 @@ export interface CatalogInstalled {
 /** An update that asks for more than the installed version, checked and waiting for the player. */
 export interface PendingUpdate {
   id: string;
+  /** The key the listing names, which must have signed the zip. */
+  signer: string;
+  /** Whose data the module uses, as installed. */
   owner: string;
   /** The installed version it replaces. */
   from: string;
@@ -43,13 +47,22 @@ export interface CheckOutcome {
   waiting: PendingUpdate[];
 }
 
-/** The listings that are updates: same module and owner, a newer version, one this Tavora can run. */
-export function findUpdates(index: readonly CatalogEntry[], installed: readonly CatalogInstalled[], tavoraVersion: string): CatalogEntry[] {
+/**
+ * The listings that are updates: same module and owner, a newer version, one this Tavora can run.
+ * A listing's key counts as the owner when it is the installed module's first key or, by a signed
+ * succession (`firstKey`, safety-lists.ts), a later key of the same account.
+ */
+export function findUpdates(
+  index: readonly CatalogEntry[],
+  installed: readonly CatalogInstalled[],
+  tavoraVersion: string,
+  firstKey: (key: string) => string = (key) => key,
+): CatalogEntry[] {
   const listed = new Map(index.map((entry) => [entry.id, entry]));
   const updates: CatalogEntry[] = [];
   for (const module of installed) {
     const entry = listed.get(module.id);
-    if (!entry || entry.owner !== module.owner) continue;
+    if (!entry || firstKey(entry.owner) !== module.owner) continue;
     if (compareModuleVersions(entry.version, module.version) <= 0) continue;
     if (entry.minTavora && compareModuleVersions(entry.minTavora, tavoraVersion) > 0) continue;
     updates.push(entry);
@@ -89,6 +102,8 @@ export interface CatalogUpdaterOptions {
   /** The modules installed from the catalog, as they are now. */
   installed(): CatalogInstalled[];
   tavoraVersion: string;
+  /** The first key of a key's account by its successions (safety-lists.ts); without it, every key is its own. */
+  firstKey?(key: string): string;
   /** Every installer check, nothing written (installer.ts `checkZipData`), against what is installed now. */
   check(zip: Buffer, expect: { id: string; owner: string }): Promise<CheckedZip>;
   /** Installs a zip by every installer rule, as a catalog module, and reloads its panels. */
@@ -125,7 +140,7 @@ export class CatalogUpdater {
   async apply(id: string, version: string): Promise<{ installed: Installed; asks: Permissions }> {
     const pending = this.pendingUpdates.get(id);
     if (!pending || pending.version !== version) throw new Error(`no update of ${id} to ${version} is waiting`);
-    const installed = await this.options.install(pending.zip, { id, owner: pending.owner });
+    const installed = await this.options.install(pending.zip, { id, owner: pending.signer });
     this.pendingUpdates.delete(id);
     return { installed, asks: pending.asks };
   }
@@ -141,7 +156,7 @@ export class CatalogUpdater {
     if (installed.length === 0) return outcome;
     const index = await this.options.client.index();
     if (!index) return outcome;
-    for (const entry of findUpdates(index, installed, this.options.tavoraVersion)) {
+    for (const entry of findUpdates(index, installed, this.options.tavoraVersion, this.options.firstKey?.bind(this.options))) {
       const module = installed.find((item) => item.id === entry.id)!;
       const waiting = this.pendingUpdates.get(entry.id);
       if (waiting?.sha256 === entry.zip.sha256) {
@@ -150,7 +165,8 @@ export class CatalogUpdater {
       }
       try {
         const zip = await this.options.client.download(entry.zip);
-        const expect = { id: entry.id, owner: module.owner };
+        // The zip must be signed by the listed key; the installer then checks it is this module's owner.
+        const expect = { id: entry.id, owner: entry.owner };
         const checked = await this.options.check(zip, expect);
         const asks = newAsks(module.asks, checked.manifest.permissions);
         if (asksNothing(asks)) {
@@ -164,6 +180,7 @@ export class CatalogUpdater {
         );
         const pending: PendingUpdate = {
           id: entry.id,
+          signer: entry.owner,
           owner: module.owner,
           from: module.version,
           version: checked.manifest.version,

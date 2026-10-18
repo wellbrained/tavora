@@ -87,6 +87,7 @@ import { DEFAULT_API_URL, OnlineSearch } from "./online";
 import { PublisherNames } from "./publisher-names";
 import { UpdateManager, type UpdaterLike } from "./updates";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
+import { CATALOGUE_PUBLIC_KEY, SAFETY_REFRESH_MS, SafetyLists, stopBlocked } from "./safety-lists";
 import { createToneReader, iconVersion } from "./icon-tone";
 import { syncIcons } from "./icon-sync";
 import { fetchSteamLibrary, importSteamGames, steamLibraryView } from "./steam-import";
@@ -278,6 +279,10 @@ export class Host {
   private moduleData: { owner: string; moduleId: string }[] = [];
   /** What the player granted each module (grants.ts); loaded before any module panel opens. */
   private grants!: GrantStore;
+  /** The catalog's signed safety lists (revoked keys, blocked zips, successions). */
+  private safetyLists!: SafetyLists;
+  /** Modules in the player's folder whose zip Tavora blocked: not loaded, data kept. */
+  private blockedModules = new Map<string, InstalledModule>();
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
   private pendingLink: string | null = null;
   /** Where modules keep their pictures. */
@@ -340,6 +345,7 @@ export class Host {
       client: this.catalog,
       installed: () => this.catalogInstalled(),
       tavoraVersion: app.getVersion(),
+      firstKey: (key) => this.safetyLists.firstKey(key),
       check: async (zip, expect) => checkZipData(zip, { ...(await this.installOptions()), expect }),
       install: async (zip, expect) => {
         const installed = await installZipData(zip, { ...(await this.installOptions()), expect, catalog: true });
@@ -410,7 +416,16 @@ export class Host {
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
     const moduleProblems: ModuleProblem[] = [];
     const modules = await discoverModules({ ...Host.moduleSources(options, library.developmentFolders), tavoraVersion: app.getVersion() }, moduleProblems);
-    applyOwners(modules, await realUserModulesDir(options), await readOwnerRecords(userData));
+    const ownerRecords = await readOwnerRecords(userData);
+    applyOwners(modules, await realUserModulesDir(options), ownerRecords);
+    const safetyLists = new SafetyLists({
+      file: path.join(userData, "catalog-lists.json"),
+      baseUrl: options.apiUrl ?? DEFAULT_API_URL,
+      publicKey: CATALOGUE_PUBLIC_KEY,
+      online: () => library.onlineSearch,
+    });
+    await safetyLists.load();
+    const blockedModules = stopBlocked(modules, await realUserModulesDir(options), ownerRecords, safetyLists, moduleProblems);
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     const moduleInfo = await describeModules(userModulesDir(options), modules);
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
@@ -446,6 +461,8 @@ export class Host {
     const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
     host.moduleData = await listModuleData(userData, host.files.root());
     host.grants = await GrantStore.load(userData);
+    host.safetyLists = safetyLists;
+    host.blockedModules = blockedModules;
     await host.moveAiUsagePanelData();
     await host.moveDiscordPanelData();
     // Native menus, dialogs and scrollbars follow the theme's mode.
@@ -453,6 +470,8 @@ export class Host {
     await host.account.init();
     await host.publisherNames.load();
     void host.refreshPublisherNames();
+    void host.refreshSafetyLists();
+    setInterval(() => void host.refreshSafetyLists(), SAFETY_REFRESH_MS).unref();
     host.noteModuleVersions();
     // The system's light or dark setting changed (or Tavora's own native theme did, which applyTheme ignores).
     nativeTheme.on("updated", () => {
@@ -565,10 +584,13 @@ export class Host {
   private async reloadModules(): Promise<void> {
     const problems: ModuleProblem[] = [];
     const modules = await discoverModules({ ...Host.moduleSources(this.options, this.library.developmentFolders), tavoraVersion: app.getVersion() }, problems);
-    const owners = await readOwnerRecords(this.options.userData);
-    applyOwners(modules, await realUserModulesDir(this.options), owners);
+    const records = await readOwnerRecords(this.options.userData);
+    applyOwners(modules, await realUserModulesDir(this.options), records);
+    this.blockedModules = stopBlocked(modules, await realUserModulesDir(this.options), records, this.safetyLists, problems);
     this.catalogModules = new Set(
-      [...modules.values()].filter((module) => module.provenance === "local" && owners[path.basename(module.root)]?.catalog && owners[path.basename(module.root)]?.id === module.manifest.id).map((module) => module.manifest.id),
+      [...this.blockedModules.values(), ...modules.values()]
+        .filter((module) => module.provenance === "local" && records[path.basename(module.root)]?.catalog && records[path.basename(module.root)]?.id === module.manifest.id)
+        .map((module) => module.manifest.id),
     );
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
@@ -780,6 +802,18 @@ export class Host {
     return this.publisherOf(module) !== null && this.moduleData.some((entry) => entry.owner === LOCAL_OWNER && entry.moduleId === module.manifest.id);
   }
 
+  /**
+   * Asks the service for the newest signed safety lists (only while online features are on). A list
+   * that blocks an installed module's zip stops it at once.
+   */
+  private async refreshSafetyLists(): Promise<void> {
+    try {
+      if (await this.safetyLists.refresh()) await this.reloadModules();
+    } catch (error) {
+      console.warn("[tavora] safety lists", error);
+    }
+  }
+
   /** Asks for the developer names of the installed modules' keys (each at most once a day). Quietly: offline is fine. */
   private refreshPublisherNames(): Promise<void> {
     const keys = [...this.modules.values()].map((module) => this.publisherOf(module)).filter((key): key is string => key !== null);
@@ -928,8 +962,19 @@ export class Host {
     return this.finishInstall(installed);
   }
 
+  /**
+   * What every install goes by. The newest revocations and blocks count (C6, C14; offline, the ones
+   * held do), and a module stopped by a block still counts as installed, so a fixed zip is its update.
+   */
   private async installOptions() {
-    return { userData: this.options.userData, userModules: await realUserModulesDir(this.options), modules: this.modules, tavoraVersion: app.getVersion() };
+    await this.refreshSafetyLists();
+    return {
+      userData: this.options.userData,
+      userModules: await realUserModulesDir(this.options),
+      modules: new Map([...this.blockedModules, ...this.modules]),
+      tavoraVersion: app.getVersion(),
+      safety: this.safetyLists,
+    };
   }
 
   /** Where the Browse tab of the module library looks: the current game, or the personal workspace. */
@@ -956,7 +1001,8 @@ export class Host {
   private catalogInstalled(): CatalogInstalled[] {
     const installed: CatalogInstalled[] = [];
     for (const id of this.catalogModules) {
-      const module = this.modules.get(id);
+      // A module stopped by a block counts too: an update that is not blocked brings it back (C14).
+      const module = this.modules.get(id) ?? this.blockedModules.get(id);
       if (!module || module.owner === LOCAL_OWNER) continue;
       const { network, connectors = [] } = module.manifest.permissions;
       installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors] } });
@@ -999,7 +1045,7 @@ export class Host {
    * reload with the new version.
    */
   private async applyCatalogUpdate(moduleId: string, version: string): Promise<string> {
-    const module = this.modules.get(moduleId);
+    const module = this.modules.get(moduleId) ?? this.blockedModules.get(moduleId);
     const pending = this.catalogUpdates.pending(moduleId);
     if (!module || !pending || pending.version !== version) throw new LibraryError("error.updateGone");
     const { installed, asks } = await this.catalogUpdates.apply(moduleId, version);
@@ -1378,6 +1424,7 @@ export class Host {
         library.onlineSearch = action.enabled;
         // Turned on: games without an icon may find one on the service, and the share list can be built.
         if (action.enabled) this.fetchIconsSoon();
+        if (action.enabled) void this.refreshSafetyLists();
         break;
       case "set-language":
         library.language = action.language;

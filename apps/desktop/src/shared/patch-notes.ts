@@ -19,12 +19,27 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.18.4",
+    version: "0.18.6",
     date: "2026-10-18",
     title: "Catalog modules stay up to date",
     notes: [
       "Modules you installed from the catalog update themselves while Tavora runs, with no restart: their open panels reload with the new version, and Settings > Modules has Check for updates. Tavora installs only an update from the same publisher with a higher version, checked like any zip.",
       "An update that wants to reach new websites or connectors waits for your yes. Its panels show a bar to review it, with what is new in that version; until you allow it, the version you have keeps running.",
+    ],
+  },
+  {
+    version: "0.18.5",
+    date: "2026-10-18",
+    title: "Safety lists switched on",
+    notes: ["Tavora now checks its safety lists with its own key, so a blocked module or a revoked publisher key takes effect as soon as you are online."],
+  },
+  {
+    version: "0.18.4",
+    date: "2026-10-18",
+    title: "Safety lists for modules",
+    notes: [
+      "Tavora can now stop a harmful module that is already installed. It gets a list signed by Tavora (only while online features are on); a module on it stops, says why in Settings > Modules and keeps its data, and comes back when you install a version that is not blocked.",
+      "A developer who loses their publisher key can revoke it and move to a new one. Tavora then refuses new zips from the old key, and updates from the new key keep your module's data.",
     ],
   },
   {

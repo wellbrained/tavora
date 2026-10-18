@@ -582,6 +582,8 @@ export const en = {
   "error.installTakenDevelopment": "{name} is loaded from your development folder {folder}. Remove that folder in Settings > Development first, then install the zip.",
   "error.installTakenOfficial": "{name} comes with Tavora, so a zip can't replace it. Give your module its own id.",
   "error.installOtherPublisher": "This zip has the same id as {name} but comes from a different publisher, so it can't replace it. Remove {name} first if you want this one.",
+  "error.installBlocked": "Tavora has blocked this zip of {name} because it can do harm: {reason} Install a version that is not blocked.",
+  "error.installRevoked": "{name} is signed with a publisher key its developer has revoked, so Tavora won't install it. Ask the developer for a version signed with their new key.",
   "error.installNotNewer": "{name} {installed} is already installed, and this zip has version {version}. An update needs a higher version.",
   "error.installNeedsNewer": "{name} needs Tavora {needed} or newer, and this is Tavora {current}. Update Tavora first, then install it again.",
   "error.tooManyDevelopmentFolders": "Tavora loads at most 20 development folders. Remove one first.",

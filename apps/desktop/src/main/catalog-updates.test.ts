@@ -8,6 +8,7 @@ import { CatalogClient, type CatalogEntry, type CatalogVersion } from "./catalog
 import { CatalogUpdater, findUpdates, newAsks, notesSince, type CatalogInstalled } from "./catalog-updates";
 import { checkZipData, installZipData, readOwnerRecords } from "./installer";
 import type { InstalledModule } from "./registry";
+import type { SafetyCheck } from "./safety-lists";
 
 const TAVORA = "0.18.4";
 const ID = "wellbrained.tracker";
@@ -44,12 +45,12 @@ function listing(version: string, zip: Buffer, owner: string, fields: Partial<Ca
 }
 
 /** A player with Tracker 1.0.0 installed from the catalog, and an updater over a fake catalog. */
-async function setup(key: KeyObject, network: string[] = []) {
+async function setup(key: KeyObject, network: string[] = [], safety?: SafetyCheck) {
   const userData = await realpath(await mkdtemp(path.join(tmpdir(), "tavora-updates-")));
   const userModules = path.join(userData, "modules");
   await mkdir(userModules);
   const modules = new Map<string, InstalledModule>();
-  const options = () => ({ userData, userModules, modules, tavoraVersion: TAVORA });
+  const options = () => ({ userData, userModules, modules, tavoraVersion: TAVORA, ...(safety ? { safety } : {}) });
   const load = (installed: { manifest: InstalledModule["manifest"]; owner: string }) =>
     modules.set(ID, { manifest: installed.manifest, root: path.join(userModules, ID), provenance: "local", owner: installed.owner });
   load(await installZipData(zipOf("1.0.0", key, network), { ...options(), catalog: true }));
@@ -71,6 +72,7 @@ async function setup(key: KeyObject, network: string[] = []) {
     installed: (): CatalogInstalled[] =>
       [...modules.values()].map((module) => ({ id: module.manifest.id, owner: module.owner, version: module.manifest.version, asks: { network: module.manifest.permissions.network, connectors: [] } })),
     tavoraVersion: TAVORA,
+    ...(safety ? { firstKey: (fingerprint: string) => safety.firstKey(fingerprint) } : {}),
     check: (zip, expect) => checkZipData(zip, { ...options(), expect }),
     install: async (zip, expect) => {
       const installed = await installZipData(zip, { ...options(), expect, catalog: true });
@@ -141,7 +143,7 @@ describe("CatalogUpdater", () => {
     expect(outcome.updated.map((item) => item.manifest.version)).toEqual(["1.1.0"]);
     expect(outcome.waiting).toEqual([]);
     expect(await page()).toBe("<p>1.1.0</p>");
-    expect((await readOwnerRecords(userData))[ID]).toEqual({ id: ID, owner: fingerprint(key), catalog: true });
+    expect((await readOwnerRecords(userData))[ID]).toEqual({ id: ID, owner: fingerprint(key), sha256: createHash("sha256").update(zip).digest("hex"), catalog: true });
   });
 
   it("refuses an older, the same and another key's version, and leaves the installed one as it is (C3)", async () => {
@@ -204,6 +206,36 @@ describe("CatalogUpdater", () => {
     expect(asks).toEqual({ network: ["api.example.com"], connectors: [] });
     expect(await page()).toBe("<p>1.1.0</p>");
     expect(updater.pending(ID)).toBeUndefined();
+  });
+
+  it("goes through the safety lists: a blocked zip and a revoked key are refused, a successor key's update is taken (C6, C7, C14)", async () => {
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const successor = generateKeyPairSync("ed25519").privateKey;
+    const lists = { blockedHash: "", revokedKey: "" };
+    const safety: SafetyCheck = {
+      blocked: (sha256) => (sha256 === lists.blockedHash ? { sha256, reason: "harmful" } : null) as ReturnType<SafetyCheck["blocked"]>,
+      revoked: (fingerprintOf) => fingerprintOf === lists.revokedKey,
+      firstKey: (fingerprintOf) => (fingerprintOf === fingerprint(successor) ? fingerprint(key) : fingerprintOf),
+    };
+    const { updater, publish, page } = await setup(key, [], safety);
+
+    const blocked = zipOf("1.1.0", key);
+    lists.blockedHash = createHash("sha256").update(blocked).digest("hex");
+    publish(listing("1.1.0", blocked, fingerprint(key)), blocked);
+    expect(await updater.check()).toEqual({ updated: [], waiting: [] });
+
+    const revoked = zipOf("1.2.0", key);
+    lists.revokedKey = fingerprint(key);
+    publish(listing("1.2.0", revoked, fingerprint(key)), revoked);
+    expect(await updater.check()).toEqual({ updated: [], waiting: [] });
+    expect(await page()).toBe("<p>1.0.0</p>");
+
+    // The account moved to a new key by a signed succession: its update keeps the module's data owner.
+    const moved = zipOf("1.3.0", successor);
+    publish(listing("1.3.0", moved, fingerprint(successor)), moved);
+    const outcome = await updater.check();
+    expect(outcome.updated.map((item) => ({ version: item.manifest.version, owner: item.owner }))).toEqual([{ version: "1.3.0", owner: fingerprint(key) }]);
+    expect(await page()).toBe("<p>1.3.0</p>");
   });
 
   it("drops a waiting update once the module is gone", async () => {

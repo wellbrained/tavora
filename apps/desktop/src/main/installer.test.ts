@@ -60,7 +60,7 @@ describe("installZip", () => {
     const installed = await installZip(await zipFile(userData, [...files, signFiles(files, key)]), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
     expect(installed).toMatchObject({ owner: fingerprint(key), updated: false });
     expect(await readFile(path.join(userModules, "wellbrained.tracker", "dist", "index.html"), "utf8")).toBe("<p>hi</p>");
-    expect(await readOwnerRecords(userData)).toEqual({ "wellbrained.tracker": { id: "wellbrained.tracker", owner: fingerprint(key) } });
+    expect(await readOwnerRecords(userData)).toEqual({ "wellbrained.tracker": { id: "wellbrained.tracker", owner: fingerprint(key), sha256: installed.sha256 } });
     // Nothing is left half-way.
     expect(await readdir(path.join(userData, "module-staging"))).toEqual([]);
   });
