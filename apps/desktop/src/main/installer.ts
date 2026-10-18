@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, validateManifest, type ModuleManifest } from "@tavora/module-schema";
-import { MANIFEST_FILE, readZip, verifyFiles, ZIP_LIMITS, ZipError } from "@tavora/pack";
+import { MANIFEST_FILE, readZip, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
 import { PlayerError } from "./messages";
@@ -42,8 +42,11 @@ export function compareModuleVersions(a: string, b: string): number {
   return x.pre.length - y.pre.length;
 }
 
-/** Who signed each module the installer put into the player's modules folder, by folder name. */
-export type OwnerRecords = Record<string, { id: string; owner: string }>;
+/**
+ * Who signed each module the installer put into the player's modules folder, by folder name, and
+ * whether it came from the catalog (only those are kept up to date from it, catalog-updates.ts).
+ */
+export type OwnerRecords = Record<string, { id: string; owner: string; catalog?: true }>;
 
 const RECORDS = "module-owners.json";
 
@@ -57,8 +60,8 @@ export async function readOwnerRecords(userData: string): Promise<OwnerRecords> 
   const folders = parsed?.folders;
   if (typeof folders !== "object" || folders === null) return records;
   for (const [folder, value] of Object.entries(folders)) {
-    const { id, owner } = (value ?? {}) as { id?: unknown; owner?: unknown };
-    if (isModuleId(folder) && isModuleId(id) && isOwnerId(owner)) records[folder] = { id, owner };
+    const { id, owner, catalog } = (value ?? {}) as { id?: unknown; owner?: unknown; catalog?: unknown };
+    if (isModuleId(folder) && isModuleId(id) && isOwnerId(owner)) records[folder] = catalog === true ? { id, owner, catalog } : { id, owner };
   }
   return records;
 }
@@ -101,6 +104,8 @@ export interface InstallOptions {
    * id and publisher key its listing named, so a zip signed by anyone else is refused.
    */
   expect?: { id: string; owner: string };
+  /** It comes from the catalog, so the catalog keeps it up to date; any other install stops that. */
+  catalog?: boolean;
 }
 
 export interface Installed {
@@ -118,7 +123,20 @@ export async function installZip(zipFile: string, options: InstallOptions): Prom
 }
 
 /** Installs a zip already in memory, such as one downloaded from the catalog, by the same rules as a picked file. */
-export async function installZipData(zip: Buffer, { userData, userModules, modules, tavoraVersion, expect }: InstallOptions): Promise<Installed> {
+export async function installZipData(zip: Buffer, options: InstallOptions): Promise<Installed> {
+  return writeChecked(await checkZipData(zip, options), options);
+}
+
+/** A zip that passed every check of the installer, ready to be written. Nothing is on disk yet. */
+export interface CheckedZip extends Installed {
+  files: ZipFile[];
+}
+
+/**
+ * Every check of the installer, with nothing written: what the zip is, who signed it and whether it
+ * may replace what is installed. A catalog update is checked like this before the player is asked.
+ */
+export async function checkZipData(zip: Buffer, { userModules, modules, tavoraVersion, expect }: InstallOptions): Promise<CheckedZip> {
   if (zip.length > ZIP_LIMITS.maxArchiveBytes) throw new InstallError("error.installRefused", { reason: "the zip is too big" });
   let files;
   try {
@@ -176,6 +194,13 @@ export async function installZipData(zip: Buffer, { userData, userModules, modul
     throw new InstallError("error.installFolderTaken", { folder });
   }
 
+  return { manifest, owner, updated, files };
+}
+
+/** Writes a checked zip into place and records its owner. */
+async function writeChecked({ files, manifest, owner, updated }: CheckedZip, { userData, userModules, catalog }: InstallOptions): Promise<Installed> {
+  const folder = manifest.id;
+  const target = path.join(userModules, folder);
   // Staged next to the modules folder, so the rename into place stays on one disk.
   const stagingRoot = path.join(userData, "module-staging");
   await mkdir(stagingRoot, { recursive: true });
@@ -206,7 +231,7 @@ export async function installZipData(zip: Buffer, { userData, userModules, modul
 
   const records = await readOwnerRecords(userData);
   if (owner === LOCAL_OWNER) delete records[folder];
-  else records[folder] = { id: manifest.id, owner };
+  else records[folder] = catalog ? { id: manifest.id, owner, catalog: true } : { id: manifest.id, owner };
   await writeOwnerRecords(userData, records);
   return { manifest, owner, updated };
 }

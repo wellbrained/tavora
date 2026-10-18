@@ -370,6 +370,11 @@ export interface HostViewState {
     usedIn: string[];
     /** The newest version the module's patch notes cover (null without any), and whether some are new to the player. */
     notes: { latest: string | null; unseen: boolean };
+    /**
+     * A catalog update that asks for more than the installed version and waits for the player's yes;
+     * the installed version keeps running until then. Null when none is waiting.
+     */
+    update: { version: string; asks: ModulePermissions; notes: ModuleNote[] } | null;
   }[];
   /** Folders in the modules folder that could not be loaded, and why, for module authors. */
   moduleProblems: { folder: string; message: string }[];
@@ -513,6 +518,10 @@ export type HostAction =
   | { type: "install-module" }
   /** Downloads a module from the catalog, checks it and installs it like a zip. */
   | { type: "install-catalog-module"; moduleId: string }
+  /** Looks for updates of the modules installed from the catalog now; answers with `updated` and `waiting`. */
+  | { type: "check-module-updates" }
+  /** The player said yes to a catalog update that asks for more: installs exactly that version and grants what it asked for. */
+  | { type: "apply-module-update"; moduleId: string; version: string }
   /** Deletes the data a module that is not installed left behind (owner as in leftoverModuleData). */
   | { type: "delete-module-data"; owner: string; moduleId: string }
   /** Moves a signed module's data from its unsigned local copy to it; Tavora restarts to do it. */
@@ -620,7 +629,7 @@ export interface ModuleMenu {
   align?: "start" | "center" | "end";
 }
 
-export type ActionResult = { ok: true; id?: string; shared?: number; added?: number } | { ok: false; error: string };
+export type ActionResult = { ok: true; id?: string; shared?: number; added?: number; updated?: number; waiting?: number } | { ok: false; error: string };
 
 export interface CatalogMatch {
   id: string;
