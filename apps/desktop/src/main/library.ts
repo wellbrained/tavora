@@ -89,6 +89,8 @@ export interface Library {
   moduleFilesFolder: string | null;
   /** Module project folders a developer added in Settings > Modules; loaded straight from there (registry.ts). */
   developmentFolders: string[];
+  /** Per system file dialog, the folder the player last picked from in it; the dialog opens there next time. */
+  dialogFolders: Partial<Record<DialogPlace, string>>;
   /** Per `owner:module id`, the module version whose patch notes the player has seen; newer notes are marked new. */
   moduleNotesSeen: Record<string, string>;
   /** The Steam profile link or id the player chose to remember for the Steam import, or null. Kept only on this PC. */
@@ -112,6 +114,10 @@ export const RAIL = { compact: 72, minWidth: 180, maxWidth: 420, defaultWidth: 2
 export const TRASH_DAYS = 30;
 export const MAX_NAME = 80;
 export const MAX_LABEL = 3;
+
+/** The system file dialogs that open where the player last picked from. */
+export const DIALOG_PLACES = ["install-module", "development-folder", "game-image", "module-files"] as const;
+export type DialogPlace = (typeof DIALOG_PLACES)[number];
 
 /** Most development folders kept. */
 export const MAX_DEVELOPMENT_FOLDERS = 20;
@@ -156,6 +162,7 @@ export function emptyLibrary(): Library {
     moduleIcons: true,
     moduleFilesFolder: null,
     developmentFolders: [],
+    dialogFolders: {},
     moduleNotesSeen: {},
     steamProfile: null,
     iconsOffered: [],
@@ -666,6 +673,11 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.moduleIcons === "boolean") library.moduleIcons = saved.moduleIcons;
   if (typeof saved.moduleFilesFolder === "string" && saved.moduleFilesFolder.length <= 500 && path.isAbsolute(saved.moduleFilesFolder)) library.moduleFilesFolder = saved.moduleFilesFolder;
   if (Array.isArray(saved.developmentFolders)) library.developmentFolders = cleanDevelopmentFolders(saved.developmentFolders);
+  const dialogFolders = asRecord(saved.dialogFolders);
+  for (const place of DIALOG_PLACES) {
+    const folder = dialogFolders[place];
+    if (typeof folder === "string" && folder.length <= 500 && path.isAbsolute(folder)) library.dialogFolders[place] = folder;
+  }
   for (const [key, version] of Object.entries(asRecord(saved.moduleNotesSeen)).slice(0, MAX_NOTES_SEEN)) {
     if (key.length <= 200 && /^[^:]+:[^:]+$/.test(key) && typeof version === "string" && version.length <= 64) library.moduleNotesSeen[key] = version;
   }

@@ -456,6 +456,8 @@ export const de: Record<keyof typeof en, string> = {
   "addModule.results": "Angezeigte Module: {count}",
   "addModule.inGame": "In diesem Spiel · {count} geöffnet",
   "addModule.addAnother": "Weiteres hinzufügen",
+  "addModule.addAll": "Alle Panels hinzufügen",
+  "addModule.addAllLabel": "Alle Panels von {name} hinzufügen",
   "addModule.emptyFilter": "Keine Module in dieser Ansicht.",
   "addModule.reset": "Alle Module anzeigen",
   "addModule.title": "Modulbibliothek",

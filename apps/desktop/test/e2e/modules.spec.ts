@@ -92,11 +92,19 @@ test("data saved before modules had owners is moved under its owner and still fo
   await again.app.close();
 });
 
-/** Makes the next file dialog answer with this file, as if the player picked it. */
-async function pickFile(app: ElectronApplication, file: string) {
+/** Makes the next file dialog answer with this file, as if the player picked it (null: cancelled), and keeps the folder it opened in. */
+async function pickFile(app: ElectronApplication, file: string | null) {
   await app.evaluate(({ dialog }, picked) => {
-    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as typeof dialog.showOpenDialog;
+    dialog.showOpenDialog = (async (_window: unknown, options: { defaultPath?: string }) => {
+      (globalThis as { openedIn?: string | null }).openedIn = options.defaultPath ?? null;
+      return picked === null ? { canceled: true, filePaths: [] } : { canceled: false, filePaths: [picked] };
+    }) as unknown as typeof dialog.showOpenDialog;
   }, file);
+}
+
+/** The folder the last file dialog opened in, or null for the system's choice. */
+async function openedIn(app: ElectronApplication): Promise<string | null> {
+  return app.evaluate(() => (globalThis as { openedIn?: string | null }).openedIn ?? null);
 }
 
 test("a signed zip installs from Settings, updates only from its publisher, and a copycat is refused (S5)", async () => {
@@ -116,12 +124,19 @@ test("a signed zip installs from Settings, updates only from its publisher, and 
   await expect(page.getByTestId("module-publisher-wellbrained.mini")).toBeVisible();
   await expect(page.getByTestId("module-origin-wellbrained.mini")).toContainText("wellbrained.mini");
 
-  // The same id signed by someone else cannot replace it.
-  const copycat = path.join(work, "copycat.zip");
+  // The same id signed by someone else cannot replace it. The dialog opens where the last zip came from.
+  await mkdir(path.join(work, "other"));
+  const copycat = path.join(work, "other", "copycat.zip");
   await writeFile(copycat, (await packModule(path.join(source, "mini"), generateKeyPairSync("ed25519").privateKey)).zip);
   await pickFile(app, copycat);
   await page.getByTestId("install-module").click();
   await expect(page.getByText("comes from a different publisher")).toBeVisible();
+  expect(await openedIn(app)).toBe(path.resolve(work));
+
+  // Only a zip that installed moves it.
+  await pickFile(app, null);
+  await page.getByTestId("install-module").click();
+  await expect.poll(() => openedIn(app)).toBe(path.resolve(work));
   await app.close();
 });
 
