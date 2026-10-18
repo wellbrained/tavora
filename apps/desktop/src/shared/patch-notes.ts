@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.3",
+    date: "2026-10-18",
+    title: "Browse the module catalog",
+    notes: [
+      "The module library has a Browse tab: it lists modules from Tavora's catalog for the game or personal workspace you are in, says who publishes each one, and installs it with one press. Tavora checks every download against its listing and its publisher's signature, and installs nothing that does not match. Browse needs Online game search to be on.",
+    ],
+  },
+  {
     version: "0.18.2",
     date: "2026-10-18",
     title: "Patch notes for modules",
