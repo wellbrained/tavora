@@ -1,4 +1,4 @@
-// Adds community modules to the catalog by hand, until publishers upload their own (Milestone E, step 3):
+// Adds community modules to the catalog by hand, next to what publishers upload with tavora-pack publish:
 //
 //   pnpm --filter @tavora/api catalog add <module.zip>     a zip packed and signed with tavora-pack
 //   pnpm --filter @tavora/api catalog delist <module id>   takes a module out; its versions are kept

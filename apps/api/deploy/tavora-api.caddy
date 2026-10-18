@@ -2,8 +2,14 @@ api.mytavora.app {
     bind 167.233.235.154 2a01:4f8:c013:d350::1
     encode zstd gzip
     header X-Content-Type-Options nosniff
-    # No request is bigger than a profile with its picture (about 700 KB); the service checks each route again.
-    request_body {
+    # No request is bigger than a profile with its picture (about 700 KB), except a module zip published
+    # to the catalog (at most the installer's 50 MB); the service checks each route again.
+    @publish path /v1/catalog/publish
+    request_body @publish {
+        max_size 50MB
+    }
+    @other not path /v1/catalog/publish
+    request_body @other {
         max_size 1MB
     }
     # The service rate-limits per client from the first X-Forwarded-For address,
