@@ -15,6 +15,7 @@ import { ShieldAlert } from "@lucide/vue";
 import { act, dialog, frozen, needsGrant, state } from "../../host";
 import { t } from "../../i18n";
 import BrowserToolbar from "./BrowserToolbar.vue";
+import CampfireLoader from "./CampfireLoader.vue";
 import { DOCK } from "./dock-context";
 
 const props = defineProps<{ params: IDockviewPanelProps }>();
@@ -120,6 +121,7 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
       <p class="text-foreground font-medium">{{ t("browser.startTitle") }}</p>
       <p>{{ t("browser.startText") }}</p>
     </div>
+    <CampfireLoader v-else-if="panel?.waiting" :name="panel.name" :data-testid="`panel-loading-${id}`" />
     <div v-else class="text-muted-foreground flex size-full items-center justify-center p-4 text-center">
       {{ panel?.name }}
     </div>

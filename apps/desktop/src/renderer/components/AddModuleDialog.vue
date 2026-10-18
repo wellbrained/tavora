@@ -2,8 +2,9 @@
 // The module library: every installed module, to open in the current game. The list on the left
 // picks what is shown: all modules, the ones already in this game, one kind of module, or Tavora's
 // catalog (CatalogBrowse.vue). Each module is a card with its Add; a module with panel types lists
-// them on its card, each with its own Add (the decision log, named panels round 1). A module made for
-// other games (its manifest's `games`) is not listed at all.
+// them on its card, each with its own Add (the decision log, named panels round 1), and an Add all
+// that opens one of each; adding one of those panels keeps the library open for the next. A module
+// made for other games (its manifest's `games`) is not listed at all.
 import { computed, ref } from "vue";
 import { addModule, dialog, openSettings, state, type AddModuleRequest } from "../host";
 import { Button } from "@/components/ui/button";
@@ -87,9 +88,12 @@ function openCount(moduleId: string, panelType?: string): number {
   return state.value!.panels.filter((panel) => panel.moduleId === moduleId && panel.panelType === panelType).length;
 }
 
-/** Adds it, or asks for what it needs first (the consent dialog takes this dialog's place). */
-function add(moduleId: string, panelType?: string) {
-  addModule(moduleId, (dialog.value as AddModuleRequest).slot ?? null, panelType);
+/**
+ * Adds it, or asks for what it needs first (the consent dialog takes this dialog's place). A module
+ * with panel types keeps the library open, so the player can add several of its panels in a row.
+ */
+function add(moduleId: string, panelTypes: string[] = []) {
+  addModule(moduleId, (dialog.value as AddModuleRequest).slot ?? null, panelTypes, { stay: panelTypes.length > 0 });
 }
 
 function manage() {
@@ -222,6 +226,17 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                   >
                 </div>
                 <ul v-else class="mt-auto flex flex-col gap-1 border-t pt-3" :aria-label="t('addModule.panels', { name: module.name })" :data-testid="`panel-types-${module.id}`">
+                  <li v-if="module.panels.length > 1" class="flex items-center justify-end pb-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      :class="cn(ADD_CLASS, 'h-7')"
+                      :data-testid="`open-all-${module.id}`"
+                      :aria-label="t('addModule.addAllLabel', { name: module.name })"
+                      @click="add(module.id, module.panels.map((type) => type.id))"
+                      >{{ t("addModule.addAll") }}</Button
+                    >
+                  </li>
                   <li v-for="type in module.panels" :key="type.id" class="flex items-center gap-2">
                     <ModuleIcon :module-id="module.id" :panel-type="type.id" />
                     <span class="min-w-0 flex-1 truncate text-sm">{{ type.name }}</span>
@@ -232,7 +247,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                       :class="cn(ADD_CLASS, 'h-7')"
                       :data-testid="`open-${module.id}-${type.id}`"
                       :aria-label="t('addModule.addLabel', { name: `${module.name}: ${type.name}` })"
-                      @click="add(module.id, type.id)"
+                      @click="add(module.id, [type.id])"
                       >{{ openCount(module.id, type.id) ? t("addModule.addAnother") : t("common.add") }}</Button
                     >
                   </li>

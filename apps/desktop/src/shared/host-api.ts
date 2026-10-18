@@ -75,6 +75,8 @@ export interface PanelView {
   /** The tab's name: the panel type's short name, or the module's name. */
   name: string;
   status: InstanceStatus;
+  /** A module panel whose page is still loading: the host UI shows a loader in its place. */
+  waiting: boolean;
   /** The full name of what the panel shows, as the module last set it (panel.setContent); the tab's hover text. */
   content: string | null;
   /** Set for Browser panels: what their toolbar shows. */
@@ -356,6 +358,8 @@ export interface HostViewState {
     origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
     /** Only a module in the player's own modules folder can be removed from Settings. */
     removable: boolean;
+    /** Installed from Tavora's module catalog, so it can be reported from Settings. */
+    fromCatalog: boolean;
     /** The fingerprint of the key that signed it, for a module installed from a signed zip; null otherwise. */
     publisher: string | null;
     /** The developer name the publisher key is linked to, as Tavora's service said ("by <name>"); null when unknown or unlinked. */
@@ -397,6 +401,8 @@ export interface HostViewState {
   layout: SavedLayout | null;
   /** Changes whenever `layout` was replaced by the main process, e.g. by applying a snapshot. */
   layoutEpoch: number;
+  /** The game was just opened and its panels are still loading; the host UI covers them, and they are shown together once all have their data. */
+  opening: boolean;
   /** Where modules keep their pictures, and how that stands. */
   moduleFiles: { folder: string; custom: boolean; /** The folder is there (a custom one on a drive that is unplugged is not). */ available: boolean; moving: boolean };
   /** A web address a module asked to open while the game has no Browser panel; the host UI asks where it should open (link-choice). */
@@ -526,6 +532,11 @@ export type HostAction =
   | { type: "install-catalog-module"; moduleId: string }
   /** Looks for updates of the modules installed from the catalog now; answers with `updated` and `waiting`. */
   | { type: "check-module-updates" }
+  /**
+   * Reports a catalog module to Tavora after the player pressed Report: the installed zip when it came
+   * from the catalog, otherwise the listed one. Sends only the module id, its key and the zip's hash.
+   */
+  | { type: "report-catalog-module"; moduleId: string }
   /** The player said yes to a catalog update that asks for more: installs exactly that version and grants what it asked for. */
   | { type: "apply-module-update"; moduleId: string; version: string }
   /** Deletes the data a module that is not installed left behind (owner as in leftoverModuleData). */

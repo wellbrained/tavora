@@ -15,6 +15,9 @@ async function addPanel(page: import("@playwright/test").Page, type: string) {
   await page.getByTestId("add-module").click();
   await expect(page.getByTestId(`panel-types-${PANELS}`)).toBeVisible();
   await page.getByTestId(`open-${PANELS}-${type}`).click();
+  // The library stays open for the module's other panels.
+  await expect(page.getByTestId("add-module-dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("add-module-dialog")).toHaveCount(0);
 }
 
@@ -50,6 +53,23 @@ test("each panel type opens its own page, named on its tab", async () => {
   await expect(again.page.locator(`[data-panel-tab][data-panel-type="overview"]`)).toContainText("Overview");
   await expectModuleText(again.app, PANELS, "panel-type", "Overview", 1);
   await again.app.close();
+});
+
+test("the library stays open to add several panels, and Add all opens one of each", async () => {
+  const userData = await newUserData();
+  const { app, page } = await launch(userData);
+  await page.getByTestId("add-module").click();
+  await page.getByTestId(`open-${PANELS}-planner`).click();
+  await page.getByTestId(`open-${PANELS}-planner`).click();
+  await expect(panels(page, PANELS)).toHaveCount(2);
+  await expect(page.getByTestId("add-module-dialog")).toBeVisible();
+  await page.getByTestId(`open-all-${PANELS}`).click();
+  await expect(panels(page, PANELS)).toHaveCount(5);
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("add-module-dialog")).toHaveCount(0);
+  for (const type of ["overview", "inventory"]) await expect(page.locator(`[data-panel-tab][data-panel-type="${type}"]`)).toHaveCount(1);
+  await expect(page.locator(`[data-panel-tab][data-panel-type="planner"]`)).toHaveCount(3);
+  await app.close();
 });
 
 const ICE_SHOT = "0.5 Ice Shot Deadeye Leveling Guide";

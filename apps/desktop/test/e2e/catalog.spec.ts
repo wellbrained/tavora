@@ -1,7 +1,8 @@
 // The Browse tab of the module library: modules from Tavora's catalog, fetched and checked by the
 // main process from a fake catalog server. A listed zip installs only when it is the zip the listing
 // names and is signed by the listed publisher key (catalog threat model, C1); listing text is plain
-// text (C10) and "by <name>" is only the service's developer name (C13).
+// text (C10) and "by <name>" is only the service's developer name (C13). A report names only the
+// module, its key and its zip (C12).
 import { createHash, generateKeyPairSync, type KeyObject } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
@@ -50,15 +51,22 @@ function listing(id: string, name: string, zip: Buffer, owner: string, fields: R
 }
 
 /** A catalog server that answers like api.mytavora.app/v1/catalog, and records what was asked. */
-async function catalogServer(modules: Listed[]): Promise<{ url: string; server: Server; asked: string[] }> {
+async function catalogServer(modules: Listed[]): Promise<{ url: string; server: Server; asked: string[]; reports: unknown[] }> {
   const asked: string[] = [];
-  const server = createServer((request, response) => {
+  const reports: unknown[] = [];
+  const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://catalog");
     asked.push(url.pathname + url.search);
     const send = (status: number, body: unknown) => {
       response.writeHead(status, { "content-type": "application/json" });
       response.end(JSON.stringify(body));
     };
+    if (url.pathname === "/v1/catalog/report" && request.method === "POST") {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(chunk as Buffer);
+      reports.push({ headers: { cookie: request.headers.cookie ?? null, referer: request.headers.referer ?? null }, body: JSON.parse(Buffer.concat(chunks).toString("utf8")) });
+      return send(202, { status: "received" });
+    }
     if (url.pathname === "/v1/catalog") {
       const game = url.searchParams.get("game");
       const workspace = url.searchParams.get("workspace") === "1";
@@ -84,7 +92,7 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as { port: number };
-  return { url: `http://127.0.0.1:${address.port}`, server, asked };
+  return { url: `http://127.0.0.1:${address.port}`, server, asked, reports };
 }
 
 test("a player browses the catalog for a game, sees who publishes a module and installs it", async () => {
@@ -263,6 +271,42 @@ test("a catalog module updates without a restart, and an update adding a network
     await expect(page.locator('[data-testid^="grant-review-open-"]')).toHaveCount(0);
     const grants = JSON.parse(await readFile(path.join(userData, "grants.json"), "utf8"));
     expect(grants.owners[owner][id].network).toEqual(["api.example.com"]);
+  } finally {
+    await app.close();
+    server.close();
+  }
+});
+
+test("a player reports a module from Browse and from Settings, and only its id, key and zip are sent", async () => {
+  const key = generateKeyPairSync("ed25519").privateKey;
+  const owner = fingerprint(key);
+  const tracker = await packed("wellbrained.tracker", "Tracker", key);
+  const sha256 = createHash("sha256").update(tracker).digest("hex");
+  const { url, server, reports } = await catalogServer([{ entry: listing("wellbrained.tracker", "Tracker", tracker, owner, { publisher: "wellbrained" }), body: tracker }]);
+  const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
+  const sent = { headers: { cookie: null, referer: null }, body: { id: "wellbrained.tracker", owner, sha256 } };
+  try {
+    await openGame(page, "poe2");
+    await page.getByTestId("add-module").click();
+    await page.getByTestId("module-tab-browse").click();
+    // Nothing is sent until the player says yes.
+    await page.getByTestId("catalog-report-wellbrained.tracker").click();
+    await expect(page.getByTestId("catalog-report-ask-wellbrained.tracker")).toContainText("nothing about you");
+    expect(reports).toEqual([]);
+    await page.getByTestId("catalog-report-send-wellbrained.tracker").click();
+    await expect(page.getByTestId("catalog-reported-wellbrained.tracker")).toBeVisible();
+    expect(reports).toEqual([sent]);
+
+    // Installed from the catalog, it can be reported from Settings > Modules too.
+    await page.getByTestId("catalog-install-wellbrained.tracker").click();
+    await expect(page.getByTestId("catalog-add-wellbrained.tracker")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.getByTestId("rail-settings").click();
+    await page.getByTestId("settings-nav-modules").click();
+    await page.getByTestId("report-module-wellbrained.tracker").click();
+    await page.getByTestId("confirm-submit").click();
+    await expect(page.getByTestId("toast")).toHaveText("Reported Tracker. Thank you.");
+    expect(reports).toEqual([sent, sent]);
   } finally {
     await app.close();
     server.close();

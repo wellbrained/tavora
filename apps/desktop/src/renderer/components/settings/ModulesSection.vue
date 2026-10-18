@@ -4,10 +4,10 @@
 // zip checks and unpacks a module zip into the folder; dropping a module
 // package into the folder and pressing Reload adds it too. Remove moves it
 // to the recycle bin. A module's data stays, so adding it again finds it.
-// Below the list are the websites modules may reach, and where module files
-// live. What module developers use (development folders, the examples) is in
+// A module installed from the catalog can be reported to Tavora. Below the
+// list are the websites modules may reach, and where module files live. What module developers use (development folders, the examples) is in
 // Settings > Development instead.
-import { ArrowRightLeft, CloudDownload, FileArchive, FolderInput, FolderOpen, NotebookText, RefreshCw, Trash2 } from "@lucide/vue";
+import { ArrowRightLeft, CloudDownload, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -84,6 +84,19 @@ function deleteData(entry: { owner: string; moduleId: string }) {
   });
 }
 
+function report(module: ModuleView) {
+  confirmAction({
+    title: t("settings.modules.reportTitle", { name: module.name }),
+    message: t("settings.modules.reportMessage"),
+    confirm: t("settings.modules.report"),
+    run: async () => {
+      const error = await submitAction({ type: "report-catalog-module", moduleId: module.id });
+      if (!error) showToast(t("settings.modules.reported", { name: module.name }));
+      return error;
+    },
+  });
+}
+
 function remove(module: ModuleView) {
   const games = gamesUsing(module);
   confirmAction({
@@ -157,6 +170,15 @@ function remove(module: ModuleView) {
             @click="moveLocal(module)"
           >
             <ArrowRightLeft :stroke-width="1.5" /> {{ t("settings.modules.moveLocal") }}
+          </Button>
+          <Button
+            v-if="module.fromCatalog && state!.library.onlineSearch"
+            variant="ghost"
+            :aria-label="t('settings.modules.reportLabel', { name: module.name })"
+            :data-testid="`report-module-${module.id}`"
+            @click="report(module)"
+          >
+            <Flag :stroke-width="1.5" /> {{ t("settings.modules.report") }}
           </Button>
           <Button
             v-if="module.removable"

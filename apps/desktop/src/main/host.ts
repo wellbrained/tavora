@@ -19,6 +19,7 @@ import {
   shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
+  type OpenDialogOptions,
   type WebContents,
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
@@ -75,6 +76,7 @@ import {
   trashedGames,
   trashGame,
   useOriginalGameIcon,
+  type DialogPlace,
   type GameEntry,
   type GameIcon,
   type Library,
@@ -96,7 +98,7 @@ import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, sha
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
 import { findSteamDir, isSteamAppId, loadAppInfo, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
-import { ModuleView } from "./module-view";
+import { ModuleView, REVEAL_CAP_MS } from "./module-view";
 import { HostError } from "./errors";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { isWebUrl, siteOfUrl } from "./browser-url";
@@ -152,6 +154,8 @@ interface Rect {
   height: number;
 }
 
+/** How long a game's panels may keep each other waiting when it opens; past it, every panel shows (each one gives up after REVEAL_CAP_MS). */
+const OPENING_CAP_MS = REVEAL_CAP_MS + 250;
 /** How long to wait for a still image of a panel before hiding it anyway. */
 const FREEZE_TIMEOUT_MS = 250;
 /** How long a development folder's build must be quiet before its panels reload. */
@@ -300,6 +304,11 @@ export class Host {
   private windowHidden = false;
   /** Bumped whenever the main process replaces the current layout. */
   private layoutEpoch = 0;
+  /**
+   * Set while a game just opened and its panels load: none is shown until every visible one has its data, so
+   * the workspace appears at once rather than panel by panel.
+   */
+  private opening: { startedAt: number; timer: ReturnType<typeof setTimeout> } | null = null;
   private readonly onlineSearch: OnlineSearch;
   /** Tavora's module catalog (catalog-client.ts). */
   private readonly catalog: CatalogClient;
@@ -331,13 +340,14 @@ export class Host {
     this.currentTheme = moduleTheme(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation);
     this.files = new ModuleFilesFolder({
       userData: options.userData,
-      window: () => this.window,
       language: () => this.language,
       chosenFolder: () => this.library.moduleFilesFolder ?? null,
       setChosenFolder: (folder) => {
         this.library.moduleFilesFolder = folder;
         this.saveLibrary();
       },
+      pick: (options) => this.pickPath("module-files", options),
+      remember: (picked) => this.rememberPicked("module-files", picked),
       notify: (message) => (this.notice = message),
       changed: () => this.pushState(),
     });
@@ -749,12 +759,11 @@ export class Host {
 
   /** The player picks a module project folder, or a folder of them; Tavora loads the modules from it from now on. Answers with the folder, or nothing when cancelled. */
   private async addDevelopmentFolder(): Promise<string | void> {
-    const picked = await dialog.showOpenDialog(this.window, { title: translate(this.language, "dialog.developmentFolder"), properties: ["openDirectory"] });
-    const folder = picked.filePaths[0];
-    if (picked.canceled || !folder) return;
+    const folder = await this.pickPath("development-folder", { title: translate(this.language, "dialog.developmentFolder"), properties: ["openDirectory"] });
+    if (!folder) return;
     if (this.library.developmentFolders.length >= MAX_DEVELOPMENT_FOLDERS) throw new LibraryError("error.tooManyDevelopmentFolders");
     this.library.developmentFolders = cleanDevelopmentFolders([...this.library.developmentFolders, folder]);
-    this.saveLibrary();
+    this.rememberPicked("development-folder", folder);
     await this.reloadModules();
     return path.resolve(folder);
   }
@@ -952,14 +961,14 @@ export class Host {
    * Answers with the module's id, or nothing when the player cancelled.
    */
   private async installModule(): Promise<string | void> {
-    const picked = await dialog.showOpenDialog(this.window, {
+    const file = await this.pickPath("install-module", {
       title: translate(this.language, "dialog.installModule"),
       properties: ["openFile"],
       filters: [{ name: translate(this.language, "dialog.moduleZip"), extensions: ["zip"] }],
     });
-    const file = picked.filePaths[0];
-    if (picked.canceled || !file) return;
+    if (!file) return;
     const installed = await installZip(file, await this.installOptions());
+    this.rememberPicked("install-module", file);
     // Replaced by hand: the catalog no longer keeps it up to date, and an update it was waiting for is dropped.
     this.catalogUpdates.forget(installed.manifest.id);
     return this.finishInstall(installed);
@@ -998,6 +1007,23 @@ export class Host {
     const entry = await this.catalog.module(moduleId);
     const zip = await this.catalog.download(entry.zip);
     return this.finishInstall(await installZipData(zip, { ...(await this.installOptions()), expect: { id: entry.id, owner: entry.owner }, catalog: true }));
+  }
+
+  /**
+   * Reports a module to Tavora (C12). A module installed from the catalog is reported as the zip that
+   * is installed, the one the player has seen; any other id as the version the catalog lists now.
+   * Only the id, the key and the zip's hash are sent, and only because the player pressed Report.
+   */
+  private async reportCatalogModule(moduleId: string): Promise<void> {
+    if (!this.library.onlineSearch) throw new PlayerError("error.reportOff");
+    const module = this.catalogModules.has(moduleId) ? (this.modules.get(moduleId) ?? this.blockedModules.get(moduleId)) : undefined;
+    const record = module ? (await readOwnerRecords(this.options.userData))[path.basename(module.root)] : undefined;
+    if (module && record?.id === moduleId && record.sha256) {
+      await this.catalog.report({ id: moduleId, owner: module.owner, sha256: record.sha256 });
+      return;
+    }
+    const entry = await this.catalog.module(moduleId);
+    await this.catalog.report({ id: entry.id, owner: entry.owner, sha256: entry.zip.sha256 });
   }
 
   /** The modules installed from the catalog, as they are now, for the update check. */
@@ -1518,6 +1544,8 @@ export class Host {
         return this.installModule();
       case "install-catalog-module":
         return this.installCatalogModule(action.moduleId);
+      case "report-catalog-module":
+        return this.reportCatalogModule(action.moduleId);
       case "apply-module-update":
         return this.applyCatalogUpdate(action.moduleId, action.version);
       case "delete-module-data":
@@ -1688,14 +1716,14 @@ export class Host {
 
   private async chooseGameImage(gameId: string): Promise<void> {
     if (!isLive(this.library, gameId)) throw new LibraryError("error.gameGone");
-    const picked = await dialog.showOpenDialog(this.window, {
+    const source = await this.pickPath("game-image", {
       title: translate(this.language, "dialog.chooseIcon"),
       properties: ["openFile"],
       filters: [{ name: translate(this.language, "dialog.images"), extensions: ["png", "jpg", "jpeg", "webp"] }],
     });
-    const source = picked.filePaths[0];
-    if (picked.canceled || !source) return;
+    if (!source) return;
     const file = await importIcon(this.iconDir, gameId, source);
+    this.rememberPicked("game-image", source);
     const previous = setGameImage(this.library, gameId, file);
     await this.dropIconFile(previous);
   }
@@ -2384,6 +2412,32 @@ export class Host {
     if (!game) return;
     for (const record of this.records(game.id)) this.createView(record, game);
     this.layoutEpoch++;
+    if ([...this.views.values()].some((view) => view instanceof ModuleView)) {
+      this.endOpening();
+      this.opening = { startedAt: performance.now(), timer: setTimeout(() => this.endOpening(true), OPENING_CAP_MS) };
+    }
+  }
+
+  /** The game has opened once the host UI placed its panels and every visible module page has its data. */
+  private openingDone(): boolean {
+    if (this.panelBounds.size === 0) return false;
+    for (const instanceId of this.panelBounds.keys()) {
+      const view = this.views.get(instanceId);
+      if (view instanceof ModuleView && !view.revealed) return false;
+    }
+    return true;
+  }
+
+  /** Ends the wait for a game's panels; `show` places them and tells the host UI, which takes its loading cover away. */
+  private endOpening(show = false): void {
+    if (!this.opening) return;
+    clearTimeout(this.opening.timer);
+    const took = performance.now() - this.opening.startedAt;
+    this.opening = null;
+    if (!show) return;
+    timings.record("game-open", took);
+    this.applyBounds();
+    this.pushState();
   }
 
   /** openedAt is when the player asked for the panel; its time to a loaded page is measured from there. */
@@ -2409,7 +2463,10 @@ export class Host {
       baseCss: (moduleCss ??= moduleBaseCss(MODULE_FONTS)),
       ...(this.options.moduleStorageLimit === undefined ? {} : { storageLimit: this.options.moduleStorageLimit }),
       onStorageOver: () => void this.purgeModuleStorage(module.manifest.id, game.id),
-      onReveal: () => this.applyBounds(),
+      onReveal: () => {
+        this.applyBounds();
+        this.pushStateSoon();
+      },
       onOpenLink: (url) => this.openLinkFromModule(url),
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
       launch: () => this.launchOf(record),
@@ -2426,7 +2483,7 @@ export class Host {
           measured = true;
           timings.record("panel-open", performance.now() - openedAt!);
         }
-        this.pushState();
+        this.pushStateSoon();
       },
     });
     const contentsId = view.webContentsId;
@@ -2655,6 +2712,7 @@ export class Host {
   }
 
   private closeAllViews(): void {
+    this.endOpening();
     for (const instanceId of [...this.views.keys()]) this.destroyView(instanceId);
     this.panelBounds.clear();
   }
@@ -2687,11 +2745,13 @@ export class Host {
    * tab are hidden and paused, as are all panels while the window is.
    */
   private applyBounds(): void {
+    if (this.opening && this.openingDone()) return this.endOpening(true);
     for (const [instanceId, view] of this.views) {
       const rect = this.panelBounds.get(instanceId);
       if (rect) view.setBounds(rect);
-      // A module page stays hidden until it has its data, so switching games does not show it building itself.
-      view.setVisible(rect !== undefined && !this.overlay && (!(view instanceof ModuleView) || view.revealed));
+      // A module page stays hidden until it has its data, so switching games does not show it building itself;
+      // while a game opens, every panel waits for the others.
+      view.setVisible(rect !== undefined && !this.overlay && !this.opening && (!(view instanceof ModuleView) || view.revealed));
       if (rect && !this.windowHidden) view.resume();
       else view.suspend();
     }
@@ -2859,6 +2919,7 @@ export class Host {
         version: module.manifest.version,
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
+        fromCatalog: this.catalogModules.has(module.manifest.id),
         publisher: this.publisherOf(module),
         publisherName: ((key) => (key ? this.publisherNames.name(key) : null))(this.publisherOf(module)),
         localDataWaiting: this.localDataWaiting(module),
@@ -2903,16 +2964,22 @@ export class Host {
         const name = type?.name ?? this.modules.get(record.moduleId)!.manifest.name;
         const panelType = record.panelType ?? null;
         const openedFrom = this.openedFrom.get(record.instanceId);
-        if (type === undefined) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: record.panelType ?? name, status: "unavailable" as const, content: null };
+        if (type === undefined) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: record.panelType ?? name, status: "unavailable" as const, waiting: false, content: null };
         const content = record.content?.title ?? null;
-        if (!(view instanceof BrowserPanel)) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status: view?.status ?? "loading", content };
+        if (!(view instanceof BrowserPanel)) {
+          const status = view?.status ?? "loading";
+          // Hidden until its page has its data.
+          const waiting = (status === "loading" || status === "ready") && !view?.revealed;
+          return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status, waiting, content };
+        }
         const browser = view.state;
         // A Browser tab is named after its page, like a browser tab.
         const title = (browser.title || browser.host).trim().slice(0, 80);
-        return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: title || name, status: view.status, content: null, browser, ...(openedFrom ? { openedFrom } : {}) };
+        return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: title || name, status: view.status, waiting: false, content: null, browser, ...(openedFrom ? { openedFrom } : {}) };
       }),
       layout: workspace.layout,
       layoutEpoch: this.layoutEpoch,
+      opening: this.opening !== null,
       pendingLink: this.pendingLink,
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
@@ -2959,11 +3026,38 @@ export class Host {
   }
 
   private pushState(): void {
+    clearImmediate(this.statePush);
+    this.statePush = undefined;
     if (!this.window.isDestroyed()) this.window.webContents.send("host:state", this.viewState());
+  }
+
+  private statePush: ReturnType<typeof setImmediate> | undefined;
+
+  /** Pushes the state once for a burst of changes, such as every panel of a game that just opened loading at once. */
+  private pushStateSoon(): void {
+    this.statePush ??= setImmediate(() => this.pushState());
   }
 
   private enqueue(write: () => Promise<void>, what: string): void {
     this.saving = this.saving.then(write).catch((error: unknown) => console.error(`[tavora] could not save ${what}`, error));
+  }
+
+  /**
+   * The system's open dialog, opening in the folder the player last picked from in this `place` while
+   * that folder is still there. Answers with what was picked, or nothing when cancelled; the caller
+   * remembers it (rememberPicked) only once it worked, so a zip that failed to install is not where it opens next.
+   */
+  private async pickPath(place: DialogPlace, options: OpenDialogOptions): Promise<string | undefined> {
+    const folder = this.library.dialogFolders[place];
+    const picked = await dialog.showOpenDialog(this.window, { ...options, ...(folder && existsSync(folder) ? { defaultPath: folder } : {}) });
+    const file = picked.filePaths[0];
+    return picked.canceled || !file ? undefined : file;
+  }
+
+  /** The dialog for `place` opens next time in the folder `picked` is in (for a picked folder, its parent), and the library is saved. */
+  private rememberPicked(place: DialogPlace, picked: string): void {
+    this.library.dialogFolders[place] = path.dirname(path.resolve(picked));
+    this.saveLibrary();
   }
 
   private saveLibrary(): void {

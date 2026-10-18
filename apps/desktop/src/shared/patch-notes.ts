@@ -19,6 +19,44 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.11",
+    date: "2026-10-18",
+    title: "Roomier, friendlier Settings",
+    notes: [
+      "Settings and the module library are bigger and easier to find your way around. Each page is split into small groups, and the texts are short and to the point.",
+      "Settings has two new pages: Online, for the online features and game icons, and About, for updates, patch notes, backups and diagnostic info. Grayscale text moved to Appearance.",
+      "Website access for modules is now in Settings > Modules, next to the modules themselves.",
+      "The module library shows modules as cards. Pick All, In this game, a kind of module or the Catalog on the left.",
+    ],
+  },
+  {
+    version: "0.18.10",
+    date: "2026-10-18",
+    title: "Games open all at once",
+    notes: [
+      "Switching to a game or workspace no longer fills in panel by panel: Tavora's campfire, with embers rising from it, covers the workspace until every panel you can see has loaded, and then they all show together.",
+      "A panel you add shows the same campfire while it loads.",
+    ],
+  },
+  {
+    version: "0.18.9",
+    date: "2026-10-18",
+    title: "Report a module",
+    notes: [
+      "A module in the catalog that does something harmful, or isn't what it says, can be reported to Tavora: Report in the Browse tab of the module library, or in Settings > Modules for one you installed from the catalog.",
+      "A person at Tavora looks at every report. The report names only the module, its publisher key and its file, nothing about you.",
+    ],
+  },
+  {
+    version: "0.18.8",
+    date: "2026-10-18",
+    title: "Quicker module library and file dialogs",
+    notes: [
+      "The module library stays open when you add one panel of a module with several panels, so you can add the next one straight away. Add all panels opens one of each.",
+      "Install from zip, the game picture, development folders and the module pictures folder open where you last picked from, once that pick worked.",
+    ],
+  },
+  {
     version: "0.18.7",
     date: "2026-10-18",
     title: "Tidy up many games at once",

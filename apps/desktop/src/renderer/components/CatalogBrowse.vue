@@ -2,6 +2,7 @@
 // The Catalog view of the module library: modules from Tavora's catalog for this game or personal
 // workspace, as cards like the installed ones. The main process fetches and checks the list and does the install (catalog-client.ts);
 // every text here is shown as plain text, and "by <name>" is only the developer name the service gave.
+// Report asks once more on the card, then sends only the module id, its key and its zip's hash (C12).
 import { computed, onMounted, ref, watch } from "vue";
 import type { CatalogListResult, CatalogModuleView } from "../../shared/host-api";
 import { act, addModule, api, dialog, openSettings, state, type AddModuleRequest } from "../host";
@@ -16,6 +17,10 @@ const emit = defineEmits<{ count: [number | null] }>();
 const result = ref<CatalogListResult | null>(null);
 const installing = ref<string | null>(null);
 const errors = ref<Record<string, string>>({});
+/** The module whose Report is waiting for the player's yes, the one being sent, and those sent. */
+const reportAsk = ref<string | null>(null);
+const reporting = ref<string | null>(null);
+const reported = ref<Set<string>>(new Set());
 
 async function load() {
   result.value = null;
@@ -55,6 +60,15 @@ async function install(module: CatalogModuleView) {
   if (!outcome.ok) errors.value = { ...errors.value, [module.id]: outcome.error };
 }
 
+async function report(module: CatalogModuleView) {
+  reporting.value = module.id;
+  const outcome = await act({ type: "report-catalog-module", moduleId: module.id }, { quiet: true });
+  reporting.value = null;
+  reportAsk.value = null;
+  if (outcome.ok) reported.value = new Set([...reported.value, module.id]);
+  else errors.value = { ...errors.value, [module.id]: outcome.error };
+}
+
 function add(moduleId: string) {
   addModule(moduleId, (dialog.value as AddModuleRequest).slot ?? null);
 }
@@ -86,8 +100,19 @@ function settings() {
             <p v-if="module.description" class="text-muted-foreground mt-1.5 line-clamp-2 text-sm" :title="module.description" data-testid="catalog-description">{{ module.description }}</p>
           </div>
           <p v-if="errors[module.id]" class="text-destructive text-sm" role="alert" :data-testid="`catalog-error-${module.id}`">{{ errors[module.id] }}</p>
+          <p v-if="reported.has(module.id)" class="text-muted-foreground text-sm" role="status" :data-testid="`catalog-reported-${module.id}`">{{ t("catalog.reported") }}</p>
+          <div v-else-if="reportAsk === module.id" class="bg-muted/40 flex flex-wrap items-center gap-2 rounded-md p-3" :data-testid="`catalog-report-ask-${module.id}`">
+            <p class="w-full text-sm">{{ t("catalog.reportAsk", { name: module.name }) }}</p>
+            <Button size="sm" variant="secondary" :disabled="reporting !== null" :data-testid="`catalog-report-send-${module.id}`" @click="report(module)">
+              {{ reporting === module.id ? t("catalog.reporting") : t("catalog.reportSend") }}
+            </Button>
+            <Button size="sm" variant="ghost" :disabled="reporting !== null" @click="reportAsk = null">{{ t("common.cancel") }}</Button>
+          </div>
           <div class="mt-auto flex items-center gap-2">
             <span class="text-muted-foreground min-w-0 flex-1 truncate text-xs" :title="asks(module) ?? undefined">{{ size(module.size) }}<template v-if="asks(module)"> · {{ asks(module) }}</template></span>
+            <Button v-if="!reported.has(module.id) && reportAsk !== module.id" size="sm" variant="ghost" class="text-muted-foreground shrink-0"
+              :data-testid="`catalog-report-${module.id}`" :aria-label="t('catalog.reportLabel', { name: module.name })" @click="reportAsk = module.id"
+            >{{ t("catalog.report") }}</Button>
             <Button v-if="installed.has(module.id)" size="sm" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary shrink-0"
               :data-testid="`catalog-add-${module.id}`" :aria-label="t('addModule.addLabel', { name: module.name })" @click="add(module.id)"
             >{{ t("common.add") }}</Button>
