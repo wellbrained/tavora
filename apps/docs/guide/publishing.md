@@ -67,8 +67,8 @@ If the module breaks the rules, Tavora can take it out of the catalog (players w
 
 Tavora can hand your modules to a new key, but only if the old key was linked to your account. It signs a statement, offline with its own key, that the new key replaces the old one. Players' Tavora then takes updates signed by the new key for the old key's modules, and their data stays where it was.
 
-- **Leaked:** make a new key, link it to the same account, and ask Tavora to revoke the old key and move your modules to the new one. Ask privately, through **Report a vulnerability** on the repository's [Security tab](https://github.com/wellbrained/tavora/security). A revoked key can't publish or install anything new. Modules players already have keep running, and so do the zips Tavora lists as published before the revocation.
-- **Lost:** make and link a new key the same way, and ask for the move through the same tab.
+- **Leaked:** make a new key, link it to the same account, and ask Tavora to revoke the old key and move your modules to the new one. Ask by email to [tavora.app@gmail.com](mailto:tavora.app@gmail.com), from the address your account uses if it has one. A revoked key can't publish or install anything new. Modules players already have keep running, and so do the zips Tavora lists as published before the revocation.
+- **Lost:** make and link a new key the same way, and email the same address to ask for the move.
 
 Once Tavora has signed the statement, publish new versions of your modules with the new key as usual. The catalog takes them because the statement names your account, and players' Tavora updates to them and keeps their data.
 
