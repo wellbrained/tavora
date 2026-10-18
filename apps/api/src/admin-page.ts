@@ -29,16 +29,13 @@ export const ADMIN_HTML = `<!doctype html>
 </header>
 <main>
   <section id="panel-pending" role="tabpanel">
-    <p class="hint">Check that each icon really is the game's own, then approve it. Deny and block refuses the same file for ever.</p>
     <div id="pending" class="grid"></div>
   </section>
   <section id="panel-hosted" role="tabpanel" hidden>
-    <p class="hint">Take down removes an icon at once, for a publisher's request. Release icons also have to be removed from the repository and deployed.</p>
-    <input id="search" type="search" placeholder="Search by game name" autocomplete="off">
+    <input id="search" type="search" placeholder="Search games" autocomplete="off">
     <div id="hosted" class="grid"></div>
   </section>
   <section id="panel-reports" role="tabpanel" hidden>
-    <p class="hint">Modules players reported from the catalog, most reported first. Delist takes the module out of the catalog; players who installed it keep it. To turn it off on players' PCs, block the zip's SHA-256 or revoke the key in a list signed with pnpm tavora-catalog-sign, then serve it with tavora-api-catalog set-list.</p>
     <div id="reports" class="grid"></div>
   </section>
 </main>
@@ -63,21 +60,21 @@ nav { display: flex; gap: 6px; }
 .tab { background: transparent; color: var(--muted); }
 .tab[aria-selected="true"] { background: var(--card); color: var(--text); border-color: var(--gold); }
 input[type="search"] { font: inherit; font-size: 16px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 9px 12px; width: 100%; max-width: 320px; margin: 0 0 12px; }
-.hint, #status { color: var(--muted); margin: 0 0 12px; }
-#status { margin: 0 0 0 auto; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-.previews { display: flex; align-items: center; gap: 10px; }
-.tile { width: 96px; height: 96px; border-radius: 24px; background: #6b4a2f; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
+#status { color: var(--muted); margin: 0 0 0 auto; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 8px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.tile { flex: none; width: 48px; height: 48px; border-radius: 12px; background: #6b4a2f; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
 .tile img { width: 88%; height: 88%; object-fit: contain; }
-.tile.small { width: 48px; height: 48px; border-radius: 12px; }
-.light { background: #eee; border-radius: 8px; padding: 4px; }
-.light img { width: 64px; height: 64px; display: block; }
-.name { font-weight: 600; }
-.meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
-.warn { color: var(--bad); font-weight: 600; }
-.row { display: flex; gap: 8px; flex-wrap: wrap; }
-button { font: inherit; font-size: 16px; font-weight: 500; background: #2c2420; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 16px; cursor: pointer; }
+.info { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.name { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.badge { font-size: 12px; line-height: 1; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.badge.ok { border-color: var(--ok); color: var(--ok); }
+.badge.bad { border-color: var(--bad); color: var(--bad); }
+.badge.gold { border-color: var(--gold); color: var(--gold); }
+.row { flex: none; display: flex; gap: 6px; }
+button { font: inherit; font-size: 15px; font-weight: 500; background: #2c2420; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+.row button { font-size: 13px; padding: 6px 10px; }
 button:hover { border-color: var(--gold); }
 button.ok { border-color: var(--ok); color: var(--ok); }
 button.bad { border-color: var(--bad); color: var(--bad); }
@@ -126,24 +123,39 @@ async function imageUrl(path) {
   return url;
 }
 
-function pictures(url) {
-  const box = el("div", "previews");
-  const big = el("div", "tile");
-  const small = el("div", "tile small");
-  const light = el("div", "light");
-  for (const holder of [big, small, light]) {
-    const img = document.createElement("img");
-    img.src = url;
-    img.alt = "";
-    holder.appendChild(img);
-    box.appendChild(holder);
-  }
-  return box;
+function logo(url) {
+  const tile = el("div", "tile");
+  const img = document.createElement("img");
+  img.src = url;
+  img.alt = "";
+  tile.appendChild(img);
+  return tile;
 }
 
-function button(label, className, action) {
+function badge(text, className) {
+  return el("span", "badge" + (className ? " " + className : ""), text);
+}
+
+// one row: logo (if any), name with its badges, then the buttons
+function card(picture, name, badges, buttons) {
+  const node = el("div", "card");
+  if (picture) node.appendChild(picture);
+  const info = el("div", "info");
+  const title = el("div", "name", name);
+  title.title = name;
+  const tags = el("div", "badges");
+  tags.append(...badges);
+  info.append(title, tags);
+  const actions = el("div", "row");
+  actions.append(...buttons);
+  node.append(info, actions);
+  return node;
+}
+
+function button(label, className, action, hint) {
   const node = el("button", className, label);
   node.type = "button";
+  if (hint) node.title = hint;
   node.addEventListener("click", async () => {
     node.disabled = true;
     try { await action(); await load(); } catch (error) { status(String(error.message || error)); node.disabled = false; }
@@ -151,66 +163,58 @@ function button(label, className, action) {
   return node;
 }
 
-function kb(bytes) { return (bytes / 1024).toFixed(1) + " KB"; }
-
 async function pendingCard(row) {
-  const card = el("div", "card");
-  card.appendChild(pictures(await imageUrl("/api/pending/" + row.sha256 + ".png")));
-  card.appendChild(el("div", "name", row.gameName || "(unknown game)"));
-  card.appendChild(el("div", "meta", "id " + row.id + " · offered as \\u201c" + row.name + "\\u201d · from " + row.source));
-  card.appendChild(el("div", "meta", kb(row.size) + " · offered " + row.count + (row.count === 1 ? " time" : " times") + " · first " + row.firstSeen.slice(0, 16).replace("T", " ")));
-  card.appendChild(el("div", "meta", row.sha256.slice(0, 16) + "\\u2026"));
-  if (row.hasIcon) card.appendChild(el("div", "warn", "This game already has a hosted icon."));
-  const actions = el("div", "row");
   const approve = button("Approve", "ok", async () => {
     const response = await call("/api/approve", { sha256: row.sha256 });
-    if (!response.ok) throw new Error((await response.json()).error || "Could not approve.");
+    if (!response.ok) throw new Error((await response.json()).error || "Couldn't approve.");
   });
   approve.disabled = row.hasIcon;
-  actions.appendChild(approve);
-  actions.appendChild(button("Deny", "", () => call("/api/deny", { sha256: row.sha256, block: false })));
-  actions.appendChild(button("Deny and block", "bad", () => call("/api/deny", { sha256: row.sha256, block: true })));
-  card.appendChild(actions);
-  return card;
+  return card(
+    logo(await imageUrl("/api/pending/" + row.sha256 + ".png")),
+    row.gameName || "(unknown game)",
+    [row.hasIcon ? badge("has an icon", "bad") : badge("new", "gold")],
+    [
+      approve,
+      button("Deny", "bad", () => call("/api/deny", { sha256: row.sha256, block: false })),
+    ],
+  );
 }
 
 async function hostedCard(icon) {
-  const card = el("div", "card");
-  card.appendChild(pictures(await imageUrl("/api/hosted/" + icon.id + ".png")));
-  card.appendChild(el("div", "name", icon.names[0]));
-  card.appendChild(el("div", "meta", "id " + icon.id + " · " + icon.origin + " · " + kb(icon.size)));
-  card.appendChild(el("div", "meta", "also known as: " + icon.names.slice(1).join(", ")));
-  const actions = el("div", "row");
-  actions.appendChild(button("Take down", "bad", async () => {
-    if (!confirm("Take down the icon for " + icon.names[0] + "?")) return;
-    await call("/api/takedown", { id: icon.id, block: false });
-  }));
-  actions.appendChild(button("Take down and block", "bad", async () => {
-    if (!confirm("Take down the icon for " + icon.names[0] + " and refuse this file for ever?")) return;
-    await call("/api/takedown", { id: icon.id, block: true });
-  }));
-  card.appendChild(actions);
-  return card;
+  const name = icon.names[0];
+  return card(
+    logo(await imageUrl("/api/hosted/" + icon.id + ".png")),
+    name,
+    [badge(icon.origin, icon.origin === "release" ? "" : "ok")],
+    [
+      button("Take down", "bad", async () => {
+        if (!confirm("Take down " + name + "?")) return;
+        await call("/api/takedown", { id: icon.id, block: false });
+      }),
+      button("Block", "bad", async () => {
+        if (!confirm("Take down " + name + " and never take this file again?")) return;
+        await call("/api/takedown", { id: icon.id, block: true });
+      }, "Take down and never take this file again"),
+    ],
+  );
 }
 
 function reportCard(report) {
-  const card = el("div", "card");
-  card.appendChild(el("div", "name", report.name + " " + report.version));
-  card.appendChild(el("div", "meta", "id " + report.id + " \u00b7 key " + report.owner + (report.listed ? "" : " \u00b7 delisted")));
-  card.appendChild(el("div", "meta", "reported " + report.count + (report.count === 1 ? " time" : " times") + " \u00b7 first " + report.firstAt.slice(0, 16).replace("T", " ") + " \u00b7 last " + report.lastAt.slice(0, 16).replace("T", " ")));
-  card.appendChild(el("div", "meta", "sha256 " + report.sha256));
-  const actions = el("div", "row");
-  if (report.listed) {
-    actions.appendChild(button("Delist", "bad", async () => {
-      if (!confirm("Take " + report.name + " out of the catalog?")) return;
+  const toggle = report.listed
+    ? button("Hide", "bad", async () => {
+      if (!confirm("Hide " + report.name + " from the catalog?")) return;
       await call("/api/catalog/listed", { id: report.id, listed: false });
-    }));
-  } else {
-    actions.appendChild(button("Relist", "ok", () => call("/api/catalog/listed", { id: report.id, listed: true })));
-  }
-  actions.appendChild(button("Dismiss", "", () => call("/api/reports/dismiss", { sha256: report.sha256 })));
-  card.appendChild(actions);
-  return card;
+    })
+    : button("Show", "ok", () => call("/api/catalog/listed", { id: report.id, listed: true }));
+  return card(
+    null,
+    report.name + " " + report.version,
+    [
+      report.listed ? badge("in catalog", "ok") : badge("hidden", "bad"),
+      badge(report.count + (report.count === 1 ? " report" : " reports"), "gold"),
+    ],
+    [toggle, button("Dismiss", "", () => call("/api/reports/dismiss", { sha256: report.sha256 }))],
+  );
 }
 
 async function fill(id, items, make, empty) {
@@ -232,16 +236,16 @@ async function render() {
   for (const url of urls.splice(0)) URL.revokeObjectURL(url);
   // only the open tab loads its pictures
   if (tab === "pending") {
-    await fill("pending", data.pending, pendingCard, "Nothing is waiting.");
+    await fill("pending", data.pending, pendingCard, "All clear!");
     return;
   }
   if (tab === "reports") {
-    await fill("reports", data.reports, reportCard, "No module has been reported.");
+    await fill("reports", data.reports, reportCard, "No reports. Nice!");
     return;
   }
   const query = $("search").value.trim().toLowerCase();
   const shown = data.hosted.filter((icon) => !query || icon.id.includes(query) || icon.names.some((name) => name.toLowerCase().includes(query)));
-  await fill("hosted", shown, hostedCard, data.hosted.length ? "No hosted icon matches." : "No icons are hosted.");
+  await fill("hosted", shown, hostedCard, data.hosted.length ? "No matches." : "No icons yet.");
 }
 
 async function load() {
