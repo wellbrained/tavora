@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import type { AccountDevice, HostAction } from "../../../shared/host-api";
 import { account, act, confirmAction, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
+import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
 defineProps<{ highlight: string | null }>();
@@ -146,12 +147,11 @@ function startDelete() {
 
 <template>
   <section data-testid="account">
-    <h3 class="text-lg font-semibold">{{ t("account.title") }}</h3>
-    <p class="text-muted-foreground mt-1 mb-4">{{ t("account.intro") }}</p>
+    <p class="text-muted-foreground mb-6 max-w-prose text-sm">{{ t("account.intro") }}</p>
 
     <!-- Signed out: an address, then its code, then (for a new address) yes to an account. -->
-    <template v-if="!signedIn">
-      <div v-if="creating" class="flex flex-col gap-3 border-b pb-4" data-setting="account">
+    <SettingGroup v-if="!signedIn" :title="t('account.title')">
+      <div v-if="creating" class="flex flex-col gap-3 py-4" data-setting="account">
         <span class="font-medium">{{ t("account.create.label") }}</span>
         <span v-if="pending?.kind === 'discord-create'" class="text-muted-foreground">{{ t("account.create.descriptionDiscord", { name: pending.name }) }}</span>
         <span v-else-if="pending?.kind === 'sign-in'" class="text-muted-foreground">{{ t("account.create.description", { email: pending.email }) }}</span>
@@ -167,7 +167,7 @@ function startDelete() {
 
       <form
         v-else-if="pending?.kind === 'sign-in'"
-        class="flex flex-col gap-3 border-b pb-4"
+        class="flex flex-col gap-3 py-4"
         data-setting="account"
         @submit.prevent="codeReady && run({ type: 'account-verify', code: cleanCode })"
       >
@@ -182,7 +182,7 @@ function startDelete() {
         </div>
       </form>
 
-      <form v-else class="flex flex-col gap-3 border-b pb-4" data-setting="account" @submit.prevent="email.trim() && run({ type: 'account-send-code', email })">
+      <form v-else class="flex flex-col gap-3 py-4" data-setting="account" @submit.prevent="email.trim() && run({ type: 'account-send-code', email })">
         <span class="font-medium">{{ t("account.email.label") }}</span>
         <div class="flex gap-2">
           <Input v-model="email" type="email" class="max-w-80" autocomplete="email" maxlength="254" :placeholder="t('account.email.placeholder')" :aria-label="t('account.email.label')" data-testid="account-email" />
@@ -196,21 +196,26 @@ function startDelete() {
           </div>
         </template>
       </form>
-    </template>
+    </SettingGroup>
 
     <!-- Signed in. -->
     <template v-else>
-      <SettingRow v-if="view?.profileChoice" :label="t('account.profileChoice.label')" :description="t('account.profileChoice.description', { profile: accountProfile })" data-testid="account-profile-choice">
-        <div class="flex flex-none gap-2">
-          <Button variant="secondary" :disabled="busy" data-testid="account-keep-pc" @click="run({ type: 'account-profile-choice', keep: 'pc' })">{{ t("account.profileChoice.keepPc") }}</Button>
-          <Button :disabled="busy" data-testid="account-keep-account" @click="run({ type: 'account-profile-choice', keep: 'account' })">{{ t("account.profileChoice.useAccount") }}</Button>
-        </div>
-      </SettingRow>
+      <SettingGroup v-if="view?.profileChoice">
+        <SettingRow :label="t('account.profileChoice.label')" :description="t('account.profileChoice.description', { profile: accountProfile })" data-testid="account-profile-choice">
+          <div class="flex flex-none gap-2">
+            <Button variant="secondary" :disabled="busy" data-testid="account-keep-pc" @click="run({ type: 'account-profile-choice', keep: 'pc' })">{{ t("account.profileChoice.keepPc") }}</Button>
+            <Button :disabled="busy" data-testid="account-keep-account" @click="run({ type: 'account-profile-choice', keep: 'account' })">{{ t("account.profileChoice.useAccount") }}</Button>
+          </div>
+        </SettingRow>
+      </SettingGroup>
 
-      <div class="border-b pt-1 pb-2" data-setting="account" :data-highlighted="highlight === 'account' || undefined" data-testid="account-methods">
-        <span class="font-medium">{{ t("account.methods.title") }}</span>
-        <p class="text-muted-foreground mt-1 text-sm">{{ t("account.methods.hint") }}</p>
-      </div>
+      <SettingGroup
+        :title="t('account.methods.title')"
+        :description="t('account.methods.hint')"
+        data-setting="account"
+        :data-highlighted="highlight === 'account' || undefined"
+        data-testid="account-methods"
+      >
       <SettingRow :label="t('account.methods.email')" :description="signedIn.email ?? t('account.methods.emailNone')">
         <div v-if="!changing && pending?.kind !== 'change-email' && pending?.kind !== 'remove-email'" class="flex flex-none gap-2">
           <Button v-if="signedIn.email && signedIn.discord" variant="ghost" :disabled="busy" data-testid="account-remove-email" @click="run({ type: 'account-email-remove-code' })">{{ t("account.email.remove") }}</Button>
@@ -280,10 +285,12 @@ function startDelete() {
         </div>
       </form>
 
-      <div class="border-b py-4">
-        <span class="font-medium">{{ t("account.devices.title") }}</span>
-        <p v-if="!view?.devices" class="text-muted-foreground mt-1">{{ t("account.devices.unknown") }}</p>
-        <ul v-else class="mt-2" data-testid="account-devices">
+      </SettingGroup>
+
+      <SettingGroup :title="t('account.devices.title')">
+      <div class="py-3">
+        <p v-if="!view?.devices" class="text-muted-foreground text-sm">{{ t("account.devices.unknown") }}</p>
+        <ul v-else data-testid="account-devices">
           <li v-for="device in view.devices" :key="device.id" class="flex min-h-10 items-center gap-3" :data-testid="`account-device-${device.id}`">
             <span class="flex-1">
               {{ t("account.devices.entry", { device: osName(device), date: formatDate(device.createdAt) }) }}
@@ -293,13 +300,13 @@ function startDelete() {
           </li>
         </ul>
       </div>
+      </SettingGroup>
 
       <!-- The developer side: only matters to people who make modules. -->
-      <div class="border-b py-4" data-testid="account-developer">
-        <span class="font-medium">{{ t("account.developer.title") }}</span>
-        <p class="text-muted-foreground mt-1 text-sm">{{ t("account.developer.hint") }}</p>
+      <SettingGroup :title="t('account.developer.title')" :description="t('account.developer.hint')">
+      <div class="py-4" data-testid="account-developer">
 
-        <form class="mt-3 flex flex-col gap-1" @submit.prevent="saveDeveloperName">
+        <form class="flex flex-col gap-1" @submit.prevent="saveDeveloperName">
           <label class="text-sm font-medium" for="account-developer-name">{{ t("account.developer.name") }}</label>
           <div class="flex gap-2">
             <Input id="account-developer-name" v-model="developerName" class="max-w-60" maxlength="32" autocomplete="off" spellcheck="false" data-testid="account-developer-name" />
@@ -337,7 +344,9 @@ function startDelete() {
           </div>
         </div>
       </div>
+      </SettingGroup>
 
+      <SettingGroup :title="t('account.heading.manage')">
       <SettingRow :label="t('account.signOut')" :description="t('account.signOutHint')">
         <Button variant="secondary" :disabled="busy" data-testid="account-sign-out" @click="run({ type: 'account-sign-out' })">{{ t("account.signOut") }}</Button>
       </SettingRow>
@@ -357,6 +366,7 @@ function startDelete() {
       <SettingRow v-else :label="t('account.delete.label')" :description="t('account.delete.description')">
         <Button variant="destructive" :disabled="busy" data-testid="account-start-delete" @click="startDelete">{{ t("account.delete.label") }}</Button>
       </SettingRow>
+      </SettingGroup>
     </template>
 
     <p v-if="waitingDiscord" class="text-muted-foreground mt-4" role="status" data-testid="account-discord-waiting">{{ t("account.discord.waiting") }}</p>

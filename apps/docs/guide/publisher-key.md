@@ -46,7 +46,7 @@ The name is a label. What a player can install is still decided by the key's sig
 
 1. Raise `version` in `tavora.module.json` (and in `package.json`, to keep them the same). Tavora refuses a zip with the same or a lower version than the installed one.
 2. `npm run build`, then `npm run zip`, with the same key.
-3. Send the new zip. Players install it with **Settings > Modules > Install from zip**, over the old one, and keep their data.
+3. Send the new zip. Players install it with **Settings > Modules > Install zip**, over the old one, and keep their data.
 
 If the new version uses something from a newer SDK, raise [`minTavora`](../reference/manifest.md) too, so an older Tavora says it needs an update instead of loading a module it can't run. The [SDK changelog](../reference/changelog.md) says which Tavora each feature needs.
 

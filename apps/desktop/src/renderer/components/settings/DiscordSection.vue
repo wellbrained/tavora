@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { act, confirmAction, discord, gamesUsing, listOf, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
+import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
 defineProps<{ highlight: string | null }>();
@@ -50,28 +51,29 @@ function revoke(module: ModuleView) {
 </script>
 
 <template>
-  <section>
-    <h3 class="text-lg font-semibold">{{ t("integrations.discord.title") }}</h3>
-    <p class="text-muted-foreground mt-1 mb-4">{{ t("discord.settings.intro") }}</p>
+  <SettingGroup :title="t('integrations.discord.title')" :description="t('discord.settings.intro')">
     <SettingRow :label="t('settings.discord-connection.label')" :description="status" setting="discord-connection" :highlighted="highlight === 'discord-connection'">
+      <template #below>
+        <p class="text-muted-foreground/80 mt-1 text-xs" data-testid="discord-limited">{{ t("discord.settings.limited") }}</p>
+        <p v-if="view && !view.canSaveSignIn" class="text-muted-foreground/80 mt-1 text-xs">{{ t("discord.settings.cantKeep") }}</p>
+      </template>
       <Button v-if="connected || view?.user" variant="secondary" data-testid="discord-sign-out" @click="act({ type: 'discord-sign-out' })">{{ t("discord.settings.signOut") }}</Button>
       <Button v-else variant="secondary" data-testid="discord-settings-connect" @click="act({ type: 'discord-connect' })">{{ t("discord.settings.connect") }}</Button>
     </SettingRow>
-    <p class="text-muted-foreground mt-4 text-sm" data-testid="discord-limited">{{ t("discord.settings.limited") }}</p>
-    <p v-if="view && !view.canSaveSignIn" class="text-muted-foreground mt-2 text-sm">{{ t("discord.settings.cantKeep") }}</p>
-
-    <h4 class="mt-6 font-medium">{{ t("integrations.discord.modules") }}</h4>
-    <p v-if="!users.length" class="text-muted-foreground py-2 text-sm" data-testid="discord-users-none">{{ t("integrations.discord.noModules") }}</p>
-    <ul v-else class="flex flex-col" data-testid="discord-users">
-      <li v-for="module in users" :key="module.id" class="flex items-center gap-3 border-b py-2 last:border-b-0" :data-testid="`discord-user-${module.id}`">
-        <span class="bg-background text-primary flex size-8 flex-none items-center justify-center rounded-lg border" aria-hidden="true">
-          <ModuleIcon :module-id="module.id" size="size-4" />
-        </span>
-        <span class="min-w-0 flex-1 truncate font-medium">{{ module.name }}</span>
-        <Button variant="secondary" :aria-label="t('integrations.discord.revokeLabel', { name: module.name })" :data-testid="`discord-revoke-${module.id}`" @click="revoke(module)">
-          {{ t("integrations.grants.revoke") }}
-        </Button>
-      </li>
-    </ul>
-  </section>
+    <div class="py-4">
+      <p class="text-sm font-medium">{{ t("integrations.discord.modules") }}</p>
+      <p v-if="!users.length" class="text-muted-foreground pt-1 text-sm" data-testid="discord-users-none">{{ t("integrations.discord.noModules") }}</p>
+      <ul v-else class="mt-1 flex flex-col" data-testid="discord-users">
+        <li v-for="module in users" :key="module.id" class="flex items-center gap-3 border-b py-2 last:border-b-0" :data-testid="`discord-user-${module.id}`">
+          <span class="bg-background text-primary flex size-8 flex-none items-center justify-center rounded-lg border" aria-hidden="true">
+            <ModuleIcon :module-id="module.id" size="size-4" />
+          </span>
+          <span class="min-w-0 flex-1 truncate font-medium">{{ module.name }}</span>
+          <Button variant="secondary" :aria-label="t('integrations.discord.revokeLabel', { name: module.name })" :data-testid="`discord-revoke-${module.id}`" @click="revoke(module)">
+            {{ t("integrations.grants.revoke") }}
+          </Button>
+        </li>
+      </ul>
+    </div>
+  </SettingGroup>
 </template>

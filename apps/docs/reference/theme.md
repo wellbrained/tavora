@@ -6,7 +6,7 @@ A theme recolours Tavora and every module in it. It is data only: one `tavora.th
 
 ## Trying your own theme
 
-1. In Tavora, open **Settings > Appearance** and press **New theme** under "Your own themes". It copies the Tavora theme, Dark and Light, into a `my-theme` folder in your themes folder and opens it. The same starter is in the repository as [`examples/theme-starter`](https://github.com/wellbrained/tavora/tree/main/examples/theme-starter), and [Tavora's own themes](https://github.com/wellbrained/tavora/tree/main/themes) are good to copy too.
+1. In Tavora, open **Settings > Appearance** and press **New theme** under "Your themes". It copies the Tavora theme, Dark and Light, into a `my-theme` folder in your themes folder and opens it. The same starter is in the repository as [`examples/theme-starter`](https://github.com/wellbrained/tavora/tree/main/examples/theme-starter), and [Tavora's own themes](https://github.com/wellbrained/tavora/tree/main/themes) are good to copy too.
 2. Change the colours in its `tavora.theme.json`, and its `id` and `name` before you share it (ids starting with `tavora.` are reserved).
 3. Press **Reload**.
 

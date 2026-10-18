@@ -204,7 +204,7 @@ test("a pictures folder that moved to a drive that is gone gives a notice; Use d
   await running.page.getByTestId("rail-settings").click();
   await running.page.getByTestId("settings-nav-modules").click();
   await expect(running.page.getByTestId("module-files-path")).toContainText(gone);
-  await expect(running.page.getByTestId("module-files-path")).toContainText("cannot be found");
+  await expect(running.page.getByTestId("module-files-path")).toContainText("Can't find this folder");
   await running.app.close();
   await expect(access(path.dirname(gone))).rejects.toThrow();
 

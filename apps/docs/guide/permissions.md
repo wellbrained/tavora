@@ -30,7 +30,7 @@ When a player adds your module, Tavora shows its own dialog, which your page can
 
 How to get your name there is in [Your publisher key](./publisher-key.md#show-your-name).
 
-If the player cancels, the module isn't added. They can take a grant back any time in Settings > Integrations, which removes the module's panels. An update that asks for more keeps what was granted, and its panels offer the player to review the new hosts, which they can put off with **Not now**.
+If the player cancels, the module isn't added. They can take a grant back any time in Settings (Modules > Website access for websites, Integrations for Discord and AI usage), which removes the module's panels. An update that asks for more keeps what was granted, and its panels offer the player to review the new hosts, which they can put off with **Not now**.
 
 ## Check before you call
 
@@ -41,7 +41,7 @@ const tavora = await connect();
 const canFetch = tavora.host.capabilities.includes("network");
 ```
 
-Without a grant, the call fails with `PERMISSION_DENIED`, and `error.capability` names what is missing. Show something useful instead, such as "Allow api.example.com in Settings > Integrations to load prices", rather than an empty panel.
+Without a grant, the call fails with `PERMISSION_DENIED`, and `error.capability` names what is missing. Show something useful instead, such as "Allow api.example.com in Settings > Modules to load prices", rather than an empty panel.
 
 ```ts
 try {

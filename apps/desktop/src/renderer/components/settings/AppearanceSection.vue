@@ -2,7 +2,8 @@
 // Settings > Appearance: pick an installed theme and its variation. Each
 // card is a small preview of the theme drawn with its own colours, so a
 // theme can be judged before it is picked; picking applies it at once, and
-// Reset always goes back to the Tavora default.
+// Reset always goes back to the Tavora default. Below are how text and tabs
+// look, and the player's own themes.
 import { Check, CopyPlus, FolderOpen, RefreshCw } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import type { ThemeVariationView, ThemeView } from "../../../shared/host-api";
 import { act, state } from "../../host";
 import { t } from "../../i18n";
 import SegmentedControl from "./SegmentedControl.vue";
+import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
 defineProps<{ highlight: string | null }>();
@@ -30,6 +32,11 @@ function pick(theme: ThemeView) {
   const variation = theme.variations.find((item) => item.id === appearance.value.variationId) ?? theme.variations[0]!;
   void act({ type: "set-theme", themeId: theme.id, variationId: variation.id });
 }
+
+const grayscaleText = computed({
+  get: () => state.value!.library.grayscaleText,
+  set: (enabled: boolean) => void act({ type: "set-grayscale-text", enabled }),
+});
 
 const moduleIcons = computed({
   get: () => state.value!.library.moduleIcons,
@@ -68,122 +75,138 @@ const showVariation = computed(() => {
 </script>
 
 <template>
-
-  <div
-    :class="cn('-mx-3 rounded-lg border-b px-3 pt-2 pb-5 transition-colors duration-500', highlight === 'theme' && 'bg-primary/10')"
-    data-setting="theme"
-  >
-    <p class="font-medium">{{ t("settings.theme.label") }}</p>
-    <p class="text-muted-foreground mt-1 mb-4">{{ t("settings.theme.description") }}</p>
-    <div class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3" role="group" :aria-label="t('settings.theme.label')" data-testid="themes">
-      <button
-        v-for="theme in appearance.themes"
-        :key="theme.id"
-        type="button"
-        :aria-pressed="theme.id === appearance.themeId"
-        :class="
-          cn(
-            'bg-background hover:border-input flex flex-col overflow-hidden rounded-lg border text-left',
-            theme.id === appearance.themeId && 'border-primary ring-primary/40 hover:border-primary ring-1',
-          )
-        "
-        :data-testid="`theme-${theme.id}`"
-        @click="pick(theme)"
-      >
-        <!-- The preview: rail, window, a card with text and the primary button, in the theme's colours. -->
-        <span class="flex h-24 w-full" :style="{ background: previewOf(theme).colors.background }" aria-hidden="true">
-          <span class="flex w-7 flex-none flex-col items-center gap-1.5 pt-2.5" :style="{ background: previewOf(theme).colors.rail }">
-            <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.primary }" />
-            <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.secondary }" />
-            <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.secondary }" />
-          </span>
-          <span class="flex flex-1 p-2.5">
-            <span
-              class="flex flex-1 flex-col gap-1.5 border p-2"
-              :style="{
-                background: previewOf(theme).colors.card,
-                borderColor: previewOf(theme).colors.border,
-                borderRadius: `${previewOf(theme).radius}px`,
-              }"
-            >
-              <span class="h-1.5 w-3/4 rounded-full" :style="{ background: previewOf(theme).colors.foreground }" />
-              <span class="h-1.5 w-1/2 rounded-full" :style="{ background: previewOf(theme).colors['muted-foreground'] }" />
-              <span class="mt-auto flex gap-1.5">
-                <span class="h-3.5 w-10" :style="{ background: previewOf(theme).colors.primary, borderRadius: `${previewOf(theme).radius / 2}px` }" />
-                <span class="h-3.5 w-8" :style="{ background: previewOf(theme).colors.secondary, borderRadius: `${previewOf(theme).radius / 2}px` }" />
+  <SettingGroup>
+    <div
+      :class="cn('-mx-5 border-b px-5 pt-4 pb-5 transition-colors duration-500', highlight === 'theme' && 'bg-primary/10')"
+      data-setting="theme"
+    >
+      <p class="font-medium">{{ t("settings.theme.label") }}</p>
+      <p class="text-muted-foreground mt-0.5 mb-4 text-sm">{{ t("settings.theme.description") }}</p>
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3" role="group" :aria-label="t('settings.theme.label')" data-testid="themes">
+        <button
+          v-for="theme in appearance.themes"
+          :key="theme.id"
+          type="button"
+          :aria-pressed="theme.id === appearance.themeId"
+          :class="
+            cn(
+              'bg-background hover:border-input flex flex-col overflow-hidden rounded-lg border text-left',
+              theme.id === appearance.themeId && 'border-primary ring-primary/40 hover:border-primary ring-1',
+            )
+          "
+          :data-testid="`theme-${theme.id}`"
+          @click="pick(theme)"
+        >
+          <!-- The preview: rail, window, a card with text and the primary button, in the theme's colours. -->
+          <span class="flex h-24 w-full" :style="{ background: previewOf(theme).colors.background }" aria-hidden="true">
+            <span class="flex w-7 flex-none flex-col items-center gap-1.5 pt-2.5" :style="{ background: previewOf(theme).colors.rail }">
+              <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.primary }" />
+              <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.secondary }" />
+              <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.secondary }" />
+            </span>
+            <span class="flex flex-1 p-2.5">
+              <span
+                class="flex flex-1 flex-col gap-1.5 border p-2"
+                :style="{
+                  background: previewOf(theme).colors.card,
+                  borderColor: previewOf(theme).colors.border,
+                  borderRadius: `${previewOf(theme).radius}px`,
+                }"
+              >
+                <span class="h-1.5 w-3/4 rounded-full" :style="{ background: previewOf(theme).colors.foreground }" />
+                <span class="h-1.5 w-1/2 rounded-full" :style="{ background: previewOf(theme).colors['muted-foreground'] }" />
+                <span class="mt-auto flex gap-1.5">
+                  <span class="h-3.5 w-10" :style="{ background: previewOf(theme).colors.primary, borderRadius: `${previewOf(theme).radius / 2}px` }" />
+                  <span class="h-3.5 w-8" :style="{ background: previewOf(theme).colors.secondary, borderRadius: `${previewOf(theme).radius / 2}px` }" />
+                </span>
               </span>
             </span>
           </span>
-        </span>
-        <span class="bg-card flex flex-1 flex-col gap-0.5 border-t px-3 py-2.5">
-          <span class="flex items-center gap-2">
-            <span class="truncate font-medium">{{ theme.name }}</span>
-            <span
-              :class="cn('flex-none rounded-sm border px-1.5 text-xs', theme.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
-              >{{ theme.provenance === "official" ? t("common.official") : t("common.local") }}</span
-            >
-            <Check v-if="theme.id === appearance.themeId" class="text-primary ml-auto size-4 flex-none" :stroke-width="1.5" />
+          <span class="bg-card flex flex-1 flex-col gap-0.5 border-t px-3 py-2.5">
+            <span class="flex items-center gap-2">
+              <span class="truncate font-medium">{{ theme.name }}</span>
+              <span
+                :class="cn('flex-none rounded-sm border px-1.5 text-xs', theme.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
+                >{{ theme.provenance === "official" ? t("common.official") : t("common.local") }}</span
+              >
+              <Check v-if="theme.id === appearance.themeId" class="text-primary ml-auto size-4 flex-none" :stroke-width="1.5" />
+            </span>
+            <span v-if="theme.description" class="text-muted-foreground line-clamp-2 text-xs">{{ theme.description }}</span>
+            <span v-if="theme.variations.length > 1" class="text-muted-foreground text-xs">{{ theme.variations.map((item) => item.name).join(" · ") }}</span>
           </span>
-          <span v-if="theme.description" class="text-muted-foreground line-clamp-2 text-xs">{{ theme.description }}</span>
-          <span v-if="theme.variations.length > 1" class="text-muted-foreground text-xs">{{ theme.variations.map((item) => item.name).join(" · ") }}</span>
-        </span>
-      </button>
+        </button>
+      </div>
     </div>
-  </div>
+    <SettingRow
+      :label="t('settings.appearance-mode.label')"
+      :description="t('settings.appearance-mode.description')"
+      setting="appearance-mode"
+      :highlighted="highlight === 'appearance-mode'"
+    >
+      <SegmentedControl v-model="mode" :label="t('settings.appearance-mode.label')" :options="modeOptions" />
+    </SettingRow>
+    <SettingRow
+      v-if="showVariation"
+      :label="t('settings.theme-variation.label')"
+      :description="t('settings.theme-variation.description', { name: active?.name ?? '' })"
+      setting="theme-variation"
+      :highlighted="highlight === 'theme-variation'"
+    >
+      <SegmentedControl v-model="variation" :label="t('settings.theme-variation.label')" :options="variationOptions" />
+    </SettingRow>
+  </SettingGroup>
 
-  <SettingRow
-    :label="t('settings.appearance-mode.label')"
-    :description="t('settings.appearance-mode.description')"
-    setting="appearance-mode"
-    :highlighted="highlight === 'appearance-mode'"
-  >
-    <SegmentedControl v-model="mode" :label="t('settings.appearance-mode.label')" :options="modeOptions" />
-  </SettingRow>
-  <SettingRow
-    v-if="showVariation"
-    :label="t('settings.theme-variation.label')"
-    :description="t('settings.theme-variation.description', { name: active?.name ?? '' })"
-    setting="theme-variation"
-    :highlighted="highlight === 'theme-variation'"
-  >
-    <SegmentedControl v-model="variation" :label="t('settings.theme-variation.label')" :options="variationOptions" />
-  </SettingRow>
-  <SettingRow
-    :label="t('settings.own-themes.label')"
-    :description="t('settings.own-themes.description')"
-    setting="own-themes"
-    :highlighted="highlight === 'own-themes'"
-  >
-    <span class="flex flex-none flex-wrap justify-end gap-2">
-      <Button variant="secondary" data-testid="create-starter-theme" @click="act({ type: 'create-starter-theme' })">
-        <CopyPlus :stroke-width="1.5" /> {{ t("settings.appearance.newTheme") }}
-      </Button>
-      <Button variant="secondary" data-testid="open-themes-folder" @click="act({ type: 'open-themes-folder' })">
-        <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
-      </Button>
-      <Button variant="secondary" data-testid="reload-themes" @click="act({ type: 'reload-themes' })"><RefreshCw :stroke-width="1.5" /> {{ t("common.reload") }}</Button>
-    </span>
-  </SettingRow>
-  <ul v-if="appearance.problems.length" class="-mt-2 mb-2 flex flex-col gap-1.5 py-2" :aria-label="t('settings.appearance.problems')" data-testid="theme-problems">
-    <li v-for="problem in appearance.problems" :key="problem.folder" class="text-sm">
-      <span class="text-destructive font-medium">{{ problem.folder }}</span>
-      <span class="text-muted-foreground"> {{ t("settings.appearance.problem", { folder: "", message: problem.message }).trim() }}</span>
-    </li>
-  </ul>
-  <SettingRow
-    :label="t('settings.module-icons.label')"
-    :description="t('settings.module-icons.description')"
-    setting="module-icons"
-    :highlighted="highlight === 'module-icons'"
-  >
-    <Switch v-model="moduleIcons" :aria-label="t('settings.module-icons.label')" data-testid="module-icons" />
-  </SettingRow>
-  <SettingRow
-    :label="t('settings.reset-theme.label')"
-    :description="t('settings.reset-theme.description')"
-    setting="reset-theme"
-    :highlighted="highlight === 'reset-theme'"
-  >
-    <Button variant="secondary" :disabled="appearance.isDefault" data-testid="reset-theme" @click="act({ type: 'reset-theme' })">{{ t("settings.appearance.reset") }}</Button>
-  </SettingRow>
+  <SettingGroup :title="t('settings.heading.display')">
+    <SettingRow
+      :label="t('settings.module-icons.label')"
+      :description="t('settings.module-icons.description')"
+      setting="module-icons"
+      :highlighted="highlight === 'module-icons'"
+    >
+      <Switch v-model="moduleIcons" :aria-label="t('settings.module-icons.label')" data-testid="module-icons" />
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.grayscale-text.label')"
+      :description="t('settings.grayscale-text.description')"
+      setting="grayscale-text"
+      :highlighted="highlight === 'grayscale-text'"
+    >
+      <Switch v-model="grayscaleText" :aria-label="t('settings.grayscale-text.label')" data-testid="grayscale-text" />
+    </SettingRow>
+  </SettingGroup>
+
+  <SettingGroup :title="t('settings.heading.ownThemes')">
+    <SettingRow
+      :label="t('settings.own-themes.label')"
+      :description="t('settings.own-themes.description')"
+      setting="own-themes"
+      :highlighted="highlight === 'own-themes'"
+    >
+      <template #below>
+        <ul v-if="appearance.problems.length" class="mt-2 flex flex-col gap-1.5" :aria-label="t('settings.appearance.problems')" data-testid="theme-problems">
+          <li v-for="problem in appearance.problems" :key="problem.folder" class="text-sm">
+            <span class="text-destructive font-medium">{{ problem.folder }}</span>
+            <span class="text-muted-foreground"> {{ t("settings.appearance.problem", { folder: "", message: problem.message }).trim() }}</span>
+          </li>
+        </ul>
+      </template>
+      <span class="flex flex-none flex-wrap justify-end gap-2">
+        <Button variant="secondary" data-testid="create-starter-theme" @click="act({ type: 'create-starter-theme' })">
+          <CopyPlus :stroke-width="1.5" /> {{ t("settings.appearance.newTheme") }}
+        </Button>
+        <Button variant="secondary" size="icon" data-testid="open-themes-folder" :aria-label="t('common.openFolder')" :title="t('common.openFolder')" @click="act({ type: 'open-themes-folder' })">
+          <FolderOpen :stroke-width="1.5" />
+        </Button>
+        <Button variant="secondary" size="icon" data-testid="reload-themes" :aria-label="t('common.reload')" :title="t('common.reload')" @click="act({ type: 'reload-themes' })"><RefreshCw :stroke-width="1.5" /></Button>
+      </span>
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.reset-theme.label')"
+      :description="t('settings.reset-theme.description')"
+      setting="reset-theme"
+      :highlighted="highlight === 'reset-theme'"
+    >
+      <Button variant="secondary" :disabled="appearance.isDefault" data-testid="reset-theme" @click="act({ type: 'reset-theme' })">{{ t("settings.appearance.reset") }}</Button>
+    </SettingRow>
+  </SettingGroup>
 </template>
