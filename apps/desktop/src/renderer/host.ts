@@ -147,6 +147,8 @@ export interface GrantRequest {
   panelType?: string;
   slot: string | null;
   review: boolean;
+  /** A catalog update that asks for more (ModuleState.update): allowing it installs the update. */
+  update?: boolean;
 }
 
 export type DialogRequest =

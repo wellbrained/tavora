@@ -33,7 +33,7 @@ import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/lay
 import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
-import { applyOwners, forgetOwner, installZip, installZipData, readOwnerRecords, type Installed } from "./installer";
+import { applyOwners, checkZipData, forgetOwner, installZip, installZipData, readOwnerRecords, type Installed } from "./installer";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
 import type { TestHosts } from "./network";
@@ -83,6 +83,7 @@ import { MODULE_FONTS } from "./module-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir, keepNewerFile, SUPPORTED_VERSIONS } from "./backup";
 import { CatalogClient, type CatalogScope } from "./catalog-client";
+import { CatalogUpdater, CHECK_INTERVAL_MS, type CatalogInstalled } from "./catalog-updates";
 import { DEFAULT_API_URL, OnlineSearch } from "./online";
 import { PublisherNames } from "./publisher-names";
 import { UpdateManager, type UpdaterLike } from "./updates";
@@ -302,6 +303,11 @@ export class Host {
   private readonly onlineSearch: OnlineSearch;
   /** Tavora's module catalog (catalog-client.ts). */
   private readonly catalog: CatalogClient;
+  /** Keeps modules installed from the catalog up to date (catalog-updates.ts). */
+  private readonly catalogUpdates: CatalogUpdater;
+  /** The modules installed from the catalog, by id, as the installer recorded them. */
+  private catalogModules = new Set<string>();
+  private catalogTimer: ReturnType<typeof setInterval> | undefined;
   /** Looks for new versions; only in an installed (packaged) app. */
   private updates: UpdateManager | null = null;
   private saving: Promise<void> = Promise.resolve();
@@ -338,6 +344,19 @@ export class Host {
     this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.catalog = new CatalogClient(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
+    this.catalogUpdates = new CatalogUpdater({
+      client: this.catalog,
+      installed: () => this.catalogInstalled(),
+      tavoraVersion: app.getVersion(),
+      firstKey: (key) => this.safetyLists.firstKey(key),
+      check: async (zip, expect) => checkZipData(zip, { ...(await this.installOptions()), expect }),
+      install: async (zip, expect) => {
+        const installed = await installZipData(zip, { ...(await this.installOptions()), expect, catalog: true });
+        await this.finishInstall(installed);
+        return installed;
+      },
+      log: (line) => console.warn(`[tavora] ${line}`),
+    });
     this.discord = Host.discordConnector(options, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:discord", view);
     });
@@ -485,6 +504,7 @@ export class Host {
     // Icons of games that have none yet are looked for quietly in the background.
     host.fetchIconsSoon();
     host.backupSoon();
+    host.checkCatalogSoon();
     await host.startUpdates();
     return host;
   }
@@ -570,6 +590,11 @@ export class Host {
     const records = await readOwnerRecords(this.options.userData);
     applyOwners(modules, await realUserModulesDir(this.options), records);
     this.blockedModules = stopBlocked(modules, await realUserModulesDir(this.options), records, this.safetyLists, problems);
+    this.catalogModules = new Set(
+      [...this.blockedModules.values(), ...modules.values()]
+        .filter((module) => module.provenance === "local" && records[path.basename(module.root)]?.catalog && records[path.basename(module.root)]?.id === module.manifest.id)
+        .map((module) => module.manifest.id),
+    );
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
     this.moduleProblems = problems;
@@ -873,6 +898,7 @@ export class Host {
     // whatever is installed next under this id is asked again.
     await forgetOwner(this.options.userData, path.basename(module.root));
     await this.grants.revoke(module.owner, moduleId);
+    this.catalogUpdates.forget(moduleId);
     await this.reloadModules();
   }
 
@@ -933,7 +959,10 @@ export class Host {
     });
     const file = picked.filePaths[0];
     if (picked.canceled || !file) return;
-    return this.finishInstall(await installZip(file, await this.installOptions()));
+    const installed = await installZip(file, await this.installOptions());
+    // Replaced by hand: the catalog no longer keeps it up to date, and an update it was waiting for is dropped.
+    this.catalogUpdates.forget(installed.manifest.id);
+    return this.finishInstall(installed);
   }
 
   /**
@@ -968,7 +997,67 @@ export class Host {
     if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
     const entry = await this.catalog.module(moduleId);
     const zip = await this.catalog.download(entry.zip);
-    return this.finishInstall(await installZipData(zip, { ...(await this.installOptions()), expect: { id: entry.id, owner: entry.owner } }));
+    return this.finishInstall(await installZipData(zip, { ...(await this.installOptions()), expect: { id: entry.id, owner: entry.owner }, catalog: true }));
+  }
+
+  /** The modules installed from the catalog, as they are now, for the update check. */
+  private catalogInstalled(): CatalogInstalled[] {
+    const installed: CatalogInstalled[] = [];
+    for (const id of this.catalogModules) {
+      // A module stopped by a block counts too: an update that is not blocked brings it back (C14).
+      const module = this.modules.get(id) ?? this.blockedModules.get(id);
+      if (!module || module.owner === LOCAL_OWNER) continue;
+      const { network, connectors = [] } = module.manifest.permissions;
+      installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors] } });
+    }
+    return installed;
+  }
+
+  /**
+   * Looks for updates of modules installed from the catalog a little after start and then every few
+   * hours, only while online features are on. Test runs check only when asked.
+   */
+  private checkCatalogSoon(): void {
+    if (this.options.hidden) return;
+    setTimeout(() => void this.checkCatalogUpdates(), 30_000).unref?.();
+    this.catalogTimer = setInterval(() => void this.checkCatalogUpdates(), CHECK_INTERVAL_MS);
+    this.catalogTimer.unref?.();
+  }
+
+  /**
+   * One update check (catalog-updates.ts). Updates that ask for nothing new are installed and their
+   * panels reload; the others wait for the player, shown in Settings > Modules and on their panels.
+   * Answers with how many modules were updated or are waiting.
+   */
+  private async checkCatalogUpdates(): Promise<{ updated: number; waiting: number }> {
+    if (!this.library.onlineSearch) return { updated: 0, waiting: 0 };
+    const { updated, waiting } = await this.catalogUpdates.check();
+    if (updated.length === 1) {
+      const { manifest } = updated[0]!;
+      this.notice = translate(this.language, "modules.catalogUpdated", { name: manifest.name, version: manifest.version });
+    } else if (updated.length > 1) {
+      this.notice = translate(this.language, "modules.catalogUpdatedMany", { count: String(updated.length) });
+    }
+    this.pushState();
+    return { updated: updated.length, waiting: waiting.length };
+  }
+
+  /**
+   * The player said yes to an update that asks for more (exactly the version they were shown): it is
+   * checked and installed by every installer rule again, what it asked for is granted, and its panels
+   * reload with the new version.
+   */
+  private async applyCatalogUpdate(moduleId: string, version: string): Promise<string> {
+    const module = this.modules.get(moduleId) ?? this.blockedModules.get(moduleId);
+    const pending = this.catalogUpdates.pending(moduleId);
+    if (!module || !pending || pending.version !== version) throw new LibraryError("error.updateGone");
+    const { installed, asks } = await this.catalogUpdates.apply(moduleId, version);
+    const updated = this.modules.get(moduleId);
+    if (updated) {
+      await this.grants.grant(updated, asks);
+      for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === moduleId) view.reload();
+    }
+    return installed.manifest.id;
   }
 
   private async finishInstall(installed: Installed): Promise<string> {
@@ -1133,6 +1222,10 @@ export class Host {
         if (action.type === "share-icons") return await this.shareIcons(action.gameIds);
         if (action.type === "share-steam-icons") return await this.shareSteamIcons(action.appids);
         if (action.type === "import-steam-games") return this.importSteam(action.games);
+        if (action.type === "check-module-updates") {
+          if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+          return { ok: true, ...(await this.checkCatalogUpdates()) };
+        }
         const id = await this.perform(action);
         return id === undefined ? { ok: true } : { ok: true, id };
       } catch (error) {
@@ -1215,6 +1308,7 @@ export class Host {
       this.viewsByContents.clear();
       this.browsersByContents.clear();
       this.discord.dispose();
+      clearInterval(this.catalogTimer);
     });
   }
 
@@ -1424,6 +1518,8 @@ export class Host {
         return this.installModule();
       case "install-catalog-module":
         return this.installCatalogModule(action.moduleId);
+      case "apply-module-update":
+        return this.applyCatalogUpdate(action.moduleId, action.version);
       case "delete-module-data":
         return this.deleteLeftoverData(action.owner, action.moduleId);
       case "seen-module-notes": {
@@ -2774,6 +2870,9 @@ export class Host {
         },
         usedIn: this.gamesUsing(module.manifest.id),
         notes: this.notesView(module),
+        update: ((pending) => (pending ? { version: pending.version, asks: { network: [...pending.asks.network], connectors: [...pending.asks.connectors] }, notes: pending.notes } : null))(
+          this.catalogUpdates.pending(module.manifest.id),
+        ),
       })),
       moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder).map(({ folder, message }) => ({ folder, message })),
       developmentFolders: this.library.developmentFolders.map((folder) => {
