@@ -343,8 +343,8 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         @ready="onReady"
       />
       <DropGuide v-if="guide" :guide="guide" />
-      <!-- The game just opened: one loader over the whole workspace, until every panel has its data and all show at once. -->
-      <div v-if="view.opening" class="bg-background absolute inset-0 z-20" data-testid="workspace-loading">
+      <!-- The game just opened: one card over the dock, where the panels go, until every panel has its data and all show at once. -->
+      <div v-if="view.opening" class="bg-background absolute inset-x-2 top-0 bottom-2 z-20 rounded-[10px] border" data-testid="workspace-loading">
         <CampfireLoader :name="game?.name ?? ''" />
       </div>
       <div
