@@ -1,5 +1,5 @@
 // Module grants (decision log, module grants row of 2026-10-16): the consent dialog when a module is
-// first added, adding it again without asking, taking it back in Settings > Integrations (its panels
+// first added, adding it again without asking, taking it back in Settings > Modules (its panels
 // go, an empty slot stays), and the Review bar when an update asks for more.
 
 import { cp, mkdtemp, readFile, writeFile } from "node:fs/promises";
@@ -75,9 +75,9 @@ test("adding a module asks first, adding it again does not, and taking it back r
   await expect(panels(page, NETWORK)).toHaveCount(2);
   await expect(page.getByTestId("grant-dialog")).toHaveCount(0);
 
-  // Settings > Integrations lists it; taking it back names the game it is used in.
+  // Settings > Modules lists it; taking it back names the game it is used in.
   await page.getByTestId("rail-settings").click();
-  await page.getByTestId("settings-nav-integrations").click();
+  await page.getByTestId("settings-nav-modules").click();
   await expect(page.getByTestId(`module-grant-${NETWORK}`)).toContainText("cdn.tavora.test");
   await page.getByTestId(`revoke-module-${NETWORK}`).click();
   await expect(page.getByTestId("confirm")).toContainText("Path of Exile 2");

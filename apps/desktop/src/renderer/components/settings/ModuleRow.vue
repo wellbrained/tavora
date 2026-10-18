@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // One module in a Settings list: icon, name, version, who made it, what it
-// does and where it was found. The buttons for it go in the slot, anything
+// does and where it was found (the Official badge says it for Tavora's own). The buttons for it go in the slot, anything
 // shown under it (such as its patch notes) in the details slot.
 import { cn } from "@/lib/utils";
 import { state } from "../../host";
@@ -11,10 +11,12 @@ defineProps<{ module: NonNullable<typeof state.value>["modules"][number] }>();
 </script>
 
 <template>
-  <li class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b py-3 last:border-b-0" :data-testid="`module-${module.id}`">
+  <li class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b py-4 last:border-b-0" :data-testid="`module-${module.id}`">
+    <span class="bg-primary/10 border-primary/20 text-primary flex size-10 flex-none items-center justify-center rounded-lg border" aria-hidden="true">
+      <ModuleIcon :module-id="module.id" size="size-5" />
+    </span>
     <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-      <span class="flex items-center gap-2">
-        <ModuleIcon :module-id="module.id" />
+      <span class="flex min-w-0 items-center gap-2">
         <span class="truncate font-medium">{{ module.name }}</span>
         <span class="text-muted-foreground flex-none text-xs tabular-nums">{{ module.version }}</span>
         <span
@@ -37,7 +39,7 @@ defineProps<{ module: NonNullable<typeof state.value>["modules"][number] }>();
         >
       </span>
       <span v-if="module.description" class="text-muted-foreground line-clamp-2 text-sm">{{ module.description }}</span>
-      <span class="text-muted-foreground text-xs" :data-testid="`module-origin-${module.id}`">{{ t(`modules.origin.${module.origin.kind}`, { folder: module.origin.folder }) }}</span>
+      <span v-if="module.origin.kind !== 'official'" class="text-muted-foreground/80 text-xs" :data-testid="`module-origin-${module.id}`">{{ t(`modules.origin.${module.origin.kind}`, { folder: module.origin.folder }) }}</span>
     </div>
     <slot />
     <div v-if="$slots.details" class="basis-full"><slot name="details" /></div>

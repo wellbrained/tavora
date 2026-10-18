@@ -7,6 +7,7 @@ import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { act, confirmAction, state, submitAction } from "../../host";
 import { t } from "../../i18n";
+import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
 defineProps<{ highlight: string | null }>();
@@ -48,36 +49,46 @@ function clear(scope: "game" | "shared") {
 </script>
 
 <template>
-  <p class="text-muted-foreground mb-4">{{ t("settings.browser.intro") }}</p>
-  <div v-for="list in LISTS" :key="list.id" class="-mx-3 rounded-lg border-b px-3 py-4 transition-colors duration-500" :class="highlight === list.setting && 'bg-primary/10'" :data-setting="list.setting">
-    <div class="flex flex-col gap-1">
-      <span class="font-medium">{{ list.label() }}</span>
-      <span class="text-muted-foreground">{{ list.description() }}</span>
+  <p class="text-muted-foreground mb-6 max-w-prose text-sm">{{ t("settings.browser.intro") }}</p>
+  <SettingGroup :title="t('settings.heading.sites')">
+    <div
+      v-for="list in LISTS"
+      :key="list.id"
+      class="-mx-5 border-b px-5 py-4 transition-colors duration-500 last:border-b-0"
+      :class="highlight === list.setting && 'bg-primary/10'"
+      :data-setting="list.setting"
+    >
+      <div class="flex flex-col gap-0.5">
+        <span class="font-medium">{{ list.label() }}</span>
+        <span class="text-muted-foreground text-sm">{{ list.description() }}</span>
+      </div>
+      <p v-if="!list.sites().length" class="text-muted-foreground/80 mt-3 text-sm">{{ list.empty() }}</p>
+      <ul v-else class="mt-3 flex flex-wrap gap-2" :data-testid="list.setting">
+        <li v-for="site in list.sites()" :key="site" class="bg-secondary flex h-8 items-center gap-1 rounded-md pr-1 pl-3 text-sm">
+          {{ site }}
+          <Button variant="ghost" size="icon-xs" :aria-label="t('settings.browser.removeSite', { site })" @click="act({ type: 'browser-forget-site', list: list.id, site })">
+            <X :stroke-width="1.5" />
+          </Button>
+        </li>
+      </ul>
     </div>
-    <p v-if="!list.sites().length" class="text-muted-foreground mt-3 text-sm">{{ list.empty() }}</p>
-    <ul v-else class="mt-3 flex flex-wrap gap-2" :data-testid="list.setting">
-      <li v-for="site in list.sites()" :key="site" class="bg-secondary flex h-8 items-center gap-1 rounded-md pr-1 pl-3 text-sm">
-        {{ site }}
-        <Button variant="ghost" size="icon-xs" :aria-label="t('settings.browser.removeSite', { site })" @click="act({ type: 'browser-forget-site', list: list.id, site })">
-          <X :stroke-width="1.5" />
-        </Button>
-      </li>
-    </ul>
-  </div>
-  <SettingRow
-    :label="t('settings.browser-clear-game.label')"
-    :description="t('settings.browser-clear-game.description')"
-    setting="browser-clear-game"
-    :highlighted="highlight === 'browser-clear-game'"
-  >
-    <Button variant="secondary" :disabled="!game" data-testid="browser-clear-game" @click="clear('game')">{{ t("common.clear") }}</Button>
-  </SettingRow>
-  <SettingRow
-    :label="t('settings.browser-clear-shared.label')"
-    :description="t('settings.browser-clear-shared.description')"
-    setting="browser-clear-shared"
-    :highlighted="highlight === 'browser-clear-shared'"
-  >
-    <Button variant="secondary" data-testid="browser-clear-shared" @click="clear('shared')">{{ t("common.clear") }}</Button>
-  </SettingRow>
+  </SettingGroup>
+  <SettingGroup :title="t('settings.heading.browserData')">
+    <SettingRow
+      :label="t('settings.browser-clear-game.label')"
+      :description="t('settings.browser-clear-game.description')"
+      setting="browser-clear-game"
+      :highlighted="highlight === 'browser-clear-game'"
+    >
+      <Button variant="secondary" :disabled="!game" data-testid="browser-clear-game" @click="clear('game')">{{ t("common.clear") }}</Button>
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.browser-clear-shared.label')"
+      :description="t('settings.browser-clear-shared.description')"
+      setting="browser-clear-shared"
+      :highlighted="highlight === 'browser-clear-shared'"
+    >
+      <Button variant="secondary" data-testid="browser-clear-shared" @click="clear('shared')">{{ t("common.clear") }}</Button>
+    </SettingRow>
+  </SettingGroup>
 </template>

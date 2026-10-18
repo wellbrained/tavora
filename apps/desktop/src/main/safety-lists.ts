@@ -44,7 +44,7 @@ export interface SafetyListsOptions {
   baseUrl: string;
   /** Raw catalogue public key, base64 (CATALOGUE_PUBLIC_KEY outside tests). */
   publicKey: string;
-  /** Whether the player allows Tavora to ask its service (Settings > General). */
+  /** Whether the player allows Tavora to ask its service (Settings > Online). */
   online: () => boolean;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;

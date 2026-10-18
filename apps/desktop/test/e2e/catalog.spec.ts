@@ -230,7 +230,7 @@ test("a catalog module updates without a restart, and an update adding a network
 
     // An update that asks for nothing new installs at once, and the open panel reloads with it.
     modules[0] = await release("1.1.0", [], ["Faster."]);
-    await checkForUpdates("Updated: 1. Waiting for your yes: 0.");
+    await checkForUpdates("Updated: 1. Waiting for you: 0.");
     await page.getByTestId("settings-close").click();
     await expectModuleText(app, id, "version", "1.1.0");
     await expect(page.getByTestId("notice")).toHaveText("Tracker was updated to 1.1.0. What's new is in Settings > Modules.");
@@ -246,7 +246,7 @@ test("a catalog module updates without a restart, and an update adding a network
         { version: "1.1.0", publishedAt: "2026-10-18T11:00:00.000Z", notes: ["Faster."] },
       ],
     };
-    await checkForUpdates("Updated: 0. Waiting for your yes: 1.");
+    await checkForUpdates("Updated: 0. Waiting for you: 1.");
     await expect(page.getByTestId(`module-update-${id}`)).toHaveText("Update to 1.2.0");
     await page.getByTestId("settings-close").click();
     const review = page.locator('[data-testid^="update-review-open-"]');
@@ -305,7 +305,7 @@ test("a player reports a module from Browse and from Settings, and only its id, 
     await page.getByTestId("settings-nav-modules").click();
     await page.getByTestId("report-module-wellbrained.tracker").click();
     await page.getByTestId("confirm-submit").click();
-    await expect(page.getByTestId("toast")).toHaveText("Reported Tracker. Thank you.");
+    await expect(page.getByTestId("toast")).toHaveText("Reported Tracker. Thanks!");
     expect(reports).toEqual([sent, sent]);
   } finally {
     await app.close();

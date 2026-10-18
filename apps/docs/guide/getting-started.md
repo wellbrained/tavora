@@ -20,7 +20,7 @@ npm install
 npm run dev     # builds, then rebuilds on every change: leave it running
 ```
 
-In Tavora, open **Settings > Development**, choose **Add a development folder…** and pick the project folder, or the folder you keep all your module projects in: Tavora loads every project directly inside it, and finds new ones by itself. The module appears in Add module, and its panels reload by themselves when `npm run dev` rebuilds.
+In Tavora, open **Settings > Development**, choose **Add folder…** under Project folders and pick the project folder, or the folder you keep all your module projects in: Tavora loads every project directly inside it, and finds new ones by itself. The module appears in Add module, and its panels reload by themselves when `npm run dev` rebuilds.
 
 To add the SDK to a project of your own instead: `npm install @tavora/sdk`, and follow [Build the module](#build-the-module). The same small module is also built three ways in Tavora's repository: [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module), [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module) and [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module). A module that offers several panels is shown in the [panel types example](https://github.com/wellbrained/tavora/tree/main/examples/panels-module) (see [Panel types](../reference/manifest.md#panel-types)).
 
@@ -113,7 +113,7 @@ The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist
 
 The first run makes your publisher key in `~/.tavora/publisher-key.pem`. **Back it up and never share it**: updates and your players' data depend on it. Read [Your publisher key](./publisher-key.md) before you send the first zip, and link the key to your account there so players see your name.
 
-Players install the zip with **Settings > Modules > Install from zip**. To list it in Tavora's module catalog, where players find it under **Browse** in the module library, publish it with your linked key:
+Players install the zip with **Settings > Modules > Install zip**. To list it in Tavora's module catalog, where players find it under **Catalog** in the module library, publish it with your linked key:
 
 ```sh
 npx tavora-pack publish <id>-<version>.zip

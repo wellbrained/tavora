@@ -19,6 +19,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.11",
+    date: "2026-10-18",
+    title: "Roomier, friendlier Settings",
+    notes: [
+      "Settings and the module library are bigger and easier to find your way around. Each page is split into small groups, and the texts are short and to the point.",
+      "Settings has two new pages: Online, for the online features and game icons, and About, for updates, patch notes, backups and diagnostic info. Grayscale text moved to Appearance.",
+      "Website access for modules is now in Settings > Modules, next to the modules themselves.",
+      "The module library shows modules as cards. Pick All, In this game, a kind of module or the Catalog on the left.",
+    ],
+  },
+  {
     version: "0.18.10",
     date: "2026-10-18",
     title: "Games open all at once",

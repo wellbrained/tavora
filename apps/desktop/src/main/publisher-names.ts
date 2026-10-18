@@ -30,7 +30,7 @@ export interface PublisherNamesOptions {
   file: string;
   baseUrl: string;
   fetch: typeof fetch;
-  /** Whether the player allows Tavora to ask its service (Settings > General > Online game search). */
+  /** Whether the player allows Tavora to ask its service (Settings > Online > Online features). */
   online: () => boolean;
   /** A name became known or changed. */
   onChange: () => void;

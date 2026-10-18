@@ -4,6 +4,7 @@ import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { dialog, state } from "../../host";
 import { t } from "../../i18n";
+import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
 defineProps<{ highlight: string | null }>();
@@ -12,10 +13,8 @@ const online = computed(() => state.value?.library.onlineSearch ?? false);
 </script>
 
 <template>
-  <section>
-    <h3 class="text-lg font-semibold">{{ t("integrations.steam.title") }}</h3>
+  <SettingGroup :title="t('integrations.steam.title')">
     <SettingRow
-      class="mt-2"
       :label="t('settings.steam-import.label')"
       :description="t('settings.steam-import.description')"
       setting="steam-import"
@@ -25,5 +24,5 @@ const online = computed(() => state.value?.library.onlineSearch ?? false);
         {{ t("settings.steamImport.button") }}
       </Button>
     </SettingRow>
-  </section>
+  </SettingGroup>
 </template>
