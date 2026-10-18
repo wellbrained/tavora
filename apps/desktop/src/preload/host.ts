@@ -10,6 +10,7 @@ const api: TavoraHostApi = {
   moduleNotes: (moduleId) => ipcRenderer.invoke("host:module-notes", moduleId),
   searchOnline: (query) => ipcRenderer.invoke("host:search-online", query),
   steamLibrary: (profile) => ipcRenderer.invoke("host:steam-library", profile),
+  steamShareIcons: (appids) => ipcRenderer.invoke("host:steam-share-icons", appids),
   browseCatalog: () => ipcRenderer.invoke("host:browse-catalog"),
   setPanelBounds: (bounds) => ipcRenderer.send("host:panel-bounds", bounds),
   setOverlay: (open) => ipcRenderer.send("host:overlay", open),

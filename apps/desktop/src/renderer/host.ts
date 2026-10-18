@@ -106,10 +106,14 @@ export interface ConfirmRequest {
   run(): Promise<string | null>;
 }
 
-/** Offering icons to Tavora: the games ticked at first, or none. */
+/**
+ * Offering icons to Tavora: the games ticked at first, or none. With `steam`, the games of the
+ * last Steam import look-up with these appids instead, without adding them to the library.
+ */
 export interface ShareIconsRequest {
   kind: "share-icons";
   gameIds: string[];
+  steam?: number[];
 }
 
 /** Adding a module; `slot` is the empty slot (a dock group id) it should fill. */

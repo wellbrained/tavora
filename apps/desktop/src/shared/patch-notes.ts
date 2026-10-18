@@ -27,6 +27,17 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
+    version: "0.18.7",
+    date: "2026-10-18",
+    title: "Tidy up many games at once",
+    notes: [
+      "Settings > Games lists every game in your library. Tick as many as you like, or Select all, and move them to Trash together. Shift-click ticks a whole run, and the filter narrows what Select all picks. Manage games… in a game's menu takes you there.",
+      "Trash can restore or delete many games at once too.",
+      "Share icons has All and None buttons, and sends any number of icons.",
+      "Share icons only, in the Steam import, offers the icons Steam keeps on your PC for the games you tick, without adding those games to your library.",
+    ],
+  },
+  {
     version: "0.18.6",
     date: "2026-10-18",
     title: "Catalog modules stay up to date",

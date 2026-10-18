@@ -457,11 +457,17 @@ export type HostAction =
   | { type: "choose-game-image"; gameId: string }
   | { type: "use-original-icon"; gameId: string }
   | { type: "share-icons"; gameIds: string[] }
+  /** Offers the icons of games from the last Steam import look-up that are not in the library (prepared by steamShareIcons). */
+  | { type: "share-steam-icons"; appids: number[] }
   /** Adds the chosen games of a Steam library that the player does not have yet. */
   | { type: "import-steam-games"; games: SteamImportGame[] }
   | { type: "trash-game"; gameId: string }
   | { type: "restore-game"; gameId: string }
   | { type: "delete-game"; gameId: string }
+  /** The same for many games at once, from Settings > Games and Trash. */
+  | { type: "trash-games"; gameIds: string[] }
+  | { type: "restore-games"; gameIds: string[] }
+  | { type: "delete-games"; gameIds: string[] }
   | { type: "favorite"; gameId: string; index?: number }
   | { type: "unfavorite"; gameId: string }
   | { type: "move-game"; gameId: string; folderId: string | null; index?: number }
@@ -631,7 +637,10 @@ export interface ModuleMenu {
   align?: "start" | "center" | "end";
 }
 
-export type ActionResult = { ok: true; id?: string; shared?: number; added?: number; updated?: number; waiting?: number } | { ok: false; error: string };
+/** `limited`: the service took only some icons for now (it takes so many an hour); the rest can be shared later. */
+export type ActionResult =
+  | { ok: true; id?: string; shared?: number; limited?: true; added?: number; updated?: number; waiting?: number }
+  | { ok: false; error: string };
 
 export interface CatalogMatch {
   id: string;
@@ -675,6 +684,15 @@ export interface SteamGameView extends SteamImportGame {
 
 export type SteamLibraryResult = { status: "ok"; games: SteamGameView[] } | { status: "error"; error: string };
 
+/** A game of a Steam import, not in the library, with the icon this PC has for it as a data address. */
+export interface SteamShareView {
+  appid: number;
+  name: string;
+  icon: string;
+}
+
+export type SteamShareResult = { status: "ok"; games: SteamShareView[] } | { status: "error"; error: string };
+
 /** A module listed in Tavora's module catalog, as the main process checked it. Every text is plain text. */
 export interface CatalogModuleView {
   id: string;
@@ -710,6 +728,8 @@ export interface TavoraHostApi {
   searchOnline(query: string): Promise<OnlineSearchResult>;
   /** The games a Steam profile (link or SteamID64) owns, through the Tavora service. Never rejects. */
   steamLibrary(profile: string): Promise<SteamLibraryResult>;
+  /** Of these games from the last steamLibrary answer, the ones not added whose icon this PC has and Tavora lacks. Never rejects. */
+  steamShareIcons(appids: number[]): Promise<SteamShareResult>;
   /** The catalog modules for the current game or personal workspace. Never rejects. */
   browseCatalog(): Promise<CatalogListResult>;
   /** Where the visible panels are. Panels not listed are hidden. */

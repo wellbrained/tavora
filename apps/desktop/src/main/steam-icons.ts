@@ -170,6 +170,20 @@ export interface SaveIconOptions {
   baseUrl?: string;
 }
 
+/** The `.ico` the Steam client keeps on this PC under this hash, or null. Never downloads. */
+export async function readSteamClientIcon(steamDir: string, hash: string): Promise<Uint8Array | null> {
+  if (!isIconHash(hash)) return null;
+  try {
+    const file = path.join(steamDir, "steam", "games", `${hash}.ico`);
+    const info = await stat(file);
+    if (!info.isFile() || info.size > MAX_STEAM_ICON_BYTES) return null;
+    const bytes = new Uint8Array(await readFile(file));
+    return isIco(bytes) ? bytes : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Saves a game's icon unchanged into `iconDir`. The icon file Steam keeps on
  * this PC is used when it is there; otherwise the same file is asked from

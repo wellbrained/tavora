@@ -3,9 +3,11 @@ import type { HostedList } from "./hosted-icons";
 import {
   isOriginalIconFile,
   isShareCandidate,
+  icoFrameNear,
   largestIcoFrame,
   shareableIconFile,
   shareSource,
+  steamShareGames,
   submitIcon,
   type ShareGame,
 } from "./share-icons";
@@ -30,7 +32,7 @@ describe("what can be shared", () => {
     takedown: "",
     icons: [{ id: "starcraft-2", names: ["StarCraft II"], sha256: "a".repeat(64), size: 1 }],
   };
-  const on = { steamIcons: true, onlineSearch: true };
+  const on = { steamIcons: true, onlineSearch: true, iconsOffered: [] as string[] };
   const game = (over: Partial<ShareGame> = {}): ShareGame => ({
     id: "diablo-iv",
     name: "Diablo IV",
@@ -66,8 +68,34 @@ describe("what can be shared", () => {
 
   it("offers nothing while the list is unknown or the player has switched online features or icons off", () => {
     expect(shareableIconFile(game(), on, null)).toBeNull();
-    expect(shareableIconFile(game(), { steamIcons: true, onlineSearch: false }, list)).toBeNull();
-    expect(shareableIconFile(game(), { steamIcons: false, onlineSearch: true }, list)).toBeNull();
+    expect(shareableIconFile(game(), { ...on, onlineSearch: false }, list)).toBeNull();
+    expect(shareableIconFile(game(), { ...on, steamIcons: false }, list)).toBeNull();
+  });
+
+  it("offers nothing for a game whose icon was offered before it was added", () => {
+    expect(shareableIconFile(game(), { ...on, iconsOffered: ["diablo-iv"] }, list)).toBeNull();
+  });
+});
+
+describe("sharing from a Steam import without adding games", () => {
+  const list: HostedList = {
+    notice: "",
+    takedown: "",
+    icons: [{ id: "starcraft-2", names: ["StarCraft II"], sha256: "a".repeat(64), size: 1 }],
+  };
+  const games = [
+    { appid: 1, name: "Elden Ring", id: "elden-ring" },
+    { appid: 2, name: "StarCraft II", id: "sc2-steam" },
+    { appid: 3, name: "Unknown", id: null },
+    { appid: 4, name: "Owned", id: "owned" },
+    { appid: 5, name: "Offered", id: "offered" },
+    { appid: 6, name: "Custom", id: "local-custom" },
+    { appid: 7, name: "Elden Ring again", id: "elden-ring" },
+  ];
+
+  it("keeps the new games with a known id that the service has no icon for and that were not offered", () => {
+    const found = steamShareGames(games, (game) => game.id !== "owned", ["offered"], list);
+    expect(found.map((game) => game.appid)).toEqual([1]);
   });
 });
 
@@ -132,6 +160,15 @@ describe("largestIcoFrame", () => {
   });
 });
 
+describe("icoFrameNear", () => {
+  it("keeps the smallest frame at least that big, else the biggest", () => {
+    const icon = ico([16, bytes(10, 1)], [256, bytes(30, 2)], [48, bytes(20, 3)], [32, bytes(15, 4)]);
+    expect(icoFrameNear(icon, 40)!.slice(22)).toEqual(bytes(20, 3));
+    expect(icoFrameNear(icon, 32)!.slice(22)).toEqual(bytes(15, 4));
+    expect(icoFrameNear(ico([16, bytes(10, 1)], [24, bytes(12, 2)]), 48)!.slice(22)).toEqual(bytes(12, 2));
+  });
+});
+
 describe("submitIcon", () => {
   const offer = { id: "diablo-iv", name: "Diablo IV", source: "installed" as const, ico: ico([32, bytes(60, 4)]) };
   const answer = (status: number) => (async () => new Response("{}", { status })) as typeof fetch;
@@ -151,7 +188,8 @@ describe("submitIcon", () => {
 
   it("says skipped when the service will not take it, failed when it could not be asked", async () => {
     for (const status of [400, 409, 413]) expect(await submitIcon({ baseUrl: "https://x.test", fetchImpl: answer(status) }, offer)).toBe("skipped");
-    for (const status of [429, 500, 503]) expect(await submitIcon({ baseUrl: "https://x.test", fetchImpl: answer(status) }, offer)).toBe("failed");
+    expect(await submitIcon({ baseUrl: "https://x.test", fetchImpl: answer(429) }, offer)).toBe("busy");
+    for (const status of [500, 503]) expect(await submitIcon({ baseUrl: "https://x.test", fetchImpl: answer(status) }, offer)).toBe("failed");
     const offline = (async () => {
       throw new Error("offline");
     }) as typeof fetch;

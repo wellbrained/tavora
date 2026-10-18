@@ -1,4 +1,4 @@
-import { Blocks, FolderCode, Globe, Keyboard, Palette, Plug, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
+import { Blocks, FolderCode, Gamepad2, Globe, Keyboard, Palette, Plug, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
 import type { MessageKey } from "../../../shared/i18n";
 import { t } from "../../i18n";
 
@@ -19,7 +19,13 @@ export const GROUPS = [
       { id: "shortcuts", icon: Keyboard },
     ],
   },
-  { id: "library", sections: [{ id: "trash", icon: Trash2 }] },
+  {
+    id: "library",
+    sections: [
+      { id: "games", icon: Gamepad2 },
+      { id: "trash", icon: Trash2 },
+    ],
+  },
 ] as const;
 
 /**
@@ -76,6 +82,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["module-grants", "integrations"],
   ["shortcuts", "shortcuts"],
   ["welcome-tour", "general"],
+  ["games", "games"],
   ["trash", "trash"],
 ];
 

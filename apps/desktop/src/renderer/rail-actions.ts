@@ -1,7 +1,7 @@
 // Menus for games and folders on the rail. Every drag-and-drop move has a
 // menu equivalent here, so the rail works from the keyboard too.
 import type { FolderView, GameView } from "../shared/host-api";
-import { act, confirmAction, dialog, prompt, state, submitAction, type MenuItem } from "./host";
+import { act, confirmAction, dialog, openSettings, prompt, state, submitAction, type MenuItem } from "./host";
 import { t } from "./i18n";
 
 function lib() {
@@ -153,6 +153,10 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
     // Only for a game whose own icon Tavora does not have yet: the whole item is the offer.
     ...(game.shareIcon
       ? [{ label: t("menu.shareIcon"), testid: "menu-share-icon", run: () => (dialog.value = { kind: "share-icons", gameIds: [game.id] }) } satisfies MenuItem]
+      : []),
+    // Removing many games at once happens in Settings > Games.
+    ...(game.kind === "game"
+      ? [{ label: t("menu.manageGames"), testid: "menu-manage-games", separator: true, run: () => openSettings({ section: "games" }) } satisfies MenuItem]
       : []),
     {
       label: t(game.kind === "workspace" ? "menu.removeWorkspace" : "menu.removeGame"),
