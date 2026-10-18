@@ -70,6 +70,6 @@ Tavora can hand your modules to a new key, but only if the old key was linked to
 - **Leaked:** make a new key, link it to the same account, and ask Tavora to revoke the old key and move your modules to the new one. Ask privately, through **Report a vulnerability** on the repository's [Security tab](https://github.com/wellbrained/tavora/security). A revoked key can't publish or install anything new. Modules players already have keep running, and so do the zips Tavora lists as published before the revocation.
 - **Lost:** make and link a new key the same way, and ask for the move through the same tab.
 
-The catalog doesn't take uploads from the new key for the old key's modules yet, so you can't publish new versions of them until it does. Say in your request which modules you publish there.
+Once Tavora has signed the statement, publish new versions of your modules with the new key as usual. The catalog takes them because the statement names your account, and players' Tavora updates to them and keeps their data.
 
 A key that was never linked can't be replaced. That's one more reason to [link yours now](./publisher-key.md#show-your-name).
