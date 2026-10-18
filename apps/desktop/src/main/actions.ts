@@ -21,6 +21,10 @@ const index = (value: unknown): value is number | undefined =>
   value === undefined || (Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 10_000);
 const uuid = (value: unknown): value is string => typeof value === "string" && INSTANCE_ID.test(value);
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+/** Most icons offered in one action; the dialog sends more in turns. */
+export const MAX_SHARE_BATCH = 50;
+/** Most games one action may move to Trash, restore or delete; as many as a Steam import adds. */
+export const MAX_BULK_GAMES = MAX_IMPORT_GAMES;
 const BROWSER_COMMANDS: readonly BrowserCommand[] = ["back", "forward", "reload", "stop", "open-external", "mute", "unmute", "exit-fullscreen"];
 
 /**
@@ -98,11 +102,31 @@ export function parseAction(raw: unknown): HostAction | null {
     case "delete-game":
     case "unfavorite":
       return only("gameId") && isGameId(a.gameId) ? { type: a.type, gameId: a.gameId } : null;
+    case "trash-games":
+    case "restore-games":
+    case "delete-games":
+      return only("gameIds") &&
+        Array.isArray(a.gameIds) &&
+        a.gameIds.length >= 1 &&
+        a.gameIds.length <= MAX_BULK_GAMES &&
+        a.gameIds.every((id) => isGameId(id)) &&
+        new Set(a.gameIds).size === a.gameIds.length
+        ? { type: a.type, gameIds: a.gameIds as string[] }
+        : null;
+    case "share-steam-icons":
+      return only("appids") &&
+        Array.isArray(a.appids) &&
+        a.appids.length >= 1 &&
+        a.appids.length <= MAX_SHARE_BATCH &&
+        a.appids.every(isSteamAppId) &&
+        new Set(a.appids).size === a.appids.length
+        ? { type: a.type, appids: a.appids as number[] }
+        : null;
     case "share-icons":
       return only("gameIds") &&
         Array.isArray(a.gameIds) &&
         a.gameIds.length >= 1 &&
-        a.gameIds.length <= 50 &&
+        a.gameIds.length <= MAX_SHARE_BATCH &&
         a.gameIds.every((id) => isGameId(id)) &&
         new Set(a.gameIds).size === a.gameIds.length
         ? { type: a.type, gameIds: a.gameIds as string[] }

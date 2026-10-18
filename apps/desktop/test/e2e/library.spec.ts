@@ -223,6 +223,37 @@ test("a removed game keeps its data in Trash and comes back when restored", asyn
   await app.close();
 });
 
+test("many games are moved to Trash, restored and deleted together from Settings", async () => {
+  const { app, page } = await launch();
+  await fromMenu(page, "poe2", "menu-manage-games");
+  await expect(page.getByTestId("settings-heading")).toHaveText("Games");
+
+  // A filter narrows what Select all ticks.
+  await page.getByTestId("games-filter").fill("path");
+  await page.getByTestId("games-select-all").check();
+  await expect(page.getByTestId("games-selected")).toHaveText("1 selected");
+  await page.getByTestId("games-filter").fill("");
+  await page.getByTestId("games-select-all").check();
+  await expect(page.getByTestId("games-selected")).toHaveText("2 selected");
+  await page.getByTestId("games-remove").click();
+  await page.getByTestId("confirm-submit").click();
+  await expect(page.getByTestId("games-empty")).toBeVisible();
+  await expect(page.getByTestId("rail-game-poe2")).toHaveCount(0);
+  await expect(page.getByTestId("rail-game-satisfactory")).toHaveCount(0);
+
+  await page.getByTestId("settings-nav-trash").click();
+  await page.getByTestId("trash-tick-poe2").check();
+  await page.getByTestId("trash-restore-selected").click();
+  await expect(page.getByTestId("trash-poe2")).toHaveCount(0);
+  await expect(page.getByTestId("rail-game-poe2")).toHaveCount(1);
+
+  await page.getByTestId("trash-select-all").check();
+  await page.getByTestId("trash-delete-selected").click();
+  await page.getByTestId("confirm-submit").click();
+  await expect(page.getByTestId("trash-empty")).toBeVisible();
+  await app.close();
+});
+
 test("a game in Trash is deleted for good after 30 days or when the player says so", async () => {
   const userData = await newUserData();
   const running = await launch(userData);
