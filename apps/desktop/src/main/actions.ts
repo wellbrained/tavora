@@ -56,6 +56,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "open-modules-folder":
     case "reload-modules":
     case "install-module":
+    case "check-module-updates":
     case "add-development-folder":
       return only() ? { type: a.type } : null;
     case "remove-development-folder":
@@ -66,6 +67,10 @@ export function parseAction(raw: unknown): HostAction | null {
     case "move-local-data":
     case "revoke-module":
       return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
+    case "apply-module-update":
+      return only("moduleId", "version") && isModuleId(a.moduleId) && typeof a.version === "string" && a.version.length > 0 && a.version.length <= 64
+        ? { type: a.type, moduleId: a.moduleId, version: a.version }
+        : null;
     case "grant-module":
       return only("moduleId", "network", "connectors") &&
         isModuleId(a.moduleId) &&

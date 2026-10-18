@@ -19,11 +19,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.18.6",
+    version: "0.18.8",
     date: "2026-10-18",
     title: "Games open all at once",
     notes: [
       "Switching to a game or workspace no longer fills in panel by panel: Tavora waits until every panel you can see has loaded and then shows them together. A small spinner appears while a busy workspace is still loading.",
+    ],
+  },
+  {
+    version: "0.18.6",
+    date: "2026-10-18",
+    title: "Catalog modules stay up to date",
+    notes: [
+      "Modules you installed from the catalog update themselves while Tavora runs, with no restart: their open panels reload with the new version, and Settings > Modules has Check for updates. Tavora installs only an update from the same publisher with a higher version, checked like any zip.",
+      "An update that wants to reach new websites or connectors waits for your yes. Its panels show a bar to review it, with what is new in that version; until you allow it, the version you have keeps running.",
     ],
   },
   {

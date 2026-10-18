@@ -3,28 +3,30 @@
 // names and is signed by the listed publisher key (catalog threat model, C1); listing text is plain
 // text (C10) and "by <name>" is only the service's developer name (C13).
 import { createHash, generateKeyPairSync, type KeyObject } from "node:crypto";
-import { mkdir, mkdtemp, readdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { launch, newUserData, openGame, panels, seedLibrary } from "./harness";
+import { expectModuleText, launch, newUserData, openGame, panels, seedLibrary } from "./harness";
 
 interface Listed {
   entry: Record<string, unknown>;
   /** What the server sends for the entry's zip hash. */
   body: Buffer;
+  /** What GET /v1/catalog/modules/<id> lists as its versions. */
+  versions?: { version: string; publishedAt: string; notes: string[] }[];
 }
 
-async function packed(id: string, name: string, key: KeyObject): Promise<Buffer> {
+async function packed(id: string, name: string, key: KeyObject, version = "1.0.0", network: string[] = []): Promise<Buffer> {
   const dir = await mkdtemp(path.join(tmpdir(), "tavora-catalog-module-"));
   await mkdir(path.join(dir, "dist"));
   await writeFile(
     path.join(dir, "tavora.module.json"),
-    JSON.stringify({ id, name, version: "1.0.0", apiVersion: "1", entry: "dist/index.html", games: [], viewport: { minWidth: 100, minHeight: 100 }, permissions: { network: [] } }),
+    JSON.stringify({ id, name, version, apiVersion: "1", entry: "dist/index.html", games: [], viewport: { minWidth: 100, minHeight: 100 }, permissions: { network } }),
   );
-  await writeFile(path.join(dir, "dist", "index.html"), `<!doctype html><title>${name}</title><p data-testid="hello">${name}</p>`);
+  await writeFile(path.join(dir, "dist", "index.html"), `<!doctype html><title>${name}</title><p data-testid="hello">${name}</p><p data-testid="version">${version}</p>`);
   return (await packModule(dir, key)).zip;
 }
 
@@ -69,7 +71,7 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
     const detail = /^\/v1\/catalog\/modules\/([^/]+)$/.exec(url.pathname);
     if (detail) {
       const item = modules.find((candidate) => candidate.entry.id === decodeURIComponent(detail[1]!));
-      return item ? send(200, { module: item.entry, versions: [] }) : send(404, { error: "not found" });
+      return item ? send(200, { module: item.entry, versions: item.versions ?? [] }) : send(404, { error: "not found" });
     }
     const zip = /^\/v1\/catalog\/zips\/([0-9a-f]{64})\.zip$/.exec(url.pathname);
     if (zip) {
@@ -185,6 +187,84 @@ test("the catalog asks for a personal workspace's modules, and stays offline wit
     expect(asked.slice(before).filter((request) => request.startsWith("/v1/catalog"))).toEqual([]);
   } finally {
     await offline.app.close();
+    server.close();
+  }
+});
+
+test("a catalog module updates without a restart, and an update adding a network host waits for consent while the old version keeps working", async () => {
+  const key = generateKeyPairSync("ed25519").privateKey;
+  const owner = fingerprint(key);
+  const id = "wellbrained.tracker";
+  const release = async (version: string, network: string[], notes: string[]): Promise<Listed> => {
+    const zip = await packed(id, "Tracker", key, version, network);
+    return { entry: listing(id, "Tracker", zip, owner, { version, permissions: { network, connectors: [] }, notes }), body: zip };
+  };
+  const modules = [await release("1.0.0", [], ["First version."])];
+  const { url, server, asked } = await catalogServer(modules);
+  const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
+  const settings = async () => {
+    await page.getByTestId("rail-settings").click();
+    await page.getByTestId("settings-nav-modules").click();
+  };
+  const checkForUpdates = async (toast: string) => {
+    await settings();
+    await page.getByTestId("check-module-updates").click();
+    await expect(page.getByTestId("toast")).toHaveText(toast);
+  };
+  try {
+    await openGame(page, "poe2");
+    await page.getByTestId("add-module").click();
+    await page.getByTestId("module-tab-browse").click();
+    await page.getByTestId(`catalog-install-${id}`).click();
+    await page.getByTestId(`catalog-add-${id}`).click();
+    await expect(panels(page, id)).toHaveCount(1);
+    await expectModuleText(app, id, "version", "1.0.0");
+
+    // An update that asks for nothing new installs at once, and the open panel reloads with it.
+    modules[0] = await release("1.1.0", [], ["Faster."]);
+    await checkForUpdates("Updated: 1. Waiting for your yes: 0.");
+    await page.getByTestId("settings-close").click();
+    await expectModuleText(app, id, "version", "1.1.0");
+    await expect(page.getByTestId("notice")).toHaveText("Tracker was updated to 1.1.0. What's new is in Settings > Modules.");
+    // The update check asked for the whole catalog, never for the modules this player has (C11).
+    expect(asked.filter((request) => request.startsWith("/v1/catalog?") || request === "/v1/catalog")).toContain("/v1/catalog");
+    expect(asked.some((request) => request.startsWith("/v1/catalog?") && request.includes(id))).toBe(false);
+
+    // An update that asks for a new network host waits; the panel keeps running 1.1.0 (C4).
+    modules[0] = {
+      ...(await release("1.2.0", ["api.example.com"], ["Reads your runs from api.example.com."])),
+      versions: [
+        { version: "1.2.0", publishedAt: "2026-10-18T12:00:00.000Z", notes: ["Reads your runs from api.example.com."] },
+        { version: "1.1.0", publishedAt: "2026-10-18T11:00:00.000Z", notes: ["Faster."] },
+      ],
+    };
+    await checkForUpdates("Updated: 0. Waiting for your yes: 1.");
+    await expect(page.getByTestId(`module-update-${id}`)).toHaveText("Update to 1.2.0");
+    await page.getByTestId("settings-close").click();
+    const review = page.locator('[data-testid^="update-review-open-"]');
+    await expect(review).toHaveCount(1);
+    await expectModuleText(app, id, "version", "1.1.0");
+    expect(JSON.parse(await readFile(path.join(userData, "modules", id, "tavora.module.json"), "utf8")).version).toBe("1.1.0");
+
+    // Not now keeps it waiting and the old version running.
+    await review.click();
+    await expect(page.getByTestId("grant-hosts")).toHaveText("api.example.com");
+    await expect(page.getByTestId(`module-notes-${id}-1.2.0`)).toContainText("Reads your runs from api.example.com.");
+    await expect(page.getByTestId(`module-notes-${id}-1.1.0`)).toHaveCount(0);
+    await page.getByTestId("grant-cancel").click();
+    await expectModuleText(app, id, "version", "1.1.0");
+
+    // Allowed: 1.2.0 installs, gets the host it asked for, and the panel reloads with it.
+    await review.click();
+    await page.getByTestId("grant-allow").click();
+    await expect(page.getByTestId("grant-dialog")).toHaveCount(0);
+    await expectModuleText(app, id, "version", "1.2.0");
+    await expect(review).toHaveCount(0);
+    await expect(page.locator('[data-testid^="grant-review-open-"]')).toHaveCount(0);
+    const grants = JSON.parse(await readFile(path.join(userData, "grants.json"), "utf8"));
+    expect(grants.owners[owner][id].network).toEqual(["api.example.com"]);
+  } finally {
+    await app.close();
     server.close();
   }
 });

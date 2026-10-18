@@ -28,7 +28,20 @@ export interface CatalogEntry extends CatalogModuleView {
   games: string[];
   workspaces: boolean;
   zip: { sha256: string; size: number };
+  /** This version's patch notes, plain text. */
+  notes: string[];
 }
+
+/** One published version of a module, as GET /v1/catalog/modules/<id> lists them. */
+export interface CatalogVersion {
+  version: string;
+  publishedAt: string;
+  notes: string[];
+}
+
+/** Most lines of patch notes kept for one version, and most versions read for one module. */
+const MAX_NOTES = 50;
+const MAX_VERSIONS = 200;
 
 /** Where the player is: a game (its catalog id) or a personal workspace. */
 export type CatalogScope = { game: string } | { workspace: true };
@@ -39,6 +52,23 @@ function plain(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
   const text = value.replace(HIDDEN, " ").replace(/\s+/g, " ").trim();
   return text && text.length <= max ? text : null;
+}
+
+/** Patch note lines as plain text; a line that is not text, or too long, is left out. */
+function plainNotes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, MAX_NOTES)
+    .map((line) => plain(line, 500))
+    .filter((line): line is string => line !== null);
+}
+
+/** Keeps a version only if it has the shape the app relies on. */
+export function parseCatalogVersion(raw: unknown): CatalogVersion | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const { version, publishedAt, notes } = raw as Record<string, unknown>;
+  if (typeof version !== "string" || !SEMVER.test(version) || version.length > 64) return null;
+  return { version, publishedAt: typeof publishedAt === "string" && publishedAt.length <= 40 ? publishedAt : "", notes: plainNotes(notes) };
 }
 
 /** Keeps a listing only if every field has the shape the app relies on. */
@@ -75,6 +105,7 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
     size: file.size,
     publishedAt: typeof publishedAt === "string" && publishedAt.length <= 40 ? publishedAt : "",
     zip: { sha256: file.sha256, size: file.size },
+    notes: plainNotes(entry.notes),
   };
 }
 
@@ -85,7 +116,7 @@ export function fitsScope(entry: Pick<CatalogEntry, "games" | "workspaces">, sco
 }
 
 /** The view the host UI gets: no hash, no games list. */
-export function catalogView({ games: _games, workspaces: _workspaces, zip: _zip, ...view }: CatalogEntry): CatalogModuleView {
+export function catalogView({ games: _games, workspaces: _workspaces, zip: _zip, notes: _notes, ...view }: CatalogEntry): CatalogModuleView {
   return view;
 }
 
@@ -131,8 +162,31 @@ export class CatalogClient {
     }
   }
 
+  /**
+   * Every listed module, for the update check (catalog-updates.ts). It asks for the whole index with
+   * no filter, so the service never learns which modules this player has (C11). Null when there is
+   * no usable answer.
+   */
+  async index(): Promise<CatalogEntry[] | null> {
+    try {
+      const response = await this.get("/v1/catalog", this.listTimeoutMs, "application/json");
+      if (failure(response.status)) return null;
+      const body = (await response.json()) as { modules?: unknown } | null;
+      const raw = Array.isArray(body?.modules) ? body.modules.slice(0, MAX_MODULES) : [];
+      const seen = new Set<string>();
+      return raw.map(parseCatalogEntry).filter((entry): entry is CatalogEntry => entry !== null && !seen.has(entry.id) && Boolean(seen.add(entry.id)));
+    } catch {
+      return null;
+    }
+  }
+
   /** The newest listing of one module. Throws a CatalogError the player can read. */
   async module(id: string): Promise<CatalogEntry> {
+    return (await this.details(id)).entry;
+  }
+
+  /** The newest listing of one module and every version it was published at, newest first. Throws a CatalogError the player can read. */
+  async details(id: string): Promise<{ entry: CatalogEntry; versions: CatalogVersion[] }> {
     if (!isModuleId(id)) throw new CatalogError("error.catalogNotListed");
     let response: Response;
     try {
@@ -142,9 +196,11 @@ export class CatalogClient {
     }
     if (response.status === 404) throw new CatalogError("error.catalogNotListed");
     throwFailure(response.status);
-    const entry = parseCatalogEntry(((await response.json().catch(() => null)) as { module?: unknown } | null)?.module);
+    const body = (await response.json().catch(() => null)) as { module?: unknown; versions?: unknown } | null;
+    const entry = parseCatalogEntry(body?.module);
     if (!entry || entry.id !== id) throw new CatalogError("error.catalogNotListed");
-    return entry;
+    const versions = (Array.isArray(body?.versions) ? body.versions.slice(0, MAX_VERSIONS) : []).map(parseCatalogVersion).filter((version): version is CatalogVersion => version !== null);
+    return { entry, versions };
   }
 
   /**
