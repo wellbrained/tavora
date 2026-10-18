@@ -1002,6 +1002,23 @@ export class Host {
     return this.finishInstall(await installZipData(zip, { ...(await this.installOptions()), expect: { id: entry.id, owner: entry.owner }, catalog: true }));
   }
 
+  /**
+   * Reports a module to Tavora (C12). A module installed from the catalog is reported as the zip that
+   * is installed, the one the player has seen; any other id as the version the catalog lists now.
+   * Only the id, the key and the zip's hash are sent, and only because the player pressed Report.
+   */
+  private async reportCatalogModule(moduleId: string): Promise<void> {
+    if (!this.library.onlineSearch) throw new PlayerError("error.reportOff");
+    const module = this.catalogModules.has(moduleId) ? (this.modules.get(moduleId) ?? this.blockedModules.get(moduleId)) : undefined;
+    const record = module ? (await readOwnerRecords(this.options.userData))[path.basename(module.root)] : undefined;
+    if (module && record?.id === moduleId && record.sha256) {
+      await this.catalog.report({ id: moduleId, owner: module.owner, sha256: record.sha256 });
+      return;
+    }
+    const entry = await this.catalog.module(moduleId);
+    await this.catalog.report({ id: entry.id, owner: entry.owner, sha256: entry.zip.sha256 });
+  }
+
   /** The modules installed from the catalog, as they are now, for the update check. */
   private catalogInstalled(): CatalogInstalled[] {
     const installed: CatalogInstalled[] = [];
@@ -1520,6 +1537,8 @@ export class Host {
         return this.installModule();
       case "install-catalog-module":
         return this.installCatalogModule(action.moduleId);
+      case "report-catalog-module":
+        return this.reportCatalogModule(action.moduleId);
       case "apply-module-update":
         return this.applyCatalogUpdate(action.moduleId, action.version);
       case "delete-module-data":
@@ -2861,6 +2880,7 @@ export class Host {
         version: module.manifest.version,
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
+        fromCatalog: this.catalogModules.has(module.manifest.id),
         publisher: this.publisherOf(module),
         publisherName: ((key) => (key ? this.publisherNames.name(key) : null))(this.publisherOf(module)),
         localDataWaiting: this.localDataWaiting(module),

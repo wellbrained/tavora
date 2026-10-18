@@ -356,6 +356,8 @@ export interface HostViewState {
     origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
     /** Only a module in the player's own modules folder can be removed from Settings. */
     removable: boolean;
+    /** Installed from Tavora's module catalog, so it can be reported from Settings. */
+    fromCatalog: boolean;
     /** The fingerprint of the key that signed it, for a module installed from a signed zip; null otherwise. */
     publisher: string | null;
     /** The developer name the publisher key is linked to, as Tavora's service said ("by <name>"); null when unknown or unlinked. */
@@ -526,6 +528,11 @@ export type HostAction =
   | { type: "install-catalog-module"; moduleId: string }
   /** Looks for updates of the modules installed from the catalog now; answers with `updated` and `waiting`. */
   | { type: "check-module-updates" }
+  /**
+   * Reports a catalog module to Tavora after the player pressed Report: the installed zip when it came
+   * from the catalog, otherwise the listed one. Sends only the module id, its key and the zip's hash.
+   */
+  | { type: "report-catalog-module"; moduleId: string }
   /** The player said yes to a catalog update that asks for more: installs exactly that version and grants what it asked for. */
   | { type: "apply-module-update"; moduleId: string; version: string }
   /** Deletes the data a module that is not installed left behind (owner as in leftoverModuleData). */

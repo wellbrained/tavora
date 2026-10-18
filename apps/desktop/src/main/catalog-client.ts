@@ -242,6 +242,28 @@ export class CatalogClient {
     return data;
   }
 
+  /**
+   * Reports a zip to Tavora, only after the player pressed Report: the module id, its key's
+   * fingerprint and the zip's hash, and nothing else (C12). Throws a CatalogError the player can read.
+   */
+  async report(report: { id: string; owner: string; sha256: string }): Promise<void> {
+    if (!isModuleId(report.id) || !FINGERPRINT.test(report.owner) || !SHA256.test(report.sha256)) throw new CatalogError("error.catalogNotListed");
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.baseUrl}/v1/catalog/report`, {
+        ...REQUEST,
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ id: report.id, owner: report.owner, sha256: report.sha256 }),
+        signal: AbortSignal.timeout(this.listTimeoutMs),
+      });
+    } catch {
+      throw new CatalogError("error.catalogUnreachable");
+    }
+    if (response.status === 404) throw new CatalogError("error.catalogNotListed");
+    throwFailure(response.status);
+  }
+
   private get(pathname: string, timeoutMs: number, accept: string): Promise<Response> {
     return this.fetchImpl(`${this.baseUrl}${pathname}`, { ...REQUEST, headers: { Accept: accept }, signal: AbortSignal.timeout(timeoutMs) });
   }

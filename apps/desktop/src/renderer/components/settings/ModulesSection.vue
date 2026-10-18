@@ -4,9 +4,10 @@
 // zip checks and unpacks a module zip into the folder; dropping a module
 // package into the folder and pressing Reload adds it too. Remove moves it
 // to the recycle bin. A module's data stays, so adding it again finds it.
+// A module installed from the catalog can be reported to Tavora.
 // What module developers use (development folders, the examples) is in
 // Settings > Development instead.
-import { ArrowRightLeft, CloudDownload, FileArchive, FolderInput, FolderOpen, NotebookText, RefreshCw, Trash2 } from "@lucide/vue";
+import { ArrowRightLeft, CloudDownload, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -78,6 +79,19 @@ function deleteData(entry: { owner: string; moduleId: string }) {
     confirm: t("settings.modules.deleteData"),
     danger: true,
     run: () => submitAction({ type: "delete-module-data", owner: entry.owner, moduleId: entry.moduleId }),
+  });
+}
+
+function report(module: ModuleView) {
+  confirmAction({
+    title: t("settings.modules.reportTitle", { name: module.name }),
+    message: t("settings.modules.reportMessage"),
+    confirm: t("settings.modules.report"),
+    run: async () => {
+      const error = await submitAction({ type: "report-catalog-module", moduleId: module.id });
+      if (!error) showToast(t("settings.modules.reported", { name: module.name }));
+      return error;
+    },
   });
 }
 
@@ -176,6 +190,15 @@ function remove(module: ModuleView) {
           @click="moveLocal(module)"
         >
           <ArrowRightLeft :stroke-width="1.5" /> {{ t("settings.modules.moveLocal") }}
+        </Button>
+        <Button
+          v-if="module.fromCatalog && state!.library.onlineSearch"
+          variant="ghost"
+          :aria-label="t('settings.modules.reportLabel', { name: module.name })"
+          :data-testid="`report-module-${module.id}`"
+          @click="report(module)"
+        >
+          <Flag :stroke-width="1.5" /> {{ t("settings.modules.report") }}
         </Button>
         <Button
           v-if="module.removable"
