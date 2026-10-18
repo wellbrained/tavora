@@ -26,6 +26,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "Right-click a panel and pick Remove from game to take its module out of just this game. All its panels there close, and empty slots stay where they were, so your layout doesn't shift. The module stays installed, and its notes and data come back when you add it again.",
       "A module in Settings > Modules that can't load now says so in plain words, with a space after its name, and tells you what to do when it just isn't built yet.",
       "While icons are being shared, a spinner turns next to the count, so you can see it's working.",
+      "Share icons now tells you straight away how many new icons it found, or that there are none, with much shorter text.",
       "Dragging a panel beside another one in its row now shows a bar where it lands, since the panels just swap places and keep their sizes.",
     ],
   },
