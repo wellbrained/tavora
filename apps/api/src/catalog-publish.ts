@@ -3,6 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import { PUBLISH_STATEMENT, ZIP_LIMITS } from "@tavora/pack";
 import type { AccountStore } from "./account-store.ts";
 import { CatalogError, checkCatalogZip, type CatalogStore, type CheckedZip } from "./catalog.ts";
+import { catalogTrust } from "./catalog-trust.ts";
 import { signedStatement } from "./publishers.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 
@@ -11,7 +12,9 @@ import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
  * the publisher key's signature over PUBLISH_STATEMENT and the zip's SHA-256. No sign-in is needed: the
  * key must be linked to an account (which takes a sign-in), and the account holds the module id's
  * prefix (C5). Signing the hash, not only the files, means a zip shared by hand cannot be published
- * by whoever received it; only the key's holder decides what lists.
+ * by whoever received it; only the key's holder decides what lists. A revoked key publishes nothing
+ * new (C6), and a successor key publishes the modules of the key it replaces (C7), both by the lists
+ * signed with the catalogue key.
  */
 export interface PublishLimits {
   /** Uploads per account in 24 hours (C9). */
@@ -36,10 +39,12 @@ export interface PublishOptions {
   rateLimiter?: RateLimiter;
   limits?: Partial<PublishLimits>;
   now?: () => number;
+  /** The catalogue public key the signed lists are checked against (CATALOGUE_PUBLIC_KEY outside tests). */
+  catalogueKey?: string;
 }
 
 /** The middleware and handler for POST /v1/catalog/publish. */
-export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now }: PublishOptions) {
+export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey }: PublishOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
   const { uploadsPerDay, accountBytes, catalogBytes } = { ...PUBLISH_LIMITS, ...limits };
   const refuse = (context: Context, status: 400 | 403 | 409 | 413 | 415 | 429 | 503 | 507, reason: string, error: string) => context.json({ error, reason }, status);
@@ -72,6 +77,13 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (!signedStatement(Buffer.from(key.publicKey, "base64"), `${PUBLISH_STATEMENT}\n${checked.sha256}`, signature)) {
       return refuse(context, 403, "bad-signature", "The upload is not signed by the key that signed the zip.");
     }
+    const trust = catalogTrust(catalog, catalogueKey);
+    if (trust.revoked(checked.owner, checked.sha256)) return refuse(context, 403, "key-revoked", "This publisher key was revoked and publishes nothing new. Link a new key to your account.");
+    // A successor key counts for its account's first key only when the succession names this account.
+    const firstKey = (fingerprint: string) => {
+      const first = trust.firstKey(fingerprint);
+      return first.account === key.accountId ? first.key : fingerprint;
+    };
 
     const prefix = checked.manifest.id.split(".")[0]!;
     const held = store.prefixCheck(key.accountId, prefix);
@@ -92,7 +104,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     }
 
     try {
-      catalog.add(bytes, new Date(at), key.accountId, checked);
+      catalog.add(bytes, new Date(at), key.accountId, checked, firstKey);
     } catch (error) {
       if (error instanceof CatalogError) return refuse(context, 409, "conflict", error.message);
       throw error;

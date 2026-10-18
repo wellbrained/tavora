@@ -2,7 +2,7 @@ import { generateKeyPairSync, createPublicKey, type KeyObject } from "node:crypt
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { publishSignature, signFiles, writeZip, type ZipFile } from "@tavora/pack";
+import { catalogPublicKey, nextCatalogList, publishSignature, signCatalogList, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { AccountStore } from "./account-store.ts";
 import { createApp } from "./app.ts";
@@ -16,6 +16,8 @@ import { createRateLimiter } from "./rate-limit.ts";
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
 const roomy = () => createRateLimiter({ limit: 1000, windowMs: 60_000 });
 const rawKey = (key: KeyObject) => createPublicKey(key).export({ format: "der", type: "spki" }).subarray(12);
+/** A catalogue key for the tests, standing in for Tavora's offline one. */
+const catalogue = generateKeyPairSync("ed25519").privateKey;
 
 function moduleZip(key: KeyObject, id = "wellbrained.timer", version = "1.0.0", extra: ZipFile[] = []): Buffer {
   const manifest = { id, name: "Timer", version, apiVersion: "1", entry: "index.html", games: [], viewport: { minWidth: 200, minHeight: 150 }, permissions: { network: [] } };
@@ -27,7 +29,7 @@ function setup(limits: Partial<PublishLimits> = {}) {
   const store = new AccountStore(":memory:");
   const catalog = new CatalogStore(mkdtempSync(path.join(tmpdir(), "tavora-catalog-")));
   const clock = { now: Date.parse("2026-10-18T12:00:00Z") };
-  const app = createApp({ db, catalog, rateLimiter: roomy(), publishRateLimiter: roomy(), publishLimits: limits, accounts: { store, mailer: createTestInbox(), now: () => clock.now } });
+  const app = createApp({ db, catalog, rateLimiter: roomy(), publishRateLimiter: roomy(), publishLimits: limits, catalogueKey: catalogPublicKey(catalogue), accounts: { store, mailer: createTestInbox(), now: () => clock.now } });
   /** An account with a linked key. */
   const developer = (email: string) => {
     const key = generateKeyPairSync("ed25519").privateKey;
@@ -142,5 +144,47 @@ describe("publishing to the catalog", () => {
     const busy = createApp({ db, catalog, publishRateLimiter: createRateLimiter({ limit: 1, windowMs: 60_000 }), accounts: { store: new AccountStore(":memory:"), mailer: createTestInbox() } });
     await busy.request("http://tavora.test/v1/catalog/publish", request());
     expect((await busy.request("http://tavora.test/v1/catalog/publish", request())).status).toBe(429);
+  });
+
+  it("takes new versions from a successor key named in the signed successions list, for the same account only (C7)", async () => {
+    const { store, catalog, clock, developer, send, reason } = setup();
+    const { key: lost, accountId } = developer("dev@example.com");
+    expect((await send(lost, moduleZip(lost, "wellbrained.timer", "1.0.0"))).status).toBe(201);
+    const next = generateKeyPairSync("ed25519").privateKey;
+    store.linkKey(accountId, keyFingerprint(rawKey(next)), rawKey(next).toString("base64"), clock.now);
+    const successions = (account: string, signer: KeyObject = catalogue) =>
+      signCatalogList(nextCatalogList("successions", [{ old: keyFingerprint(rawKey(lost)), new: keyFingerprint(rawKey(next)), account }], null, new Date(clock.now)), signer);
+
+    // No list, a list signed by another key, or one naming another account: still the first key's module.
+    expect(await reason(await send(next, moduleZip(next, "wellbrained.timer", "1.1.0")))).toBe("conflict");
+    catalog.setList("successions", Buffer.from(successions(accountId, generateKeyPairSync("ed25519").privateKey)));
+    expect(await reason(await send(next, moduleZip(next, "wellbrained.timer", "1.1.0")))).toBe("conflict");
+    catalog.setList("successions", Buffer.from(successions("someone-else")));
+    expect(await reason(await send(next, moduleZip(next, "wellbrained.timer", "1.1.0")))).toBe("conflict");
+
+    catalog.setList("successions", Buffer.from(successions(accountId)));
+    const zip = moduleZip(next, "wellbrained.timer", "1.1.0");
+    expect((await send(next, zip)).status).toBe(201);
+    // The listing names the key that signed the newest zip, which the app checks the zip against.
+    const [entry] = catalog.index();
+    expect(entry).toMatchObject({ id: "wellbrained.timer", version: "1.1.0", owner: keyFingerprint(rawKey(next)) });
+    expect(catalog.modules()[0]!.owner).toBe(keyFingerprint(rawKey(lost)));
+    // Reports of the new zip name its key, or the module's first key.
+    expect(catalog.report({ id: "wellbrained.timer", owner: keyFingerprint(rawKey(next)), sha256: entry!.zip.sha256 })).toBe(true);
+    expect(catalog.report({ id: "wellbrained.timer", owner: keyFingerprint(rawKey(lost)), sha256: entry!.zip.sha256 })).toBe(true);
+  });
+
+  it("refuses uploads signed by a revoked key (C6)", async () => {
+    const { catalog, clock, developer, send, reason } = setup();
+    const { key } = developer("dev@example.com");
+    expect((await send(key, moduleZip(key, "wellbrained.timer", "1.0.0"))).status).toBe(201);
+    const revoked = [{ fingerprint: keyFingerprint(rawKey(key)), revoked: "2026-10-18T11:00:00Z", allow: [] }];
+    catalog.setList("revocations", Buffer.from(signCatalogList(nextCatalogList("revocations", revoked, null, new Date(clock.now)), catalogue)));
+    const answer = await send(key, moduleZip(key, "wellbrained.timer", "1.0.1"));
+    expect(answer.status).toBe(403);
+    expect(await reason(answer)).toBe("key-revoked");
+    // A revocation signed by any other key counts for nothing.
+    catalog.setList("revocations", Buffer.from(signCatalogList(nextCatalogList("revocations", revoked, null, new Date(clock.now)), generateKeyPairSync("ed25519").privateKey)));
+    expect((await send(key, moduleZip(key, "wellbrained.timer", "1.0.1"))).status).toBe(201);
   });
 });

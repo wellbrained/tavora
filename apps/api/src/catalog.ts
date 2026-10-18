@@ -117,7 +117,7 @@ export interface CatalogEntry {
   /** Whether it may be added to a personal workspace (only modules for any game can be). */
   workspaces: boolean;
   permissions: { network: string[]; connectors: string[] };
-  /** The publisher key's fingerprint. */
+  /** The fingerprint of the publisher key that signed this version: the module's first key, or its successor. */
   owner: string;
   zip: { sha256: string; size: number };
   publishedAt: string;
@@ -164,7 +164,7 @@ interface VersionSql {
 }
 
 const LATEST = `
-  select m.id as module_id, m.owner, v.version, v.sha256, v.size, v.manifest, v.notes, v.published_at
+  select m.id as module_id, coalesce(v.signer, m.owner) as owner, v.version, v.sha256, v.size, v.manifest, v.notes, v.published_at
   from modules m join versions v on v.seq = (select max(seq) from versions where module_id = m.id)
   where m.listed = 1`;
 
@@ -189,7 +189,8 @@ function entryOf(row: VersionSql): CatalogEntry {
 /**
  * The catalog's own files, in a folder of the state directory: `catalog.sqlite` with the modules and
  * their versions, and `zips/<sha256>.zip`. A module's owner is set by its first version; later versions
- * must come from the same key and be newer, so a version can never be replaced or go back.
+ * must come from the same key, or its successor by a signed succession (C7), and be newer, so a version
+ * can never be replaced or go back.
  */
 export class CatalogStore {
   private readonly db: DatabaseSync;
@@ -227,6 +228,8 @@ export class CatalogStore {
     // Catalogs from before signed uploads have no account_id: those versions were added by hand.
     const columns = (this.db.prepare("pragma table_info(versions)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (!columns.includes("account_id")) this.db.exec("alter table versions add column account_id text");
+    // The key that signed a version when it is not the module's owner (a successor key); null means the owner.
+    if (!columns.includes("signer")) this.db.exec("alter table versions add column signer text");
   }
 
   close(): void {
@@ -235,12 +238,19 @@ export class CatalogStore {
 
   /**
    * Adds a checked zip as a module's newest version, and stores the zip under its hash. `uploadedBy`
-   * is the account a publisher's upload came from; versions added by hand have none.
+   * is the account a publisher's upload came from; versions added by hand have none. `firstKey` says
+   * which key a signing key succeeds (catalog-trust.ts); without it only the owner key adds versions.
    */
-  add(bytes: Buffer, now: Date = new Date(), uploadedBy: string | null = null, checked: CheckedZip = checkCatalogZip(bytes)): CheckedZip {
+  add(
+    bytes: Buffer,
+    now: Date = new Date(),
+    uploadedBy: string | null = null,
+    checked: CheckedZip = checkCatalogZip(bytes),
+    firstKey: (fingerprint: string) => string = (fingerprint) => fingerprint,
+  ): CheckedZip {
     const { manifest, owner, sha256 } = checked;
     const module = this.db.prepare("select owner from modules where id = ?").get(manifest.id) as { owner: string } | undefined;
-    if (module && module.owner !== owner) throw new CatalogError(`${manifest.id} belongs to another publisher key.`);
+    if (module && module.owner !== owner && firstKey(owner) !== module.owner) throw new CatalogError(`${manifest.id} belongs to another publisher key.`);
     const latest = this.db.prepare("select version from versions where module_id = ? order by seq desc limit 1").get(manifest.id) as { version: string } | undefined;
     if (latest && compareModuleVersions(manifest.version, latest.version) <= 0) {
       throw new CatalogError(`${manifest.id} already has ${latest.version}; a new version must be newer.`);
@@ -257,8 +267,8 @@ export class CatalogStore {
     try {
       if (!module) this.db.prepare("insert into modules (id, owner, created_at) values (?, ?, ?)").run(manifest.id, owner, at);
       this.db
-        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id) values (?, ?, ?, ?, ?, ?, ?, ?)")
-        .run(manifest.id, manifest.version, sha256, checked.size, JSON.stringify(manifest), JSON.stringify(checked.notes), at, uploadedBy);
+        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id, signer) values (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(manifest.id, manifest.version, sha256, checked.size, JSON.stringify(manifest), JSON.stringify(checked.notes), at, uploadedBy, module && module.owner !== owner ? owner : null);
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
@@ -286,13 +296,13 @@ export class CatalogStore {
   }
 
   /**
-   * Records a player's report of a zip. Only a zip the catalog lists, under that module id and key,
-   * can be reported. Reports hide nothing: a person decides on the admin page (C12).
+   * Records a player's report of a zip. Only a zip the catalog lists, under that module id and key
+   * (the module's owner, or the key that signed that version), can be reported. Reports hide nothing: a person decides on the admin page (C12).
    */
   report(input: { id: string; owner: string; sha256: string }, now: Date = new Date()): boolean {
     const known = this.db
-      .prepare("select 1 from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.id = ? and m.owner = ? and m.listed = 1")
-      .get(input.sha256, input.id, input.owner);
+      .prepare("select 1 from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.id = ? and (m.owner = ? or v.signer = ?) and m.listed = 1")
+      .get(input.sha256, input.id, input.owner, input.owner);
     if (!known) return false;
     const at = now.toISOString();
     this.db
