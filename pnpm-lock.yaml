@@ -36,6 +36,9 @@ importers:
       '@tavora/module-schema':
         specifier: workspace:*
         version: link:../../packages/module-schema
+      '@tavora/pack':
+        specifier: workspace:*
+        version: link:../../packages/pack
       '@types/node':
         specifier: ^22.20.5
         version: 22.20.5
