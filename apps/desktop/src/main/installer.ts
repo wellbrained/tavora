@@ -3,7 +3,7 @@
 // and checked in memory (readZip), the manifest validated and the signature
 // verified before anything is written, then the files go to a staging folder
 // that is renamed into place. Nothing from the zip is ever run.
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, validateManifest, type ModuleManifest } from "@tavora/module-schema";
@@ -12,6 +12,7 @@ import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
 import { PlayerError } from "./messages";
 import { OFFICIAL_PREFIX, type InstalledModule } from "./registry";
+import type { SafetyCheck } from "./safety-lists";
 
 export class InstallError extends PlayerError {}
 
@@ -42,8 +43,13 @@ export function compareModuleVersions(a: string, b: string): number {
   return x.pre.length - y.pre.length;
 }
 
-/** Who signed each module the installer put into the player's modules folder, by folder name. */
-export type OwnerRecords = Record<string, { id: string; owner: string }>;
+/**
+ * Who signed each module the installer put into the player's modules folder, by folder name.
+ * `owner` is whose data it uses: the first key of the publisher's account. `signer` is the key
+ * that signed the zip installed now, when a succession made it another key, and `sha256` the
+ * zip's hash, so a blocked zip can be stopped (catalog threat model, C7, C14).
+ */
+export type OwnerRecords = Record<string, { id: string; owner: string; signer?: string; sha256?: string }>;
 
 const RECORDS = "module-owners.json";
 
@@ -57,8 +63,11 @@ export async function readOwnerRecords(userData: string): Promise<OwnerRecords> 
   const folders = parsed?.folders;
   if (typeof folders !== "object" || folders === null) return records;
   for (const [folder, value] of Object.entries(folders)) {
-    const { id, owner } = (value ?? {}) as { id?: unknown; owner?: unknown };
-    if (isModuleId(folder) && isModuleId(id) && isOwnerId(owner)) records[folder] = { id, owner };
+    const { id, owner, signer, sha256 } = (value ?? {}) as { id?: unknown; owner?: unknown; signer?: unknown; sha256?: unknown };
+    if (!isModuleId(folder) || !isModuleId(id) || !isOwnerId(owner)) continue;
+    records[folder] = { id, owner };
+    if (isOwnerId(signer) && signer !== owner) records[folder].signer = signer;
+    if (typeof sha256 === "string" && /^[0-9a-f]{64}$/.test(sha256)) records[folder].sha256 = sha256;
   }
   return records;
 }
@@ -92,27 +101,34 @@ export interface InstallOptions {
   userData: string;
   /** The player's modules folder (real path). */
   userModules: string;
-  /** Every module loaded now, with the folder it came from. */
+  /** Every module loaded now, with the folder it came from, and those stopped because their zip is blocked. */
   modules: ReadonlyMap<string, InstalledModule>;
   /** This Tavora's version; a zip whose `minTavora` is newer is refused before anything is unpacked. */
   tavoraVersion: string;
+  /** The catalog's signed safety lists: blocked zips, revoked keys and successions. None: nothing is revoked or blocked. */
+  safety?: SafetyCheck;
 }
 
 export interface Installed {
   manifest: ModuleManifest;
+  /** Whose data it uses: the signing key, or the first key of its account after a succession. */
   owner: string;
+  /** SHA-256 of the zip. */
+  sha256: string;
   /** It replaced an earlier version from the same publisher. */
   updated: boolean;
 }
 
-export async function installZip(zipFile: string, { userData, userModules, modules, tavoraVersion }: InstallOptions): Promise<Installed> {
+export async function installZip(zipFile: string, { userData, userModules, modules, tavoraVersion, safety }: InstallOptions): Promise<Installed> {
   const size = await stat(zipFile).then((info) => (info.isFile() ? info.size : -1));
   if (size < 0) throw new InstallError("error.installNotZip");
   if (size > ZIP_LIMITS.maxArchiveBytes) throw new InstallError("error.installRefused", { reason: "the zip is too big" });
 
+  const bytes = await readFile(zipFile);
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
   let files;
   try {
-    files = readZip(await readFile(zipFile));
+    files = readZip(bytes);
   } catch (error) {
     if (error instanceof ZipError) throw new InstallError("error.installRefused", { reason: error.message });
     throw error;
@@ -136,9 +152,16 @@ export async function installZip(zipFile: string, { userData, userModules, modul
   for (const icon of icons) if (!names.has(icon)) throw new InstallError("error.installRefused", { reason: `the icon ${icon} is missing` });
   if (manifest.id.startsWith(OFFICIAL_PREFIX)) throw new InstallError("error.installRefused", { reason: "its id is reserved for Tavora's own modules" });
 
+  const block = safety?.blocked(sha256);
+  if (block) throw new InstallError("error.installBlocked", { name: manifest.name, reason: block.reason });
+
   const verified = verifyFiles(files);
   if (!verified.ok) throw new InstallError("error.installRefused", { reason: verified.reason });
-  const { owner } = verified;
+  const signer = verified.owner;
+  const signed = signer !== LOCAL_OWNER;
+  // A revoked key installs only what it signed before (C6); a successor key's modules use its first key's data (C7).
+  if (signed && safety?.revoked(signer, sha256)) throw new InstallError("error.installRevoked", { name: manifest.name });
+  const owner = signed && safety ? safety.firstKey(signer) : signer;
 
   // An id already loaded is replaced only by a newer zip from the same
   // publisher in the player's own folder (an update); two modules with one id never run together.
@@ -194,9 +217,9 @@ export async function installZip(zipFile: string, { userData, userModules, modul
 
   const records = await readOwnerRecords(userData);
   if (owner === LOCAL_OWNER) delete records[folder];
-  else records[folder] = { id: manifest.id, owner };
+  else records[folder] = { id: manifest.id, owner, ...(signer !== owner ? { signer } : {}), sha256 };
   await writeOwnerRecords(userData, records);
-  return { manifest, owner, updated };
+  return { manifest, owner, sha256, updated };
 }
 
 async function exists(target: string): Promise<boolean> {

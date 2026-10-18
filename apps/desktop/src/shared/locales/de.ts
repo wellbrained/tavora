@@ -554,6 +554,8 @@ export const de: Record<keyof typeof en, string> = {
   "error.installTakenDevelopment": "{name} wird aus deinem Entwicklungsordner {folder} geladen. Entferne den Ordner zuerst unter Einstellungen > Entwicklung und installiere dann das Zip.",
   "error.installTakenOfficial": "{name} kommt mit Tavora, deshalb kann ein Zip es nicht ersetzen. Gib deinem Modul eine eigene ID.",
   "error.installOtherPublisher": "Dieses Zip hat dieselbe ID wie {name}, stammt aber von einem anderen Herausgeber und kann es deshalb nicht ersetzen. Entferne {name} zuerst, wenn du dieses möchtest.",
+  "error.installBlocked": "Tavora hat dieses Zip von {name} gesperrt, weil es Schaden anrichten kann: {reason} Installiere eine Version, die nicht gesperrt ist.",
+  "error.installRevoked": "{name} ist mit einem Herausgeberschlüssel signiert, den die Entwicklerin oder der Entwickler widerrufen hat, deshalb installiert Tavora es nicht. Frag nach einer Version, die mit dem neuen Schlüssel signiert ist.",
   "error.installNotNewer": "{name} {installed} ist schon installiert, und dieses Zip hat Version {version}. Ein Update braucht eine höhere Version.",
   "error.installNeedsNewer": "{name} braucht Tavora {needed} oder neuer, und dies ist Tavora {current}. Aktualisiere zuerst Tavora und installiere es dann noch einmal.",
   "error.tooManyDevelopmentFolders": "Tavora lädt höchstens 20 Entwicklungsordner. Entferne zuerst einen.",
