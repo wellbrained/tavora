@@ -63,7 +63,7 @@ input[type="search"] { font: inherit; font-size: 16px; background: var(--card); 
 #status { color: var(--muted); margin: 0 0 0 auto; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 8px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; align-items: center; gap: 12px; min-width: 0; }
-.tile { flex: none; width: 48px; height: 48px; border-radius: 12px; background: #6b4a2f; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
+.tile { flex: none; width: 48px; height: 48px; background: #6b4a2f; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
 .tile img { width: 88%; height: 88%; object-fit: contain; }
 .info { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .name { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
