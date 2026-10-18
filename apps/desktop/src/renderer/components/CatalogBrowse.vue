@@ -90,7 +90,7 @@ function settings() {
     <template v-else>
       <p class="text-muted-foreground flex items-center gap-2 pt-6 pb-3 text-sm"><ShieldCheck class="size-4 flex-none" :stroke-width="1.5" /> {{ t("catalog.hint") }}</p>
       <ul class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">
-        <li v-for="module in shown" :key="module.id" class="bg-background/40 flex flex-col gap-3 rounded-xl border p-4" :data-testid="`catalog-${module.id}`">
+        <li v-for="module in shown" :key="module.id" class="bg-background/40 hover:border-primary/40 flex flex-col gap-3 rounded-xl border p-4 transition-colors" :data-testid="`catalog-${module.id}`">
           <div class="min-w-0">
             <div class="flex min-w-0 items-baseline gap-2">
               <span class="truncate font-medium" :title="module.name" data-testid="catalog-name">{{ module.name }}</span>

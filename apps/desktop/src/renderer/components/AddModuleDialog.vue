@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { t } from "../i18n";
-import { Blocks, Code, Gamepad2, HardDrive, Search, Settings2, ShieldCheck, Store, X } from "@lucide/vue";
+import { Blocks, Code, Download, Gamepad2, Search, Settings2, ShieldCheck, Store, X } from "@lucide/vue";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import ModuleIcon from "./ModuleIcon.vue";
 import CatalogBrowse from "./CatalogBrowse.vue";
@@ -26,7 +26,7 @@ const VIEWS = [
   { id: "all", icon: Blocks },
   { id: "inGame", icon: Gamepad2 },
   { id: "official", icon: ShieldCheck },
-  { id: "local", icon: HardDrive },
+  { id: "local", icon: Download },
   { id: "development", icon: Code },
 ] as const;
 
@@ -80,6 +80,8 @@ const resultCount = computed(() => groups.value.reduce((total, group) => total +
 const showHeadings = computed(() => view.value === "all" || view.value === "inGame");
 
 const title = computed(() => (view.value === "catalog" ? t("addModule.tab.browse") : t(`addModule.category.${view.value}`)));
+/** The header's icon: the chosen view's own from the list on the left. */
+const viewIcon = computed(() => (view.value === "catalog" ? Store : (VIEWS.find((item) => item.id === view.value)?.icon ?? Blocks)));
 const shownCount = computed(() => (view.value === "catalog" ? catalogCount.value : resultCount.value));
 
 /** How many panels of a module (of one of its panel types, if given) are already open in this game. */
@@ -139,8 +141,8 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
             type="button"
             :class="
               cn(
-                'text-muted-foreground hover:bg-accent hover:text-foreground flex h-9 shrink-0 items-center gap-3 rounded-lg px-3 text-left font-medium whitespace-nowrap',
-                view === item.id && 'bg-accent text-foreground',
+                'text-muted-foreground hover:bg-accent hover:text-foreground group flex h-9 shrink-0 items-center gap-3 rounded-lg px-3 text-left font-medium whitespace-nowrap',
+                view === item.id && 'bg-primary/10 text-foreground hover:bg-primary/15',
               )
             "
             :aria-pressed="view === item.id"
@@ -148,17 +150,17 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
             :data-testid="`module-category-${item.id}`"
             @click="view = item.id"
           >
-            <component :is="item.icon" class="hidden size-4 flex-none sm:block" :stroke-width="1.5" />
+            <component :is="item.icon" :class="cn('hidden size-4 flex-none transition-colors sm:block', view === item.id ? 'text-primary' : 'group-hover:text-primary/80')" :stroke-width="1.75" />
             <span class="flex-1 truncate">{{ t(`addModule.category.${item.id}`) }}</span>
-            <span class="text-muted-foreground text-xs tabular-nums">{{ count(item.id) }}</span>
+            <span :class="cn('text-xs tabular-nums', view === item.id ? 'text-primary' : 'text-muted-foreground')">{{ count(item.id) }}</span>
           </button>
           <h3 class="text-muted-foreground hidden px-3 pt-4 pb-1 text-xs font-semibold tracking-wider uppercase sm:block">{{ t("addModule.more") }}</h3>
           <button
             type="button"
             :class="
               cn(
-                'text-muted-foreground hover:bg-accent hover:text-foreground flex h-9 shrink-0 items-center gap-3 rounded-lg px-3 text-left font-medium whitespace-nowrap',
-                view === 'catalog' && 'bg-accent text-foreground',
+                'text-muted-foreground hover:bg-accent hover:text-foreground group flex h-9 shrink-0 items-center gap-3 rounded-lg px-3 text-left font-medium whitespace-nowrap',
+                view === 'catalog' && 'bg-primary/10 text-foreground hover:bg-primary/15',
               )
             "
             :aria-pressed="view === 'catalog'"
@@ -166,7 +168,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
             data-testid="module-tab-browse"
             @click="view = 'catalog'"
           >
-            <Store class="hidden size-4 flex-none sm:block" :stroke-width="1.5" />
+            <Store :class="cn('hidden size-4 flex-none transition-colors sm:block', view === 'catalog' ? 'text-primary' : 'group-hover:text-primary/80')" :stroke-width="1.75" />
             <span class="flex-1">{{ t("addModule.tab.browse") }}</span>
           </button>
         </nav>
@@ -177,6 +179,9 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
 
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
         <header class="flex h-[72px] shrink-0 items-center gap-3 border-b px-5 sm:px-8">
+          <span class="bg-primary/15 text-primary flex size-10 flex-none items-center justify-center rounded-lg" aria-hidden="true">
+            <component :is="viewIcon" class="size-5" :stroke-width="1.75" />
+          </span>
           <div class="flex min-w-0 flex-1 flex-col gap-0.5">
             <div class="flex min-w-0 items-baseline gap-3">
               <h2 class="truncate text-xl font-semibold" data-testid="module-view-title">{{ title }}</h2>
@@ -194,18 +199,18 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
         <CatalogBrowse v-if="view === 'catalog'" :query="query" @count="catalogCount = $event" />
         <div v-else class="min-h-0 flex-1 overflow-y-auto px-5 pb-8 sm:px-8" data-testid="module-results">
           <section v-for="group in groups" :key="group.id" :aria-label="group.label" class="pt-6">
-            <h3 v-if="showHeadings" class="text-muted-foreground flex items-center gap-2 pb-3 text-xs font-semibold tracking-wider uppercase">
-              {{ group.label }} <span class="tabular-nums">{{ group.items.length }}</span>
+            <h3 v-if="showHeadings" class="text-primary flex items-center gap-2 pb-3 text-xs font-semibold tracking-wider uppercase">
+              {{ group.label }} <span class="text-muted-foreground tabular-nums">{{ group.items.length }}</span>
             </h3>
             <ul class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">
               <li
                 v-for="module in group.items"
                 :key="module.id"
-                :class="cn('bg-background/40 flex flex-col gap-3 rounded-xl border p-4', openCount(module.id) && 'border-primary/30')"
+                :class="cn('bg-background/40 hover:border-primary/40 flex flex-col gap-3 rounded-xl border p-4 transition-colors', openCount(module.id) && 'border-primary/30 bg-primary/5')"
                 :data-testid="`module-${module.id}`"
               >
                 <div class="flex items-start gap-3">
-                  <span class="bg-background text-primary flex size-10 shrink-0 items-center justify-center rounded-lg border" aria-hidden="true"><ModuleIcon :module-id="module.id" size="size-5" /></span>
+                  <span class="bg-primary/10 border-primary/20 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg border" aria-hidden="true"><ModuleIcon :module-id="module.id" size="size-5" /></span>
                   <div class="min-w-0 flex-1">
                     <div class="flex min-w-0 items-center gap-2">
                       <span class="truncate font-medium" :title="module.name">{{ module.name }}</span>

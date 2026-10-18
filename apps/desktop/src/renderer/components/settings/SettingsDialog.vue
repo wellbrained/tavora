@@ -2,7 +2,7 @@
 // Settings: the sections in groups on the left, with a search that finds any setting; the chosen
 // section on the right, under a title that stays put while it scrolls. Each section is its own
 // component; settings-index.ts lists them and every setting the search can find.
-import { RotateCw, Search, X } from "@lucide/vue";
+import { RotateCw, ScrollText, Search, Settings as SettingsIcon, X } from "@lucide/vue";
 import { computed, nextTick, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -24,6 +24,14 @@ import PatchNotesSection from "./PatchNotesSection.vue";
 import ShortcutsSection from "./ShortcutsSection.vue";
 import TrashSection from "./TrashSection.vue";
 import { GROUPS, groupLabel, sectionLabel, settingEntries, type SettingsSection } from "./settings-index";
+
+/** The icon shown in the page header: the section's own, a magnifier for search results. */
+const headerIcon = computed(() => {
+  if (query.value.trim()) return Search;
+  if (section.value === "patch-notes") return ScrollText;
+  for (const group of GROUPS) for (const item of group.sections) if (item.id === section.value) return item.icon;
+  return SettingsIcon;
+});
 
 const section = ref<SettingsSection>("general");
 const query = ref("");
@@ -130,15 +138,15 @@ function onSearchKey(event: KeyboardEvent) {
             type="button"
             :class="
               cn(
-                'text-muted-foreground hover:bg-accent hover:text-foreground flex h-9 items-center gap-3 rounded-lg px-3 text-left font-medium',
-                !query && section === item.id && 'bg-accent text-foreground',
+                'text-muted-foreground hover:bg-accent hover:text-foreground group flex h-9 items-center gap-3 rounded-lg px-3 text-left font-medium',
+                !query && section === item.id && 'bg-primary/10 text-foreground hover:bg-primary/15',
               )
             "
             :data-testid="`settings-nav-${item.id}`"
             :aria-current="!query && section === item.id ? 'page' : undefined"
             @click="show(item.id)"
           >
-            <component :is="item.icon" class="size-4 flex-none" :stroke-width="1.5" />
+            <component :is="item.icon" :class="cn('size-4 flex-none transition-colors', !query && section === item.id ? 'text-primary' : 'group-hover:text-primary/80')" :stroke-width="1.75" />
             <span class="flex-1">{{ sectionLabel(item.id) }}</span>
             <span v-if="item.id === 'trash' && library.trash.length" class="text-muted-foreground text-xs tabular-nums">{{ library.trash.length }}</span>
           </button>
@@ -148,7 +156,7 @@ function onSearchKey(event: KeyboardEvent) {
           :class="
             cn(
               'text-muted-foreground hover:bg-accent hover:text-foreground mt-auto rounded-lg px-3 py-2 text-left text-xs tabular-nums',
-              !query && section === 'patch-notes' && 'bg-accent text-foreground',
+              !query && section === 'patch-notes' && 'bg-primary/10 text-foreground',
             )
           "
           :title="t('settings.version')"
@@ -164,7 +172,12 @@ function onSearchKey(event: KeyboardEvent) {
           :class="cn('flex h-[72px] flex-none items-center justify-between gap-4 border-b px-10 transition-colors duration-500', highlight === section && 'bg-primary/10')"
           :data-setting="section"
         >
-          <h2 class="truncate text-xl font-semibold" data-testid="settings-heading">{{ query.trim() ? t("settings.results.title") : sectionLabel(section) }}</h2>
+          <div class="flex min-w-0 items-center gap-3">
+            <span class="bg-primary/15 text-primary flex size-9 flex-none items-center justify-center rounded-lg" aria-hidden="true">
+              <component :is="headerIcon" class="size-5" :stroke-width="1.75" />
+            </span>
+            <h2 class="truncate text-xl font-semibold" data-testid="settings-heading">{{ query.trim() ? t("settings.results.title") : sectionLabel(section) }}</h2>
+          </div>
           <DialogClose as-child>
             <Button variant="ghost" size="icon" class="flex-none" data-testid="settings-close" :aria-label="t('settings.close')" :title="t('common.close')">
               <X :stroke-width="1.5" />
@@ -184,7 +197,7 @@ function onSearchKey(event: KeyboardEvent) {
                     :data-testid="`settings-result-${result.id}`"
                     @click="show(result.section, result.id)"
                   >
-                    <span class="text-muted-foreground text-xs font-medium">{{ sectionLabel(result.section) }}</span>
+                    <span class="text-primary text-xs font-medium">{{ sectionLabel(result.section) }}</span>
                     <span class="font-medium">{{ result.label }}</span>
                     <span class="text-muted-foreground text-sm">{{ result.description }}</span>
                   </button>
