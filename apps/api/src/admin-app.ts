@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { ADMIN_CSS, ADMIN_HTML, ADMIN_JS } from "./admin-page.ts";
+import type { CatalogStore } from "./catalog.ts";
 import { INTER_WOFF2 } from "./inter-font.ts";
 import type { IconState } from "./icon-state.ts";
 import { isIconId, type IconStore } from "./icons.ts";
@@ -9,7 +10,8 @@ import type { Submissions } from "./submissions.ts";
 /**
  * The private review page: the icons players have offered, shown the way the
  * app will show them, with Approve, Deny and Deny and block; and the hosted
- * icons, with Take down for a publisher's request. It is served on its own
+ * icons, with Take down for a publisher's request; and the modules players
+ * reported from the catalog, with Delist and Dismiss. It is served on its own
  * port of 127.0.0.1 that the web server never forwards, and every call needs
  * the admin token, so reaching it takes the server and the token.
  */
@@ -19,11 +21,12 @@ export interface AdminOptions {
   submissions: Submissions;
   state: IconState;
   store: IconStore;
+  catalog?: CatalogStore;
 }
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function createAdminApp({ token, submissions, state, store }: AdminOptions) {
+export function createAdminApp({ token, submissions, state, store, catalog }: AdminOptions) {
   const app = new Hono();
   const expected = digest(token);
 
@@ -99,6 +102,20 @@ export function createAdminApp({ token, submissions, state, store }: AdminOption
     const { id, block } = await json(context.req.raw);
     if (typeof id !== "string") return context.json({ error: "Send { id, block }." }, 400);
     return submissions.takedown(id, block === true) ? context.json({ ok: true }) : context.json({ error: "No such hosted icon." }, 404);
+  });
+
+  app.get("/api/reports", (context) => context.json({ reports: catalog?.reports() ?? [] }));
+
+  app.post("/api/reports/dismiss", async (context) => {
+    const { sha256 } = await json(context.req.raw);
+    if (typeof sha256 !== "string") return context.json({ error: "Send { sha256 }." }, 400);
+    return catalog?.dismissReport(sha256) ? context.json({ ok: true }) : context.json({ error: "No such report." }, 404);
+  });
+
+  app.post("/api/catalog/listed", async (context) => {
+    const { id, listed } = await json(context.req.raw);
+    if (typeof id !== "string" || typeof listed !== "boolean") return context.json({ error: "Send { id, listed }." }, 400);
+    return catalog?.setListed(id, listed) ? context.json({ ok: true }) : context.json({ error: "No such module." }, 404);
   });
 
   app.notFound((context) => context.json({ error: "Not found." }, 404));

@@ -1,5 +1,5 @@
 /**
- * The review page, as three small files served by the admin app. No outside
+ * The review page (icons, and modules reported from the catalog), as three small files served by the admin app. No outside
  * resources, no inline script or style (the page's content security policy
  * allows only these files), and everything that came from a player is put in
  * with textContent, never as markup. Images are fetched with the token and shown
@@ -11,16 +11,17 @@ export const ADMIN_HTML = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tavora icon review</title>
+<title>Tavora review</title>
 <link rel="stylesheet" href="/admin.css">
 </head>
 <body>
 <header>
   <div class="bar">
-    <h1>Icon review</h1>
+    <h1>Review</h1>
     <nav role="tablist">
       <button id="tab-pending" class="tab" type="button" role="tab" data-tab="pending">Needs review</button>
       <button id="tab-hosted" class="tab" type="button" role="tab" data-tab="hosted">Hosted</button>
+      <button id="tab-reports" class="tab" type="button" role="tab" data-tab="reports">Reports</button>
     </nav>
     <p id="status" role="status"></p>
     <button id="refresh" type="button">Refresh</button>
@@ -35,6 +36,10 @@ export const ADMIN_HTML = `<!doctype html>
     <p class="hint">Take down removes an icon at once, for a publisher's request. Release icons also have to be removed from the repository and deployed.</p>
     <input id="search" type="search" placeholder="Search by game name" autocomplete="off">
     <div id="hosted" class="grid"></div>
+  </section>
+  <section id="panel-reports" role="tabpanel" hidden>
+    <p class="hint">Modules players reported from the catalog, most reported first. Delist takes the module out of the catalog; players who installed it keep it. To turn it off on players' PCs, block the zip's SHA-256 or revoke the key in a list signed with pnpm tavora-catalog-sign, then serve it with tavora-api-catalog set-list.</p>
+    <div id="reports" class="grid"></div>
   </section>
 </main>
 <script src="/admin.js"></script>
@@ -88,7 +93,8 @@ let token = sessionStorage.getItem("adminToken") || "";
 const urls = [];
 let data = null;
 let tab = "pending";
-try { if (sessionStorage.getItem("adminTab") === "hosted") tab = "hosted"; } catch {}
+const TABS = ["pending", "hosted", "reports"];
+try { const saved = sessionStorage.getItem("adminTab"); if (TABS.includes(saved)) tab = saved; } catch {}
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -187,6 +193,26 @@ async function hostedCard(icon) {
   return card;
 }
 
+function reportCard(report) {
+  const card = el("div", "card");
+  card.appendChild(el("div", "name", report.name + " " + report.version));
+  card.appendChild(el("div", "meta", "id " + report.id + " \u00b7 key " + report.owner + (report.listed ? "" : " \u00b7 delisted")));
+  card.appendChild(el("div", "meta", "reported " + report.count + (report.count === 1 ? " time" : " times") + " \u00b7 first " + report.firstAt.slice(0, 16).replace("T", " ") + " \u00b7 last " + report.lastAt.slice(0, 16).replace("T", " ")));
+  card.appendChild(el("div", "meta", "sha256 " + report.sha256));
+  const actions = el("div", "row");
+  if (report.listed) {
+    actions.appendChild(button("Delist", "bad", async () => {
+      if (!confirm("Take " + report.name + " out of the catalog?")) return;
+      await call("/api/catalog/listed", { id: report.id, listed: false });
+    }));
+  } else {
+    actions.appendChild(button("Relist", "ok", () => call("/api/catalog/listed", { id: report.id, listed: true })));
+  }
+  actions.appendChild(button("Dismiss", "", () => call("/api/reports/dismiss", { sha256: report.sha256 })));
+  card.appendChild(actions);
+  return card;
+}
+
 async function fill(id, items, make, empty) {
   const holder = $(id);
   const cards = [];
@@ -196,16 +222,21 @@ async function fill(id, items, make, empty) {
 
 async function render() {
   if (!data) return;
-  for (const name of ["pending", "hosted"]) {
+  for (const name of TABS) {
     $("tab-" + name).setAttribute("aria-selected", String(name === tab));
     $("panel-" + name).hidden = name !== tab;
   }
   $("tab-pending").textContent = "Needs review (" + data.pending.length + ")";
   $("tab-hosted").textContent = "Hosted (" + data.hosted.length + ")";
+  $("tab-reports").textContent = "Reports (" + data.reports.length + ")";
   for (const url of urls.splice(0)) URL.revokeObjectURL(url);
   // only the open tab loads its pictures
   if (tab === "pending") {
     await fill("pending", data.pending, pendingCard, "Nothing is waiting.");
+    return;
+  }
+  if (tab === "reports") {
+    await fill("reports", data.reports, reportCard, "No module has been reported.");
     return;
   }
   const query = $("search").value.trim().toLowerCase();
@@ -223,6 +254,7 @@ async function load() {
   try {
     const response = await call("/api/overview");
     data = await response.json();
+    data.reports = (await (await call("/api/reports")).json()).reports;
     await render();
     status("Up to date.");
   } catch (error) {
@@ -230,7 +262,7 @@ async function load() {
   }
 }
 
-for (const name of ["pending", "hosted"]) {
+for (const name of TABS) {
   $("tab-" + name).addEventListener("click", () => {
     tab = name;
     try { sessionStorage.setItem("adminTab", name); } catch {}
