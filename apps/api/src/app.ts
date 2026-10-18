@@ -43,7 +43,8 @@ export interface AppOptions {
 
 export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
-  const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 10, windowMs: 3_600_000 });
+  // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
+  const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 100, windowMs: 3_600_000 });
   const steamLimiter = steamRateLimiter ?? createRateLimiter({ limit: 6, windowMs: 60_000 });
   const app = new Hono();
 

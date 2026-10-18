@@ -243,7 +243,7 @@ describe("icon offers", () => {
       icons: store,
       submissions,
       ...(options.contact === undefined ? {} : { takedownContact: options.contact }),
-      submitRateLimiter: createRateLimiter({ limit: options.limit ?? 10, windowMs: 3_600_000 }),
+      submitRateLimiter: createRateLimiter({ limit: options.limit ?? 100, windowMs: 3_600_000 }),
     });
     return { app, state };
   };
