@@ -376,6 +376,7 @@ test("grayscale text is chosen in Settings and applies on the next start", async
   expect(await hasSwitch(app)).toBe(false);
 
   await page.getByTestId("rail-settings").click();
+  await page.getByTestId("settings-nav-appearance").click();
   const toggle = page.getByTestId("grayscale-text");
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
@@ -390,6 +391,7 @@ test("grayscale text is chosen in Settings and applies on the next start", async
   const again = await launch(userData);
   expect(await hasSwitch(again.app)).toBe(true);
   await again.page.getByTestId("rail-settings").click();
+  await again.page.getByTestId("settings-nav-appearance").click();
   await expect(again.page.getByTestId("grayscale-text")).toHaveAttribute("aria-checked", "true");
   await expect(again.page.getByTestId("restart-bar")).toHaveCount(0);
   await again.app.close();

@@ -173,7 +173,7 @@ function onSearchKey(event: KeyboardEvent) {
         </header>
 
         <div ref="scroller" class="relative min-h-0 flex-1 overflow-y-auto" data-testid="settings-body">
-          <div class="max-w-[840px] px-10 pt-8 pb-12">
+          <div class="px-10 pt-8 pb-12">
             <template v-if="query.trim()">
               <p v-if="!results.length" class="text-muted-foreground" data-testid="settings-no-results">{{ t("settings.results.none", { query: query.trim() }) }}</p>
               <ul v-else class="-mx-3 flex flex-col gap-1" :aria-label="t('settings.results.title')" data-testid="settings-results">

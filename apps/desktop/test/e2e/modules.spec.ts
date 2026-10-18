@@ -37,8 +37,9 @@ test("the modules page lists where modules came from, reloads, and removes one w
   await page.getByTestId("settings-nav-modules").click();
   await expect(page.getByTestId("module-origin-local.test.mini")).toHaveText("Your modules folder, in mini");
   await expect(page.getByTestId("remove-module-local.test.mini")).toBeVisible();
-  // Tavora's own modules are listed but cannot be removed here.
-  await expect(page.getByTestId("module-origin-tavora.notes")).toHaveText("Ships with Tavora");
+  // Tavora's own modules are listed, with the Official badge instead of a folder, but cannot be removed here.
+  await expect(page.getByTestId("module-tavora.notes")).toContainText("Official");
+  await expect(page.getByTestId("module-origin-tavora.notes")).toHaveCount(0);
   await expect(page.getByTestId("remove-module-tavora.notes")).toHaveCount(0);
 
   // A module added while Tavora runs appears on Reload; a broken one is explained.

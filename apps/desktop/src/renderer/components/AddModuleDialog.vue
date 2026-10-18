@@ -144,6 +144,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
               )
             "
             :aria-pressed="view === item.id"
+            :title="t(`addModule.about.${item.id}`)"
             :data-testid="`module-category-${item.id}`"
             @click="view = item.id"
           >
@@ -161,6 +162,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
               )
             "
             :aria-pressed="view === 'catalog'"
+            :title="t('addModule.about.catalog')"
             data-testid="module-tab-browse"
             @click="view = 'catalog'"
           >
@@ -175,11 +177,14 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
 
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
         <header class="flex h-[72px] shrink-0 items-center gap-3 border-b px-5 sm:px-8">
-          <div class="flex min-w-0 flex-1 items-baseline gap-3">
-            <h2 class="truncate text-xl font-semibold" data-testid="module-view-title">{{ title }}</h2>
-            <span v-if="shownCount !== null" class="text-muted-foreground text-sm tabular-nums" role="status" data-testid="module-result-count">{{
-              t("addModule.results", { count: shownCount })
-            }}</span>
+          <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div class="flex min-w-0 items-baseline gap-3">
+              <h2 class="truncate text-xl font-semibold" data-testid="module-view-title">{{ title }}</h2>
+              <span v-if="shownCount !== null" class="text-muted-foreground text-sm tabular-nums" role="status" data-testid="module-result-count">{{
+                t("addModule.results", { count: shownCount })
+              }}</span>
+            </div>
+            <p class="text-muted-foreground truncate text-sm" data-testid="module-view-about">{{ t(`addModule.about.${view}`) }}</p>
           </div>
           <DialogClose as-child>
             <Button variant="ghost" size="icon" class="flex-none" :aria-label="t('common.close')" :title="t('common.close')"><X :stroke-width="1.5" /></Button>
