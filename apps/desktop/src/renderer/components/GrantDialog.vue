@@ -10,7 +10,7 @@
 import { Gauge, Globe, Headphones } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
-import { act, aiUsage, dialog, discord, nextPanelSlot, openSettings, state, type GrantRequest } from "../host";
+import { act, aiUsage, dialog, discord, openPanels, openSettings, state, type GrantRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 import ModuleIcon from "./ModuleIcon.vue";
@@ -27,6 +27,11 @@ const hosts = computed(() => asks.value?.network ?? []);
 const connectors = computed(() => asks.value?.connectors ?? []);
 const aiAccounts = computed(() => aiUsage.value?.accounts ?? []);
 const discordUser = computed(() => discord.value?.user ?? null);
+
+/** Cancel goes back to the module library when the request came from there and it stays open. */
+function close() {
+  dialog.value = props.request.backToLibrary ? { kind: "add-module" } : null;
+}
 
 // The module went away, or has nothing left to ask: nothing to answer.
 watch(
@@ -73,11 +78,9 @@ async function allow() {
     error.value = result.error;
     return;
   }
-  dialog.value = null;
+  close();
   if (props.request.review) return;
-  nextPanelSlot.value = props.request.slot;
-  const { panelType } = props.request;
-  void act({ type: "open-module", moduleId: current.id, ...(panelType ? { panelType } : {}) });
+  void openPanels(current.id, props.request.slot, props.request.panelTypes ?? []);
 }
 </script>
 
@@ -89,7 +92,7 @@ async function allow() {
     "
     class="sm:max-w-[480px]"
     testid="grant-dialog"
-    @close="dialog = null"
+    @close="close"
   >
     <div class="flex items-center gap-3">
       <span class="bg-background text-primary flex size-10 flex-none items-center justify-center rounded-[10px] border" aria-hidden="true">
@@ -134,7 +137,7 @@ async function allow() {
     <p class="text-muted-foreground text-sm">{{ t("grant.later") }}</p>
     <p v-if="error" class="text-destructive text-sm" role="alert">{{ error }}</p>
     <div class="flex justify-end gap-2">
-      <Button type="button" variant="secondary" autofocus data-testid="grant-cancel" @click="dialog = null">
+      <Button type="button" variant="secondary" autofocus data-testid="grant-cancel" @click="close">
         {{ request.review ? t("grant.notNow") : t("common.cancel") }}
       </Button>
       <Button type="button" data-testid="grant-allow" :disabled="busy" @click="allow">{{ update ? t("grant.updateAllow") : t("grant.allow") }}</Button>
