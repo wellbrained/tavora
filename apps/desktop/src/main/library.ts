@@ -93,6 +93,8 @@ export interface Library {
   moduleNotesSeen: Record<string, string>;
   /** The Steam profile link or id the player chose to remember for the Steam import, or null. Kept only on this PC. */
   steamProfile: string | null;
+  /** Ids of games not in the library whose icon the player offered to the Tavora service (Steam import), so they are not offered again. */
+  iconsOffered: string[];
   /** The language of Tavora's texts: one of them, or the system's. */
   language: LanguageSetting;
   /** The picked theme and variation. Kept even while that theme is not installed, which shows the default. */
@@ -115,6 +117,8 @@ export const MAX_LABEL = 3;
 export const MAX_DEVELOPMENT_FOLDERS = 20;
 /** Modules whose seen patch notes are remembered; more than anyone installs. */
 export const MAX_NOTES_SEEN = 1000;
+/** Offered icons of games not in the library that are remembered; as many as a Steam import can list. */
+export const MAX_ICONS_OFFERED = 5000;
 
 /** Absolute paths only, each once (ignoring case on Windows), at most MAX_DEVELOPMENT_FOLDERS. */
 export function cleanDevelopmentFolders(values: unknown[]): string[] {
@@ -154,6 +158,7 @@ export function emptyLibrary(): Library {
     developmentFolders: [],
     moduleNotesSeen: {},
     steamProfile: null,
+    iconsOffered: [],
     language: "system",
     theme: { ...DEFAULT_THEME },
     followSystem: true,
@@ -367,6 +372,11 @@ export function recordIcon(library: Library, id: string, outcome: { file: string
 export function markIconShared(library: Library, id: string, now: Date): void {
   const game = library.games[id];
   if (game) game.iconSharedAt = now.toISOString();
+}
+
+/** Notes that the player offered the icon of a game that is not in the library, newest last. */
+export function markIconOffered(library: Library, id: string): void {
+  library.iconsOffered = [...library.iconsOffered.filter((other) => other !== id), id].slice(-MAX_ICONS_OFFERED);
 }
 
 /** True when another game in the library uses this icon file. */
@@ -661,6 +671,9 @@ export function sanitizeLibrary(raw: unknown): Library {
   }
   if (isLanguageSetting(saved.language)) library.language = saved.language;
   if (typeof saved.steamProfile === "string" && saved.steamProfile.trim() && saved.steamProfile.length <= 200) library.steamProfile = saved.steamProfile.trim();
+  if (Array.isArray(saved.iconsOffered)) {
+    library.iconsOffered = [...new Set(saved.iconsOffered.filter((id): id is string => isGameId(id) && !id.startsWith("local-")))].slice(-MAX_ICONS_OFFERED);
+  }
   const theme = asRecord(saved.theme);
   if (isModuleId(theme.id) && isVariationId(theme.variation)) library.theme = { id: theme.id, variation: theme.variation };
   if (typeof saved.followSystem === "boolean") library.followSystem = saved.followSystem;

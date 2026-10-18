@@ -6,6 +6,7 @@ import {
   deleteFolder,
   deleteTrashedGame,
   emptyLibrary,
+  markIconOffered,
   gamesNeedingIcon,
   LibraryError,
   markIconShared,
@@ -223,6 +224,14 @@ describe("Steam icons", () => {
     expect(emptyLibrary().steamProfile).toBeNull();
     expect(sanitizeLibrary({ steamProfile: "  https://steamcommunity.com/id/me " }).steamProfile).toBe("https://steamcommunity.com/id/me");
     for (const bad of ["", "   ", 5, "x".repeat(201)]) expect(sanitizeLibrary({ steamProfile: bad }).steamProfile).toBeNull();
+    // Icons offered for games not in the library: known ids, each once.
+    expect(emptyLibrary().iconsOffered).toEqual([]);
+    expect(sanitizeLibrary({ iconsOffered: ["elden-ring", "elden-ring", "local-x", "../x", 5] }).iconsOffered).toEqual(["elden-ring"]);
+    const offered = emptyLibrary();
+    markIconOffered(offered, "a");
+    markIconOffered(offered, "b");
+    markIconOffered(offered, "a");
+    expect(offered.iconsOffered).toEqual(["b", "a"]);
   });
 
   it("asks for every game that has no icon, and not again soon after a miss", () => {

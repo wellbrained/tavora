@@ -7,12 +7,16 @@
  * anyone else sees it.
  */
 
+import type { SteamImportGame } from "../shared/host-api";
 import { matchHosted, type HostedList } from "./hosted-icons";
 
 export const SHARE_TIMEOUT_MS = 10_000;
 
-/** `sent`: the service took it. `skipped`: it will not take this one (bad, already there). `failed`: try again later. */
-export type ShareOutcome = "sent" | "skipped" | "failed";
+/**
+ * `sent`: the service took it. `skipped`: it will not take this one (bad, already there). `busy`: it takes only
+ * so many an hour, try the rest later. `failed`: try again later.
+ */
+export type ShareOutcome = "sent" | "skipped" | "busy" | "failed";
 
 /** True for the icon files that came from this PC: the installed game's, or Steam's own `.ico` from its folder. */
 export function isOriginalIconFile(file: string | null): file is string {
@@ -45,11 +49,32 @@ export function isShareCandidate(game: ShareGame): boolean {
  */
 export function shareableIconFile(
   game: ShareGame,
-  settings: { steamIcons: boolean; onlineSearch: boolean },
+  settings: { steamIcons: boolean; onlineSearch: boolean; iconsOffered: readonly string[] },
   list: HostedList | null,
 ): string | null {
-  if (!list || !settings.steamIcons || !settings.onlineSearch || !isShareCandidate(game)) return null;
+  if (!list || !settings.steamIcons || !settings.onlineSearch || !isShareCandidate(game) || settings.iconsOffered.includes(game.id)) return null;
   return matchHosted(game, list) ? null : game.iconFile;
+}
+
+/**
+ * The games of a Steam import whose icon could be offered without adding them:
+ * ones the player does not have (`isNew`), with an id the service knows, that
+ * were not offered before and that the service has no icon for. Whether this PC
+ * has the icon is for the caller to find out.
+ */
+export function steamShareGames(
+  games: readonly SteamImportGame[],
+  isNew: (game: SteamImportGame) => boolean,
+  offered: readonly string[],
+  list: HostedList,
+): (SteamImportGame & { id: string })[] {
+  const done = new Set(offered);
+  const seen = new Set<string>();
+  return games.filter((game): game is SteamImportGame & { id: string } => {
+    if (game.id === null || game.id.startsWith("local-") || done.has(game.id) || seen.has(game.id) || !isNew(game)) return false;
+    seen.add(game.id);
+    return !matchHosted({ id: game.id, name: game.name, catalogId: null }, list);
+  });
 }
 
 /**
@@ -57,6 +82,17 @@ export function shareableIconFile(
  * a game's icon can carry a dozen sizes. Null when the file is not a readable icon.
  */
 export function largestIcoFrame(ico: Uint8Array): Uint8Array | null {
+  return pickIcoFrame(ico, (a, b) => a > b);
+}
+
+/** An .ico with one frame of about `size` px (the smallest at least that big, else the biggest), for a preview. */
+export function icoFrameNear(ico: Uint8Array, size: number): Uint8Array | null {
+  const want = size * size;
+  return pickIcoFrame(ico, (a, b) => (a >= want ? b < want || a < b : b < want && a > b));
+}
+
+/** An .ico with only the frame `better` prefers (by pixel count). */
+function pickIcoFrame(ico: Uint8Array, better: (pixels: number, best: number) => boolean): Uint8Array | null {
   if (ico.byteLength < 22) return null;
   const view = new DataView(ico.buffer, ico.byteOffset, ico.byteLength);
   if (view.getUint16(0, true) !== 0 || view.getUint16(2, true) !== 1) return null;
@@ -69,7 +105,7 @@ export function largestIcoFrame(ico: Uint8Array): Uint8Array | null {
     const offset = view.getUint32(at + 12, true);
     if (size === 0 || offset < 6 + count * 16 || offset + size > ico.byteLength) continue;
     const pixels = (ico[at]! || 256) * (ico[at + 1]! || 256);
-    if (!best || pixels > best.pixels) best = { at, pixels };
+    if (!best || better(pixels, best.pixels)) best = { at, pixels };
   }
   if (!best) return null;
   const size = view.getUint32(best.at + 8, true);
@@ -106,6 +142,7 @@ export async function submitIcon(
       body: JSON.stringify({ id: offer.id, name: offer.name, source: offer.source, icon: Buffer.from(offer.ico).toString("base64") }),
     });
     if (response.status === 202) return "sent";
+    if (response.status === 429) return "busy";
     // A refusal that asking again cannot change: the game has an icon now, or the file is not usable.
     if (response.status === 400 || response.status === 409 || response.status === 413) return "skipped";
     return "failed";
