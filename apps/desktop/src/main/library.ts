@@ -19,9 +19,17 @@ export type { RootItem, RootSort, Startup };
 
 export type GameIcon = { kind: "monogram"; text: string } | { kind: "image"; file: string };
 
+/**
+ * What an entry in the library is: a game, or a personal workspace that belongs to no game (for
+ * modules such as Notes or Whiteboard). Both keep their own layout and module data under their id.
+ */
+export type EntryKind = "game" | "workspace";
+
 export interface GameEntry {
   /** Stable id. Keys the game's workspace and module data, so it never changes. */
   id: string;
+  /** A workspace has no built-in game, Steam id or icon of its own. */
+  kind: EntryKind;
   /** Set when the game was picked from the built-in list. */
   catalogId: string | null;
   /** Display name. Renaming never changes the id. */
@@ -264,7 +272,8 @@ function customGameId(library: Library, name: string): string {
 export type NewGame =
   | { catalogId: string }
   | { name: string; steamAppId?: number | null }
-  | { online: { id: string; name: string; steamAppId?: number | null } };
+  | { online: { id: string; name: string; steamAppId?: number | null } }
+  | { workspace: string };
 
 function checkNotInLibrary(library: Library, id: string): void {
   const existing = library.games[id];
@@ -279,7 +288,13 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
   let name: string;
   let catalogId: string | null = null;
   let steamAppId: number | null = null;
-  if ("catalogId" in input) {
+  let kind: EntryKind = "game";
+  if ("workspace" in input) {
+    // A workspace is never linked to a built-in game, whatever its name.
+    name = cleanName(input.workspace);
+    id = customGameId(library, name);
+    kind = "workspace";
+  } else if ("catalogId" in input) {
     const known = catalogGame(input.catalogId);
     if (!known) throw new LibraryError("error.game.notBuiltIn");
     checkNotInLibrary(library, known.id);
@@ -306,15 +321,16 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
   if (!isGameId(id)) throw new LibraryError("error.game.badName");
   library.games[id] = {
     id,
+    kind,
     catalogId,
     name,
     icon: { kind: "monogram", text: monogram(name) },
-    useOriginalIcon: true,
+    useOriginalIcon: kind === "game",
     steamAppId,
     iconFile: null,
     iconCheckedAt: null,
     iconSharedAt: null,
-    showNews: true,
+    showNews: kind === "game",
     addedAt: now.toISOString(),
     lastPlayedAt: null,
     trashedAt: null,
@@ -323,9 +339,9 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
   return id;
 }
 
-/** Live games that have no icon yet and are due to be looked up. */
+/** Live games that have no icon yet and are due to be looked up. Workspaces have no icon to find. */
 export function gamesNeedingIcon(library: Library, now: Date): GameEntry[] {
-  return liveGames(library).filter((game) => needsIcon(game, now));
+  return liveGames(library).filter((game) => game.kind === "game" && needsIcon(game, now));
 }
 
 /** Records the outcome of looking for a game's icon: the saved file, or that none was found. */
@@ -380,7 +396,8 @@ export function useOriginalGameIcon(library: Library, id: string): GameIcon {
   const game = liveGame(library, id);
   const previous = game.icon;
   game.icon = { kind: "monogram", text: monogram(game.name) };
-  game.useOriginalIcon = true;
+  // A workspace has no icon of its own, so its letters are its original.
+  game.useOriginalIcon = game.kind === "game";
   return previous;
 }
 
@@ -550,10 +567,31 @@ export function sanitizeLibrary(raw: unknown): Library {
     if (!name || typeof game.addedAt !== "string" || !ISO.test(game.addedAt)) continue;
     // A game saved before Steam icons existed gets its Steam id from the built-in list, if it is there.
     // Diablo IV was saved with the Steam id of another game; it gets the right one and its icon is looked for again.
+    // Only an id made on this PC can be a workspace, so a built-in game is never turned into one.
+    if (game.kind === "workspace" && game.id.startsWith("local-")) {
+      library.games[game.id] = {
+        id: game.id,
+        kind: "workspace",
+        catalogId: null,
+        name,
+        icon: sanitizeIcon(game.icon, name),
+        useOriginalIcon: false,
+        steamAppId: null,
+        iconFile: null,
+        iconCheckedAt: null,
+        iconSharedAt: null,
+        showNews: false,
+        addedAt: game.addedAt,
+        lastPlayedAt: typeof game.lastPlayedAt === "string" && ISO.test(game.lastPlayedAt) ? game.lastPlayedAt : null,
+        trashedAt: typeof game.trashedAt === "string" && ISO.test(game.trashedAt) ? game.trashedAt : null,
+      };
+      continue;
+    }
     const wrongDiabloId = game.steamAppId === WRONG_DIABLO_ID && (game.id === "diablo-4" || game.catalogId === "diablo-4");
     const steamAppId = wrongDiabloId ? (catalogGame("diablo-4")?.steamAppId ?? null) : isSteamAppId(game.steamAppId) ? game.steamAppId : (catalogGame(game.id)?.steamAppId ?? null);
     library.games[game.id] = {
       id: game.id,
+      kind: "game",
       catalogId: typeof game.catalogId === "string" && catalogGame(game.catalogId) ? game.catalogId : null,
       name,
       icon: sanitizeIcon(game.icon, name),

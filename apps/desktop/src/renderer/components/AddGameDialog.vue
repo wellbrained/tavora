@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { CatalogMatch, OnlineGame, OnlineSearchResult } from "../../shared/host-api";
 import { act, api, dialog, state } from "../host";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
@@ -15,6 +16,9 @@ const online = ref<OnlineGame[]>([]);
 const onlineStatus = ref<OnlineSearchResult["status"]>("ok");
 const error = ref<string | null>(null);
 const busy = ref(false);
+/** Adding a game, or making a personal workspace, which belongs to no game. */
+const mode = ref<"game" | "workspace">("game");
+const workspaceName = ref("");
 const name = computed(() => query.value.replace(/\s+/g, " ").trim());
 
 let searchId = 0;
@@ -64,7 +68,7 @@ function addRow(row: Row) {
   return add({ online: online.value.find((game) => game.id === row.id) ?? { id: row.id, name: row.name, steamAppId: null } });
 }
 
-async function add(input: { catalogId: string } | { name: string } | { online: OnlineGame }) {
+async function add(input: { catalogId: string } | { name: string } | { online: OnlineGame } | { workspace: string }) {
   busy.value = true;
   error.value = null;
   const added = await act({ type: "add-game", ...input }, { quiet: true });
@@ -79,6 +83,19 @@ async function add(input: { catalogId: string } | { name: string } | { online: O
   busy.value = false;
 }
 
+function switchMode(to: "game" | "workspace") {
+  // What was typed as a game's name is a fair start for the workspace's, and back.
+  if (to === "workspace") workspaceName.value = name.value;
+  else query.value = workspaceName.value.trim();
+  error.value = null;
+  mode.value = to;
+}
+
+function submitWorkspace() {
+  const value = workspaceName.value.replace(/\s+/g, " ").trim();
+  if (value) void add({ workspace: value });
+}
+
 function submit() {
   const exact = rows.value.find((row) => row.name.toLowerCase() === name.value.toLowerCase());
   const first = exact ?? (name.value ? undefined : rows.value[0]);
@@ -88,7 +105,34 @@ function submit() {
 </script>
 
 <template>
-  <ModalDialog :title="t('addGame.title')" testid="add-game-dialog" @close="dialog = null">
+  <ModalDialog v-if="mode === 'workspace'" :title="t('addWorkspace.title')" testid="add-workspace-dialog" @close="dialog = null">
+    <form class="flex flex-col gap-3" @submit.prevent="submitWorkspace">
+      <label class="text-sm font-medium" for="workspace-name">{{ t("addWorkspace.name") }}</label>
+      <Input
+        id="workspace-name"
+        v-model="workspaceName"
+        :placeholder="t('addWorkspace.placeholder')"
+        autocomplete="off"
+        maxlength="80"
+        data-testid="workspace-name"
+        autofocus
+      />
+      <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="add-game-error">{{ error }}</p>
+      <p class="text-muted-foreground text-xs">{{ t("addWorkspace.hint") }}</p>
+      <Button type="submit" class="w-fit" data-testid="create-workspace" :disabled="busy || !workspaceName.trim()">
+        {{ t("addWorkspace.create") }}
+      </Button>
+    </form>
+    <button
+      type="button"
+      class="text-primary w-fit text-xs underline-offset-2 hover:underline"
+      data-testid="add-game-instead"
+      @click="switchMode('game')"
+    >
+      {{ t("addWorkspace.toGame") }}
+    </button>
+  </ModalDialog>
+  <ModalDialog v-else :title="t('addGame.title')" testid="add-game-dialog" @close="dialog = null">
     <form @submit.prevent="submit">
       <label class="sr-only" for="game-search">{{ t("addGame.search") }}</label>
       <Input
@@ -137,6 +181,14 @@ function submit() {
       @click="dialog = { kind: 'steam-import' }"
     >
       {{ t("addGame.steam") }}
+    </button>
+    <button
+      type="button"
+      class="text-primary w-fit text-xs underline-offset-2 hover:underline"
+      data-testid="open-add-workspace"
+      @click="switchMode('workspace')"
+    >
+      {{ t("addGame.toWorkspace") }}
     </button>
   </ModalDialog>
 </template>

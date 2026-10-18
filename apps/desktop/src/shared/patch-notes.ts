@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.1",
+    date: "2026-10-18",
+    title: "Personal workspaces",
+    notes: [
+      "Personal workspaces: a place on the rail that belongs to no game, for modules such as Notes, Whiteboard and To-Dos. Make one with Add game > Make a personal workspace instead. Modules made for one game are not offered there, and a workspace never looks up an icon or links to a game with the same name.",
+    ],
+  },
+  {
     version: "0.18.0",
     date: "2026-10-18",
     title: "Modules from other people",

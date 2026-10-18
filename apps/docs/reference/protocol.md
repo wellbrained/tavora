@@ -49,7 +49,7 @@ Methods without params must be sent with `params` left out.
 | Method | Params | Result |
 | --- | --- | --- |
 | `bridge.handshake` | `{ protocol: 1, sdkVersion: string }` | `{ protocol: 1, host: { name: "tavora-desktop", version }, module: { id, version }, capabilities, panel: { type } }`: `capabilities` lists what the player has granted, such as `["network"]`; `panel.type` is the [panel type](./manifest.md#panel-types) this panel shows, or `null` for a module without panel types (Tavora 0.17.12 and newer) |
-| `game.getCurrent` | none | `{ id, displayName }` of the game this panel belongs to |
+| `game.getCurrent` | none | `{ id, displayName, kind }` of the game this panel belongs to; `kind` is `"game"`, or `"workspace"` for a personal workspace that belongs to no game (Tavora 0.18.1 and newer; an older Tavora leaves it out, which means a game) |
 | `storage.get` | `{ key }` | the stored JSON value, or `null` |
 | `storage.set` | `{ key, value }` | `null` |
 | `storage.delete` | `{ key }` | `null` |

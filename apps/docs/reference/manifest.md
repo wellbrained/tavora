@@ -36,6 +36,7 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `entry` | yes | The HTML page to load, as a path inside the package. Must end in `.html`. |
 | `icon` | no | A `.png` or `.webp` file inside the package, square, at least 128 × 128. |
 | `games` | yes | Game ids the module is made for, e.g. `["poe2"]`; see [Game ids](#game-ids). Tavora lists the module in Add module only in these games. An empty array means any game. |
+| `workspaces` | no | `false` keeps a module for any game out of personal workspaces, which belong to no game. Left out, a module with an empty `games` is offered there too; a module for one game never is, and `true` is refused next to a non-empty `games`. Needs Tavora 0.18.1 or newer. |
 | `viewport.minWidth`, `viewport.minHeight` | yes | Smallest usable panel size in CSS pixels, 1 to 10000. Tavora refuses to open a panel it cannot give this much room. |
 | `viewport.preferredWidth`, `viewport.preferredHeight` | no | Size the module looks best at, 1 to 10000. Used by the docking layout later. |
 | `permissions.network` | yes | Hosts the module asks to reach with [`network.fetch`](./protocol.md#network), at most 32, e.g. `["api.example.com"]`; `[]` for none. Exact lowercase public names only: no scheme, port, path, wildcard, IP address, `localhost`, `.local` or `.internal`. Each one works only once the player has granted it. |

@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.3
+
+- New projects start on `@tavora/sdk` 0.2.6 and `@tavora/pack` 0.1.1, with `minTavora` 0.18.1.
+
 ## 0.1.2
 
 - A new project's `dev`, `build` and `zip` scripts say "Run npm install first" when its packages were never installed, instead of "'tavora-pack' is not recognized".

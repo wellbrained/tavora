@@ -16,6 +16,15 @@ const valid = {
 };
 
 describe("validateManifest", () => {
+  it("takes workspaces only as a boolean, and true only for a module for any game", () => {
+    const anyGame = { ...valid, games: [] };
+    expect(validateManifest({ ...anyGame, workspaces: false }).ok).toBe(true);
+    expect(validateManifest({ ...anyGame, workspaces: true }).ok).toBe(true);
+    expect(validateManifest({ ...valid, workspaces: false }).ok).toBe(true);
+    expect(validateManifest({ ...anyGame, workspaces: "yes" })).toEqual({ ok: false, errors: ["workspaces must be true or false"] });
+    expect(validateManifest({ ...valid, workspaces: true })).toEqual({ ok: false, errors: ["workspaces can only be true for a module made for any game (games is empty)"] });
+  });
+
   it("accepts a valid manifest", () => {
     expect(validateManifest(valid)).toEqual({ ok: true, manifest: valid });
   });

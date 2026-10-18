@@ -40,6 +40,11 @@ export interface ModuleManifest {
   entry: string;
   icon?: string;
   games: string[];
+  /**
+   * Whether the module may be added to a personal workspace, which belongs to no game. Only modules for any game
+   * (an empty `games`) can be; leave it out for true, and set false for one that only makes sense in a game.
+   */
+  workspaces?: boolean;
   viewport: ModuleViewport;
   /** Named panel types. Without them the module has one panel, made from `entry`, `icon` and `viewport`. */
   panels?: ModulePanelType[];
@@ -63,7 +68,7 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "games", "viewport", "panels", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "games", "workspaces", "viewport", "panels", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
 
 /** Most panel types one module may offer, and the longest short name a tab shows. */
@@ -274,6 +279,10 @@ export function validateManifest(input: unknown): ManifestResult {
 
   if (!Array.isArray(input.games) || !input.games.every(isGameId)) {
     errors.push("games must be an array of game ids (empty means any game)");
+  }
+  if (input.workspaces !== undefined && typeof input.workspaces !== "boolean") errors.push("workspaces must be true or false");
+  else if (input.workspaces === true && Array.isArray(input.games) && input.games.length > 0) {
+    errors.push("workspaces can only be true for a module made for any game (games is empty)");
   }
 
   checkViewport(input.viewport, "viewport", errors);

@@ -982,7 +982,8 @@ export class Host {
 
   private get game(): TavoraGame | null {
     const id = this.gameId;
-    return id ? { id, displayName: this.library.games[id]!.name } : null;
+    const entry = id ? this.library.games[id]! : null;
+    return entry ? { id: entry.id, displayName: entry.name, kind: entry.kind } : null;
   }
 
   private gameWorkspace(gameId: string): GameWorkspace {
@@ -2422,8 +2423,11 @@ export class Host {
   // ── State ────────────────────────────────────────────────────────────
 
   private supportsGame(module: InstalledModule, gameId: string): boolean {
-    const { games } = module.manifest;
-    const catalogId = this.library.games[gameId]?.catalogId;
+    const { games, workspaces } = module.manifest;
+    const entry = this.library.games[gameId];
+    // A workspace belongs to no game: only modules for any game that did not opt out go there.
+    if (entry?.kind === "workspace") return games.length === 0 && workspaces !== false;
+    const catalogId = entry?.catalogId;
     return games.length === 0 || games.includes(gameId) || (catalogId != null && games.includes(catalogId));
   }
 
@@ -2442,6 +2446,7 @@ export class Host {
   private gameView(game: GameEntry): GameView {
     return {
       id: game.id,
+      kind: game.kind,
       name: game.name,
       icon: game.icon.kind === "image" ? { kind: "image", url: ICON_URL + game.icon.file } : game.icon,
       ...this.ownIcon(game),

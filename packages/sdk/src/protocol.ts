@@ -15,6 +15,11 @@ export const PORT_MESSAGE = "tavora:port";
 export interface TavoraGame {
   id: string;
   displayName: string;
+  /**
+   * A game, or a personal workspace the player made for modules that belong to no game, such as notes.
+   * Tavora older than 0.18.1 leaves it out, which means a game.
+   */
+  kind?: "game" | "workspace";
 }
 
 export interface TavoraViewport {
