@@ -29,6 +29,10 @@ export const ADMIN_HTML = `<!doctype html>
 </header>
 <main>
   <section id="panel-pending" role="tabpanel">
+    <div id="bulk" class="bulk" hidden>
+      <button id="approve-all" class="ok" type="button">Approve all</button>
+      <button id="deny-all" class="bad" type="button">Deny all</button>
+    </div>
     <div id="pending" class="grid"></div>
   </section>
   <section id="panel-hosted" role="tabpanel" hidden>
@@ -64,7 +68,7 @@ input[type="search"] { font: inherit; font-size: 16px; background: var(--card); 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 8px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; align-items: center; gap: 12px; min-width: 0; }
 .tile { flex: none; width: 48px; height: 48px; border-radius: 12px; background: #6b4a2f; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
-.tile img { width: 88%; height: 88%; object-fit: contain; }
+.tile img { width: 88%; height: 88%; object-fit: contain; border-radius: 9px; }
 .info { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .name { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .badges { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -72,6 +76,7 @@ input[type="search"] { font: inherit; font-size: 16px; background: var(--card); 
 .badge.ok { border-color: var(--ok); color: var(--ok); }
 .badge.bad { border-color: var(--bad); color: var(--bad); }
 .badge.gold { border-color: var(--gold); color: var(--gold); }
+.bulk { display: flex; gap: 8px; margin: 0 0 12px; }
 .row { flex: none; display: flex; gap: 6px; }
 button { font: inherit; font-size: 15px; font-weight: 500; background: #2c2420; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
 .row button { font-size: 13px; padding: 6px 10px; }
@@ -217,6 +222,24 @@ function reportCard(report) {
   );
 }
 
+// one call per offer, one after another; an offer that fails (say, its game got an icon a moment ago) is skipped
+async function bulk(verb, past, rows, send) {
+  if (!rows.length || !confirm(verb + " all " + rows.length + "?")) return;
+  $("approve-all").disabled = $("deny-all").disabled = true;
+  let done = 0;
+  try {
+    for (const row of rows) {
+      status(verb + " " + (done + 1) + " of " + rows.length + "\u2026");
+      const response = await send(row);
+      if (response.ok) done++;
+    }
+  } finally {
+    $("approve-all").disabled = $("deny-all").disabled = false;
+  }
+  await load();
+  if (done < rows.length) status(past + " " + done + " of " + rows.length + ", skipped the rest.");
+}
+
 async function fill(id, items, make, empty) {
   const holder = $(id);
   const cards = [];
@@ -235,6 +258,7 @@ async function render() {
   $("tab-reports").textContent = "Reports (" + data.reports.length + ")";
   for (const url of urls.splice(0)) URL.revokeObjectURL(url);
   // only the open tab loads its pictures
+  $("bulk").hidden = !data.pending.length;
   if (tab === "pending") {
     await fill("pending", data.pending, pendingCard, "All clear!");
     return;
@@ -275,5 +299,8 @@ for (const name of TABS) {
 }
 $("search").addEventListener("input", () => { render().catch((error) => status(String(error.message || error))); });
 $("refresh").addEventListener("click", load);
+const pendingRows = () => (data ? data.pending : []);
+$("approve-all").addEventListener("click", () => bulk("Approve", "Approved", pendingRows().filter((row) => !row.hasIcon), (row) => call("/api/approve", { sha256: row.sha256 })).catch((error) => status(String(error.message || error))));
+$("deny-all").addEventListener("click", () => bulk("Deny", "Denied", pendingRows(), (row) => call("/api/deny", { sha256: row.sha256, block: false })).catch((error) => status(String(error.message || error))));
 load();
 `;
