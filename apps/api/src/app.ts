@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { accountRoutes, type AccountOptions } from "./accounts.ts";
-import { catalogFilter, type CatalogEntry, type CatalogStore } from "./catalog.ts";
+import { catalogFilter, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
 import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
@@ -213,6 +213,14 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     return new Response(new Uint8Array(bytes), {
       headers: { "Content-Type": "application/zip", "Content-Disposition": "attachment", "Cache-Control": "public, max-age=31536000, immutable" },
     });
+  });
+  // The signed lists, byte for byte as tavora-catalog-sign wrote them. Short caching, so a revocation
+  // or a blocked zip reaches players soon; the app refuses a list older than the one it has.
+  catalogApp.get("/lists/:file", (context) => {
+    const match = /^([a-z]+)\.json$/.exec(context.req.param("file"));
+    const bytes = match && isSignedList(match[1]!) ? catalog!.list(match[1]) : null;
+    if (!bytes) return context.json({ error: "Not found." }, 404);
+    return new Response(new Uint8Array(bytes), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" } });
   });
   app.route("/v1/catalog", catalogApp);
 

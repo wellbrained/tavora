@@ -46,6 +46,7 @@ pnpm --filter @tavora/api dev          # http://127.0.0.1:4010, restarts on chan
   - `GET /v1/catalog` returns `{ modules: [entry] }`, every listed module; `?game=<id>` only those for that game and for any game; `?workspace=1` only those a personal workspace offers. The app takes a whole index and decides on the PC what to update, so it never sends what a player has installed. Cached publicly for 5 minutes.
   - `GET /v1/catalog/modules/<id>` returns `{ module: entry, versions: [{ version, publishedAt, notes }] }`, newest first.
   - `GET /v1/catalog/zips/<sha256>.zip` returns a listed module's zip, named by its hash and cached for a year. The app checks the hash and then installs it exactly like Install from zip; the service is never what makes a zip trusted.
+  - `GET /v1/catalog/lists/<revocations|blocks|successions>.json` returns a list signed offline with Tavora's catalogue key (revoked publisher keys with their allowlists, blocked zips, key successions), byte for byte as `pnpm tavora-catalog-sign` wrote it, or `404` before there is one. Cached for 5 minutes. The app checks the signature and the sequence number; the service never holds the catalogue key.
 - 60 requests a minute per client, then `429` with `Retry-After`. No CORS: the app calls it from its main process.
 - Every other answer is never cached. The service never logs a request, so what a player typed is not kept.
 
@@ -98,6 +99,7 @@ pnpm --filter @tavora/api catalog add path/to/module.zip   # packed and signed w
 pnpm --filter @tavora/api catalog delist <module id>       # out of the catalog; its versions are kept
 pnpm --filter @tavora/api catalog relist <module id>
 pnpm --filter @tavora/api catalog list
+pnpm --filter @tavora/api catalog set-list revocations path/to/revocations.json   # also blocks, successions
 ```
 
 On the server the same commands are `tavora-api-catalog` (copy the zip there first). A zip is checked the way the app's installer checks it before anything is stored: size and compression caps, a valid manifest with every page and icon it names, a valid changelog if it has one, and a publisher signature over every file. Unsigned zips and `tavora.` ids are refused. A module's first version sets its owner key; later versions must come from the same key and be newer, so no version is ever replaced. Zips are stored as `catalog/zips/<sha256>.zip` and are never unpacked on the server.

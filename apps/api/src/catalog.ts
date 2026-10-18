@@ -20,6 +20,16 @@ const OFFICIAL_PREFIX = "tavora.";
 const SHA256 = /^[0-9a-f]{64}$/;
 
 /**
+ * The lists signed offline with Tavora's catalogue key (`pnpm tavora-catalog-sign`): revoked keys with
+ * their allowlists (C6), blocked zips (C14) and key successions (C7). The service only stores and serves
+ * them unchanged; the app checks the signature, the sequence number and the age itself (C2).
+ */
+export const SIGNED_LISTS = ["revocations", "blocks", "successions"] as const;
+export type SignedList = (typeof SIGNED_LISTS)[number];
+export const MAX_LIST_BYTES = 1024 * 1024;
+export const isSignedList = (value: string): value is SignedList => (SIGNED_LISTS as readonly string[]).includes(value);
+
+/**
  * Version order, newest last. The same order as `compareModuleVersions` in the app's installer,
  * which decides on the player's PC whether a catalog version is an update.
  */
@@ -172,11 +182,14 @@ function entryOf(row: VersionSql): CatalogEntry {
 export class CatalogStore {
   private readonly db: DatabaseSync;
   private readonly zips: string;
+  private readonly lists: string;
 
   constructor(dir: string) {
     mkdirSync(dir, { recursive: true });
     this.zips = path.join(dir, "zips");
     mkdirSync(this.zips, { recursive: true });
+    this.lists = path.join(dir, "lists");
+    mkdirSync(this.lists, { recursive: true });
     this.db = new DatabaseSync(path.join(dir, "catalog.sqlite"));
     this.db.exec(`
       pragma journal_mode = wal;
@@ -267,6 +280,32 @@ export class CatalogStore {
       }[]
     ).map((version) => ({ version: version.version, publishedAt: version.published_at, notes: JSON.parse(version.notes) as string[] }));
     return { module: entryOf(row), versions };
+  }
+
+  /**
+   * Stores a signed list as it is. It must be JSON and at most MAX_LIST_BYTES; its signature is the
+   * app's to check, against the catalogue key the service never holds.
+   */
+  setList(name: SignedList, bytes: Buffer): void {
+    if (bytes.length > MAX_LIST_BYTES) throw new CatalogError(`A signed list may be at most ${MAX_LIST_BYTES} bytes.`);
+    try {
+      JSON.parse(bytes.toString("utf8"));
+    } catch {
+      throw new CatalogError("That is not JSON. Upload the file tavora-catalog-sign wrote, unchanged.");
+    }
+    const target = path.join(this.lists, `${name}.json`);
+    const temporary = `${target}.${process.pid}.tmp`;
+    writeFileSync(temporary, bytes);
+    renameSync(temporary, target);
+  }
+
+  /** A signed list's bytes as they were stored, or null before there is one. */
+  list(name: SignedList): Buffer | null {
+    try {
+      return readFileSync(path.join(this.lists, `${name}.json`));
+    } catch {
+      return null;
+    }
   }
 
   /** A zip of a listed module by its hash, or null. A delisted module's zips are not handed out. */
