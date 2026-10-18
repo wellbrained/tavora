@@ -109,10 +109,23 @@ npm run build
 npm run zip     # the same as npx tavora-pack .
 ```
 
-The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`) and the icon, plus `tavora.signature.json`. Your sources and `node_modules` stay out. Use `--out` to choose the file name.
+The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`), the icon and the changelog, plus `tavora.signature.json`. Your sources and `node_modules` stay out. Use `--out` to choose the file name.
 
 The first run makes your publisher key in `~/.tavora/publisher-key.pem`. **Back it up and never share it**: updates and your players' data depend on it. Read [Your publisher key](./publisher-key.md) before you send the first zip, and link the key to your account there so players see your name.
 
 Players install the zip with **Settings > Modules > Install from zip**. While you build, keep loading the module from its development folder: it needs no key, and its data is kept apart from the signed version's.
+
+## Patch notes
+
+Tell players what changed in `changelog.json`, which the starter makes and the manifest's `changelog` names. Add an entry, newest first, every time you raise `version`:
+
+```json
+[
+  { "version": "0.2.0", "date": "2026-11-02", "notes": ["Filter quests by act.", "Fixed the timer after a game switch."] },
+  { "version": "0.1.0", "notes": ["First version."] }
+]
+```
+
+Players read them under the module in **Settings > Modules > Patch notes**. After an update, the notes newer than the version they had are marked New until they open them. Each line is plain text of at most 500 characters, at most 20 lines per version and 100 versions; `tavora-pack` refuses a changelog Tavora could not show. Needs Tavora 0.18.2 or newer, so set `minTavora` to at least `0.18.2`.
 
 Something not working? See [Troubleshooting](./troubleshooting.md).

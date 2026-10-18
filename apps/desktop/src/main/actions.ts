@@ -61,6 +61,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "remove-development-folder":
       return only("folder") && typeof a.folder === "string" && a.folder.length > 0 && a.folder.length <= 500 ? { type: a.type, folder: a.folder } : null;
     case "remove-module":
+    case "seen-module-notes":
     case "move-local-data":
     case "revoke-module":
       return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;

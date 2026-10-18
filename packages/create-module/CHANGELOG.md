@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.4
+
+- New projects start with `changelog.json` for their patch notes, on `@tavora/sdk` 0.2.7 and `@tavora/pack` 0.1.2, with `minTavora` 0.18.2.
+
 ## 0.1.3
 
 - New projects start on `@tavora/sdk` 0.2.6 and `@tavora/pack` 0.1.1, with `minTavora` 0.18.1.

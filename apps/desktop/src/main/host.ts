@@ -34,6 +34,7 @@ import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
 import { applyOwners, forgetOwner, installZip, readOwnerRecords } from "./installer";
+import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
 import type { TestHosts } from "./network";
 import { shortcutFor } from "./shortcuts";
@@ -430,6 +431,7 @@ export class Host {
     await host.account.init();
     await host.publisherNames.load();
     void host.refreshPublisherNames();
+    host.noteModuleVersions();
     // The system's light or dark setting changed (or Tavora's own native theme did, which applyTheme ignores).
     nativeTheme.on("updated", () => {
       if (host.library.followSystem) host.applyTheme();
@@ -547,6 +549,7 @@ export class Host {
     this.modules = modules;
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
+    this.noteModuleVersions();
     settlePanelTypes(this.workspace, panelTypesOf(modules));
     this.syncPanelTypes();
     await this.watchDevelopmentFolders();
@@ -759,6 +762,32 @@ export class Host {
   /** The key fingerprint of a module from a signed zip, or null. */
   private publisherOf(module: InstalledModule): string | null {
     return isOwnerId(module.owner) && module.owner !== OFFICIAL_OWNER && module.owner !== LOCAL_OWNER ? module.owner : null;
+  }
+
+  /** The key a module's seen patch notes are kept under: who publishes it and its id. */
+  private static notesKey(module: InstalledModule): string {
+    return `${module.owner}:${module.manifest.id}`;
+  }
+
+  /**
+   * A module seen for the first time counts as read up to its version, so only the notes of later updates are new.
+   * Kept under owner and id, so another publisher's module with the same id starts fresh.
+   */
+  private noteModuleVersions(): void {
+    let changed = false;
+    for (const module of this.modules.values()) {
+      const key = Host.notesKey(module);
+      if (module.builtIn || this.library.moduleNotesSeen[key] !== undefined) continue;
+      this.library.moduleNotesSeen[key] = module.manifest.version;
+      changed = true;
+    }
+    if (changed) this.saveLibrary();
+  }
+
+  /** What Settings shows of a module's patch notes: the newest version they cover, and whether any are new to the player. */
+  private notesView(module: InstalledModule): { latest: string | null; unseen: boolean } {
+    const notes = installedNotes(this.moduleInfo.get(module.manifest.id)?.changelog ?? [], module.manifest.version);
+    return { latest: notes[0]?.version ?? null, unseen: hasUnseenNotes(notes, module.manifest.version, this.library.moduleNotesSeen[Host.notesKey(module)]) };
   }
 
   /** Closes and forgets every panel whose module is not installed any more, in every game. Module data stays. */
@@ -1041,6 +1070,10 @@ export class Host {
     ipcMain.handle("host:get-discord", (event) => (fromHost(event) ? this.discord.view() : null));
     ipcMain.handle("host:get-ai-usage", (event) => (fromHost(event) ? this.aiUsage.view() : null));
     ipcMain.handle("host:get-account", (event) => (fromHost(event) ? this.account.view() : null));
+    ipcMain.handle("host:module-notes", (event, moduleId: unknown) => {
+      const module = fromHost(event) && typeof moduleId === "string" ? this.modules.get(moduleId) : undefined;
+      return module ? installedNotes(this.moduleInfo.get(module.manifest.id)?.changelog ?? [], module.manifest.version) : [];
+    });
     ipcMain.handle("host:search-catalog", (event, query: unknown) =>
       fromHost(event) && typeof query === "string" && query.length <= 100
         ? searchCatalog(this.library, query).map(({ id, name }) => ({ id, name }))
@@ -1278,6 +1311,13 @@ export class Host {
         return this.installModule();
       case "delete-module-data":
         return this.deleteLeftoverData(action.owner, action.moduleId);
+      case "seen-module-notes": {
+        const module = this.modules.get(action.moduleId);
+        if (!module || module.builtIn) return;
+        this.library.moduleNotesSeen[Host.notesKey(module)] = module.manifest.version;
+        this.saveLibrary();
+        return;
+      }
       case "move-local-data":
         return this.moveLocalData(action.moduleId);
       case "reload-themes":
@@ -2521,6 +2561,7 @@ export class Host {
           missing: this.grants.missing(module),
         },
         usedIn: this.gamesUsing(module.manifest.id),
+        notes: this.notesView(module),
       })),
       moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder).map(({ folder, message }) => ({ folder, message })),
       developmentFolders: this.library.developmentFolders.map((folder) => {

@@ -2,6 +2,10 @@
 
 What changed in `@tavora/pack`, newest first.
 
+## 0.1.2
+
+- Packs the changelog the manifest names, and refuses one that is missing or that Tavora could not show.
+
 ## 0.1.1
 
 - Accepts the manifest's new `workspaces` field (`@tavora/module-schema` 0.1.1).

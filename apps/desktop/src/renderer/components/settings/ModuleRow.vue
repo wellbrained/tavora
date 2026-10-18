@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // One module in a Settings list: icon, name, version, who made it, what it
-// does and where it was found. The buttons for it go in the slot.
+// does and where it was found. The buttons for it go in the slot, anything
+// shown under it (such as its patch notes) in the details slot.
 import { cn } from "@/lib/utils";
 import { state } from "../../host";
 import { t } from "../../i18n";
@@ -10,7 +11,7 @@ defineProps<{ module: NonNullable<typeof state.value>["modules"][number] }>();
 </script>
 
 <template>
-  <li class="flex items-center gap-4 border-b py-3 last:border-b-0" :data-testid="`module-${module.id}`">
+  <li class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b py-3 last:border-b-0" :data-testid="`module-${module.id}`">
     <div class="flex min-w-0 flex-1 flex-col gap-0.5">
       <span class="flex items-center gap-2">
         <ModuleIcon :module-id="module.id" />
@@ -39,5 +40,6 @@ defineProps<{ module: NonNullable<typeof state.value>["modules"][number] }>();
       <span class="text-muted-foreground text-xs" :data-testid="`module-origin-${module.id}`">{{ t(`modules.origin.${module.origin.kind}`, { folder: module.origin.folder }) }}</span>
     </div>
     <slot />
+    <div v-if="$slots.details" class="basis-full"><slot name="details" /></div>
   </li>
 </template>

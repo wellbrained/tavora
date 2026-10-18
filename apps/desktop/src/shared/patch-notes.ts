@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.2",
+    date: "2026-10-18",
+    title: "Patch notes for modules",
+    notes: [
+      "Modules have patch notes of their own: press Patch notes next to a module in Settings > Modules. After a module updates, its notes are marked New until you open them.",
+    ],
+  },
+  {
     version: "0.18.1",
     date: "2026-10-18",
     title: "Personal workspaces",
