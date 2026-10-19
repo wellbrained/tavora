@@ -110,7 +110,7 @@ export class Inventory {
         this.tooltip.innerHTML = itemTooltipMarkup(item,label,item ? this.options.notesFor?.(item) : undefined,!!this.pinned);
         this.tooltip.classList.remove('compact');
         this.tooltip.style.width='';
-        if(this.tooltip.offsetHeight>innerHeight-16){this.tooltip.style.width=Math.min(480,innerWidth-16)+'px';}
+        if(this.tooltip.offsetHeight>innerHeight-16){this.tooltip.style.width=Math.min(640,innerWidth-16)+'px';}
         if(this.tooltip.offsetHeight>innerHeight-16)this.tooltip.classList.add('compact');
         const rect = button.getBoundingClientRect(), width = this.tooltip.offsetWidth;
         const x = rect.right + 12 + width <= innerWidth ? rect.right + 12 : rect.left - width - 12;

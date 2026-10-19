@@ -18,8 +18,8 @@ be toggled independently. Each panel remembers its weapon filter, passive search
 notes and Tree info visibility, as well as its build, variant and Guide section.
 **Read in Guide** opens the matching section; local messages select one matching
 Guide reader, using recent activity when several copies show the same build.
-The compact Guide uses a section dropdown rather than a sidebar. This update uses
-the same signing key and build-document format as alpha 1.
+The compact Guide uses a section dropdown rather than a sidebar. The build-document
+format remains compatible with alpha 1.
 
 This alpha loads portable Tavora v1 JSON, not raw PoB XML, `.build` or ZIP files.
 Convert those using the prototype first. No guides or personal builds ship in the
@@ -153,3 +153,15 @@ character choices separately. Build selectors put the build name before source.
 
 Alpha 14 reissues the Alpha 13 item-details and control improvements under a
 new version so installations already on Alpha 13 can update normally.
+
+Alpha 15 fixes a document overflow caused by visually hidden rarity labels outside
+an item-positioning context. Gear now has one equipment scrollbar with no blank
+page tail. Inventory tooltips use a wider, left-aligned layout and expand further
+when needed to reduce wrapping, while retaining the viewport width limit.
+
+Release ZIPs are signed with the **WellBrained publisher key**, fingerprint
+`2b85409d347617c9b8fe014fae1d90ec`. Always pass the publisher key explicitly with
+`--key` when running `tavora-pack`; stop if it cannot be read. Never fall back to
+a generated key or use `catalogue-key.pem`. The expected signature `publicKey` is
+`hAitBzxq+BAxvvMXD6mgIJqHcXOtNIl2qMaeyBy43FE=`. Earlier alpha ZIPs signed with
+another publisher identity must not be used as the signing reference.
