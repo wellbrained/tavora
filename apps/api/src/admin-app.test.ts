@@ -28,7 +28,7 @@ beforeEach(() => {
   };
   const store = createHostedStore(seed, state);
   const names: Record<string, string> = { "diablo-iv": "Diablo IV", "hades-2": "Hades II" };
-  submissions = createSubmissions({ state, store, gameName: (id) => names[id] ?? null });
+  submissions = createSubmissions({ state, store, gameName: (id) => names[id] ?? null, gamesNamed: () => [] });
   app = createAdminApp({ token: TOKEN, submissions, state, store });
 });
 
@@ -42,7 +42,7 @@ const call = (path: string, init: { method?: string; token?: string | null; body
     ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
   });
 const post = (path: string, body: unknown) => call(path, { method: "POST", body });
-const offer = (over: Record<string, unknown> = {}) => submissions.submit({ id: "diablo-iv", name: "Diablo 4", source: "installed", icon: b64(png(3)), ...over });
+const offer = (over: Record<string, unknown> = {}, sender = "account-1") => submissions.submit({ id: "diablo-iv", name: "Diablo 4", source: "installed", icon: b64(png(3)), ...over }, sender);
 
 describe("the page", () => {
   it("is served without a token, with a strict content security policy and no outside resources", async () => {
@@ -110,7 +110,7 @@ describe("overview and images", () => {
   it("lists what waits and what is hosted, saying where each hosted icon came from", async () => {
     offer();
     const body = (await (await call("/api/overview")).json()) as { pending: Record<string, unknown>[]; hosted: Record<string, unknown>[] };
-    expect(body.pending).toEqual([expect.objectContaining({ id: "diablo-iv", gameName: "Diablo IV", name: "Diablo 4", source: "installed", count: 1, hasIcon: false })]);
+    expect(body.pending).toEqual([expect.objectContaining({ id: "diablo-iv", gameName: "Diablo IV", name: "Diablo 4", source: "installed", count: 1, custom: false, hasIcon: false })]);
     expect(body.hosted).toEqual([expect.objectContaining({ id: "hades-2", origin: "release", source: null })]);
   });
 
@@ -155,7 +155,7 @@ describe("approve, deny and takedown", () => {
     expect((await post("/api/approve", { sha256: "0".repeat(64) })).status).toBe(409);
     expect((await post("/api/approve", {})).status).toBe(400);
     expect((await post("/api/approve", "not an object")).status).toBe(400);
-    state.addPending({ sha256: "b".repeat(64), id: "hades-2", name: "Hades II", source: "other", bytes: png(5), now: new Date() });
+    state.addPending({ sha256: "b".repeat(64), id: "hades-2", name: "Hades II", source: "other", bytes: png(5), sender: "account-1", now: new Date() });
     expect((await post("/api/approve", { sha256: "b".repeat(64) })).status).toBe(409);
   });
 
@@ -164,10 +164,13 @@ describe("approve, deny and takedown", () => {
     const sha = state.listPending()[0]!.sha256;
     expect(await (await post("/api/deny", { sha256: sha, block: true })).json()).toEqual({ ok: true });
     expect(state.isBlocked(sha)).toBe(true);
-    offer();
+    offer({}, "account-2");
     expect(state.pendingCount()).toBe(0);
     expect((await post("/api/deny", {})).status).toBe(400);
+    // Blocking also stopped the sender; someone else can still offer.
     offer({ icon: b64(png(5)) });
+    expect(state.pendingCount()).toBe(0);
+    offer({ icon: b64(png(5)) }, "account-2");
     expect(await (await post("/api/deny", { sha256: state.listPending()[0]!.sha256 })).json()).toEqual({ ok: true });
     expect(state.isBlocked(state.listPending()[0]?.sha256 ?? "")).toBe(false);
   });

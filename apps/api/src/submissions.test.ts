@@ -1,11 +1,15 @@
 import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { crc32 } from "node:zlib";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
 import type { IconEntry, IconStore } from "./icons.ts";
 import { encodePng, inspectPng } from "./png.ts";
-import { createSubmissions, MAX_PENDING, MAX_PENDING_PER_GAME } from "./submissions.ts";
+import { createSubmissions, MAX_PENDING, MAX_PENDING_PER_GAME, MAX_PENDING_PER_SENDER } from "./submissions.ts";
 
 const picture = (size: number, seed: number) =>
   Uint8Array.from({ length: size * size * 4 }, (_, i) => (i % 4 === 3 ? 255 : (i * seed) % 256));
@@ -43,7 +47,12 @@ function icoOf(frame: Uint8Array, size = 32): Uint8Array {
   return out;
 }
 
-const GAMES: Record<string, string> = { "diablo-iv": "Diablo IV", "elden-ring": "Elden Ring", "hades-2": "Hades II" };
+const GAMES: Record<string, string> = { "diablo-iv": "Diablo IV", "elden-ring": "Elden Ring", "hades-2": "Hades II", "doom-1993": "Doom", "doom-2016": "Doom" };
+/** The dataset's games by name, as the service looks them up (case ignored here). */
+const gamesNamed = (name: string) =>
+  Object.entries(GAMES)
+    .filter(([, game]) => game.toLowerCase() === name.trim().toLowerCase())
+    .map(([id]) => id);
 const seedFiles = new Map<string, { names: string[]; bytes: Uint8Array }>();
 const seed: IconStore = {
   list: (): IconEntry[] => [...seedFiles].map(([id, icon]) => ({ id, names: icon.names, sha256: sha(icon.bytes), size: icon.bytes.byteLength })),
@@ -58,10 +67,10 @@ beforeEach(() => {
   seedFiles.clear();
   state = new IconState(":memory:");
   store = createHostedStore(seed, state);
-  submissions = createSubmissions({ state, store, gameName: (id) => GAMES[id] ?? null, now: () => now });
+  submissions = createSubmissions({ state, store, gameName: (id) => GAMES[id] ?? null, gamesNamed, now: () => now });
 });
 
-const offer = (over: Record<string, unknown> = {}) => submissions.submit({ id: "diablo-iv", name: "Diablo IV", source: "installed", icon: b64(png()), ...over });
+const offer = (over: Record<string, unknown> = {}, sender = "account-1") => submissions.submit({ id: "diablo-iv", name: "Diablo IV", source: "installed", icon: b64(png()), ...over }, sender);
 
 describe("submit", () => {
   it("queues a valid PNG without serving it", () => {
@@ -123,8 +132,8 @@ describe("submit", () => {
     ];
     for (const [over, status] of cases) expect(offer(over)).toMatchObject({ status });
     expect(offer({ icon: "AAA" })).toMatchObject({ status: 400 });
-    expect(submissions.submit(null)).toMatchObject({ status: 400 });
-    expect(submissions.submit("text")).toMatchObject({ status: 400 });
+    expect(submissions.submit(null, "account-1")).toMatchObject({ status: 400 });
+    expect(submissions.submit("text", "account-1")).toMatchObject({ status: 400 });
     expect(state.pendingCount()).toBe(0);
   });
 
@@ -148,9 +157,9 @@ describe("submit", () => {
     offer({ icon: b64(png(32, 3)) });
     expect(state.listPending().find((row) => row.sha256 === sha(png(32, 3)))!.count).toBe(2);
 
-    const full = createSubmissions({ state, store, gameName: (id) => GAMES[id] ?? null, now: () => now });
-    for (let i = 0; state.pendingCount() < MAX_PENDING; i += 1) state.addPending({ sha256: `f${i}`.padEnd(64, "0"), id: "elden-ring", name: "x", source: "other", bytes: new Uint8Array(1), now });
-    expect(full.submit({ id: "hades-2", name: "Hades II", source: "other", icon: b64(png(32, 77)) })).toMatchObject({ status: 503 });
+    const full = createSubmissions({ state, store, gameName: (id) => GAMES[id] ?? null, gamesNamed, now: () => now });
+    for (let i = 0; state.pendingCount() < MAX_PENDING; i += 1) state.addPending({ sha256: `f${i}`.padEnd(64, "0"), id: "elden-ring", name: "x", source: "other", bytes: new Uint8Array(1), sender: "account-2", now });
+    expect(full.submit({ id: "hades-2", name: "Hades II", source: "other", icon: b64(png(32, 77)) }, "account-1")).toMatchObject({ status: 503 });
   });
 });
 
@@ -223,5 +232,93 @@ describe("approve, deny and takedown", () => {
     submissions.approve(state.listPending()[0]!.sha256);
     expect(store.list().map((icon) => icon.id)).toEqual(["diablo-iv", "hades-2"]);
     expect(submissions.takedown("nothing", false)).toBe(false);
+  });
+});
+
+describe("senders", () => {
+  it("keeps the account with a waiting offer, and drops it once reviewed", () => {
+    offer();
+    const row = state.listPending()[0]!;
+    expect(state.pendingSender(row.sha256)).toBe("account-1");
+    // A repeat from someone else keeps the first sender.
+    offer({}, "account-2");
+    expect(state.pendingSender(row.sha256)).toBe("account-1");
+    submissions.approve(row.sha256);
+    expect(state.pendingSender(row.sha256)).toBeNull();
+  });
+
+  it("blocking an offer stops its sender for good, quietly, and drops what it has waiting", () => {
+    offer();
+    offer({ id: "elden-ring", name: "Elden Ring", icon: b64(png(32, 5)) });
+    offer({ id: "hades-2", name: "Hades II", icon: b64(png(32, 7)) }, "account-2");
+    expect(submissions.deny(state.listPending()[0]!.sha256, true)).toBe(true);
+    expect(state.isSenderBlocked("account-1")).toBe(true);
+    expect(state.listPending().map((row) => row.id)).toEqual(["hades-2"]);
+    expect(offer({ id: "elden-ring", name: "Elden Ring", icon: b64(png(32, 9)) })).toEqual({ status: 202 });
+    expect(state.pendingCount()).toBe(1);
+    expect(state.isSenderBlocked("account-2")).toBe(false);
+  });
+
+  it("keeps the offers that waited from before sign-in was needed, with no sender", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "tavora-icons-"));
+    try {
+      const file = path.join(dir, "icons.sqlite");
+      const old = new DatabaseSync(file);
+      old.exec(`create table pending (
+        sha256 text primary key, id text not null, name text not null, source text not null,
+        bytes blob not null, size integer not null, count integer not null,
+        first_seen text not null, last_seen text not null
+      );
+      insert into pending values ('${"a".repeat(64)}', 'diablo-iv', 'Diablo IV', 'steam', x'00', 1, 1, '2026-10-01', '2026-10-01');`);
+      old.close();
+      const migrated = new IconState(file);
+      expect(migrated.pendingCount()).toBe(1);
+      expect(migrated.pendingSender("a".repeat(64))).toBeNull();
+      migrated.addPending({ sha256: "b".repeat(64), id: "elden-ring", name: "Elden Ring", source: "steam", bytes: png(), sender: "account-1", now });
+      expect(migrated.pendingSender("b".repeat(64))).toBe("account-1");
+      migrated.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("lets one account have only so many offers waiting", () => {
+    for (let i = 0; i < MAX_PENDING_PER_SENDER; i += 1) state.addPending({ sha256: i.toString(16).padStart(64, "0"), id: "elden-ring", name: "x", source: "other", bytes: new Uint8Array(1), sender: "account-1", now });
+    expect(offer()).toMatchObject({ status: 429 });
+    expect(offer({}, "account-2")).toEqual({ status: 202 });
+  });
+});
+
+describe("games added by name", () => {
+  const local = (over: Record<string, unknown> = {}, sender = "account-1") => offer({ id: "local-my-mod", name: "My Mod", ...over }, sender);
+
+  it("offers a name the dataset knows for that game", () => {
+    expect(local({ id: "local-elden-ring", name: " elden ring " })).toEqual({ status: 202 });
+    expect(submissions.listPending()).toEqual([expect.objectContaining({ id: "elden-ring", gameName: "Elden Ring", custom: false })]);
+  });
+
+  it("offers any other name as a custom game, and publishes it for exactly that name", () => {
+    expect(local({ id: "local-my-mod-2" })).toEqual({ status: 202 });
+    const [row] = submissions.listPending();
+    expect(row).toMatchObject({ id: "local-my-mod", name: "My Mod", gameName: "My Mod", custom: true });
+    expect(submissions.approve(row!.sha256)).toEqual({ ok: true, id: "local-my-mod" });
+    expect(store.list()).toEqual([expect.objectContaining({ id: "local-my-mod", names: ["My Mod"] })]);
+    expect(local({ icon: b64(png(32, 5)) })).toMatchObject({ status: 409 });
+  });
+
+  it("refuses a name several games share, an empty or odd one, and one with nothing to make an id of", () => {
+    for (const name of ["Doom", "", "   ", undefined, "a\u0007b", "x".repeat(121), "ゲーム"]) expect(local({ name })).toMatchObject({ status: 400 });
+    expect(state.pendingCount()).toBe(0);
+  });
+
+  it("will not publish a custom game's icon once the dataset has a game of that name", () => {
+    local({ name: "Hades III" });
+    GAMES["hades-3"] = "Hades III";
+    try {
+      expect(submissions.approve(state.listPending()[0]!.sha256)).toMatchObject({ ok: false });
+      expect(store.list()).toEqual([]);
+    } finally {
+      delete GAMES["hades-3"];
+    }
   });
 });

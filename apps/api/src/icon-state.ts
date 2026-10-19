@@ -4,8 +4,10 @@ import { DatabaseSync } from "node:sqlite";
  * The one writable thing the service keeps: icons players have offered and
  * are waiting to be reviewed, icons that were approved, hashes that must never
  * come back, and hosted icons that were taken down. It lives in its own small
- * SQLite file, apart from the read-only game dataset. It holds no player data:
- * a submission records the file, the game id and a counter, never who sent it.
+ * SQLite file, apart from the read-only game dataset. An offer records the
+ * file, the game id, a counter and the account that sent it first; the account
+ * goes with the offer once a person has approved or denied it. Accounts whose
+ * offers were blocked are kept so they cannot offer again.
  */
 
 export interface PendingRow {
@@ -35,6 +37,8 @@ export interface NewSubmission {
   name: string;
   source: string;
   bytes: Uint8Array;
+  /** The account id that sends it. */
+  sender: string;
   now: Date;
 }
 
@@ -62,12 +66,17 @@ export class IconState {
       );
       create index if not exists pending_id on pending (id);
       create table if not exists blocked (sha256 text primary key, reason text not null, at text not null);
+      create table if not exists blocked_senders (account text primary key, at text not null);
       create table if not exists approved (
         id text primary key, names text not null, sha256 text not null, bytes blob not null,
         size integer not null, source text not null, approved_at text not null
       );
       create table if not exists hidden (id text primary key, at text not null);
     `);
+    // Offers from before sign-in was needed have no sender.
+    const columns = this.db.prepare("pragma table_info(pending)").all() as { name: string }[];
+    if (!columns.some((column) => column.name === "sender")) this.db.exec("alter table pending add column sender text");
+    this.db.exec("create index if not exists pending_sender on pending (sender)");
   }
 
   close(): void {
@@ -85,8 +94,8 @@ export class IconState {
       return "again";
     }
     this.db
-      .prepare("insert into pending (sha256, id, name, source, bytes, size, count, first_seen, last_seen) values (?, ?, ?, ?, ?, ?, 1, ?, ?)")
-      .run(input.sha256, input.id, input.name, input.source, input.bytes, input.bytes.byteLength, at, at);
+      .prepare("insert into pending (sha256, id, name, source, bytes, size, count, first_seen, last_seen, sender) values (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)")
+      .run(input.sha256, input.id, input.name, input.source, input.bytes, input.bytes.byteLength, at, at, input.sender);
     return "new";
   }
 
@@ -95,6 +104,17 @@ export class IconState {
       ? this.db.prepare("select count(*) as n from pending").get()
       : this.db.prepare("select count(*) as n from pending where id = ?").get(id)) as { n: number };
     return row.n;
+  }
+
+  /** How many different offers from this account are waiting. */
+  pendingCountFrom(sender: string): number {
+    return (this.db.prepare("select count(*) as n from pending where sender = ?").get(sender) as { n: number }).n;
+  }
+
+  /** The account that sent a waiting offer, or null (none waiting, or one from before sign-in was needed). */
+  pendingSender(sha256: string): string | null {
+    const row = this.db.prepare("select sender from pending where sha256 = ?").get(sha256) as { sender: string | null } | undefined;
+    return row?.sender ?? null;
   }
 
   /** Oldest first, so nothing waits forever behind newer offers. */
@@ -126,6 +146,16 @@ export class IconState {
 
   isBlocked(sha256: string): boolean {
     return this.db.prepare("select 1 from blocked where sha256 = ?").get(sha256) !== undefined;
+  }
+
+  /** Refuses every later offer from this account, and drops the ones it has waiting. */
+  blockSender(account: string, now: Date): void {
+    this.db.prepare("insert or replace into blocked_senders (account, at) values (?, ?)").run(account, now.toISOString());
+    this.db.prepare("delete from pending where sender = ?").run(account);
+  }
+
+  isSenderBlocked(account: string): boolean {
+    return this.db.prepare("select 1 from blocked_senders where account = ?").get(account) !== undefined;
   }
 
   // ── Approved icons ─────────────────────────────────────────────────────
