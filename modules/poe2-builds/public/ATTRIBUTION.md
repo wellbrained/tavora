@@ -37,3 +37,11 @@ the HivemindOverlord/poe2-mcp data-v0.5.0-1 modifier dataset. Game data and item
 assets remain copyright Grinding Gear Games. The MCP server is not installed
 or required by this module; no network access is added.
 https://github.com/HivemindOverlord/poe2-mcp
+Character import gem identities/attribute tags and ascendancy names are derived
+from the bundled-data version of Path of Building Community PoE2 (0.4/0.5).
+Game data remains copyright Grinding Gear Games; PoB notices accompany the module.
+
+Planner string-to-numeric passive IDs are derived from Grinding Gear Games'
+public poe2-skilltree-export data. Range-only unique reference modifiers and
+planner gem identities are generated from local Path of Building Community PoE2
+data. These reference ranges do not represent a guide author's exact item rolls.

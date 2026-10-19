@@ -1,5 +1,38 @@
 [
   {
+    "version": "0.1.0-alpha.20",
+    "date": "2026-10-19",
+    "notes": [
+      "Import Mobalytics PoE 2 guide URLs from Add > Import build, starting with Ice Shot Deadeye.",
+      "Preview all variants, original guide text and Quest Rewards before saving locally.",
+      "Update a saved guide manually or import a separate copy. Failed imports leave saved builds intact.",
+      "Attach a planner ZIP, .build, PoB XML or Tavora build when automatic importing is unavailable.",
+      "Requires Tavora 0.19.3 for isolated automatic page importing."
+    ]
+  },
+  {
+    "version": "0.1.0-alpha.19",
+    "date": "2026-10-19",
+    "notes": [
+      "Add now comes before the build selector.",
+      "Add and panel actions have an icon and short description, with one full-width row per action.",
+      "Import build, Import character and Load build file are separate options. Guide URL importing is marked unavailable for now.",
+      "Panel links form a vertical list and omit the panel you are already viewing."
+    ]
+  },
+  {
+    "version": "0.1.0-alpha.18",
+    "date": "2026-10-19",
+    "notes": [
+      "Use the visible Add button beside the build selector to load a build or import a character.",
+      "Import your PoE 2 character from poe.ninja, a PoB export code or a PoB XML file.",
+      "My characters stays separate from guide builds and saves locally for offline use.",
+      "Preview before saving, refresh manually or update from a new PoB export. Existing data remains on failed imports.",
+      "Keep independent PoB profiles, active weapon set, gem levels/quality and source item details. Comparison comes later.",
+      "Requests access only to poe.ninja; requires Tavora 0.18.18."
+    ]
+  },
+  {
     "version": "0.1.0-alpha.17",
     "date": "2026-10-19",
     "notes": [

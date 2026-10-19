@@ -159,6 +159,14 @@ describe("requests", () => {
     expect(host.requests.at(-1)).toMatchObject({ method: "network.fetch", params: { url: "https://api.example.com/v1", method: "POST", body: "{}", responseType: "text" } });
   });
 
+  it("sends a page URL without scripts or browser options", async () => {
+    const answer = {status:200,url:"https://public.example/guide",title:"Guide",html:"<main>Guide</main>"};
+    const host=fakeHost(request=>request.method==="bridge.handshake"?{result:handshake}:request.method==="network.readPage"?{result:answer}:undefined);
+    hosts.push(host);const tavora=await sdk.connect();
+    await expect(tavora.network.readPage(answer.url)).resolves.toEqual(answer);
+    expect(host.requests.at(-1)).toMatchObject({method:"network.readPage",params:{url:answer.url}});
+  });
+
   it("ignores messages for another protocol version", async () => {
     const host = fakeHost(standard);
     hosts.push(host);

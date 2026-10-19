@@ -63,6 +63,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     showMenu: () => Promise.resolve(null),
     tooltip:{show:async()=>false,move:()=>{},close:()=>{}},
     fetch: () => Promise.reject(new Error("no network in this test")),
+    readPage: () => Promise.reject(new Error("no pages in this test")),
   };
 }
 
@@ -269,6 +270,7 @@ describe("documents", () => {
 describe("denied and malformed calls", () => {
   it.each([
     ["network.fetch", "network"],
+    ["network.readPage", "network"],
     ["files.open", "files"],
     ["clipboard.readText", "clipboard"],
     ["sharedData.read", "sharedData"],

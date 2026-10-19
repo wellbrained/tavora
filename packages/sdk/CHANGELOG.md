@@ -2,6 +2,10 @@
 
 What changed in `@tavora/sdk` and the bridge protocol it speaks, newest first. Before Tavora 1.0 the SDK may still change in ways that break modules; each such change raises the minor version (0.2 → 0.3) and is marked **Breaking** here. Anything else raises the patch version. To make sure players have a Tavora that knows what your module uses, set [`minTavora`](https://docs.mytavora.app/reference/manifest) in its manifest.
 
+## 0.2.9
+
+- `network.readPage(url)` (Tavora 0.19.3): bounded public HTML capture in a fresh hidden sandbox, using existing exact-domain grants. No module script execution API, interactions or player cookies. Owner disconnect cancels it. `MIN_TAVORA` is now `0.19.3`.
+
 ## 0.2.8
 
 - Shared rich tooltips (Tavora 0.18.18). Adds `ui.tooltip.show/move/hide/close/onClose` for checked rich details over neighbouring panels. Hover is pointer-transparent; a pin requires real input. One shared pin remains until closed or its source goes away.

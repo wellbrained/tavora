@@ -14,6 +14,7 @@ import {
   type DiscordState,
   type HandshakeResult,
   type NetworkResponse,
+  type PageResponse,
   type PanelContent,
   type PanelLaunch,
   type PanelOpenResult,
@@ -101,6 +102,7 @@ export interface BridgeContext {
   };
   /** network.fetch: checks the grant on every hop and makes the request (network.ts). Throws HostErrors. */
   fetch(params: unknown): Promise<NetworkResponse>;
+  readPage(params: unknown): Promise<PageResponse>;
   /**
    * The module started (true) or finished (false) having requests answered; `served` counts the
    * answered ones apart from the handshake. The host uses it to tell when a page has its data.
@@ -205,6 +207,13 @@ const handlers = new Map<string, Handler>([
     },
   ],
 
+  [
+    "network.readPage",
+    async (s, params) => {
+      needs(s, "network", "network.readPage");
+      return s.context.readPage(params);
+    },
+  ],
   [
     "network.fetch",
     async (s, params) => {

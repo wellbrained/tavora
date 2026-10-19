@@ -74,6 +74,7 @@ Methods without params must be sent with `params` left out.
 | `blobs.delete` | `{ id }` | `null` (also when the file did not exist); `INVALID_PARAMS` for an id the host did not make |
 | `ui.getTheme` | none | `{ mode, colors: { background, surface, text, textMuted, accent }, tokens, radius }`: `tokens` holds every semantic colour by its shadcn-vue name (`THEME_TOKENS`), `radius` is in CSS pixels |
 | `network.fetch` | `{ url, method?, headers?, body?, responseType? }` | `{ status, url, headers, body }`; needs the `network` capability, see [Network](#network) |
+| `network.readPage` | `{ url }` | `{ status, url, title, html }`; isolated public page capture, same `network` grant, Tavora 0.19.3+ |
 | `aiUsage.accounts` | none | `AiUsageAccountInfo[]` in the player's order; needs the `aiUsage` capability, see [Connectors](#connectors) |
 | `aiUsage.read` | `{ accountId }` | `AiUsageReading`; needs the `aiUsage` capability |
 | `discord.state` | none | `DiscordState`; starts the connection for this panel. Needs the `discord` capability, see [Connectors](#connectors) |
@@ -159,6 +160,18 @@ A module's page has no network of its own: it cannot fetch, load remote images o
 - **The answer:** `status`, the final `url`, `headers` with lowercase names (without `Set-Cookie`), and `body`. Compressed answers are unpacked. An error status such as 404 or 500 is an answer, not an error.
 - **Limits:** at most 5 MB of body (after unpacking; `QUOTA_EXCEEDED` otherwise), 15 seconds per request including redirects, and 6 requests at once per panel (`BAD_REQUEST` for a seventh). When no answer comes at all (unknown host, refused connection, certificate error, too slow), the error is `NETWORK_ERROR`.
 - **To show a picture** from a granted host, ask for `responseType: "base64"` and use a `data:` address, or store it with `blobs.put`.
+
+### Isolated public pages
+
+`sdk.network.readPage(url)` is an optional public-page fallback when a source needs
+its own scripts to render. Set `minTavora` to `0.19.3` or newer. It accepts no script,
+selector or interaction. The hidden sandbox uses a new session with no player sign-ins,
+and only granted HTTPS domains; it closes after capturing HTML. A module parses that
+HTML as untrusted data and must never evaluate scripts extracted from it. Verification
+and login pages fail with `NETWORK_ERROR`; attach a file as a fallback. There is one
+active page import per module (`BAD_REQUEST` otherwise), a 30-second deadline and a
+5 MiB returned-HTML limit. Panel disconnect cancels the import. Resource and connection
+limits and DNS protection are described in the [security model](../guide/security.md#isolated-public-page-importing).
 
 ### Connectors
 
@@ -278,6 +291,7 @@ Some methods need a capability the player grants. A module asks for it in its ma
 | Method | Capability | |
 | --- | --- | --- |
 | `network.fetch` | `network` | granted per host, see [Network](#network) |
+| `network.readPage` | `network` | the same exact-host grant; fresh isolated session |
 | `aiUsage.accounts`, `aiUsage.read` | `aiUsage` | granted for the `ai-usage` connector, see [Connectors](#connectors) |
 | `discord.*` | `discord` | granted for the `discord` connector, see [Connectors](#connectors) |
 | `files.open`, `files.save` | `files` | reserved |
@@ -306,6 +320,7 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | Panel state | 256 KiB |
 | JSON nesting depth | 64 |
 | `network.fetch` answer | 5 MB of body, 15 s, 5 redirects, 6 requests at once per panel |
+| `network.readPage` answer | 5 MiB of HTML, 30 s, 5 redirects, one active import per module |
 | `aiUsage.read` | one reading per account and minute for all modules, 40 s, answers up to 256 KB |
 | `discord.command` | 15 s, answers and events up to 512 KB; 32 subscriptions per panel |
 | `ui.showMenu` | one menu per click or key press, 100 entries, labels 80 characters, hints 30 |
