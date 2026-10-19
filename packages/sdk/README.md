@@ -53,6 +53,7 @@ Values you store must be JSON. Type parameters such as `get<number>()` are not c
 | `tavora.pictures.save(png, name)` | Saves a PNG in the player's `Pictures\Tavora` folder and resolves with the file name. Call it from the click or key press that asked for it. See [Saving pictures](https://docs.mytavora.app/reference/protocol#saving-pictures). |
 | `tavora.links.open(url)` | Opens a web address in the game's Browser panel, from a click or key press. |
 | `tavora.network.fetch(url, init)` | A web request to a host listed in `permissions.network`, once the player granted it. See [Network](https://docs.mytavora.app/reference/protocol#network). |
+| `tavora.network.readPage(url)` | Capture a public page in an isolated temporary browser, using the same grants. No player sign-ins or module scripts; Tavora 0.19.3+. |
 | `tavora.connectors.aiUsage` | The usage of the player's Claude and Codex accounts, with the `ai-usage` connector. |
 | `tavora.connectors.discord` | The Discord app on this PC through Tavora's Discord sign-in, with the `discord` connector: voice channels, mute and deafen, voice events. |
 

@@ -19,7 +19,7 @@ To report a problem, see [Security policy](https://github.com/wellbrained/tavora
 | G1 | Reach Node, Electron or operating-system APIs. The module preload exposes nothing but the bridge port. |
 | G2 | Read or write another module's data. Host storage is keyed by the module's bound identity, and web storage lives in separate sessions. |
 | G3 | Choose or fake which module it is or which game it runs for. The host binds both when it creates the port; message fields never carry identity. |
-| G4 | Use the network on its own. Everything but its own origin is blocked; hosts the player granted are reached only through `network.fetch`, which the main process makes. |
+| G4 | Use the network on its own. Everything but its own origin is blocked; hosts the player granted are reached only through host-controlled `network.fetch` and `network.readPage`. |
 | G5 | Take down Tavora or other panels. A crash, hang or failed load is shown in that panel only, with Reload and Stop, and saved data is written atomically. |
 | G6 | Read files outside its own bundle. Paths are resolved inside the module's folder; `..`, encoded `..`, links out and null bytes are refused. |
 | G7 | Open windows, navigate away, download files or ask for devices (camera, microphone, location). |
@@ -169,3 +169,29 @@ close its current tooltip by id. Escape and the host close button always dismiss
 it. Source hide, reload, close, game switch, app focus loss and host dialogs clear
 it; stale asynchronous requests cannot revive a closed tooltip. Tooltips stay
 inside Tavora's content bounds and do not open remote pages.
+
+## Isolated public page importing
+
+`network.readPage` renders one public HTTPS address in a hidden, sandboxed browser,
+using a new temporary session for every call. It shares no cookies, storage,
+sign-ins, browser tabs or bridge with the player or the module. The module supplies
+only a URL; it cannot inject JavaScript, click, fill forms, choose headers or read
+cookies. Tavora returns bounded page HTML, title, final URL and status after loading.
+The page's own scripts may run, without Node or a preload. Popups, webviews,
+downloads, device access and permission requests are refused. Login and verification
+pages fail instead of asking for interaction.
+
+Every page, script and data request needs an exact granted domain and HTTPS on the
+standard port. Only GET/HEAD document, script, stylesheet and XHR requests are allowed;
+images, media, fonts, frames, sockets and other resource types are blocked. A mandatory
+session proxy resolves each connection, refuses any non-public address and connects
+to the checked IP, so a second DNS resolution cannot redirect it into the local network.
+Chromium still checks the destination's TLS certificate. Non-proxied WebRTC UDP is
+disabled. This session never uses the player's Browser session or system proxy.
+
+One import per module may run at once, for at most 30 seconds, with 200 resource
+requests, 100 connections, five redirects, 20 MiB of total tunnel traffic and 5 MiB
+of returned HTML. The window, tunnels and temporary storage are cleared after each
+call; closing, reloading or disconnecting the source panel cancels its import.
+An import can fail when a site needs resources on domains that were not granted,
+requires interaction or changes its page format. No protection or verification is bypassed.

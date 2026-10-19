@@ -8,6 +8,7 @@ import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession, type BridgeContext } from "./bridge";
+import { moduleReadPage } from "./page-import";
 import type { CheckedMenu } from "./module-menu";
 import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
 import type { PanelContent, PanelLaunch } from "./panel-content";
@@ -424,6 +425,7 @@ export class ModuleView {
     this.disconnect();
     const { port1, port2 } = new MessageChannelMain();
     const { module, game, instanceId, data, panelState, hostVersion } = this.options;
+    const pageImports = new AbortController();
     const bridge: BridgeSession = new BridgeSession(
       port1,
       {
@@ -449,6 +451,10 @@ export class ModuleView {
         aiUsage: this.options.aiUsage,
         discord: this.discordFor(() => bridge),
         capabilities: () => this.capabilities(),
+        readPage: (params) => moduleReadPage(params, {
+          allowedHosts: this.options.networkHosts,
+          userAgent: `Tavora/${hostVersion} (module ${module.manifest.id})`,
+        }, module.manifest.id, pageImports.signal),
         fetch: (params) =>
           moduleFetch(params, {
             allowedHosts: this.options.networkHosts,
@@ -482,6 +488,7 @@ export class ModuleView {
         },
       },
       () => {
+        pageImports.abort();
         if (this.bridge !== bridge) return;
         this.options.tooltip?.close();
         this.bridge = undefined;

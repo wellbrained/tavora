@@ -528,7 +528,7 @@ export const en = {
   "grant.from.publisher": "Signed with key {key}.",
   "grant.from.publisherName": "By {name}, signed with key {key}.",
   "grant.network": "Reach these websites",
-  "grant.networkNote": "Tavora sends these requests for it, never with your cookies or sign-ins, and nothing else is reachable.",
+  "grant.networkNote": "It can request data and read public pages in a temporary browser, only on these websites. Your cookies and sign-ins stay private.",
   "grant.later": "You can change this anytime in Settings.",
   "grant.allow": "Allow",
   "grant.notNow": "Not now",

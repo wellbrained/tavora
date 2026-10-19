@@ -37,6 +37,7 @@ import {
   type Methods,
   type NetworkRequest,
   type NetworkResponse,
+  type PageResponse,
   type PanelContent,
   type PanelLaunch,
   type PanelOpenResult,
@@ -69,6 +70,7 @@ export type {
   MenuRequest,
   NetworkRequest,
   NetworkResponse,
+  PageResponse,
   PanelContent,
   PanelLaunch,
   PanelOpenResult,
@@ -85,14 +87,14 @@ export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, PROTOCOL
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.8";
+export const SDK_VERSION = "0.2.9";
 
 /**
  * The oldest Tavora that has everything this SDK version offers. Put it in your manifest as
  * `minTavora`, so an older Tavora says it needs an update instead of loading a module it cannot run
  * (the starter, `npm create @tavora/module`, does). The changelog names it for every version.
  */
-export const MIN_TAVORA = "0.18.18";
+export const MIN_TAVORA = "0.19.3";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -198,7 +200,7 @@ export interface TavoraSDK {
      * Resolves with the chosen item's id, or null when the player closed the menu without choosing.
      */
     showMenu(request: MenuRequest): Promise<string | null>;
-    /** One shared tooltip above the workspace (Tavora 0.18.18+). A pin needs a real click/key press. */
+    /** One shared tooltip above the workspace (Tavora 0.19.3+). A pin needs a real click/key press. */
     tooltip: {
       show(request: TooltipRequest): Promise<boolean>;
       move(anchor: TooltipAnchor): Promise<void>;
@@ -256,6 +258,10 @@ export interface TavoraSDK {
      * Error statuses such as 404 are answers, not errors; NETWORK_ERROR means no answer came.
      */
     fetch(url: string, init?: Omit<NetworkRequest, "url">): Promise<NetworkResponse>;
+    /** Render a public HTTPS page in a temporary session, with the same granted domains.
+     * No browser logins, module scripts or interactions. Up to 5 MB / 30 seconds.
+     * Requires Tavora 0.19.3. Login and verification pages fail with NETWORK_ERROR. */
+    readPage(url: string): Promise<PageResponse>;
   };
   /** Parts of Tavora that hold a sign-in, used without seeing it. Each needs its connector in `permissions.connectors` and the player's grant (PERMISSION_DENIED otherwise). */
   connectors: {
@@ -568,6 +574,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
     network: {
       // The host gives up after its own limit; this waits a little longer so its answer arrives first.
       fetch: (url, init = {}) => call("network.fetch", { ...init, url }, LIMITS.networkTimeoutMs + 5000),
+      readPage: (url) => call("network.readPage", { url }, LIMITS.pageTimeoutMs + 5000),
     },
     connectors: {
       aiUsage: {

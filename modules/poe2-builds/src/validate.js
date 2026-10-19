@@ -75,7 +75,26 @@ export function validate(document) {
         throw Error('This tree version is not bundled in this alpha.');
     const out = { id: 'saved-' + document.buildId, fileId: document.buildId, title: buildDisplayTitle(text(b.title, 2000)), shortTitle: text(b.shortTitle, 2000) || text(b.title, 2000), source: text(b.source, 2000) || 'Saved Tavora build', kind: b.kind === 'leveling' ? 'leveling' : 'endgame', version: text(b.version, 2000), treeVersion: ['0.4', '0.5'].includes(b.treeVersion) ? b.treeVersion : '0.5', ascendancy: text(b.ascendancy, 2000) || 'Ascendancy', guideUrl: url(b.guideUrl), requestedUrl: url(b.requestedUrl), video: url(b.video), importerVersion: text(b.importerVersion, 100), importNotes: stringList(b.importNotes, 200), downloads: [], stages: [], guideText: guideText(document.guideText || b.guideText) };
     out.questSelections=questChoices(b.questSelections);
+    if(typeof b.guideExport==='string'&&b.guideExport.length<=5*1024*1024)out.guideExport=b.guideExport;
+    if(plain(b.guideImport)&&b.guideImport.source==='Mobalytics'&&text(b.guideImport.documentId,200)&&Number.isFinite(Date.parse(b.guideImport.importedAt))){
+        const u=new URL(b.guideImport.url);
+        if(u.protocol!=='https:'||u.hostname!=='mobalytics.gg'||u.port||u.username||u.password||!/^\/poe-2\/builds\/[a-z0-9-]+\/?$/.test(u.pathname))throw Error('The guide source URL is invalid.');
+        out.guideImport={source:'Mobalytics',url:u.href,documentId:b.guideImport.documentId,revision:text(b.guideImport.revision,200),importedAt:new Date(b.guideImport.importedAt).toISOString(),variantIds:stringList(b.guideImport.variantIds,100)};
+    }
     out.questStats=stringList(b.questStats,100);
+    if (b.character !== undefined) {
+        const c=b.character;
+        if (!plain(c) || !text(c.name,200) || !['poe.ninja','PoB'].includes(c.source) || !Number.isInteger(c.level) || c.level<1 || c.level>100 || !text(c.class,100) || !Number.isFinite(Date.parse(c.importedAt)))
+            throw Error('The character identity is invalid.');
+        out.character={name:c.name,class:c.class,level:c.level,source:c.source,importedAt:new Date(c.importedAt).toISOString()};
+        for(const field of ['account','league']) if(text(c[field],200))out.character[field]=c[field];
+        if(c.source==='poe.ninja'){
+            const u=new URL(c.url);
+            if(u.protocol!=='https:'||u.hostname!=='poe.ninja'||u.port||u.username||u.password||!/^\/poe2\/builds\/[^/]+\/character\/[^/]+\/[^/]+\/?$/.test(u.pathname))throw Error('The character source URL is invalid.');
+            out.character.url=u.origin+u.pathname;
+        }
+        if(typeof b.characterExport==='string' && b.characterExport.length<=8*1024*1024)out.characterExport=b.characterExport;
+    }
     for (const s of b.stages) {
         if (!plain(s) || !Array.isArray(s.passives) || !Array.isArray(s.skills) || !Array.isArray(s.items) || s.passives.length > 10000 || s.skills.length > 1000 || s.items.length > 500)
             throw Error('The build contains invalid or oversized planner data.');
@@ -94,8 +113,17 @@ export function validate(document) {
                     item.level_interval = i.level_interval.slice(0, 2).map(Number);
                 if (plain(i.sourceStats))
                     item.sourceStats = Object.fromEntries(Object.entries(i.sourceStats).slice(0, 1000).filter(([, v]) => ['number', 'string', 'boolean'].includes(typeof v)));
+                if(typeof i.sourceText==='string')item.sourceText=text(i.sourceText,100000);
+                if(Array.isArray(i.sourceModifiers))item.sourceModifiers=i.sourceModifiers.slice(0,100).filter(plain).map(m=>({kind:text(m.kind,100),id:text(m.id,500),stats:plain(m.stats)?Object.fromEntries(Object.entries(m.stats).slice(0,100).filter(([,n])=>typeof n==='number'&&Number.isFinite(n))):{}}));
                 return enrichItem({...resolveItemIdentity(item),...itemMetadata(i)});
             }) };
+        if(out.character){
+            if(['active','gear','skills','tree'].includes(s.characterProfile))stage.characterProfile=s.characterProfile;
+            if(['0.4','0.5'].includes(s.treeVersion))stage.treeVersion=s.treeVersion;
+            if(text(s.ascendancy,200))stage.ascendancy=s.ascendancy;
+            if([1,2].includes(s.weaponSet))stage.weaponSet=s.weaponSet;
+        }
+        if(text(s.ascendancy,200))stage.ascendancy=s.ascendancy;
         out.stages.push(stage);
     }
     out.defaultStage = Number.isInteger(b.defaultStage) && b.defaultStage >= 0 && b.defaultStage < out.stages.length ? b.defaultStage : 0;

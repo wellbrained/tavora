@@ -178,6 +178,9 @@ export interface NetworkResponse {
   body: string;
 }
 
+/** A public page rendered in a new, hidden, isolated browser session. */
+export interface PageResponse { url: string; status: number; title: string; html: string }
+
 /** An AI account the player set up in Settings > Integrations > AI usage, as the ai-usage connector shows it. */
 export interface AiUsageAccountInfo {
   /** Chosen by Tavora; stays the same while the account exists. */
@@ -362,6 +365,7 @@ export interface Methods {
   "blobs.delete": { params: { id: string }; result: null };
   /** A web request to a granted host (capability `network`). */
   "network.fetch": { params: NetworkRequest; result: NetworkResponse };
+  "network.readPage": { params: { url: string }; result: PageResponse };
   /** The AI accounts the player set up, in their order (capability `aiUsage`). */
   "aiUsage.accounts": { params: undefined; result: AiUsageAccountInfo[] };
   /** Reads one account's usage (capability `aiUsage`). */
@@ -427,7 +431,7 @@ export type ErrorCode =
   | "PERMISSION_DENIED"
   /** A storage, document or panel-state limit would be exceeded, or a network answer was too large. */
   | "QUOTA_EXCEEDED"
-  /** network.fetch got no answer: the host could not be found or reached, the connection failed or it took too long. An answer with an error status (404, 500) is not this; it is returned. */
+  /** A network request failed, timed out or was cancelled. readPage also refuses login/verification pages; fetch returns HTTP error statuses as answers. */
   | "NETWORK_ERROR"
   /** `ifRevision` did not match the stored revision. */
   | "CONFLICT"
@@ -501,6 +505,8 @@ export const LIMITS = {
   maxNetworkResponseBytes: 5 * 1024 * 1024,
   /** How long one network.fetch may take, redirects included. */
   networkTimeoutMs: 15_000,
+  /** Deadline for an isolated page import, including cleanup. */
+  pageTimeoutMs: 30_000,
   /** Redirects one network.fetch follows; each must go to a granted host. */
   maxNetworkRedirects: 5,
   /** network.fetch calls one panel may have running at once; more fail with BAD_REQUEST. */
