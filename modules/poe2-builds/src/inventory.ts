@@ -89,17 +89,18 @@ export class Inventory {
             this.options.weapon = Number(button.dataset.gearWeapon) as 1 | 2; this.draw(); this.options.onChange({gearWeapon:this.options.weapon});
         });
         this.equipment.querySelectorAll<HTMLButtonElement>('[data-slot]').forEach(button => {
-            button.onpointerenter = () => { if (!this.pinned) this.show(button); };
+            button.onpointerenter = event => { if (!this.pinned) this.show(button,event); };
+            button.onpointermove = event => { if (!this.pinned) this.position(button,event); };
             button.onpointerleave = () => { if (!this.pinned) this.dismiss(); };
             button.onfocus = () => { if (!this.pinned) this.show(button); };
             button.onblur = () => { if (!this.pinned) this.dismiss(); };
-            button.onclick = () => {
+            button.onclick = event => {
                 if (this.pinned === button) { this.dismiss(); return; }
-                this.dismiss(); this.pinned = button; button.classList.add('pinned'); this.show(button);
+                this.dismiss(); this.pinned = button; button.classList.add('pinned'); this.show(button,event.detail ? event : undefined);
             };
         });
     }
-    private show(button: HTMLButtonElement) {
+    private show(button: HTMLButtonElement, pointer?: {clientX:number;clientY:number}) {
         if (this.anchor !== button) this.anchor?.removeAttribute('aria-describedby');
         this.anchor = button; button.setAttribute('aria-describedby',this.tooltip.id);
         const slot = equipmentSlots.find(s => s.id === button.dataset.slot)!;
@@ -112,11 +113,14 @@ export class Inventory {
         this.tooltip.style.width='';
         if(this.tooltip.offsetHeight>innerHeight-16){this.tooltip.style.width=Math.min(640,innerWidth-16)+'px';}
         if(this.tooltip.offsetHeight>innerHeight-16)this.tooltip.classList.add('compact');
-        const rect = button.getBoundingClientRect(), width = this.tooltip.offsetWidth;
-        const x = rect.right + 12 + width <= innerWidth ? rect.right + 12 : rect.left - width - 12;
-        this.tooltip.style.left = Math.max(8,Math.min(x,innerWidth-width-8))+'px';
-        this.tooltip.style.top = Math.max(8,Math.min(rect.top,innerHeight-this.tooltip.offsetHeight-8))+'px';
+        this.position(button,pointer);
         const close = this.tooltip.querySelector<HTMLButtonElement>('.inventory-tooltip-close'); if (close) close.onclick = () => this.dismiss();
+    }
+    private position(button: HTMLButtonElement, pointer?: {clientX:number;clientY:number}) {
+        const rect=button.getBoundingClientRect();
+        const point=pointer ?? {clientX:rect.left+rect.width/2,clientY:rect.bottom};
+        const {left,top}=itemTooltipPosition(point,this.tooltip.offsetWidth,this.tooltip.offsetHeight,innerWidth,innerHeight);
+        this.tooltip.style.left=left+'px'; this.tooltip.style.top=top+'px';
     }
     private dismiss() {
         if (this.tooltip.contains(document.activeElement)) this.pinned?.focus();
@@ -134,4 +138,14 @@ export function itemTooltipMarkup(item: Item | undefined, slotLabel: string, not
     if(item)item=resolveItemIdentity(item);
     const r=rarity(item);
     return `${pinned ? '<button class="inventory-tooltip-close" aria-label="Unpin item details">×</button>' : ''}<div class="inventory-tooltip-body">${item?itemDetails(item):`<p class="reference-label">${slotLabel==='Uses both hands'?'The main-hand weapon uses both hands.':'This slot is not specified by the build.'}</p>`}</div>${notes?.trim()?`<section class="inventory-item-notes"><h4>Notes</h4><div>${esc(notes)}</div></section>`:''}<div class="inventory-tooltip-hint">${pinned?'Pinned · Press Escape to close':'Click to pin item details'}</div>`;
+}
+
+/** Prefer below the pointer; flip above at the bottom edge and keep panel gutters. */
+export function itemTooltipPosition(pointer: {clientX:number;clientY:number}, width:number, height:number, viewportWidth:number, viewportHeight:number) {
+    const below=pointer.clientY+16;
+    const top=below+height<=viewportHeight-8 ? below : pointer.clientY-height-16;
+    return {
+        left:Math.max(8,Math.min(pointer.clientX+12,viewportWidth-width-8)),
+        top:Math.max(8,Math.min(top,viewportHeight-height-8)),
+    };
 }

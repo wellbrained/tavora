@@ -165,3 +165,8 @@ Release ZIPs are signed with the **WellBrained publisher key**, fingerprint
 a generated key or use `catalogue-key.pem`. The expected signature `publicKey` is
 `hAitBzxq+BAxvvMXD6mgIJqHcXOtNIl2qMaeyBy43FE=`. Earlier alpha ZIPs signed with
 another publisher identity must not be used as the signing reference.
+
+Alpha 16 anchors inventory hover details below the mouse and follows pointer movement
+within a slot. At the bottom edge it prefers above the pointer, with placement
+constrained to the panel. Clicking freezes the details; keyboard focus anchors
+below the equipment slot. Alpha 15's sizing and scrollbar repairs are retained.

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { validate } from './validate.js';
 import { portable } from './model';
 import { expect, it } from 'vitest';
-import { itemForSlot, inventoryMarkup, itemTooltipMarkup } from './inventory';
+import { itemForSlot, inventoryMarkup, itemTooltipMarkup, itemTooltipPosition } from './inventory';
 import { restoreView } from './view-state';
 import type { Item } from './model';
 const item=(inventory_id:string,slot_x=0):Item=>({inventory_id,slot_x,name:inventory_id+'-'+slot_x,mods:[]});
@@ -56,4 +56,13 @@ it.skipIf(!process.env.POE2_NOTES_FILE || !process.env.POE2_REPAIRED_FILE)('roun
  expect(restored.guideText!.stageNotes).toEqual(original.guideText!.stageNotes);
  expect(Object.keys(restored.guideText!.items!)).toHaveLength(10);
  expect(restored.guideText!.items!.Amulet1).toBe('You need at least 30 spirit on the amulet to use all spirit gems.');
+});
+
+it('anchors hover details below the pointer instead of the equipment-slot edge',()=>{
+ expect(itemTooltipPosition({clientX:120,clientY:200},520,400,800,1000)).toEqual({left:132,top:216});
+ expect(itemTooltipPosition({clientX:140,clientY:240},520,400,800,1000)).toEqual({left:152,top:256});
+});
+it('flips above near the bottom and clamps to narrow panel gutters',()=>{
+ expect(itemTooltipPosition({clientX:700,clientY:900},520,400,800,1000)).toEqual({left:272,top:484});
+ expect(itemTooltipPosition({clientX:200,clientY:300},382,538,398,606)).toEqual({left:8,top:8});
 });
