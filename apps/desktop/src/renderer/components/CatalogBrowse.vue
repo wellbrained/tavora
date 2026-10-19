@@ -3,12 +3,14 @@
 // workspace, as cards like the installed ones. The main process fetches and checks the list and does the install (catalog-client.ts);
 // every text here is shown as plain text, and "by <name>" is only the developer name the service gave.
 // Report asks once more on the card, then sends only the module id, its key and its zip's hash (C12).
+// A card's name opens the module's info with its screenshots and homepage (CatalogModuleDialog.vue).
 import { computed, onMounted, ref, watch } from "vue";
 import type { CatalogListResult, CatalogModuleView } from "../../shared/host-api";
 import { act, addModule, api, dialog, openSettings, state, type AddModuleRequest } from "../host";
 import { Button } from "@/components/ui/button";
 import { t } from "../i18n";
 import { ShieldCheck } from "@lucide/vue";
+import CatalogModuleDialog from "./CatalogModuleDialog.vue";
 
 const props = defineProps<{ query: string }>();
 /** How many modules are listed for the search, or null while there is no list. */
@@ -21,6 +23,8 @@ const errors = ref<Record<string, string>>({});
 const reportAsk = ref<string | null>(null);
 const reporting = ref<string | null>(null);
 const reported = ref<Set<string>>(new Set());
+/** The module whose info is open. */
+const info = ref<CatalogModuleView | null>(null);
 
 async function load() {
   result.value = null;
@@ -93,7 +97,9 @@ function settings() {
         <li v-for="module in shown" :key="module.id" class="bg-background/40 hover:border-primary/40 flex flex-col gap-3 rounded-xl border p-4 transition-colors" :data-testid="`catalog-${module.id}`">
           <div class="min-w-0">
             <div class="flex min-w-0 items-baseline gap-2">
-              <span class="truncate font-medium" :title="module.name" data-testid="catalog-name">{{ module.name }}</span>
+              <button type="button" class="hover:text-primary focus-visible:ring-ring truncate rounded-sm text-left font-medium outline-none focus-visible:ring-2" :title="module.name"
+                :aria-label="t('catalog.infoLabel', { name: module.name })" data-testid="catalog-name" :data-module="module.id" @click="info = module"
+              >{{ module.name }}</button>
               <span class="text-muted-foreground shrink-0 text-xs tabular-nums">{{ module.version }}</span>
             </div>
             <p class="text-muted-foreground truncate text-xs" :title="module.owner" data-testid="catalog-publisher">{{ module.publisher ? t("catalog.by", { name: module.publisher }) : t("catalog.byKey", { key: module.owner.slice(0, 8) }) }}</p>
@@ -126,5 +132,8 @@ function settings() {
         {{ query.trim() ? t("addModule.none", { query: query.trim() }) : t("catalog.empty") }}
       </p>
     </template>
+    <CatalogModuleDialog v-if="info" :module="info" :installed="installed.has(info.id)" :installing="installing === info.id" :asks="asks(info)" :size="size(info.size)"
+      :error="errors[info.id]" @close="info = null" @install="install(info)" @add="add(info.id)"
+    />
   </div>
 </template>

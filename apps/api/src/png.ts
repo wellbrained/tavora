@@ -24,8 +24,8 @@ export interface PngInfo {
  * icon limits: signature, a first IHDR chunk, every chunk's checksum right,
  * data present, and an IEND chunk at the very end.
  */
-/** `maxBytes` is the icon limit unless a caller (a profile picture) allows more; the pixel limit stays. */
-export function inspectPng(bytes: Uint8Array, maxBytes = MAX_ICON_BYTES): PngInfo | null {
+/** `maxBytes` and `maxPixels` are the icon limits unless a caller (a profile picture, a screenshot) allows more. */
+export function inspectPng(bytes: Uint8Array, maxBytes = MAX_ICON_BYTES, maxPixels = MAX_ICON_PIXELS): PngInfo | null {
   if (bytes.byteLength < 45 || bytes.byteLength > maxBytes) return null;
   if (!SIGNATURE.every((byte, i) => bytes[i] === byte)) return null;
   const v = view(bytes);
@@ -42,7 +42,7 @@ export function inspectPng(bytes: Uint8Array, maxBytes = MAX_ICON_BYTES): PngInf
       if (type !== "IHDR" || length !== 13) return null;
       const width = v.getUint32(at + 8);
       const height = v.getUint32(at + 12);
-      if (width < 1 || height < 1 || width > MAX_ICON_PIXELS || height > MAX_ICON_PIXELS) return null;
+      if (width < 1 || height < 1 || width > maxPixels || height > maxPixels) return null;
       info = { width, height };
     } else if (type === "IDAT") {
       sawData = true;
@@ -89,6 +89,19 @@ export function stripPng(bytes: Uint8Array, maxBytes = MAX_ICON_BYTES): Uint8Arr
     at += part.byteLength;
   }
   return inspectPng(out) ? out : null;
+}
+
+/**
+ * Whether a file is a well-formed WebP by its RIFF header: the RIFF size matches the file, it says WEBP,
+ * and its first chunk is one of the three image kinds and fits. Nothing is decoded.
+ */
+export function isWebp(bytes: Uint8Array, maxBytes: number): boolean {
+  if (bytes.byteLength < 20 || bytes.byteLength > maxBytes) return false;
+  const text = (from: number, to: number) => String.fromCharCode(...bytes.subarray(from, to));
+  if (text(0, 4) !== "RIFF" || text(8, 12) !== "WEBP") return false;
+  const v = view(bytes);
+  if (v.getUint32(4, true) + 8 !== bytes.byteLength) return false;
+  return ["VP8 ", "VP8L", "VP8X"].includes(text(12, 16)) && 20 + v.getUint32(16, true) <= bytes.byteLength;
 }
 
 /** An 8-bit RGBA PNG from top-down rows of pixels. */

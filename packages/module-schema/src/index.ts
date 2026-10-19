@@ -41,6 +41,10 @@ export interface ModuleManifest {
   icon?: string;
   /** A JSON file inside the package with the module's patch notes (see validateChangelog), shown to players in Settings > Modules. */
   changelog?: string;
+  /** The module's web page, `http` or `https`, shown in the catalog. Tavora opens it like a module link. */
+  homepage?: string;
+  /** Up to MAX_SCREENSHOTS pictures inside the package, `.png` or `.webp`, shown in the catalog before installing. */
+  screenshots?: string[];
   games: string[];
   /**
    * Whether the module may be added to a personal workspace, which belongs to no game. Only modules for any game
@@ -70,8 +74,27 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "games", "workspaces", "viewport", "panels", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "screenshots", "games", "workspaces", "viewport", "panels", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
+
+/** Most screenshots a manifest may name, and the longest homepage address. */
+export const MAX_SCREENSHOTS = 5;
+/** Largest screenshot file the catalog takes and the app shows. */
+export const MAX_SCREENSHOT_BYTES = 1024 * 1024;
+export const MAX_HOMEPAGE_LENGTH = 300;
+// http or https, a host without a user name or password, and no spaces or control characters.
+const HOMEPAGE = /^https?:\/\/[^\s\u0000-\u001f/?#@\\]+(?:[/?#][^\s\u0000-\u001f\\]*)?$/;
+
+/** Whether a homepage is an address Tavora opens: `http` or `https` with a host, at most MAX_HOMEPAGE_LENGTH characters. */
+export function isHomepage(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > MAX_HOMEPAGE_LENGTH || !HOMEPAGE.test(value)) return false;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "https:" || url.protocol === "http:") && url.hostname !== "";
+  } catch {
+    return false;
+  }
+}
 
 /** Most panel types one module may offer, and the longest short name a tab shows. */
 export const MAX_PANEL_TYPES = 16;
@@ -154,15 +177,15 @@ export function validateChangelog(input: unknown): ChangelogResult {
   return errors.length > 0 ? { ok: false, errors } : { ok: true, entries: input as ChangelogEntry[] };
 }
 
-/** Every page and icon the manifest names, its panel types' included, each once: the files a package must hold. */
-export function manifestFiles(manifest: ModuleManifest): { entries: string[]; icons: string[] } {
+/** Every page and icon the manifest names, its panel types' included, each once, and its screenshots: the files a package must hold. */
+export function manifestFiles(manifest: ModuleManifest): { entries: string[]; icons: string[]; screenshots: string[] } {
   const entries = new Set([manifest.entry]);
   const icons = new Set(manifest.icon === undefined ? [] : [manifest.icon]);
   for (const type of manifest.panels ?? []) {
     if (type.entry !== undefined) entries.add(type.entry);
     if (type.icon !== undefined) icons.add(type.icon);
   }
-  return { entries: [...entries], icons: [...icons] };
+  return { entries: [...entries], icons: [...icons], screenshots: [...(manifest.screenshots ?? [])] };
 }
 
 export function isModuleId(value: unknown): value is string {
@@ -327,6 +350,16 @@ export function validateManifest(input: unknown): ManifestResult {
   if (input.changelog !== undefined) {
     if (!isPackagePath(input.changelog)) errors.push("changelog must be a relative path inside the package");
     else if (!input.changelog.endsWith(".json")) errors.push("changelog must be a .json file");
+  }
+
+  if (input.homepage !== undefined && !isHomepage(input.homepage)) {
+    errors.push(`homepage must be an http or https address of at most ${MAX_HOMEPAGE_LENGTH} characters`);
+  }
+  if (input.screenshots !== undefined) {
+    const shots = input.screenshots;
+    if (!Array.isArray(shots) || shots.length === 0 || shots.length > MAX_SCREENSHOTS) errors.push(`screenshots must be an array of 1 to ${MAX_SCREENSHOTS} files`);
+    else if (!shots.every((shot) => isPackagePath(shot) && /\.(png|webp)$/.test(shot))) errors.push("screenshots must be .png or .webp files inside the package");
+    else if (new Set(shots).size !== shots.length) errors.push("screenshots lists a file twice");
   }
 
   if (!Array.isArray(input.games) || !input.games.every(isGameId)) {

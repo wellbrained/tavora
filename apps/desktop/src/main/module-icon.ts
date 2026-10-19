@@ -8,7 +8,12 @@ const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /** A PNG or WebP as a data address, or null when the bytes are neither or too large. */
 export function iconDataUrl(bytes: Buffer): string | null {
-  if (bytes.length > MAX_MODULE_ICON || bytes.length < 12) return null;
+  return pictureDataUrl(bytes, MAX_MODULE_ICON);
+}
+
+/** A PNG or WebP of at most `maxBytes` as a data address, judged by its first bytes (an icon, a catalog screenshot), or null. */
+export function pictureDataUrl(bytes: Buffer, maxBytes: number): string | null {
+  if (bytes.length > maxBytes || bytes.length < 12) return null;
   if (bytes.subarray(0, PNG.length).equals(PNG)) return `data:image/png;base64,${bytes.toString("base64")}`;
   if (bytes.toString("latin1", 0, 4) === "RIFF" && bytes.toString("latin1", 8, 12) === "WEBP") return `data:image/webp;base64,${bytes.toString("base64")}`;
   return null;

@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.17",
+    date: "2026-10-19",
+    title: "Peek before you install",
+    notes: [
+      "Click a module's name in the catalog to see its screenshots and website before you install it.",
+    ],
+  },
+  {
     version: "0.18.16",
     date: "2026-10-19",
     title: "Steadier To-Dos",

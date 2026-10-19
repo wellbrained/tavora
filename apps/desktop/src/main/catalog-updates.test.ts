@@ -40,6 +40,8 @@ function listing(version: string, zip: Buffer, owner: string, fields: Partial<Ca
     publishedAt: "",
     zip: { sha256: createHash("sha256").update(zip).digest("hex"), size: zip.length },
     notes: [],
+    homepage: null,
+    shots: [],
     ...fields,
   };
 }

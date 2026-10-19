@@ -18,6 +18,8 @@ interface Listed {
   body: Buffer;
   /** What GET /v1/catalog/modules/<id> lists as its versions. */
   versions?: { version: string; publishedAt: string; notes: string[] }[];
+  /** What the server sends for each screenshot hash. */
+  pictures?: Record<string, Buffer>;
 }
 
 async function packed(id: string, name: string, key: KeyObject, version = "1.0.0", network: string[] = []): Promise<Buffer> {
@@ -81,6 +83,12 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
       const item = modules.find((candidate) => candidate.entry.id === decodeURIComponent(detail[1]!));
       return item ? send(200, { module: item.entry, versions: item.versions ?? [] }) : send(404, { error: "not found" });
     }
+    const shot = /^\/v1\/catalog\/screenshots\/([0-9a-f]{64})\.(png|webp)$/.exec(url.pathname);
+    const picture = shot && modules.map((item) => item.pictures?.[shot[1]!]).find((bytes) => bytes !== undefined);
+    if (picture) {
+      response.writeHead(200, { "content-type": `image/${shot[2]}` });
+      return response.end(picture);
+    }
     const zip = /^\/v1\/catalog\/zips\/([0-9a-f]{64})\.zip$/.exec(url.pathname);
     if (zip) {
       const item = modules.find((candidate) => (candidate.entry.zip as { sha256: string }).sha256 === zip[1]);
@@ -129,6 +137,61 @@ test("a player browses the catalog for a game, sees who publishes a module and i
     // The installed module is listed among the installed ones, from its publisher.
     await page.getByTestId("add-module").click();
     await expect(page.getByTestId("module-wellbrained.tracker")).toBeVisible();
+  } finally {
+    await app.close();
+    server.close();
+  }
+});
+
+test("a player opens a module's info with its screenshots and homepage before installing", async () => {
+  const key = generateKeyPairSync("ed25519").privateKey;
+  const owner = fingerprint(key);
+  const tracker = await packed("wellbrained.tracker", "Tracker", key);
+  const picture = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  const fake = Buffer.from("<svg xmlns='http://www.w3.org/2000/svg' onload='alert(1)'/>");
+  const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
+  const { url, server, asked } = await catalogServer([
+    {
+      entry: listing("wellbrained.tracker", "Tracker", tracker, owner, {
+        homepage: "https://example.com/tracker",
+        screenshots: [
+          { sha256: hash(picture), type: "png", size: picture.length },
+          // Listed as a PNG but is not one: left out.
+          { sha256: hash(fake), type: "png", size: fake.length },
+        ],
+      }),
+      body: tracker,
+      pictures: { [hash(picture)]: picture, [hash(fake)]: fake },
+    },
+  ]);
+  const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
+  try {
+    await openGame(page, "poe2");
+    await page.getByTestId("add-module").click();
+    await page.getByTestId("module-tab-browse").click();
+    await page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-name").click();
+    const info = page.getByTestId("catalog-info-wellbrained.tracker");
+    await expect(info).toBeVisible();
+    await expect(info.getByTestId("catalog-info-screenshot")).toHaveAttribute("src", `data:image/png;base64,${picture.toString("base64")}`);
+    await expect(info.getByRole("button", { name: /Screenshot \d of/ })).toHaveCount(0);
+    expect(asked).toContain(`/v1/catalog/screenshots/${hash(picture)}.png`);
+    expect(await readdir(path.join(userData, "modules")).catch(() => [])).toEqual([]);
+
+    // The game has no Browser panel yet, so the player picks where the homepage opens.
+    await expect(info.getByTestId("catalog-info-homepage")).toHaveText("example.com/tracker");
+    await info.getByTestId("catalog-info-homepage").click();
+    await expect(page.getByTestId("link-choice-url")).toHaveText("https://example.com/tracker");
+    await page.getByTestId("link-choice-cancel").click();
+
+    await page.getByTestId("add-module").click();
+    await page.getByTestId("module-tab-browse").click();
+    await page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-name").click();
+    await page.getByTestId("catalog-info-install").click();
+    await expect(page.getByTestId("catalog-info-add")).toBeVisible();
+    expect(await readdir(path.join(userData, "modules"))).toEqual(["wellbrained.tracker"]);
   } finally {
     await app.close();
     server.close();
