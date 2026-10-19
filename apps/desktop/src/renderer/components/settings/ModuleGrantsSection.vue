@@ -51,7 +51,7 @@ function revoke(module: ModuleView) {
           </span>
         </span>
         <Button
-          variant="secondary"
+          variant="danger"
           :aria-label="t('integrations.grants.revokeLabel', { name: module.name })"
           :data-testid="`revoke-module-${module.id}`"
           @click="revoke(module)"

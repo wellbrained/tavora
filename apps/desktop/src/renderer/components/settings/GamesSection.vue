@@ -6,9 +6,11 @@ import { cn } from "@/lib/utils";
 import { confirmAction, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import GameIcon from "../GameIcon.vue";
+import SteamSection from "./SteamSection.vue";
 
 // Settings > Games: every game in one list, to move many to Trash at once
-// (a Steam import can add hundreds). Shift-click ticks a run of games.
+// (a Steam import can add hundreds). Shift-click ticks a run of games. The
+// Steam import itself sits on top, as it is Tavora's own and not a module's.
 defineProps<{ highlight: string | null }>();
 
 const filter = ref("");
@@ -79,6 +81,8 @@ function removeSelected() {
 </script>
 
 <template>
+  <SteamSection :highlight="highlight" />
+  <h3 class="text-primary mt-10 mb-3 text-xs font-semibold tracking-wider uppercase">{{ t("settings.games.listTitle") }}</h3>
   <p :class="cn('text-muted-foreground -mx-3 mb-4 rounded-lg px-3 text-sm transition-colors duration-500', highlight === 'games' && 'bg-primary/10')" data-setting="games">
     {{ t("settings.games.intro") }}
   </p>
@@ -101,7 +105,7 @@ function removeSelected() {
         <span>{{ t("settings.games.selectAll") }}</span>
       </label>
       <span class="text-muted-foreground text-sm tabular-nums" data-testid="games-selected">{{ t("settings.games.selected", { count: selected.length }) }}</span>
-      <Button variant="secondary" class="text-destructive" :disabled="!selected.length" data-testid="games-remove" @click="removeSelected">
+      <Button variant="danger" :disabled="!selected.length" data-testid="games-remove" @click="removeSelected">
         {{ t("settings.games.remove") }}
       </Button>
     </div>

@@ -1,5 +1,6 @@
 import { copyFile, cp, mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { isOwnerId } from "@tavora/module-schema";
 import { FILES_DIR } from "./module-files";
 
 /**
@@ -17,7 +18,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 /** The player's own data: games and layout, profile, and every module's settings and documents. */
 const DATA_FILES = ["library.json", "workspace.json", "profile.json"];
 const DATA_DIRS = ["module-data"];
-/** Pictures: the player's own images and profile picture, and the pictures modules keep. Left out of a snapshot that would be too big. */
+/** Pictures: the player's own images and profile picture, and the pictures modules keep (FILES_DIR, wherever its folder is). Left out of a snapshot that would be too big. */
 const PICTURE_DIRS = ["game-icons", "profile", FILES_DIR];
 
 export function backupsDir(userData: string): string {
@@ -54,6 +55,8 @@ async function exists(target: string): Promise<boolean> {
 
 export interface BackupOptions {
   userData: string;
+  /** The folder modules keep pictures in, which may be outside userData; saved in the snapshot as FILES_DIR. */
+  moduleFiles?: string;
   now?: Date;
   keep?: number;
   maxBytes?: number;
@@ -82,16 +85,30 @@ export async function backupData(options: BackupOptions): Promise<BackupResult> 
   if (!(await exists(path.join(userData, "library.json")))) return { status: "nothing" };
   if (await exists(target)) return { status: "exists", dir: target };
 
+  const source = (name: string) => (name === FILES_DIR && options.moduleFiles ? options.moduleFiles : path.join(userData, name));
+  // In a folder the player can reach, like Pictures\Tavora, only the modules' own folders are theirs to back up.
+  const parts = async (name: string): Promise<string[]> => {
+    if (name !== FILES_DIR) return [""];
+    const owners = await readdir(source(name)).catch(() => [] as string[]);
+    return owners.filter((owner) => isOwnerId(owner));
+  };
+  const sizeOfDir = async (name: string) => {
+    let size = 0;
+    for (const part of await parts(name)) size += await sizeOf(path.join(source(name), part));
+    return size;
+  };
   let dirs = [...DATA_DIRS, ...PICTURE_DIRS];
   let total = 0;
-  for (const name of [...DATA_FILES, ...dirs]) total += await sizeOf(path.join(userData, name));
+  for (const name of DATA_FILES) total += await sizeOf(path.join(userData, name));
+  for (const name of dirs) total += await sizeOfDir(name);
   const maxBytes = options.maxBytes ?? BACKUP_MAX_BYTES;
   let withPictures = true;
   if (total > maxBytes) {
     dirs = [...DATA_DIRS];
     withPictures = false;
     total = 0;
-    for (const name of [...DATA_FILES, ...dirs]) total += await sizeOf(path.join(userData, name));
+    for (const name of DATA_FILES) total += await sizeOf(path.join(userData, name));
+    for (const name of dirs) total += await sizeOfDir(name);
     if (total > maxBytes) {
       log(`backup skipped: the data is ${Math.round(total / 1024 / 1024)} MB`);
       return { status: "too-big" };
@@ -106,9 +123,11 @@ export async function backupData(options: BackupOptions): Promise<BackupResult> 
       if (await exists(path.join(userData, name))) await copyFile(path.join(userData, name), path.join(partial, name));
     }
     for (const name of dirs) {
-      const from = path.join(userData, name);
-      // Temp files of a write in progress are not part of the data.
-      if (await exists(from)) await cp(from, path.join(partial, name), { recursive: true, filter: (source) => !source.endsWith(".tmp") });
+      for (const part of await parts(name)) {
+        const from = path.join(source(name), part);
+        // Temp files of a write in progress are not part of the data.
+        if (await exists(from)) await cp(from, path.join(partial, name, part), { recursive: true, filter: (file) => !file.endsWith(".tmp") });
+      }
     }
     await rename(partial, target);
   } catch (error) {

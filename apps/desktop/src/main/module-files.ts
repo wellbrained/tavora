@@ -8,11 +8,17 @@ import { isGameId, isModuleId, isOwnerId } from "@tavora/module-schema";
 import { parseBlobFileName } from "./blobs";
 
 /** Inside the place the player picks, the files go into a folder of their own with this name. */
-export const FILES_FOLDER_NAME = "Tavora module files";
+export const FILES_FOLDER_NAME = "Tavora";
+/** What that folder was called before; picking one of these uses it as it is. */
+const OLD_FOLDER_NAME = "Tavora module files";
 
-/** The default files folder's name inside the app's data folder. */
+/** The files folder's name inside the app's data folder. */
 export const FILES_DIR = "module-blobs";
 
+/**
+ * The files folder inside the app's data folder: the default until the player's Pictures folder took
+ * its place (index.ts), and still the default where no Pictures folder is given (tests).
+ */
 export function defaultFilesRoot(userData: string): string {
   return path.join(userData, FILES_DIR);
 }
@@ -31,10 +37,15 @@ const insideOrSame = (child: string, parent: string) => sameFolder(child, parent
  * The folder the files would go to if the player picked `picked`: a folder called FILES_FOLDER_NAME
  * inside it (or `picked` itself when it already has that name). Null with the problem when it cannot be used.
  */
-export async function filesTarget(picked: string, currentRoot: string, userData: string): Promise<{ root: string } | { problem: TargetProblem }> {
+export async function filesTarget(
+  picked: string,
+  currentRoot: string,
+  userData: string,
+  defaultRoot = defaultFilesRoot(userData),
+): Promise<{ root: string } | { problem: TargetProblem }> {
   const chosen = path.resolve(picked);
-  const root = path.basename(chosen) === FILES_FOLDER_NAME ? chosen : path.join(chosen, FILES_FOLDER_NAME);
-  const dataDefault = defaultFilesRoot(userData);
+  const root = [FILES_FOLDER_NAME, OLD_FOLDER_NAME].includes(path.basename(chosen)) ? chosen : path.join(chosen, FILES_FOLDER_NAME);
+  const dataDefault = path.resolve(defaultRoot);
   if (sameFolder(root, path.resolve(currentRoot))) return { problem: "same" };
   if (insideOrSame(root, path.resolve(currentRoot)) || insideOrSame(path.resolve(currentRoot), root)) return { problem: "nested" };
   // Tavora's own data folder is no place for it, except the default folder itself.

@@ -70,7 +70,7 @@ function loads(moduleId: string): string {
           <FolderCode class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" />
           <span class="min-w-0 flex-1 truncate font-mono text-sm" :title="entry.folder" data-testid="development-folder-path">{{ shortPath(entry.folder) }}</span>
           <Button
-            variant="ghost"
+            variant="danger"
             class="flex-none"
             :aria-label="t('settings.devFolders.removeLabel', { folder: entry.folder })"
             data-testid="remove-development-folder"

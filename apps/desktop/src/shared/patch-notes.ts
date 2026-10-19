@@ -19,11 +19,24 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.18.13",
+    version: "0.18.15",
     date: "2026-10-19",
     title: "Clearer Share icons",
     notes: [
       "Settings > Online now says in plain words what Share icons does, and the long note under Game icons is gone.",
+    ],
+  },
+  {
+    version: "0.18.14",
+    date: "2026-10-19",
+    title: "Tidier settings",
+    notes: [
+      "Pictures from modules like Notes now live in your Pictures folder, under Tavora, where you can find them. Pictures you already have move there by themselves, and backups now include them wherever you keep them.",
+      "Your signed-in devices are tucked away under Account > Manage. Each one shows its PC's name, and you can rename it.",
+      "Import from Steam moved to Settings > Games, since it adds games and isn't a module.",
+      "Remove, Delete and Take back buttons are always red now, so you can tell them apart at a glance.",
+      "Website access and the AI accounts list explain in plain words what they're for.",
+      "The buttons next to the pictures folder, your themes and your modules line up again.",
     ],
   },
   {

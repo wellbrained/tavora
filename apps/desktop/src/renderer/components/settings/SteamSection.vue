@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Settings > Integrations > Steam: adding the games the player owns on Steam.
+// Settings > Games > Steam: adding the games the player owns on Steam. Always first in Games.
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { dialog, state } from "../../host";

@@ -66,7 +66,7 @@ function clear(scope: "game" | "shared") {
       <ul v-else class="mt-3 flex flex-wrap gap-2" :data-testid="list.setting">
         <li v-for="site in list.sites()" :key="site" class="bg-secondary flex h-8 items-center gap-1 rounded-md pr-1 pl-3 text-sm">
           {{ site }}
-          <Button variant="ghost" size="icon-xs" :aria-label="t('settings.browser.removeSite', { site })" @click="act({ type: 'browser-forget-site', list: list.id, site })">
+          <Button variant="danger" size="icon-xs" :aria-label="t('settings.browser.removeSite', { site })" @click="act({ type: 'browser-forget-site', list: list.id, site })">
             <X :stroke-width="1.5" />
           </Button>
         </li>

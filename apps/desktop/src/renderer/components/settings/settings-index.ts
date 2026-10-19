@@ -79,7 +79,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["module-grants", "modules"],
   ["module-files", "modules"],
   ["discord-connection", "integrations"],
-  ["steam-import", "integrations"],
+  ["steam-import", "games"],
   ["ai-usage-accounts", "integrations"],
   ["browser-shared-sites", "browser"],
   ["browser-adblock-off", "browser"],

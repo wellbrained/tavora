@@ -7,7 +7,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AccountDevice, HostAction } from "../../../shared/host-api";
-import { account, act, confirmAction, showToast, submitAction } from "../../host";
+import { account, act, confirmAction, prompt, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
@@ -76,10 +76,29 @@ function osName(device: AccountDevice): string {
   return t(device.os === "other" ? "account.os.unknown" : `account.os.${device.os}`);
 }
 
+/** The device's name, or its system for a sign-in from before devices had names. */
+function deviceLabel(device: AccountDevice): string {
+  return device.name ?? osName(device);
+}
+
+/** The devices list is folded away until the player opens it. */
+const devicesOpen = ref(false);
+
+function renameDevice(device: AccountDevice) {
+  prompt({
+    title: t("account.devices.renameTitle"),
+    label: t("account.devices.name"),
+    value: device.name ?? "",
+    maxLength: 40,
+    confirm: t("common.save"),
+    submit: (name) => submitAction({ type: "account-rename-device", deviceId: device.id, name }),
+  });
+}
+
 function signOutDevice(device: AccountDevice) {
   confirmAction({
     title: t("account.devices.signOutTitle"),
-    message: t("account.devices.signOutMessage", { device: osName(device), date: formatDate(device.createdAt) }),
+    message: t("account.devices.signOutMessage", { device: deviceLabel(device), date: formatDate(device.createdAt) }),
     confirm: t("account.signOut"),
     run: () => submitAction({ type: "account-sign-out-device", deviceId: device.id }),
   });
@@ -218,7 +237,7 @@ function startDelete() {
       >
       <SettingRow :label="t('account.methods.email')" :description="signedIn.email ?? t('account.methods.emailNone')">
         <div v-if="!changing && pending?.kind !== 'change-email' && pending?.kind !== 'remove-email'" class="flex flex-none gap-2">
-          <Button v-if="signedIn.email && signedIn.discord" variant="ghost" :disabled="busy" data-testid="account-remove-email" @click="run({ type: 'account-email-remove-code' })">{{ t("account.email.remove") }}</Button>
+          <Button v-if="signedIn.email && signedIn.discord" variant="danger" :disabled="busy" data-testid="account-remove-email" @click="run({ type: 'account-email-remove-code' })">{{ t("account.email.remove") }}</Button>
           <Button variant="secondary" data-testid="account-change-email" @click="(changing = true), (newEmail = '')">{{ signedIn.email ? t("account.email.change") : t("account.email.add") }}</Button>
         </div>
       </SettingRow>
@@ -254,7 +273,7 @@ function startDelete() {
         <span class="text-muted-foreground">{{ t("account.email.removeCodeSent", { email: signedIn.email ?? "" }) }}</span>
         <div class="flex gap-2">
           <Input v-model="code" class="w-40 tracking-widest tabular-nums" inputmode="numeric" autocomplete="one-time-code" maxlength="7" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
-          <Button type="submit" :disabled="busy || !codeReady" data-testid="account-confirm-remove-email">{{ t("account.email.removeConfirm") }}</Button>
+          <Button type="submit" variant="destructive" :disabled="busy || !codeReady" data-testid="account-confirm-remove-email">{{ t("account.email.removeConfirm") }}</Button>
           <Button type="button" variant="ghost" :disabled="busy" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
         </div>
       </form>
@@ -285,21 +304,6 @@ function startDelete() {
         </div>
       </form>
 
-      </SettingGroup>
-
-      <SettingGroup :title="t('account.devices.title')">
-      <div class="py-3">
-        <p v-if="!view?.devices" class="text-muted-foreground text-sm">{{ t("account.devices.unknown") }}</p>
-        <ul v-else data-testid="account-devices">
-          <li v-for="device in view.devices" :key="device.id" class="flex min-h-10 items-center gap-3" :data-testid="`account-device-${device.id}`">
-            <span class="flex-1">
-              {{ t("account.devices.entry", { device: osName(device), date: formatDate(device.createdAt) }) }}
-            </span>
-            <span v-if="device.current" class="text-muted-foreground text-sm">{{ t("account.devices.thisPc") }}</span>
-            <Button v-else variant="ghost" size="sm" :disabled="busy" @click="signOutDevice(device)">{{ t("account.signOut") }}</Button>
-          </li>
-        </ul>
-      </div>
       </SettingGroup>
 
       <!-- The developer side: only matters to people who make modules. -->
@@ -350,6 +354,29 @@ function startDelete() {
       <SettingRow :label="t('account.signOut')" :description="t('account.signOutHint')">
         <Button variant="secondary" :disabled="busy" data-testid="account-sign-out" @click="run({ type: 'account-sign-out' })">{{ t("account.signOut") }}</Button>
       </SettingRow>
+
+      <!-- Every PC signed in to the account, folded away: rarely needed. -->
+      <SettingRow
+        :label="view?.devices ? t('account.devices.titleCount', { count: view.devices.length }) : t('account.devices.title')"
+        :description="t('account.devices.description')"
+      >
+        <Button variant="ghost" :aria-expanded="devicesOpen" data-testid="account-devices-toggle" @click="devicesOpen = !devicesOpen">
+          {{ devicesOpen ? t("account.devices.hide") : t("account.devices.show") }}
+        </Button>
+      </SettingRow>
+      <div v-if="devicesOpen" class="border-b py-2">
+        <p v-if="!view?.devices" class="text-muted-foreground py-1 text-sm">{{ t("account.devices.unknown") }}</p>
+        <ul v-else data-testid="account-devices">
+          <li v-for="device in view.devices" :key="device.id" class="flex min-h-12 items-center gap-3 py-1" :data-testid="`account-device-${device.id}`">
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="truncate font-medium">{{ deviceLabel(device) }}<span v-if="device.current" class="text-muted-foreground font-normal"> · {{ t("account.devices.thisPc") }}</span></span>
+              <span class="text-muted-foreground text-sm">{{ t("account.devices.entry", { device: osName(device), date: formatDate(device.createdAt) }) }}</span>
+            </span>
+            <Button variant="ghost" size="sm" :disabled="busy" :data-testid="`account-device-rename-${device.id}`" @click="renameDevice(device)">{{ t("account.devices.rename") }}</Button>
+            <Button v-if="!device.current" variant="danger" size="sm" :disabled="busy" @click="signOutDevice(device)">{{ t("account.signOut") }}</Button>
+          </li>
+        </ul>
+      </div>
 
       <form
         v-if="pending?.kind === 'delete'"

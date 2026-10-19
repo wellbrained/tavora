@@ -127,17 +127,17 @@ function remove(module: ModuleView) {
           </li>
         </ul>
       </template>
-      <span class="flex flex-none flex-wrap justify-end gap-2">
+      <span class="flex flex-none flex-wrap items-center justify-end gap-2">
         <Button variant="secondary" data-testid="install-module" @click="install">
           <FileArchive :stroke-width="1.5" /> {{ t("settings.modules.install") }}
         </Button>
         <Button v-if="state!.library.onlineSearch" variant="secondary" data-testid="check-module-updates" :disabled="checking" @click="checkUpdates">
           <CloudDownload :stroke-width="1.5" /> {{ t("settings.modules.checkUpdates") }}
         </Button>
-        <Button variant="secondary" size="icon" data-testid="open-modules-folder" :aria-label="t('common.openFolder')" :title="t('common.openFolder')" @click="act({ type: 'open-modules-folder' })">
+        <Button variant="secondary" size="icon-sm" data-testid="open-modules-folder" :aria-label="t('common.openFolder')" :title="t('common.openFolder')" @click="act({ type: 'open-modules-folder' })">
           <FolderOpen :stroke-width="1.5" />
         </Button>
-        <Button variant="secondary" size="icon" data-testid="reload-modules" :aria-label="t('common.reload')" :title="t('common.reload')" @click="act({ type: 'reload-modules' })">
+        <Button variant="secondary" size="icon-sm" data-testid="reload-modules" :aria-label="t('common.reload')" :title="t('common.reload')" @click="act({ type: 'reload-modules' })">
           <RefreshCw :stroke-width="1.5" />
         </Button>
       </span>
@@ -184,7 +184,7 @@ function remove(module: ModuleView) {
           </Button>
           <Button
             v-if="module.removable"
-            variant="ghost"
+            variant="danger"
             :aria-label="t('settings.modules.removeLabel', { name: module.name })"
             :title="openCount(module.id) ? t('settings.modules.removeHint') : undefined"
             :data-testid="`remove-module-${module.id}`"
@@ -214,11 +214,11 @@ function remove(module: ModuleView) {
           {{ files.folder }}<template v-if="!files.available"> — {{ t("settings.module-files.missing") }}</template>
         </p>
       </template>
-      <span class="flex flex-none flex-wrap justify-end gap-2">
+      <span class="flex flex-none flex-wrap items-center justify-end gap-2">
         <Button variant="secondary" data-testid="change-module-files" :disabled="files.moving" @click="act({ type: 'module-files-change' })">
           <FolderInput :stroke-width="1.5" /> {{ files.moving ? t("settings.module-files.moving") : t("settings.module-files.change") }}
         </Button>
-        <Button variant="secondary" size="icon" data-testid="open-module-files" :aria-label="t('common.openFolder')" :title="t('common.openFolder')" @click="act({ type: 'module-files-open' })">
+        <Button variant="secondary" size="icon-sm" data-testid="open-module-files" :aria-label="t('common.openFolder')" :title="t('common.openFolder')" @click="act({ type: 'module-files-open' })">
           <FolderOpen :stroke-width="1.5" />
         </Button>
         <Button v-if="files.custom" variant="ghost" data-testid="reset-module-files" :disabled="files.moving" @click="act({ type: 'module-files-reset' })">
@@ -242,7 +242,7 @@ function remove(module: ModuleView) {
               {{ entry.publisher ? t("settings.modules.publisher", { short: entry.publisher.slice(0, 8) }) : t(`settings.modules.leftoverOwner.${entry.owner as "local" | "official"}`) }}
             </span>
           </span>
-          <Button variant="secondary" :aria-label="t('settings.modules.deleteDataLabel', { id: entry.moduleId })" :data-testid="`delete-data-${entry.owner}-${entry.moduleId}`" @click="deleteData(entry)">
+          <Button variant="danger" :aria-label="t('settings.modules.deleteDataLabel', { id: entry.moduleId })" :data-testid="`delete-data-${entry.owner}-${entry.moduleId}`" @click="deleteData(entry)">
             <Trash2 :stroke-width="1.5" /> {{ t("settings.modules.deleteData") }}
           </Button>
         </li>
