@@ -9,6 +9,7 @@ import { createDiscordClient } from "./discord.ts";
 import { createApp } from "./app.ts";
 import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
+import { normalize } from "./ids.ts";
 import { loadIconStore } from "./icons.ts";
 import { createBrevoMailer, createTestInbox, createTestInboxApp, type Mailer } from "./mail.ts";
 import { clientOf } from "./rate-limit.ts";
@@ -45,10 +46,12 @@ const icons = createHostedStore(releaseIcons, state);
 console.log(`[tavora-api] ${icons.list().length} hosted icons, ${state.pendingCount()} waiting for review.`);
 
 const gameNameStatement = db.prepare("select name from games where id = ?");
+const gamesNamedStatement = db.prepare("select distinct game_id from entries where norm = ?");
 const submissions = createSubmissions({
   state,
   store: icons,
   gameName: (id) => (gameNameStatement.get(id) as { name: string } | undefined)?.name ?? null,
+  gamesNamed: (name) => (gamesNamedStatement.all(normalize(name)) as { game_id: string }[]).map((row) => row.game_id),
 });
 
 // Accounts need a way to send email. No provider is set up yet (it is chosen

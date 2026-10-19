@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.20",
+    date: "2026-10-19",
+    title: "Share icons of your own games",
+    notes: [
+      "Sharing game icons now needs you to be signed in.",
+      "You can share icons of games you added by name too.",
+    ],
+  },
+  {
     version: "0.18.19",
     date: "2026-10-19",
     title: "Module pages in the catalog",

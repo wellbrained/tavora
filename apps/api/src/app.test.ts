@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { AccountStore } from "./account-store.ts";
 import { createApp } from "./app.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
+import { createTestInbox } from "./mail.ts";
 import { encodePng } from "./png.ts";
 import { createRateLimiter } from "./rate-limit.ts";
 import { createSubmissions } from "./submissions.ts";
@@ -234,20 +236,24 @@ describe("icon endpoints", () => {
 describe("icon offers", () => {
   const picture = (size: number) => Uint8Array.from({ length: size * size * 4 }, (_, i) => (i % 4 === 3 ? 255 : (i * 7) % 256));
   const icon = (size = 32) => Buffer.from(encodePng(size, size, picture(size))).toString("base64");
-  const setup = (options: { contact?: string; limit?: number } = {}) => {
+  const accountStore = new AccountStore(":memory:");
+  const account = accountStore.createAccount({ email: "player@example.test" }, Date.now());
+  const { token } = accountStore.createSession(account.id, "windows", Date.now());
+  const setup = (options: { contact?: string; limit?: number; accounts?: boolean } = {}) => {
     const state = new IconState(":memory:");
     const store = createHostedStore({ list: () => [], file: () => null }, state);
-    const submissions = createSubmissions({ state, store, gameName: (id) => (id === "elden-ring" ? "Elden Ring" : null) });
+    const submissions = createSubmissions({ state, store, gameName: (id) => (id === "elden-ring" ? "Elden Ring" : null), gamesNamed: () => [] });
     const app = createApp({
       db,
       icons: store,
       submissions,
       ...(options.contact === undefined ? {} : { takedownContact: options.contact }),
+      ...(options.accounts === false ? {} : { accounts: { store: accountStore, mailer: createTestInbox() } }),
       submitRateLimiter: createRateLimiter({ limit: options.limit ?? 100, windowMs: 3_600_000 }),
     });
     return { app, state };
   };
-  const post = (app: ReturnType<typeof createApp>, body: unknown, headers: Record<string, string> = { "Content-Type": "application/json" }) =>
+  const post = (app: ReturnType<typeof createApp>, body: unknown, headers: Record<string, string> = { "Content-Type": "application/json", Authorization: `Bearer ${token}` }) =>
     app.request("http://tavora.test/v1/icons/submit", { method: "POST", headers, body: typeof body === "string" ? body : JSON.stringify(body) });
   const offer = (over: Record<string, unknown> = {}) => ({ id: "elden-ring", name: "Elden Ring", source: "installed", icon: icon(), ...over });
 
@@ -257,6 +263,7 @@ describe("icon offers", () => {
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({ status: "received" });
     expect(state.pendingCount()).toBe(1);
+    expect(state.pendingSender(state.listPending()[0]!.sha256)).toBe(account.id);
     expect(await (await get(app, "/v1/icons")).json()).toMatchObject({ icons: [] });
     expect((await get(app, "/v1/icons/elden-ring.png")).status).toBe(404);
   });
@@ -267,16 +274,28 @@ describe("icon offers", () => {
     expect((await get(app, "/v1/icons/submit")).status).toBe(404);
   });
 
-  it("offers nothing without a takedown contact, and without the review queue", async () => {
+  it("offers nothing without a takedown contact, the review queue or accounts", async () => {
     expect((await post(setup().app, offer())).status).toBe(503);
     const bare = createApp({ db, takedownContact: "legal@example.test" });
     expect((await post(bare, offer())).status).toBe(503);
+    expect((await post(setup({ contact: "legal@example.test", accounts: false }).app, offer())).status).toBe(503);
+  });
+
+  it("takes offers only from a signed-in player", async () => {
+    const { app, state } = setup({ contact: "legal@example.test" });
+    for (const authorization of [undefined, "Bearer nope", `Bearer ${"x".repeat(40)}`, token]) {
+      const headers: Record<string, string> = { "Content-Type": "application/json", ...(authorization ? { Authorization: authorization } : {}) };
+      const response = await post(app, offer(), headers);
+      expect(response.status).toBe(401);
+      expect(await response.json()).toMatchObject({ reason: "signed-out" });
+    }
+    expect(state.pendingCount()).toBe(0);
   });
 
   it("wants JSON, and answers what is wrong with an offer", async () => {
     const { app, state } = setup({ contact: "legal@example.test" });
-    expect((await post(app, offer(), { "Content-Type": "text/plain" })).status).toBe(415);
-    expect((await post(app, offer(), {})).status).toBe(415);
+    expect((await post(app, offer(), { "Content-Type": "text/plain", Authorization: `Bearer ${token}` })).status).toBe(415);
+    expect((await post(app, offer(), { Authorization: `Bearer ${token}` })).status).toBe(415);
     expect((await post(app, "{ nope")).status).toBe(400);
     expect((await post(app, offer({ id: "not-a-game" }))).status).toBe(400);
     expect((await post(app, offer({ icon: "AAAA" }))).status).toBe(400);

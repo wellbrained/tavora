@@ -3,7 +3,7 @@ import { Loader } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
 import { Button } from "@/components/ui/button";
 import type { HostAction } from "../../shared/host-api";
-import { act, api, dialog, showToast, state, type ShareIconsRequest } from "../host";
+import { account, act, api, dialog, openSettings, showToast, state, type ShareIconsRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
@@ -37,6 +37,13 @@ const busy = ref(false);
 const progress = ref<{ done: number; total: number } | null>(null);
 const error = ref<string | null>(null);
 const chosen = computed(() => rows.value.filter((row) => ticked.value.has(row.key)));
+/** Only signed-in players can share. */
+const signedIn = computed(() => Boolean(account.value?.account));
+
+function signIn() {
+  dialog.value = null;
+  openSettings({ section: "account" });
+}
 const count = computed(() => chosen.value.length);
 /** Nothing found to share: the dialog says just that and offers Close. */
 const empty = computed(() => !looking.value && !error.value && rows.value.length === 0);
@@ -154,6 +161,7 @@ async function share() {
     <p v-if="!empty" class="text-muted-foreground text-xs leading-relaxed">
       {{ t("shareIcons.notice") }}
     </p>
+    <p v-if="!empty && !signedIn" class="text-sm" data-testid="share-icons-sign-in">{{ t("shareIcons.signIn") }}</p>
     <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="share-icons-error">{{ error }}</p>
     <div class="flex items-center justify-end gap-2">
       <span v-if="progress" class="text-muted-foreground mr-auto flex items-center gap-2 text-sm tabular-nums" role="status" data-testid="share-icons-progress">
@@ -161,7 +169,8 @@ async function share() {
         {{ t("shareIcons.progress", progress) }}
       </span>
       <Button type="button" variant="secondary" :disabled="busy" @click="dialog = null">{{ empty ? t("common.close") : t("common.cancel") }}</Button>
-      <Button v-if="!empty" type="button" data-testid="share-icons-submit" :disabled="busy || looking || count === 0" @click="share">
+      <Button v-if="!empty && !signedIn" type="button" data-testid="share-icons-sign-in-button" @click="signIn">{{ t("account.signIn") }}</Button>
+      <Button v-else-if="!empty" type="button" data-testid="share-icons-submit" :disabled="busy || looking || count === 0" @click="share">
         {{ t("shareIcons.submit", { count: Math.max(count, 1) }) }}
       </Button>
     </div>

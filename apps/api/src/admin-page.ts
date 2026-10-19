@@ -212,10 +212,14 @@ function pendingCard(row) {
   return card(
     logo(pendingPicture(row)),
     row.gameName || "(unknown game)",
-    [row.hasIcon ? badge("has an icon", "bad") : badge("new", "gold")],
+    [row.hasIcon ? badge("has an icon", "bad") : badge("new", "gold"), ...(row.custom ? [badge("custom game", "")] : [])],
     [
       approve,
       button("Deny", "bad", () => call("/api/deny", { sha256: row.sha256, block: false })),
+      button("Block", "bad", async () => {
+        if (!confirm("Deny this icon, never take this file again and stop its sender from sharing?")) return;
+        await call("/api/deny", { sha256: row.sha256, block: true });
+      }, "Deny, never take this file again, and stop its sender from sharing"),
     ],
   );
 }

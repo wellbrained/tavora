@@ -130,10 +130,10 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     });
   });
 
-  // A player offers an icon their PC has and the service lacks. It is checked,
-  // cleaned and queued; nothing is served until a person approves it. JSON
-  // only, which a web page on another site cannot send without a preflight
-  // this service refuses. Who sent it is never recorded.
+  // A signed-in player offers an icon their PC has and the service lacks. It is
+  // checked, cleaned and queued; nothing is served until a person approves it.
+  // JSON only, which a web page on another site cannot send without a preflight
+  // this service refuses. The account is kept with the offer until it is reviewed.
   app.post(
     "/v1/icons/submit",
     bodyLimit({ maxSize: MAX_UPLOAD_BODY + 2000, onError: (context) => context.json({ error: "That icon is too big." }, 413) }),
@@ -143,7 +143,10 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
         context.header("Retry-After", String(wait));
         return context.json({ error: "Too many requests." }, 429);
       }
-      if (!iconsAvailable || !submissions) return context.json({ error: "Sharing icons is not available right now." }, 503);
+      if (!iconsAvailable || !submissions || !accounts) return context.json({ error: "Sharing icons is not available right now." }, 503);
+      const token = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "")?.[1];
+      const session = token ? accounts.store.sessionByToken(token, (accounts.now ?? Date.now)()) : null;
+      if (!session || !accounts.store.account(session.accountId)) return context.json({ error: "Sign in to share icons.", reason: "signed-out" }, 401);
       if (!(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) {
         return context.json({ error: "Send JSON." }, 415);
       }
@@ -153,7 +156,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
       } catch {
         return context.json({ error: "Send { id, name, source, icon }." }, 400);
       }
-      const result = submissions.submit(body);
+      const result = submissions.submit(body, session.accountId);
       if (result.status === 202) return context.json({ status: "received" }, 202);
       return context.json({ error: result.error }, result.status);
     },
