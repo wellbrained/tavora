@@ -225,6 +225,8 @@ export class CatalogStore {
       );
       create table if not exists report_notices (owner text primary key, notified_at text not null);
     `);
+    // Since when the whole catalog has had no room (C9), and when the maintainer was last told.
+    this.db.exec("create table if not exists catalog_state (name text primary key, value text not null)");
     // Catalogs from before signed uploads have no account_id: those versions were added by hand.
     const columns = (this.db.prepare("pragma table_info(versions)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (!columns.includes("account_id")) this.db.exec("alter table versions add column account_id text");
@@ -317,6 +319,29 @@ export class CatalogStore {
     if (last && now.getTime() - Date.parse(last.notified_at) < 86_400_000) return false;
     this.db.prepare("insert into report_notices (owner, notified_at) values (?, ?) on conflict (owner) do update set notified_at = excluded.notified_at").run(owner, now.toISOString());
     return true;
+  }
+
+  /**
+   * Marks the catalog as full (an upload was refused for room) and says whether the maintainer may be
+   * told now: at most once a day. Saying yes counts as telling.
+   */
+  markFull(now: Date = new Date()): boolean {
+    const at = now.toISOString();
+    this.db.prepare("insert into catalog_state (name, value) values ('full_since', ?) on conflict (name) do nothing").run(at);
+    const last = this.db.prepare("select value from catalog_state where name = 'full_notified_at'").get() as { value: string } | undefined;
+    if (last && now.getTime() - Date.parse(last.value) < 86_400_000) return false;
+    this.db.prepare("insert into catalog_state (name, value) values ('full_notified_at', ?) on conflict (name) do update set value = excluded.value").run(at);
+    return true;
+  }
+
+  /** An upload fit again: the catalog is no longer full. */
+  clearFull(): void {
+    this.db.exec("delete from catalog_state where name = 'full_since'");
+  }
+
+  /** Since when uploads are refused for room (ISO time), or null while there is room. */
+  fullSince(): string | null {
+    return (this.db.prepare("select value from catalog_state where name = 'full_since'").get() as { value: string } | undefined)?.value ?? null;
   }
 
   /** Open reports, most reported first, with what the maintainer needs to decide. */

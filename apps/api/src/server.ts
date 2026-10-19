@@ -33,6 +33,8 @@ if (!steamKey) console.log("[tavora-api] No STEAM_WEB_API_KEY: Steam import is o
 // Hosted game icons are only served with a takedown contact; without one the icon routes answer 503.
 const takedownContact = process.env.TAKEDOWN_CONTACT?.trim();
 if (!takedownContact) console.log("[tavora-api] No TAKEDOWN_CONTACT: hosted icons are off.");
+// Who hears by email when the module catalog is full; without it only the admin page shows it.
+const maintainerEmail = process.env.MAINTAINER_EMAIL?.trim();
 
 // The one writable thing: icons offered by players, approved ones and takedowns.
 const stateDir = process.env.TAVORA_STATE_DIR ?? "data/state";
@@ -96,6 +98,7 @@ const app = createApp({
       }
     : {}),
   ...(takedownContact ? { takedownContact } : {}),
+  ...(maintainerEmail ? { maintainerEmail } : {}),
   ...(steamKey ? { steam: createSteamClient({ key: steamKey }) } : {}),
   // An IPv6 client counts by its /64 (clientOf), so new addresses from one connection share one limit.
   clientKey: (request) => (behindProxy ? clientOf(request.headers.get("x-forwarded-for")?.split(",")[0]) : null) ?? "shared",

@@ -108,7 +108,8 @@ export function createAdminApp({ token, submissions, state, store, catalog }: Ad
     return submissions.takedown(id, block === true) ? context.json({ ok: true }) : context.json({ error: "No such hosted icon." }, 404);
   });
 
-  app.get("/api/reports", (context) => context.json({ reports: catalog?.reports() ?? [] }));
+  // With the reports: since when the catalog has been full (C9), or null while there is room.
+  app.get("/api/reports", (context) => context.json({ reports: catalog?.reports() ?? [], catalogFullSince: catalog?.fullSince() ?? null }));
 
   app.post("/api/reports/dismiss", async (context) => {
     const { sha256 } = await json(context.req.raw);

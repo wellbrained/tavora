@@ -44,9 +44,11 @@ export interface AppOptions {
   catalogueKey?: string;
   /** Reports per client. */
   reportRateLimiter?: RateLimiter;
+  /** Who is told by email when the catalog is full (needs accounts' mailer). */
+  maintainerEmail?: string;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, catalogueKey, reportRateLimiter }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, catalogueKey, reportRateLimiter, maintainerEmail }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 100, windowMs: 3_600_000 });
@@ -203,6 +205,9 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     ...(publishLimits ? { limits: publishLimits } : {}),
     ...(catalogueKey ? { catalogueKey } : {}),
     ...(accounts?.now ? { now: accounts.now } : {}),
+    ...(accounts && maintainerEmail?.trim()
+      ? { maintainer: { email: maintainerEmail.trim(), mailer: accounts.mailer, ...(accounts.mailDailyLimit === undefined ? {} : { mailDailyLimit: accounts.mailDailyLimit }) } }
+      : {}),
   });
   catalogApp.post("/publish", publish.limit, publish.handler);
   const report = reportHandlers({

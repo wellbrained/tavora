@@ -198,7 +198,8 @@ describe("reports", () => {
 
     expect((await call("/api/reports", { token: null })).status).toBe(401);
     expect((await call("/api/reports", { method: "POST", token: null, body: {} })).status).toBe(401);
-    const listed = (await (await call("/api/reports")).json()) as { reports: { sha256: string; id: string; count: number; listed: boolean }[] };
+    const listed = (await (await call("/api/reports")).json()) as { reports: { sha256: string; id: string; count: number; listed: boolean }[]; catalogFullSince: string | null };
+    expect(listed.catalogFullSince).toBeNull();
     expect(listed.reports).toEqual([expect.objectContaining({ sha256: added.sha256, id: "wellbrained.timer", count: 1, listed: true })]);
 
     expect((await post("/api/catalog/listed", { id: "wellbrained.timer", listed: false })).status).toBe(200);
@@ -212,9 +213,15 @@ describe("reports", () => {
     expect((await post("/api/reports/dismiss", { sha256: added.sha256 })).status).toBe(200);
     expect(((await (await call("/api/reports")).json()) as { reports: unknown[] }).reports).toEqual([]);
     expect((await post("/api/reports/dismiss", { sha256: added.sha256 })).status).toBe(404);
+
+    // A full catalog (C9) shows with the reports until an upload fits again.
+    catalog.markFull(new Date("2026-10-19T08:00:00Z"));
+    expect(((await (await call("/api/reports")).json()) as { catalogFullSince: string | null }).catalogFullSince).toBe("2026-10-19T08:00:00.000Z");
+    catalog.clearFull();
+    expect(((await (await call("/api/reports")).json()) as { catalogFullSince: string | null }).catalogFullSince).toBeNull();
   });
 
   it("answers with no reports when there is no catalog", async () => {
-    expect(await (await call("/api/reports")).json()).toEqual({ reports: [] });
+    expect(await (await call("/api/reports")).json()).toEqual({ reports: [], catalogFullSince: null });
   });
 });

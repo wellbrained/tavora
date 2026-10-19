@@ -2,8 +2,10 @@ import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { PUBLISH_STATEMENT, ZIP_LIMITS } from "@tavora/pack";
 import type { AccountStore } from "./account-store.ts";
+import { MAIL_RESERVED } from "./accounts.ts";
 import { CatalogError, checkCatalogZip, type CatalogStore, type CheckedZip } from "./catalog.ts";
 import { catalogTrust } from "./catalog-trust.ts";
+import type { Mail, Mailer } from "./mail.ts";
 import { signedStatement } from "./publishers.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 
@@ -41,10 +43,24 @@ export interface PublishOptions {
   now?: () => number;
   /** The catalogue public key the signed lists are checked against (CATALOGUE_PUBLIC_KEY outside tests). */
   catalogueKey?: string;
+  /** Who is told when the catalog is full (MAINTAINER_EMAIL), and how. Absent: only the review page shows it. */
+  maintainer?: { email: string; mailer: Mailer; mailDailyLimit?: number };
+}
+
+export function catalogFullMail(to: string, usedBytes: number, catalogBytes: number): Mail {
+  const mb = (bytes: number) => Math.round(bytes / 1024 / 1024);
+  return {
+    to,
+    subject: "Tavora's module catalog is full",
+    text:
+      `The module catalog holds ${mb(usedBytes)} MB of its ${mb(catalogBytes)} MB, so new uploads are refused with 507.\n\n` +
+      "Make room by removing old zips, or raise the catalog's limit, and uploads work again. The review page shows this until an upload fits.\n\n" +
+      "You get this email at most once a day.\n\nTavora\n",
+  };
 }
 
 /** The middleware and handler for POST /v1/catalog/publish. */
-export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey }: PublishOptions) {
+export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, maintainer }: PublishOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
   const { uploadsPerDay, accountBytes, catalogBytes } = { ...PUBLISH_LIMITS, ...limits };
   const refuse = (context: Context, status: 400 | 403 | 409 | 413 | 415 | 429 | 503 | 507, reason: string, error: string) => context.json({ error, reason }, status);
@@ -53,6 +69,20 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     maxSize: ZIP_LIMITS.maxArchiveBytes,
     onError: (context) => refuse(context, 413, "too-big", `A module zip may be at most ${ZIP_LIMITS.maxArchiveBytes / 1024 / 1024} MB.`),
   });
+
+  // Tells the maintainer by email, at most once a day; the review page shows it either way (C9).
+  const tellFull = async (catalog: CatalogStore, store: AccountStore, at: number, usedBytes: number) => {
+    if (!catalog.markFull(new Date(at)) || !maintainer) return;
+    const day = new Date(at).toISOString().slice(0, 10);
+    // Sign-in codes come first: this notice never uses the emails kept for them.
+    if (maintainer.mailDailyLimit !== undefined && store.mailsSent(day) >= Math.max(0, maintainer.mailDailyLimit - MAIL_RESERVED)) return;
+    try {
+      await maintainer.mailer.send(catalogFullMail(maintainer.email, usedBytes, catalogBytes));
+      store.countMail(day);
+    } catch {
+      // The review page still shows it; the email is best effort.
+    }
+  };
 
   const handler = async (context: Context) => {
     const wait = limiter.check(clientKey(context.req.raw));
@@ -98,8 +128,10 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (catalog.storedBytes(key.accountId) + checked.size > accountBytes) {
       return refuse(context, 413, "account-full", `Your modules may take at most ${accountBytes / 1024 / 1024} MB in the catalog.`);
     }
-    if (catalog.storedBytes() + checked.size > catalogBytes) {
+    const usedBytes = catalog.storedBytes();
+    if (usedBytes + checked.size > catalogBytes) {
       console.warn("[tavora-api] The module catalog is full: uploads are refused until there is room.");
+      await tellFull(catalog, store, at, usedBytes);
       return refuse(context, 507, "catalog-full", "The catalog has no room right now. Tavora has been told.");
     }
 
@@ -109,6 +141,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
       if (error instanceof CatalogError) return refuse(context, 409, "conflict", error.message);
       throw error;
     }
+    catalog.clearFull();
     if (held === "free") store.reservePrefix(key.accountId, prefix, at);
     return context.json({ status: "published", id: checked.manifest.id, version: checked.manifest.version, sha256: checked.sha256 }, 201);
   };
