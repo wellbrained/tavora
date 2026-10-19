@@ -88,6 +88,7 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
           {
             label: t("dock.removeModule", { name: module.name }),
             testid: "panel-remove-module",
+            danger: true,
             run: () => act({ type: "remove-module-from-game", moduleId: module.id }),
           },
         ]

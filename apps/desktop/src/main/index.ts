@@ -121,6 +121,9 @@ if (!app.requestSingleInstanceLock()) {
     .then(async () => {
       host = await Host.create({
         userData: app.getPath("userData"),
+        // Pictures\Tavora, where the player can find them; a development run keeps its own. A run with its own data
+        // folder (tests) keeps them in there.
+        picturesFolder: !app.isPackaged && process.env.TAVORA_USER_DATA ? undefined : path.join(app.getPath("pictures"), app.isPackaged ? "Tavora" : "Tavora (dev)"),
         moduleDirs,
         officialModuleDirs,
         officialThemeDirs,

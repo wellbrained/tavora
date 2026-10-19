@@ -31,7 +31,7 @@ function remove() {
     >
       <Plus :stroke-width="1.5" /> {{ t("workspace.addModule") }}
     </Button>
-    <Button variant="ghost" size="sm" class="text-muted-foreground" data-testid="slot-remove" @click="remove">
+    <Button variant="danger" size="sm" data-testid="slot-remove" @click="remove">
       <X :stroke-width="1.5" /> {{ t("workspace.removeSlot") }}
     </Button>
   </div>

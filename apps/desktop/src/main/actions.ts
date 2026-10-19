@@ -308,6 +308,10 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("fingerprint") && typeof a.fingerprint === "string" && /^[0-9a-f]{32}$/.test(a.fingerprint) ? { type: a.type, fingerprint: a.fingerprint } : null;
     case "account-sign-out-device":
       return only("deviceId") && typeof a.deviceId === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(a.deviceId) ? { type: a.type, deviceId: a.deviceId } : null;
+    case "account-rename-device":
+      return only("deviceId", "name") && typeof a.deviceId === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(a.deviceId) && text(a.name, 40) && a.name.trim()
+        ? { type: a.type, deviceId: a.deviceId, name: a.name }
+        : null;
     case "ai-usage-add":
       return only("provider", "label", "directory") && (a.provider === "claude" || a.provider === "codex") && text(a.label, 60) && text(a.directory, 500)
         ? { type: a.type, provider: a.provider, label: a.label, directory: a.directory }

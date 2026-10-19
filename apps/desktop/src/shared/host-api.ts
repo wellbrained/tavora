@@ -139,6 +139,8 @@ export type DeviceOs = "windows" | "linux" | "macos" | "other";
 export interface AccountDevice {
   id: string;
   os: DeviceOs;
+  /** The PC's name, or null for a sign-in from before devices had names. */
+  name: string | null;
   createdAt: string;
   lastUsedAt: string;
   /** This PC. */
@@ -592,6 +594,7 @@ export type HostAction =
   | { type: "account-refresh" }
   | { type: "account-sign-out" }
   | { type: "account-sign-out-device"; deviceId: string }
+  | { type: "account-rename-device"; deviceId: string; name: string }
   | { type: "account-email-code"; email: string }
   | { type: "account-change-email"; code: string }
   | { type: "account-delete-code" }
