@@ -150,3 +150,6 @@ Equipment order is fixed across builds. Plain visibility/ascendancy switches,
 dropdown indicators, collapse icons, frame-label help and wrapping Guide tabs
 clarify control behavior. Quest rewards display saved author advice or recorded
 character choices separately. Build selectors put the build name before source.
+
+Alpha 14 reissues the Alpha 13 item-details and control improvements under a
+new version so installations already on Alpha 13 can update normally.
