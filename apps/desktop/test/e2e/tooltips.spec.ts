@@ -63,8 +63,8 @@ test('PoE2 Gear imports a portable build and sends artwork and stats to the shar
   const at=await inModule<{x:number;y:number}>(app,id,"(()=>{const r=document.querySelector('[data-slot=weapon]').getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()");
   await app.evaluate(({webContents},{id,at})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://'+id+'/'))!;wc.sendInputEvent({type:'mouseMove',...at});},{id,at});
   await expect.poll(async()=> (await tooltip(app))?.visible).toBe(true);
-  const rendered=await app.evaluate(async({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith('data:text/html'))!;return w.webContents.executeJavaScript('({text:document.body.innerText,image:document.querySelector("img")?.src,html:document.querySelector("#card").innerHTML})');});
-  expect(rendered.text).toContain('Armageddon Edge');expect(rendered.text).toContain('[P5]');expect(rendered.image).toMatch(/^data:image\//);expect(rendered.html).not.toContain('tavora-module://');
+  const rendered=await app.evaluate(async({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith('data:text/html'))!;return w.webContents.executeJavaScript('({text:document.body.innerText,image:document.querySelector("img")?.src,html:document.querySelector("#card").innerHTML,bullet:getComputedStyle(document.querySelector("li .text"),"::before").content})');});
+  expect(rendered.bullet).toBe('"'+String.fromCharCode(8226)+'"');expect(rendered.text).toContain('Armageddon Edge');expect(rendered.text).toContain('[P5]');expect(rendered.image).toMatch(/^data:image\//);expect(rendered.html).not.toContain('tavora-module://');
   const png=await app.evaluate(async({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith('data:text/html'))!;return(await w.webContents.capturePage()).toPNG().toString('base64');});
   await writeFile(testInfo.outputPath('gear-tooltip.png'),Buffer.from(png,'base64'));
   // Changing the source clears both the host surface and the module's local pin state.

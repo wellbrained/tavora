@@ -23,9 +23,9 @@ function render(data: Data) {
         card.style.setProperty("--bg", bg);
     const de = data.language === "de";
     if (data.pinned) {
-        const close = node("button", "ï¿½");
+        const close = node("button", "\u00d7");
         close.id = "close";
-        close.setAttribute("aria-label", de ? "Details schlieï¿½en" : "Close item details");
+        close.setAttribute("aria-label", de ? "Details schlie\u00dfen" : "Close item details");
         close.onclick = () => ipcRenderer.send("tooltip:close", data.serial);
         card.append(close);
     }
@@ -43,7 +43,7 @@ function render(data: Data) {
     }
     if (c.requirements?.length) {
         const req = node("div", undefined, "requirements");
-        req.append(node("small", de ? "Benï¿½tigt" : "Requires"));
+        req.append(node("small", de ? "Ben\u00f6tigt" : "Requires"));
         for (const r of c.requirements) {
             const row = node("div", undefined, "requirement");
             row.append(node("span", r.label), node("b", r.value));
@@ -89,7 +89,7 @@ function render(data: Data) {
         details.append(section);
     }
     const footer = node("div", undefined, "footer");
-    footer.append(node("span", data.source), node("span", data.pinned ? (de ? "Angeheftet ï¿½ Esc zum Schlieï¿½en" : "Pinned ï¿½ Escape to close") : (de ? "Klicken zum Anheften" : "Click to pin item details")));
+    footer.append(node("span", data.source), node("span", data.pinned ? (de ? "Angeheftet \u00b7 Esc zum Schlie\u00dfen" : "Pinned \u00b7 Escape to close") : (de ? "Klicken zum Anheften" : "Click to pin item details")));
     card.append(footer);
     measure();
 }
