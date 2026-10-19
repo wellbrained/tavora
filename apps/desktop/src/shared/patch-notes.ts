@@ -19,7 +19,7 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.18.20",
+    version: "0.19.1",
     date: "2026-10-19",
     title: "Share icons of your own games",
     notes: [
@@ -28,157 +28,22 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
-    version: "0.18.19",
+    version: "0.19.0",
     date: "2026-10-19",
-    title: "Module pages in the catalog",
+    title: "The module catalog",
     notes: [
-      "Catalog modules now have their own page, like in an app store: the developer's introduction, screenshots, what's new, when it was updated and what it can reach.",
-      "Catalog cards show each module's icon.",
-    ],
-  },
-  {version:"0.18.18",date:"2026-10-19",title:"Item details across panels",notes:["Item tooltips can open beside your mouse over neighbouring panels. Click to pin details, then press Escape to close them."]},
-  {
-    version: "0.18.17",
-    date: "2026-10-19",
-    title: "Peek before you install",
-    notes: [
-      "Click a module's name in the catalog to see its screenshots and website before you install it.",
-    ],
-  },
-  {
-    version: "0.18.16",
-    date: "2026-10-19",
-    title: "Steadier To-Dos",
-    notes: ["Menus in To-Dos stay open while your changes save, even when another panel saves too."],
-  },
-  {
-    version: "0.18.15",
-    date: "2026-10-19",
-    title: "Clearer Share icons",
-    notes: [
-      "Settings > Online now says in plain words what Share icons does, and the long note under Game icons is gone.",
-    ],
-  },
-  {
-    version: "0.18.14",
-    date: "2026-10-19",
-    title: "Tidier settings",
-    notes: [
-      "Pictures from modules like Notes now live in your Pictures folder, under Tavora, where you can find them. Pictures you already have move there by themselves, and backups now include them wherever you keep them.",
-      "Your signed-in devices are tucked away under Account > Manage. Each one shows its PC's name, and you can rename it.",
-      "Import from Steam moved to Settings > Games, since it adds games and isn't a module.",
-      "Remove, Delete and Take back buttons are always red now, so you can tell them apart at a glance.",
-      "Website access and the AI accounts list explain in plain words what they're for.",
-      "The buttons next to the pictures folder, your themes and your modules line up again.",
-    ],
-  },
-  {
-    version: "0.18.12",
-    date: "2026-10-18",
-    title: "Take a module out of a game",
-    notes: [
-      "Right-click a panel and pick Remove from game to take its module out of just this game. All its panels there close, and empty slots stay where they were, so your layout doesn't shift. The module stays installed, and its notes and data come back when you add it again.",
-      "A module in Settings > Modules that can't load now says so in plain words, with a space after its name, and tells you what to do when it just isn't built yet.",
-      "While icons are being shared, a spinner turns next to the count, so you can see it's working.",
-      "Share icons now tells you straight away how many new icons it found, or that there are none, with much shorter text.",
-      "Dragging a panel beside another one in its row now shows a bar where it lands, since the panels just swap places and keep their sizes.",
-    ],
-  },
-  {
-    version: "0.18.11",
-    date: "2026-10-18",
-    title: "Roomier, friendlier Settings",
-    notes: [
-      "Settings and the module library are bigger and easier to find your way around. Each page is split into small groups, and the texts are short and to the point.",
-      "Settings has two new pages: Online, for the online features and game icons, and About, for updates, patch notes, backups and diagnostic info. Grayscale text moved to Appearance.",
-      "Website access for modules is now in Settings > Modules, next to the modules themselves.",
-      "The module library shows modules as cards. Pick All, In this game, a kind of module or the Catalog on the left.",
-    ],
-  },
-  {
-    version: "0.18.10",
-    date: "2026-10-18",
-    title: "Games open all at once",
-    notes: [
-      "Switching to a game or workspace no longer fills in panel by panel: Tavora's campfire, with embers rising from it, covers the workspace until every panel you can see has loaded, and then they all show together.",
-      "A panel you add shows the same campfire while it loads.",
-    ],
-  },
-  {
-    version: "0.18.9",
-    date: "2026-10-18",
-    title: "Report a module",
-    notes: [
-      "A module in the catalog that does something harmful, or isn't what it says, can be reported to Tavora: Report in the Browse tab of the module library, or in Settings > Modules for one you installed from the catalog.",
-      "A person at Tavora looks at every report. The report names only the module, its publisher key and its file, nothing about you.",
-    ],
-  },
-  {
-    version: "0.18.8",
-    date: "2026-10-18",
-    title: "Quicker module library and file dialogs",
-    notes: [
-      "The module library stays open when you add one panel of a module with several panels, so you can add the next one straight away. Add all panels opens one of each.",
-      "Install from zip, the game picture, development folders and the module pictures folder open where you last picked from, once that pick worked.",
-    ],
-  },
-  {
-    version: "0.18.7",
-    date: "2026-10-18",
-    title: "Tidy up many games at once",
-    notes: [
-      "Settings > Games lists every game in your library. Tick as many as you like, or Select all, and move them to Trash together. Shift-click ticks a whole run, and the filter narrows what Select all picks. Manage games… in a game's menu takes you there.",
-      "Trash can restore or delete many games at once too.",
-      "Share icons has All and None buttons, and sends any number of icons.",
-      "Share icons only, in the Steam import, offers the icons Steam keeps on your PC for the games you tick, without adding those games to your library.",
-    ],
-  },
-  {
-    version: "0.18.6",
-    date: "2026-10-18",
-    title: "Catalog modules stay up to date",
-    notes: [
-      "Modules you installed from the catalog update themselves while Tavora runs, with no restart: their open panels reload with the new version, and Settings > Modules has Check for updates. Tavora installs only an update from the same publisher with a higher version, checked like any zip.",
-      "An update that wants to reach new websites or connectors waits for your yes. Its panels show a bar to review it, with what is new in that version; until you allow it, the version you have keeps running.",
-    ],
-  },
-  {
-    version: "0.18.5",
-    date: "2026-10-18",
-    title: "Safety lists switched on",
-    notes: ["Tavora now checks its safety lists with its own key, so a blocked module or a revoked publisher key takes effect as soon as you are online."],
-  },
-  {
-    version: "0.18.4",
-    date: "2026-10-18",
-    title: "Safety lists for modules",
-    notes: [
-      "Tavora can now stop a harmful module that is already installed. It gets a list signed by Tavora (only while online features are on); a module on it stops, says why in Settings > Modules and keeps its data, and comes back when you install a version that is not blocked.",
-      "A developer who loses their publisher key can revoke it and move to a new one. Tavora then refuses new zips from the old key, and updates from the new key keep your module's data.",
-    ],
-  },
-  {
-    version: "0.18.3",
-    date: "2026-10-18",
-    title: "Browse the module catalog",
-    notes: [
-      "The module library has a Browse tab: it lists modules from Tavora's catalog for the game or personal workspace you are in, says who publishes each one, and installs it with one press. Tavora checks every download against its listing and its publisher's signature, and installs nothing that does not match. Browse needs Online game search to be on.",
-    ],
-  },
-  {
-    version: "0.18.2",
-    date: "2026-10-18",
-    title: "Patch notes for modules",
-    notes: [
-      "Modules have patch notes of their own: press Patch notes next to a module in Settings > Modules. After a module updates, its notes are marked New until you open them.",
-    ],
-  },
-  {
-    version: "0.18.1",
-    date: "2026-10-18",
-    title: "Personal workspaces",
-    notes: [
-      "Personal workspaces: a place on the rail that belongs to no game, for modules such as Notes, Whiteboard and To-Dos. Make one with Add game > Make a personal workspace instead. Modules made for one game are not offered there, and a workspace never looks up an icon or links to a game with the same name.",
+      "Browse Tavora's module catalog in the module library and install a module with one press. Each module has its own page with screenshots, what's new, who made it and what it can reach. Tavora checks every download against its listing and its publisher's signature.",
+      "Modules from the catalog update themselves while Tavora runs, with no restart. An update that wants to reach new websites waits for your yes, and the version you have keeps running until then.",
+      "Something wrong with a module? Report it from the catalog or Settings > Modules. A person at Tavora looks at every report, and it says nothing about you.",
+      "Tavora can stop a harmful module that's already installed. It says why in Settings > Modules and keeps the module's data.",
+      "Modules have their own patch notes, next to each one in Settings > Modules.",
+      "Personal workspaces: a place on the rail that belongs to no game, for Notes, Whiteboard, To-Dos and the like. Pick Make a personal workspace instead under Add game.",
+      "Right-click a panel and pick Remove from game to take its module out of just this game. Its data comes back when you add it again.",
+      "Games open all at once: a campfire covers the workspace until every panel has loaded.",
+      "Settings is roomier, with new Online and About pages, short texts and red buttons for anything that removes. Pictures from modules now live in Pictures\\Tavora.",
+      "Settings > Games lets you move many games to Trash at once, and Share icons can send icons for games you haven't added.",
+      "Item tooltips can open over neighbouring panels. Click to pin them, press Escape to close.",
+      "To-Dos menus stay open while your changes save.",
     ],
   },
   {
