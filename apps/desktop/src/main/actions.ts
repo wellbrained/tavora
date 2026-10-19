@@ -63,6 +63,8 @@ export function parseAction(raw: unknown): HostAction | null {
     case "check-module-updates":
     case "add-development-folder":
       return only() ? { type: a.type } : null;
+    case "open-module-problem-folder":
+      return only("path") && typeof a.path === "string" && a.path.length > 0 && a.path.length <= 500 ? { type: a.type, path: a.path } : null;
     case "remove-development-folder":
       return only("folder") && typeof a.folder === "string" && a.folder.length > 0 && a.folder.length <= 500 ? { type: a.type, folder: a.folder } : null;
     case "install-catalog-module":

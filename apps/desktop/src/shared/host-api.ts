@@ -383,8 +383,8 @@ export interface HostViewState {
     update: { version: string; asks: ModulePermissions; notes: ModuleNote[] } | null;
   }[];
   /** Folders in the modules folder that could not be loaded, and why, for module authors. */
-  /** `kind` "not-built" gets its own text in Settings; the others show `message`. */
-  moduleProblems: { folder: string; message: string; kind?: "not-built" | "no-module" | "missing" }[];
+  /** `path` is the folder's full path; `kind` "not-built" gets its own text in Settings, the others show `message`. */
+  moduleProblems: { folder: string; path: string; message: string; kind?: "not-built" | "no-module" | "missing" }[];
   /**
    * Folders added in Settings > Development: a module project, or a folder of projects. `problem` is
    * set when the folder itself has none or is gone; each project says the module it loads or why not.
@@ -517,6 +517,8 @@ export type HostAction =
   | { type: "open-themes-folder" }
   /** Opens the player's modules folder in the file manager, creating it first. */
   | { type: "open-modules-folder" }
+  /** Opens a folder Settings lists as not loading (a `moduleProblems` path) in the file manager. */
+  | { type: "open-module-problem-folder"; path: string }
   /** Picks a module project folder to load from (answers with the folder), or forgets one. */
   | { type: "add-development-folder" }
   | { type: "remove-development-folder"; folder: string }

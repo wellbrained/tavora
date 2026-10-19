@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.2",
+    date: "2026-10-19",
+    title: "Clearer module problems",
+    notes: [
+      "A module that can't load now shows its folder in Settings > Modules, with a button to open it and what to do next.",
+    ],
+  },
+  {
     version: "0.19.1",
     date: "2026-10-19",
     title: "Share icons of your own games",

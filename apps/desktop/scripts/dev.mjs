@@ -83,17 +83,21 @@ const reload = {
   },
 };
 
-// The official modules (repo modules/) are loaded from their built bundles,
-// so they are built in watch mode too. A rebuild restarts Tavora like a main
-// process change, which reloads every panel with the new bundle.
-const modulesDir = path.resolve(root, "../../modules");
-const officialModules = readdirSync(modulesDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory() && existsSync(path.join(modulesDir, entry.name, "tavora.module.json")))
-  .map((entry) => path.join(modulesDir, entry.name));
-pending += officialModules.length;
+// The official modules (repo modules/) and the examples (repo examples/) are
+// loaded from their built bundles, so they are built in watch mode too; an
+// example left unbuilt showed up as a broken module in Settings. A rebuild
+// restarts Tavora like a main process change, which reloads every panel with
+// the new bundle.
+const moduleProjects = ["../../modules", "../../examples"].flatMap((folder) => {
+  const dir = path.resolve(root, folder);
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(path.join(dir, entry.name, "tavora.module.json")))
+    .map((entry) => path.join(dir, entry.name));
+});
+pending += moduleProjects.length;
 
 const watchers = await Promise.all(
-  officialModules.map(async (dir) => {
+  moduleProjects.map(async (dir) => {
     const name = path.basename(dir);
     const watcher = await build({
       configFile: path.join(dir, "vite.config.ts"),

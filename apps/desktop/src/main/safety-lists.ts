@@ -184,6 +184,7 @@ export function stopBlocked(
     stopped.set(id, module);
     problems.push({
       folder: path.basename(module.root),
+      path: module.root,
       message: `Tavora stopped ${module.manifest.name} ${module.manifest.version} because it can do harm: ${block.reason} Its data is kept, and it comes back when you install a version that is not blocked.`,
     });
   }

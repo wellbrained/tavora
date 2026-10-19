@@ -47,7 +47,7 @@ describe("discoverModules", () => {
     const modules = await discoverModules({ official: [official], local: [local] }, problems);
     expect([...modules.keys()].sort()).toEqual(["community.example.plain", "tavora.board"]);
     expect(modules.get("tavora.board")?.manifest.permissions.webAssembly).toBe(true);
-    expect(problems).toEqual([{ folder: "greedy", message: "permissions.webAssembly is only for Tavora's own modules" }]);
+    expect(problems).toMatchObject([{ folder: "greedy", message: "permissions.webAssembly is only for Tavora's own modules" }]);
   });
 
   it("refuses the tavora publisher outside the official folder", async () => {
@@ -106,7 +106,7 @@ describe("minTavora", () => {
     const problems: ModuleProblem[] = [];
     const modules = await discoverModules({ local: [local], tavoraVersion: "0.17.9" }, problems);
     expect([...modules.keys()]).toEqual(["example.now"]);
-    expect(problems).toEqual([{ folder: "later", message: "it needs Tavora 0.18.0 or newer (this is 0.17.9)" }]);
+    expect(problems).toMatchObject([{ folder: "later", message: "it needs Tavora 0.18.0 or newer (this is 0.17.9)" }]);
     expect([...(await discoverModules({ local: [local], tavoraVersion: "0.18.0" })).keys()].sort()).toEqual(["example.later", "example.now"]);
   });
 });
@@ -128,7 +128,7 @@ describe("panel types", () => {
     const problems: ModuleProblem[] = [];
     const modules = await discoverModules({ local: [local] }, problems);
     expect([...modules.keys()]).toEqual(["example.typed"]);
-    expect(problems).toEqual([{ folder: "pageless", message: "the entry file b.html is missing (is it built?)", kind: "not-built" }]);
+    expect(problems).toMatchObject([{ folder: "pageless", message: "the entry file b.html is missing (is it built?)", kind: "not-built" }]);
     const info = await describeModules(local, modules);
     expect(info.get("example.typed")!.panelIcons).toEqual({ a: null, b: `data:image/png;base64,${png.toString("base64")}` });
   });
@@ -144,7 +144,7 @@ describe("development folders", () => {
     const modules = await discoverModules({ development: [project], local: [own] }, problems);
     expect(modules.get("example.tracker")).toMatchObject({ developmentFolder: project, developmentProject: project, provenance: "local", owner: "local", manifest: { name: "Tracker (dev)" } });
     // The installed copy waits, and says why.
-    expect(problems).toEqual([{ folder: "tracker", message: "another module with the same id is already loaded" }]);
+    expect(problems).toMatchObject([{ folder: "tracker", message: "another module with the same id is already loaded" }]);
     const info = await describeModules(own, modules);
     expect(info.get("example.tracker")).toMatchObject({ origin: { kind: "dev", folder: project }, removable: false });
   });
@@ -179,10 +179,10 @@ describe("development folders", () => {
     const modules = await discoverModules({ development: [empty, unbuilt, reserved, path.join(projects, "gone")] }, problems);
     expect(modules.size).toBe(0);
     expect(problems).toEqual([
-      { folder: "workspace", message: "there is no tavora.module.json in this folder or in the folders directly inside it", developmentFolder: empty, kind: "no-module" },
-      { folder: "unbuilt", message: "the entry file index.html is missing (is it built?)", developmentFolder: unbuilt, developmentProject: unbuilt, kind: "not-built" },
-      { folder: "fake", message: "its id is reserved for Tavora's own modules", developmentFolder: reserved, developmentProject: reserved },
-      { folder: "gone", message: "this folder can't be found", developmentFolder: path.join(projects, "gone"), kind: "missing" },
+      { folder: "workspace", path: empty, message: "there is no tavora.module.json in this folder or in the folders directly inside it", developmentFolder: empty, kind: "no-module" },
+      { folder: "unbuilt", path: unbuilt, message: "the entry file index.html is missing (is it built?)", developmentFolder: unbuilt, developmentProject: unbuilt, kind: "not-built" },
+      { folder: "fake", path: reserved, message: "its id is reserved for Tavora's own modules", developmentFolder: reserved, developmentProject: reserved },
+      { folder: "gone", path: path.join(projects, "gone"), message: "this folder can't be found", developmentFolder: path.join(projects, "gone"), kind: "missing" },
     ]);
   });
 

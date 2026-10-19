@@ -233,7 +233,7 @@ describe("C14: a blocked zip", () => {
     const stopped = stopBlocked(modules, userModules, records, safety, problems);
     expect(modules.has(ID)).toBe(false);
     expect([...stopped.keys()]).toEqual([ID]);
-    expect(problems).toEqual([{ folder: ID, message: expect.stringContaining("Tavora stopped Tracker 1.0.0 because it can do harm: It sends your files to a stranger's server. Its data is kept") }]);
+    expect(problems).toEqual([{ folder: ID, path: root, message: expect.stringContaining("Tavora stopped Tracker 1.0.0 because it can do harm: It sends your files to a stranger's server. Its data is kept") }]);
     expect(await readFile(path.join(root, "kept.txt"), "utf8")).toBe("data");
 
     // The same zip cannot be installed again, from anywhere.
