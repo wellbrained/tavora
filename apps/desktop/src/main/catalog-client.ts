@@ -5,12 +5,12 @@
 // matches the listing. After that the zip goes through the same installer as Install from zip, which
 // checks the publisher signature itself.
 import { createHash } from "node:crypto";
-import { isConnector, isGameId, isHomepage, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, type Connector } from "@tavora/module-schema";
+import { isConnector, isGameId, isHomepage, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, type Connector } from "@tavora/module-schema";
 import { ZIP_LIMITS } from "@tavora/pack";
 import type { CatalogListResult, CatalogModuleView } from "../shared/host-api";
 import { isWebUrl } from "./browser-url";
 import { PlayerError } from "./messages";
-import { pictureDataUrl } from "./module-icon";
+import { MAX_MODULE_ICON, pictureDataUrl } from "./module-icon";
 import { DEFAULT_API_URL } from "./online";
 import { isPublisherName } from "./publisher-names";
 
@@ -25,7 +25,7 @@ const SHA256 = /^[0-9a-f]{64}$/;
 /** Text that could change how the text around it reads: controls and direction marks. */
 const HIDDEN = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g;
 
-/** A listing's screenshot, fetched by its hash only when the player opens the module's info. */
+/** A listing's screenshot or icon, fetched by its hash only when the player looks at it. */
 export interface CatalogScreenshot {
   sha256: string;
   type: "png" | "webp";
@@ -33,13 +33,15 @@ export interface CatalogScreenshot {
 }
 
 /** A listed module with the zip it comes as; only the main process sees the hash. */
-export interface CatalogEntry extends Omit<CatalogModuleView, "screenshots"> {
+export interface CatalogEntry extends Omit<CatalogModuleView, "screenshots" | "icon"> {
   games: string[];
   workspaces: boolean;
   zip: { sha256: string; size: number };
   /** This version's patch notes, plain text. */
   notes: string[];
   shots: CatalogScreenshot[];
+  /** At most MAX_MODULE_ICON, like an installed module's icon (G10). */
+  icon: CatalogScreenshot | null;
 }
 
 /** One published version of a module, as GET /v1/catalog/modules/<id> lists them. */
@@ -73,18 +75,25 @@ function plainNotes(value: unknown): string[] {
     .filter((line): line is string => line !== null);
 }
 
+/** A listed picture with the shape the app relies on, at most `maxBytes`, or null. */
+function parsePicture(raw: unknown, maxBytes: number): CatalogScreenshot | null {
+  const { sha256, type, size } = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+  if (typeof sha256 !== "string" || !SHA256.test(sha256)) return null;
+  if (type !== "png" && type !== "webp") return null;
+  if (typeof size !== "number" || !Number.isSafeInteger(size) || size <= 0 || size > maxBytes) return null;
+  return { sha256, type, size };
+}
+
 /** The listed screenshots that have the shape the app relies on, at most MAX_SCREENSHOTS, each once. */
 function parseScreenshots(value: unknown): CatalogScreenshot[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
   const shots: CatalogScreenshot[] = [];
   for (const raw of value.slice(0, MAX_SCREENSHOTS)) {
-    const { sha256, type, size } = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
-    if (typeof sha256 !== "string" || !SHA256.test(sha256) || seen.has(sha256)) continue;
-    if (type !== "png" && type !== "webp") continue;
-    if (typeof size !== "number" || !Number.isSafeInteger(size) || size <= 0 || size > MAX_SCREENSHOT_BYTES) continue;
-    seen.add(sha256);
-    shots.push({ sha256, type, size });
+    const shot = parsePicture(raw, MAX_SCREENSHOT_BYTES);
+    if (!shot || seen.has(shot.sha256)) continue;
+    seen.add(shot.sha256);
+    shots.push(shot);
   }
   return shots;
 }
@@ -135,6 +144,7 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
     // Opened only like a module link (http or https), and shown as plain text.
     homepage: isHomepage(entry.homepage) && isWebUrl(entry.homepage) ? entry.homepage : null,
     shots: parseScreenshots(entry.screenshots),
+    icon: parsePicture(entry.icon, MAX_MODULE_ICON),
   };
 }
 
@@ -144,9 +154,9 @@ export function fitsScope(entry: Pick<CatalogEntry, "games" | "workspaces">, sco
   return entry.games.length === 0 || entry.games.includes(scope.game);
 }
 
-/** The view the host UI gets: no hash, no games list, and only how many screenshots there are. */
-export function catalogView({ games: _games, workspaces: _workspaces, zip: _zip, notes: _notes, shots, ...view }: CatalogEntry): CatalogModuleView {
-  return { ...view, screenshots: shots.length };
+/** The view the host UI gets: no hash, no games list, and only whether there are pictures. */
+export function catalogView({ games: _games, workspaces: _workspaces, zip: _zip, notes: _notes, shots, icon, ...view }: CatalogEntry): CatalogModuleView {
+  return { ...view, screenshots: shots.length, icon: icon !== null };
 }
 
 export interface CatalogClientOptions {
@@ -163,6 +173,10 @@ export class CatalogClient {
   private readonly fetchImpl: typeof fetch;
   private readonly listTimeoutMs: number;
   private readonly downloadTimeoutMs: number;
+  /** The listings of the last list, so their icons are fetched without asking for the list again. */
+  private listed = new Map<string, CatalogEntry>();
+  /** Icons already checked, by hash; a few hundred at most. */
+  private readonly icons = new Map<string, string | null>();
 
   constructor(options: CatalogClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? DEFAULT_API_URL).replace(/\/+$/, "");
@@ -185,6 +199,7 @@ export class CatalogClient {
         .map(parseCatalogEntry)
         .filter((entry): entry is CatalogEntry => entry !== null && fitsScope(entry, scope) && !seen.has(entry.id) && Boolean(seen.add(entry.id)))
         .sort((a, b) => a.name.localeCompare(b.name));
+      this.listed = new Map(entries.map((entry) => [entry.id, entry]));
       return { status: "ok", modules: entries.map(catalogView) };
     } catch {
       return { status: "unreachable" };
@@ -215,7 +230,7 @@ export class CatalogClient {
   }
 
   /** The newest listing of one module and every version it was published at, newest first. Throws a CatalogError the player can read. */
-  async details(id: string): Promise<{ entry: CatalogEntry; versions: CatalogVersion[] }> {
+  async details(id: string): Promise<{ entry: CatalogEntry; versions: CatalogVersion[]; readme: string | null }> {
     if (!isModuleId(id)) throw new CatalogError("error.catalogNotListed");
     let response: Response;
     try {
@@ -225,11 +240,12 @@ export class CatalogClient {
     }
     if (response.status === 404) throw new CatalogError("error.catalogNotListed");
     throwFailure(response.status);
-    const body = (await response.json().catch(() => null)) as { module?: unknown; versions?: unknown } | null;
+    const body = (await response.json().catch(() => null)) as { module?: unknown; versions?: unknown; readme?: unknown } | null;
     const entry = parseCatalogEntry(body?.module);
     if (!entry || entry.id !== id) throw new CatalogError("error.catalogNotListed");
     const versions = (Array.isArray(body?.versions) ? body.versions.slice(0, MAX_VERSIONS) : []).map(parseCatalogVersion).filter((version): version is CatalogVersion => version !== null);
-    return { entry, versions };
+    const readme = typeof body?.readme === "string" && Buffer.byteLength(body.readme) <= MAX_README_BYTES ? body.readme : null;
+    return { entry, versions, readme };
   }
 
   /**
@@ -279,19 +295,30 @@ export class CatalogClient {
   }
 
   /**
-   * A listed screenshot as a data address for the host UI, or null when it cannot be had or is not
-   * what the listing says (C10): read into memory with its listed size as a cap, then its SHA-256 and
+   * A listed screenshot or icon as a data address for the host UI, or null when it cannot be had or is
+   * not what the listing says (C10): read into memory with its listed size as a cap, then its SHA-256 and
    * its own first bytes (a PNG or WebP of that type) are checked, like a module icon (G10).
    */
-  async screenshot(shot: CatalogScreenshot): Promise<string | null> {
+  async picture(shot: CatalogScreenshot, maxBytes = MAX_SCREENSHOT_BYTES): Promise<string | null> {
     try {
-      const data = await this.read(`/v1/catalog/screenshots/${shot.sha256}.${shot.type}`, shot.size, this.listTimeoutMs, `image/${shot.type}`);
+      const data = await this.read(`/v1/catalog/pictures/${shot.sha256}.${shot.type}`, shot.size, this.listTimeoutMs, `image/${shot.type}`);
       if (createHash("sha256").update(data).digest("hex") !== shot.sha256) return null;
-      const url = pictureDataUrl(data, MAX_SCREENSHOT_BYTES);
+      const url = pictureDataUrl(data, maxBytes);
       return url?.startsWith(`data:image/${shot.type};`) ? url : null;
     } catch {
       return null;
     }
+  }
+
+  /** The icon of a module from the last list, checked like any listed picture, or null. Never throws. */
+  async icon(id: string): Promise<string | null> {
+    const shot = this.listed.get(id)?.icon;
+    if (!shot) return null;
+    if (this.icons.has(shot.sha256)) return this.icons.get(shot.sha256)!;
+    const url = await this.picture(shot, MAX_MODULE_ICON);
+    if (this.icons.size >= MAX_MODULES) this.icons.clear();
+    this.icons.set(shot.sha256, url);
+    return url;
   }
 
   /**

@@ -18,6 +18,15 @@ export interface PatchNote {
 }
 
 export const PATCH_NOTES: readonly PatchNote[] = [
+  {
+    version: "0.18.19",
+    date: "2026-10-19",
+    title: "Module pages in the catalog",
+    notes: [
+      "Catalog modules now have their own page, like in an app store: the developer's introduction, screenshots, what's new, when it was updated and what it can reach.",
+      "Catalog cards show each module's icon.",
+    ],
+  },
   {version:"0.18.18",date:"2026-10-19",title:"Item details across panels",notes:["Item tooltips can open beside your mouse over neighbouring panels. Click to pin details, then press Escape to close them."]},
   {
     version: "0.18.17",

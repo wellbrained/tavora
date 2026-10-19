@@ -728,9 +728,31 @@ export interface CatalogModuleView {
   publishedAt: string;
   /** The module's web page, http or https, shown as plain text; open-catalog-homepage opens it. */
   homepage: string | null;
-  /** How many screenshots the listing has; catalogScreenshots fetches them. */
+  /** How many screenshots the listing has; catalogPage fetches them. */
   screenshots: number;
+  /** Whether the listing has an icon; catalogIcon fetches it. */
+  icon: boolean;
 }
+
+/** One block of a catalog module's readme, as plain text (catalog-readme.ts). */
+export type ReadmeBlock =
+  | { kind: "heading"; level: 2 | 3; text: string }
+  | { kind: "paragraph"; text: string }
+  | { kind: "list"; ordered: boolean; items: string[] }
+  | { kind: "code"; text: string };
+
+/** What a catalog module's page shows beyond its card, checked by the main process. Every text is plain text. */
+export interface CatalogPage {
+  /** The listing as the main process just read it again. */
+  module: CatalogModuleView;
+  /** Checked PNG or WebP data addresses, in the listing's order; the ones that failed a check are left out. */
+  screenshots: string[];
+  readme: ReadmeBlock[];
+  /** Every published version with its patch notes, newest first. */
+  versions: { version: string; publishedAt: string; notes: string[] }[];
+}
+
+export type CatalogPageResult = ({ status: "ok" } & CatalogPage) | { status: "off" | "unavailable" | "busy" | "unreachable" | "gone" };
 
 /**
  * `off`: the player turned the online features off. `unavailable`: the catalog is switched off on the
@@ -753,8 +775,10 @@ export interface TavoraHostApi {
   steamShareIcons(appids: number[]): Promise<SteamShareResult>;
   /** The catalog modules for the current game or personal workspace. Never rejects. */
   browseCatalog(): Promise<CatalogListResult>;
-  /** A catalog module's screenshots as checked PNG or WebP data addresses, in the listing's order; empty when there are none or they can't be had. Never rejects. */
-  catalogScreenshots(moduleId: string): Promise<string[]>;
+  /** A catalog module's page: its readme, screenshots and versions. Never rejects. */
+  catalogPage(moduleId: string): Promise<CatalogPageResult>;
+  /** The icon of a module from the last catalog list, as a checked data address, or null. Never rejects. */
+  catalogIcon(moduleId: string): Promise<string | null>;
   /** Where the visible panels are. Panels not listed are hidden. */
   setPanelBounds(bounds: PanelBounds[]): void;
   /**

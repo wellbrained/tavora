@@ -141,7 +141,7 @@ describe("CatalogClient.download", () => {
   });
 });
 
-describe("CatalogClient.screenshot", () => {
+describe("CatalogClient.picture", () => {
   const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("picture bytes")]);
   const shot = { sha256: createHash("sha256").update(png).digest("hex"), type: "png" as const, size: png.length };
   const client = (body: Buffer) => {
@@ -151,18 +151,34 @@ describe("CatalogClient.screenshot", () => {
 
   it("gives back a listed PNG as a data address, asked for by its hash", async () => {
     const { client: catalog, calls } = client(png);
-    expect(await catalog.screenshot(shot)).toBe(`data:image/png;base64,${png.toString("base64")}`);
-    expect(calls[0]!.url).toBe(`https://catalog.test/v1/catalog/screenshots/${shot.sha256}.png`);
+    expect(await catalog.picture(shot)).toBe(`data:image/png;base64,${png.toString("base64")}`);
+    expect(calls[0]!.url).toBe(`https://catalog.test/v1/catalog/pictures/${shot.sha256}.png`);
     expect(calls[0]!.init).toMatchObject({ credentials: "omit", referrerPolicy: "no-referrer" });
   });
 
   it("drops a screenshot with another hash, size or kind than listed (C10)", async () => {
     const svg = Buffer.from("<svg onload='alert(1)'></svg>");
     const svgShot = { ...shot, sha256: createHash("sha256").update(svg).digest("hex"), size: svg.length };
-    expect(await client(svg).client.screenshot(svgShot)).toBeNull();
-    expect(await client(png).client.screenshot({ ...shot, type: "webp" })).toBeNull();
-    expect(await client(Buffer.concat([png, Buffer.from("x")])).client.screenshot(shot)).toBeNull();
-    expect(await client(Buffer.from(png).fill(1, 20)).client.screenshot(shot)).toBeNull();
+    expect(await client(svg).client.picture(svgShot)).toBeNull();
+    expect(await client(png).client.picture({ ...shot, type: "webp" })).toBeNull();
+    expect(await client(Buffer.concat([png, Buffer.from("x")])).client.picture(shot)).toBeNull();
+    expect(await client(Buffer.from(png).fill(1, 20)).client.picture(shot)).toBeNull();
+  });
+});
+
+describe("CatalogClient.icon", () => {
+  it("fetches the icon of a module from the last list once, and nothing for others", async () => {
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("icon bytes")]);
+    const icon = { sha256: createHash("sha256").update(png).digest("hex"), type: "png", size: png.length };
+    const { impl, calls } = fakeFetch((url) => (url.includes("/pictures/") ? new Response(new Uint8Array(png)) : json({ modules: [entry({ icon })] })));
+    const client = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl });
+    expect(await client.icon("wellbrained.tracker")).toBeNull();
+    const listed = await client.list({ game: "poe2" });
+    expect(listed).toMatchObject({ status: "ok", modules: [{ icon: true }] });
+    expect(await client.icon("wellbrained.tracker")).toBe(`data:image/png;base64,${png.toString("base64")}`);
+    expect(await client.icon("wellbrained.tracker")).not.toBeNull();
+    expect(await client.icon("wellbrained.other")).toBeNull();
+    expect(calls.filter((call) => call.url.includes("/pictures/"))).toHaveLength(1);
   });
 });
 

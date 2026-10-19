@@ -1,7 +1,7 @@
 import type { KeyObject } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { CHANGELOG_LIMITS, manifestFiles, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { CHANGELOG_LIMITS, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { signFiles, SIGNATURE_FILE } from "./signature.ts";
 import { isSafeEntryName, readZip, writeZip, ZIP_LIMITS, ZipError, type ZipFile } from "./zip.ts";
 
@@ -11,7 +11,7 @@ export class PackError extends Error {}
 
 /**
  * The files of a module folder that go into its zip: the manifest, the folders
- * its entry pages are in (usually dist/), the icons, the screenshots and the changelog. When the entry page sits
+ * its entry pages are in (usually dist/), the icons, the screenshots, the readme and the changelog. When the entry page sits
  * next to the manifest, everything goes except node_modules and dot files.
  */
 export async function collectFiles(dir: string): Promise<{ manifest: ModuleManifest; files: ZipFile[] }> {
@@ -31,6 +31,11 @@ export async function collectFiles(dir: string): Promise<{ manifest: ModuleManif
   const folders = new Set(entries.map((entry) => (entry.includes("/") ? entry.split("/")[0]! : "")));
   for (const folder of folders) for (const name of await walk(dir, folder)) names.add(name);
   for (const icon of [...icons, ...screenshots]) names.add(icon);
+  if (manifest.readme !== undefined) {
+    const info = await lstat(path.join(dir, manifest.readme)).catch(() => null);
+    if (info?.isFile() && info.size > MAX_README_BYTES) throw new PackError(`${manifest.readme} is bigger than a readme may be (${MAX_README_BYTES / 1024} KB)`);
+    names.add(manifest.readme);
+  }
   if (manifest.changelog !== undefined) {
     await checkChangelog(dir, manifest.changelog);
     names.add(manifest.changelog);

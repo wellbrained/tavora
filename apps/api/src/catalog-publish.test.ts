@@ -139,8 +139,8 @@ describe("publishing to the catalog", () => {
     expect(catalog.uploadsSince(accountId, new Date(0))).toBe(0);
     expect(store.prefixes(accountId)).toEqual([]);
     expect(readdirSync(path.join(dir, "zips"))).toEqual([]);
-    expect(readdirSync(path.join(dir, "screenshots"))).toEqual([]);
-    expect(readdirSync(dir).filter((name) => !name.startsWith("catalog.sqlite")).sort()).toEqual(["lists", "screenshots", "zips"]);
+    expect(readdirSync(path.join(dir, "pictures"))).toEqual([]);
+    expect(readdirSync(dir).filter((name) => !name.startsWith("catalog.sqlite")).sort()).toEqual(["lists", "pictures", "zips"]);
     expect(existsSync(path.join(dir, "..", "evil.txt"))).toBe(false);
   });
 

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { isGameId, LOCAL_OWNER, manifestFiles, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { isGameId, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, readZip, verifyFiles, ZIP_LIMITS, ZipError } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
 
@@ -30,7 +30,28 @@ export function screenshotType(bytes: Uint8Array): ScreenshotType | null {
   return isWebp(bytes, MAX_SCREENSHOT_BYTES) ? "webp" : null;
 }
 
-/** A screenshot of a listing: the file is served by its hash, so the app can check it. */
+/** Largest icon a listing shows, as for icons in the app (G10). */
+export const MAX_LISTING_ICON_BYTES = 256 * 1024;
+
+/** An icon's kind by its own bytes, or null unless it is a well-formed PNG or WebP of at most 256 KB and 1024 px. */
+export function iconType(bytes: Uint8Array): ScreenshotType | null {
+  if (inspectPng(bytes, MAX_LISTING_ICON_BYTES, 1024)) return "png";
+  return isWebp(bytes, MAX_LISTING_ICON_BYTES) ? "webp" : null;
+}
+
+/** A readme as text, or null unless it is UTF-8 of at most MAX_README_BYTES without control characters other than tabs and line breaks. */
+export function readmeText(bytes: Buffer): string | null {
+  if (bytes.length > MAX_README_BYTES) return null;
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+  return /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text) ? null : text.replace(/^\ufeff/, "").replace(/\r\n?/g, "\n");
+}
+
+/** A picture of a listing (a screenshot or the icon): the file is served by its hash, so the app can check it. */
 export interface CatalogScreenshot {
   sha256: string;
   type: ScreenshotType;
@@ -83,6 +104,10 @@ export interface CheckedZip {
   notes: string[];
   /** The screenshots the manifest names, in its order, each checked to be a real picture. */
   screenshots: (CatalogScreenshot & { data: Buffer })[];
+  /** The manifest icon when it is a real small picture; a listing simply has none otherwise. */
+  icon: (CatalogScreenshot & { data: Buffer }) | null;
+  /** The readme's text, checked to be plain UTF-8 within the limit. */
+  readme: string | null;
 }
 
 /** Checks a module zip the way the app's installer does, and refuses what the catalog does not take. */
@@ -130,7 +155,17 @@ export function checkCatalogZip(bytes: Buffer): CheckedZip {
     }
     return { sha256: createHash("sha256").update(data).digest("hex"), type, size: data.length, data };
   });
-  return { manifest, owner: verified.owner, sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length, notes, screenshots };
+  let readme: string | null = null;
+  if (manifest.readme !== undefined) {
+    const data = file(manifest.readme)?.data;
+    if (!data) throw new CatalogError(`It names ${manifest.readme}, which is missing.`);
+    readme = readmeText(data);
+    if (readme === null) throw new CatalogError(`Its readme ${manifest.readme} must be UTF-8 text of at most ${MAX_README_BYTES / 1024} KB.`);
+  }
+  const iconData = manifest.icon === undefined ? undefined : file(manifest.icon)?.data;
+  const kind = iconData ? iconType(iconData) : null;
+  const icon = iconData && kind && manifest.icon!.endsWith(`.${kind}`) ? { sha256: createHash("sha256").update(iconData).digest("hex"), type: kind, size: iconData.length, data: iconData } : null;
+  return { manifest, owner: verified.owner, sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length, notes, screenshots, icon, readme };
 }
 
 /** What a player sees of a module in the catalog, at its newest version. */
@@ -153,6 +188,7 @@ export interface CatalogEntry {
   /** The module's web page from its manifest, http or https; the app shows it as plain text and opens it like a module link. */
   homepage: string | null;
   screenshots: CatalogScreenshot[];
+  icon: CatalogScreenshot | null;
 }
 
 export interface CatalogVersion {
@@ -193,10 +229,11 @@ interface VersionSql {
   notes: string;
   published_at: string;
   screenshots: string | null;
+  icon: string | null;
 }
 
 const LATEST = `
-  select m.id as module_id, coalesce(v.signer, m.owner) as owner, v.version, v.sha256, v.size, v.manifest, v.notes, v.published_at, v.screenshots
+  select m.id as module_id, coalesce(v.signer, m.owner) as owner, v.version, v.sha256, v.size, v.manifest, v.notes, v.published_at, v.screenshots, v.icon
   from modules m join versions v on v.seq = (select max(seq) from versions where module_id = m.id)
   where m.listed = 1`;
 
@@ -217,6 +254,7 @@ function entryOf(row: VersionSql): CatalogEntry {
     notes: JSON.parse(row.notes) as string[],
     homepage: manifest.homepage ?? null,
     screenshots: row.screenshots === null ? [] : (JSON.parse(row.screenshots) as CatalogScreenshot[]),
+    icon: row.icon === null ? null : (JSON.parse(row.icon) as CatalogScreenshot),
   };
 }
 
@@ -236,7 +274,7 @@ export class CatalogStore {
     mkdirSync(dir, { recursive: true });
     this.zips = path.join(dir, "zips");
     mkdirSync(this.zips, { recursive: true });
-    this.shots = path.join(dir, "screenshots");
+    this.shots = path.join(dir, "pictures");
     mkdirSync(this.shots, { recursive: true });
     this.lists = path.join(dir, "lists");
     mkdirSync(this.lists, { recursive: true });
@@ -271,6 +309,9 @@ export class CatalogStore {
     if (!columns.includes("signer")) this.db.exec("alter table versions add column signer text");
     // A version's screenshots as JSON ([{ sha256, type, size }]); null for versions from before them.
     if (!columns.includes("screenshots")) this.db.exec("alter table versions add column screenshots text");
+    // The listing icon ({ sha256, type, size }) and the readme's text; null without one.
+    if (!columns.includes("icon")) this.db.exec("alter table versions add column icon text");
+    if (!columns.includes("readme")) this.db.exec("alter table versions add column readme text");
   }
 
   close(): void {
@@ -305,14 +346,15 @@ export class CatalogStore {
       renameSync(temporary, target);
     };
     write(path.join(this.zips, `${sha256}.zip`), bytes);
-    for (const shot of checked.screenshots) write(path.join(this.shots, `${shot.sha256}.${shot.type}`), shot.data);
+    for (const shot of [...checked.screenshots, ...(checked.icon ? [checked.icon] : [])]) write(path.join(this.shots, `${shot.sha256}.${shot.type}`), shot.data);
     const screenshots = checked.screenshots.map(({ sha256: hash, type, size }) => ({ sha256: hash, type, size }));
+    const icon = checked.icon ? { sha256: checked.icon.sha256, type: checked.icon.type, size: checked.icon.size } : null;
     const at = now.toISOString();
     this.db.exec("begin");
     try {
       if (!module) this.db.prepare("insert into modules (id, owner, created_at) values (?, ?, ?)").run(manifest.id, owner, at);
       this.db
-        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id, signer, screenshots) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id, signer, screenshots, icon, readme) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .run(
           manifest.id,
           manifest.version,
@@ -324,6 +366,8 @@ export class CatalogStore {
           uploadedBy,
           module && module.owner !== owner ? owner : null,
           screenshots.length ? JSON.stringify(screenshots) : null,
+          icon ? JSON.stringify(icon) : null,
+          checked.readme,
         );
       this.db.exec("commit");
     } catch (error) {
@@ -447,10 +491,11 @@ export class CatalogStore {
     return entries;
   }
 
-  /** A listed module at its newest version, with every version's notes, newest first. */
-  module(id: string): { module: CatalogEntry; versions: CatalogVersion[] } | null {
+  /** A listed module at its newest version, with its readme and every version's notes, newest first. */
+  module(id: string): { module: CatalogEntry; versions: CatalogVersion[]; readme: string | null } | null {
     const row = this.db.prepare(`${LATEST} and m.id = ?`).get(id) as VersionSql | undefined;
     if (!row) return null;
+    const readme = (this.db.prepare("select readme from versions where sha256 = ?").get(row.sha256) as { readme: string | null }).readme;
     const versions = (
       this.db.prepare("select version, published_at, notes from versions where module_id = ? order by seq desc").all(id) as unknown as {
         version: string;
@@ -458,7 +503,7 @@ export class CatalogStore {
         notes: string;
       }[]
     ).map((version) => ({ version: version.version, publishedAt: version.published_at, notes: JSON.parse(version.notes) as string[] }));
-    return { module: entryOf(row), versions };
+    return { module: entryOf(row), versions, readme };
   }
 
   /**
@@ -488,13 +533,17 @@ export class CatalogStore {
   }
 
   /**
-   * A screenshot of a listed module's newest version by its hash and type, or null. Only the newest
-   * version's screenshots are handed out, and none of a delisted module.
+   * A picture (screenshot or icon) of a listed module's newest version by its hash and type, or null.
+   * Only the newest version's pictures are handed out, and none of a delisted module.
    */
-  screenshot(sha256: string, type: string): Buffer | null {
+  picture(sha256: string, type: string): Buffer | null {
     if (!SHA256.test(sha256) || (type !== "png" && type !== "webp")) return null;
-    const listed = (this.db.prepare(`${LATEST} and v.screenshots like ?`).all(`%"${sha256}"%`) as unknown as VersionSql[])
-      .some((row) => entryOf(row).screenshots.some((shot) => shot.sha256 === sha256 && shot.type === type));
+    const pattern = `%"${sha256}"%`;
+    const listed = (this.db.prepare(`${LATEST} and (v.screenshots like ? or v.icon like ?)`).all(pattern, pattern) as unknown as VersionSql[])
+      .some((row) => {
+        const entry = entryOf(row);
+        return [...entry.screenshots, ...(entry.icon ? [entry.icon] : [])].some((shot) => shot.sha256 === sha256 && shot.type === type);
+      });
     if (!listed) return null;
     try {
       const bytes = readFileSync(path.join(this.shots, `${sha256}.${type}`));

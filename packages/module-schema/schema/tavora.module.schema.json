@@ -117,6 +117,21 @@
         "https://example.com/campaign-companion"
       ]
     },
+    "readme": {
+      "type": "string",
+      "allOf": [
+        {
+          "$ref": "#/definitions/packagePath"
+        },
+        {
+          "pattern": "\\.(md|txt)$"
+        }
+      ],
+      "description": "A .md or .txt file inside the package introducing the module, at most 20 KB. The catalog shows its headings, paragraphs and lists as plain text: no links, pictures or HTML.",
+      "examples": [
+        "README.md"
+      ]
+    },
     "screenshots": {
       "type": "array",
       "minItems": 1,
