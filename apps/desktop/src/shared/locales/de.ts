@@ -530,7 +530,7 @@ export const de: Record<keyof typeof en, string> = {
   "grant.from.publisher": "Signiert mit Schlüssel {key}.",
   "grant.from.publisherName": "Von {name}, signiert mit Schlüssel {key}.",
   "grant.network": "Diese Websites erreichen",
-  "grant.networkNote": "Tavora schickt diese Anfragen für das Modul, nie mit deinen Cookies oder Anmeldungen, und sonst ist nichts erreichbar.",
+  "grant.networkNote": "Es kann Daten abrufen und öffentliche Seiten in einem temporären Browser lesen, nur auf diesen Websites. Deine Cookies und Anmeldungen bleiben privat.",
   "grant.later": "Du kannst das jederzeit in den Einstellungen ändern.",
   "grant.allow": "Erlauben",
   "grant.notNow": "Nicht jetzt",

@@ -29,12 +29,13 @@ export function readerChapters(build: Build): ReaderChapter[] {
         if (text) chapters.push({ key, title, text, context, buildData: true });
     };
     const choices=build.questSelections||[];
-    if(choices.length)append('quest-rewards','Quest rewards','Recorded character choices\n\n'+choices.map(q=>[q.act,q.area,q.quest,q.reward].filter(Boolean).join(' · ')).join('\n\n'),'overview');
+    if(choices.length)append('quest-rewards','Quest rewards',(build.character?'Recorded character choices':'Guide recommendations')+'\n\n'+choices.map(q=>[q.act,q.area,q.quest,q.reward].filter(Boolean).join(' · ')).join('\n\n'),'overview');
     else if(build.questStats?.length)append('quest-rewards','Quest rewards','Recorded character bonuses\n\n'+build.questStats.join('\n'),'overview');
     build.stages.forEach((stage,i)=>{if(stage.questRecommendations?.length)append('quest-rewards-'+i,'Quest rewards · '+stage.label,stage.questRecommendations.map(q=>q.text).join('\n\n'),'overview');});
     const information = [build.title, build.source ? `Source: ${build.source}` : '', build.version ? `Build version: ${build.version}` : '',
         build.treeVersion ? `Passive tree: ${build.treeVersion}` : '', build.ascendancy,
         ...build.stages.filter(s => s.author).map(s => `${s.label} · ${s.author}`)].filter(Boolean);
+    if(build.character){const c=build.character;information.push(`Character: ${c.name}`,`${c.class} · Level ${c.level}`,`Imported: ${new Date(c.importedAt).toLocaleString()}`,...(build.importNotes||[]));}
     append('build-information', 'Build information', information.join('\n'), 'overview');
     const video = safeLink(build.video);
     if (video) chapters.push({ key: 'build-video', title: 'Video', text: '', links: [{ label: 'Open build video ↗', url: video }], buildData: true });

@@ -1,16 +1,17 @@
 # PoE 2 Builds alpha
 
-Four native Tavora panel types: Tree, Skills, Gear, Guide. Requires Tavora 0.18.18+.
+Four native Tavora panel types: Tree, Skills, Gear, Guide. Requires Tavora 0.19.3+.
 
 Build with `pnpm --filter @tavora/poe2-builds build`. Add this module folder under
 Settings > Development, or install the signed module ZIP under Settings > Modules.
 Add the four panel types from the module picker and arrange them in your workspace.
 
-Choose **⋯ > Load build file** in any panel and select a `.tavora-build.json` exported
+Choose **Add > Load build file** in any panel and select a `.tavora-build.json` exported
 by the prototype. All panels share the library; their build/variant selections
 stay independent. Buttons open another panel on the same build. Tree has pan,
 zoom, search, red/green weapon sets and an ascendancy popover. Guide retains saved
-wording and has a section navigator. The module makes no network requests.
+wording and has a section navigator. Character import and Refresh use Tavora's
+network permission for `poe.ninja`; viewing saved data and PoB imports work offline.
 
 Alpha 2 keeps the build and variant controls on one toolbar row. Other actions
 are under **⋯**. Notes start collapsed; each note and **Show/Hide all notes** can
@@ -21,16 +22,67 @@ Guide reader, using recent activity when several copies show the same build.
 The compact Guide uses a section dropdown rather than a sidebar. The build-document
 format remains compatible with alpha 1.
 
-This alpha loads portable Tavora v1 JSON, not raw PoB XML, `.build` or ZIP files.
-Convert those using the prototype first. No guides or personal builds ship in the
+**Load build file** accepts portable Tavora v1 JSON. **Import character** accepts
+PoB PoE2 XML or a direct export code (not a pobb.in/Pastebin link), and public
+`https://poe.ninja/poe2/builds/<league>/character/<account>/<character>` URLs.
+Planner `.build` and ZIP files can be attached under **Import build**. No guides or personal builds ship in the
 module. Builds auto-save through Tavora documents, scoped to this module/game.
 A signed ZIP and a development folder have separate data by host design: load
 the file again when changing between them.
 
 The host blocks browser downloads, so build-file export is not offered in this
-alpha. Keep original files as your portable copies. URL import adapters and a
+alpha. Keep original files as your portable copies. Guide URL adapters and a
 host-supported export path are follow-up work. Guide text already in a loaded
 file is retained completely; unimported prose is not reconstructed.
+
+### Guide import (alpha 20)
+
+Choose **Add > Import build** and paste a public Mobalytics PoE 2 build URL.
+All available variants and original guide text are read locally without AI. If a
+normal request cannot read the public page, Tavora uses an isolated hidden browser
+with no player cookies or sign-ins. Verification/login pages stop the import.
+Preview the name, variants, chapters and warnings, then save as new or explicitly
+update an existing guide. The source-selected variant opens first. **Update guide**
+under ⋯ fetches a new preview; nothing refreshes automatically.
+
+An optional planner ZIP, .build, PoB XML or Tavora file provides a fallback when
+the page is unavailable. Attachments without guide text cannot recreate that text.
+ZIP imports never extract files; compressed size, expansion, entry count and CRC
+are checked. Original text, variant association, Quest Rewards and a public-only
+planner snapshot are saved for offline use. Unresolved affix tiers, socketed
+augment effects and tree jewels remain in source data and are not guessed.
+Website access now includes mobalytics.gg and cdn.mobalytics.gg, alongside poe.ninja.
+An update asks for these new domains before using them.
+
+### Character import (alpha 18)
+
+Choose **Add > Import character** from any panel. The labelled Add button stays
+visible before the build selector. Add and panel actions use icon-led rows with
+short descriptions; an empty library shows the add actions directly. **Import
+build** reads Mobalytics guide URLs and offers an optional file fallback.
+Preview the character, edit its
+name if needed, then choose **Import as new** or an existing character to update.
+Characters appear under **My characters**, separate from **Guide builds**, with
+class, level and import time. They are saved locally and survive restarts.
+**Refresh character** retrieves a linked poe.ninja snapshot and asks you to save
+it. Updates use the same atomic storage path as build loading; a failed fetch,
+parse or write leaves the saved character intact. There is no automatic refresh,
+account login, comparison calculation or snapshot-history UI in this release.
+
+PoB's independently selected equipment, skill and tree profiles open as **Active
+setup**. Each panel can select its other relevant profiles without mixing all
+sets together; the chosen weapon set, gem levels and quality travel with them.
+Supported passive trees are 0.4 and 0.5; unsupported trees are rejected. XML and
+expanded export codes are capped at 8 MB; saved characters at 24 MB. XML document
+types/entities are refused. Importing runs locally without AI or a Python helper.
+
+poe.ninja can lag behind the game. Exact item properties, requirements, rarity,
+modifier sections/IDs and quest bonuses are retained where provided. PoB may
+contain planned gear; it is not proof of current in-game equipment. Missing
+properties/affix tiers are not guessed. Tree jewels remain in the saved source
+XML; jewel tooltips and full PoB calculation/configuration rendering are not yet
+available. Artwork uses the bundled catalogue with existing slot placeholders.
+PoB source XML and additive character metadata survive portable-v1 validation.
 
 Files up to 24 MB are validated before saving. Large builds use revision-checked
 headers plus immutable chunk documents under the host's 4 MiB limit. Replacements

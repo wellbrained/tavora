@@ -14,6 +14,8 @@ export interface ItemProperty { name: string; values: [string,number][]; display
 export interface AffixRow { text:string; type:'P'|'S'; id:string; instanceId?:string; name?:string; tier?:number; status?:string; evidence?:string; hybrid?:'start'|'middle'|'end'; contributors?:AffixRow[] }
 export interface QuestChoice { quest:string; act:string; area:string; reward:string }
 export interface Item {
+    sourceText?: string;
+    sourceModifiers?: {kind:string;id:string;stats:Record<string,number>}[];
     sourceSections?: {kind:string;mods:string[]}[];
     properties?:ItemProperty[];
     requirements?:ItemProperty[];
@@ -40,6 +42,10 @@ export interface Item {
     sourceStats?: Record<string, number | string | boolean>;
 }
 export interface Stage {
+    characterProfile?: 'active' | 'gear' | 'skills' | 'tree';
+    ascendancy?: string;
+    treeVersion?: string;
+    weaponSet?: 1 | 2;
     questRecommendations?:{text:string;quest?:string}[];
     name: string;
     label: string;
@@ -74,6 +80,11 @@ export interface Guide {
     }>;
 }
 export interface Build {
+    /** Public source document only, retained for portable reprocessing without re-fetching. */
+    guideExport?: string;
+    guideImport?: {source:'Mobalytics';url:string;documentId:string;revision:string;importedAt:string;variantIds:string[]};
+    character?: Character;
+    characterExport?: string;
     questSelections?:QuestChoice[];
     questStats?:string[];
     id: string;
@@ -90,6 +101,16 @@ export interface Build {
     guideText: Guide | null;
     stages: Stage[];
     defaultStage: number;
+}
+export interface Character {
+    name: string;
+    class: string;
+    level: number;
+    source: 'poe.ninja' | 'PoB';
+    importedAt: string;
+    url?: string;
+    account?: string;
+    league?: string;
 }
 export interface Portable {
     format: 'tavora.build';

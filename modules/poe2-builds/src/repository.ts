@@ -5,13 +5,15 @@ interface Header {
     kind: 'poe2-build';
     version: 1;
     chunks: string[];
+    character?: Build['character'];
+    guideImport?: Build['guideImport'];
 }
 const PREFIX = 'poe2-build-';
 // Immutable chunks keep attachments outside the host's 4 MiB document limit.
 // The small header is committed last with a revision check; readers see one complete import.
 export class BuildRepository {
     constructor(private documents: TavoraSDK['documents']) { }
-    async list() { return (await this.documents.list()).filter(d => d.id.startsWith(PREFIX)); }
+    async list() { return Promise.all((await this.documents.list()).filter(d=>d.id.startsWith(PREFIX)).map(async d=>{const h=await this.documents.get<Header>(d.id);return {...d,character:h?.data.character,guideImport:h?.data.guideImport};})); }
     async get(id: string, attempt = 0): Promise<Build | null> {
         const header = await this.documents.get<Header>(id);
         if (!header)
@@ -40,7 +42,7 @@ export class BuildRepository {
                 await this.documents.put({ id: key, title: 'Build data', data: { text: text.slice(offset, offset + 400000) } });
                 chunks.push(key);
             }
-            await this.documents.put({ id, title: build.title.slice(0, 200), ifRevision: prior?.revision ?? 0, data: { kind: 'poe2-build', version: 1, chunks } as unknown as JsonValue });
+            await this.documents.put({ id, title: build.title.slice(0, 200), ifRevision: prior?.revision ?? 0, data: { kind: 'poe2-build', version: 1, chunks, ...(build.character?{character:build.character}:{}),...(build.guideImport?{guideImport:build.guideImport}:{}) } as unknown as JsonValue });
         }
         catch (error) {
             await Promise.allSettled(chunks.map(key => this.documents.delete(key)));

@@ -1,6 +1,6 @@
 {
   "name": "@tavora/poe2-builds",
-  "version": "0.1.0-alpha.17",
+  "version": "0.1.0-alpha.20",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
-    "@tavora/sdk": "workspace:*"
+    "@tavora/sdk": "workspace:*",
+    "@xmldom/xmldom": "0.8.15"
   },
   "devDependencies": {
     "vite": "8.3.4"
