@@ -108,6 +108,38 @@
         "changelog.json"
       ]
     },
+    "homepage": {
+      "type": "string",
+      "maxLength": 300,
+      "pattern": "^https?://[^\\s\\u0000-\\u001f/?#@\\\\]+(?:[/?#][^\\s\\u0000-\\u001f\\\\]*)?$",
+      "description": "The module's web page, http or https. Shown in the catalog; Tavora opens it like a module link.",
+      "examples": [
+        "https://example.com/campaign-companion"
+      ]
+    },
+    "screenshots": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "allOf": [
+          {
+            "$ref": "#/definitions/packagePath"
+          },
+          {
+            "pattern": "\\.(png|webp)$"
+          }
+        ]
+      },
+      "description": "Up to 5 PNG or WebP pictures inside the package, at most 1 MB each, shown in the catalog before installing.",
+      "examples": [
+        [
+          "assets/screenshot-1.png"
+        ]
+      ]
+    },
     "games": {
       "type": "array",
       "items": {

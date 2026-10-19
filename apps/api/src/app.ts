@@ -248,6 +248,20 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
       headers: { "Content-Type": "application/zip", "Content-Disposition": "attachment", "Cache-Control": "public, max-age=31536000, immutable" },
     });
   });
+  catalogApp.get("/screenshots/:file", (context) => {
+    const match = /^([0-9a-f]{64})\.(png|webp)$/.exec(context.req.param("file"));
+    const bytes = match ? catalog!.screenshot(match[1]!, match[2]!) : null;
+    if (!bytes) return context.json({ error: "Not found." }, 404);
+    // Checked to be a picture when it was uploaded (C10) and named by its hash, so it never changes.
+    return new Response(new Uint8Array(bytes), {
+      headers: {
+        "Content-Type": `image/${match![2]}`,
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'",
+        "Cache-Control": "public, max-age=31536000, immutable",
+      },
+    });
+  });
   // The signed lists, byte for byte as tavora-catalog-sign wrote them. Short caching, so a revocation
   // or a blocked zip reaches players soon; the app refuses a list older than the one it has.
   catalogApp.get("/lists/:file", (context) => {

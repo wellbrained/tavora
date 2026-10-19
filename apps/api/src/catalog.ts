@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { isGameId, LOCAL_OWNER, manifestFiles, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { isGameId, LOCAL_OWNER, manifestFiles, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, readZip, verifyFiles, ZIP_LIMITS, ZipError } from "@tavora/pack";
+import { inspectPng, isWebp } from "./png.ts";
 
 /**
  * The module catalog (Milestone E, docs/catalog-threat-model.md): community modules, each with the
@@ -18,6 +19,23 @@ export class CatalogError extends Error {}
 /** Tavora's own modules stay bundled with the app; the catalog holds community modules only. */
 const OFFICIAL_PREFIX = "tavora.";
 const SHA256 = /^[0-9a-f]{64}$/;
+/** Widest and tallest screenshot the catalog takes, in pixels. */
+export const MAX_SCREENSHOT_PIXELS = 4096;
+
+export type ScreenshotType = "png" | "webp";
+
+/** A screenshot's kind by its own bytes (C10, like icons in G10), or null unless it is a well-formed PNG or WebP within the limits. */
+export function screenshotType(bytes: Uint8Array): ScreenshotType | null {
+  if (inspectPng(bytes, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_PIXELS)) return "png";
+  return isWebp(bytes, MAX_SCREENSHOT_BYTES) ? "webp" : null;
+}
+
+/** A screenshot of a listing: the file is served by its hash, so the app can check it. */
+export interface CatalogScreenshot {
+  sha256: string;
+  type: ScreenshotType;
+  size: number;
+}
 
 /**
  * The lists signed offline with Tavora's catalogue key (`pnpm tavora-catalog-sign`): revoked keys with
@@ -63,6 +81,8 @@ export interface CheckedZip {
   size: number;
   /** This version's patch notes from the module's changelog, if it has an entry for it. */
   notes: string[];
+  /** The screenshots the manifest names, in its order, each checked to be a real picture. */
+  screenshots: (CatalogScreenshot & { data: Buffer })[];
 }
 
 /** Checks a module zip the way the app's installer does, and refuses what the catalog does not take. */
@@ -87,8 +107,8 @@ export function checkCatalogZip(bytes: Buffer): CheckedZip {
   const result = validateManifest(json(MANIFEST_FILE));
   if (!result.ok) throw new CatalogError(`Its manifest is invalid: ${result.errors.slice(0, 2).join("; ")}.`);
   const { manifest } = result;
-  const { entries, icons } = manifestFiles(manifest);
-  for (const name of [...entries, ...icons]) if (!file(name)) throw new CatalogError(`It names ${name}, which is missing.`);
+  const { entries, icons, screenshots: shots } = manifestFiles(manifest);
+  for (const name of [...entries, ...icons, ...shots]) if (!file(name)) throw new CatalogError(`It names ${name}, which is missing.`);
   if (manifest.id.startsWith(OFFICIAL_PREFIX)) throw new CatalogError("Its id is reserved for Tavora's own modules, which stay bundled with the app.");
 
   const verified = verifyFiles(files);
@@ -102,7 +122,15 @@ export function checkCatalogZip(bytes: Buffer): CheckedZip {
     if (!changelog.ok) throw new CatalogError(`Its changelog is invalid: ${changelog.errors.slice(0, 2).join("; ")}.`);
     notes = changelog.entries.find((entry) => entry.version === manifest.version)?.notes ?? [];
   }
-  return { manifest, owner: verified.owner, sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length, notes };
+  const screenshots = shots.map((name) => {
+    const data = file(name)!.data;
+    const type = screenshotType(data);
+    if (!type || !name.endsWith(`.${type}`)) {
+      throw new CatalogError(`Its screenshot ${name} is not a ${name.endsWith(".webp") ? "WebP" : "PNG"} of at most ${MAX_SCREENSHOT_BYTES / 1024 / 1024} MB and ${MAX_SCREENSHOT_PIXELS} px.`);
+    }
+    return { sha256: createHash("sha256").update(data).digest("hex"), type, size: data.length, data };
+  });
+  return { manifest, owner: verified.owner, sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length, notes, screenshots };
 }
 
 /** What a player sees of a module in the catalog, at its newest version. */
@@ -122,6 +150,9 @@ export interface CatalogEntry {
   zip: { sha256: string; size: number };
   publishedAt: string;
   notes: string[];
+  /** The module's web page from its manifest, http or https; the app shows it as plain text and opens it like a module link. */
+  homepage: string | null;
+  screenshots: CatalogScreenshot[];
 }
 
 export interface CatalogVersion {
@@ -161,10 +192,11 @@ interface VersionSql {
   manifest: string;
   notes: string;
   published_at: string;
+  screenshots: string | null;
 }
 
 const LATEST = `
-  select m.id as module_id, coalesce(v.signer, m.owner) as owner, v.version, v.sha256, v.size, v.manifest, v.notes, v.published_at
+  select m.id as module_id, coalesce(v.signer, m.owner) as owner, v.version, v.sha256, v.size, v.manifest, v.notes, v.published_at, v.screenshots
   from modules m join versions v on v.seq = (select max(seq) from versions where module_id = m.id)
   where m.listed = 1`;
 
@@ -183,6 +215,8 @@ function entryOf(row: VersionSql): CatalogEntry {
     zip: { sha256: row.sha256, size: row.size },
     publishedAt: row.published_at,
     notes: JSON.parse(row.notes) as string[],
+    homepage: manifest.homepage ?? null,
+    screenshots: row.screenshots === null ? [] : (JSON.parse(row.screenshots) as CatalogScreenshot[]),
   };
 }
 
@@ -195,12 +229,15 @@ function entryOf(row: VersionSql): CatalogEntry {
 export class CatalogStore {
   private readonly db: DatabaseSync;
   private readonly zips: string;
+  private readonly shots: string;
   private readonly lists: string;
 
   constructor(dir: string) {
     mkdirSync(dir, { recursive: true });
     this.zips = path.join(dir, "zips");
     mkdirSync(this.zips, { recursive: true });
+    this.shots = path.join(dir, "screenshots");
+    mkdirSync(this.shots, { recursive: true });
     this.lists = path.join(dir, "lists");
     mkdirSync(this.lists, { recursive: true });
     this.db = new DatabaseSync(path.join(dir, "catalog.sqlite"));
@@ -232,6 +269,8 @@ export class CatalogStore {
     if (!columns.includes("account_id")) this.db.exec("alter table versions add column account_id text");
     // The key that signed a version when it is not the module's owner (a successor key); null means the owner.
     if (!columns.includes("signer")) this.db.exec("alter table versions add column signer text");
+    // A version's screenshots as JSON ([{ sha256, type, size }]); null for versions from before them.
+    if (!columns.includes("screenshots")) this.db.exec("alter table versions add column screenshots text");
   }
 
   close(): void {
@@ -259,18 +298,33 @@ export class CatalogStore {
     }
     if (this.db.prepare("select 1 from versions where sha256 = ?").get(sha256)) throw new CatalogError("This exact zip is already in the catalog.");
 
-    // The file first, under its hash, so a row never points at a zip that is not there.
-    const target = path.join(this.zips, `${sha256}.zip`);
-    const temporary = `${target}.${process.pid}.tmp`;
-    writeFileSync(temporary, bytes);
-    renameSync(temporary, target);
+    // The files first, under their hashes, so a row never points at a file that is not there.
+    const write = (target: string, data: Buffer) => {
+      const temporary = `${target}.${process.pid}.tmp`;
+      writeFileSync(temporary, data);
+      renameSync(temporary, target);
+    };
+    write(path.join(this.zips, `${sha256}.zip`), bytes);
+    for (const shot of checked.screenshots) write(path.join(this.shots, `${shot.sha256}.${shot.type}`), shot.data);
+    const screenshots = checked.screenshots.map(({ sha256: hash, type, size }) => ({ sha256: hash, type, size }));
     const at = now.toISOString();
     this.db.exec("begin");
     try {
       if (!module) this.db.prepare("insert into modules (id, owner, created_at) values (?, ?, ?)").run(manifest.id, owner, at);
       this.db
-        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id, signer) values (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .run(manifest.id, manifest.version, sha256, checked.size, JSON.stringify(manifest), JSON.stringify(checked.notes), at, uploadedBy, module && module.owner !== owner ? owner : null);
+        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id, signer, screenshots) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(
+          manifest.id,
+          manifest.version,
+          sha256,
+          checked.size,
+          JSON.stringify(manifest),
+          JSON.stringify(checked.notes),
+          at,
+          uploadedBy,
+          module && module.owner !== owner ? owner : null,
+          screenshots.length ? JSON.stringify(screenshots) : null,
+        );
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
@@ -428,6 +482,23 @@ export class CatalogStore {
   list(name: SignedList): Buffer | null {
     try {
       return readFileSync(path.join(this.lists, `${name}.json`));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * A screenshot of a listed module's newest version by its hash and type, or null. Only the newest
+   * version's screenshots are handed out, and none of a delisted module.
+   */
+  screenshot(sha256: string, type: string): Buffer | null {
+    if (!SHA256.test(sha256) || (type !== "png" && type !== "webp")) return null;
+    const listed = (this.db.prepare(`${LATEST} and v.screenshots like ?`).all(`%"${sha256}"%`) as unknown as VersionSql[])
+      .some((row) => entryOf(row).screenshots.some((shot) => shot.sha256 === sha256 && shot.type === type));
+    if (!listed) return null;
+    try {
+      const bytes = readFileSync(path.join(this.shots, `${sha256}.${type}`));
+      return createHash("sha256").update(bytes).digest("hex") === sha256 ? bytes : null;
     } catch {
       return null;
     }

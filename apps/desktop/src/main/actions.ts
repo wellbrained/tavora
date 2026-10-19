@@ -67,6 +67,7 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("folder") && typeof a.folder === "string" && a.folder.length > 0 && a.folder.length <= 500 ? { type: a.type, folder: a.folder } : null;
     case "install-catalog-module":
     case "report-catalog-module":
+    case "open-catalog-homepage":
     case "remove-module":
     case "seen-module-notes":
     case "move-local-data":
