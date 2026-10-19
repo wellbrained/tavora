@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.8",
+    date: "2026-10-19",
+    title: "Tidier module library",
+    notes: ["Modules with several panels keep their card small. Click the arrow next to Add all to pick one."],
+  },
+  {
     version: "0.19.7",
     date: "2026-10-19",
     title: "A button for the game you're playing",

@@ -2,16 +2,18 @@
 // The module library: every installed module, to open in the current game. The list on the left
 // picks what is shown: all modules, the ones already in this game, one kind of module, or Tavora's
 // catalog (CatalogBrowse.vue). Each module is a card with its Add; a module with panel types lists
-// them on its card, each with its own Add (the decision log, named panels round 1), and an Add all
-// that opens one of each; adding one of those panels keeps the library open for the next. A module
+// them in a list that drops over the card below, each with its own Add (the decision log, named
+// panels round 1), next to an Add all that opens one of each; adding one of those panels keeps the
+// library open for the next. A module
 // made for other games (its manifest's `games`) is not listed at all.
 import { computed, ref } from "vue";
+import { useEventListener } from "@vueuse/core";
 import { addModule, dialog, openSettings, state, type AddModuleRequest } from "../host";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { t } from "../i18n";
-import { Blocks, Code, Download, Gamepad2, Search, Settings2, ShieldCheck, Store, X } from "@lucide/vue";
+import { Blocks, ChevronDown, Code, Download, Gamepad2, Search, Settings2, ShieldCheck, Store, X } from "@lucide/vue";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import ModuleIcon from "./ModuleIcon.vue";
 import CatalogBrowse from "./CatalogBrowse.vue";
@@ -115,6 +117,25 @@ function submit() {
   if (first) add(first.id);
 }
 
+/** The module whose panel list is open, if any. */
+const expanded = ref<string | null>(null);
+
+function toggle(moduleId: string) {
+  expanded.value = expanded.value === moduleId ? null : moduleId;
+}
+
+// A click outside its card closes the panel list.
+useEventListener(document, "pointerdown", (event) => {
+  if (expanded.value && !(event.target as Element | null)?.closest(`[data-panel-menu="${CSS.escape(expanded.value)}"]`)) expanded.value = null;
+});
+
+/** Escape closes an open panel list before the library itself. */
+function closeMenuFirst(event: KeyboardEvent) {
+  if (!expanded.value) return;
+  event.preventDefault();
+  expanded.value = null;
+}
+
 const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text-primary shrink-0";
 </script>
 
@@ -125,6 +146,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
       data-testid="add-module-dialog"
       :show-close-button="false"
       :aria-describedby="undefined"
+      @escape-key-down="closeMenuFirst"
     >
       <aside class="bg-background flex shrink-0 flex-col gap-4 border-b p-4 sm:w-64 sm:gap-5 sm:border-r sm:border-b-0">
         <DialogTitle class="hidden px-2 pt-1 text-xl font-semibold sm:block">{{ t("addModule.title") }}</DialogTitle>
@@ -206,8 +228,15 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
               <li
                 v-for="module in group.items"
                 :key="module.id"
-                :class="cn('bg-background/40 hover:border-primary/40 flex flex-col gap-3 rounded-xl border p-4 transition-colors', openCount(module.id) && 'border-primary/30 bg-primary/5')"
+                :class="
+                  cn(
+                    'bg-background/40 hover:border-primary/40 relative flex flex-col gap-3 rounded-xl border p-4 transition-colors',
+                    openCount(module.id) && 'border-primary/30 bg-primary/5',
+                    expanded === module.id && 'border-primary/40 z-10 rounded-b-none',
+                  )
+                "
                 :data-testid="`module-${module.id}`"
+                :data-panel-menu="module.id"
               >
                 <div class="flex items-start gap-3">
                   <span class="bg-primary/10 border-primary/20 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg border" aria-hidden="true"><ModuleIcon :module-id="module.id" size="size-5" /></span>
@@ -223,45 +252,82 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                     <p v-if="module.description" class="text-muted-foreground mt-0.5 line-clamp-2 text-sm" :title="module.description">{{ module.description }}</p>
                   </div>
                 </div>
-                <div v-if="!module.panels.length" class="mt-auto flex items-center gap-2">
-                  <span v-if="openCount(module.id)" class="text-primary text-xs" :data-testid="`in-game-${module.id}`">{{ t("addModule.inGame", { count: openCount(module.id) }) }}</span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    :class="cn(ADD_CLASS, 'ml-auto')"
-                    :data-testid="`open-${module.id}`"
-                    :aria-label="t('addModule.addLabel', { name: module.name })"
-                    @click="add(module.id)"
-                    >{{ openCount(module.id) ? t("addModule.addAnother") : t("common.add") }}</Button
-                  >
-                </div>
-                <ul v-else class="mt-auto flex flex-col gap-1 border-t pt-3" :aria-label="t('addModule.panels', { name: module.name })" :data-testid="`panel-types-${module.id}`">
-                  <li v-if="module.panels.length > 1" class="flex items-center justify-end pb-1">
+                <div class="mt-auto flex items-center gap-2 pl-13">
+                  <template v-if="module.panels.length > 1">
+                    <button
+                      type="button"
+                      class="text-muted-foreground hover:text-foreground min-w-0 flex-1 truncate text-left text-xs transition-colors"
+                      :aria-expanded="expanded === module.id"
+                      :aria-controls="`panel-menu-${module.id}`"
+                      :data-testid="`panel-count-${module.id}`"
+                      @click="toggle(module.id)"
+                    >
+                      {{ t("addModule.panelCount", { count: module.panels.length }) }}
+                      <template v-if="openCount(module.id)">
+                        · <span class="text-primary" :data-testid="`in-game-${module.id}`">{{ t("addModule.inGame", { count: openCount(module.id) }) }}</span>
+                      </template>
+                    </button>
+                    <div class="flex shrink-0">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        :class="cn(ADD_CLASS, 'rounded-r-none')"
+                        :data-testid="`open-all-${module.id}`"
+                        :aria-label="t('addModule.addAllLabel', { name: module.name })"
+                        @click="add(module.id, module.panels.map((type) => type.id))"
+                        >{{ t("addModule.addAll") }}</Button
+                      >
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        :class="cn(ADD_CLASS, 'rounded-l-none border-l-0 px-2')"
+                        :aria-label="t('addModule.showPanels', { name: module.name })"
+                        :aria-expanded="expanded === module.id"
+                        :aria-controls="`panel-menu-${module.id}`"
+                        :data-testid="`panel-menu-toggle-${module.id}`"
+                        @click="toggle(module.id)"
+                        ><ChevronDown :class="cn('size-4 transition-transform motion-reduce:transition-none', expanded === module.id && 'rotate-180')" :stroke-width="1.75"
+                      /></Button>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <span v-if="openCount(module.id)" class="text-primary text-xs" :data-testid="`in-game-${module.id}`">{{ t("addModule.inGame", { count: openCount(module.id) }) }}</span>
                     <Button
                       size="sm"
                       variant="outline"
-                      :class="cn(ADD_CLASS, 'h-7')"
-                      :data-testid="`open-all-${module.id}`"
-                      :aria-label="t('addModule.addAllLabel', { name: module.name })"
+                      :class="cn(ADD_CLASS, 'ml-auto')"
+                      :data-testid="`open-${module.id}`"
+                      :aria-label="t('addModule.addLabel', { name: module.name })"
                       @click="add(module.id, module.panels.map((type) => type.id))"
-                      >{{ t("addModule.addAll") }}</Button
+                      >{{ openCount(module.id) ? t("addModule.addAnother") : t("common.add") }}</Button
                     >
-                  </li>
-                  <li v-for="type in module.panels" :key="type.id" class="flex items-center gap-2">
-                    <ModuleIcon :module-id="module.id" :panel-type="type.id" />
-                    <span class="min-w-0 flex-1 truncate text-sm">{{ type.name }}</span>
-                    <span v-if="openCount(module.id, type.id)" class="text-primary text-xs">{{ t("addModule.open", { count: openCount(module.id, type.id) }) }}</span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      :class="cn(ADD_CLASS, 'h-7')"
-                      :data-testid="`open-${module.id}-${type.id}`"
-                      :aria-label="t('addModule.addLabel', { name: `${module.name}: ${type.name}` })"
-                      @click="add(module.id, [type.id])"
-                      >{{ openCount(module.id, type.id) ? t("addModule.addAnother") : t("common.add") }}</Button
-                    >
-                  </li>
-                </ul>
+                  </template>
+                </div>
+                <!-- Drops over the card below, so the grid keeps its rows. -->
+                <div
+                  v-if="expanded === module.id"
+                  :id="`panel-menu-${module.id}`"
+                  class="bg-card absolute inset-x-[-1px] top-[calc(100%-0.5rem)] z-10 rounded-b-xl border border-t-0 border-primary/40 shadow-xl"
+                >
+                  <div :class="cn('bg-background/40 rounded-b-xl px-4 pt-2 pb-3', openCount(module.id) && 'bg-primary/5')">
+                    <ul class="flex flex-col gap-1 border-t pt-3" :aria-label="t('addModule.panels', { name: module.name })" :data-testid="`panel-types-${module.id}`">
+                      <li v-for="type in module.panels" :key="type.id" class="flex items-center gap-2">
+                        <ModuleIcon :module-id="module.id" :panel-type="type.id" />
+                        <span class="min-w-0 flex-1 truncate text-sm">{{ type.name }}</span>
+                        <span v-if="openCount(module.id, type.id)" class="text-primary text-xs">{{ t("addModule.open", { count: openCount(module.id, type.id) }) }}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          :class="cn(ADD_CLASS, 'h-7')"
+                          :data-testid="`open-${module.id}-${type.id}`"
+                          :aria-label="t('addModule.addLabel', { name: `${module.name}: ${type.name}` })"
+                          @click="add(module.id, [type.id])"
+                          >{{ openCount(module.id, type.id) ? t("addModule.addAnother") : t("common.add") }}</Button
+                        >
+                      </li>
+                    </ul>
+                  </div>
+                </div>
               </li>
             </ul>
           </section>
