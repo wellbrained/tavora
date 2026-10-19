@@ -1,9 +1,11 @@
 // Keeps this panel's copy of the to-do list and saves each change. Changes
 // show at once; saving re-applies them to the newest stored list, so two
-// panels editing at the same time both keep their changes.
+// panels editing at the same time both keep their changes. A new list keeps
+// the parts that did not change, so rows that stay the same are not drawn
+// again and an open menu stays open when a save comes back.
 
 import { errorMessage, readDocument, serial, updateDocument, type Versioned } from "@tavora/official-ui";
-import type { TavoraSDK } from "@tavora/sdk";
+import type { JsonValue, TavoraSDK } from "@tavora/sdk";
 import { ref, shallowRef } from "vue";
 import { t } from "./i18n";
 import { LIST_ID, LIST_TITLE, parseList, type TodoList } from "./todos";
@@ -21,13 +23,13 @@ export function createTodoStore(sdk: TavoraSDK) {
 
   async function load(): Promise<void> {
     stored = await readDocument(sdk, LIST_ID, parseList);
-    list.value = stored.data;
+    show(stored.data);
   }
 
   function apply(change: (data: TodoList) => void): Promise<void> {
     const next = structuredClone(list.value);
     change(next);
-    list.value = next;
+    show(next);
     saving++;
     return queue(async () => {
       try {
@@ -39,7 +41,7 @@ export function createTodoStore(sdk: TavoraSDK) {
         stored = await readDocument(sdk, LIST_ID, parseList).catch(() => stored);
       } finally {
         saving--;
-        if (saving === 0) list.value = stored.data;
+        if (saving === 0) show(stored.data);
       }
     });
   }
@@ -50,8 +52,33 @@ export function createTodoStore(sdk: TavoraSDK) {
     const fresh = await readDocument(sdk, LIST_ID, parseList);
     if (saving > 0) return;
     stored = fresh;
-    list.value = fresh.data;
+    show(fresh.data);
+  }
+
+  function show(next: TodoList): void {
+    list.value = keepSame(list.value, next);
   }
 
   return { list, error, load, apply, reload };
+}
+
+/**
+ * `next`, but with every part that equals the same part of `previous` taken
+ * from `previous`. When nothing changed, `previous` itself comes back.
+ */
+export function keepSame<T>(previous: T, next: T): T {
+  if (previous === next) return previous;
+  const a = previous as JsonValue;
+  const b = next as JsonValue;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null || Array.isArray(a) !== Array.isArray(b)) return next;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    const items = b.map((item, index) => (index < a.length ? keepSame(a[index], item) : item));
+    return (items.length === a.length && items.every((item, index) => item === a[index]) ? previous : items) as T;
+  }
+  const before = a as { [key: string]: JsonValue };
+  const after = b as { [key: string]: JsonValue };
+  const entries = Object.entries(after).map(([key, value]) => [key, key in before ? keepSame(before[key], value) : value] as const);
+  const same = entries.length === Object.keys(before).length && entries.every(([key, value]) => key in before && value === before[key]);
+  const merged = Object.fromEntries(entries);
+  return (same ? previous : merged) as T;
 }

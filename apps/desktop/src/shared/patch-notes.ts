@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.16",
+    date: "2026-10-19",
+    title: "Steadier To-Dos",
+    notes: ["Menus in To-Dos stay open while your changes save, even when another panel saves too."],
+  },
+  {
     version: "0.18.15",
     date: "2026-10-19",
     title: "Clearer Share icons",
