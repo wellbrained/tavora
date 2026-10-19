@@ -19,6 +19,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.18.15",
+    date: "2026-10-19",
+    title: "Clearer Share icons",
+    notes: [
+      "Settings > Online now says in plain words what Share icons does, and the long note under Game icons is gone.",
+    ],
+  },
+  {
     version: "0.18.14",
     date: "2026-10-19",
     title: "Tidier settings",
