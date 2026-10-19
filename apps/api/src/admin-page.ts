@@ -3,7 +3,10 @@
  * resources, no inline script or style (the page's content security policy
  * allows only these files), and everything that came from a player is put in
  * with textContent, never as markup. Images are fetched with the token and shown
- * from blob addresses, since an image tag cannot send a header.
+ * from blob addresses, since an image tag cannot send a header. Rows show at
+ * once with a spinner in the logo, the pictures load side by side, and each one
+ * is kept for the session; a hosted picture is also kept by the browser, under
+ * an address that names its hash.
  */
 
 export const ADMIN_HTML = `<!doctype html>
@@ -70,6 +73,10 @@ input[type="search"] { font: inherit; font-size: 16px; background: var(--card); 
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; align-items: center; gap: 12px; min-width: 0; }
 .tile { flex: none; width: 48px; height: 48px; border-radius: 12px; background: #6b4a2f; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
 .tile img { width: 88%; height: 88%; object-fit: contain; border-radius: 9px; }
+.tile.loading img, .tile.missing img { display: none; }
+.tile.loading::after { content: ""; width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgb(255 255 255 / 0.2); border-top-color: var(--gold); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tile.loading::after { animation-duration: 2.4s; } }
 .info { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .name { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .badges { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -94,7 +101,8 @@ export const ADMIN_JS = `
 const $ = (id) => document.getElementById(id);
 const status = (text) => { $("status").textContent = text; };
 let token = sessionStorage.getItem("adminToken") || "";
-const urls = [];
+// picture address -> promise of its blob address ("" when it could not be loaded)
+const pictures = new Map();
 let data = null;
 let tab = "pending";
 const TABS = ["pending", "hosted", "reports"];
@@ -107,12 +115,12 @@ function el(tag, className, text) {
   return node;
 }
 
-async function call(path, body) {
+async function call(path, body, cache) {
   const response = await fetch(path, {
     method: body ? "POST" : "GET",
     headers: Object.assign({ "X-Admin-Token": token }, body ? { "Content-Type": "application/json" } : {}),
     body: body ? JSON.stringify(body) : undefined,
-    cache: "no-store",
+    cache: cache || "no-store",
   });
   if (response.status === 401) {
     sessionStorage.removeItem("adminToken");
@@ -122,20 +130,45 @@ async function call(path, body) {
   return response;
 }
 
-async function imageUrl(path) {
-  const response = await call(path);
-  if (!response.ok) return "";
-  const url = URL.createObjectURL(await response.blob());
-  urls.push(url);
+const pendingPicture = (row) => "/api/pending/" + row.sha256 + ".png";
+const hostedPicture = (icon) => "/api/hosted/" + icon.id + ".png?v=" + icon.sha256;
+
+// once per address; a hosted picture may come from the browser's cache, an offered one never does
+function picture(path) {
+  let url = pictures.get(path);
+  if (!url) {
+    url = call(path, undefined, path.startsWith("/api/hosted/") ? "default" : "no-store")
+      .then(async (response) => (response.ok ? URL.createObjectURL(await response.blob()) : ""))
+      .catch(() => "");
+    url.then((value) => { if (!value && pictures.get(path) === url) pictures.delete(path); });
+    pictures.set(path, url);
+  }
   return url;
 }
 
-function logo(url) {
-  const tile = el("div", "tile");
+// lets go of the pictures nothing shows any more
+function prune() {
+  const wanted = new Set([...data.pending.map(pendingPicture), ...data.hosted.map(hostedPicture)]);
+  for (const [path, url] of pictures) {
+    if (wanted.has(path)) continue;
+    pictures.delete(path);
+    url.then((value) => { if (value) URL.revokeObjectURL(value); });
+  }
+}
+
+// the tile spins until its picture is there
+function logo(path) {
+  const tile = el("div", "tile loading");
   const img = document.createElement("img");
-  img.src = url;
   img.alt = "";
+  img.addEventListener("load", () => tile.classList.remove("loading"));
+  img.addEventListener("error", () => { tile.classList.remove("loading"); tile.classList.add("missing"); });
   tile.appendChild(img);
+  picture(path).then((url) => {
+    if (url) { img.src = url; return; }
+    tile.classList.remove("loading");
+    tile.classList.add("missing");
+  });
   return tile;
 }
 
@@ -170,14 +203,14 @@ function button(label, className, action, hint) {
   return node;
 }
 
-async function pendingCard(row) {
+function pendingCard(row) {
   const approve = button("Approve", "ok", async () => {
     const response = await call("/api/approve", { sha256: row.sha256 });
     if (!response.ok) throw new Error((await response.json()).error || "Couldn't approve.");
   });
   approve.disabled = row.hasIcon;
   return card(
-    logo(await imageUrl("/api/pending/" + row.sha256 + ".png")),
+    logo(pendingPicture(row)),
     row.gameName || "(unknown game)",
     [row.hasIcon ? badge("has an icon", "bad") : badge("new", "gold")],
     [
@@ -187,10 +220,10 @@ async function pendingCard(row) {
   );
 }
 
-async function hostedCard(icon) {
+function hostedCard(icon) {
   const name = icon.names[0];
   return card(
-    logo(await imageUrl("/api/hosted/" + icon.id + ".png")),
+    logo(hostedPicture(icon)),
     name,
     [badge(icon.origin, icon.origin === "release" ? "" : "ok")],
     [
@@ -242,11 +275,9 @@ async function bulk(verb, past, rows, send) {
   if (done < rows.length) status(past + " " + done + " of " + rows.length + ", skipped the rest.");
 }
 
-async function fill(id, items, make, empty) {
-  const holder = $(id);
-  const cards = [];
-  for (const item of items) cards.push(await make(item));
-  holder.replaceChildren(...(cards.length ? cards : [el("p", "empty", empty)]));
+function fill(id, items, make, empty) {
+  const cards = items.map(make);
+  $(id).replaceChildren(...(cards.length ? cards : [el("p", "empty", empty)]));
 }
 
 async function render() {
@@ -260,20 +291,19 @@ async function render() {
   $("tab-reports").textContent = "Reports (" + data.reports.length + ")";
   $("catalog-full").hidden = !data.catalogFullSince;
   if (data.catalogFullSince) $("catalog-full").textContent = "The module catalog is full since " + new Date(data.catalogFullSince).toLocaleString() + ". Uploads are refused until there is room.";
-  for (const url of urls.splice(0)) URL.revokeObjectURL(url);
   // only the open tab loads its pictures
   $("bulk").hidden = !data.pending.length;
   if (tab === "pending") {
-    await fill("pending", data.pending, pendingCard, "All clear!");
+    fill("pending", data.pending, pendingCard, "All clear!");
     return;
   }
   if (tab === "reports") {
-    await fill("reports", data.reports, reportCard, "No reports. Nice!");
+    fill("reports", data.reports, reportCard, "No reports. Nice!");
     return;
   }
   const query = $("search").value.trim().toLowerCase();
   const shown = data.hosted.filter((icon) => !query || icon.id.includes(query) || icon.names.some((name) => name.toLowerCase().includes(query)));
-  await fill("hosted", shown, hostedCard, data.hosted.length ? "No matches." : "No icons yet.");
+  fill("hosted", shown, hostedCard, data.hosted.length ? "No matches." : "No icons yet.");
 }
 
 async function load() {
@@ -289,6 +319,7 @@ async function load() {
     const catalog = await (await call("/api/reports")).json();
     data.reports = catalog.reports;
     data.catalogFullSince = catalog.catalogFullSince;
+    prune();
     await render();
     status("Up to date.");
   } catch (error) {
