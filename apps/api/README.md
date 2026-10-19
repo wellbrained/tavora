@@ -61,6 +61,8 @@ pnpm --filter @tavora/api dev          # http://127.0.0.1:4010, restarts on chan
 2. Wikidata (CC0): video games with a Steam application ID (P1733), their English label and aliases,
 3. optionally Steam's game list, when `STEAM_WEB_API_KEY` is set.
 
+Wikidata is asked in ranges of Steam appids. When it is busy (429, 502, 504 or no answer) the script tries again up to three times, and splits a range that keeps failing in two.
+
 `--limit <n>` stops after n Wikidata rows (for a quick test; do not commit its registry).
 
 It writes `data/games.sqlite` (not in git) and updates `data/ids.tsv`.
