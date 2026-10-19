@@ -299,8 +299,8 @@ export class Host {
   private blockedModules = new Map<string, InstalledModule>();
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
   private pendingLink: string | null = null;
-  /** The library games running on this PC, while "When a game starts" is not off (game-watch.ts). */
-  private running: ReadonlySet<string> = new Set();
+  /** The library games running on this PC, in the order they started, while "When a game starts" is not off (game-watch.ts). */
+  private running: string[] = [];
   /** A game that started while the player chose to be asked; waits for the answer. */
   private pendingGameSwitch: string | null = null;
   private readonly gameWatcher = new GameWatcher({
@@ -2238,17 +2238,17 @@ export class Host {
   /** The running games changed (game-watch.ts). Games already running when the watch began start nothing. */
   private gamesRunning(running: ReadonlySet<string>, initial: boolean): void {
     const before = this.running;
-    this.running = running;
+    const started = [...running].filter((id) => !before.includes(id));
+    this.running = [...before.filter((id) => running.has(id)), ...started];
     if (!initial) {
       for (const id of before) if (!running.has(id)) this.gameClosed(id);
       // Several at once is rare; the last one counts.
-      const started = [...running].filter((id) => !before.has(id)).at(-1);
-      if (started) this.gameStarted(started);
+      if (started.length) this.gameStarted(started.at(-1)!);
     }
     this.pushState();
   }
 
-  /** Switches or asks, as the player chose. "show" only marks the game on the rail, which `running` does. */
+  /** Switches or asks, as the player chose. "show" only offers it on the rail (runningGameId). */
   private gameStarted(gameId: string): void {
     if (this.gameId === gameId) return;
     if (this.library.gameStart === "switch") this.openGameQuietly(gameId);
@@ -3047,7 +3047,6 @@ export class Host {
       builtIn: game.catalogId !== null,
       addedAt: game.addedAt,
       lastPlayedAt: game.lastPlayedAt,
-      running: this.running.has(game.id),
     };
   }
 
@@ -3168,6 +3167,7 @@ export class Host {
       layoutEpoch: this.layoutEpoch,
       opening: this.opening !== null,
       pendingLink: this.pendingLink,
+      runningGameId: this.running.filter((id) => id !== this.gameId && isLive(this.library, id)).at(-1) ?? null,
       pendingGameSwitch: this.pendingGameSwitch && isLive(this.library, this.pendingGameSwitch) ? this.pendingGameSwitch : null,
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },

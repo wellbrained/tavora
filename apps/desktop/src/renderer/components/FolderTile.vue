@@ -14,8 +14,6 @@ const props = defineProps<{
   /** Letters the player chose for the folder, shown instead of its games. */
   label: string | null;
   open: boolean;
-  /** One of its games is running; marked while the folder is closed, since the game's own mark is hidden. */
-  running?: boolean;
 }>();
 
 const SLOTS = [0, 1, 2, 3];
@@ -38,6 +36,5 @@ const shown = computed(() => props.games.slice(0, 4));
         <span v-else class="bg-foreground/[0.07] size-[17px] rounded-[4px]" data-testid="folder-empty-slot" />
       </template>
     </span>
-    <span v-if="running && !open" class="bg-success ring-rail absolute -right-0.5 -bottom-0.5 size-3.5 rounded-full ring-[3px]" data-testid="folder-running" />
   </span>
 </template>
