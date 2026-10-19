@@ -1,6 +1,6 @@
 # PoE 2 Builds alpha
 
-Four native Tavora panel types: Tree, Skills, Gear, Guide. Requires Tavora 0.17.20+.
+Four native Tavora panel types: Tree, Skills, Gear, Guide. Requires Tavora 0.18.16+.
 
 Build with `pnpm --filter @tavora/poe2-builds build`. Add this module folder under
 Settings > Development, or install the signed module ZIP under Settings > Modules.
@@ -170,3 +170,9 @@ Alpha 16 anchors inventory hover details below the mouse and follows pointer mov
 within a slot. At the bottom edge it prefers above the pointer, with placement
 constrained to the panel. Clicking freezes the details; keyboard focus anchors
 below the equipment slot. Alpha 15's sizing and scrollbar repairs are retained.
+
+Alpha 17 uses Tavora's shared item tooltip surface above neighbouring panels.
+Details prefer the pointer's right side, then left, within the app window. Click
+pins one item until Escape, close or another pin; hovering cannot replace it.
+Changing builds, hiding/closing Gear, changing games or leaving Tavora dismisses it.
+Underlying panels remain live. Requires Tavora 0.18.16 and SDK 0.2.8.

@@ -1,7 +1,7 @@
 import {expect,it} from 'vitest';
 import {validate} from './validate.js';
 import {portable,type Item} from './model';
-import {itemDetails,equipmentOrder} from './item-details';
+import {itemTooltipContent,itemDetails,equipmentOrder} from './item-details';
 import {itemSignature,enrichItem,buildDisplayTitle} from './item-data.js';
 import {readerChapters} from './guide-chapters';
 const item:Item={inventory_id:'Weapon1',name:'Example spear',base:'Soaring Spear',mods:['Suffix','Hybrid accuracy','Hybrid speed','Socket'],rarity:'rare',itemLevel:82,quality:20,requirements:[{name:'Level',values:[['70',0]]}],sourceSections:[{kind:'explicitMods',mods:['Suffix']},{kind:'craftedMods',mods:['Hybrid accuracy','Hybrid speed']},{kind:'runeMods',mods:['Socket']}],affixRows:[{text:'Suffix',type:'S',id:'s',tier:2},{text:'Hybrid accuracy',type:'P',id:'p',tier:1,status:'Crafted',hybrid:'start'},{text:'Hybrid speed',type:'P',id:'p',tier:1,status:'Crafted',hybrid:'end'}]};
@@ -42,4 +42,13 @@ it('does not apply catalogue facts to unrelated or edited item content',()=>{
 it('uses a deterministic equipment order independent of import order',()=>{
  const ids=['Flask2','Ring2','Belt1','Offhand1','Boots1','Weapon2','Amulet1','Weapon1','Ring1','Gloves1','Helm1','BodyArmour1','Charm3','Charm1','Charm2','Flask1'];
  expect(ids.map(inventory_id=>({...item,inventory_id})).sort((a,b)=>equipmentOrder(a)-equipmentOrder(b)).map(i=>i.inventory_id)).toEqual(['Weapon1','Weapon2','Offhand1','Helm1','BodyArmour1','Gloves1','Boots1','Belt1','Amulet1','Ring1','Ring2','Charm1','Charm2','Charm3','Flask1','Flask2']);
+});
+
+it('preserves item details in the checked host-overlay document',()=>{
+ const content=itemTooltipContent(item,'Original item note');
+ expect(content.title).toBe('Example spear');expect(content.badges).toContain('ilvl 82');expect(content.badges).toContain('Quality: +20%');
+ expect(content.requirements).toEqual([{label:'Level',value:'70'}]);
+ const lines=content.sections!.flatMap(s=>s.rows);expect(lines.map(r=>r.text)).toEqual(['Hybrid accuracy','Hybrid speed','Suffix','Socket','Original item note']);
+ expect(lines[0]).toMatchObject({badges:['[P1]'],status:'Crafted',connected:true});expect(lines[2]!.badges).toEqual(['[S2]']);
+ expect(content.sections!.at(-1)!.title).toBe('Notes');expect(JSON.stringify(content)).not.toContain('<li');
 });

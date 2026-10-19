@@ -226,3 +226,12 @@ it("SDK_VERSION matches the package version", async () => {
   const { default: pkg } = await import("../package.json", { with: { type: "json" } });
   expect(sdk.SDK_VERSION).toBe(pkg.version);
 });
+
+it("marshals the shared tooltip lifecycle and close events",async()=>{
+ const host=fakeHost(req=>req.method==="bridge.handshake"?{result:handshake}:{result:req.method==="ui.tooltip.show"?true:null});hosts.push(host);
+ const api=await sdk.connect();const closed:string[]=[];const off=api.ui.tooltip.onClose(e=>closed.push(e.id));
+ expect(await api.ui.tooltip.show({id:"item:1",at:{x:10,y:20},content:{title:"Item"},pinned:true})).toBe(true);
+ await api.ui.tooltip.move({id:"item:1",at:{x:30,y:40}});await api.ui.tooltip.hide("item:1");await api.ui.tooltip.close("item:1");
+ host.emit("ui.tooltipClosed",{id:"item:1"});await new Promise(r=>setTimeout(r,20));expect(closed).toEqual(["item:1"]);off();
+ expect(host.requests.filter(r=>r.method.startsWith("ui.tooltip")).map(r=>r.method)).toEqual(["ui.tooltip.show","ui.tooltip.move","ui.tooltip.hide","ui.tooltip.close"]);
+});

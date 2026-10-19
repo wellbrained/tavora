@@ -152,7 +152,7 @@ function render() {
     document.querySelectorAll<HTMLDetailsElement>('[data-note]').forEach(details => details.ontoggle = () => { if (!details.isConnected) return; const key = details.dataset.note!; if (noteOpen(key) !== details.open) { view.disclosures[key] = details.open; void remember().catch(report); } });
     if (build && type === 'tree')
         mountTree();
-    if (build && type === 'gear') inventory = new Inventory($('.gear-content'), stage().items, {shown:view.inventory, listShown:view.equipmentList, notesFor:item => build!.guideText?.items?.[item.inventory_id], weapon:view.gearWeapon, onChange:change => { Object.assign(view,change); void remember().catch(report); }});
+    if (build && type === 'gear') inventory = new Inventory($('.gear-content'), stage().items, {tooltip:sdk.ui.tooltip, shown:view.inventory, listShown:view.equipmentList, notesFor:item => build!.guideText?.items?.[item.inventory_id], weapon:view.gearWeapon, onChange:change => { Object.assign(view,change); void remember().catch(report); }});
     if (build && type === 'guide') mountGuide();
 }
 async function loadFile(file: File) { if (importing)

@@ -1,0 +1,11 @@
+[
+  {
+    "version": "0.1.0-alpha.17",
+    "date": "2026-10-19",
+    "notes": [
+      "Item details open beside your mouse over neighbouring panels.",
+      "Click to pin one item; Escape closes it. Hovering another item leaves the pin unchanged.",
+      "Requires Tavora 0.18.16. Existing build files remain compatible."
+    ]
+  }
+]

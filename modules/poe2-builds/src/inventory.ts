@@ -1,5 +1,6 @@
 import {visibilitySwitch} from './controls';
-import {itemDetails} from './item-details';
+import type {TavoraSDK} from '@tavora/sdk';
+import {itemTooltipContent,itemDetails} from './item-details';
 import type { Item } from './model';
 import { esc } from './presentation';
 import { resolveItemIdentity, weaponSlotState } from './item-identity.js';
@@ -42,13 +43,18 @@ export function inventoryMarkup(shown: boolean, listShown = true): string {
 }
 function rarity(i?: Item) { return i?.rarity && ['normal','magic','rare','unique'].includes(i.rarity) ? i.rarity : 'unknown'; }
 
-interface Options { shown: boolean; listShown: boolean; weapon: 1 | 2; notesFor?: (item: Item) => string | undefined; onChange: (change: {inventory?: boolean; equipmentList?: boolean; gearWeapon?: 1 | 2}) => void }
+interface Options { tooltip?:TavoraSDK['ui']['tooltip']; shown: boolean; listShown: boolean; weapon: 1 | 2; notesFor?: (item: Item) => string | undefined; onChange: (change: {inventory?: boolean; equipmentList?: boolean; gearWeapon?: 1 | 2}) => void }
 export class Inventory {
     private tooltip = document.createElement('aside');
     private pinned: HTMLButtonElement | null = null;
     private anchor: HTMLButtonElement | null = null;
     private equipment: HTMLElement;
-    private outside = (event: PointerEvent) => { if (!(event.target instanceof Element) || !event.target.closest('.equip-slot,.inventory-tooltip')) this.dismiss(); };
+    private remoteId:string|null=null;
+    private serial=0;
+    private readonly instance=crypto.randomUUID();
+    private offTooltip:(()=>void)|undefined;
+    private remote=false;
+    private outside = (event: PointerEvent) => { if(this.pinned)return; if (!(event.target instanceof Element) || !event.target.closest('.equip-slot,.inventory-tooltip')) this.dismiss(); };
     private escape = (event: KeyboardEvent) => { if (event.key === 'Escape') this.dismiss(); };
     private moved = () => this.dismiss();
     constructor(private root: HTMLElement, private items: Item[], private options: Options) {
@@ -72,6 +78,7 @@ export class Inventory {
         document.addEventListener('pointerdown',this.outside);
         document.addEventListener('keydown',this.escape);
         root.addEventListener('scroll',this.moved,true); window.addEventListener('resize',this.moved);
+        this.offTooltip=options.tooltip?.onClose(({id})=>{if(this.remoteId===id){this.remoteId=null;this.dismiss();}});
         this.draw();
     }
     private draw() {
@@ -91,11 +98,11 @@ export class Inventory {
         this.equipment.querySelectorAll<HTMLButtonElement>('[data-slot]').forEach(button => {
             button.onpointerenter = event => { if (!this.pinned) this.show(button,event); };
             button.onpointermove = event => { if (!this.pinned) this.position(button,event); };
-            button.onpointerleave = () => { if (!this.pinned) this.dismiss(); };
+            button.onpointerleave = () => { if (!this.pinned) this.dismiss(false); };
             button.onfocus = () => { if (!this.pinned) this.show(button); };
-            button.onblur = () => { if (!this.pinned) this.dismiss(); };
+            button.onblur = () => { if (!this.pinned) this.dismiss(false); };
             button.onclick = event => {
-                if (this.pinned === button) { this.dismiss(); return; }
+                if (this.pinned === button) return;
                 this.dismiss(); this.pinned = button; button.classList.add('pinned'); this.show(button,event.detail ? event : undefined);
             };
         });
@@ -107,6 +114,19 @@ export class Inventory {
         const item = itemForSlot(this.items,slot.id,this.options.weapon);
         const weapons=weaponSlotState(this.items,this.options.weapon);
         const label=slot.id==='weapon'?weapons.mainLabel:slot.id==='offhand'?weapons.offhandLabel:slot.label;
+        if(this.options.tooltip&&item){
+            const id=this.remoteId=`gear:${this.instance}:${++this.serial}`;
+            this.remote=true;this.tooltip.hidden=true;
+            const rect=button.getBoundingClientRect(),at=pointer?{x:pointer.clientX,y:pointer.clientY}:{x:rect.left+rect.width/2,y:rect.bottom};
+            void this.options.tooltip.show({id,at,content:itemTooltipContent(item,this.options.notesFor?.(item)),pinned:!!this.pinned}).catch(()=>{
+                if(this.remoteId!==id)return;this.remote=false;this.remoteId=null;
+                this.showLocal(button,item,label,pointer);
+            });
+            return;
+        }
+        this.showLocal(button,item,label,pointer);
+    }
+    private showLocal(button:HTMLButtonElement,item:Item|undefined,label:string,pointer?:{clientX:number;clientY:number}) {
         this.tooltip.hidden = false; this.tooltip.classList.toggle('pinned',!!this.pinned);
         this.tooltip.innerHTML = itemTooltipMarkup(item,label,item ? this.options.notesFor?.(item) : undefined,!!this.pinned);
         this.tooltip.classList.remove('compact');
@@ -117,17 +137,21 @@ export class Inventory {
         const close = this.tooltip.querySelector<HTMLButtonElement>('.inventory-tooltip-close'); if (close) close.onclick = () => this.dismiss();
     }
     private position(button: HTMLButtonElement, pointer?: {clientX:number;clientY:number}) {
+        if(this.remote&&this.remoteId&&pointer){void this.options.tooltip?.move({id:this.remoteId,at:{x:pointer.clientX,y:pointer.clientY}}).catch(()=>{});return;}
         const rect=button.getBoundingClientRect();
         const point=pointer ?? {clientX:rect.left+rect.width/2,clientY:rect.bottom};
         const {left,top}=itemTooltipPosition(point,this.tooltip.offsetWidth,this.tooltip.offsetHeight,innerWidth,innerHeight);
         this.tooltip.style.left=left+'px'; this.tooltip.style.top=top+'px';
     }
-    private dismiss() {
+    private dismiss(force=true) {
+        const id=this.remoteId;this.remoteId=null;this.remote=false;
+        if(id){const action=force?this.options.tooltip?.close(id):this.options.tooltip?.hide(id);void action?.catch(()=>{});}
         if (this.tooltip.contains(document.activeElement)) this.pinned?.focus();
         this.pinned?.classList.remove('pinned'); this.pinned = null;
         this.anchor?.removeAttribute('aria-describedby'); this.anchor = null; this.tooltip.hidden = true;
     }
     destroy() {
+        this.dismiss();this.offTooltip?.();
         document.removeEventListener('pointerdown',this.outside); document.removeEventListener('keydown',this.escape);
         this.root.removeEventListener('scroll',this.moved,true); window.removeEventListener('resize',this.moved);
         this.tooltip.remove();

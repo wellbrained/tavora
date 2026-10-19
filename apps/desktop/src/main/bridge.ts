@@ -25,6 +25,8 @@ import { isPanelTypeId } from "@tavora/module-schema";
 import { HostError } from "./errors";
 import { discordCommand, discordSubscription } from "./discord-commands";
 import { checkMenu, type CheckedMenu } from "./module-menu";
+import {checkTooltip,checkTooltipAnchor,tooltipId} from "./tooltip-content";
+import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
 import { checkPanelContent } from "./panel-content";
 import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
 
@@ -92,6 +94,11 @@ export interface BridgeContext {
   openLink(url: string): void | Promise<void>;
   /** ui.showMenu: Tavora draws the checked menu above every panel; the chosen id, or null. Throws PERMISSION_DENIED without a click or key press first. */
   showMenu(menu: CheckedMenu): Promise<string | null>;
+  tooltip: {
+    show(request:TooltipRequest):Promise<boolean>;
+    move(anchor:TooltipAnchor):void;
+    close(id:string,hoverOnly:boolean):void;
+  };
   /** network.fetch: checks the grant on every hop and makes the request (network.ts). Throws HostErrors. */
   fetch(params: unknown): Promise<NetworkResponse>;
   /**
@@ -322,6 +329,10 @@ const handlers = new Map<string, Handler>([
   ["ui.getTheme", (s, params) => (noParams(params), s.context.getTheme())],
   ["ui.getLanguage", (s, params) => (noParams(params), s.context.getLanguage())],
   ["ui.showMenu", (s, params) => s.context.showMenu(checkMenu(params))],
+  ["ui.tooltip.show",(s,p)=>s.context.tooltip.show(checkTooltip(p))],
+  ["ui.tooltip.move",(s,p)=>{s.context.tooltip.move(checkTooltipAnchor(p));return null;}],
+  ["ui.tooltip.hide",(s,p)=>{s.context.tooltip.close(tooltipId(p),true);return null;}],
+  ["ui.tooltip.close",(s,p)=>{s.context.tooltip.close(tooltipId(p),false);return null;}],
 ]);
 
 /** Serves one module panel over one port. */

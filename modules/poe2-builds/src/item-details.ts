@@ -1,3 +1,5 @@
+import type {TooltipContent} from '@tavora/sdk';
+import {resolveItemIdentity} from './item-identity.js';
 import type {Item,AffixRow,ItemProperty} from './model';
 import {itemImage} from './item-art';
 import {esc} from './html';
@@ -42,4 +44,29 @@ export function equipmentOrder(item:Item):number{
  if(/^Charm[123]$/.test(id))return 12+(id==='Charm1'?(item.slot_x||0):n-1);
  if(/^Flask[12]$/.test(id))return 15+(id==='Flask1'?(item.slot_x||0):1);
  return 99;
+}
+
+/** Portable structured content for the host-owned overlay; the host never receives markup. */
+export function itemTooltipContent(item:Item,notes?:string):TooltipContent{
+ item=resolveItemIdentity(item);
+ const image=itemImage(item),sections=item.sourceSections?.length?item.sourceSections:[{kind:'explicitMods',mods:item.mods}];
+ const rows=sections.filter(s=>ordinary.includes(s.kind)).flatMap(s=>s.mods.map(text=>({text,kind:s.kind})));
+ const first=new Map<string,number>();rows.forEach((r,i)=>{const a=affixInfo(item,r.text,r.kind),key=a?.instanceId||a?.id;if(key&&!first.has(key))first.set(key,i);});
+ const positions=new Map(rows.map((r,i)=>[r,i]));
+ const rank=(r:typeof rows[number])=>{const a=affixInfo(item,r.text,r.kind);return a?.type==='P'?0:a?.type==='S'?1:2;};
+ rows.sort((a,b)=>rank(a)-rank(b)||(first.get(affixInfo(item,a.text,a.kind)?.instanceId||affixInfo(item,a.text,a.kind)?.id||'')??positions.get(a)!)-(first.get(affixInfo(item,b.text,b.kind)?.instanceId||affixInfo(item,b.text,b.kind)?.id||'')??positions.get(b)!));
+ const row=(text:string,kind:string)=>{const a=affixInfo(item,text,kind),status=a?.status||({craftedMods:'Crafted',fracturedMods:'Fractured',desecratedMods:'Desecrated'}[kind]||'');return{text:cleanStat(text),...(a?{badges:(a.contributors?.length?a.contributors:[a]).map(b=>`[${b.type}${b.tier||''}]`)}:{}),...(status?{status}:{}),...(a?.hybrid?{connected:true}:{})};};
+ const property=(p:ItemProperty)=>({label:cleanStat(p.name).replace(/:$/,''),value:p.values.map(v=>cleanStat(v[0])).join(', ')});
+ const quality=(item.properties||[]).filter(p=>/^Quality/.test(cleanStat(p.name)));
+ const content:TooltipContent={title:item.name,...(item.base&&item.base!==item.name?{subtitle:item.base}:{}),...(item.rarity&&['normal','magic','rare','unique'].includes(item.rarity)?{tone:item.rarity as NonNullable<TooltipContent['tone']>}:{}),
+  ...(/\.(png|webp|jpe?g|gif)$/i.test(image.src)?{image:'dist/'+image.src.replace(/^\.\//,'')}:{}),
+  badges:[...(item.itemLevel?[`ilvl ${item.itemLevel}`]:[]),...quality.map(p=>{const q=property(p);return q.label+': '+q.value;}),...(!quality.length&&item.quality?[`Quality: +${item.quality}%`]:[])],
+  requirements:(item.requirements||[]).map(property),properties:[...(item.properties||[]).filter(p=>p.values.length&&!/^Quality/.test(cleanStat(p.name))).map(property),...(item.grantedSkills||[]).map(property)],sections:[]};
+ const add=(lines:{text:string;kind:string}[],title?:string)=>{if(lines.length)content.sections!.push({...(title?{title}:{}),rows:lines.map(r=>row(r.text,r.kind))});};
+ add(sections.filter(s=>s.kind==='implicitMods').flatMap(s=>s.mods.map(text=>({text,kind:s.kind}))),'Implicit');add(rows);
+ add(sections.filter(s=>socketed.includes(s.kind)).flatMap(s=>s.mods.map(text=>({text,kind:s.kind}))),'Socketed effects');
+ if(item.corrupted)add([{text:'Corrupted',kind:'info'}]);
+ if(item.dps)add([{text:'DPS: '+item.dps,kind:'info'}]);
+ if(notes?.trim())add([{text:notes.trim(),kind:'notes'}],'Notes');
+ return content;
 }
