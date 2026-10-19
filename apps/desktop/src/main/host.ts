@@ -24,7 +24,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, DeveloperLink, GameView, HostAction, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, DeveloperLink, GameView, HostAction, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -118,6 +118,8 @@ import { readClaudeEmail } from "./ai-usage-claude";
 import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
+import { CloudCopy } from "./cloud-copy";
+import { CopySync } from "./cloud-copy-sync";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
 import { discordLogin } from "./discord-login";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
@@ -285,6 +287,8 @@ export class Host {
   private readonly aiUsage: AiUsageConnector;
   /** The player's Tavora account; the sign-in never leaves the main process. */
   private readonly account: AccountClient;
+  /** The cloud copy: made before the data is read, since a newer copy is taken before anything reads it. */
+  private copySync!: CopySync;
   /** The developer names players see for publisher keys (publisher-names.ts). */
   private readonly publisherNames: PublisherNames;
   private screen: Screen = "welcome";
@@ -449,6 +453,8 @@ export class Host {
 
   static async create(options: HostOptions): Promise<Host> {
     const { userData } = options;
+    let created: Host | undefined;
+    const copySync = await Host.cloudCopy(options, () => created);
     // A file saved by a newer Tavora is copied aside before this one can overwrite it.
     for (const [name, version] of Object.entries(SUPPORTED_VERSIONS)) {
       await keepNewerFile(path.join(userData, name), version).catch(() => null);
@@ -499,6 +505,8 @@ export class Host {
     );
 
     const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
+    created = host;
+    host.copySync = copySync;
     // Before any module opens, so none sees the pictures half moved.
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
     host.moduleData = await listModuleData(userData, host.files.root());
@@ -545,6 +553,7 @@ export class Host {
     host.fetchIconsSoon();
     host.backupSoon();
     host.checkCatalogSoon();
+    host.copySync.start();
     await host.startUpdates();
     return host;
   }
@@ -1355,6 +1364,7 @@ export class Host {
     ipcMain.handle("host:get-discord", (event) => (fromHost(event) ? this.discord.view() : null));
     ipcMain.handle("host:get-ai-usage", (event) => (fromHost(event) ? this.aiUsage.view() : null));
     ipcMain.handle("host:get-account", (event) => (fromHost(event) ? this.account.view() : null));
+    ipcMain.handle("host:get-cloud-copy", (event) => (fromHost(event) ? this.copySync.view() : null));
     ipcMain.handle("host:module-notes", (event, moduleId: unknown) => {
       const module = fromHost(event) && typeof moduleId === "string" ? this.modules.get(moduleId) : undefined;
       return module ? installedNotes(this.moduleInfo.get(module.manifest.id)?.changelog ?? [], module.manifest.version) : [];
@@ -1413,7 +1423,11 @@ export class Host {
   private registerWindowEvents(): void {
     this.window.on("resize", () => this.saveWindowSoon());
     this.window.on("move", () => this.saveWindowSoon());
-    this.window.on("close", () => this.saveWindow());
+    this.window.on("close", (event) => {
+      this.saveWindow();
+      // The last changes go to the cloud copy first; the window closes once they are up.
+      if (this.copySync.holdClose(() => this.window.close())) event.preventDefault();
+    });
     const hidden = (value: boolean) => () => {
       this.windowHidden = value;
       this.applyBounds();
@@ -1429,6 +1443,7 @@ export class Host {
       this.browsersByContents.clear();
       this.discord.dispose();
       this.gameWatcher.stop();
+      this.copySync.dispose();
       clearInterval(this.catalogTimer);
     });
   }
@@ -1742,7 +1757,8 @@ export class Host {
       case "account-refresh":
         return this.account.refresh();
       case "account-sign-out":
-        return this.account.signOut();
+        await this.account.signOut();
+        return this.copySync.signedOut();
       case "account-sign-out-device":
         return this.account.signOutDevice(action.deviceId);
       case "account-rename-device":
@@ -1754,7 +1770,8 @@ export class Host {
       case "account-delete-code":
         return this.account.sendDeleteCode();
       case "account-delete":
-        return this.account.deleteAccount(action.code);
+        await this.account.deleteAccount(action.code);
+        return this.copySync.signedOut();
       case "account-discord-sign-in":
         return this.account.discordSignIn();
       case "account-discord-connect-code":
@@ -1770,7 +1787,9 @@ export class Host {
       case "account-email-remove":
         return this.account.removeEmail(action.code);
       case "account-delete-discord":
-        return this.account.deleteWithDiscord();
+        await this.account.deleteWithDiscord();
+        if (!this.account.view().account) await this.copySync.signedOut();
+        return;
       case "account-profile-choice":
         return this.account.chooseProfile(action.keep);
       case "account-developer-name":
@@ -1785,6 +1804,35 @@ export class Host {
       }
       case "account-unlink-key":
         return this.account.unlinkKey(action.fingerprint);
+      case "cloud-copy-on":
+        return this.copySync.turnOn();
+      case "cloud-copy-key":
+        return this.copySync.enterKey(action.key);
+      case "cloud-copy-cancel":
+        return this.copySync.cancelKey();
+      case "cloud-copy-show-key":
+        return this.copySync.showKey();
+      case "cloud-copy-copy-key": {
+        const key = this.copySync.view().recoveryKey;
+        if (key) clipboard.writeText(key);
+        return;
+      }
+      case "cloud-copy-key-saved":
+        return this.copySync.keySaved();
+      case "cloud-copy-upload":
+        return this.copySync.sync(true);
+      case "cloud-copy-restore":
+        return this.copySync.restore();
+      case "cloud-copy-keep":
+        return this.copySync.keep(action.side);
+      case "cloud-copy-restart":
+        return this.copySync.restart();
+      case "cloud-copy-off":
+        return this.copySync.turnOff();
+      case "cloud-copy-delete":
+        return this.copySync.remove();
+      case "cloud-copy-close-anyway":
+        return this.copySync.closeAnyway(() => this.window.close());
       case "ai-usage-add":
         return this.aiUsage.add(action.provider, action.label, action.directory);
       case "ai-usage-update":
@@ -2435,6 +2483,39 @@ export class Host {
           open: options.discordAuthorizeUrl ? async (url) => void (await fetch(url)) : (url) => shell.openExternal(url),
         }),
     });
+  }
+
+  /**
+   * The cloud copy, run before the data is read: a copy waiting from the last run, or a newer one from
+   * another PC, is taken first. Until the host exists it uses the sign-in and module files folder as saved.
+   */
+  private static async cloudCopy(options: HostOptions, host: () => Host | undefined): Promise<CopySync> {
+    const encryptor = Host.encryptor(options);
+    const startToken = options.accounts === true ? ((await loadAccount(path.join(options.userData, "account.json"), encryptor))?.token ?? null) : null;
+    const savedFolder = sanitizeLibrary(await readJsonOrSetAside(path.join(options.userData, "library.json"))).moduleFilesFolder;
+    const sync = new CopySync({
+      userData: options.userData,
+      enabled: options.accounts === true,
+      moduleFiles: () => host()?.files.root() ?? savedFolder ?? options.picturesFolder ?? defaultFilesRoot(options.userData),
+      cloud: new CloudCopy({
+        baseUrl: `${(options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, "")}/v1/account`,
+        fetch: (input, init) => fetch(input, init),
+        token: () => {
+          const current = host();
+          return current ? current.account.token() : startToken;
+        },
+      }),
+      encryptor,
+      flush: () => host()?.flush() ?? Promise.resolve(),
+      restart: () => options.restart(),
+      onChange: (view: CloudCopyView) => {
+        const current = host();
+        if (current && !current.window.isDestroyed()) current.window.webContents.send("host:cloud-copy", view);
+      },
+      log: (line) => console.log(`[tavora] ${line}`),
+    });
+    await sync.beforeLoad();
+    return sync;
   }
 
   // ── Discord ──────────────────────────────────────────────────────────

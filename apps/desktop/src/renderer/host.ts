@@ -1,7 +1,7 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import type { AccountView, ActionResult, AiUsageView, DiscordView, HostAction, HostShortcut, HostViewState, ModuleMenu } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, CloudCopyView, DiscordView, HostAction, HostShortcut, HostViewState, ModuleMenu } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
 import type { SettingsSection } from "./components/settings/settings-index";
 import { numberedGames } from "./shortcuts";
@@ -40,6 +40,23 @@ export const account = shallowRef<AccountView | null>(null);
 api.onAccount((next) => (account.value = next));
 void api.getAccount().then((initial) => {
   if (initial && !account.value) account.value = initial;
+});
+
+/** Settings > Account > Cloud copy, and the questions it asks over the app. */
+export const cloudCopy = shallowRef<CloudCopyView | null>(null);
+api.onCloudCopy((next) => (cloudCopy.value = next));
+void api.getCloudCopy().then((initial) => {
+  if (initial && !cloudCopy.value) cloudCopy.value = initial;
+});
+/** The question the cloud copy asks over the app, unless the player put it off for now. */
+export const copyLater = ref<"conflict" | "newer" | null>(null);
+export const copyQuestion = computed<"closing" | "conflict" | "newer" | null>(() => {
+  const view = cloudCopy.value;
+  if (!view) return null;
+  if (view.closing) return "closing";
+  if (view.conflict && copyLater.value !== "conflict") return "conflict";
+  if (view.restartToTake && copyLater.value !== "newer") return "newer";
+  return null;
 });
 
 /** Settings sections not shown on this run: Account until accounts are on. */
@@ -342,6 +359,7 @@ export const overlayOpen = computed(
   () =>
     openMenus.value > 0 ||
     dialog.value !== null ||
+    copyQuestion.value !== null ||
     settingsOpen.value ||
     searchOpen.value ||
     dragging.value,

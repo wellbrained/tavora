@@ -231,3 +231,66 @@ test("a developer chooses a public name and links a publisher key with tavora-pa
     await rm(path.dirname(keyFile), { recursive: true, force: true }).catch(() => undefined);
   }
 });
+
+/** Signs in to an account that exists already, from Settings > Account. */
+async function signIn(page: import("@playwright/test").Page, email: string, create = false) {
+  await page.getByTestId("rail-settings").click();
+  await page.getByTestId("settings-nav-account").click();
+  await page.getByTestId("account-email").fill(email);
+  await page.getByTestId("account-send-code").click();
+  await expect(page.getByTestId("account-code-sent")).toContainText(email);
+  await page.getByTestId("account-code").fill(await codeFor(email));
+  await page.getByTestId("account-verify").click();
+  if (create) {
+    await page.getByTestId("account-age").check();
+    await page.getByTestId("account-create").click();
+  }
+  await expect(page.getByTestId("account-methods")).toContainText(email);
+}
+
+test("the cloud copy takes one PC's games to another, with the recovery key", async () => {
+  // Three starts of Tavora.
+  test.setTimeout(120_000);
+  // A pretend Discord app turns on the test key store on Linux, which has no keyring here; the copy key needs one.
+  const env = { TAVORA_API_URL: apiUrl, TAVORA_DISCORD_IPC: path.join(tmpdir(), "tavora-no-discord"), TAVORA_DISCORD_TOKEN_URL: `${discordUrl}/api/oauth2/token` };
+  // PC A has two games; it turns the copy on and keeps the recovery key.
+  const a = await launch(undefined, [], { env });
+  let key = "";
+  try {
+    await signIn(a.page, "copy@example.com", true);
+    await a.page.getByTestId("cloud-copy-on").click();
+    await expect(a.page.getByTestId("cloud-copy-key-text")).toBeVisible();
+    key = (await a.page.getByTestId("cloud-copy-key-text").textContent()) ?? "";
+    await a.page.getByTestId("cloud-copy-key-saved").click();
+    await expect(a.page.getByTestId("cloud-copy-status")).toContainText("Saved");
+  } finally {
+    await a.app.close();
+  }
+
+  // PC B has no games yet; with A's key it takes the copy, and Tavora restarts.
+  const b = await launch(undefined, [], { env, seed: false });
+  try {
+    await signIn(b.page, "copy@example.com");
+    await b.page.getByTestId("cloud-copy-on").click();
+    await b.page.getByTestId("cloud-copy-key-input").fill(key);
+    await b.page.getByTestId("cloud-copy-key-submit").click();
+    await expect(b.page.getByTestId("cloud-copy-question")).toContainText("Which data do you want to keep?");
+    // The test starts Tavora again itself.
+    await b.app.evaluate(({ app }) => {
+      app.relaunch = () => undefined;
+    });
+    const exited = new Promise<void>((resolve) => b.app.process().once("exit", () => resolve()));
+    await b.page.getByTestId("cloud-copy-keep-cloud").click();
+    await exited;
+  } catch (error) {
+    await b.app.close();
+    throw error;
+  }
+  const again = await launch(b.userData, [], { env, seed: false });
+  try {
+    await expect(again.page.getByTestId("rail-game-poe2")).toBeVisible();
+    await expect(again.page.getByTestId("rail-game-satisfactory")).toBeVisible();
+  } finally {
+    await again.app.close();
+  }
+});

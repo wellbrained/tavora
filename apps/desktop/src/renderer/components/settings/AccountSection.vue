@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import type { AccountDevice, HostAction } from "../../../shared/host-api";
 import { account, act, confirmAction, prompt, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
+import CloudCopySettings from "./CloudCopySettings.vue";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
@@ -305,6 +306,8 @@ function startDelete() {
       </form>
 
       </SettingGroup>
+
+      <CloudCopySettings />
 
       <!-- The developer side: only matters to people who make modules. -->
       <SettingGroup :title="t('account.developer.title')" :description="t('account.developer.hint')">

@@ -318,6 +318,22 @@ export function parseAction(raw: unknown): HostAction | null {
       return only() ? { type: a.type } : null;
     case "account-unlink-key":
       return only("fingerprint") && typeof a.fingerprint === "string" && /^[0-9a-f]{32}$/.test(a.fingerprint) ? { type: a.type, fingerprint: a.fingerprint } : null;
+    case "cloud-copy-on":
+    case "cloud-copy-cancel":
+    case "cloud-copy-show-key":
+    case "cloud-copy-copy-key":
+    case "cloud-copy-key-saved":
+    case "cloud-copy-upload":
+    case "cloud-copy-restore":
+    case "cloud-copy-restart":
+    case "cloud-copy-off":
+    case "cloud-copy-delete":
+    case "cloud-copy-close-anyway":
+      return only() ? { type: a.type } : null;
+    case "cloud-copy-key":
+      return only("key") && text(a.key, 200) ? { type: a.type, key: a.key } : null;
+    case "cloud-copy-keep":
+      return only("side") && (a.side === "pc" || a.side === "cloud") ? { type: a.type, side: a.side } : null;
     case "account-sign-out-device":
       return only("deviceId") && typeof a.deviceId === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(a.deviceId) ? { type: a.type, deviceId: a.deviceId } : null;
     case "account-rename-device":
