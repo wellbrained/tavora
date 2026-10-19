@@ -4,7 +4,7 @@ What changed in `@tavora/sdk` and the bridge protocol it speaks, newest first. B
 
 ## 0.2.8
 
-- Shared rich tooltips (Tavora 0.18.16). Adds `ui.tooltip.show/move/hide/close/onClose` for checked rich details over neighbouring panels. Hover is pointer-transparent; a pin requires real input. One shared pin remains until closed or its source goes away.
+- Shared rich tooltips (Tavora 0.18.18). Adds `ui.tooltip.show/move/hide/close/onClose` for checked rich details over neighbouring panels. Hover is pointer-transparent; a pin requires real input. One shared pin remains until closed or its source goes away.
 
 ## 0.2.7
 

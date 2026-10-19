@@ -92,7 +92,7 @@ export const SDK_VERSION = "0.2.8";
  * `minTavora`, so an older Tavora says it needs an update instead of loading a module it cannot run
  * (the starter, `npm create @tavora/module`, does). The changelog names it for every version.
  */
-export const MIN_TAVORA = "0.18.16";
+export const MIN_TAVORA = "0.18.18";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -198,7 +198,7 @@ export interface TavoraSDK {
      * Resolves with the chosen item's id, or null when the player closed the menu without choosing.
      */
     showMenu(request: MenuRequest): Promise<string | null>;
-    /** One shared tooltip above the workspace (Tavora 0.18.16+). A pin needs a real click/key press. */
+    /** One shared tooltip above the workspace (Tavora 0.18.18+). A pin needs a real click/key press. */
     tooltip: {
       show(request: TooltipRequest): Promise<boolean>;
       move(anchor: TooltipAnchor): Promise<void>;

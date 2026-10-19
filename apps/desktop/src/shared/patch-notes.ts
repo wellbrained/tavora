@@ -18,7 +18,21 @@ export interface PatchNote {
 }
 
 export const PATCH_NOTES: readonly PatchNote[] = [
-  {version:"0.18.16",date:"2026-10-19",title:"Item details across panels",notes:["Item tooltips can open beside your mouse over neighbouring panels. Click to pin details, then press Escape to close them."]},
+  {version:"0.18.18",date:"2026-10-19",title:"Item details across panels",notes:["Item tooltips can open beside your mouse over neighbouring panels. Click to pin details, then press Escape to close them."]},
+  {
+    version: "0.18.17",
+    date: "2026-10-19",
+    title: "Peek before you install",
+    notes: [
+      "Click a module's name in the catalog to see its screenshots and website before you install it.",
+    ],
+  },
+  {
+    version: "0.18.16",
+    date: "2026-10-19",
+    title: "Steadier To-Dos",
+    notes: ["Menus in To-Dos stay open while your changes save, even when another panel saves too."],
+  },
   {
     version: "0.18.15",
     date: "2026-10-19",

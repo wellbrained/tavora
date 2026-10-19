@@ -5,10 +5,12 @@
 // matches the listing. After that the zip goes through the same installer as Install from zip, which
 // checks the publisher signature itself.
 import { createHash } from "node:crypto";
-import { isConnector, isGameId, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, type Connector } from "@tavora/module-schema";
+import { isConnector, isGameId, isHomepage, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, type Connector } from "@tavora/module-schema";
 import { ZIP_LIMITS } from "@tavora/pack";
 import type { CatalogListResult, CatalogModuleView } from "../shared/host-api";
+import { isWebUrl } from "./browser-url";
 import { PlayerError } from "./messages";
+import { pictureDataUrl } from "./module-icon";
 import { DEFAULT_API_URL } from "./online";
 import { isPublisherName } from "./publisher-names";
 
@@ -23,13 +25,21 @@ const SHA256 = /^[0-9a-f]{64}$/;
 /** Text that could change how the text around it reads: controls and direction marks. */
 const HIDDEN = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g;
 
+/** A listing's screenshot, fetched by its hash only when the player opens the module's info. */
+export interface CatalogScreenshot {
+  sha256: string;
+  type: "png" | "webp";
+  size: number;
+}
+
 /** A listed module with the zip it comes as; only the main process sees the hash. */
-export interface CatalogEntry extends CatalogModuleView {
+export interface CatalogEntry extends Omit<CatalogModuleView, "screenshots"> {
   games: string[];
   workspaces: boolean;
   zip: { sha256: string; size: number };
   /** This version's patch notes, plain text. */
   notes: string[];
+  shots: CatalogScreenshot[];
 }
 
 /** One published version of a module, as GET /v1/catalog/modules/<id> lists them. */
@@ -61,6 +71,22 @@ function plainNotes(value: unknown): string[] {
     .slice(0, MAX_NOTES)
     .map((line) => plain(line, 500))
     .filter((line): line is string => line !== null);
+}
+
+/** The listed screenshots that have the shape the app relies on, at most MAX_SCREENSHOTS, each once. */
+function parseScreenshots(value: unknown): CatalogScreenshot[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const shots: CatalogScreenshot[] = [];
+  for (const raw of value.slice(0, MAX_SCREENSHOTS)) {
+    const { sha256, type, size } = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+    if (typeof sha256 !== "string" || !SHA256.test(sha256) || seen.has(sha256)) continue;
+    if (type !== "png" && type !== "webp") continue;
+    if (typeof size !== "number" || !Number.isSafeInteger(size) || size <= 0 || size > MAX_SCREENSHOT_BYTES) continue;
+    seen.add(sha256);
+    shots.push({ sha256, type, size });
+  }
+  return shots;
 }
 
 /** Keeps a version only if it has the shape the app relies on. */
@@ -106,6 +132,9 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
     publishedAt: typeof publishedAt === "string" && publishedAt.length <= 40 ? publishedAt : "",
     zip: { sha256: file.sha256, size: file.size },
     notes: plainNotes(entry.notes),
+    // Opened only like a module link (http or https), and shown as plain text.
+    homepage: isHomepage(entry.homepage) && isWebUrl(entry.homepage) ? entry.homepage : null,
+    shots: parseScreenshots(entry.screenshots),
   };
 }
 
@@ -115,9 +144,9 @@ export function fitsScope(entry: Pick<CatalogEntry, "games" | "workspaces">, sco
   return entry.games.length === 0 || entry.games.includes(scope.game);
 }
 
-/** The view the host UI gets: no hash, no games list. */
-export function catalogView({ games: _games, workspaces: _workspaces, zip: _zip, notes: _notes, ...view }: CatalogEntry): CatalogModuleView {
-  return view;
+/** The view the host UI gets: no hash, no games list, and only how many screenshots there are. */
+export function catalogView({ games: _games, workspaces: _workspaces, zip: _zip, notes: _notes, shots, ...view }: CatalogEntry): CatalogModuleView {
+  return { ...view, screenshots: shots.length };
 }
 
 export interface CatalogClientOptions {
@@ -208,16 +237,23 @@ export class CatalogClient {
    * It is read into memory with the size as a cap, so a wrong or endless answer writes nothing.
    */
   async download(zip: CatalogEntry["zip"]): Promise<Buffer> {
+    const data = await this.read(`/v1/catalog/zips/${zip.sha256}.zip`, zip.size, this.downloadTimeoutMs, "application/zip");
+    if (createHash("sha256").update(data).digest("hex") !== zip.sha256) throw new CatalogError("error.catalogBadZip");
+    return data;
+  }
+
+  /** Reads an answer of exactly `expected` bytes into memory, with that as a cap. Throws a CatalogError. */
+  private async read(pathname: string, expected: number, timeoutMs: number, accept: string): Promise<Buffer> {
     let response: Response;
     try {
-      response = await this.get(`/v1/catalog/zips/${zip.sha256}.zip`, this.downloadTimeoutMs, "application/zip");
+      response = await this.get(pathname, timeoutMs, accept);
     } catch {
       throw new CatalogError("error.catalogUnreachable");
     }
     throwFailure(response.status);
     // A compressed answer gives the compressed length, so only a plain one is compared up front.
     const declared = response.headers.has("content-encoding") ? NaN : Number(response.headers.get("content-length") ?? NaN);
-    if (Number.isFinite(declared) && declared !== zip.size) throw new CatalogError("error.catalogBadZip");
+    if (Number.isFinite(declared) && declared !== expected) throw new CatalogError("error.catalogBadZip");
     const chunks: Buffer[] = [];
     let size = 0;
     try {
@@ -227,7 +263,7 @@ export class CatalogClient {
         const { done, value } = await reader.read();
         if (done) break;
         size += value.length;
-        if (size > zip.size) {
+        if (size > expected) {
           await reader.cancel().catch(() => undefined);
           throw new CatalogError("error.catalogBadZip");
         }
@@ -238,8 +274,24 @@ export class CatalogClient {
       throw new CatalogError("error.catalogUnreachable");
     }
     const data = Buffer.concat(chunks);
-    if (data.length !== zip.size || createHash("sha256").update(data).digest("hex") !== zip.sha256) throw new CatalogError("error.catalogBadZip");
+    if (data.length !== expected) throw new CatalogError("error.catalogBadZip");
     return data;
+  }
+
+  /**
+   * A listed screenshot as a data address for the host UI, or null when it cannot be had or is not
+   * what the listing says (C10): read into memory with its listed size as a cap, then its SHA-256 and
+   * its own first bytes (a PNG or WebP of that type) are checked, like a module icon (G10).
+   */
+  async screenshot(shot: CatalogScreenshot): Promise<string | null> {
+    try {
+      const data = await this.read(`/v1/catalog/screenshots/${shot.sha256}.${shot.type}`, shot.size, this.listTimeoutMs, `image/${shot.type}`);
+      if (createHash("sha256").update(data).digest("hex") !== shot.sha256) return null;
+      const url = pictureDataUrl(data, MAX_SCREENSHOT_BYTES);
+      return url?.startsWith(`data:image/${shot.type};`) ? url : null;
+    } catch {
+      return null;
+    }
   }
 
   /**

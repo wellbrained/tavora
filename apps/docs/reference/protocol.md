@@ -323,7 +323,7 @@ Values must be JSON: `null`, booleans, finite numbers, strings, arrays and plain
 - The manifest's `apiVersion` names the major version the module was built for, and `minTavora` the oldest Tavora that has everything it uses.
 - Before Tavora 1.0, version 1 may still change in ways that break modules. Each such change raises `@tavora/sdk`'s minor version and is marked **Breaking** in the [changelog](./changelog.md). From 1.0 on, the rules above apply.
 
-## Shared rich tooltips (Tavora 0.18.16+)
+## Shared rich tooltips (Tavora 0.18.18+)
 
 - `ui.tooltip.show({ id, at: { x, y }, content, pinned? })` returns whether it was
   accepted. Coordinates are CSS pixels relative to the source panel. Pinning needs

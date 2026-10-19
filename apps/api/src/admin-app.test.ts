@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { createAdminApp } from "./admin-app.ts";
 import { CatalogStore } from "./catalog.ts";
@@ -49,7 +49,7 @@ describe("the page", () => {
     for (const path of ["/", "/admin.js", "/admin.css", "/inter.woff2"]) {
       const response = await call(path, { token: null });
       expect(response.status).toBe(200);
-      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("cache-control")).toBe(path === "/inter.woff2" ? "public, max-age=31536000, immutable" : "no-store");
       const policy = response.headers.get("content-security-policy")!;
       expect(policy).toContain("default-src 'none'");
       expect(policy).toContain("script-src 'self'");
@@ -123,6 +123,16 @@ describe("overview and images", () => {
     expect(new Uint8Array(await (await call("/api/hosted/hades-2.png")).arrayBuffer())).toEqual(seedBytes);
   });
 
+  it("lets the browser keep a hosted picture only under the hash of its bytes, and never an offered one", async () => {
+    offer();
+    const sha = state.listPending()[0]!.sha256;
+    const seedSha = createHash("sha256").update(seedBytes).digest("hex");
+    expect((await call(`/api/hosted/hades-2.png?v=${seedSha}`)).headers.get("cache-control")).toBe("private, max-age=31536000, immutable");
+    for (const path of ["/api/hosted/hades-2.png", `/api/hosted/hades-2.png?v=${"a".repeat(64)}`, `/api/pending/${sha}.png`, `/api/pending/${sha}.png?v=${sha}`]) {
+      expect((await call(path)).headers.get("cache-control")).toBe("no-store");
+    }
+  });
+
   it("answers 404 for pictures that are not there or names that are not valid", async () => {
     for (const path of ["/api/pending/" + "0".repeat(64) + ".png", "/api/pending/short.png", "/api/pending/..%2Fx.png", "/api/hosted/nothing.png", "/api/hosted/Hades-2.png", "/api/hosted/a.b.png"]) {
       expect((await call(path)).status).toBe(404);
@@ -188,7 +198,8 @@ describe("reports", () => {
 
     expect((await call("/api/reports", { token: null })).status).toBe(401);
     expect((await call("/api/reports", { method: "POST", token: null, body: {} })).status).toBe(401);
-    const listed = (await (await call("/api/reports")).json()) as { reports: { sha256: string; id: string; count: number; listed: boolean }[] };
+    const listed = (await (await call("/api/reports")).json()) as { reports: { sha256: string; id: string; count: number; listed: boolean }[]; catalogFullSince: string | null };
+    expect(listed.catalogFullSince).toBeNull();
     expect(listed.reports).toEqual([expect.objectContaining({ sha256: added.sha256, id: "wellbrained.timer", count: 1, listed: true })]);
 
     expect((await post("/api/catalog/listed", { id: "wellbrained.timer", listed: false })).status).toBe(200);
@@ -202,9 +213,15 @@ describe("reports", () => {
     expect((await post("/api/reports/dismiss", { sha256: added.sha256 })).status).toBe(200);
     expect(((await (await call("/api/reports")).json()) as { reports: unknown[] }).reports).toEqual([]);
     expect((await post("/api/reports/dismiss", { sha256: added.sha256 })).status).toBe(404);
+
+    // A full catalog (C9) shows with the reports until an upload fits again.
+    catalog.markFull(new Date("2026-10-19T08:00:00Z"));
+    expect(((await (await call("/api/reports")).json()) as { catalogFullSince: string | null }).catalogFullSince).toBe("2026-10-19T08:00:00.000Z");
+    catalog.clearFull();
+    expect(((await (await call("/api/reports")).json()) as { catalogFullSince: string | null }).catalogFullSince).toBeNull();
   });
 
   it("answers with no reports when there is no catalog", async () => {
-    expect(await (await call("/api/reports")).json()).toEqual({ reports: [] });
+    expect(await (await call("/api/reports")).json()).toEqual({ reports: [], catalogFullSince: null });
   });
 });

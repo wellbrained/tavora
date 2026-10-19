@@ -44,9 +44,11 @@ export interface AppOptions {
   catalogueKey?: string;
   /** Reports per client. */
   reportRateLimiter?: RateLimiter;
+  /** Who is told by email when the catalog is full (needs accounts' mailer). */
+  maintainerEmail?: string;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, catalogueKey, reportRateLimiter }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, catalogueKey, reportRateLimiter, maintainerEmail }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 100, windowMs: 3_600_000 });
@@ -203,6 +205,9 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     ...(publishLimits ? { limits: publishLimits } : {}),
     ...(catalogueKey ? { catalogueKey } : {}),
     ...(accounts?.now ? { now: accounts.now } : {}),
+    ...(accounts && maintainerEmail?.trim()
+      ? { maintainer: { email: maintainerEmail.trim(), mailer: accounts.mailer, ...(accounts.mailDailyLimit === undefined ? {} : { mailDailyLimit: accounts.mailDailyLimit }) } }
+      : {}),
   });
   catalogApp.post("/publish", publish.limit, publish.handler);
   const report = reportHandlers({
@@ -241,6 +246,20 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     // Named by its hash, so it never changes.
     return new Response(new Uint8Array(bytes), {
       headers: { "Content-Type": "application/zip", "Content-Disposition": "attachment", "Cache-Control": "public, max-age=31536000, immutable" },
+    });
+  });
+  catalogApp.get("/screenshots/:file", (context) => {
+    const match = /^([0-9a-f]{64})\.(png|webp)$/.exec(context.req.param("file"));
+    const bytes = match ? catalog!.screenshot(match[1]!, match[2]!) : null;
+    if (!bytes) return context.json({ error: "Not found." }, 404);
+    // Checked to be a picture when it was uploaded (C10) and named by its hash, so it never changes.
+    return new Response(new Uint8Array(bytes), {
+      headers: {
+        "Content-Type": `image/${match![2]}`,
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'",
+        "Cache-Control": "public, max-age=31536000, immutable",
+      },
     });
   });
   // The signed lists, byte for byte as tavora-catalog-sign wrote them. Short caching, so a revocation

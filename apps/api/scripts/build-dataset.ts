@@ -22,12 +22,34 @@ const args = process.argv.slice(2);
 const limitIndex = args.indexOf("--limit");
 const rowLimit = limitIndex >= 0 ? Number(args[limitIndex + 1]) : undefined;
 
+const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+/** Wikidata was busy (429, 5xx or no answer) even after the retries. */
+class WikidataBusy extends Error {}
+
+// Wikidata's query service often times out or turns requests away for a moment, so a
+// busy answer is asked again a few times, after Retry-After or a growing pause.
 async function sparql(query: string): Promise<{ results: { bindings: Record<string, { value: string }>[] } }> {
-  const response = await fetch(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(query)}`, {
-    headers: { "User-Agent": USER_AGENT, Accept: "application/sparql-results+json" },
-  });
-  if (!response.ok) throw new Error(`Wikidata answered ${response.status}`);
-  return (await response.json()) as never;
+  for (let attempt = 1; ; attempt++) {
+    let status = 0;
+    let retryAfter = 0;
+    try {
+      const response = await fetch(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(query)}`, {
+        headers: { "User-Agent": USER_AGENT, Accept: "application/sparql-results+json" },
+      });
+      if (response.ok) return (await response.json()) as never;
+      status = response.status;
+      retryAfter = Number(response.headers.get("retry-after")) || 0;
+      await response.body?.cancel();
+      if (status !== 429 && status < 500) throw new Error(`Wikidata answered ${status}`);
+    } catch (error) {
+      if (status && status !== 429 && status < 500) throw error;
+    }
+    if (attempt === 4) throw new WikidataBusy(`Wikidata answered ${status || "nothing"}`);
+    const pause = Math.max(retryAfter * 1000, 5000 * 2 ** (attempt - 1));
+    console.log(`Wikidata answered ${status || "nothing"}; trying again in ${pause / 1000} s`);
+    await wait(pause);
+  }
 }
 
 // Video games (and their subclasses) with a Steam application ID (P1733), in
@@ -35,8 +57,11 @@ async function sparql(query: string): Promise<{ results: { bindings: Record<stri
 async function fetchWikidata(): Promise<WikidataGame[]> {
   const byItem = new Map<string, WikidataGame>();
   const langs = new Map<string, string>();
-  const width = 250_000;
-  for (let from = 0; from < 5_000_000; from += width) {
+  // Ranges still to ask, lowest first. A range Wikidata keeps failing on is split in two.
+  const ranges: [number, number][] = [];
+  for (let from = 0; from < 5_000_000; from += 250_000) ranges.push([from, from + 250_000]);
+  while (ranges.length) {
+    const [from, to] = ranges.shift()!;
     const remaining = rowLimit === undefined ? undefined : rowLimit - byItem.size;
     if (remaining !== undefined && remaining <= 0) break;
     const query = `
@@ -44,12 +69,21 @@ async function fetchWikidata(): Promise<WikidataGame[]> {
         ?item wdt:P31/wdt:P279* wd:Q7889 ; wdt:P1733 ?appid ; rdfs:label ?label .
         BIND(LANG(?label) AS ?lang)
         FILTER(?lang IN ("en", "mul"))
-        FILTER(xsd:integer(?appid) >= ${from} && xsd:integer(?appid) < ${from + width})
+        FILTER(xsd:integer(?appid) >= ${from} && xsd:integer(?appid) < ${to})
         OPTIONAL { ?item skos:altLabel ?alt . FILTER(LANG(?alt) IN ("en", "mul")) }
       } GROUP BY ?item ?label ?lang ?appid ${remaining !== undefined ? `LIMIT ${remaining}` : ""}`;
-    const { results } = await sparql(query);
+    let results;
+    try {
+      ({ results } = await sparql(query));
+    } catch (error) {
+      if (!(error instanceof WikidataBusy) || to - from <= 10_000) throw error;
+      const middle = from + Math.floor((to - from) / 2);
+      console.log(`Wikidata: appids ${from} to ${to} keep failing; asking in two halves`);
+      ranges.unshift([from, middle], [middle, to]);
+      continue;
+    }
     collectWikidata(results.bindings as unknown as WikidataRow[], byItem, langs);
-    console.log(`Wikidata: appids below ${from + width}: ${byItem.size} games so far`);
+    console.log(`Wikidata: appids below ${to}: ${byItem.size} games so far`);
   }
   return [...byItem.values()];
 }

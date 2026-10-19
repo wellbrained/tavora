@@ -447,6 +447,43 @@ test("ui playground: shows every section, filters them and disables the controls
   await app.close();
 });
 
+test("to-dos: an open menu stays open when a save comes back", async () => {
+  const { app, page } = await launch();
+  await openModule(page, TODOS);
+  await openModule(page, TODOS);
+  await ready(app, TODOS, "empty", 0);
+  await ready(app, TODOS, "empty", 1);
+  await addInto(app, TODOS, $(`[data-testid="first-task"]`), "Find the Ancient Crypt");
+  await addInto(app, TODOS, $(`[data-testid="group-name-new"]`), "Bosses");
+  await expect.poll(() => inModule(app, TODOS, `!!${groupNamed("Bosses")}`, 1)).toBe(true);
+
+  // The to-do's menu with its "Move to group" submenu open.
+  const menu = `document.querySelector('[data-slot="dropdown-menu-content"][data-state="open"]')`;
+  const sub = `document.querySelector('[data-slot="dropdown-menu-sub-content"][data-state="open"]')`;
+  const open = (index: number) => inModule<boolean>(app, TODOS, `!!${menu} && !!${sub}`, index);
+  await inModule(app, TODOS, `${taskTitled("Find the Ancient Crypt")}.querySelector('[data-testid="task-menu"]').dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  await expect.poll(() => inModule(app, TODOS, `!!${menu} && ${menu}.getAnimations().length === 0`)).toBe(true);
+  await inModule(
+    app,
+    TODOS,
+    `(() => { const trigger = ${menu}.querySelector('[data-slot="dropdown-menu-sub-trigger"]'); trigger.focus(); trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); })()`,
+  );
+  await expect.poll(() => open(0)).toBe(true);
+
+  // This panel saves a change while its menu is open...
+  await addInto(app, TODOS, `${groupNamed("Bosses")}.querySelector("form")`, "Defeat Count Geonor");
+  await expect.poll(() => taskTitles(app, "", 1)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor"]);
+  await page.waitForTimeout(300);
+  expect(await open(0)).toBe(true);
+
+  // ...and so does the other panel.
+  await addInto(app, TODOS, `${groupNamed("Bosses")}.querySelector("form")`, "Defeat the Executioner", 1);
+  await expect.poll(() => taskTitles(app, "", 0)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor", "Defeat the Executioner"]);
+  await page.waitForTimeout(300);
+  expect(await open(0)).toBe(true);
+  await app.close();
+});
+
 test("to-dos: a group gets a color from its menu, and keeps it after a restart", async () => {
   const { app, page, userData } = await launch();
   await openModule(page, TODOS);
@@ -457,10 +494,6 @@ test("to-dos: a group gets a color from its menu, and keeps it after a restart",
   const header = `${q("group-header")}`;
   const tint = () => inModule<string | null>(app, TODOS, `${header}.getAttribute("data-tint")`);
   expect(await tint()).toBeNull();
-
-  // The panel shows a change at once and replaces its list when the save is acknowledged, which closes an open menu.
-  // Let the save settle first, as a person would.
-  await page.waitForTimeout(300);
 
   // Tavora draws a module's menu over the panel's place on screen, so the panel must be shown first.
   await waitForShown(app, TODOS);

@@ -4,5 +4,5 @@
 export const VERSIONS = {
   sdk: "0.2.8",
   pack: "0.1.3",
-  minTavora: "0.18.16",
+  minTavora: "0.18.18",
 } as const;

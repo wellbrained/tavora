@@ -3,7 +3,7 @@ import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { continuingPanelType, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, type Connector, type ResolvedPanelType } from "@tavora/module-schema";
+import { continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, type Connector, type ResolvedPanelType } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -1052,6 +1052,28 @@ export class Host {
     await this.catalog.report({ id: entry.id, owner: entry.owner, sha256: entry.zip.sha256 });
   }
 
+  /**
+   * Opens a catalog module's homepage like a link from a module (C10): only http or https, in the
+   * game's Browser panel or where the player picks. The address comes from the listing, asked for again here.
+   */
+  private async openCatalogHomepage(moduleId: string): Promise<void> {
+    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    const { homepage } = await this.catalog.module(moduleId);
+    if (homepage && isWebUrl(homepage)) this.openLinkFromModule(homepage);
+  }
+
+  /** A catalog module's screenshots, checked one by one (catalog-client.ts); those that fail are left out. */
+  private async catalogScreenshots(moduleId: string): Promise<string[]> {
+    if (!this.library.onlineSearch) return [];
+    try {
+      const { shots } = await this.catalog.module(moduleId);
+      const urls = await Promise.all(shots.map((shot) => this.catalog.screenshot(shot)));
+      return urls.filter((url): url is string => url !== null);
+    } catch {
+      return [];
+    }
+  }
+
   /** The modules installed from the catalog, as they are now, for the update check. */
   private catalogInstalled(): CatalogInstalled[] {
     const installed: CatalogInstalled[] = [];
@@ -1319,6 +1341,9 @@ export class Host {
       const scope = this.catalogScope();
       return scope ? this.catalog.list(scope) : { status: "ok", modules: [] };
     });
+    ipcMain.handle("host:catalog-screenshots", (event, moduleId: unknown): Promise<string[]> | string[] =>
+      fromHost(event) && isModuleId(moduleId) ? this.catalogScreenshots(moduleId) : [],
+    );
     ipcMain.handle("host:steam-library", async (event, profile: unknown): Promise<SteamLibraryResult> => {
       if (!fromHost(event) || typeof profile !== "string") return { status: "error", error: translate(this.language, "error.notUnderstood") };
       if (!this.library.onlineSearch) return { status: "error", error: translate(this.language, "error.onlineOff") };
@@ -1576,6 +1601,8 @@ export class Host {
         return this.installCatalogModule(action.moduleId);
       case "report-catalog-module":
         return this.reportCatalogModule(action.moduleId);
+      case "open-catalog-homepage":
+        return this.openCatalogHomepage(action.moduleId);
       case "apply-module-update":
         return this.applyCatalogUpdate(action.moduleId, action.version);
       case "delete-module-data":

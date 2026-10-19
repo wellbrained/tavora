@@ -9,6 +9,8 @@
 #                                            only served while it is set
 #   tavora-api-set-setting.sh admin-token    makes a new token for the review page and prints
 #                                            it once; it is stored nowhere else, so save it
+#   tavora-api-set-setting.sh maintainer-email [address]
+#                                            who hears when the module catalog is full
 #   tavora-api-set-setting.sh brevo-key      asks for the Brevo API key (not shown while typed);
 #                                            the service sends sign-in codes with it
 #
@@ -39,6 +41,15 @@ case "${1:-}" in
     set_var TAKEDOWN_CONTACT "$contact"
     shown="$contact"
     ;;
+  maintainer-email)
+    email="${2:-}"
+    [[ -n "$email" ]] || read -rp 'Maintainer email (told when the module catalog is full): ' email
+    email="$(printf '%s' "$email" | LC_ALL=C sed 's/^\xef\xbb\xbf//' | tr -d '[:space:]')"
+    # One plain address: letters, digits and . _ + - with a single @.
+    [[ "$email" =~ ^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] && (( ${#email} <= 200 )) || { echo 'That does not look like an email address. Nothing was saved.'; exit 1; }
+    set_var MAINTAINER_EMAIL "$email"
+    shown="$email"
+    ;;
   brevo-key)
     read -rsp 'Brevo API key (not shown): ' key; echo
     key="$(printf '%s' "$key" | LC_ALL=C sed 's/^\xef\xbb\xbf//' | tr -d '[:space:]')"
@@ -54,7 +65,7 @@ case "${1:-}" in
     shown='a new admin token'
     ;;
   *)
-    echo 'Usage: tavora-api-set-setting.sh takedown [address] | admin-token | brevo-key'
+    echo 'Usage: tavora-api-set-setting.sh takedown [address] | maintainer-email [address] | admin-token | brevo-key'
     exit 2
     ;;
 esac
@@ -67,4 +78,4 @@ if [[ "${1:-}" == admin-token ]]; then
   echo "Admin token (shown once, save it now):"
   echo "$token"
 fi
-journalctl -u tavora-api -n 8 --no-pager | grep -E 'TAKEDOWN_CONTACT|ADMIN_TOKEN|review page|accounts|email' || true
+journalctl -u tavora-api -n 8 --no-pager | grep -E 'TAKEDOWN_CONTACT|MAINTAINER_EMAIL|ADMIN_TOKEN|review page|accounts|email' || true

@@ -11,7 +11,7 @@ export class PackError extends Error {}
 
 /**
  * The files of a module folder that go into its zip: the manifest, the folders
- * its entry pages are in (usually dist/), the icons and the changelog. When the entry page sits
+ * its entry pages are in (usually dist/), the icons, the screenshots and the changelog. When the entry page sits
  * next to the manifest, everything goes except node_modules and dot files.
  */
 export async function collectFiles(dir: string): Promise<{ manifest: ModuleManifest; files: ZipFile[] }> {
@@ -26,11 +26,11 @@ export async function collectFiles(dir: string): Promise<{ manifest: ModuleManif
   const { manifest } = result;
 
   const names = new Set<string>([MANIFEST_FILE]);
-  const { entries, icons } = manifestFiles(manifest);
+  const { entries, icons, screenshots } = manifestFiles(manifest);
   // Panel types may have pages of their own; each page's folder goes in.
   const folders = new Set(entries.map((entry) => (entry.includes("/") ? entry.split("/")[0]! : "")));
   for (const folder of folders) for (const name of await walk(dir, folder)) names.add(name);
-  for (const icon of icons) names.add(icon);
+  for (const icon of [...icons, ...screenshots]) names.add(icon);
   if (manifest.changelog !== undefined) {
     await checkChangelog(dir, manifest.changelog);
     names.add(manifest.changelog);

@@ -32,7 +32,7 @@ export function createAdminApp({ token, submissions, state, store, catalog }: Ad
 
   app.use("*", async (context, next) => {
     await next();
-    context.header("Cache-Control", "no-store");
+    if (!context.res.headers.has("Cache-Control")) context.header("Cache-Control", "no-store");
     context.header("X-Content-Type-Options", "nosniff");
     context.header("Referrer-Policy", "no-referrer");
     context.header(
@@ -70,10 +70,14 @@ export function createAdminApp({ token, submissions, state, store, catalog }: Ad
     return bytes ? new Response(bytes, { headers: { "Content-Type": "image/png" } }) : context.json({ error: "Not found." }, 404);
   });
 
+  // Hosted icons are public anyway, so the browser may keep one, but only under
+  // an address that names the hash of exactly these bytes.
   app.get("/api/hosted/:file", (context) => {
     const id = /^([a-z0-9-]+)\.png$/.exec(context.req.param("file"))?.[1];
     const bytes = id && isIconId(id) ? store.file(id) : null;
-    return bytes ? new Response(bytes, { headers: { "Content-Type": "image/png" } }) : context.json({ error: "Not found." }, 404);
+    if (!bytes) return context.json({ error: "Not found." }, 404);
+    const kept = context.req.query("v") === createHash("sha256").update(bytes).digest("hex");
+    return new Response(bytes, { headers: { "Content-Type": "image/png", ...(kept ? { "Cache-Control": "private, max-age=31536000, immutable" } : {}) } });
   });
 
   const json = async (request: Request): Promise<Record<string, unknown>> => {
@@ -104,7 +108,8 @@ export function createAdminApp({ token, submissions, state, store, catalog }: Ad
     return submissions.takedown(id, block === true) ? context.json({ ok: true }) : context.json({ error: "No such hosted icon." }, 404);
   });
 
-  app.get("/api/reports", (context) => context.json({ reports: catalog?.reports() ?? [] }));
+  // With the reports: since when the catalog has been full (C9), or null while there is room.
+  app.get("/api/reports", (context) => context.json({ reports: catalog?.reports() ?? [], catalogFullSince: catalog?.fullSince() ?? null }));
 
   app.post("/api/reports/dismiss", async (context) => {
     const { sha256 } = await json(context.req.raw);

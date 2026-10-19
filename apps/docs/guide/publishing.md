@@ -8,7 +8,8 @@ Tavora's module catalog is where players find community modules: under **Browse*
 2. **Pick an id with your own prefix.** The part of your module id before the first dot is your prefix, such as `wellbrained` in `wellbrained.timer`. The first time you publish under a free prefix, it becomes your account's, and nobody else can publish under it. An account holds up to 3 prefixes. Words a developer name couldn't be are refused, such as `tavora`, `official` and `local`, so an id from the starter (`local.…`) needs a new prefix first. Prefixes stay taken when an account is deleted.
 3. **Say where the module belongs.** `games` lists the games it is made for, or stays empty for any game. A module for any game is offered in personal workspaces too, unless you set `workspaces` to `false`. See the [manifest reference](../reference/manifest.md).
 4. **Write a description and patch notes.** The listing shows your manifest's `name`, `description`, `version` and what it asks for (`permissions.network` and `connectors`), next to the zip's size. Each version's lines from [`changelog.json`](./getting-started.md#patch-notes) show up as its patch notes. All of it is shown as plain text, never HTML or Markdown.
-5. **Set `minTavora`** if the module uses something from a newer SDK. The [SDK changelog](../reference/changelog.md) says which Tavora each feature needs.
+5. **Add screenshots and a homepage** if you like. `screenshots` names up to 5 PNG or WebP pictures in your package, and `homepage` your module's web page. Players see both when they click your module's name in the catalog. Set `minTavora` to at least `0.18.17` when you use them.
+6. **Set `minTavora`** if the module uses something from a newer SDK. The [SDK changelog](../reference/changelog.md) says which Tavora each feature needs.
 
 ## Publish
 
@@ -22,11 +23,12 @@ npx tavora-pack publish <id>-<version>.zip
 
 `publish` checks that the zip is signed by your key, then uploads it with a signature over its SHA-256. Your secret key never leaves your PC. Pass `--key <file>` if you sign with another key file.
 
-The service checks the zip the way Tavora's installer does: the size and compression limits, the manifest and every file it names, the changelog and the signature over every file. A zip that passes is listed at once. There's no review before listing; a person at Tavora looks only at modules players report.
+The service checks the zip the way Tavora's installer does: the size and compression limits, the manifest and every file it names, that each screenshot really is a PNG or WebP within the limits, the changelog and the signature over every file. A zip that passes is listed at once. There's no review before listing; a person at Tavora looks only at modules players report.
 
 ## What players see
 
 - **Browse** lists your module with its name, version, "by *your name*", its description, its size and what it asks for. Before they install, players can see the network hosts and connectors it wants.
+- **Clicking the name** shows your description, screenshots and homepage, before installing.
 - **Install** downloads the zip, checks it against the listing and your key's signature, and installs it like Install from zip. Installing grants nothing: players are asked for your network hosts and connectors when they add the module, as with any zip.
 - Their data and permissions belong to your module id and your key, as [Your publisher key](./publisher-key.md#what-the-key-decides) explains.
 

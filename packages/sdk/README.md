@@ -70,7 +70,7 @@ The same small module built three ways: [vanilla TypeScript](https://github.com/
 
 ### Details over neighbouring panels
 
-Requires Tavora 0.18.16. `tavora.ui.tooltip.show` accepts `TooltipRequest`, a bounded
+Requires Tavora 0.18.18. `tavora.ui.tooltip.show` accepts `TooltipRequest`, a bounded
 plain-data description, never HTML or CSS. Use a new id for each hover session,
 `move` while the pointer moves, and `hide` on pointer leave. A click may call
 `show` with `pinned: true`; `hide` then leaves it open. Call `close` before changing

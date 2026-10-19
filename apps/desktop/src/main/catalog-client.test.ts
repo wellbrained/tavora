@@ -50,6 +50,18 @@ describe("parseCatalogEntry", () => {
     expect(parsed?.description).toBe("<img src=x onerror=alert(1)> **bold**");
   });
 
+  it("keeps an http or https homepage only, and well-formed screenshots, at most five (C10)", () => {
+    expect(parseCatalogEntry(entry({ homepage: "https://example.com/tracker" }))?.homepage).toBe("https://example.com/tracker");
+    for (const bad of ["javascript:alert(1)", "file:///C:/Windows", "tavora-module://x/", "https://user:pw@example.com", 42, `https://example.com/${"a".repeat(300)}`]) {
+      expect(parseCatalogEntry(entry({ homepage: bad }))?.homepage, String(bad)).toBeNull();
+    }
+    const shot = (n: number, fields: Record<string, unknown> = {}) => ({ sha256: n.toString(16).repeat(64), type: "png", size: 1000, ...fields });
+    const parsed = parseCatalogEntry(entry({ screenshots: [shot(1), shot(5, { type: "webp" }), shot(1), shot(2, { type: "svg" }), shot(3, { size: 2 * 1024 * 1024 }), shot(4, { sha256: "x" })] }));
+    expect(parsed?.shots).toEqual([shot(1), shot(5, { type: "webp" })]);
+    expect(parseCatalogEntry(entry({ screenshots: [1, 2, 3, 4, 5, 6, 7].map((n) => shot(n)) }))?.shots).toHaveLength(5);
+    expect(parseCatalogEntry(entry({ screenshots: "nope" }))?.shots).toEqual([]);
+  });
+
   it("shows only a developer name the service form allows, never another claim (C13)", () => {
     expect(parseCatalogEntry(entry({ publisher: "Tavora​ Official" }))?.publisher).toBeNull();
     expect(parseCatalogEntry(entry({ publisher: null }))?.publisher).toBeNull();
@@ -126,6 +138,31 @@ describe("CatalogClient.download", () => {
     await expect(client(Buffer.from("zip bytez")).download(zip)).rejects.toMatchObject({ key: "error.catalogBadZip" });
     await expect(client(Buffer.concat([data, Buffer.alloc(10_000)])).download(zip)).rejects.toMatchObject({ key: "error.catalogBadZip" });
     await expect(client(data.subarray(0, 3)).download(zip)).rejects.toMatchObject({ key: "error.catalogBadZip" });
+  });
+});
+
+describe("CatalogClient.screenshot", () => {
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("picture bytes")]);
+  const shot = { sha256: createHash("sha256").update(png).digest("hex"), type: "png" as const, size: png.length };
+  const client = (body: Buffer) => {
+    const fake = fakeFetch(() => new Response(new Uint8Array(body)));
+    return { client: new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: fake.impl }), calls: fake.calls };
+  };
+
+  it("gives back a listed PNG as a data address, asked for by its hash", async () => {
+    const { client: catalog, calls } = client(png);
+    expect(await catalog.screenshot(shot)).toBe(`data:image/png;base64,${png.toString("base64")}`);
+    expect(calls[0]!.url).toBe(`https://catalog.test/v1/catalog/screenshots/${shot.sha256}.png`);
+    expect(calls[0]!.init).toMatchObject({ credentials: "omit", referrerPolicy: "no-referrer" });
+  });
+
+  it("drops a screenshot with another hash, size or kind than listed (C10)", async () => {
+    const svg = Buffer.from("<svg onload='alert(1)'></svg>");
+    const svgShot = { ...shot, sha256: createHash("sha256").update(svg).digest("hex"), size: svg.length };
+    expect(await client(svg).client.screenshot(svgShot)).toBeNull();
+    expect(await client(png).client.screenshot({ ...shot, type: "webp" })).toBeNull();
+    expect(await client(Buffer.concat([png, Buffer.from("x")])).client.screenshot(shot)).toBeNull();
+    expect(await client(Buffer.from(png).fill(1, 20)).client.screenshot(shot)).toBeNull();
   });
 });
 

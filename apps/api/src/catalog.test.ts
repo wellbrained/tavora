@@ -1,7 +1,8 @@
-import { createHash, generateKeyPairSync, type KeyObject } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes, type KeyObject } from "node:crypto";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { crc32 } from "node:zlib";
 import { signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { AccountStore } from "./account-store.ts";
@@ -9,6 +10,7 @@ import { createApp } from "./app.ts";
 import { CatalogError, CatalogStore, compareModuleVersions } from "./catalog.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
+import { encodePng } from "./png.ts";
 import { createRateLimiter } from "./rate-limit.ts";
 
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
@@ -22,11 +24,14 @@ interface Options {
   workspaces?: boolean;
   key?: KeyObject | null;
   changelog?: unknown;
+  homepage?: string;
+  /** Screenshot files, named in the manifest in this order and put in the zip. */
+  screenshots?: ZipFile[];
   extra?: ZipFile[];
 }
 
 /** A module zip as tavora-pack makes it: manifest, page, optional changelog, and the signature. */
-function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], workspaces, key = publisher, changelog, extra = [] }: Options = {}): Buffer {
+function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], workspaces, key = publisher, changelog, homepage, screenshots = [], extra = [] }: Options = {}): Buffer {
   const manifest = {
     id,
     name: "Timer",
@@ -37,6 +42,8 @@ function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], wo
     games,
     ...(workspaces === undefined ? {} : { workspaces }),
     ...(changelog === undefined ? {} : { changelog: "changelog.json" }),
+    ...(homepage === undefined ? {} : { homepage }),
+    ...(screenshots.length ? { screenshots: screenshots.map((shot) => shot.name) } : {}),
     viewport: { minWidth: 200, minHeight: 150 },
     permissions: { network: ["api.example.com"] },
   };
@@ -44,10 +51,29 @@ function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], wo
     { name: "tavora.module.json", data: Buffer.from(JSON.stringify(manifest)) },
     { name: "dist/index.html", data: Buffer.from("<!doctype html><p>timer</p>") },
     ...(changelog === undefined ? [] : [{ name: "changelog.json", data: Buffer.from(JSON.stringify(changelog)) }]),
+    ...screenshots,
     ...extra,
   ];
   return writeZip(key ? [...files, signFiles(files, key)] : files);
 }
+
+const png = (size = 8) => Buffer.from(encodePng(size, size, new Uint8Array(size * size * 4).fill(200)));
+/** The smallest well-formed WebP header: RIFF, its size, WEBP and one VP8L chunk. */
+const webp = () => {
+  const chunk = Buffer.from([0x2f, 0, 0, 0, 0]);
+  const body = Buffer.concat([Buffer.from("WEBPVP8L"), Buffer.from([chunk.length, 0, 0, 0]), chunk, Buffer.from([0])]);
+  const size = Buffer.alloc(4);
+  size.writeUInt32LE(body.length);
+  return Buffer.concat([Buffer.from("RIFF"), size, body]);
+};
+
+/** A PNG whose header says 4097 px wide: small as a file, too big as a picture. */
+const wide = () => {
+  const bytes = png();
+  bytes.writeUInt32BE(4097, 16);
+  bytes.writeUInt32BE(crc32(bytes.subarray(12, 29)), 29);
+  return bytes;
+};
 
 const store = () => new CatalogStore(mkdtempSync(path.join(tmpdir(), "tavora-catalog-")));
 const sha = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
@@ -73,8 +99,47 @@ describe("adding to the catalog", () => {
         zip: { sha256: added.sha256, size: zip.length },
         publishedAt: "2026-10-18T10:00:00.000Z",
         notes: ["First version."],
+        homepage: null,
+        screenshots: [],
       },
     ]);
+  });
+
+  it("lists the homepage and checked screenshots, and serves only the newest version's", () => {
+    const catalog = store();
+    const first = png();
+    const second = webp();
+    catalog.add(moduleZip({ homepage: "https://example.com/timer", screenshots: [{ name: "shots/one.png", data: first }, { name: "shots/two.webp", data: second }] }));
+    const [entry] = catalog.index();
+    expect(entry?.homepage).toBe("https://example.com/timer");
+    expect(entry?.screenshots).toEqual([
+      { sha256: sha(first), type: "png", size: first.length },
+      { sha256: sha(second), type: "webp", size: second.length },
+    ]);
+    expect(catalog.screenshot(sha(first), "png")).toEqual(first);
+    expect(catalog.screenshot(sha(second), "webp")).toEqual(second);
+    expect(catalog.screenshot(sha(first), "webp")).toBeNull();
+
+    catalog.add(moduleZip({ version: "1.1.0", screenshots: [{ name: "shots/one.png", data: png(9) }] }));
+    expect(catalog.screenshot(sha(first), "png")).toBeNull();
+    expect(catalog.screenshot(sha(png(9)), "png")).not.toBeNull();
+    catalog.setListed("wellbrained.timer", false);
+    expect(catalog.screenshot(sha(png(9)), "png")).toBeNull();
+  });
+
+  it("refuses screenshots that are not real pictures, or too big", () => {
+    const catalog = store();
+    const refused = (data: Buffer, name = "shot.png") => expect(() => catalog.add(moduleZip({ screenshots: [{ name, data }] }))).toThrow(/screenshot/);
+    refused(Buffer.from("<svg onload=alert(1)>"));
+    refused(Buffer.from("<html>not a picture</html>"), "shot.webp");
+    refused(webp(), "shot.png");
+    refused(wide());
+    refused(Buffer.concat([png(), Buffer.from("extra")]));
+    const big = Buffer.concat([webp(), randomBytes(1024 * 1024)]);
+    big.writeUInt32LE(big.length - 8, 4);
+    refused(big, "shot.webp");
+    expect(() => catalog.add(moduleZip({ homepage: "javascript:alert(1)" }))).toThrow(CatalogError);
+    expect(catalog.index()).toEqual([]);
   });
 
   it("refuses unsigned zips, Tavora's own ids, broken manifests and zips that do not match their signature", () => {
@@ -175,6 +240,21 @@ describe("catalog routes", () => {
     expect(Buffer.from(await download.arrayBuffer())).toEqual(zip);
     expect((await get(`/v1/catalog/zips/${"0".repeat(64)}.zip`)).status).toBe(404);
     expect((await get("/v1/catalog/zips/../catalog.sqlite")).status).toBe(404);
+  });
+
+  it("serves a listed screenshot as a plain picture", async () => {
+    const { catalog, get } = setup();
+    const shot = png();
+    catalog.add(moduleZip({ screenshots: [{ name: "shot.png", data: shot }] }));
+    const answer = await get(`/v1/catalog/screenshots/${sha(shot)}.png`);
+    expect(answer.status).toBe(200);
+    expect(answer.headers.get("content-type")).toBe("image/png");
+    expect(answer.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(answer.headers.get("cache-control")).toContain("immutable");
+    expect(Buffer.from(await answer.arrayBuffer())).toEqual(shot);
+    expect((await get(`/v1/catalog/screenshots/${sha(shot)}.webp`)).status).toBe(404);
+    expect((await get(`/v1/catalog/screenshots/${sha(shot)}.svg`)).status).toBe(404);
+    expect((await get(`/v1/catalog/screenshots/${"0".repeat(64)}.png`)).status).toBe(404);
   });
 
   it("names the publisher from the account the key is linked to, never from the listing", async () => {

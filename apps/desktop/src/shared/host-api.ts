@@ -540,6 +540,8 @@ export type HostAction =
    * from the catalog, otherwise the listed one. Sends only the module id, its key and the zip's hash.
    */
   | { type: "report-catalog-module"; moduleId: string }
+  /** Opens a catalog module's homepage like a module link: the address is the one the main process reads from the listing again. */
+  | { type: "open-catalog-homepage"; moduleId: string }
   /** The player said yes to a catalog update that asks for more: installs exactly that version and grants what it asked for. */
   | { type: "apply-module-update"; moduleId: string; version: string }
   /** Deletes the data a module that is not installed left behind (owner as in leftoverModuleData). */
@@ -724,6 +726,10 @@ export interface CatalogModuleView {
   /** The zip's size in bytes. */
   size: number;
   publishedAt: string;
+  /** The module's web page, http or https, shown as plain text; open-catalog-homepage opens it. */
+  homepage: string | null;
+  /** How many screenshots the listing has; catalogScreenshots fetches them. */
+  screenshots: number;
 }
 
 /**
@@ -747,6 +753,8 @@ export interface TavoraHostApi {
   steamShareIcons(appids: number[]): Promise<SteamShareResult>;
   /** The catalog modules for the current game or personal workspace. Never rejects. */
   browseCatalog(): Promise<CatalogListResult>;
+  /** A catalog module's screenshots as checked PNG or WebP data addresses, in the listing's order; empty when there are none or they can't be had. Never rejects. */
+  catalogScreenshots(moduleId: string): Promise<string[]>;
   /** Where the visible panels are. Panels not listed are hidden. */
   setPanelBounds(bounds: PanelBounds[]): void;
   /**
