@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.7",
+    date: "2026-10-19",
+    title: "A button for the game you're playing",
+    notes: [
+      "When one of your games is running, a controller shows up at the bottom of the rail. Hover to see which game, click to jump in.",
+      "It works for games inside folders too.",
+    ],
+  },
+  {
     version: "0.19.6",
     date: "2026-10-19",
     title: "Cloud copy",

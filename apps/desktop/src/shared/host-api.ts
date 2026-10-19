@@ -59,8 +59,6 @@ export interface GameView {
   builtIn: boolean;
   addedAt: string;
   lastPlayedAt: string | null;
-  /** The game is running on this PC (main/game-watch.ts); always false while that is off. */
-  running: boolean;
 }
 
 export interface FolderView {
@@ -456,6 +454,11 @@ export interface HostViewState {
    * whether to open it in a new panel (navigation-choice). `panel` is the panel type's name, `content` the title.
    */
   pendingNavigation: { panel: string; content: string } | null;
+  /**
+   * The running game the rail offers to switch to (main/game-watch.ts): the one that started last, other than
+   * the game open now. Null when none, or while "When a game starts" is off.
+   */
+  runningGameId: string | null;
   /** A game that just started, while the player chose to be asked; the host UI asks whether to switch to it (game-switch). */
   pendingGameSwitch: string | null;
   snapshots: SnapshotView[];

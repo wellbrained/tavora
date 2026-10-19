@@ -10,6 +10,7 @@ import { folderMenu, gameMenu } from "../rail-actions";
 import MenuArea from "./menus/MenuArea.vue";
 import MenuButton from "./menus/MenuButton.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
+import RunningGameButton from "./RunningGameButton.vue";
 import UpdateMarker from "./UpdateMarker.vue";
 import RailGame from "./RailGame.vue";
 import FolderTile from "./FolderTile.vue";
@@ -419,7 +420,6 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                     :games="folderGames(entry.id).slice(0, 4).map(game)"
                     :label="folder(entry.id).label"
                     :open="openFolders.has(entry.id)"
-                    :running="folderGames(entry.id).some((id) => game(id).running)"
                   />
                   <template v-if="expanded">
                     <span class="flex-1 truncate text-sm font-medium">{{ folder(entry.id).name }}</span>
@@ -503,8 +503,9 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
     </div>
     </div>
 
-    <!-- Player things live at the bottom on their own: the profile, then Settings. -->
+    <!-- Player things live at the bottom on their own: a game running now, the profile, then Settings. -->
     <div class="flex flex-col gap-1 border-t py-2">
+      <RunningGameButton :expanded="expanded" />
       <UpdateMarker :expanded="expanded" />
       <ProfileMenu :expanded="expanded" />
       <button

@@ -18,6 +18,8 @@ defineProps<{
   lines?: string[];
   /** How many more games the folder holds than `lines` lists. */
   more?: number;
+  /** A short second line in quieter text, such as what a click does. */
+  hint?: string;
 }>();
 
 const setFloating = useFloating();
@@ -45,6 +47,7 @@ onBeforeUnmount(() => clearTimeout(release));
           <Folder v-if="folder" class="text-muted-foreground size-4 flex-none" :stroke-width="1.75" aria-hidden="true" />
           {{ text }}
         </span>
+        <p v-if="hint" class="text-muted-foreground mt-0.5 text-sm font-normal">{{ hint }}</p>
         <ul v-if="folder" class="text-muted-foreground mt-1.5 flex flex-col gap-0.5 text-sm font-normal" data-testid="rail-tooltip-games">
           <li v-for="line in lines" :key="line" class="truncate">{{ line }}</li>
           <li v-if="more" class="text-xs">{{ t("rail.folderMore", { count: more }) }}</li>
