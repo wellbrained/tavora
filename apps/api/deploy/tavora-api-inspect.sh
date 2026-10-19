@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Read-only. Runs on the server and prints what is needed to deploy the
 # game search service: Node, how Caddy is configured, how docs.mytavora.app is
-# routed, which ports are taken and how the other Node apps run under systemd.
+# routed, which ports are taken, how the other Node apps run under systemd and
+# how full the disk is (the module catalog's zips live in the state folder, C9).
 # It changes nothing and prints no secrets (environment files are not read).
 set -uo pipefail
 section() { printf '\n== %s ==\n' "$1"; }
@@ -30,6 +31,21 @@ for unit in ${TAVORA_INSPECT_UNITS:-}; do
     systemctl cat "$unit" | grep -vE '^(#|$)' | sed -E 's/(TOKEN|KEY|SECRET|PASSWORD)=[^ ]*/\1=<hidden>/g' | head -n 30
   fi
 done
+
+section 'disk'
+# The catalog refuses uploads with 507 at its own cap; this shows whether the disk runs out first.
+state=/var/lib/tavora-api
+df -h / /srv "$state" 2>/dev/null | awk 'NR == 1 || !seen[$0]++'
+if [[ -d "$state/catalog/zips" ]]; then
+  printf 'catalog zips: %s in %s files\n' "$(du -sh "$state/catalog/zips" 2>/dev/null | cut -f1)" "$(find "$state/catalog/zips" -type f 2>/dev/null | wc -l)"
+else
+  echo "catalog zips: none yet (or $state is not readable; run as root)"
+fi
+# A warning when the disk holding the state folder is 90 % full or has less than 5 GB left.
+read -r used avail < <(df -P -k "$state" 2>/dev/null | awk 'NR == 2 { sub("%", "", $5); print $5, $4 }')
+if [[ -n "${used:-}" ]] && { (( used >= 90 )) || (( avail < 5 * 1024 * 1024 )); }; then
+  echo "WARNING: the disk with $state is ${used}% full, $(( avail / 1024 / 1024 )) GB left. Make room before the catalog, accounts and search stop writing."
+fi
 
 section 'srv and dns tooling'
 ls -la /srv | head -n 30

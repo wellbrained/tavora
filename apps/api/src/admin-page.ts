@@ -28,6 +28,7 @@ export const ADMIN_HTML = `<!doctype html>
   </div>
 </header>
 <main>
+  <p id="catalog-full" class="alert" role="alert" hidden></p>
   <section id="panel-pending" role="tabpanel">
     <div id="bulk" class="bulk" hidden>
       <button id="approve-all" class="ok" type="button">Approve all</button>
@@ -85,6 +86,7 @@ button.ok { border-color: var(--ok); color: var(--ok); }
 button.bad { border-color: var(--bad); color: var(--bad); }
 button:disabled { opacity: 0.5; cursor: default; }
 .empty { color: var(--muted); }
+.alert { border: 1px solid var(--bad); color: var(--bad); border-radius: 8px; padding: 8px 12px; margin: 0 0 16px; }
 `;
 
 export const ADMIN_JS = `
@@ -256,6 +258,8 @@ async function render() {
   $("tab-pending").textContent = "Needs review (" + data.pending.length + ")";
   $("tab-hosted").textContent = "Hosted (" + data.hosted.length + ")";
   $("tab-reports").textContent = "Reports (" + data.reports.length + ")";
+  $("catalog-full").hidden = !data.catalogFullSince;
+  if (data.catalogFullSince) $("catalog-full").textContent = "The module catalog is full since " + new Date(data.catalogFullSince).toLocaleString() + ". Uploads are refused until there is room.";
   for (const url of urls.splice(0)) URL.revokeObjectURL(url);
   // only the open tab loads its pictures
   $("bulk").hidden = !data.pending.length;
@@ -282,7 +286,9 @@ async function load() {
   try {
     const response = await call("/api/overview");
     data = await response.json();
-    data.reports = (await (await call("/api/reports")).json()).reports;
+    const catalog = await (await call("/api/reports")).json();
+    data.reports = catalog.reports;
+    data.catalogFullSince = catalog.catalogFullSince;
     await render();
     status("Up to date.");
   } catch (error) {

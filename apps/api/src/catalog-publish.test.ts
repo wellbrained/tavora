@@ -1,5 +1,5 @@
-import { generateKeyPairSync, createPublicKey, type KeyObject } from "node:crypto";
-import { mkdtempSync } from "node:fs";
+import { generateKeyPairSync, createPublicKey, randomBytes, type KeyObject } from "node:crypto";
+import { existsSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { catalogPublicKey, nextCatalogList, publishSignature, signCatalogList, signFiles, writeZip, type ZipFile } from "@tavora/pack";
@@ -25,11 +25,35 @@ function moduleZip(key: KeyObject, id = "wellbrained.timer", version = "1.0.0", 
   return writeZip([...files, signFiles(files, key)]);
 }
 
-function setup(limits: Partial<PublishLimits> = {}) {
+/** The central (and local) headers of one entry, found by its name, for zips no honest packer writes. */
+function hostile(zip: Buffer, name: string, change: (out: Buffer, central: number, local: number) => void): Buffer {
+  const out = Buffer.from(zip);
+  const wanted = Buffer.from(name);
+  for (let at = out.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02])); at >= 0; at = out.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]), at + 4)) {
+    const length = out.readUInt16LE(at + 28);
+    if (!out.subarray(at + 46, at + 46 + length).equals(wanted)) continue;
+    change(out, at, out.readUInt32LE(at + 42));
+    return out;
+  }
+  throw new Error(`no entry ${name}`);
+}
+
+function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string) {
   const store = new AccountStore(":memory:");
-  const catalog = new CatalogStore(mkdtempSync(path.join(tmpdir(), "tavora-catalog-")));
+  const dir = mkdtempSync(path.join(tmpdir(), "tavora-catalog-"));
+  const catalog = new CatalogStore(dir);
   const clock = { now: Date.parse("2026-10-18T12:00:00Z") };
-  const app = createApp({ db, catalog, rateLimiter: roomy(), publishRateLimiter: roomy(), publishLimits: limits, catalogueKey: catalogPublicKey(catalogue), accounts: { store, mailer: createTestInbox(), now: () => clock.now } });
+  const inbox = createTestInbox();
+  const app = createApp({
+    db,
+    catalog,
+    rateLimiter: roomy(),
+    publishRateLimiter: roomy(),
+    publishLimits: limits,
+    catalogueKey: catalogPublicKey(catalogue),
+    accounts: { store, mailer: inbox, now: () => clock.now },
+    ...(maintainerEmail ? { maintainerEmail } : {}),
+  });
   /** An account with a linked key. */
   const developer = (email: string) => {
     const key = generateKeyPairSync("ed25519").privateKey;
@@ -45,7 +69,7 @@ function setup(limits: Partial<PublishLimits> = {}) {
     });
   const send = (key: KeyObject, zip: Buffer) => publish(zip, publishSignature(key, zip));
   const reason = async (response: Response) => ((await response.json()) as { reason?: string }).reason;
-  return { store, catalog, clock, developer, publish, send, reason };
+  return { store, catalog, dir, inbox, clock, developer, publish, send, reason };
 }
 
 describe("publishing to the catalog", () => {
@@ -84,6 +108,39 @@ describe("publishing to the catalog", () => {
     expect(invalid.status).toBe(400);
     expect(await reason(invalid)).toBe("invalid");
     expect((await publish(moduleZip(key), publishSignature(key, moduleZip(key)), "application/json")).status).toBe(415);
+  });
+
+  it("refuses a zip bomb, a link and a .. path in a signed upload, and stores nothing (C8)", async () => {
+    const { store, catalog, dir, developer, send } = setup();
+    const { key, accountId } = developer("dev@example.com");
+    const extra = (name: string, data = Buffer.from("x")) => moduleZip(key, "wellbrained.timer", "1.0.0", [{ name, data }]);
+    const attacks = {
+      // 5 MB of zeros packs into a few KB: far past the ratio cap.
+      bomb: extra("zeros.bin", Buffer.alloc(5 * 1024 * 1024)),
+      // A Unix symlink entry, pointing wherever its data says.
+      link: hostile(extra("link.txt", Buffer.from("/etc/passwd")), "link.txt", (out, central) => {
+        out.writeUInt16LE((3 << 8) | 20, central + 4);
+        out.writeUInt32LE((0o120777 << 16) >>> 0, central + 38);
+      }),
+      // A name that climbs out of wherever it would be unpacked, in both headers.
+      dotdot: hostile(extra("zzzzzzz.txt"), "zzzzzzz.txt", (out, central, local) => {
+        Buffer.from("../evil.txt").copy(out, central + 46);
+        Buffer.from("../evil.txt").copy(out, local + 30);
+      }),
+    };
+    for (const [attack, zip] of Object.entries(attacks)) {
+      const answer = await send(key, zip);
+      expect(answer.status, attack).toBe(400);
+      // Refused by readZip itself, before the manifest or signature are looked at.
+      expect(await answer.json(), attack).toMatchObject({ reason: "invalid", error: expect.stringMatching(/^The zip was refused/) });
+    }
+    expect(catalog.modules()).toEqual([]);
+    expect(catalog.storedBytes()).toBe(0);
+    expect(catalog.uploadsSince(accountId, new Date(0))).toBe(0);
+    expect(store.prefixes(accountId)).toEqual([]);
+    expect(readdirSync(path.join(dir, "zips"))).toEqual([]);
+    expect(readdirSync(dir).filter((name) => !name.startsWith("catalog.sqlite")).sort()).toEqual(["lists", "zips"]);
+    expect(existsSync(path.join(dir, "..", "evil.txt"))).toBe(false);
   });
 
   it("keeps a prefix to the account that has it, refuses reserved ones and holds at most three", async () => {
@@ -133,6 +190,37 @@ describe("publishing to the catalog", () => {
     const answer = await full.send(fullDev.key, moduleZip(fullDev.key));
     expect(answer.status).toBe(507);
     expect(await full.reason(answer)).toBe("catalog-full");
+  });
+
+  it("tells the maintainer once a day when the catalog is full, and shows it until an upload fits (C9)", async () => {
+    const first = moduleZip(generateKeyPairSync("ed25519").privateKey);
+    const full = setup({ catalogBytes: 2 * first.length + 100 }, "maintainer@example.com");
+    const dev = full.developer("dev@example.com");
+    expect((await full.send(dev.key, moduleZip(dev.key, "wellbrained.timer", "1.0.0"))).status).toBe(201);
+    expect(full.catalog.fullSince()).toBeNull();
+    let patch = 0;
+    const tooMuch = () => full.send(dev.key, moduleZip(dev.key, "wellbrained.timer", `1.1.${++patch}`, [{ name: "noise.bin", data: randomBytes(2000) }]));
+    expect((await tooMuch()).status).toBe(507);
+    expect((await tooMuch()).status).toBe(507);
+    const told = full.inbox.mails().filter((mail) => mail.to === "maintainer@example.com");
+    expect(told).toHaveLength(1);
+    expect(told[0]!.subject).toMatch(/catalog is full/);
+    expect(full.catalog.fullSince()).toBe(new Date(full.clock.now).toISOString());
+    // Once a day at most; the moment it got full stays.
+    full.clock.now += 86_400_001;
+    expect((await tooMuch()).status).toBe(507);
+    expect(full.inbox.mails().filter((mail) => mail.to === "maintainer@example.com")).toHaveLength(2);
+    expect(full.catalog.fullSince()).toBe("2026-10-18T12:00:00.000Z");
+    // An upload that fits again clears it.
+    expect((await full.send(dev.key, moduleZip(dev.key, "wellbrained.timer", "2.0.0"))).status).toBe(201);
+    expect(full.catalog.fullSince()).toBeNull();
+
+    // Without a maintainer address nobody is mailed, but the admin page still shows it.
+    const quiet = setup({ catalogBytes: 10 });
+    const quietDev = quiet.developer("dev@example.com");
+    expect((await quiet.send(quietDev.key, moduleZip(quietDev.key))).status).toBe(507);
+    expect(quiet.inbox.mails()).toEqual([]);
+    expect(quiet.catalog.fullSince()).not.toBeNull();
   });
 
   it("answers 503 without accounts, and 429 when a client uploads too often", async () => {
