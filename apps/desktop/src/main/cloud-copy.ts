@@ -6,6 +6,7 @@ import { DATA_DIRS, DATA_FILES, PICTURE_DIRS } from "./backup";
 import { copyKeys, open, PART_ID_BYTES, partId, seal, type CopyKeys } from "./copy-crypto";
 import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
+import { OWNER_RECORDS_FILE } from "./installer";
 import { FILES_DIR } from "./module-files";
 
 // The cloud copy (decided 2026-10-19): one copy of the player's Tavora data per
@@ -40,11 +41,17 @@ export interface CopyRoot {
   keep?: (name: string) => boolean;
 }
 
-/** What the copy holds: what the daily backup holds (backup.ts). The module files folder may be anywhere. */
+/** Installed modules and who publishes them; without them the other PC would drop their panels. */
+export const MODULE_ROOTS = { dir: "modules", records: OWNER_RECORDS_FILE } as const;
+
+/**
+ * What the copy holds: what the daily backup holds (backup.ts), plus the installed modules, so a
+ * layout arrives with the modules its panels need. The module files folder may be anywhere.
+ */
 export function copyRoots(userData: string, moduleFiles: string): CopyRoot[] {
   return [
-    ...DATA_FILES.map((name) => ({ name, path: path.join(userData, name), dir: false, picture: false })),
-    ...DATA_DIRS.map((name) => ({ name, path: path.join(userData, name), dir: true, picture: false })),
+    ...[...DATA_FILES, MODULE_ROOTS.records].map((name) => ({ name, path: path.join(userData, name), dir: false, picture: false })),
+    ...[...DATA_DIRS, MODULE_ROOTS.dir].map((name) => ({ name, path: path.join(userData, name), dir: true, picture: false })),
     ...PICTURE_DIRS.map((name) =>
       name === FILES_DIR ? { name, path: moduleFiles, dir: true, picture: true, keep: (entry: string) => isOwnerId(entry) } : { name, path: path.join(userData, name), dir: true, picture: true },
     ),
@@ -248,8 +255,9 @@ export class CloudCopy {
   /**
    * Uploads what changed since `state` and makes it the copy's new version. Unchanged files are not read
    * again, and parts the copy already has are not sent again. Returns the state to keep on success.
+   * `progress` hears how much of what changed is read and sent so far.
    */
-  async upload(copyKey: Uint8Array, roots: CopyRoot[], state: CopyState): Promise<UploadResult> {
+  async upload(copyKey: Uint8Array, roots: CopyRoot[], state: CopyState, progress?: (done: number, total: number) => void): Promise<UploadResult> {
     const keys = copyKeys(copyKey);
     let found = await scanCopy(roots);
     let pictures = true;
@@ -272,10 +280,16 @@ export class CloudCopy {
         batch = [];
         batchBytes = 0;
       };
-      for (const file of found) {
+      const unchanged = (file: Found) => {
         const synced = state.files[file.path];
-        if (synced && synced.size === file.size && synced.mtimeMs === file.mtimeMs && synced.parts.every((id) => known.has(id))) {
-          files[file.path] = synced;
+        return synced !== undefined && synced.size === file.size && synced.mtimeMs === file.mtimeMs && synced.parts.every((id) => known.has(id));
+      };
+      const work = found.reduce((sum, file) => sum + (unchanged(file) ? 0 : file.size), 0);
+      let done = 0;
+      progress?.(0, work);
+      for (const file of found) {
+        if (unchanged(file)) {
+          files[file.path] = state.files[file.path]!;
           continue;
         }
         let content: Buffer;
@@ -299,6 +313,8 @@ export class CloudCopy {
           if (batchBytes >= BATCH_BYTES) await flush();
         }
         files[file.path] = { size: content.length, mtimeMs: file.mtimeMs, sha256: createHash("sha256").update(content).digest("hex"), parts };
+        done += file.size;
+        progress?.(Math.min(done, work), work);
       }
       await flush();
 

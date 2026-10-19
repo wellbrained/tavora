@@ -187,6 +187,40 @@ export interface AccountView {
   linkCode: { code: string; expiresAt: string } | null;
 }
 
+/** Why the cloud copy could not sync last time, worded by the host UI. */
+export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted";
+
+/**
+ * Settings > Account > Cloud copy, and the questions it asks over the app. Sent on its own channel;
+ * the copy key stays in the main process, except as the recovery key the player asks to see.
+ */
+export interface CloudCopyView {
+  /** False where this PC can't keep the key encrypted: the copy can't be turned on here. */
+  canKeepKey: boolean;
+  on: boolean;
+  /** What it is doing right now. */
+  busy: "checking" | "uploading" | "downloading" | null;
+  /** Bytes read and sent of what changed, while uploading. */
+  progress: { done: number; total: number } | null;
+  /** The copy as the service last had it; null when there is none or it was not read yet. */
+  copy: { size: number; savedAt: string } | null;
+  /** The most a copy may hold. */
+  limit: number;
+  /** False when the last copy left the pictures out to fit. */
+  pictures: boolean;
+  /** The recovery key, while the player looks at it (right after turning on, or when asked for). */
+  recoveryKey: string | null;
+  /** Turning on found a copy from another PC: its recovery key is asked for. */
+  askKey: boolean;
+  /** This PC and the copy both changed since they last matched: the player keeps one side. */
+  conflict: boolean;
+  /** A newer copy from another PC is downloaded; a restart takes it. */
+  restartToTake: boolean;
+  /** Closing waits for the last upload. */
+  closing: boolean;
+  problem: CloudCopyProblem | null;
+}
+
 /** Settings > Integrations > Discord: the Discord connector's sign-in. Sent on its own channel. */
 export interface DiscordView {
   status: DiscordStatus;
@@ -635,6 +669,25 @@ export type HostAction =
   /** Copies `tavora-pack link <code>` for the code shown now. */
   | { type: "account-copy-link-command" }
   | { type: "account-unlink-key"; fingerprint: string }
+  /** Settings > Account > Cloud copy. Turning on makes a key, or asks for the one of a copy that exists. */
+  | { type: "cloud-copy-on" }
+  | { type: "cloud-copy-key"; key: string }
+  | { type: "cloud-copy-cancel" }
+  | { type: "cloud-copy-show-key" }
+  /** Puts the recovery key on screen on the clipboard. */
+  | { type: "cloud-copy-copy-key" }
+  /** The player saved the recovery key: it leaves the screen. */
+  | { type: "cloud-copy-key-saved" }
+  | { type: "cloud-copy-upload" }
+  /** Takes the copy in place of this PC's data (kept as a local backup); Tavora restarts. */
+  | { type: "cloud-copy-restore" }
+  /** Both sides changed: keep this PC's (the copy is kept as a local backup) or the copy's. */
+  | { type: "cloud-copy-keep"; side: "pc" | "cloud" }
+  | { type: "cloud-copy-restart" }
+  /** Off on this PC; the copy stays for the other PCs. */
+  | { type: "cloud-copy-off" }
+  | { type: "cloud-copy-delete" }
+  | { type: "cloud-copy-close-anyway" }
   /** Adds an account for a CLI profile folder. */
   | { type: "ai-usage-add"; provider: AiProvider; label: string; directory: string }
   /** Renames an account or points it at another profile folder. */
@@ -813,6 +866,8 @@ export interface TavoraHostApi {
   onAiUsage(listener: (view: AiUsageView) => void): void;
   getAccount(): Promise<AccountView | null>;
   onAccount(listener: (view: AccountView) => void): void;
+  getCloudCopy(): Promise<CloudCopyView | null>;
+  onCloudCopy(listener: (view: CloudCopyView) => void): void;
   /** A module asked for a menu (or null: close the one shown). */
   onModuleMenu(listener: (menu: ModuleMenu | null) => void): void;
   /** The player chose an item of the module menu, or closed it (null). */
