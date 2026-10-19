@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.5",
+    date: "2026-10-19",
+    title: "Tavora spots your games",
+    notes: [
+      "When one of your games starts, it gets a green dot in the rail. Click it to jump in.",
+      "Rather switch right away or be asked? Pick it under Settings > General, \"When a game starts\".",
+      "Tavora can also take you back to a personal workspace when the game closes.",
+    ],
+  },
+  {
     version: "0.19.4",
     date: "2026-10-19",
     title: "Favorites get their full menu",

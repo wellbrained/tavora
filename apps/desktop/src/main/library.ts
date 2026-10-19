@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { isGameId, isModuleId } from "@tavora/module-schema";
-import type { RootItem, RootSort, Startup } from "../shared/host-api";
+import type { GameStart, RootItem, RootSort, Startup } from "../shared/host-api";
 import { isSite } from "./browser-url";
 import { isLanguageSetting, type LanguageSetting } from "../shared/i18n";
 import { PlayerError } from "./messages";
@@ -75,6 +75,10 @@ export interface Library {
   sort: RootSort;
   rail: { expanded: boolean; width: number };
   startup: Startup;
+  /** What happens when a game of the library starts (main/game-watch.ts). */
+  gameStart: GameStart;
+  /** The personal workspace to go back to when the open game closes; null stays on the game. */
+  gameEndWorkspace: string | null;
   /** Grayscale instead of ClearType text, for OLED screens. Read before the app is ready. */
   grayscaleText: boolean;
   /** Search may ask the Tavora service online. Off means the built-in games only. */
@@ -109,6 +113,8 @@ export interface Library {
   browser: { sharedSites: string[]; adblockOff: string[] };
   lastGameId: string | null;
 }
+
+export const GAME_START_CHOICES: readonly GameStart[] = ["switch", "ask", "show", "off"];
 
 export const RAIL = { compact: 72, minWidth: 180, maxWidth: 420, defaultWidth: 256 } as const;
 export const TRASH_DAYS = 30;
@@ -155,6 +161,8 @@ export function emptyLibrary(): Library {
     sort: "recent",
     rail: { expanded: false, width: RAIL.defaultWidth },
     startup: "last-game",
+    gameStart: "show",
+    gameEndWorkspace: null,
     grayscaleText: false,
     onlineSearch: true,
     autoUpdate: true,
@@ -666,6 +674,10 @@ export function sanitizeLibrary(raw: unknown): Library {
   library.favorites = [...favorites];
   if (saved.sort === "manual" || saved.sort === "recent") library.sort = saved.sort;
   if (saved.startup === "welcome" || saved.startup === "last-game") library.startup = saved.startup;
+  if (GAME_START_CHOICES.includes(saved.gameStart as GameStart)) library.gameStart = saved.gameStart as GameStart;
+  if (typeof saved.gameEndWorkspace === "string" && isLive(library, saved.gameEndWorkspace) && library.games[saved.gameEndWorkspace]!.kind === "workspace") {
+    library.gameEndWorkspace = saved.gameEndWorkspace;
+  }
   if (typeof saved.grayscaleText === "boolean") library.grayscaleText = saved.grayscaleText;
   if (typeof saved.onlineSearch === "boolean") library.onlineSearch = saved.onlineSearch;
   if (typeof saved.autoUpdate === "boolean") library.autoUpdate = saved.autoUpdate;

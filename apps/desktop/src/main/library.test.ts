@@ -118,6 +118,24 @@ describe("adding games", () => {
     expect(sanitizeLibrary({ autoUpdate: "no" }).autoUpdate).toBe(true);
   });
 
+  it("marks running games by default and keeps only a real choice", () => {
+    expect(emptyLibrary().gameStart).toBe("show");
+    expect(sanitizeLibrary({ gameStart: "ask" }).gameStart).toBe("ask");
+    expect(sanitizeLibrary({ gameStart: "always" }).gameStart).toBe("show");
+  });
+
+  it("keeps the workspace to go back to only while it is a live personal workspace", () => {
+    const library = emptyLibrary();
+    const notes = addGame(library, { workspace: "Notes" }, day(1));
+    addGame(library, { catalogId: "poe2" }, day(1));
+    const saved = JSON.parse(JSON.stringify(library)) as Record<string, unknown>;
+    expect(sanitizeLibrary({ ...saved, gameEndWorkspace: notes }).gameEndWorkspace).toBe(notes);
+    expect(sanitizeLibrary({ ...saved, gameEndWorkspace: "poe2" }).gameEndWorkspace).toBeNull();
+    expect(sanitizeLibrary({ ...saved, gameEndWorkspace: "gone" }).gameEndWorkspace).toBeNull();
+    trashGame(library, notes, day(2));
+    expect(sanitizeLibrary({ ...JSON.parse(JSON.stringify(library)), gameEndWorkspace: notes }).gameEndWorkspace).toBeNull();
+  });
+
   it("has online search on by default and keeps only a real setting", () => {
     expect(emptyLibrary().onlineSearch).toBe(true);
     expect(sanitizeLibrary({ onlineSearch: false }).onlineSearch).toBe(false);

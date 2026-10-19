@@ -2,6 +2,7 @@ import { isConnector, isGameId, isModuleId, isNetworkHost, isOwnerId, isPanelTyp
 import type { BrowserCommand, HostAction, SteamImportGame } from "../shared/host-api";
 import { isSite, MAX_ADDRESS } from "./browser-url";
 import { INSTANCE_ID } from "./ids";
+import { GAME_START_CHOICES } from "./library";
 import { parseLayout } from "./layout";
 import { isGridSize, layoutTemplate } from "../shared/layout-templates";
 import { MAX_INITIALS, MAX_PICTURE_BYTES, MAX_PROFILE_NAME } from "./profile";
@@ -46,6 +47,8 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("choice") && (a.choice === "panel" || a.choice === "system" || a.choice === "cancel") ? { type: "link-choice", choice: a.choice } : null;
     case "navigation-choice":
       return only("choice") && (a.choice === "new-panel" || a.choice === "cancel") ? { type: "navigation-choice", choice: a.choice } : null;
+    case "game-switch":
+      return only("choice") && (a.choice === "switch" || a.choice === "cancel") ? { type: "game-switch", choice: a.choice } : null;
     case "show-welcome":
     case "restart":
     case "download-update":
@@ -219,6 +222,12 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("startup") && (a.startup === "welcome" || a.startup === "last-game")
         ? { type: a.type, startup: a.startup }
         : null;
+    case "set-game-start":
+      return only("gameStart") && GAME_START_CHOICES.some((choice) => choice === a.gameStart)
+        ? { type: a.type, gameStart: a.gameStart as (typeof GAME_START_CHOICES)[number] }
+        : null;
+    case "set-game-end":
+      return only("workspaceId") && (a.workspaceId === null || isGameId(a.workspaceId)) ? { type: a.type, workspaceId: a.workspaceId } : null;
     case "save-profile":
       // Code units, so emoji still fit; both are clipped by character when stored.
       return only("name", "initials") && text(a.name, MAX_PROFILE_NAME * 2) && text(a.initials, MAX_INITIALS * 2)

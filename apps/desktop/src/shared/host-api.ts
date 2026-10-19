@@ -15,6 +15,8 @@ export type InstanceStatus = "loading" | "ready" | "failed" | "unresponsive" | "
 export type Screen = "welcome" | "game";
 export type RootSort = "recent" | "manual";
 export type Startup = "welcome" | "last-game";
+/** What Tavora does when a game of the library starts: switch to it, ask, only mark it on the rail, or not look at all. */
+export type GameStart = "switch" | "ask" | "show" | "off";
 export type RootItem = { kind: "game"; id: string } | { kind: "folder"; id: string };
 
 export type IconView = { kind: "monogram"; text: string } | { kind: "image"; url: string };
@@ -57,6 +59,8 @@ export interface GameView {
   builtIn: boolean;
   addedAt: string;
   lastPlayedAt: string | null;
+  /** The game is running on this PC (main/game-watch.ts); always false while that is off. */
+  running: boolean;
 }
 
 export interface FolderView {
@@ -324,6 +328,9 @@ export interface HostViewState {
     trash: { game: GameView; trashedAt: string; purgeAt: string }[];
     sort: RootSort;
     startup: Startup;
+    gameStart: GameStart;
+    /** The personal workspace to go back to when the open game closes, or null to stay. */
+    gameEndWorkspace: string | null;
     grayscaleText: boolean;
     /** Whether search may ask the Tavora service online. */
     onlineSearch: boolean;
@@ -415,6 +422,8 @@ export interface HostViewState {
    * whether to open it in a new panel (navigation-choice). `panel` is the panel type's name, `content` the title.
    */
   pendingNavigation: { panel: string; content: string } | null;
+  /** A game that just started, while the player chose to be asked; the host UI asks whether to switch to it (game-switch). */
+  pendingGameSwitch: string | null;
   snapshots: SnapshotView[];
   notice: string | null;
   /** The player's local profile. */
@@ -447,6 +456,8 @@ export type HostAction =
   | { type: "link-choice"; choice: "panel" | "system" | "cancel" }
   /** The answer to pendingNavigation: open the content in a new panel, or leave it. */
   | { type: "navigation-choice"; choice: "new-panel" | "cancel" }
+  /** The answer to pendingGameSwitch: switch to the game, or stay. */
+  | { type: "game-switch"; choice: "switch" | "cancel" }
   /** Opens the system dialog to pick the place for the pictures of modules, then moves them there. */
   | { type: "module-files-change" }
   /** Moves the pictures of modules back to the default folder. */
@@ -485,6 +496,9 @@ export type HostAction =
   | { type: "move-folder"; folderId: string; index: number }
   | { type: "set-sort"; sort: RootSort }
   | { type: "set-startup"; startup: Startup }
+  | { type: "set-game-start"; gameStart: GameStart }
+  /** A personal workspace's id, or null to stay on the game. */
+  | { type: "set-game-end"; workspaceId: string | null }
   | { type: "set-grayscale-text"; enabled: boolean }
   | { type: "set-online-search"; enabled: boolean }
   | { type: "set-auto-update"; enabled: boolean }

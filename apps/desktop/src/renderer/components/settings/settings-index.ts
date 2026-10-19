@@ -58,6 +58,8 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["account", "account"],
   ["language", "general"],
   ["startup", "general"],
+  ["game-start", "general"],
+  ["game-end", "general"],
   ["sort", "general"],
   ["welcome-tour", "general"],
   ["theme", "appearance"],

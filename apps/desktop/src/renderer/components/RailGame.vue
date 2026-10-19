@@ -33,7 +33,7 @@ defineOptions({ inheritAttrs: false });
       v-bind="$attrs"
     >
       <span class="rail-pill" aria-hidden="true" />
-      <RailTooltip :text="game.name" :disabled="expanded">
+      <RailTooltip :text="game.running ? t('rail.running', { name: game.name }) : game.name" :disabled="expanded">
       <button
         type="button"
         :class="
@@ -47,10 +47,14 @@ defineOptions({ inheritAttrs: false });
         data-rail-item
         :data-testid="testid"
         :aria-current="active ? 'page' : undefined"
-        :aria-label="game.name"
+        :aria-label="game.running ? t('rail.running', { name: game.name }) : game.name"
         @click="emit('open')"
       >
-        <span class="rail-icon flex-none rounded-[12px]"><GameIcon :game="game" :size="48" /></span>
+        <span class="relative flex-none">
+          <span class="rail-icon flex rounded-[12px]"><GameIcon :game="game" :size="48" /></span>
+          <!-- The game is running on this PC (Settings > General, "When a game starts"). -->
+          <span v-if="game.running" class="bg-success ring-rail absolute -right-0.5 -bottom-0.5 size-3.5 rounded-full ring-[3px]" :data-testid="`${testid}-running`" />
+        </span>
         <span v-if="expanded" class="truncate text-sm font-medium">{{ game.name }}</span>
         <kbd
           v-if="shortcut"

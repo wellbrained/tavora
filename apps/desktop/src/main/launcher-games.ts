@@ -7,7 +7,8 @@ import path from "node:path";
  * behind: Windows' list of installed programs (Battle.net, EA, Ubisoft and most
  * others write their games there), Epic's manifests and GOG's registry keys.
  * Only a name and the path of a program or icon file are kept, to read the
- * game's own icon from. Nothing is run, changed or sent anywhere.
+ * game's own icon from, and the install folder when the launcher names it.
+ * Nothing is run, changed or sent anywhere.
  */
 
 export type LauncherSource = "battlenet" | "epic" | "gog" | "steam" | "windows";
@@ -21,6 +22,8 @@ export interface InstalledGame {
   file: string;
   /** Which icon of the file, as in the registry's `DisplayIcon` (`file,2`). */
   index: number;
+  /** The game's install folder, when the launcher names it; game-watch.ts looks for running programs inside it. */
+  folder?: string;
 }
 
 /** Earlier sources win when two launchers know the same game. Battle.net comes first. */
@@ -87,6 +90,14 @@ export function parseRegistry(output: string): Record<string, string>[] {
   return blocks;
 }
 
+/** An absolute Windows folder from the registry or a manifest, or undefined when it is not one. */
+function installFolder(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const folder = value.trim().replace(/^"|"$/g, "");
+  if (!/^[A-Za-z]:\\/.test(folder) || /(^|\\)\.\.(\\|$)/.test(folder)) return undefined;
+  return path.win32.normalize(folder).replace(/\\+$/, "");
+}
+
 /** A `DisplayIcon` value such as `"C:\Games\a.exe",0` or `C:\Games\a.exe,-101`, or null when it is not an icon file path. */
 export function parseDisplayIcon(value: string | undefined): { file: string; index: number } | null {
   if (!value) return null;
@@ -105,7 +116,8 @@ export function gamesFromUninstall(output: string): InstalledGame[] {
     const icon = parseDisplayIcon(block.displayicon);
     if (!name || !icon) continue;
     const source: LauncherSource = /blizzard|activision/i.test(block.publisher ?? "") ? "battlenet" : "windows";
-    games.push({ source, name, ...icon });
+    const folder = installFolder(block.installlocation);
+    games.push({ source, name, ...icon, ...(folder ? { folder } : {}) });
   }
   return games;
 }
@@ -114,7 +126,8 @@ export function gamesFromGog(output: string): InstalledGame[] {
   const games: InstalledGame[] = [];
   for (const block of parseRegistry(output)) {
     const icon = parseDisplayIcon(block.exe);
-    if (block.gamename && icon) games.push({ source: "gog", name: block.gamename, ...icon });
+    const folder = installFolder(block.path);
+    if (block.gamename && icon) games.push({ source: "gog", name: block.gamename, ...icon, ...(folder ? { folder } : {}) });
   }
   return games;
 }
@@ -129,7 +142,8 @@ export function gamesFromEpic(manifests: readonly string[]): InstalledGame[] {
       // The launch program lives inside the install folder.
       if (/(^|[\\/])\.\.([\\/]|$)/.test(exe) || /^([A-Za-z]:|[\\/])/.test(exe)) continue;
       const icon = parseDisplayIcon(path.win32.join(dir, exe));
-      if (icon) games.push({ source: "epic", name, ...icon });
+      const folder = installFolder(dir);
+      if (icon) games.push({ source: "epic", name, ...icon, ...(folder ? { folder } : {}) });
     } catch {
       // A manifest this app cannot read is skipped.
     }
@@ -179,7 +193,7 @@ export function parseAppManifest(acf: string): { appid: number; name: string; in
 }
 
 /** Programs of an install folder that are not the game itself. */
-const NOT_THE_GAME = /(unins|setup|redist|crash|report|helper|install|anticheat|battleye|bootstrap|updater|launcher|config|vcredist|ffmpeg|start_protected)/i;
+export const NOT_THE_GAME = /(unins|setup|redist|crash|report|helper|install|anticheat|battleye|bootstrap|updater|launcher|config|vcredist|ffmpeg|start_protected)/i;
 
 /** The game's own program among the files of its install folder: the largest `.exe` that is not an installer, a helper or a launcher. */
 export function pickProgram(files: readonly { name: string; size: number }[]): string | null {
@@ -219,7 +233,7 @@ export async function findSteamGames(steamDir: string): Promise<InstalledGame[]>
         const exes = entries.filter((entry) => entry.isFile() && /\.exe$/i.test(entry.name)).slice(0, 200);
         const sizes = await Promise.all(exes.map(async (entry) => ({ name: entry.name, size: (await stat(path.join(folder, entry.name))).size })));
         const program = pickProgram(sizes);
-        if (program) games.push({ source: "steam", name: app.name, file: path.join(folder, program), index: 0, steamAppId: app.appid });
+        if (program) games.push({ source: "steam", name: app.name, file: path.join(folder, program), index: 0, steamAppId: app.appid, folder });
       } catch {
         // A game whose folder is gone or unreadable is skipped.
       }

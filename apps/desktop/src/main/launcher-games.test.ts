@@ -85,7 +85,7 @@ describe("gamesFromUninstall", () => {
 
   it("lists programs that have a name and an icon file, and marks Blizzard's as Battle.net", () => {
     expect(games).toEqual([
-      { source: "battlenet", name: "Diablo IV", file: "G:\\Blizzard Games\\Diablo IV\\Diablo IV.exe", index: 0 },
+      { source: "battlenet", name: "Diablo IV", file: "G:\\Blizzard Games\\Diablo IV\\Diablo IV.exe", index: 0, folder: "G:\\Blizzard Games\\Diablo IV" },
       { source: "battlenet", name: "StarCraft II", file: "G:\\Blizzard Games\\StarCraft II\\Support\\SC2Switcher.exe", index: 0 },
       { source: "windows", name: "Apex Legends", file: "D:\\EA Games\\Apex\\r5apex.exe", index: 1 },
     ]);
@@ -98,7 +98,7 @@ describe("gamesFromGog", () => {
       key("1207658924", row("gameName", "Witcher Test"), row("exe", "D:\\GOG\\Witcher\\witcher.exe"), row("path", "D:\\GOG\\Witcher")),
       key("broken", row("gameName", "No Exe")),
     ].join("\r\n");
-    expect(gamesFromGog(output)).toEqual([{ source: "gog", name: "Witcher Test", file: "D:\\GOG\\Witcher\\witcher.exe", index: 0 }]);
+    expect(gamesFromGog(output)).toEqual([{ source: "gog", name: "Witcher Test", file: "D:\\GOG\\Witcher\\witcher.exe", index: 0, folder: "D:\\GOG\\Witcher" }]);
   });
 });
 
@@ -108,7 +108,7 @@ describe("gamesFromEpic", () => {
 
   it("joins the install folder and the launch program of each manifest", () => {
     expect(gamesFromEpic([item({})])).toEqual([
-      { source: "epic", name: "Fortnite", file: "D:\\Epic\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient.exe", index: 0 },
+      { source: "epic", name: "Fortnite", file: "D:\\Epic\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient.exe", index: 0, folder: "D:\\Epic\\Fortnite" },
     ]);
   });
 
