@@ -11,6 +11,34 @@
       "addedAt": "2026-10-15T14:23:14.032Z"
     },
     {
+      "id": "hearthstone",
+      "names": [
+        "Hearthstone"
+      ],
+      "sha256": "e549b8da72d9e1e92a61d58fea222faf4f2bfdf707cb65ca624cf56fafe6b635",
+      "source": "Blizzard's own Hearthstone icon from the navigation of hearthstone.blizzard.com (baseui.akamaized.net/icons/hearthstone.svg), drawn at 256 px without changes, 2026-10-19",
+      "addedAt": "2026-10-19T07:52:08.542Z"
+    },
+    {
+      "id": "heroes-of-the-storm",
+      "names": [
+        "Heroes of the Storm"
+      ],
+      "sha256": "fc87e826ab4b79b015d56fd76082bf2ac7237b6ebbcfa517d692e2e7a85981d7",
+      "source": "Blizzard's own Heroes of the Storm icon from the navigation of heroesofthestorm.blizzard.com (baseui.akamaized.net/icons/heroes-of-the-storm.svg), drawn at 256 px without changes, 2026-10-19",
+      "addedAt": "2026-10-19T07:52:08.701Z"
+    },
+    {
+      "id": "overwatch-2",
+      "names": [
+        "Overwatch 2",
+        "Overwatch"
+      ],
+      "sha256": "70c4d23daea91521b2b468795f78aee6ed6c5206278974f14deaa5e3c1a0c487",
+      "source": "Blizzard's own Overwatch icon from the navigation of overwatch.blizzard.com (baseui.akamaized.net/icons/overwatch.svg), drawn at 256 px without changes, 2026-10-19",
+      "addedAt": "2026-10-19T07:52:08.166Z"
+    },
+    {
       "id": "starcraft-2",
       "names": [
         "StarCraft II",
@@ -19,6 +47,27 @@
       "sha256": "4f3371db3c49c7cc10dc5657097aff16c22176a21caa16c29f386bd77b59391c",
       "source": "Icon of the installed game's own program (SC2Switcher.exe), lossless PNG of its 256 px bitmap frame, 2026-10-15",
       "addedAt": "2026-10-15T14:23:14.658Z"
+    },
+    {
+      "id": "warcraft-iii-reforged",
+      "names": [
+        "Warcraft III: Reforged",
+        "Warcraft III",
+        "Warcraft 3"
+      ],
+      "sha256": "052f3174205a0c10eb7bdca61e28dcb06937b05b33b5835f975b424f65d2ce13",
+      "source": "Blizzard's own Warcraft III icon from the navigation of warcraft3.blizzard.com (nav_icon.svg on blz-contentstack-images.akamaized.net), drawn at 256 px without changes, 2026-10-19",
+      "addedAt": "2026-10-19T07:52:08.873Z"
+    },
+    {
+      "id": "world-of-warcraft",
+      "names": [
+        "World of Warcraft",
+        "WoW"
+      ],
+      "sha256": "8c5d9ae776fb26c7346d6c412fbef383cb867c8d034ee679378574652656ea7d",
+      "source": "Blizzard's own World of Warcraft icon from the navigation of worldofwarcraft.blizzard.com (baseui.akamaized.net/icons/world-of-warcraft.svg), drawn at 256 px without changes, 2026-10-19",
+      "addedAt": "2026-10-19T07:52:08.360Z"
     }
   ]
 }
