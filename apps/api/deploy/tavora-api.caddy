@@ -3,12 +3,17 @@ api.mytavora.app {
     encode zstd gzip
     header X-Content-Type-Options nosniff
     # No request is bigger than a profile with its picture (about 700 KB), except a module zip published
-    # to the catalog (at most the installer's 50 MB); the service checks each route again.
+    # to the catalog (at most the installer's 50 MB) and a cloud copy upload (about 8 MB of parts, or a
+    # manifest with its part list); the service checks each route again.
     @publish path /v1/catalog/publish
     request_body @publish {
         max_size 50MB
     }
-    @other not path /v1/catalog/publish
+    @copy path /v1/account/copy /v1/account/copy/*
+    request_body @copy {
+        max_size 10MB
+    }
+    @other not path /v1/catalog/publish /v1/account/copy /v1/account/copy/*
     request_body @other {
         max_size 1MB
     }

@@ -4,6 +4,7 @@ import { bodyLimit } from "hono/body-limit";
 import { accountRoutes, type AccountOptions } from "./accounts.ts";
 import { publishHandlers, type PublishLimits } from "./catalog-publish.ts";
 import { reportHandlers } from "./catalog-report.ts";
+import { copyRoutes } from "./cloud-copy.ts";
 import { catalogFilter, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
 import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
@@ -276,6 +277,9 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   app.route("/v1/catalog", catalogApp);
 
   // Accounts: the only player data the service keeps, and only once it can send email.
+  // The cloud copy first: its bodies are bigger than the account routes allow, and it has its own limits.
+  if (accounts?.copies) app.route("/v1/account/copy", copyRoutes({ copies: accounts.copies, accounts: accounts.store, clientKey: (request) => (clientKey ? clientKey(request) : "local"), ...(accounts.now ? { now: accounts.now } : {}) }));
+  else app.all("/v1/account/copy", (context) => context.json({ error: "The cloud copy is not available right now.", reason: "unavailable" }, 503)).all("/v1/account/copy/*", (context) => context.json({ error: "The cloud copy is not available right now.", reason: "unavailable" }, 503));
   if (accounts) app.route("/v1/account", accountRoutes(accounts, limiter, (request) => (clientKey ? clientKey(request) : "local")));
   else app.all("/v1/account/*", (context) => context.json({ error: "Accounts are not available right now.", reason: "unavailable" }, 503));
   // Publisher keys belong to accounts, so they come and go with them.
