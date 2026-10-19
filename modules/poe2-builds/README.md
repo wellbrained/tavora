@@ -49,3 +49,104 @@ IDs are counted in Tree info; no alternate tree version is silently substituted.
 It is not the real Tavora runtime and is excluded from module ZIPs. It persists
 its test data separately in that browser origin. Core tests run with
 `pnpm exec vitest run modules/poe2-builds/src/core.test.ts` from the repository root.
+
+Alpha 3 restores the preview presentation: gem markers, fully coloured support
+badges, gear slot icons and rarity badges. Ascendancy/search float over the tree;
+Tree info and zoom sit at the bottom, with red/green weapon-set buttons below.
+Actual gem levels are preserved when supplied. Character level ranges remain
+labelled separately; missing gem levels are shown as unavailable. Existing builds
+and saved panel preferences remain compatible.
+
+Alpha 4 adds the approved character equipment view above the detailed Gear list.
+Show/Hide inventory and equipment weapon-set selection are remembered per panel.
+Hover/focus a slot for stats; click or press Enter to pin them, Escape to close.
+Missing slots remain empty, including missing swap weapons. The layout contains
+equipped gear only, with no backpack. Source files using repeated flask/charm slots
+and numbered slots are supported. Alpha 4 used generic PoB slot artwork. The details list uses two columns from 680px of panel width, one below.
+
+Alpha 5 adds bundled game artwork to inventory slots and the detailed Gear list.
+Unique items match by name; crafted rare/magic items match by base type. Unknown
+items retain slot icons. Artwork is local: no image hosts, game installation or
+network access are needed at runtime. Existing builds and panel state still work.
+
+Alpha 6 adds collapsible Guide chapters and a hideable chapter sidebar. Panels
+up to 640px wide automatically use dropdown navigation; chapter navigation opens
+the destination. Individual/all chapter visibility and the wide-panel sidebar
+preference persist. Original guide wording stays unchanged. Additional chapters
+expose saved skill/equipment details, build information, import notes and video
+or distinct variant references when available. Gem quality is retained when
+supplied. Chapters are derived from the portable file's data, so existing files
+need no migration. Absent values and lost inline references are not reconstructed.
+
+Alpha 7 includes distinctive Tree/Skills/Gear/Guide tab icons and custom pixel
+placeholders for bow, helmet, rings, health and mana flasks. Actual item artwork
+still wins; empty slots show dim placeholders. Health is red, mana is blue.
+Variant-specific saved guide notes are retained without falling back to a
+different variant. Existing damaged guide text needs a corrected portable file;
+the module cannot recover words absent from its local file. The development
+tools/mobalytics_snapshot.py utility converts explicitly captured rendered guide
+snapshots deterministically, preserving inline labels and checking variant tabs.
+It is not a URL importer and is excluded from the installable ZIP.
+
+Alpha 8 adds offline artwork for active, support and socketed skill gems. Exact
+English names and PoB identifiers resolve to compact bundled atlases; unknown
+gems retain attribute-coloured markers. Actual levels and lineage badges remain.
+Native class illustrations sit at the main tree centre; the ascendancy popover
+shows its matching illustration, using version-specific coordinates. Tree info
+contains an optional **Decorative frames** checkbox, remembered per panel and
+applied to both tree views. It starts off so the previous styling is preserved;
+weapon-set allocation rings keep their red/green colours in either mode.
+Existing portable files need no replacement or reimport for the artwork.
+
+Alpha 9 simplifies Tree info to unique Total / Set 1 / Set 2 node counts. Shared
+nodes contribute to Total only; a node used in both weapon sets counts once in
+Total. Decorative frames and zoom-dependent allocated notable/keystone names
+have remembered checkboxes in the weapon-allocation bar.
+Gear has independent inventory and equipment-list visibility controls, known
+rarity borders/badges, and no missing-rarity label. Item-specific saved notes
+appear after stats and before the pin hint. The inventory backdrop is static
+CSS, requiring no extra image load.
+Guide navigation groups chapters into General and build variants, with short
+chapter tabs. Narrow panels use a group dropdown; the wide group sidebar can
+also be hidden. Chapter collapse, keyboard tab navigation and contextual jumps
+remain supported; contextual links select the matching variant. Generated Skill
+details, Equipment details and Import notes chapters are removed; original
+author chapters and all underlying saved data remain intact. Older files encode
+variant membership in chapter-title suffixes; unmatched chapters stay in General.
+
+Alpha 10 omits missing gem-level messages, abbreviates gem tooltip attributes
+(for example Maim (Dex)), and puts character-level badges beside skill names.
+Known actual gem levels remain visible. Support names are slightly larger.
+General Gear notes open by default in a fixed bottom section; their collapse
+choice and Show/Hide all notes still work. Equipment scrolls independently, and
+item-specific notes remain beneath item stats in the list and inventory tooltip.
+Guide web addresses are clickable through Tavora's normal link API: use an
+existing game Browser panel, otherwise show the host destination dialog. The
+current SDK cannot force that dialog with Ctrl-click; that requires a host/SDK
+extension. No direct window navigation or external-browser workaround is used.
+
+Alpha 11 uses a 64px active gem column and 24px support icons beside each skill.
+Gear uses slot section headings, level badges and bulleted modifier lists. Its
+minimum viewport is 400 × 608px, sized to keep the inventory visible with default
+Gear notes open; the preferred width is 568px. Inventory and list visibility stay
+independent at every width. Lists use two columns from 800px. Guide chapters use
+flat underline tabs; Tree allocation controls use 14px text.
+
+Alpha 12 resolves saved planner item/base IDs using bundled English game and
+PoB name tables. Planner labels remain source metadata. Every equipment slot
+has a custom fallback; weapon labels/icons follow each equipped weapon set.
+Two-handed weapons reserve the offhand, while bows permit a quiver. Item hover
+details wrap without scrollbars. Existing saved builds resolve on load.
+
+Alpha 13 preserves extended item properties, requirements and affix metadata in
+portable v1 files. Item level and quality are name badges; requirement values
+align beneath artwork. Modifiers show prefixes before suffixes with right-edge
+type/tier badges, inline crafted/fractured labels, connected hybrid lines and
+socketed effects last. No prefix/suffix headings are shown. Unique modifiers do
+not receive ordinary affix tiers; ambiguous guide targets retain unnumbered P/S.
+An exact-content catalogue enriches recognized older exports, without applying
+facts to modified or unrelated items. Updated files retain all guide chapters.
+Equipment order is fixed across builds. Plain visibility/ascendancy switches,
+dropdown indicators, collapse icons, frame-label help and wrapping Guide tabs
+clarify control behavior. Quest rewards display saved author advice or recorded
+character choices separately. Build selectors put the build name before source.

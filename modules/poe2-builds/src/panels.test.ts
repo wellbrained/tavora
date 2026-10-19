@@ -50,3 +50,10 @@ it('waits for a newly opened Guide to finish loading before jumping', async () =
     try { expect(await sender.navigate('new', 7)).toBe(true); expect(jumps).toEqual([7]); }
     finally { clearTimeout(timer); reader.destroy(); sender.destroy(); }
 });
+
+it('contextual links select the current variant instead of the first chapter of that topic',()=>{
+ const sections=[{title:'Equipment · Early',text:'Shared notes',context:'gear'},{title:'Equipment · Uber Endgame',text:'Shared notes with formatting differences',context:'gear'}];
+ expect(guideSectionIndex(sections,'gear','Shared notes','Uber Endgame')).toBe(1);
+ expect(guideSectionIndex(sections,'gear','Unmatched excerpt','Uber Endgame')).toBe(1);
+ expect(guideSectionIndex(sections,'gear','Shared notes')).toBe(0);
+});

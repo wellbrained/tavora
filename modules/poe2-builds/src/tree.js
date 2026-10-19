@@ -1,14 +1,17 @@
+import { treeArtwork } from './tree-art';
+
 export function createTree(canvas, context, options = {}) {
     const { state, nodesFor, selectedStage, selectedBuild, ascendancyName, esc } = context;
     class PassiveTree {
-        constructor(canvas, options = {}) { this.ascendancy = !!options.ascendancy; this.compact = !!options.compact; this.tooltip = canvas.closest('.tree-body').querySelector('.node-tooltip'); this.canvas = canvas; this.ctx = canvas.getContext('2d'); const style = getComputedStyle(canvas); this.palette = { 1: style.getPropertyValue('--weapon-set-1').trim(), 2: style.getPropertyValue('--weapon-set-2').trim(), shared: style.getPropertyValue('--passive-shared').trim() }; this.nodes = nodesFor(); this.byId = new Map(this.nodes.map(n => [n.id, n])); this.atlas = new Image(); this.atlas.src = new URL('assets/passives.webp', document.baseURI).href; this.atlas.onload = () => this.draw(); this.selected = new Map(selectedStage('tree').passives.map(p => [p.id, p.weapon])); this.previous = new Set((selectedBuild('tree').stages[state.tree - 1]?.passives || []).map(p => p.id)); this.observer = new ResizeObserver(() => { this.resize(); this.fit(true); this.initial = true; }); this.observer.observe(canvas.parentElement); this.bind(); }
-        destroy() { this.observer.disconnect(); this.atlas.onload = null; }
+        constructor(canvas, options = {}) { this.ascendancy = !!options.ascendancy; this.compact = !!options.compact; this.tooltip = canvas.closest('.tree-body').querySelector('.node-tooltip'); this.canvas = canvas; this.ctx = canvas.getContext('2d'); const style = getComputedStyle(canvas); this.palette = { 1: style.getPropertyValue('--weapon-set-1').trim(), 2: style.getPropertyValue('--weapon-set-2').trim(), shared: style.getPropertyValue('--passive-shared').trim() }; this.nodes = nodesFor(); this.byId = new Map(this.nodes.map(n => [n.id, n])); this.atlas = new Image(); this.atlas.src = new URL('assets/passives.webp', document.baseURI).href; this.atlas.onload = () => this.draw(); this.selected = new Map(selectedStage('tree').passives.map(p => [p.id, p.weapon])); this.previous = new Set((selectedBuild('tree').stages[state.tree - 1]?.passives || []).map(p => p.id)); this.observer = new ResizeObserver(() => { this.resize(); this.fit(true); this.initial = true; }); this.observer.observe(canvas.parentElement); this.artwork = treeArtwork(selectedBuild().treeVersion, ascendancyName(), this.ascendancy); this.illustration = this.artwork ? this.loadImage('assets/classes/' + this.artwork.file) : null; this.frames = {}; for (const kind of ['Small', 'Notable', 'Keystone']) for (const status of ['Normal', 'Active']) this.frames[kind + status] = this.loadImage(`assets/frames/${kind}-${status}.webp`); this.bind(); }
+        loadImage(path) { const img = new Image(); img.onload = () => this.draw(); img.src = new URL(path, document.baseURI).href; return img; }
+        destroy() { this.observer.disconnect(); this.atlas.onload = null; if (this.illustration) this.illustration.onload = null; for (const image of Object.values(this.frames)) image.onload = null; }
         visibleNodes() { return this.nodes.filter(n => this.ascendancy ? n.ascendancy === ascendancyName() : !n.ascendancy); }
         eligible(n) { return this.selected.has(n.id) && (state.weapon === 'all' || !this.selected.get(n.id) || String(this.selected.get(n.id)) === state.weapon); }
         resize() { const r = this.canvas.getBoundingClientRect(); this.width = r.width; this.height = r.height; const dpr = devicePixelRatio || 1; this.canvas.width = Math.round(r.width * dpr); this.canvas.height = Math.round(r.height * dpr); this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
         fit(build) { let ns = this.visibleNodes(); if (build)
             ns = ns.filter(n => this.selected.has(n.id)); if (!ns.length)
-            return; const xs = ns.map(n => n.x), ys = ns.map(n => n.y); const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys); this.scale = Math.min((this.width - (this.compact ? 50 : 100)) / Math.max(maxX - minX, 700), (this.height - (this.compact ? 50 : 155)) / Math.max(maxY - minY, 700)); this.scale = Math.max(.008, Math.min(this.scale, .5)); this.tx = this.width / 2 - (minX + maxX) / 2 * this.scale; this.ty = (this.height - 15) / 2 - (minY + maxY) / 2 * this.scale; this.hideTooltip(); this.draw(); }
+            return; const xs = ns.map(n => n.x), ys = ns.map(n => n.y); if (this.ascendancy && this.artwork) { const a = this.artwork; xs.push(a.x - a.width, a.x + a.width); ys.push(a.y - a.height, a.y + a.height); } const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys); this.scale = Math.min((this.width - (this.compact ? 50 : 100)) / Math.max(maxX - minX, 700), (this.height - (this.compact ? 50 : 155)) / Math.max(maxY - minY, 700)); this.scale = Math.max(.008, Math.min(this.scale, .5)); this.tx = this.width / 2 - (minX + maxX) / 2 * this.scale; this.ty = (this.height - 15) / 2 - (minY + maxY) / 2 * this.scale; this.hideTooltip(); this.draw(); }
         center(n) { this.scale = Math.max(this.scale, .24); this.tx = this.width / 2 - n.x * this.scale; this.ty = this.height / 2 - n.y * this.scale; this.draw(); }
         zoom(factor, x = this.width / 2, y = this.height / 2) { const next = Math.min(1.1, Math.max(.008, this.scale * factor)); const f = next / this.scale; this.tx = x - (x - this.tx) * f; this.ty = y - (y - this.ty) * f; this.scale = next; this.hideTooltip(); this.draw(); }
         point(n) { return { x: n.x * this.scale + this.tx, y: n.y * this.scale + this.ty }; }
@@ -18,6 +21,13 @@ export function createTree(canvas, context, options = {}) {
                 return;
             const c = this.ctx;
             c.clearRect(0, 0, this.width, this.height);
+            if (this.artwork && this.illustration?.complete && this.illustration.naturalWidth) {
+                const a = this.artwork, p = this.point(a);
+                // PoB's DrawAsset treats background width/height as half extents.
+                c.globalAlpha = .7;
+                c.drawImage(this.illustration, p.x - a.width * this.scale, p.y - a.height * this.scale, a.width * 2 * this.scale, a.height * 2 * this.scale);
+                c.globalAlpha = 1;
+            }
             const nodes = this.visibleNodes(), visible = new Set(nodes.map(n => n.id));
             const search = this.ascendancy ? '' : state.search.toLowerCase();
             const edgeDone = new Set();
@@ -76,6 +86,15 @@ export function createTree(canvas, context, options = {}) {
                 }
                 c.beginPath();
                 c.arc(p.x, p.y, r + 1, 0, Math.PI * 2);
+                if (context.decorativeFrames?.()) {
+                    const frame = this.frames[(n.keystone ? 'Keystone' : n.notable ? 'Notable' : 'Small') + (active ? 'Active' : 'Normal')];
+                    if (frame?.complete && frame.naturalWidth) {
+                        const size = r * (n.keystone ? 3.2 : n.notable ? 3 : 2.8);
+                        c.drawImage(frame, p.x - size / 2, p.y - size / 2, size, size);
+                    }
+                }
+                // Keep the allocation ring, including both weapon-set colours, over the artwork.
+                c.beginPath(); c.arc(p.x, p.y, r + 1, 0, Math.PI * 2);
                 c.strokeStyle = match ? '#f6f1c3' : active ? this.color(n) : n.notable ? '#79674c' : '#55554b';
                 c.lineWidth = active ? 1.8 : 1;
                 c.stroke();
@@ -92,7 +111,7 @@ export function createTree(canvas, context, options = {}) {
                     c.strokeStyle = '#f2e8d1';
                     c.stroke();
                 }
-                if (n.notable && active && !this.compact && this.scale > .075) {
+                if (context.nodeNames?.() !== false && (n.notable || n.keystone) && active && this.scale > .075) {
                     c.font = '12px "Segoe UI",sans-serif';
                     c.textAlign = 'center';
                     c.fillStyle = '#e3d6b9';
