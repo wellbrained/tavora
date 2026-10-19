@@ -13,9 +13,14 @@ const PANELS = "local.example.panels-module";
 
 async function addPanel(page: import("@playwright/test").Page, type: string) {
   await page.getByTestId("add-module").click();
+  await page.getByTestId(`panel-menu-toggle-${PANELS}`).click();
   await expect(page.getByTestId(`panel-types-${PANELS}`)).toBeVisible();
   await page.getByTestId(`open-${PANELS}-${type}`).click();
   // The library stays open for the module's other panels.
+  await expect(page.getByTestId("add-module-dialog")).toBeVisible();
+  // Escape closes the panel list first, then the library.
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId(`panel-types-${PANELS}`)).toHaveCount(0);
   await expect(page.getByTestId("add-module-dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("add-module-dialog")).toHaveCount(0);
@@ -59,10 +64,16 @@ test("the library stays open to add several panels, and Add all opens one of eac
   const userData = await newUserData();
   const { app, page } = await launch(userData);
   await page.getByTestId("add-module").click();
+  await expect(page.getByTestId(`panel-count-${PANELS}`)).toHaveText("3 panels");
+  await page.getByTestId(`panel-count-${PANELS}`).click();
   await page.getByTestId(`open-${PANELS}-planner`).click();
   await page.getByTestId(`open-${PANELS}-planner`).click();
   await expect(panels(page, PANELS)).toHaveCount(2);
   await expect(page.getByTestId("add-module-dialog")).toBeVisible();
+  await expect(page.getByTestId(`in-game-${PANELS}`)).toHaveText("2 open");
+  // A click outside the card closes the list, which drops over the card below.
+  await page.getByTestId("module-view-title").click();
+  await expect(page.getByTestId(`panel-types-${PANELS}`)).toHaveCount(0);
   await page.getByTestId(`open-all-${PANELS}`).click();
   await expect(panels(page, PANELS)).toHaveCount(5);
   await page.keyboard.press("Escape");
