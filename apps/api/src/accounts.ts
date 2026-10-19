@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cleanDeveloperName, DEVICE_OS, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
+import type { CopyStore } from "./cloud-copy.ts";
 import { DiscordError, isDiscordCode, isPkceVerifier, type DiscordClient, type DiscordIdentity } from "./discord.ts";
 import { codeMail, emailChangedMail, MailLimitError, mailLanguage, type Mail, type Mailer } from "./mail.ts";
 import { inspectPng } from "./png.ts";
@@ -25,6 +26,8 @@ export interface AccountOptions {
   mailDailyLimit?: number;
   /** Discord login. Absent: its routes answer 503 and email sign-in works as before. */
   discord?: DiscordClient;
+  /** The cloud copies (cloud-copy.ts), deleted with their account. Absent: the copy routes answer 503. */
+  copies?: CopyStore;
 }
 
 /** Of the day's emails, the last ones are kept for changing the address and deleting the account. */
@@ -94,6 +97,11 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   const codeLimiter = options.codeRateLimiter ?? createRateLimiter({ limit: 10, windowMs: 3_600_000 });
   const verifyLimiter = options.verifyRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 15 * 60_000 });
   const app = new Hono<Env>();
+  /** Everything on the server goes at once: the account, its sign-ins and its cloud copy. */
+  const deleteAccount = (id: string) => {
+    store.deleteAccount(id, now());
+    options.copies?.remove(id);
+  };
 
   /** The day's emails are used up (for sign-ins already when only the reserved ones are left). */
   const usedUp = (important: boolean) =>
@@ -346,7 +354,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const account = context.get("account");
     if (typeof input.code !== "string" || !CODE.test(input.code)) return context.json({ error: "Send { code }.", reason: "bad-request" }, 400);
     if (!account.email || !store.checkCode(account.email, "delete", account.id, input.code, now(), true)) return wrongCode(context);
-    store.deleteAccount(account.id, now());
+    deleteAccount(account.id);
     return context.body(null, 204);
   });
 
@@ -474,7 +482,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (!account.discord || account.discord.id !== who.id) {
       return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
     }
-    store.deleteAccount(account.id, now());
+    deleteAccount(account.id);
     return context.body(null, 204);
   });
 
