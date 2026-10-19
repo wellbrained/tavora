@@ -51,6 +51,7 @@ import {
   cleanDevelopmentFolders,
   isLive,
   LibraryError,
+  liveGames,
   MAX_DEVELOPMENT_FOLDERS,
   markPlayed,
   moveFolder,
@@ -97,6 +98,8 @@ import { syncIcons } from "./icon-sync";
 import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus, steamLibraryView } from "./steam-import";
 import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, steamShareGames, submitIcon } from "./share-icons";
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
+import { GameWatcher } from "./game-watch";
+import { findInstalledGames } from "./launcher-games";
 import { findSteamDir, isSteamAppId, loadAppInfo, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
 import { ModuleView, REVEAL_CAP_MS } from "./module-view";
@@ -296,6 +299,16 @@ export class Host {
   private blockedModules = new Map<string, InstalledModule>();
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
   private pendingLink: string | null = null;
+  /** The library games running on this PC, while "When a game starts" is not off (game-watch.ts). */
+  private running: ReadonlySet<string> = new Set();
+  /** A game that started while the player chose to be asked; waits for the answer. */
+  private pendingGameSwitch: string | null = null;
+  private readonly gameWatcher = new GameWatcher({
+    entries: () => liveGames(this.library),
+    findInstalled: async () => findInstalledGames({ steamDir: await findSteamDir() }),
+    onChange: (running, initial) => this.gamesRunning(running, initial),
+    log: (line) => console.warn(`[tavora] ${line}`),
+  });
   /** Where modules keep their pictures. */
   private readonly files: ModuleFilesFolder;
   /** Where the host UI shows each visible panel, in window content coordinates. */
@@ -526,6 +539,7 @@ export class Host {
     host.window.once("ready-to-show", () => timings.record("startup", process.uptime() * 1000));
     await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
     if (host.screen === "game") host.openCurrentGame();
+    if (library.gameStart !== "off") host.gameWatcher.start();
     void host.files.check();
     // Icons of games that have none yet are looked for quietly in the background.
     host.fetchIconsSoon();
@@ -1414,6 +1428,7 @@ export class Host {
       this.viewsByContents.clear();
       this.browsersByContents.clear();
       this.discord.dispose();
+      this.gameWatcher.stop();
       clearInterval(this.catalogTimer);
     });
   }
@@ -1425,6 +1440,8 @@ export class Host {
     switch (action.type) {
       case "link-choice":
         return this.chooseLink(action.choice);
+      case "game-switch":
+        return this.chooseGameSwitch(action.choice);
       case "navigation-choice":
         return this.chooseNavigation(action.choice);
       case "module-files-change":
@@ -1445,6 +1462,8 @@ export class Host {
         this.saveLibrary();
         this.saveWorkspace();
         this.fetchIconsSoon();
+        // A game added just now may have been installed since the last look.
+        if (this.gameWatcher.active) void this.gameWatcher.refreshInstalled();
         return id;
       }
       case "rename-game":
@@ -1530,6 +1549,18 @@ export class Host {
         break;
       case "set-startup":
         library.startup = action.startup;
+        break;
+      case "set-game-start":
+        library.gameStart = action.gameStart;
+        if (action.gameStart !== "ask") this.pendingGameSwitch = null;
+        if (action.gameStart === "off") this.gameWatcher.stop();
+        else this.gameWatcher.start();
+        break;
+      case "set-game-end":
+        if (action.workspaceId !== null && !(isLive(library, action.workspaceId) && library.games[action.workspaceId]!.kind === "workspace")) {
+          throw new LibraryError("error.gameGone");
+        }
+        library.gameEndWorkspace = action.workspaceId;
         break;
       case "set-grayscale-text":
         library.grayscaleText = action.enabled;
@@ -1795,6 +1826,7 @@ export class Host {
 
   private openGame(gameId: string): void {
     if (!isLive(this.library, gameId)) throw new LibraryError("error.gameGone");
+    if (this.pendingGameSwitch === gameId) this.pendingGameSwitch = null;
     if (this.gameId === gameId) return;
     this.showScreen("game");
     markPlayed(this.library, gameId, new Date());
@@ -2199,6 +2231,51 @@ export class Host {
     }
     const id = this.openModule(BROWSER_MODULE_ID);
     if (id) this.browser(id).restore(url);
+  }
+
+  // ── Games starting and closing ───────────────────────────────────────
+
+  /** The running games changed (game-watch.ts). Games already running when the watch began start nothing. */
+  private gamesRunning(running: ReadonlySet<string>, initial: boolean): void {
+    const before = this.running;
+    this.running = running;
+    if (!initial) {
+      for (const id of before) if (!running.has(id)) this.gameClosed(id);
+      // Several at once is rare; the last one counts.
+      const started = [...running].filter((id) => !before.has(id)).at(-1);
+      if (started) this.gameStarted(started);
+    }
+    this.pushState();
+  }
+
+  /** Switches or asks, as the player chose. "show" only marks the game on the rail, which `running` does. */
+  private gameStarted(gameId: string): void {
+    if (this.gameId === gameId) return;
+    if (this.library.gameStart === "switch") this.openGameQuietly(gameId);
+    else if (this.library.gameStart === "ask") this.pendingGameSwitch = gameId;
+  }
+
+  /** Goes back to the chosen personal workspace, but only from the game that closed. */
+  private gameClosed(gameId: string): void {
+    if (this.pendingGameSwitch === gameId) this.pendingGameSwitch = null;
+    const back = this.library.gameEndWorkspace;
+    if (back && this.gameId === gameId && isLive(this.library, back) && this.library.games[back]!.kind === "workspace") this.openGameQuietly(back);
+  }
+
+  /** Opens a game without bringing the window to the front, so the game keeps the focus. */
+  private openGameQuietly(gameId: string): void {
+    try {
+      this.openGame(gameId);
+    } catch (error) {
+      console.error("[tavora] switching to a running game failed", error);
+    }
+  }
+
+  /** The player's answer to pendingGameSwitch. */
+  private chooseGameSwitch(choice: "switch" | "cancel"): void {
+    const gameId = this.pendingGameSwitch;
+    this.pendingGameSwitch = null;
+    if (choice === "switch" && gameId && isLive(this.library, gameId)) this.openGame(gameId);
   }
 
   /** A panel whose type is gone becomes another type of the same module, and starts. */
@@ -2970,6 +3047,7 @@ export class Host {
       builtIn: game.catalogId !== null,
       addedAt: game.addedAt,
       lastPlayedAt: game.lastPlayedAt,
+      running: this.running.has(game.id),
     };
   }
 
@@ -2997,6 +3075,8 @@ export class Host {
         })),
         sort: library.sort,
         startup: library.startup,
+        gameStart: library.gameStart,
+        gameEndWorkspace: library.gameEndWorkspace && isLive(library, library.gameEndWorkspace) ? library.gameEndWorkspace : null,
         grayscaleText: library.grayscaleText,
         onlineSearch: library.onlineSearch,
         autoUpdate: library.autoUpdate,
@@ -3088,6 +3168,7 @@ export class Host {
       layoutEpoch: this.layoutEpoch,
       opening: this.opening !== null,
       pendingLink: this.pendingLink,
+      pendingGameSwitch: this.pendingGameSwitch && isLive(this.library, this.pendingGameSwitch) ? this.pendingGameSwitch : null,
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),

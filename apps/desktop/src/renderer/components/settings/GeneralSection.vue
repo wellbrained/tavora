@@ -1,11 +1,13 @@
 <script setup lang="ts">
-// Settings > General: the language, where Tavora starts, the rail's order and the welcome tour.
+// Settings > General: the language, where Tavora starts, what happens when a game starts or closes,
+// the rail's order and the welcome tour.
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
-import type { RootSort, Startup } from "../../../shared/host-api";
+import type { GameStart, RootSort, Startup } from "../../../shared/host-api";
 import type { LanguageSetting } from "../../../shared/i18n";
 import { act, settingsOpen, state } from "../../host";
 import { t } from "../../i18n";
+import ChoicePicker from "./ChoicePicker.vue";
 import LanguagePicker from "./LanguagePicker.vue";
 import SegmentedControl from "./SegmentedControl.vue";
 import SettingGroup from "./SettingGroup.vue";
@@ -18,6 +20,23 @@ const startup = computed({
   get: () => library.value.startup,
   set: (value: Startup) => void act({ type: "set-startup", startup: value }),
 });
+const gameStart = computed({
+  get: () => library.value.gameStart,
+  set: (value: GameStart) => void act({ type: "set-game-start", gameStart: value }),
+});
+/** Not a game id, so it can stand for staying on the game. */
+const STAY = ":stay";
+const gameEnd = computed({
+  get: () => library.value.gameEndWorkspace ?? STAY,
+  set: (value: string) => void act({ type: "set-game-end", workspaceId: value === STAY ? null : value }),
+});
+const gameEndOptions = computed(() => [
+  { value: STAY, label: t("settings.game-end.stay") },
+  ...Object.values(library.value.games)
+    .filter((entry) => entry.kind === "workspace")
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((entry) => ({ value: entry.id, label: entry.name })),
+]);
 const sort = computed({
   get: () => library.value.sort,
   set: (value: RootSort) => void act({ type: "set-sort", sort: value }),
@@ -50,6 +69,27 @@ async function showWelcomeAgain() {
           { value: 'last-game', label: t('settings.startup.lastGame'), testid: 'startup-last-game' },
         ]"
       />
+    </SettingRow>
+    <SettingRow :label="t('settings.game-start.label')" :description="t('settings.game-start.description')" setting="game-start" :highlighted="highlight === 'game-start'">
+      <SegmentedControl
+        v-model="gameStart"
+        :label="t('settings.game-start.label')"
+        :options="[
+          { value: 'switch', label: t('settings.game-start.switch'), testid: 'game-start-switch' },
+          { value: 'ask', label: t('settings.game-start.ask'), testid: 'game-start-ask' },
+          { value: 'show', label: t('settings.game-start.show'), testid: 'game-start-show' },
+          { value: 'off', label: t('settings.game-start.off'), testid: 'game-start-off' },
+        ]"
+      />
+    </SettingRow>
+    <SettingRow
+      v-if="gameStart !== 'off'"
+      :label="t('settings.game-end.label')"
+      :description="t('settings.game-end.description')"
+      setting="game-end"
+      :highlighted="highlight === 'game-end'"
+    >
+      <ChoicePicker v-model="gameEnd" :label="t('settings.game-end.label')" :options="gameEndOptions" testid="game-end" />
     </SettingRow>
     <SettingRow :label="t('settings.sort.label')" :description="t('settings.sort.description')" setting="sort" :highlighted="highlight === 'sort'">
       <SegmentedControl

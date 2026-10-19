@@ -128,6 +128,12 @@ export interface LinkChoiceRequest {
   url: string;
 }
 
+/** A game of the library just started and the player chose to be asked (HostViewState.pendingGameSwitch). */
+export interface GameSwitchRequest {
+  kind: "game-switch";
+  gameId: string;
+}
+
 /** A panel could not switch to what another panel asked for; asking whether to open it in a new panel (HostViewState.pendingNavigation). */
 export interface NavigationChoiceRequest {
   kind: "navigation-choice";
@@ -159,6 +165,7 @@ export type DialogRequest =
   | ShareIconsRequest
   | LinkChoiceRequest
   | NavigationChoiceRequest
+  | GameSwitchRequest
   | { kind: "add-game" }
   | { kind: "steam-import" }
   | AddModuleRequest
@@ -179,6 +186,15 @@ watch(
   () => state.value?.pendingLink ?? null,
   (url) => {
     if (url && dialog.value?.kind !== "link-choice") dialog.value = { kind: "link-choice", url };
+  },
+);
+
+// A game started while the player chose to be asked: ask whether to switch. It goes away when the game closes.
+watch(
+  () => state.value?.pendingGameSwitch ?? null,
+  (gameId) => {
+    if (gameId && (!dialog.value || dialog.value.kind === "game-switch")) dialog.value = { kind: "game-switch", gameId };
+    else if (!gameId && dialog.value?.kind === "game-switch") dialog.value = null;
   },
 );
 

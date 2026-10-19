@@ -419,6 +419,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                     :games="folderGames(entry.id).slice(0, 4).map(game)"
                     :label="folder(entry.id).label"
                     :open="openFolders.has(entry.id)"
+                    :running="folderGames(entry.id).some((id) => game(id).running)"
                   />
                   <template v-if="expanded">
                     <span class="flex-1 truncate text-sm font-medium">{{ folder(entry.id).name }}</span>
