@@ -1997,15 +1997,23 @@ export class Host {
   private async sendOffers(
     offers: { id: string; name: string; source: "installed" | "steam"; read: () => Promise<Uint8Array | null>; done: () => void }[],
   ): Promise<ActionResult> {
+    // Only signed-in players can share: the service keeps the account with an offer until it is checked.
+    const token = this.account.token();
+    if (offers.length > 0 && token === null) return { ok: false, error: translate(this.language, "error.share.signIn") };
     let tried = 0;
     let shared = 0;
     let unreachable = false;
     let limited = false;
+    let signedOut = false;
     for (const offer of offers) {
       tried += 1;
       const ico = await offer.read().catch(() => null);
       if (!ico) continue;
-      const outcome = await submitIcon({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL }, { id: offer.id, name: offer.name, source: offer.source, ico });
+      const outcome = await submitIcon({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL, token: token! }, { id: offer.id, name: offer.name, source: offer.source, ico });
+      if (outcome === "signed-out") {
+        signedOut = true;
+        break;
+      }
       if (outcome === "failed") {
         unreachable = true;
         break;
@@ -2022,6 +2030,11 @@ export class Host {
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
     if (tried === 0) return { ok: false, error: translate(this.language, "error.nothingToShare") };
+    if (signedOut) {
+      // Signed out on another PC, or the account is gone: the account side finds out and forgets the sign-in.
+      void this.account.refresh().catch(() => undefined);
+      if (shared === 0) return { ok: false, error: translate(this.language, "error.share.signIn") };
+    }
     if (limited && shared === 0) return { ok: false, error: translate(this.language, "error.share.limited") };
     if (unreachable && shared === 0) return { ok: false, error: translate(this.language, "error.unreachable") };
     return limited ? { ok: true, shared, limited: true } : { ok: true, shared };

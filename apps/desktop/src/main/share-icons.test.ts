@@ -36,6 +36,7 @@ describe("what can be shared", () => {
   const game = (over: Partial<ShareGame> = {}): ShareGame => ({
     id: "diablo-iv",
     name: "Diablo IV",
+    kind: "game",
     catalogId: null,
     trashedAt: null,
     iconFile: "exe-diablo-iv.ico",
@@ -58,11 +59,17 @@ describe("what can be shared", () => {
     for (const iconFile of ["hosted-diablo-iv.png", "1245620.jpg", null]) expect(shareableIconFile(game({ iconFile }), on, list)).toBeNull();
   });
 
-  it("offers nothing for a custom game, one in Trash or one already offered", () => {
-    expect(shareableIconFile(game({ id: "local-diablo-iv" }), on, list)).toBeNull();
+  it("offers a game the player added by name, unless the service has an icon by that name", () => {
+    expect(shareableIconFile(game({ id: "local-my-mod", name: "My Mod", iconFile: "exe-local-my-mod.ico" }), on, list)).toBe("exe-local-my-mod.ico");
+    expect(shareableIconFile(game({ id: "local-starcraft-ii", name: "StarCraft II", iconFile: "exe-local-starcraft-ii.ico" }), on, list)).toBeNull();
+  });
+
+  it("offers nothing for a personal workspace, a game in Trash or one already offered", () => {
+    expect(shareableIconFile(game({ id: "local-notes", kind: "workspace" }), on, list)).toBeNull();
     expect(shareableIconFile(game({ trashedAt: "2026-10-15T00:00:00.000Z" }), on, list)).toBeNull();
     expect(shareableIconFile(game({ iconSharedAt: "2026-10-15T00:00:00.000Z" }), on, list)).toBeNull();
-    expect(isShareCandidate(game({ id: "local-x" }))).toBe(false);
+    expect(isShareCandidate(game({ kind: "workspace" }))).toBe(false);
+    expect(isShareCandidate(game({ id: "local-x" }))).toBe(true);
     expect(isShareCandidate(game())).toBe(true);
   });
 
@@ -173,26 +180,28 @@ describe("submitIcon", () => {
   const offer = { id: "diablo-iv", name: "Diablo IV", source: "installed" as const, ico: ico([32, bytes(60, 4)]) };
   const answer = (status: number) => (async () => new Response("{}", { status })) as typeof fetch;
 
-  it("posts the id, name, source and the icon as base64 JSON, with no cookies or referrer", async () => {
+  it("posts the id, name, source and the icon as base64 JSON with the sign-in, and no cookies or referrer", async () => {
     let seen: { url: string; init: RequestInit } | undefined;
     const fetchImpl = (async (url: string, init: RequestInit) => ((seen = { url, init }), new Response("{}", { status: 202 }))) as unknown as typeof fetch;
-    expect(await submitIcon({ baseUrl: "https://service.test/", fetchImpl }, offer)).toBe("sent");
+    expect(await submitIcon({ baseUrl: "https://service.test/", token: "t".repeat(43), fetchImpl }, offer)).toBe("sent");
     expect(seen!.url).toBe("https://service.test/v1/icons/submit");
     expect(seen!.init).toMatchObject({ method: "POST", credentials: "omit", referrerPolicy: "no-referrer", redirect: "error" });
     expect((seen!.init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+    expect((seen!.init.headers as Record<string, string>).Authorization).toBe(`Bearer ${"t".repeat(43)}`);
     const body = JSON.parse(seen!.init.body as string) as Record<string, string>;
     expect(Object.keys(body).sort()).toEqual(["icon", "id", "name", "source"]);
     expect(body).toMatchObject({ id: "diablo-iv", name: "Diablo IV", source: "installed" });
     expect(new Uint8Array(Buffer.from(body.icon!, "base64"))).toEqual(offer.ico);
   });
 
-  it("says skipped when the service will not take it, failed when it could not be asked", async () => {
-    for (const status of [400, 409, 413]) expect(await submitIcon({ baseUrl: "https://x.test", fetchImpl: answer(status) }, offer)).toBe("skipped");
-    expect(await submitIcon({ baseUrl: "https://x.test", fetchImpl: answer(429) }, offer)).toBe("busy");
-    for (const status of [500, 503]) expect(await submitIcon({ baseUrl: "https://x.test", fetchImpl: answer(status) }, offer)).toBe("failed");
+  it("says skipped when the service will not take it, signed-out when it does not know the sign-in, failed when it could not be asked", async () => {
+    for (const status of [400, 409, 413]) expect(await submitIcon({ baseUrl: "https://x.test", token: "t".repeat(43), fetchImpl: answer(status) }, offer)).toBe("skipped");
+    expect(await submitIcon({ baseUrl: "https://x.test", token: "t".repeat(43), fetchImpl: answer(429) }, offer)).toBe("busy");
+    expect(await submitIcon({ baseUrl: "https://x.test", token: "t".repeat(43), fetchImpl: answer(401) }, offer)).toBe("signed-out");
+    for (const status of [500, 503]) expect(await submitIcon({ baseUrl: "https://x.test", token: "t".repeat(43), fetchImpl: answer(status) }, offer)).toBe("failed");
     const offline = (async () => {
       throw new Error("offline");
     }) as typeof fetch;
-    expect(await submitIcon({ baseUrl: "https://x.test", fetchImpl: offline }, offer)).toBe("failed");
+    expect(await submitIcon({ baseUrl: "https://x.test", token: "t".repeat(43), fetchImpl: offline }, offer)).toBe("failed");
   });
 });

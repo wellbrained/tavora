@@ -2,9 +2,11 @@
  * Offering a game's icon to the Tavora service, which does not have one for it
  * yet. Only ever the game's own icon found on this PC (from the installed game
  * or the Steam folder), never a picture the player chose and never an icon
- * downloaded from Tavora. The offer holds the icon, the game's id and its name;
- * nothing that identifies the player. A person checks every offer before
- * anyone else sees it.
+ * downloaded from Tavora. The offer holds the icon, the game's id and its name,
+ * and goes with the player's sign-in: only signed-in players can share, and the
+ * service keeps the account with an offer until a person has checked it. A
+ * person checks every offer before anyone else sees it. A game the player added
+ * by name (`local-`) is offered by that name.
  */
 
 import type { SteamImportGame } from "../shared/host-api";
@@ -14,9 +16,9 @@ export const SHARE_TIMEOUT_MS = 10_000;
 
 /**
  * `sent`: the service took it. `skipped`: it will not take this one (bad, already there). `busy`: it takes only
- * so many an hour, try the rest later. `failed`: try again later.
+ * so many an hour, try the rest later. `signed-out`: the service does not know the sign-in. `failed`: try again later.
  */
-export type ShareOutcome = "sent" | "skipped" | "busy" | "failed";
+export type ShareOutcome = "sent" | "skipped" | "busy" | "signed-out" | "failed";
 
 /** True for the icon files that came from this PC: the installed game's, or Steam's own `.ico` from its folder. */
 export function isOriginalIconFile(file: string | null): file is string {
@@ -30,15 +32,16 @@ export function shareSource(file: string): "installed" | "steam" {
 export interface ShareGame {
   id: string;
   name: string;
+  kind: "game" | "workspace";
   catalogId: string | null;
   trashedAt: string | null;
   iconFile: string | null;
   iconSharedAt: string | null;
 }
 
-/** A game that could be offered at all: not in Trash, not offered before, with an id the service knows and an icon of its own. */
+/** A game that could be offered at all: a game (not a personal workspace), not in Trash, not offered before, with an icon of its own. */
 export function isShareCandidate(game: ShareGame): boolean {
-  return game.trashedAt === null && game.iconSharedAt === null && !game.id.startsWith("local-") && isOriginalIconFile(game.iconFile);
+  return game.kind === "game" && game.trashedAt === null && game.iconSharedAt === null && isOriginalIconFile(game.iconFile);
 }
 
 /**
@@ -122,6 +125,8 @@ function pickIcoFrame(ico: Uint8Array, better: (pixels: number, best: number) =>
 
 export interface SubmitOptions {
   baseUrl: string;
+  /** The player's sign-in token. */
+  token: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -133,16 +138,17 @@ export async function submitIcon(
   try {
     const response = await (options.fetchImpl ?? fetch)(`${options.baseUrl.replace(/\/+$/, "")}/v1/icons/submit`, {
       method: "POST",
-      // No cookies, no referrer, nothing that says who is asking.
+      // No cookies and no referrer: the sign-in is the only thing that says who is asking.
       credentials: "omit",
       referrerPolicy: "no-referrer",
       redirect: "error",
       signal: AbortSignal.timeout(SHARE_TIMEOUT_MS),
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${options.token}` },
       body: JSON.stringify({ id: offer.id, name: offer.name, source: offer.source, icon: Buffer.from(offer.ico).toString("base64") }),
     });
     if (response.status === 202) return "sent";
     if (response.status === 429) return "busy";
+    if (response.status === 401) return "signed-out";
     // A refusal that asking again cannot change: the game has an icon now, or the file is not usable.
     if (response.status === 400 || response.status === 409 || response.status === 413) return "skipped";
     return "failed";

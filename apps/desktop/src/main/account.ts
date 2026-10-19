@@ -182,6 +182,11 @@ export class AccountClient {
     if (this.saved) void this.syncProfile(false).catch(() => undefined);
   }
 
+  /** The sign-in token, for another call to the service that needs a signed-in player (sharing icons); null when signed out. */
+  token(): string | null {
+    return this.options.enabled ? (this.saved?.token ?? null) : null;
+  }
+
   view(): AccountView {
     return {
       enabled: this.options.enabled,
