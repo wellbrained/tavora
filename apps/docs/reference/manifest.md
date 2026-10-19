@@ -35,7 +35,9 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `minTavora` | no | The oldest Tavora the module works with, as `major.minor.patch` (e.g. `0.18.0`). An older Tavora refuses to install the zip or load the folder and tells the player which version is needed. Set it to the Tavora version that added the newest SDK feature you use (see the [changelog](./changelog.md)). |
 | `entry` | yes | The HTML page to load, as a path inside the package. Must end in `.html`. |
 | `icon` | no | A `.png` or `.webp` file inside the package, square, at least 128 × 128. |
-| `games` | yes | Game ids the module is made for, e.g. `["poe2"]`. An empty array means any game. |
+| `changelog` | no | A `.json` file inside the package with the module's [patch notes](../guide/getting-started.md#patch-notes): an array of `{ "version", "date"?, "notes": [...] }`, newest first, each version once, 1 to 20 plain lines of at most 500 characters per version, at most 100 versions and 64 KB. Players read them in Settings > Modules. Needs Tavora 0.18.2 or newer. |
+| `games` | yes | Game ids the module is made for, e.g. `["poe2"]`; see [Game ids](#game-ids). Tavora lists the module in Add module only in these games. An empty array means any game. |
+| `workspaces` | no | `false` keeps a module for any game out of personal workspaces, which belong to no game. Left out, a module with an empty `games` is offered there too; a module for one game never is, and `true` is refused next to a non-empty `games`. Needs Tavora 0.18.1 or newer. |
 | `viewport.minWidth`, `viewport.minHeight` | yes | Smallest usable panel size in CSS pixels, 1 to 10000. Tavora refuses to open a panel it cannot give this much room. |
 | `viewport.preferredWidth`, `viewport.preferredHeight` | no | Size the module looks best at, 1 to 10000. Used by the docking layout later. |
 | `permissions.network` | yes | Hosts the module asks to reach with [`network.fetch`](./protocol.md#network), at most 32, e.g. `["api.example.com"]`; `[]` for none. Exact lowercase public names only: no scheme, port, path, wildcard, IP address, `localhost`, `.local` or `.internal`. Each one works only once the player has granted it. |
@@ -69,6 +71,68 @@ A module can offer several tools as separate panels, such as an Inventory, a Bui
 | `continues` | no | `true` on the type that panels opened before the module had panel types become, keeping their state. At most one type; without it, the first type. |
 
 When an update removes a panel type, its open panels keep their place and say the type is gone; the player can remove them or pick another type of the same module. The module's saved content is not touched. Each panel can also show content of its own, such as a different build; see [Content per panel](./protocol.md#content-per-panel). The Panel Types Example in Tavora's examples folder shows every option, and [Several panels](../guide/panels.md) walks through a module built this way.
+
+## Game ids
+
+The games built into Tavora, with the ids to put in `games`.
+
+| Id | Game |
+| --- | --- |
+| `age-of-empires-2` | Age of Empires II |
+| `alchemy-factory` | Alchemy Factory |
+| `apex-legends` | Apex Legends |
+| `baldurs-gate-3` | Baldur's Gate 3 |
+| `battlefield-6` | Battlefield 6 |
+| `civilization-6` | Sid Meier's Civilization VI |
+| `counter-strike-2` | Counter-Strike 2 |
+| `cyberpunk-2077` | Cyberpunk 2077 |
+| `dark-souls-3` | Dark Souls III |
+| `dead-by-daylight` | Dead by Daylight |
+| `deep-rock-galactic` | Deep Rock Galactic |
+| `destiny-2` | Destiny 2 |
+| `diablo-4` | Diablo IV |
+| `dota-2` | Dota 2 |
+| `elden-ring` | Elden Ring |
+| `enshrouded` | Enshrouded |
+| `factorio` | Factorio |
+| `final-fantasy-14` | Final Fantasy XIV |
+| `fortnite` | Fortnite |
+| `genshin-impact` | Genshin Impact |
+| `grand-theft-auto-5` | Grand Theft Auto V |
+| `guild-wars-2` | Guild Wars 2 |
+| `hades-2` | Hades II |
+| `helldivers-2` | Helldivers 2 |
+| `hollow-knight` | Hollow Knight |
+| `last-epoch` | Last Epoch |
+| `league-of-legends` | League of Legends |
+| `lost-ark` | Lost Ark |
+| `minecraft` | Minecraft |
+| `monster-hunter-wilds` | Monster Hunter Wilds |
+| `no-mans-sky` | No Man's Sky |
+| `overwatch-2` | Overwatch 2 |
+| `oxygen-not-included` | Oxygen Not Included |
+| `palworld` | Palworld |
+| `path-of-exile` | Path of Exile |
+| `poe2` | Path of Exile 2 |
+| `red-dead-redemption-2` | Red Dead Redemption 2 |
+| `rimworld` | RimWorld |
+| `rocket-league` | Rocket League |
+| `rust` | Rust |
+| `satisfactory` | Satisfactory |
+| `skyrim` | The Elder Scrolls V: Skyrim |
+| `slay-the-spire` | Slay the Spire |
+| `starcraft-2` | StarCraft II |
+| `stardew-valley` | Stardew Valley |
+| `starfield` | Starfield |
+| `stellaris` | Stellaris |
+| `terraria` | Terraria |
+| `the-sims-4` | The Sims 4 |
+| `the-witcher-3` | The Witcher 3: Wild Hunt |
+| `total-war-warhammer-3` | Total War: Warhammer III |
+| `valheim` | Valheim |
+| `valorant` | Valorant |
+| `warframe` | Warframe |
+| `world-of-warcraft` | World of Warcraft |
 
 ## What is not in v1 yet
 

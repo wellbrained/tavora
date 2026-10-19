@@ -11,6 +11,7 @@ import { act, aiUsage, confirmAction, gamesUsing, listOf, state, submitAction } 
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 import SegmentedControl from "./SegmentedControl.vue";
+import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
 defineProps<{ highlight: string | null }>();
@@ -70,29 +71,26 @@ function revoke(module: ModuleView) {
 </script>
 
 <template>
-  <section>
-    <h3 class="text-lg font-semibold">{{ t("integrations.aiUsage.title") }}</h3>
-    <p class="text-muted-foreground mt-1 mb-4">{{ t("aiUsage.settings.intro") }}</p>
-
+  <SettingGroup :title="t('integrations.aiUsage.title')" :description="t('aiUsage.settings.intro')">
     <SettingRow :label="t('settings.ai-usage-accounts.label')" :description="t('settings.ai-usage-accounts.description')" setting="ai-usage-accounts" :highlighted="highlight === 'ai-usage-accounts'">
       <Button variant="secondary" data-testid="ai-usage-add" :disabled="editing === 'new'" @click="startAdd">{{ t("aiUsage.settings.add") }}</Button>
     </SettingRow>
 
-    <ul class="mt-1" data-testid="ai-usage-accounts">
+    <ul v-if="accounts.length || (view && editing !== 'new')" class="border-b" data-testid="ai-usage-accounts">
       <li v-for="account in accounts" :key="account.id" class="border-b py-2 last:border-b-0" :data-testid="`ai-usage-row-${account.id}`">
         <div v-if="editing !== account.id" class="flex items-center gap-3">
           <div class="flex min-w-0 flex-1 flex-col">
             <span class="truncate font-medium">{{ account.label }} <span class="text-muted-foreground font-normal">· {{ t(`aiUsage.provider.${account.provider}`) }}<template v-if="account.plan"> · {{ account.plan }}</template></span></span>
-            <span class="text-muted-foreground truncate text-sm" :title="account.directory">{{ account.directory }}</span>
+            <span class="text-muted-foreground truncate font-mono text-xs" :title="account.directory">{{ account.directory }}</span>
           </div>
           <Button variant="ghost" size="sm" data-testid="ai-usage-edit" @click="startEdit(account)">{{ t("aiUsage.settings.edit") }}</Button>
-          <Button variant="ghost" size="sm" data-testid="ai-usage-remove" @click="act({ type: 'ai-usage-remove', accountId: account.id })">{{ t("aiUsage.settings.remove") }}</Button>
+          <Button variant="danger" size="sm" data-testid="ai-usage-remove" @click="act({ type: 'ai-usage-remove', accountId: account.id })">{{ t("aiUsage.settings.remove") }}</Button>
         </div>
       </li>
       <li v-if="view && accounts.length === 0 && editing !== 'new'" class="text-muted-foreground py-3 text-sm" data-testid="ai-usage-none">{{ t("aiUsage.settings.empty") }}</li>
     </ul>
 
-    <form v-if="editing !== null" class="mt-2 flex flex-col gap-3 rounded-lg border p-3" data-testid="ai-usage-form" @submit.prevent="save">
+    <form v-if="editing !== null" class="my-3 flex flex-col gap-3 rounded-lg border p-3" data-testid="ai-usage-form" @submit.prevent="save">
       <SegmentedControl
         v-if="editing === 'new'"
         v-model="provider"
@@ -117,23 +115,25 @@ function revoke(module: ModuleView) {
       </div>
     </form>
 
-    <h4 class="mt-6 font-medium">{{ t("integrations.aiUsage.modules") }}</h4>
-    <p v-if="!readers.length" class="text-muted-foreground py-2 text-sm" data-testid="ai-usage-readers-none">{{ t("integrations.aiUsage.noModules") }}</p>
-    <ul v-else class="flex flex-col" data-testid="ai-usage-readers">
-      <li v-for="module in readers" :key="module.id" class="flex items-center gap-3 border-b py-2 last:border-b-0" :data-testid="`ai-usage-reader-${module.id}`">
-        <span class="bg-background text-primary flex size-8 flex-none items-center justify-center rounded-lg border" aria-hidden="true">
-          <ModuleIcon :module-id="module.id" size="size-4" />
-        </span>
-        <span class="min-w-0 flex-1 truncate font-medium">{{ module.name }}</span>
-        <Button
-          variant="secondary"
-          :aria-label="t('integrations.aiUsage.revokeLabel', { name: module.name })"
-          :data-testid="`ai-usage-revoke-${module.id}`"
-          @click="revoke(module)"
-        >
-          {{ t("integrations.grants.revoke") }}
-        </Button>
-      </li>
-    </ul>
-  </section>
+    <div class="py-4">
+      <p class="text-sm font-medium">{{ t("integrations.aiUsage.modules") }}</p>
+      <p v-if="!readers.length" class="text-muted-foreground pt-1 text-sm" data-testid="ai-usage-readers-none">{{ t("integrations.aiUsage.noModules") }}</p>
+      <ul v-else class="mt-1 flex flex-col" data-testid="ai-usage-readers">
+        <li v-for="module in readers" :key="module.id" class="flex items-center gap-3 border-b py-2 last:border-b-0" :data-testid="`ai-usage-reader-${module.id}`">
+          <span class="bg-background text-primary flex size-8 flex-none items-center justify-center rounded-lg border" aria-hidden="true">
+            <ModuleIcon :module-id="module.id" size="size-4" />
+          </span>
+          <span class="min-w-0 flex-1 truncate font-medium">{{ module.name }}</span>
+          <Button
+            variant="danger"
+            :aria-label="t('integrations.aiUsage.revokeLabel', { name: module.name })"
+            :data-testid="`ai-usage-revoke-${module.id}`"
+            @click="revoke(module)"
+          >
+            {{ t("integrations.grants.revoke") }}
+          </Button>
+        </li>
+      </ul>
+    </div>
+  </SettingGroup>
 </template>

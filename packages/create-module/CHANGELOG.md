@@ -2,6 +2,23 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.5
+
+- New projects start on `@tavora/pack` 0.1.3, which can publish to the module catalog.
+
+## 0.1.4
+
+- New projects start with `changelog.json` for their patch notes, on `@tavora/sdk` 0.2.7 and `@tavora/pack` 0.1.2, with `minTavora` 0.18.2.
+
+## 0.1.3
+
+- New projects start on `@tavora/sdk` 0.2.6 and `@tavora/pack` 0.1.1, with `minTavora` 0.18.1.
+
+## 0.1.2
+
+- A new project's `dev`, `build` and `zip` scripts say "Run npm install first" when its packages were never installed, instead of "'tavora-pack' is not recognized".
+- Asks which game the module is for: any game, or one picked from Tavora's games by typing to search. `--game poe2` (or `--game any`) skips the question. Tavora offers a module made for one game only in that game.
+
 ## 0.1.1
 
 - Asks with arrow keys: where the project goes (the empty folder you are in, or a new folder in it) and which template.

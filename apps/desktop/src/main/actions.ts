@@ -21,6 +21,10 @@ const index = (value: unknown): value is number | undefined =>
   value === undefined || (Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 10_000);
 const uuid = (value: unknown): value is string => typeof value === "string" && INSTANCE_ID.test(value);
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+/** Most icons offered in one action; the dialog sends more in turns. */
+export const MAX_SHARE_BATCH = 50;
+/** Most games one action may move to Trash, restore or delete; as many as a Steam import adds. */
+export const MAX_BULK_GAMES = MAX_IMPORT_GAMES;
 const BROWSER_COMMANDS: readonly BrowserCommand[] = ["back", "forward", "reload", "stop", "open-external", "mute", "unmute", "exit-fullscreen"];
 
 /**
@@ -56,14 +60,22 @@ export function parseAction(raw: unknown): HostAction | null {
     case "open-modules-folder":
     case "reload-modules":
     case "install-module":
+    case "check-module-updates":
     case "add-development-folder":
       return only() ? { type: a.type } : null;
     case "remove-development-folder":
       return only("folder") && typeof a.folder === "string" && a.folder.length > 0 && a.folder.length <= 500 ? { type: a.type, folder: a.folder } : null;
+    case "install-catalog-module":
+    case "report-catalog-module":
     case "remove-module":
+    case "seen-module-notes":
     case "move-local-data":
     case "revoke-module":
       return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
+    case "apply-module-update":
+      return only("moduleId", "version") && isModuleId(a.moduleId) && typeof a.version === "string" && a.version.length > 0 && a.version.length <= 64
+        ? { type: a.type, moduleId: a.moduleId, version: a.version }
+        : null;
     case "grant-module":
       return only("moduleId", "network", "connectors") &&
         isModuleId(a.moduleId) &&
@@ -96,11 +108,31 @@ export function parseAction(raw: unknown): HostAction | null {
     case "delete-game":
     case "unfavorite":
       return only("gameId") && isGameId(a.gameId) ? { type: a.type, gameId: a.gameId } : null;
+    case "trash-games":
+    case "restore-games":
+    case "delete-games":
+      return only("gameIds") &&
+        Array.isArray(a.gameIds) &&
+        a.gameIds.length >= 1 &&
+        a.gameIds.length <= MAX_BULK_GAMES &&
+        a.gameIds.every((id) => isGameId(id)) &&
+        new Set(a.gameIds).size === a.gameIds.length
+        ? { type: a.type, gameIds: a.gameIds as string[] }
+        : null;
+    case "share-steam-icons":
+      return only("appids") &&
+        Array.isArray(a.appids) &&
+        a.appids.length >= 1 &&
+        a.appids.length <= MAX_SHARE_BATCH &&
+        a.appids.every(isSteamAppId) &&
+        new Set(a.appids).size === a.appids.length
+        ? { type: a.type, appids: a.appids as number[] }
+        : null;
     case "share-icons":
       return only("gameIds") &&
         Array.isArray(a.gameIds) &&
         a.gameIds.length >= 1 &&
-        a.gameIds.length <= 50 &&
+        a.gameIds.length <= MAX_SHARE_BATCH &&
         a.gameIds.every((id) => isGameId(id)) &&
         new Set(a.gameIds).size === a.gameIds.length
         ? { type: a.type, gameIds: a.gameIds as string[] }
@@ -119,6 +151,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "add-game":
       if (only("catalogId") && isGameId(a.catalogId)) return { type: a.type, catalogId: a.catalogId };
       if (only("name") && text(a.name)) return { type: a.type, name: a.name };
+      if (only("workspace") && text(a.workspace)) return { type: a.type, workspace: a.workspace };
       if (only("online")) {
         const game = a.online as Fields | null;
         if (
@@ -275,6 +308,10 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("fingerprint") && typeof a.fingerprint === "string" && /^[0-9a-f]{32}$/.test(a.fingerprint) ? { type: a.type, fingerprint: a.fingerprint } : null;
     case "account-sign-out-device":
       return only("deviceId") && typeof a.deviceId === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(a.deviceId) ? { type: a.type, deviceId: a.deviceId } : null;
+    case "account-rename-device":
+      return only("deviceId", "name") && typeof a.deviceId === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(a.deviceId) && text(a.name, 40) && a.name.trim()
+        ? { type: a.type, deviceId: a.deviceId, name: a.name }
+        : null;
     case "ai-usage-add":
       return only("provider", "label", "directory") && (a.provider === "claude" || a.provider === "codex") && text(a.label, 60) && text(a.directory, 500)
         ? { type: a.type, provider: a.provider, label: a.label, directory: a.directory }
@@ -289,6 +326,8 @@ export function parseAction(raw: unknown): HostAction | null {
       if (!only("moduleId", "panelType") || !isModuleId(a.moduleId)) return null;
       if (a.panelType === undefined) return { type: a.type, moduleId: a.moduleId };
       return isPanelTypeId(a.panelType) ? { type: a.type, moduleId: a.moduleId, panelType: a.panelType } : null;
+    case "remove-module-from-game":
+      return only("moduleId") && isModuleId(a.moduleId) ? { type: a.type, moduleId: a.moduleId } : null;
     case "choose-panel-type":
       return only("instanceId", "panelType") && uuid(a.instanceId) && isPanelTypeId(a.panelType)
         ? { type: a.type, instanceId: a.instanceId, panelType: a.panelType }

@@ -1,15 +1,17 @@
 #!/usr/bin/env node
-// npm create @tavora/module [folder] -- [--template vanilla|vue|react] [--id publisher.name] [--name "Name"] [--yes]
+// npm create @tavora/module [folder] -- [--template vanilla|vue|react] [--id publisher.name] [--name "Name"] [--game poe2|any] [--yes]
 // pnpm create @tavora/module [folder] [--template ...]
 // Makes a new Tavora module project. Asks for what was not given, unless --yes (or no terminal):
-// where (this empty folder or a new one in it) and the template are picked with the arrow keys.
+// where (this empty folder or a new one in it), the game and the template are picked with the arrow keys.
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { cancel, intro, isCancel, note, outro, select, text } from "@clack/prompts";
+import { autocomplete, cancel, intro, isCancel, note, outro, select, text } from "@clack/prompts";
+import { isGameId } from "@tavora/module-schema";
 import { createModule, CreateError, defaultsFor, idProblem, nameProblem, TEMPLATES, type Template } from "./create.ts";
+import { GAMES } from "./games.ts";
 
-const USAGE = "usage: npm create @tavora/module [folder] -- [--template vanilla|vue|react] [--id publisher.module-name] [--name \"Module name\"] [--yes]";
+const USAGE = "usage: npm create @tavora/module [folder] -- [--template vanilla|vue|react] [--id publisher.module-name] [--name \"Module name\"] [--game poe2|any] [--yes]";
 
 const TEMPLATE_LABELS: Record<Template, string> = { vanilla: "Vanilla TypeScript", vue: "Vue", react: "React" };
 
@@ -36,7 +38,7 @@ async function main(): Promise<number> {
   try {
     parsed = parseArgs({
       allowPositionals: true,
-      options: { template: { type: "string", short: "t" }, id: { type: "string" }, name: { type: "string" }, yes: { type: "boolean", short: "y" }, help: { type: "boolean", short: "h" } },
+      options: { template: { type: "string", short: "t" }, id: { type: "string" }, name: { type: "string" }, game: { type: "string", short: "g" }, yes: { type: "boolean", short: "y" }, help: { type: "boolean", short: "h" } },
     });
   } catch (error) {
     console.error(`${(error as Error).message}\n${USAGE}`);
@@ -49,6 +51,11 @@ async function main(): Promise<number> {
   }
   if (values.template !== undefined && !TEMPLATES.includes(values.template as Template)) {
     console.error(`create-module: the template is one of ${TEMPLATES.join(", ")}`);
+    return 2;
+  }
+
+  if (values.game !== undefined && values.game !== "any" && !isGameId(values.game)) {
+    console.error("create-module: --game is a game id, such as poe2, or any");
     return 2;
   }
 
@@ -105,13 +112,36 @@ async function main(): Promise<number> {
             }),
           )
         : defaults.id);
+    // Which game: any game, or one, so Tavora offers the module only there.
+    let game = values.game;
+    if (game === undefined && interactive) {
+      const scope = answer(
+        await select({
+          message: "Which game is it for?",
+          options: [
+            { value: "any", label: "Any game" },
+            { value: "one", label: "One game", hint: "Tavora offers it only in that game" },
+          ],
+        }),
+      );
+      if (scope === "one") {
+        game = answer(
+          await autocomplete({
+            message: "The game (type to search)",
+            options: GAMES.map((item) => ({ value: item.id, label: item.name, hint: item.id })),
+            maxItems: 8,
+          }),
+        );
+      }
+    }
+
     const template = (values.template ??
       (interactive
         ? answer(await select({ message: "Template", options: TEMPLATES.map((value) => ({ value, label: TEMPLATE_LABELS[value] })), initialValue: "vanilla" as Template }))
         : "vanilla")) as Template;
 
     const manager = packageManager();
-    await createModule({ dir: folder, id, name, template, packageManager: manager });
+    await createModule({ dir: folder, id, name, template, ...(game && game !== "any" ? { game } : {}), packageManager: manager });
 
     const run = manager === "npm" ? "npm run" : manager;
     const project = path.resolve(folder);

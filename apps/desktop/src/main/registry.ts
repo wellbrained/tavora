@@ -1,7 +1,8 @@
 import { readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import { LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ChangelogEntry, type ModuleManifest } from "@tavora/module-schema";
 import { resolveAsset } from "./assets";
+import { readModuleChangelog } from "./module-changelog";
 import { moduleIconUrl } from "./module-icon";
 
 /**
@@ -260,6 +261,8 @@ export interface ModuleInfo {
   icon: string | null;
   /** Each panel type's icon (its own, else the module's) as a data address, or null. */
   panelIcons: Record<string, string | null>;
+  /** The module's patch notes from its changelog file, as written (see module-notes.ts); empty without one. */
+  changelog: ChangelogEntry[];
 }
 
 /** Where each module was found, and whether Settings may remove it. */
@@ -274,7 +277,8 @@ export async function describeModules(userModules: string, modules: Map<string, 
     const icon = await moduleIconUrl(module.root, module.manifest.icon);
     const panelIcons: Record<string, string | null> = {};
     for (const type of module.manifest.panels ?? []) panelIcons[type.id] = type.icon === undefined ? icon : await moduleIconUrl(module.root, type.icon);
-    info.set(id, { origin, removable: own, icon, panelIcons });
+    const changelog = await readModuleChangelog(module.root, module.manifest.changelog, id);
+    info.set(id, { origin, removable: own, icon, panelIcons, changelog });
   }
   return info;
 }

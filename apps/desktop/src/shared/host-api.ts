@@ -25,8 +25,17 @@ export type DeveloperLink = "docs" | "discussions" | "issue";
 /** Why a development project did not load, for the fix Settings suggests. */
 export type DevelopmentProblemKind = "not-built" | "no-module" | "missing";
 
+/** One version of a module's patch notes, as its changelog file says; plain text. */
+export interface ModuleNote {
+  version: string;
+  date?: string;
+  notes: string[];
+}
+
 export interface GameView {
   id: string;
+  /** A game, or a personal workspace that belongs to no game. */
+  kind: "game" | "workspace";
   name: string;
   icon: IconView;
   /**
@@ -66,6 +75,8 @@ export interface PanelView {
   /** The tab's name: the panel type's short name, or the module's name. */
   name: string;
   status: InstanceStatus;
+  /** A module panel whose page is still loading: the host UI shows a loader in its place. */
+  waiting: boolean;
   /** The full name of what the panel shows, as the module last set it (panel.setContent); the tab's hover text. */
   content: string | null;
   /** Set for Browser panels: what their toolbar shows. */
@@ -128,6 +139,8 @@ export type DeviceOs = "windows" | "linux" | "macos" | "other";
 export interface AccountDevice {
   id: string;
   os: DeviceOs;
+  /** The PC's name, or null for a sign-in from before devices had names. */
+  name: string | null;
   createdAt: string;
   lastUsedAt: string;
   /** This PC. */
@@ -347,6 +360,8 @@ export interface HostViewState {
     origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
     /** Only a module in the player's own modules folder can be removed from Settings. */
     removable: boolean;
+    /** Installed from Tavora's module catalog, so it can be reported from Settings. */
+    fromCatalog: boolean;
     /** The fingerprint of the key that signed it, for a module installed from a signed zip; null otherwise. */
     publisher: string | null;
     /** The developer name the publisher key is linked to, as Tavora's service said ("by <name>"); null when unknown or unlinked. */
@@ -359,9 +374,17 @@ export interface HostViewState {
     permissions: { asks: ModulePermissions; granted: ModulePermissions; missing: ModulePermissions };
     /** Games (ids in the library) with a panel of this module, for the dialogs that remove them. */
     usedIn: string[];
+    /** The newest version the module's patch notes cover (null without any), and whether some are new to the player. */
+    notes: { latest: string | null; unseen: boolean };
+    /**
+     * A catalog update that asks for more than the installed version and waits for the player's yes;
+     * the installed version keeps running until then. Null when none is waiting.
+     */
+    update: { version: string; asks: ModulePermissions; notes: ModuleNote[] } | null;
   }[];
   /** Folders in the modules folder that could not be loaded, and why, for module authors. */
-  moduleProblems: { folder: string; message: string }[];
+  /** `kind` "not-built" gets its own text in Settings; the others show `message`. */
+  moduleProblems: { folder: string; message: string; kind?: "not-built" | "no-module" | "missing" }[];
   /**
    * Folders added in Settings > Development: a module project, or a folder of projects. `problem` is
    * set when the folder itself has none or is gone; each project says the module it loads or why not.
@@ -381,6 +404,8 @@ export interface HostViewState {
   layout: SavedLayout | null;
   /** Changes whenever `layout` was replaced by the main process, e.g. by applying a snapshot. */
   layoutEpoch: number;
+  /** The game was just opened and its panels are still loading; the host UI covers them, and they are shown together once all have their data. */
+  opening: boolean;
   /** Where modules keep their pictures, and how that stands. */
   moduleFiles: { folder: string; custom: boolean; /** The folder is there (a custom one on a drive that is unplugged is not). */ available: boolean; moving: boolean };
   /** A web address a module asked to open while the game has no Browser panel; the host UI asks where it should open (link-choice). */
@@ -431,6 +456,7 @@ export type HostAction =
   | { type: "open-game"; gameId: string }
   | { type: "add-game"; catalogId: string }
   | { type: "add-game"; name: string }
+  | { type: "add-game"; workspace: string }
   /** A game found by the online search. */
   | { type: "add-game"; online: OnlineGame }
   | { type: "rename-game"; gameId: string; name: string }
@@ -438,11 +464,17 @@ export type HostAction =
   | { type: "choose-game-image"; gameId: string }
   | { type: "use-original-icon"; gameId: string }
   | { type: "share-icons"; gameIds: string[] }
+  /** Offers the icons of games from the last Steam import look-up that are not in the library (prepared by steamShareIcons). */
+  | { type: "share-steam-icons"; appids: number[] }
   /** Adds the chosen games of a Steam library that the player does not have yet. */
   | { type: "import-steam-games"; games: SteamImportGame[] }
   | { type: "trash-game"; gameId: string }
   | { type: "restore-game"; gameId: string }
   | { type: "delete-game"; gameId: string }
+  /** The same for many games at once, from Settings > Games and Trash. */
+  | { type: "trash-games"; gameIds: string[] }
+  | { type: "restore-games"; gameIds: string[] }
+  | { type: "delete-games"; gameIds: string[] }
   | { type: "favorite"; gameId: string; index?: number }
   | { type: "unfavorite"; gameId: string }
   | { type: "move-game"; gameId: string; folderId: string | null; index?: number }
@@ -499,10 +531,23 @@ export type HostAction =
   | { type: "revoke-module"; moduleId: string }
   /** Asks for a module zip and installs it into the player's modules folder; answers with the module's id. */
   | { type: "install-module" }
+  /** Downloads a module from the catalog, checks it and installs it like a zip. */
+  | { type: "install-catalog-module"; moduleId: string }
+  /** Looks for updates of the modules installed from the catalog now; answers with `updated` and `waiting`. */
+  | { type: "check-module-updates" }
+  /**
+   * Reports a catalog module to Tavora after the player pressed Report: the installed zip when it came
+   * from the catalog, otherwise the listed one. Sends only the module id, its key and the zip's hash.
+   */
+  | { type: "report-catalog-module"; moduleId: string }
+  /** The player said yes to a catalog update that asks for more: installs exactly that version and grants what it asked for. */
+  | { type: "apply-module-update"; moduleId: string; version: string }
   /** Deletes the data a module that is not installed left behind (owner as in leftoverModuleData). */
   | { type: "delete-module-data"; owner: string; moduleId: string }
   /** Moves a signed module's data from its unsigned local copy to it; Tavora restarts to do it. */
   | { type: "move-local-data"; moduleId: string }
+  /** The player opened a module's patch notes: none of them are new any more. */
+  | { type: "seen-module-notes"; moduleId: string }
   /** Copies the Tavora theme into the themes folder as a new theme to change; answers with its id. */
   | { type: "create-starter-theme" }
   /** Done ends the first-run welcome; false shows it again. */
@@ -517,6 +562,8 @@ export type HostAction =
   /** Gives a panel whose type an update removed another type of the same module. */
   | { type: "choose-panel-type"; instanceId: string; panelType: string }
   | { type: "close-panel"; instanceId: string }
+  /** Closes all of a module's panels in the current game, leaving empty slots; it stays installed. */
+  | { type: "remove-module-from-game"; moduleId: string }
   | { type: "reload-panel"; instanceId: string }
   | { type: "stop-panel"; instanceId: string }
   /** An empty Browser tab beside this one. */
@@ -547,6 +594,7 @@ export type HostAction =
   | { type: "account-refresh" }
   | { type: "account-sign-out" }
   | { type: "account-sign-out-device"; deviceId: string }
+  | { type: "account-rename-device"; deviceId: string; name: string }
   | { type: "account-email-code"; email: string }
   | { type: "account-change-email"; code: string }
   | { type: "account-delete-code" }
@@ -604,7 +652,10 @@ export interface ModuleMenu {
   align?: "start" | "center" | "end";
 }
 
-export type ActionResult = { ok: true; id?: string; shared?: number; added?: number } | { ok: false; error: string };
+/** `limited`: the service took only some icons for now (it takes so many an hour); the rest can be shared later. */
+export type ActionResult =
+  | { ok: true; id?: string; shared?: number; limited?: true; added?: number; updated?: number; waiting?: number }
+  | { ok: false; error: string };
 
 export interface CatalogMatch {
   id: string;
@@ -648,15 +699,54 @@ export interface SteamGameView extends SteamImportGame {
 
 export type SteamLibraryResult = { status: "ok"; games: SteamGameView[] } | { status: "error"; error: string };
 
+/** A game of a Steam import, not in the library, with the icon this PC has for it as a data address. */
+export interface SteamShareView {
+  appid: number;
+  name: string;
+  icon: string;
+}
+
+export type SteamShareResult = { status: "ok"; games: SteamShareView[] } | { status: "error"; error: string };
+
+/** A module listed in Tavora's module catalog, as the main process checked it. Every text is plain text. */
+export interface CatalogModuleView {
+  id: string;
+  name: string;
+  description: string | null;
+  version: string;
+  minTavora: string | null;
+  /** What its manifest asks for; the player is asked again when it is added. */
+  permissions: ModulePermissions;
+  /** The fingerprint of the publisher key that signed it. */
+  owner: string;
+  /** The developer name of that key's account, for "by <name>"; null when it has none. */
+  publisher: string | null;
+  /** The zip's size in bytes. */
+  size: number;
+  publishedAt: string;
+}
+
+/**
+ * `off`: the player turned the online features off. `unavailable`: the catalog is switched off on the
+ * service. `busy`: too many requests, try later. `unreachable`: no usable answer.
+ */
+export type CatalogListResult = { status: "ok"; modules: CatalogModuleView[] } | { status: "off" | "unavailable" | "busy" | "unreachable" };
+
 /** Exposed to the host UI as `window.tavoraHost` by the host preload. */
 export interface TavoraHostApi {
   getState(): Promise<HostViewState | null>;
   act(action: HostAction): Promise<ActionResult>;
   searchCatalog(query: string): Promise<CatalogMatch[]>;
+  /** A module's patch notes, newest first, up to the installed version; empty without any. */
+  moduleNotes(moduleId: string): Promise<ModuleNote[]>;
   /** Asks the Tavora service; a newer call cancels an older one. Never rejects. */
   searchOnline(query: string): Promise<OnlineSearchResult>;
   /** The games a Steam profile (link or SteamID64) owns, through the Tavora service. Never rejects. */
   steamLibrary(profile: string): Promise<SteamLibraryResult>;
+  /** Of these games from the last steamLibrary answer, the ones not added whose icon this PC has and Tavora lacks. Never rejects. */
+  steamShareIcons(appids: number[]): Promise<SteamShareResult>;
+  /** The catalog modules for the current game or personal workspace. Never rejects. */
+  browseCatalog(): Promise<CatalogListResult>;
   /** Where the visible panels are. Panels not listed are hidden. */
   setPanelBounds(bounds: PanelBounds[]): void;
   /**

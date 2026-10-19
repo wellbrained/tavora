@@ -84,7 +84,7 @@ if ! cmp -s "$incoming/tavora-api.caddy" /etc/caddy/tavora-api.caddy; then
 fi
 
 # The helper scripts the maintainer runs by hand (ssh -t root@... tavora-api-set-setting takedown), kept next to the other server tools.
-for helper in set-steam-key set-setting backup; do
+for helper in set-steam-key set-setting catalog backup; do
   if [[ -f "$incoming/tavora-api-$helper.sh" ]]; then install -m 750 -o root -g root "$incoming/tavora-api-$helper.sh" "/usr/local/sbin/tavora-api-$helper"; fi
 done
 

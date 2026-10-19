@@ -46,6 +46,8 @@ export interface Account {
 export interface Device {
   id: string;
   os: DeviceOs;
+  /** The PC's name, as the app sent it or the player renamed it; null for a sign-in from before names. */
+  name: string | null;
   createdAt: string;
   lastUsedAt: string;
 }
@@ -73,6 +75,8 @@ export const NAME_HOLD_MS = 30 * 24 * 60 * 60_000;
 export const LINK_CODE_TTL_MS = 10 * 60_000;
 /** Publisher keys one account can link. */
 export const MAX_KEYS = 20;
+/** Module id prefixes (the part before the first dot) an account may hold in the catalog (C5). */
+export const MAX_PREFIXES = 3;
 /** The letters a link code is made of: no 0/O, 1/I/L, so it can be typed from the screen. */
 const LINK_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 export const LINK_CODE = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/;
@@ -146,7 +150,7 @@ export class AccountStore {
       create table if not exists sessions (
         id text primary key, token_hash text not null unique,
         account_id text not null references accounts (id) on delete cascade,
-        os text not null, created_at integer not null, last_used_at integer not null
+        os text not null, name text, created_at integer not null, last_used_at integer not null
       );
       create index if not exists sessions_account on sessions (account_id);
       create table if not exists mail_days (day text primary key, sent integer not null);
@@ -165,6 +169,8 @@ export class AccountStore {
         public_key text not null, linked_at integer not null
       );
       create index if not exists publisher_keys_account on publisher_keys (account_id);
+      create table if not exists module_prefixes (prefix text primary key, account_id text not null, reserved_at integer not null);
+      create index if not exists module_prefixes_account on module_prefixes (account_id);
       create table if not exists link_codes (
         code_hash text primary key, account_id text not null references accounts (id) on delete cascade, expires_at integer not null
       );
@@ -179,6 +185,9 @@ export class AccountStore {
    * everything back on any problem.
    */
   private migrate(): void {
+    // Device names came later; older sign-ins have none.
+    const sessionColumns = (this.db.prepare("pragma table_info(sessions)").all() as unknown as { name: string }[]).map((column) => column.name);
+    if (!sessionColumns.includes("name")) this.db.exec("alter table sessions add column name text");
     const columns = (this.db.prepare("pragma table_info(accounts)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (columns.includes("discord_id")) return;
     const before = (this.db.prepare("select count(*) as n from accounts").get() as { n: number }).n;
@@ -384,6 +393,36 @@ export class AccountStore {
     return Number(this.db.prepare("delete from publisher_keys where fingerprint = ? and account_id = ?").run(fingerprint, accountId).changes) > 0;
   }
 
+  /** The account a publisher key is linked to, with the key's public half (base64), or null. */
+  publisherKey(fingerprint: string): { accountId: string; publicKey: string } | null {
+    const row = this.db.prepare("select account_id, public_key from publisher_keys where fingerprint = ?").get(fingerprint) as { account_id: string; public_key: string } | undefined;
+    return row ? { accountId: row.account_id, publicKey: row.public_key } : null;
+  }
+
+  // ── Module id prefixes ─────────────────────────────────────────────────
+
+  /**
+   * Whether an account may publish under a module id prefix: it holds it, or may reserve it now.
+   * First come; words reserved for developer names (anything with "tavora", "official", "local", …)
+   * are refused, and an account holds at most MAX_PREFIXES. Prefixes are not kept with the account:
+   * a deleted account's prefixes stay held, so nobody can publish new modules under its name.
+   */
+  prefixCheck(accountId: string, prefix: string): "held" | "free" | "taken" | "reserved" | "too-many" {
+    const owner = this.db.prepare("select account_id from module_prefixes where prefix = ?").get(prefix) as { account_id: string } | undefined;
+    if (owner) return owner.account_id === accountId ? "held" : "taken";
+    if (isReservedName(nameKey(prefix))) return "reserved";
+    return this.prefixes(accountId).length >= MAX_PREFIXES ? "too-many" : "free";
+  }
+
+  /** Reserves a prefix that prefixCheck called free. */
+  reservePrefix(accountId: string, prefix: string, now: number): void {
+    this.db.prepare("insert into module_prefixes (prefix, account_id, reserved_at) values (?, ?, ?)").run(prefix, accountId, now);
+  }
+
+  prefixes(accountId: string): string[] {
+    return (this.db.prepare("select prefix from module_prefixes where account_id = ? order by prefix").all(accountId) as unknown as { prefix: string }[]).map((row) => row.prefix);
+  }
+
   /** The developer name players see for a key, or null when the key is not linked or its account has no name. */
   publisherName(fingerprint: string): string | null {
     const row = this.db.prepare("select d.name from publisher_keys k join developers d on d.account_id = k.account_id where k.fingerprint = ?").get(fingerprint) as { name: string } | undefined;
@@ -469,12 +508,12 @@ export class AccountStore {
   // ── Sessions ───────────────────────────────────────────────────────────
 
   /** A new sign-in. The token goes to the app once; only its hash is kept. */
-  createSession(accountId: string, os: DeviceOs, now: number): { token: string; session: Session } {
+  createSession(accountId: string, os: DeviceOs, now: number, name: string | null = null): { token: string; session: Session } {
     const token = randomBytes(32).toString("base64url");
     const id = randomBytes(12).toString("base64url");
     this.db
-      .prepare("insert into sessions (id, token_hash, account_id, os, created_at, last_used_at) values (?, ?, ?, ?, ?, ?)")
-      .run(id, sha256(`session:${token}`), accountId, os, now, now);
+      .prepare("insert into sessions (id, token_hash, account_id, os, name, created_at, last_used_at) values (?, ?, ?, ?, ?, ?, ?)")
+      .run(id, sha256(`session:${token}`), accountId, os, name, now, now);
     return { token, session: { id, accountId } };
   }
 
@@ -494,13 +533,19 @@ export class AccountStore {
 
   devices(accountId: string): Device[] {
     return (
-      this.db.prepare("select id, os, created_at, last_used_at from sessions where account_id = ? order by created_at, rowid").all(accountId) as unknown as {
+      this.db.prepare("select id, os, name, created_at, last_used_at from sessions where account_id = ? order by created_at, rowid").all(accountId) as unknown as {
         id: string;
         os: DeviceOs;
+        name: string | null;
         created_at: number;
         last_used_at: number;
       }[]
-    ).map((row) => ({ id: row.id, os: row.os, createdAt: new Date(row.created_at).toISOString(), lastUsedAt: new Date(row.last_used_at).toISOString() }));
+    ).map((row) => ({ id: row.id, os: row.os, name: row.name, createdAt: new Date(row.created_at).toISOString(), lastUsedAt: new Date(row.last_used_at).toISOString() }));
+  }
+
+  /** Names one device of an account; false when the account has no such device. */
+  renameSession(accountId: string, id: string, name: string): boolean {
+    return Number(this.db.prepare("update sessions set name = ? where id = ? and account_id = ?").run(name, id, accountId).changes) > 0;
   }
 
   /** Signs out one device of an account; false when the account has no such device. */

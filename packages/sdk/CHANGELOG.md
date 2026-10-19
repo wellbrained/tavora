@@ -2,6 +2,15 @@
 
 What changed in `@tavora/sdk` and the bridge protocol it speaks, newest first. Before Tavora 1.0 the SDK may still change in ways that break modules; each such change raises the minor version (0.2 → 0.3) and is marked **Breaking** here. Anything else raises the patch version. To make sure players have a Tavora that knows what your module uses, set [`minTavora`](https://docs.mytavora.app/reference/manifest) in its manifest.
 
+## 0.2.7
+
+- Manifest `changelog`: a JSON file in the package with the module's patch notes, `[{ "version", "date", "notes": [...] }]`, newest first. Players read them under the module in Settings > Modules, and an update marks the new ones (Tavora 0.18.2). `MIN_TAVORA` is now `0.18.2`.
+
+## 0.2.6
+
+- `game.getCurrent()` answers `kind`: `"game"`, or `"workspace"` for a personal workspace the player made for modules that belong to no game, such as notes (Tavora 0.18.1). An older Tavora leaves it out, which means a game. `MIN_TAVORA` is now `0.18.1`.
+- Manifest `workspaces`: modules for any game are offered in personal workspaces too. Set `"workspaces": false` for one that only makes sense in a game; a module for one game is never offered there (Tavora 0.18.1).
+
 ## 0.2.5
 
 - `pictures.save(png, name)`: saves a PNG as a new file in the player's `Pictures\Tavora` folder, right after a click or key press in the panel; resolves with the file name it got (Tavora 0.17.19). `MIN_TAVORA` is now `0.17.19`.

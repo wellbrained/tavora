@@ -1,7 +1,7 @@
 // Menus for games and folders on the rail. Every drag-and-drop move has a
 // menu equivalent here, so the rail works from the keyboard too.
 import type { FolderView, GameView } from "../shared/host-api";
-import { act, confirmAction, dialog, prompt, state, submitAction, type MenuItem } from "./host";
+import { act, confirmAction, dialog, openSettings, prompt, state, submitAction, type MenuItem } from "./host";
 import { t } from "./i18n";
 
 function lib() {
@@ -117,12 +117,17 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
       testid: "menu-icon",
       // Three choices, one current: choosing any replaces the others, so there is nothing to "remove".
       submenu: () => [
-        {
-          label: t("menu.icon.original"),
-          testid: "menu-icon-original",
-          checked: game.iconChoice === "original",
-          run: () => act({ type: "use-original-icon", gameId: game.id }),
-        },
+        // A workspace has no icon of its own; its letters are where it starts.
+        ...(game.kind === "game"
+          ? [
+              {
+                label: t("menu.icon.original"),
+                testid: "menu-icon-original",
+                checked: game.iconChoice === "original",
+                run: () => act({ type: "use-original-icon", gameId: game.id }),
+              } satisfies MenuItem,
+            ]
+          : []),
         {
           label: t("menu.icon.letters"),
           testid: "menu-icon-label",
@@ -149,14 +154,18 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
     ...(game.shareIcon
       ? [{ label: t("menu.shareIcon"), testid: "menu-share-icon", run: () => (dialog.value = { kind: "share-icons", gameIds: [game.id] }) } satisfies MenuItem]
       : []),
+    // Removing many games at once happens in Settings > Games.
+    ...(game.kind === "game"
+      ? [{ label: t("menu.manageGames"), testid: "menu-manage-games", separator: true, run: () => openSettings({ section: "games" }) } satisfies MenuItem]
+      : []),
     {
-      label: t("menu.removeGame"),
+      label: t(game.kind === "workspace" ? "menu.removeWorkspace" : "menu.removeGame"),
       testid: "menu-remove",
       danger: true,
       run: () =>
         confirmAction({
           title: t("menu.remove.title", { name: game.name }),
-          message: t("menu.remove.message"),
+          message: t(game.kind === "workspace" ? "menu.remove.workspaceMessage" : "menu.remove.message"),
           confirm: t("menu.remove.confirm"),
           danger: true,
           run: () => submitAction({ type: "trash-game", gameId: game.id }),

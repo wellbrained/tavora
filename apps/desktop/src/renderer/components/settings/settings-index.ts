@@ -1,4 +1,4 @@
-import { Blocks, FolderCode, Globe, Keyboard, Palette, Plug, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
+import { Blocks, Cloud, FolderCode, Gamepad2, Globe, Info, Keyboard, Palette, Plug, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
 import type { MessageKey } from "../../../shared/i18n";
 import { t } from "../../i18n";
 
@@ -7,19 +7,32 @@ import { t } from "../../i18n";
 // files: `settings.group.<id>` and `settings.section.<id>`.
 export const GROUPS = [
   {
-    id: "tavora",
+    id: "app",
     sections: [
       { id: "account", icon: UserRound },
       { id: "general", icon: SlidersHorizontal },
       { id: "appearance", icon: Palette },
-      { id: "modules", icon: Blocks },
-      { id: "development", icon: FolderCode },
-      { id: "browser", icon: Globe },
-      { id: "integrations", icon: Plug },
+      { id: "online", icon: Cloud },
       { id: "shortcuts", icon: Keyboard },
+      { id: "about", icon: Info },
     ],
   },
-  { id: "library", sections: [{ id: "trash", icon: Trash2 }] },
+  {
+    id: "modules",
+    sections: [
+      { id: "modules", icon: Blocks },
+      { id: "integrations", icon: Plug },
+      { id: "browser", icon: Globe },
+      { id: "development", icon: FolderCode },
+    ],
+  },
+  {
+    id: "library",
+    sections: [
+      { id: "games", icon: Gamepad2 },
+      { id: "trash", icon: Trash2 },
+    ],
+  },
 ] as const;
 
 /**
@@ -43,39 +56,40 @@ export const groupLabel = (group: (typeof GROUPS)[number]["id"]): string => t(`s
  */
 export const SETTING_SECTIONS: readonly (readonly [id: string, section: SettingsSection])[] = [
   ["account", "account"],
+  ["language", "general"],
   ["startup", "general"],
   ["sort", "general"],
-  ["language", "general"],
-  ["grayscale-text", "general"],
-  ["online-search", "general"],
-  ["auto-update", "general"],
-  ["check-updates", "general"],
-  ["backups", "general"],
-  ["diagnostics", "general"],
-  ["steam-icons", "general"],
+  ["welcome-tour", "general"],
   ["theme", "appearance"],
   ["appearance-mode", "appearance"],
   ["theme-variation", "appearance"],
+  ["module-icons", "appearance"],
+  ["grayscale-text", "appearance"],
   ["own-themes", "appearance"],
   ["reset-theme", "appearance"],
-  ["module-icons", "appearance"],
-  ["share-icons", "general"],
-  ["steam-import", "integrations"],
-  ["own-modules", "modules"],
-  ["module-files", "modules"],
+  ["online-search", "online"],
+  ["steam-icons", "online"],
+  ["share-icons", "online"],
+  ["auto-update", "about"],
+  ["check-updates", "about"],
+  ["backups", "about"],
+  ["diagnostics", "about"],
   ["installed-modules", "modules"],
-  ["development-folders", "development"],
-  ["development-modules", "development"],
-  ["developer-docs", "development"],
+  ["own-modules", "modules"],
+  ["module-grants", "modules"],
+  ["module-files", "modules"],
+  ["discord-connection", "integrations"],
+  ["steam-import", "games"],
+  ["ai-usage-accounts", "integrations"],
   ["browser-shared-sites", "browser"],
   ["browser-adblock-off", "browser"],
   ["browser-clear-game", "browser"],
   ["browser-clear-shared", "browser"],
-  ["discord-connection", "integrations"],
-  ["ai-usage-accounts", "integrations"],
-  ["module-grants", "integrations"],
+  ["development-folders", "development"],
+  ["development-modules", "development"],
+  ["developer-docs", "development"],
   ["shortcuts", "shortcuts"],
-  ["welcome-tour", "general"],
+  ["games", "games"],
   ["trash", "trash"],
 ];
 

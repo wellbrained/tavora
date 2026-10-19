@@ -20,7 +20,7 @@ npm install
 npm run dev     # builds, then rebuilds on every change: leave it running
 ```
 
-In Tavora, open **Settings > Development**, choose **Add a development folder…** and pick the project folder, or the folder you keep all your module projects in: Tavora loads every project directly inside it, and finds new ones by itself. The module appears in Add module, and its panels reload by themselves when `npm run dev` rebuilds.
+In Tavora, open **Settings > Development**, choose **Add folder…** under Project folders and pick the project folder, or the folder you keep all your module projects in: Tavora loads every project directly inside it, and finds new ones by itself. The module appears in Add module, and its panels reload by themselves when `npm run dev` rebuilds.
 
 To add the SDK to a project of your own instead: `npm install @tavora/sdk`, and follow [Build the module](#build-the-module). The same small module is also built three ways in Tavora's repository: [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module), [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module) and [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module). A module that offers several panels is shown in the [panel types example](https://github.com/wellbrained/tavora/tree/main/examples/panels-module) (see [Panel types](../reference/manifest.md#panel-types)).
 
@@ -80,6 +80,18 @@ Settings go in `tavora.storage`, the player's work in `tavora.documents`, pictur
 
 What reaches outside the panel needs the player's yes first; see [Permissions and consent](./permissions.md). Following the theme and the language is in [Look and languages](./look-and-languages.md).
 
+## Made for one game
+
+A module made for one game, such as a build planner for Path of Exile 2, lists that game in its manifest:
+
+```json
+"games": ["poe2"]
+```
+
+Tavora then offers it only in that game: in any other game it is not in Add module at all. `"games": []` means any game. The starter asks which game the module is for and fills this in. The ids of Tavora's built-in games are in the [manifest reference](../reference/manifest.md#game-ids).
+
+Players can also make personal workspaces, which belong to no game, for modules such as notes or a whiteboard. A module for any game is offered there too. If yours only makes sense in a game, add `"workspaces": false` (Tavora 0.18.1 or newer). `tavora.game.getCurrent()` says which one a panel is in: its `kind` is `"game"` or `"workspace"`.
+
 ## Build the module
 
 - Bundle everything. A module's page has no network access, so no CDN scripts, web fonts or remote images. To reach a web API, name its host in `permissions.network` and call [`network.fetch`](../reference/protocol.md#network) once the player has granted it.
@@ -97,10 +109,31 @@ npm run build
 npm run zip     # the same as npx tavora-pack .
 ```
 
-The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`) and the icon, plus `tavora.signature.json`. Your sources and `node_modules` stay out. Use `--out` to choose the file name.
+The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`), the icon and the changelog, plus `tavora.signature.json`. Your sources and `node_modules` stay out. Use `--out` to choose the file name.
 
 The first run makes your publisher key in `~/.tavora/publisher-key.pem`. **Back it up and never share it**: updates and your players' data depend on it. Read [Your publisher key](./publisher-key.md) before you send the first zip, and link the key to your account there so players see your name.
 
-Players install the zip with **Settings > Modules > Install from zip**. While you build, keep loading the module from its development folder: it needs no key, and its data is kept apart from the signed version's.
+Players install the zip with **Settings > Modules > Install zip**. To list it in Tavora's module catalog, where players find it under **Catalog** in the module library, publish it with your linked key:
+
+```sh
+npx tavora-pack publish <id>-<version>.zip
+```
+
+The part of your module id before the first dot is your prefix: the first time you publish under it, it becomes yours, and nobody else can publish under it (an account holds up to 3). A module stays with the key that published its first version, and each new version must be newer. An account can publish 10 versions a day. [Publishing to the catalog](./publishing.md) covers the listing, updates, limits and reports.
+
+While you build, keep loading the module from its development folder: it needs no key, and its data is kept apart from the signed version's.
+
+## Patch notes
+
+Tell players what changed in `changelog.json`, which the starter makes and the manifest's `changelog` names. Add an entry, newest first, every time you raise `version`:
+
+```json
+[
+  { "version": "0.2.0", "date": "2026-11-02", "notes": ["Filter quests by act.", "Fixed the timer after a game switch."] },
+  { "version": "0.1.0", "notes": ["First version."] }
+]
+```
+
+Players read them under the module in **Settings > Modules > Patch notes**. After an update, the notes newer than the version they had are marked New until they open them. Each line is plain text of at most 500 characters, at most 20 lines per version and 100 versions; `tavora-pack` refuses a changelog Tavora could not show. Needs Tavora 0.18.2 or newer, so set `minTavora` to at least `0.18.2`.
 
 Something not working? See [Troubleshooting](./troubleshooting.md).

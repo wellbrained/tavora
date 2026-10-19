@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { isModuleId } from "@tavora/module-schema";
+import { isGameId, isModuleId } from "@tavora/module-schema";
 import { VERSIONS } from "./versions.ts";
 
 // Makes a new module project from a template: the shared files (manifest, README, styles,
@@ -20,6 +20,8 @@ export interface ModuleOptions {
   /** The name players see. */
   name: string;
   template: Template;
+  /** The game the module is made for (its id, such as poe2), or none for any game. */
+  game?: string;
   /** The package manager the commands in the README use. */
   packageManager?: "npm" | "pnpm" | "yarn";
 }
@@ -64,6 +66,10 @@ export function nameProblem(name: string): string | null {
 
 const run = (manager: ModuleOptions["packageManager"]) => (manager === "pnpm" ? "pnpm" : manager === "yarn" ? "yarn" : "npm run");
 const exec = (manager: ModuleOptions["packageManager"]) => (manager === "pnpm" ? "pnpm exec" : manager === "yarn" ? "yarn" : "npx");
+const install = (manager: ModuleOptions["packageManager"]) => (manager === "yarn" ? "yarn" : `${manager} install`);
+
+/** Placeholders that are already JSON, standing outside quotes, so they are put in as they are. */
+const RAW = new Set(["games"]);
 
 /** Fills the placeholders of one file, escaped for where they stand. */
 function fill(text: string, file: string, values: Record<string, string>): string {
@@ -72,7 +78,7 @@ function fill(text: string, file: string, values: Record<string, string>): strin
     : file.endsWith(".html")
       ? (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
       : (value: string) => value;
-  return text.replace(/\{\{(\w+)\}\}/g, (match, key: string) => (key in values ? escape(values[key]!) : match));
+  return text.replace(/\{\{(\w+)\}\}/g, (match, key: string) => (key in values ? (RAW.has(key) ? values[key]! : escape(values[key]!)) : match));
 }
 
 async function files(root: string, prefix = ""): Promise<string[]> {
@@ -90,6 +96,7 @@ export async function createModule(options: ModuleOptions): Promise<string[]> {
   const problem = idProblem(options.id) ?? nameProblem(options.name);
   if (problem) throw new CreateError(problem);
   if (!TEMPLATES.includes(options.template)) throw new CreateError(`the template is one of ${TEMPLATES.join(", ")}`);
+  if (options.game !== undefined && !isGameId(options.game)) throw new CreateError("a game id is lowercase letters, digits and dashes, such as poe2");
   const dir = path.resolve(options.dir);
   const existing = await readdir(dir).catch(() => null);
   if (existing && existing.length > 0) throw new CreateError(`${dir} is not empty`);
@@ -98,12 +105,14 @@ export async function createModule(options: ModuleOptions): Promise<string[]> {
     id: options.id,
     name: options.name.trim(),
     description: `${options.name.trim()}, a Tavora module.`,
+    games: JSON.stringify(options.game === undefined ? [] : [options.game]),
     package: slugOf(dir),
     sdkVersion: VERSIONS.sdk,
     packVersion: VERSIONS.pack,
     minTavora: VERSIONS.minTavora,
     run: run(options.packageManager),
     exec: exec(options.packageManager),
+    install: install(options.packageManager),
   };
   const written: string[] = [];
   for (const source of ["shared", options.template]) {

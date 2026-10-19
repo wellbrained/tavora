@@ -26,6 +26,7 @@ test("Copy diagnostic info has what helps and nothing private, and the timings a
   await openModule(page, VANILLA);
   // The panel's own load is what its timing waits for, so ask again until it is in the report.
   await page.getByTestId("rail-settings").click();
+  await page.getByTestId("settings-nav-about").click();
   await expect.poll(() => copyReport(app, page), { timeout: 15_000 }).toContain("panel-open:");
   const report = await copyReport(app, page);
 

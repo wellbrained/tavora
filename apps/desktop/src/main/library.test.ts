@@ -6,6 +6,7 @@ import {
   deleteFolder,
   deleteTrashedGame,
   emptyLibrary,
+  markIconOffered,
   gamesNeedingIcon,
   LibraryError,
   markIconShared,
@@ -123,6 +124,43 @@ describe("adding games", () => {
     expect(sanitizeLibrary({ onlineSearch: "no" }).onlineSearch).toBe(true);
   });
 });
+describe("personal workspaces", () => {
+  it("adds a workspace by name, never linked to a built-in game", () => {
+    const library = emptyLibrary();
+    expect(addGame(library, { workspace: "Path of Exile 2" }, day(1))).toBe("local-path-of-exile-2");
+    expect(library.games["local-path-of-exile-2"]).toMatchObject({
+      kind: "workspace",
+      catalogId: null,
+      steamAppId: null,
+      useOriginalIcon: false,
+      showNews: false,
+      icon: { kind: "monogram" },
+    });
+    expect(rootIds(library)).toEqual(["game:local-path-of-exile-2"]);
+  });
+
+  it("looks up no icon for a workspace and keeps it on letters", () => {
+    const library = emptyLibrary();
+    const id = addGame(library, { workspace: "Notes" }, day(1));
+    addGame(library, { name: "Notes" }, day(1));
+    expect(gamesNeedingIcon(library, day(2)).map((game) => game.id)).toEqual(["local-notes-2"]);
+    useOriginalGameIcon(library, id);
+    expect(library.games[id]!.useOriginalIcon).toBe(false);
+  });
+
+  it("keeps a workspace through saving, and never makes a built-in game one", () => {
+    const library = emptyLibrary();
+    const id = addGame(library, { workspace: "Personal" }, day(1));
+    addGame(library, { catalogId: "poe2" }, day(1));
+    const saved = JSON.parse(JSON.stringify(library));
+    saved.games.poe2.kind = "workspace";
+    saved.games[id].steamAppId = 570;
+    const loaded = sanitizeLibrary(saved);
+    expect(loaded.games[id]).toMatchObject({ kind: "workspace", steamAppId: null, catalogId: null });
+    expect(loaded.games.poe2).toMatchObject({ kind: "game", catalogId: "poe2" });
+  });
+});
+
 describe("Steam icons", () => {
   it("takes a game's Steam id from the built-in list, the service, or leaves it empty", () => {
     const library = emptyLibrary();
@@ -176,6 +214,9 @@ describe("Steam icons", () => {
     const folder = process.platform === "win32" ? "D:\\Pictures\\Tavora module files" : "/mnt/pictures/Tavora module files";
     expect(sanitizeLibrary({ moduleFilesFolder: folder }).moduleFilesFolder).toBe(folder);
     for (const bad of ["relative/folder", "", 4, null, "x".repeat(501)]) expect(sanitizeLibrary({ moduleFilesFolder: bad }).moduleFilesFolder).toBeNull();
+    // The folders file dialogs open in: absolute paths, for the dialogs Tavora has.
+    expect(emptyLibrary().dialogFolders).toEqual({});
+    expect(sanitizeLibrary({ dialogFolders: { "install-module": folder, "game-image": "relative/x", other: folder, "module-files": 4 } }).dialogFolders).toEqual({ "install-module": folder });
     // Development folders: absolute paths, each once, at most 20.
     expect(emptyLibrary().developmentFolders).toEqual([]);
     const project = process.platform === "win32" ? "D:\\Code\\my-tracker" : "/home/dev/my-tracker";
@@ -186,6 +227,14 @@ describe("Steam icons", () => {
     expect(emptyLibrary().steamProfile).toBeNull();
     expect(sanitizeLibrary({ steamProfile: "  https://steamcommunity.com/id/me " }).steamProfile).toBe("https://steamcommunity.com/id/me");
     for (const bad of ["", "   ", 5, "x".repeat(201)]) expect(sanitizeLibrary({ steamProfile: bad }).steamProfile).toBeNull();
+    // Icons offered for games not in the library: known ids, each once.
+    expect(emptyLibrary().iconsOffered).toEqual([]);
+    expect(sanitizeLibrary({ iconsOffered: ["elden-ring", "elden-ring", "local-x", "../x", 5] }).iconsOffered).toEqual(["elden-ring"]);
+    const offered = emptyLibrary();
+    markIconOffered(offered, "a");
+    markIconOffered(offered, "b");
+    markIconOffered(offered, "a");
+    expect(offered.iconsOffered).toEqual(["b", "a"]);
   });
 
   it("asks for every game that has no icon, and not again soon after a miss", () => {

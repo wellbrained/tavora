@@ -6,6 +6,7 @@
   "version": "0.1.0",
   "apiVersion": "1",
   "entry": "dist/index.html",
+  "changelog": "changelog.json",
   "games": [],
   "viewport": { "minWidth": 260, "minHeight": 160, "preferredWidth": 360, "preferredHeight": 320 },
   "permissions": { "network": [], "connectors": ["ai-usage"] }

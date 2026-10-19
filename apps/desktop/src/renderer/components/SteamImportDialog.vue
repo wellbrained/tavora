@@ -73,6 +73,12 @@ async function runImport() {
   showToast(added === 0 ? t("steamImport.added.zero") : t("steamImport.added", { count: added }));
 }
 
+/** Offers the selected games' icons without adding them: the share dialog finds which ones this PC has. */
+function shareOnly() {
+  const appids = fresh.value.filter((game) => ticked.value.has(game.appid)).map((game) => game.appid);
+  dialog.value = { kind: "share-icons", gameIds: [], steam: appids };
+}
+
 const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImport.trash") : t("steamImport.owned"));
 </script>
 
@@ -148,6 +154,16 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
       <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="steam-import-error">{{ error }}</p>
       <div class="flex justify-end gap-2">
         <Button type="button" variant="secondary" :disabled="busy" @click="back">{{ t("common.back") }}</Button>
+        <Button
+          type="button"
+          variant="secondary"
+          data-testid="steam-share-only"
+          :title="t('steamImport.shareOnlyHelp')"
+          :disabled="busy || count === 0 || !state?.library.steamIcons"
+          @click="shareOnly"
+        >
+          {{ t("steamImport.shareOnly") }}
+        </Button>
         <Button type="button" data-testid="steam-import-submit" :disabled="busy || count === 0" @click="runImport">
           {{ t("steamImport.import", { count }) }}
         </Button>

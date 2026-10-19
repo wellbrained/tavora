@@ -3,24 +3,35 @@
 // player has not granted, shown when the module is first added or when an update asks for more.
 // Tavora draws it, never the module, so a module cannot fake or hide what it asks for. A connector
 // shows what the module would read through it: for AI Usage, the accounts set up right now; for
-// Discord, what it can see and do in the Discord app, with Tavora's sign-in.
+// Discord, what it can see and do in the Discord app, with Tavora's sign-in. For a catalog update that
+// asks for more (`request.update`), it shows what the update asks for that the installed version did
+// not, and the update's patch notes; allowing installs the update, and until then the installed
+// version keeps running (catalog threat model, C4).
 import { Gauge, Globe, Headphones } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
-import { act, aiUsage, dialog, discord, nextPanelSlot, openSettings, state, type GrantRequest } from "../host";
+import { act, aiUsage, dialog, discord, openPanels, openSettings, state, type GrantRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 import ModuleIcon from "./ModuleIcon.vue";
+import ModuleNotes from "./settings/ModuleNotes.vue";
 
 const props = defineProps<{ request: GrantRequest }>();
 const error = ref<string | null>(null);
 const busy = ref(false);
 
 const module = computed(() => state.value?.modules.find((item) => item.id === props.request.moduleId) ?? null);
-const hosts = computed(() => module.value?.permissions.missing.network ?? []);
-const connectors = computed(() => module.value?.permissions.missing.connectors ?? []);
+const update = computed(() => (props.request.update ? (module.value?.update ?? null) : null));
+const asks = computed(() => (props.request.update ? update.value?.asks : module.value?.permissions.missing));
+const hosts = computed(() => asks.value?.network ?? []);
+const connectors = computed(() => asks.value?.connectors ?? []);
 const aiAccounts = computed(() => aiUsage.value?.accounts ?? []);
 const discordUser = computed(() => discord.value?.user ?? null);
+
+/** Cancel goes back to the module library when the request came from there and it stays open. */
+function close() {
+  dialog.value = props.request.backToLibrary ? { kind: "add-module" } : null;
+}
 
 // The module went away, or has nothing left to ask: nothing to answer.
 watch(
@@ -49,6 +60,17 @@ async function allow() {
   const current = module.value;
   if (!current) return;
   busy.value = true;
+  if (props.request.update) {
+    // Exactly the version this dialog shows; the main process checks the zip again before it installs.
+    const result = await act({ type: "apply-module-update", moduleId: current.id, version: update.value?.version ?? "" }, { quiet: true });
+    busy.value = false;
+    if (!result.ok) {
+      error.value = result.error;
+      return;
+    }
+    dialog.value = null;
+    return;
+  }
   // Exactly what this dialog shows: the main process grants only what the module still asks for.
   const result = await act({ type: "grant-module", moduleId: current.id, network: [...hosts.value], connectors: [...connectors.value] }, { quiet: true });
   busy.value = false;
@@ -56,21 +78,21 @@ async function allow() {
     error.value = result.error;
     return;
   }
-  dialog.value = null;
+  close();
   if (props.request.review) return;
-  nextPanelSlot.value = props.request.slot;
-  const { panelType } = props.request;
-  void act({ type: "open-module", moduleId: current.id, ...(panelType ? { panelType } : {}) });
+  void openPanels(current.id, props.request.slot, props.request.panelTypes ?? []);
 }
 </script>
 
 <template>
   <ModalDialog
     v-if="module"
-    :title="request.review ? t('grant.reviewTitle', { name: module.name }) : t('grant.title', { name: module.name })"
+    :title="
+      update ? t('grant.updateTitle', { name: module.name, version: update.version }) : request.review ? t('grant.reviewTitle', { name: module.name }) : t('grant.title', { name: module.name })
+    "
     class="sm:max-w-[480px]"
     testid="grant-dialog"
-    @close="dialog = null"
+    @close="close"
   >
     <div class="flex items-center gap-3">
       <span class="bg-background text-primary flex size-10 flex-none items-center justify-center rounded-[10px] border" aria-hidden="true">
@@ -78,6 +100,7 @@ async function allow() {
       </span>
       <span class="text-muted-foreground text-sm" data-testid="grant-from">{{ from }}</span>
     </div>
+    <p v-if="update" class="text-sm" data-testid="grant-update-intro">{{ t("grant.updateIntro", { name: module.name, installed: module.version, version: update.version }) }}</p>
     <section v-if="connectors.includes('ai-usage')" class="flex flex-col gap-2" :aria-label="t('grant.aiUsage')" data-testid="grant-ai-usage">
       <h3 class="flex items-center gap-2 font-medium"><Gauge :stroke-width="1.5" class="size-4" /> {{ t("grant.aiUsage") }}</h3>
       <ul v-if="aiAccounts.length" class="bg-muted flex flex-col gap-1 rounded-md px-3 py-2 text-sm" data-testid="grant-ai-accounts">
@@ -110,13 +133,14 @@ async function allow() {
       </ul>
       <p class="text-muted-foreground text-sm">{{ t("grant.networkNote") }}</p>
     </section>
+    <ModuleNotes v-if="update && update.notes.length" :module-id="module.id" :version="update.version" :unseen="false" :entries="update.notes" />
     <p class="text-muted-foreground text-sm">{{ t("grant.later") }}</p>
     <p v-if="error" class="text-destructive text-sm" role="alert">{{ error }}</p>
     <div class="flex justify-end gap-2">
-      <Button type="button" variant="secondary" autofocus data-testid="grant-cancel" @click="dialog = null">
+      <Button type="button" variant="secondary" autofocus data-testid="grant-cancel" @click="close">
         {{ request.review ? t("grant.notNow") : t("common.cancel") }}
       </Button>
-      <Button type="button" data-testid="grant-allow" :disabled="busy" @click="allow">{{ t("grant.allow") }}</Button>
+      <Button type="button" data-testid="grant-allow" :disabled="busy" @click="allow">{{ update ? t("grant.updateAllow") : t("grant.allow") }}</Button>
     </div>
   </ModalDialog>
 </template>

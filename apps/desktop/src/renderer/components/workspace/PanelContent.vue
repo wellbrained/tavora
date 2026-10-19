@@ -3,7 +3,9 @@
 // so this only shows while the view is hidden: a still image of the module
 // during menus and drags, or the module's name and state. A Browser panel
 // also gets its toolbar here, above the page, and its start and error pages.
-// A module whose update asks for more gets a bar above its view to review it.
+// A module whose update asks for more gets a bar above its view to review it, and so does one whose
+// catalog update waits for the player's yes because it asks for more (the panel keeps running the
+// installed version until then).
 // A panel whose type the module no longer offers says so, with Remove and the
 // module's other panel types (the decision log, named panels round 4).
 import type { IDockviewPanelProps } from "dockview-vue";
@@ -13,6 +15,7 @@ import { ShieldAlert } from "@lucide/vue";
 import { act, dialog, frozen, needsGrant, state } from "../../host";
 import { t } from "../../i18n";
 import BrowserToolbar from "./BrowserToolbar.vue";
+import CampfireLoader from "./CampfireLoader.vue";
 import { DOCK } from "./dock-context";
 
 const props = defineProps<{ params: IDockviewPanelProps }>();
@@ -27,6 +30,7 @@ const reviewNeeded = computed(() => {
   const module = state.value?.modules.find((item) => item.id === panel.value?.moduleId);
   return module !== undefined && needsGrant(module);
 });
+const updateWaiting = computed(() => module.value?.update ?? null);
 
 // The still image is shown at the size it was taken (its pixels over the
 // screen's pixel ratio), so resizing a split crops or reveals it instead of
@@ -46,7 +50,25 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
   <div class="flex size-full flex-col">
   <BrowserToolbar v-if="panel?.browser" :instance-id="id" :browser="panel.browser" />
   <div
-    v-if="panel && reviewNeeded"
+    v-if="panel && updateWaiting"
+    class="bg-info/10 flex flex-none items-center gap-2 border-b px-3 py-1.5 text-sm"
+    role="status"
+    :data-testid="`update-review-${id}`"
+  >
+    <ShieldAlert :stroke-width="1.5" class="text-info size-4 flex-none" aria-hidden="true" />
+    <span class="min-w-0 flex-1 truncate">{{ t("grant.updateBar", { name: panel.name, version: updateWaiting.version }) }}</span>
+    <Button
+      size="sm"
+      variant="outline"
+      class="h-7"
+      :data-testid="`update-review-open-${id}`"
+      @click="dialog = { kind: 'grant', moduleId: panel.moduleId, slot: null, review: true, update: true }"
+    >
+      {{ t("grant.review") }}
+    </Button>
+  </div>
+  <div
+    v-else-if="panel && reviewNeeded"
     class="bg-warning/10 flex flex-none items-center gap-2 border-b px-3 py-1.5 text-sm"
     role="status"
     :data-testid="`grant-review-${id}`"
@@ -88,7 +110,7 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
           </Button>
         </div>
       </template>
-      <Button size="sm" variant="ghost" data-testid="remove-unavailable-panel" @click="act({ type: 'close-panel', instanceId: id })">{{ t("panel.remove") }}</Button>
+      <Button size="sm" variant="danger" data-testid="remove-unavailable-panel" @click="act({ type: 'close-panel', instanceId: id })">{{ t("panel.remove") }}</Button>
     </div>
     <div v-else-if="panel?.browser?.error" class="flex size-full flex-col items-center justify-center gap-3 p-4 text-center" :data-testid="`browser-error-${id}`">
       <p class="font-medium">{{ t(`browser.error.${panel.browser.error.kind}`, { detail: panel.browser.error.detail }) }}</p>
@@ -99,6 +121,7 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
       <p class="text-foreground font-medium">{{ t("browser.startTitle") }}</p>
       <p>{{ t("browser.startText") }}</p>
     </div>
+    <CampfireLoader v-else-if="panel?.waiting" :name="panel.name" :data-testid="`panel-loading-${id}`" />
     <div v-else class="text-muted-foreground flex size-full items-center justify-center p-4 text-center">
       {{ panel?.name }}
     </div>

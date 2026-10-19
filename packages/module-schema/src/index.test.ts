@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { continuingPanelType, isGameId, isModuleId, isOwnerId, needsNewerTavora, panelTypes, validateManifest, type ModuleManifest } from "./index";
+import { CHANGELOG_LIMITS, continuingPanelType, validateChangelog, isGameId, isModuleId, isOwnerId, needsNewerTavora, panelTypes, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -16,6 +16,15 @@ const valid = {
 };
 
 describe("validateManifest", () => {
+  it("takes workspaces only as a boolean, and true only for a module for any game", () => {
+    const anyGame = { ...valid, games: [] };
+    expect(validateManifest({ ...anyGame, workspaces: false }).ok).toBe(true);
+    expect(validateManifest({ ...anyGame, workspaces: true }).ok).toBe(true);
+    expect(validateManifest({ ...valid, workspaces: false }).ok).toBe(true);
+    expect(validateManifest({ ...anyGame, workspaces: "yes" })).toEqual({ ok: false, errors: ["workspaces must be true or false"] });
+    expect(validateManifest({ ...valid, workspaces: true })).toEqual({ ok: false, errors: ["workspaces can only be true for a module made for any game (games is empty)"] });
+  });
+
   it("accepts a valid manifest", () => {
     expect(validateManifest(valid)).toEqual({ ok: true, manifest: valid });
   });
@@ -91,6 +100,9 @@ const cases: [string, unknown, boolean][] = [
   ["minimal", valid, true],
   ["full", { ...valid, $schema: "x", description: "Plans builds.", icon: "assets/icon.webp" }, true],
   ["any game", { ...valid, games: [] }, true],
+  ["changelog", { ...valid, changelog: "changelog.json" }, true],
+  ["changelog not json", { ...valid, changelog: "CHANGELOG.md" }, false],
+  ["changelog outside the package", { ...valid, changelog: "../changelog.json" }, false],
   ["prerelease version", { ...valid, version: "2.0.0-beta.1" }, true],
   ["nested entry", { ...valid, entry: "a/b/c/index.html" }, true],
   ["dotted file name", { ...valid, entry: "dist/.index.html" }, true],
@@ -283,5 +295,26 @@ describe("isOwnerId", () => {
 
   it.each(["", "Local", "tavora.notes", "0123456789ABCDEF0123456789ABCDEF", "0123456789abcdef", "../x", 7])("refuses %j", (value) => {
     expect(isOwnerId(value)).toBe(false);
+  });
+});
+
+describe("validateChangelog", () => {
+  it("takes versions newest first, each with plain lines", () => {
+    const entries = [
+      { version: "1.1.0", date: "2026-10-18", notes: ["Filters by tag."] },
+      { version: "1.0.0", notes: ["First release."] },
+    ];
+    expect(validateChangelog(entries)).toEqual({ ok: true, entries });
+  });
+
+  it("refuses what Tavora could not show safely or would misread", () => {
+    expect(validateChangelog({ version: "1.0.0" }).ok).toBe(false);
+    expect(validateChangelog([{ version: "1.0", notes: ["x"] }])).toEqual({ ok: false, errors: ["changelog[0].version must be semver, e.g. 1.0.0"] });
+    expect(validateChangelog([{ version: "1.0.0", notes: ["a"] }, { version: "1.0.0", notes: ["b"] }])).toEqual({ ok: false, errors: ["changelog[1].version 1.0.0 is listed twice"] });
+    expect(validateChangelog([{ version: "1.0.0", date: "18.10.2026", notes: ["x"] }]).ok).toBe(false);
+    expect(validateChangelog([{ version: "1.0.0", notes: [] }]).ok).toBe(false);
+    expect(validateChangelog([{ version: "1.0.0", notes: ["two\nlines"] }]).ok).toBe(false);
+    expect(validateChangelog([{ version: "1.0.0", notes: ["x".repeat(CHANGELOG_LIMITS.maxNoteLength + 1)] }]).ok).toBe(false);
+    expect(validateChangelog([{ version: "1.0.0", notes: ["x"], html: "<b>" }]).ok).toBe(false);
   });
 });

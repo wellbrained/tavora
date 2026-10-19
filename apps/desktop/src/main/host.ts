@@ -19,12 +19,13 @@ import {
   shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
+  type OpenDialogOptions,
   type WebContents,
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, DeveloperLink, GameView, HostAction, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
-import { resolveLanguage, translate, type Language } from "../shared/i18n";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, DeveloperLink, GameView, HostAction, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
@@ -33,7 +34,8 @@ import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/lay
 import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
-import { applyOwners, forgetOwner, installZip, readOwnerRecords } from "./installer";
+import { applyOwners, checkZipData, forgetOwner, installZip, installZipData, readOwnerRecords, type Installed } from "./installer";
+import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
 import type { TestHosts } from "./network";
 import { shortcutFor } from "./shortcuts";
@@ -66,6 +68,7 @@ import {
   searchCatalog,
   setFolderLabel,
   setGameImage,
+  markIconOffered,
   markIconShared,
   setGameLabel,
   setRail,
@@ -73,6 +76,7 @@ import {
   trashedGames,
   trashGame,
   useOriginalGameIcon,
+  type DialogPlace,
   type GameEntry,
   type GameIcon,
   type Library,
@@ -80,16 +84,21 @@ import {
 import { MODULE_FONTS } from "./module-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir, keepNewerFile, SUPPORTED_VERSIONS } from "./backup";
+import { CatalogClient, type CatalogScope } from "./catalog-client";
+import { CatalogUpdater, CHECK_INTERVAL_MS, type CatalogInstalled } from "./catalog-updates";
 import { DEFAULT_API_URL, OnlineSearch } from "./online";
 import { PublisherNames } from "./publisher-names";
 import { UpdateManager, type UpdaterLike } from "./updates";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
+import { CATALOGUE_PUBLIC_KEY, SAFETY_REFRESH_MS, SafetyLists, stopBlocked } from "./safety-lists";
 import { createToneReader, iconVersion } from "./icon-tone";
 import { syncIcons } from "./icon-sync";
-import { fetchSteamLibrary, importSteamGames, steamLibraryView } from "./steam-import";
-import { isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, submitIcon } from "./share-icons";
-import { findSteamDir, removeSteamIcon } from "./steam-icons";
-import { ModuleView } from "./module-view";
+import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus, steamLibraryView } from "./steam-import";
+import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, steamShareGames, submitIcon } from "./share-icons";
+import { AppInfoError, readClientIcons } from "./steam-appinfo";
+import { findSteamDir, isSteamAppId, loadAppInfo, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
+import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
+import { ModuleView, REVEAL_CAP_MS } from "./module-view";
 import { HostError } from "./errors";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { isWebUrl, siteOfUrl } from "./browser-url";
@@ -145,6 +154,8 @@ interface Rect {
   height: number;
 }
 
+/** How long a game's panels may keep each other waiting when it opens; past it, every panel shows (each one gives up after REVEAL_CAP_MS). */
+const OPENING_CAP_MS = REVEAL_CAP_MS + 250;
 /** How long to wait for a still image of a panel before hiding it anyway. */
 const FREEZE_TIMEOUT_MS = 250;
 /** How long a development folder's build must be quiet before its panels reload. */
@@ -173,6 +184,8 @@ const TITLE_BAR_HEIGHT = 47;
 
 export interface HostOptions {
   userData: string;
+  /** Where modules keep pictures unless the player chose another folder; left out, inside userData (module-files.ts). */
+  picturesFolder?: string | undefined;
   moduleDirs: string[];
   /** Modules that ship with Tavora, shown as Official. */
   officialModuleDirs: string[];
@@ -275,6 +288,10 @@ export class Host {
   private moduleData: { owner: string; moduleId: string }[] = [];
   /** What the player granted each module (grants.ts); loaded before any module panel opens. */
   private grants!: GrantStore;
+  /** The catalog's signed safety lists (revoked keys, blocked zips, successions). */
+  private safetyLists!: SafetyLists;
+  /** Modules in the player's folder whose zip Tavora blocked: not loaded, data kept. */
+  private blockedModules = new Map<string, InstalledModule>();
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
   private pendingLink: string | null = null;
   /** Where modules keep their pictures. */
@@ -289,7 +306,19 @@ export class Host {
   private windowHidden = false;
   /** Bumped whenever the main process replaces the current layout. */
   private layoutEpoch = 0;
+  /**
+   * Set while a game just opened and its panels load: none is shown until every visible one has its data, so
+   * the workspace appears at once rather than panel by panel.
+   */
+  private opening: { startedAt: number; timer: ReturnType<typeof setTimeout> } | null = null;
   private readonly onlineSearch: OnlineSearch;
+  /** Tavora's module catalog (catalog-client.ts). */
+  private readonly catalog: CatalogClient;
+  /** Keeps modules installed from the catalog up to date (catalog-updates.ts). */
+  private readonly catalogUpdates: CatalogUpdater;
+  /** The modules installed from the catalog, by id, as the installer recorded them. */
+  private catalogModules = new Set<string>();
+  private catalogTimer: ReturnType<typeof setInterval> | undefined;
   /** Looks for new versions; only in an installed (packaged) app. */
   private updates: UpdateManager | null = null;
   private saving: Promise<void> = Promise.resolve();
@@ -313,18 +342,34 @@ export class Host {
     this.currentTheme = moduleTheme(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation);
     this.files = new ModuleFilesFolder({
       userData: options.userData,
-      window: () => this.window,
+      defaultFolder: options.picturesFolder ?? defaultFilesRoot(options.userData),
       language: () => this.language,
       chosenFolder: () => this.library.moduleFilesFolder ?? null,
       setChosenFolder: (folder) => {
         this.library.moduleFilesFolder = folder;
         this.saveLibrary();
       },
+      pick: (options) => this.pickPath("module-files", options),
+      remember: (picked) => this.rememberPicked("module-files", picked),
       notify: (message) => (this.notice = message),
       changed: () => this.pushState(),
     });
     this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
+    this.catalog = new CatalogClient(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
+    this.catalogUpdates = new CatalogUpdater({
+      client: this.catalog,
+      installed: () => this.catalogInstalled(),
+      tavoraVersion: app.getVersion(),
+      firstKey: (key) => this.safetyLists.firstKey(key),
+      check: async (zip, expect) => checkZipData(zip, { ...(await this.installOptions()), expect }),
+      install: async (zip, expect) => {
+        const installed = await installZipData(zip, { ...(await this.installOptions()), expect, catalog: true });
+        await this.finishInstall(installed);
+        return installed;
+      },
+      log: (line) => console.warn(`[tavora] ${line}`),
+    });
     this.discord = Host.discordConnector(options, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:discord", view);
     });
@@ -387,7 +432,16 @@ export class Host {
     const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
     const moduleProblems: ModuleProblem[] = [];
     const modules = await discoverModules({ ...Host.moduleSources(options, library.developmentFolders), tavoraVersion: app.getVersion() }, moduleProblems);
-    applyOwners(modules, await realUserModulesDir(options), await readOwnerRecords(userData));
+    const ownerRecords = await readOwnerRecords(userData);
+    applyOwners(modules, await realUserModulesDir(options), ownerRecords);
+    const safetyLists = new SafetyLists({
+      file: path.join(userData, "catalog-lists.json"),
+      baseUrl: options.apiUrl ?? DEFAULT_API_URL,
+      publicKey: CATALOGUE_PUBLIC_KEY,
+      online: () => library.onlineSearch,
+    });
+    await safetyLists.load();
+    const blockedModules = stopBlocked(modules, await realUserModulesDir(options), ownerRecords, safetyLists, moduleProblems);
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     const moduleInfo = await describeModules(userModulesDir(options), modules);
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
@@ -421,8 +475,12 @@ export class Host {
     );
 
     const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
+    // Before any module opens, so none sees the pictures half moved.
+    await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
     host.moduleData = await listModuleData(userData, host.files.root());
     host.grants = await GrantStore.load(userData);
+    host.safetyLists = safetyLists;
+    host.blockedModules = blockedModules;
     await host.moveAiUsagePanelData();
     await host.moveDiscordPanelData();
     // Native menus, dialogs and scrollbars follow the theme's mode.
@@ -430,6 +488,9 @@ export class Host {
     await host.account.init();
     await host.publisherNames.load();
     void host.refreshPublisherNames();
+    void host.refreshSafetyLists();
+    setInterval(() => void host.refreshSafetyLists(), SAFETY_REFRESH_MS).unref();
+    host.noteModuleVersions();
     // The system's light or dark setting changed (or Tavora's own native theme did, which applyTheme ignores).
     nativeTheme.on("updated", () => {
       if (host.library.followSystem) host.applyTheme();
@@ -458,6 +519,7 @@ export class Host {
     // Icons of games that have none yet are looked for quietly in the background.
     host.fetchIconsSoon();
     host.backupSoon();
+    host.checkCatalogSoon();
     await host.startUpdates();
     return host;
   }
@@ -506,7 +568,7 @@ export class Host {
   /** The daily copy of the player's data, made a little after start so it never slows it. */
   private backupSoon(): void {
     setTimeout(() => {
-      backupData({ userData: this.options.userData, log: (line) => console.log(`[tavora] ${line}`) }).catch((error: unknown) => console.error("[tavora] backup failed", error));
+      backupData({ userData: this.options.userData, moduleFiles: this.files.root(), log: (line) => console.log(`[tavora] ${line}`) }).catch((error: unknown) => console.error("[tavora] backup failed", error));
     }, 30_000).unref();
   }
 
@@ -540,13 +602,21 @@ export class Host {
   private async reloadModules(): Promise<void> {
     const problems: ModuleProblem[] = [];
     const modules = await discoverModules({ ...Host.moduleSources(this.options, this.library.developmentFolders), tavoraVersion: app.getVersion() }, problems);
-    applyOwners(modules, await realUserModulesDir(this.options), await readOwnerRecords(this.options.userData));
+    const records = await readOwnerRecords(this.options.userData);
+    applyOwners(modules, await realUserModulesDir(this.options), records);
+    this.blockedModules = stopBlocked(modules, await realUserModulesDir(this.options), records, this.safetyLists, problems);
+    this.catalogModules = new Set(
+      [...this.blockedModules.values(), ...modules.values()]
+        .filter((module) => module.provenance === "local" && records[path.basename(module.root)]?.catalog && records[path.basename(module.root)]?.id === module.manifest.id)
+        .map((module) => module.manifest.id),
+    );
     modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
     this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
     this.moduleProblems = problems;
     this.modules = modules;
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
+    this.noteModuleVersions();
     settlePanelTypes(this.workspace, panelTypesOf(modules));
     this.syncPanelTypes();
     await this.watchDevelopmentFolders();
@@ -694,12 +764,11 @@ export class Host {
 
   /** The player picks a module project folder, or a folder of them; Tavora loads the modules from it from now on. Answers with the folder, or nothing when cancelled. */
   private async addDevelopmentFolder(): Promise<string | void> {
-    const picked = await dialog.showOpenDialog(this.window, { title: translate(this.language, "dialog.developmentFolder"), properties: ["openDirectory"] });
-    const folder = picked.filePaths[0];
-    if (picked.canceled || !folder) return;
+    const folder = await this.pickPath("development-folder", { title: translate(this.language, "dialog.developmentFolder"), properties: ["openDirectory"] });
+    if (!folder) return;
     if (this.library.developmentFolders.length >= MAX_DEVELOPMENT_FOLDERS) throw new LibraryError("error.tooManyDevelopmentFolders");
     this.library.developmentFolders = cleanDevelopmentFolders([...this.library.developmentFolders, folder]);
-    this.saveLibrary();
+    this.rememberPicked("development-folder", folder);
     await this.reloadModules();
     return path.resolve(folder);
   }
@@ -750,6 +819,18 @@ export class Host {
     return this.publisherOf(module) !== null && this.moduleData.some((entry) => entry.owner === LOCAL_OWNER && entry.moduleId === module.manifest.id);
   }
 
+  /**
+   * Asks the service for the newest signed safety lists (only while online features are on). A list
+   * that blocks an installed module's zip stops it at once.
+   */
+  private async refreshSafetyLists(): Promise<void> {
+    try {
+      if (await this.safetyLists.refresh()) await this.reloadModules();
+    } catch (error) {
+      console.warn("[tavora] safety lists", error);
+    }
+  }
+
   /** Asks for the developer names of the installed modules' keys (each at most once a day). Quietly: offline is fine. */
   private refreshPublisherNames(): Promise<void> {
     const keys = [...this.modules.values()].map((module) => this.publisherOf(module)).filter((key): key is string => key !== null);
@@ -759,6 +840,32 @@ export class Host {
   /** The key fingerprint of a module from a signed zip, or null. */
   private publisherOf(module: InstalledModule): string | null {
     return isOwnerId(module.owner) && module.owner !== OFFICIAL_OWNER && module.owner !== LOCAL_OWNER ? module.owner : null;
+  }
+
+  /** The key a module's seen patch notes are kept under: who publishes it and its id. */
+  private static notesKey(module: InstalledModule): string {
+    return `${module.owner}:${module.manifest.id}`;
+  }
+
+  /**
+   * A module seen for the first time counts as read up to its version, so only the notes of later updates are new.
+   * Kept under owner and id, so another publisher's module with the same id starts fresh.
+   */
+  private noteModuleVersions(): void {
+    let changed = false;
+    for (const module of this.modules.values()) {
+      const key = Host.notesKey(module);
+      if (module.builtIn || this.library.moduleNotesSeen[key] !== undefined) continue;
+      this.library.moduleNotesSeen[key] = module.manifest.version;
+      changed = true;
+    }
+    if (changed) this.saveLibrary();
+  }
+
+  /** What Settings shows of a module's patch notes: the newest version they cover, and whether any are new to the player. */
+  private notesView(module: InstalledModule): { latest: string | null; unseen: boolean } {
+    const notes = installedNotes(this.moduleInfo.get(module.manifest.id)?.changelog ?? [], module.manifest.version);
+    return { latest: notes[0]?.version ?? null, unseen: hasUnseenNotes(notes, module.manifest.version, this.library.moduleNotesSeen[Host.notesKey(module)]) };
   }
 
   /** Closes and forgets every panel whose module is not installed any more, in every game. Module data stays. */
@@ -805,6 +912,7 @@ export class Host {
     // whatever is installed next under this id is asked again.
     await forgetOwner(this.options.userData, path.basename(module.root));
     await this.grants.revoke(module.owner, moduleId);
+    this.catalogUpdates.forget(moduleId);
     await this.reloadModules();
   }
 
@@ -838,18 +946,29 @@ export class Host {
   /** Removes a module's panels in every game; a slot left with nothing stays as an empty slot. */
   private removeModulePanels(moduleId: string): void {
     let changed = false;
-    for (const workspace of Object.values(this.workspace.games)) {
-      const gone = new Set(workspace.instances.filter((record) => record.moduleId === moduleId).map((record) => record.instanceId));
-      if (gone.size === 0) continue;
-      changed = true;
-      workspace.instances = workspace.instances.filter((record) => !gone.has(record.instanceId));
-      workspace.layout = vacateLayout(workspace.layout, (id) => gone.has(id));
-      for (const instanceId of gone) this.closeView(instanceId);
-    }
+    for (const workspace of Object.values(this.workspace.games)) changed = this.vacateModule(workspace, moduleId) || changed;
     if (changed) {
       this.layoutEpoch++;
       this.saveWorkspace();
     }
+  }
+
+  /** Takes a module out of the current game only: its panels close the same way, so the layout stays. Module data stays. */
+  private removeModuleFromGame(moduleId: string): void {
+    const game = this.game;
+    if (!game || !this.vacateModule(this.gameWorkspace(game.id), moduleId)) return;
+    this.layoutEpoch++;
+    this.saveWorkspace();
+  }
+
+  /** Closes a module's panels in one workspace, leaving empty slots; false when it had none. */
+  private vacateModule(workspace: GameWorkspace, moduleId: string): boolean {
+    const gone = new Set(workspace.instances.filter((record) => record.moduleId === moduleId).map((record) => record.instanceId));
+    if (gone.size === 0) return false;
+    workspace.instances = workspace.instances.filter((record) => !gone.has(record.instanceId));
+    workspace.layout = vacateLayout(workspace.layout, (id) => gone.has(id));
+    for (const instanceId of gone) this.closeView(instanceId);
+    return true;
   }
 
   /**
@@ -858,14 +977,132 @@ export class Host {
    * Answers with the module's id, or nothing when the player cancelled.
    */
   private async installModule(): Promise<string | void> {
-    const picked = await dialog.showOpenDialog(this.window, {
+    const file = await this.pickPath("install-module", {
       title: translate(this.language, "dialog.installModule"),
       properties: ["openFile"],
       filters: [{ name: translate(this.language, "dialog.moduleZip"), extensions: ["zip"] }],
     });
-    const file = picked.filePaths[0];
-    if (picked.canceled || !file) return;
-    const installed = await installZip(file, { userData: this.options.userData, userModules: await realUserModulesDir(this.options), modules: this.modules, tavoraVersion: app.getVersion() });
+    if (!file) return;
+    const installed = await installZip(file, await this.installOptions());
+    this.rememberPicked("install-module", file);
+    // Replaced by hand: the catalog no longer keeps it up to date, and an update it was waiting for is dropped.
+    this.catalogUpdates.forget(installed.manifest.id);
+    return this.finishInstall(installed);
+  }
+
+  /**
+   * What every install goes by. The newest revocations and blocks count (C6, C14; offline, the ones
+   * held do), and a module stopped by a block still counts as installed, so a fixed zip is its update.
+   */
+  private async installOptions() {
+    await this.refreshSafetyLists();
+    return {
+      userData: this.options.userData,
+      userModules: await realUserModulesDir(this.options),
+      modules: new Map([...this.blockedModules, ...this.modules]),
+      tavoraVersion: app.getVersion(),
+      safety: this.safetyLists,
+    };
+  }
+
+  /** Where the Browse tab of the module library looks: the current game, or the personal workspace. */
+  private catalogScope(): CatalogScope | null {
+    const id = this.gameId;
+    const game = id ? this.library.games[id] : undefined;
+    if (!game) return null;
+    return game.kind === "workspace" ? { workspace: true } : { game: game.catalogId ?? game.id };
+  }
+
+  /**
+   * Installs a module from the catalog: its listing is asked for again here, never taken from the
+   * host UI, and its zip must match the listed hash and be signed by the listed key (C1) before the
+   * installer writes anything.
+   */
+  private async installCatalogModule(moduleId: string): Promise<string> {
+    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    const entry = await this.catalog.module(moduleId);
+    const zip = await this.catalog.download(entry.zip);
+    return this.finishInstall(await installZipData(zip, { ...(await this.installOptions()), expect: { id: entry.id, owner: entry.owner }, catalog: true }));
+  }
+
+  /**
+   * Reports a module to Tavora (C12). A module installed from the catalog is reported as the zip that
+   * is installed, the one the player has seen; any other id as the version the catalog lists now.
+   * Only the id, the key and the zip's hash are sent, and only because the player pressed Report.
+   */
+  private async reportCatalogModule(moduleId: string): Promise<void> {
+    if (!this.library.onlineSearch) throw new PlayerError("error.reportOff");
+    const module = this.catalogModules.has(moduleId) ? (this.modules.get(moduleId) ?? this.blockedModules.get(moduleId)) : undefined;
+    const record = module ? (await readOwnerRecords(this.options.userData))[path.basename(module.root)] : undefined;
+    if (module && record?.id === moduleId && record.sha256) {
+      await this.catalog.report({ id: moduleId, owner: module.owner, sha256: record.sha256 });
+      return;
+    }
+    const entry = await this.catalog.module(moduleId);
+    await this.catalog.report({ id: entry.id, owner: entry.owner, sha256: entry.zip.sha256 });
+  }
+
+  /** The modules installed from the catalog, as they are now, for the update check. */
+  private catalogInstalled(): CatalogInstalled[] {
+    const installed: CatalogInstalled[] = [];
+    for (const id of this.catalogModules) {
+      // A module stopped by a block counts too: an update that is not blocked brings it back (C14).
+      const module = this.modules.get(id) ?? this.blockedModules.get(id);
+      if (!module || module.owner === LOCAL_OWNER) continue;
+      const { network, connectors = [] } = module.manifest.permissions;
+      installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors] } });
+    }
+    return installed;
+  }
+
+  /**
+   * Looks for updates of modules installed from the catalog a little after start and then every few
+   * hours, only while online features are on. Test runs check only when asked.
+   */
+  private checkCatalogSoon(): void {
+    if (this.options.hidden) return;
+    setTimeout(() => void this.checkCatalogUpdates(), 30_000).unref?.();
+    this.catalogTimer = setInterval(() => void this.checkCatalogUpdates(), CHECK_INTERVAL_MS);
+    this.catalogTimer.unref?.();
+  }
+
+  /**
+   * One update check (catalog-updates.ts). Updates that ask for nothing new are installed and their
+   * panels reload; the others wait for the player, shown in Settings > Modules and on their panels.
+   * Answers with how many modules were updated or are waiting.
+   */
+  private async checkCatalogUpdates(): Promise<{ updated: number; waiting: number }> {
+    if (!this.library.onlineSearch) return { updated: 0, waiting: 0 };
+    const { updated, waiting } = await this.catalogUpdates.check();
+    if (updated.length === 1) {
+      const { manifest } = updated[0]!;
+      this.notice = translate(this.language, "modules.catalogUpdated", { name: manifest.name, version: manifest.version });
+    } else if (updated.length > 1) {
+      this.notice = translate(this.language, "modules.catalogUpdatedMany", { count: String(updated.length) });
+    }
+    this.pushState();
+    return { updated: updated.length, waiting: waiting.length };
+  }
+
+  /**
+   * The player said yes to an update that asks for more (exactly the version they were shown): it is
+   * checked and installed by every installer rule again, what it asked for is granted, and its panels
+   * reload with the new version.
+   */
+  private async applyCatalogUpdate(moduleId: string, version: string): Promise<string> {
+    const module = this.modules.get(moduleId) ?? this.blockedModules.get(moduleId);
+    const pending = this.catalogUpdates.pending(moduleId);
+    if (!module || !pending || pending.version !== version) throw new LibraryError("error.updateGone");
+    const { installed, asks } = await this.catalogUpdates.apply(moduleId, version);
+    const updated = this.modules.get(moduleId);
+    if (updated) {
+      await this.grants.grant(updated, asks);
+      for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === moduleId) view.reload();
+    }
+    return installed.manifest.id;
+  }
+
+  private async finishInstall(installed: Installed): Promise<string> {
     // The developer name comes with the install, so it is said at once (it waits for the service at most a few seconds).
     if (installed.owner !== LOCAL_OWNER) await this.publisherNames.refresh([installed.owner]).catch(() => undefined);
     await this.reloadModules();
@@ -982,7 +1219,8 @@ export class Host {
 
   private get game(): TavoraGame | null {
     const id = this.gameId;
-    return id ? { id, displayName: this.library.games[id]!.name } : null;
+    const entry = id ? this.library.games[id]! : null;
+    return entry ? { id: entry.id, displayName: entry.name, kind: entry.kind } : null;
   }
 
   private gameWorkspace(gameId: string): GameWorkspace {
@@ -1024,7 +1262,12 @@ export class Host {
       if (!action) return { ok: false, error: translate(this.language, "error.notUnderstood") };
       try {
         if (action.type === "share-icons") return await this.shareIcons(action.gameIds);
+        if (action.type === "share-steam-icons") return await this.shareSteamIcons(action.appids);
         if (action.type === "import-steam-games") return this.importSteam(action.games);
+        if (action.type === "check-module-updates") {
+          if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+          return { ok: true, ...(await this.checkCatalogUpdates()) };
+        }
         const id = await this.perform(action);
         return id === undefined ? { ok: true } : { ok: true, id };
       } catch (error) {
@@ -1040,6 +1283,10 @@ export class Host {
     ipcMain.handle("host:get-discord", (event) => (fromHost(event) ? this.discord.view() : null));
     ipcMain.handle("host:get-ai-usage", (event) => (fromHost(event) ? this.aiUsage.view() : null));
     ipcMain.handle("host:get-account", (event) => (fromHost(event) ? this.account.view() : null));
+    ipcMain.handle("host:module-notes", (event, moduleId: unknown) => {
+      const module = fromHost(event) && typeof moduleId === "string" ? this.modules.get(moduleId) : undefined;
+      return module ? installedNotes(this.moduleInfo.get(module.manifest.id)?.changelog ?? [], module.manifest.version) : [];
+    });
     ipcMain.handle("host:search-catalog", (event, query: unknown) =>
       fromHost(event) && typeof query === "string" && query.length <= 100
         ? searchCatalog(this.library, query).map(({ id, name }) => ({ id, name }))
@@ -1052,11 +1299,27 @@ export class Host {
       // Games the player already has (Trash included) are not offered again.
       return { ...result, games: result.games.filter((game) => !this.library.games[game.id]) };
     });
+    ipcMain.handle("host:browse-catalog", async (event): Promise<CatalogListResult> => {
+      if (!fromHost(event)) return { status: "unreachable" };
+      if (!this.library.onlineSearch) return { status: "off" };
+      const scope = this.catalogScope();
+      return scope ? this.catalog.list(scope) : { status: "ok", modules: [] };
+    });
     ipcMain.handle("host:steam-library", async (event, profile: unknown): Promise<SteamLibraryResult> => {
       if (!fromHost(event) || typeof profile !== "string") return { status: "error", error: translate(this.language, "error.notUnderstood") };
       if (!this.library.onlineSearch) return { status: "error", error: translate(this.language, "error.onlineOff") };
       const result = await fetchSteamLibrary({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL, language: this.language }, profile);
-      return result.status === "ok" ? steamLibraryView(this.library, result.games) : result;
+      if (result.status !== "ok") return result;
+      // Kept for sharing icons without adding the games: only games the service listed can be offered.
+      this.steamLookup = result.games;
+      this.steamOffers.clear();
+      return steamLibraryView(this.library, result.games);
+    });
+    ipcMain.handle("host:steam-share-icons", async (event, appids: unknown): Promise<SteamShareResult> => {
+      if (!fromHost(event) || !Array.isArray(appids) || appids.length > MAX_IMPORT_GAMES || !appids.every(isSteamAppId)) {
+        return { status: "error", error: translate(this.language, "error.notUnderstood") };
+      }
+      return this.steamShareIcons(appids);
     });
     ipcMain.on("host:panel-bounds", (event, bounds: unknown) => {
       if (fromHost(event)) this.setPanelBounds(bounds);
@@ -1087,6 +1350,7 @@ export class Host {
       this.viewsByContents.clear();
       this.browsersByContents.clear();
       this.discord.dispose();
+      clearInterval(this.catalogTimer);
     });
   }
 
@@ -1136,8 +1400,9 @@ export class Host {
         break;
       }
       case "share-icons":
+      case "share-steam-icons":
         // Answered with a count, so the IPC handler runs it itself.
-        throw new Error("share-icons is not run through perform");
+        throw new Error(`${action.type} is not run through perform`);
       case "trash-game": {
         const wasOpen = this.gameId === action.gameId;
         trashGame(library, action.gameId, new Date());
@@ -1151,6 +1416,23 @@ export class Host {
         const game = deleteTrashedGame(library, action.gameId);
         this.saveLibrary();
         await this.deleteGameData(game);
+        break;
+      }
+      // Many at once: games already gone are skipped, so a list the screen showed a moment ago still works.
+      case "trash-games": {
+        const live = action.gameIds.filter((id) => isLive(library, id));
+        for (const id of live) trashGame(library, id, new Date());
+        if (this.gameId !== null && live.includes(this.gameId)) this.showScreen("welcome");
+        break;
+      }
+      case "restore-games":
+        for (const id of action.gameIds) if (library.games[id]?.trashedAt) restoreGame(library, id);
+        break;
+      case "delete-games": {
+        const games = action.gameIds.filter((id) => library.games[id]?.trashedAt).map((id) => deleteTrashedGame(library, id));
+        this.saveLibrary();
+        for (const game of games) await this.forgetGameData(game);
+        await this.clearOrphanedSessions();
         break;
       }
       case "favorite":
@@ -1216,6 +1498,7 @@ export class Host {
         library.onlineSearch = action.enabled;
         // Turned on: games without an icon may find one on the service, and the share list can be built.
         if (action.enabled) this.fetchIconsSoon();
+        if (action.enabled) void this.refreshSafetyLists();
         break;
       case "set-language":
         library.language = action.language;
@@ -1275,8 +1558,21 @@ export class Host {
         return this.revokeModule(action.moduleId);
       case "install-module":
         return this.installModule();
+      case "install-catalog-module":
+        return this.installCatalogModule(action.moduleId);
+      case "report-catalog-module":
+        return this.reportCatalogModule(action.moduleId);
+      case "apply-module-update":
+        return this.applyCatalogUpdate(action.moduleId, action.version);
       case "delete-module-data":
         return this.deleteLeftoverData(action.owner, action.moduleId);
+      case "seen-module-notes": {
+        const module = this.modules.get(action.moduleId);
+        if (!module || module.builtIn) return;
+        this.library.moduleNotesSeen[Host.notesKey(module)] = module.manifest.version;
+        this.saveLibrary();
+        return;
+      }
       case "move-local-data":
         return this.moveLocalData(action.moduleId);
       case "reload-themes":
@@ -1309,6 +1605,8 @@ export class Host {
         return this.choosePanelType(action.instanceId, action.panelType);
       case "close-panel":
         return this.closePanel(action.instanceId);
+      case "remove-module-from-game":
+        return this.removeModuleFromGame(action.moduleId);
       case "reload-panel":
         return this.views.get(action.instanceId)?.reload();
       case "stop-panel":
@@ -1348,6 +1646,8 @@ export class Host {
         return this.account.signOut();
       case "account-sign-out-device":
         return this.account.signOutDevice(action.deviceId);
+      case "account-rename-device":
+        return this.account.renameDevice(action.deviceId, action.name);
       case "account-email-code":
         return this.account.sendEmailCode(action.email);
       case "account-change-email":
@@ -1436,14 +1736,14 @@ export class Host {
 
   private async chooseGameImage(gameId: string): Promise<void> {
     if (!isLive(this.library, gameId)) throw new LibraryError("error.gameGone");
-    const picked = await dialog.showOpenDialog(this.window, {
+    const source = await this.pickPath("game-image", {
       title: translate(this.language, "dialog.chooseIcon"),
       properties: ["openFile"],
       filters: [{ name: translate(this.language, "dialog.images"), extensions: ["png", "jpg", "jpeg", "webp"] }],
     });
-    const source = picked.filePaths[0];
-    if (picked.canceled || !source) return;
+    if (!source) return;
     const file = await importIcon(this.iconDir, gameId, source);
+    this.rememberPicked("game-image", source);
     const previous = setGameImage(this.library, gameId, file);
     await this.dropIconFile(previous);
   }
@@ -1586,37 +1886,125 @@ export class Host {
   }
 
   /** Offers these games' icons to the service, one at a time. Returns how many it took. */
-  private async shareIcons(gameIds: string[]): Promise<ActionResult> {
+  private shareIcons(gameIds: string[]): Promise<ActionResult> {
+    const offers = gameIds.flatMap((id) => {
+      const game = this.library.games[id];
+      const file = game ? this.shareableFile(game) : null;
+      if (!game || !file) return [];
+      return [
+        {
+          id: game.id,
+          name: game.name,
+          source: shareSource(file),
+          read: async () => largestIcoFrame(new Uint8Array(await readFile(path.join(this.steamIconDir, file)))),
+          done: () => markIconShared(this.library, game.id, new Date()),
+        },
+      ];
+    });
+    return this.sendOffers(offers);
+  }
+
+  /** Offers the icons of games from the Steam import that are not in the library, as steamShareIcons found them. */
+  private shareSteamIcons(appids: number[]): Promise<ActionResult> {
+    const offers = appids.flatMap((appid) => {
+      const offer = this.steamOffers.get(appid);
+      // Added or offered since the dialog asked: the library flow or nobody offers it now.
+      if (!offer || this.library.iconsOffered.includes(offer.id) || this.library.games[offer.id]) return [];
+      return [
+        {
+          id: offer.id,
+          name: offer.name,
+          source: "steam" as const,
+          read: async () => offer.ico,
+          done: () => {
+            markIconOffered(this.library, offer.id);
+            this.steamOffers.delete(appid);
+          },
+        },
+      ];
+    });
+    return this.sendOffers(offers);
+  }
+
+  private async sendOffers(
+    offers: { id: string; name: string; source: "installed" | "steam"; read: () => Promise<Uint8Array | null>; done: () => void }[],
+  ): Promise<ActionResult> {
     let tried = 0;
     let shared = 0;
     let unreachable = false;
-    for (const id of gameIds) {
-      const game = this.library.games[id];
-      const file = game ? this.shareableFile(game) : null;
-      if (!game || !file) continue;
+    let limited = false;
+    for (const offer of offers) {
       tried += 1;
-      let ico: Uint8Array | null = null;
-      try {
-        ico = largestIcoFrame(new Uint8Array(await readFile(path.join(this.steamIconDir, file))));
-      } catch {
-        ico = null;
-      }
+      const ico = await offer.read().catch(() => null);
       if (!ico) continue;
-      const outcome = await submitIcon({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL }, { id: game.id, name: game.name, source: shareSource(file), ico });
+      const outcome = await submitIcon({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL }, { id: offer.id, name: offer.name, source: offer.source, ico });
       if (outcome === "failed") {
         unreachable = true;
         break;
       }
+      if (outcome === "busy") {
+        limited = true;
+        break;
+      }
       // Sent, or refused for good: either way it is not offered again.
-      markIconShared(this.library, game.id, new Date());
+      offer.done();
       if (outcome === "sent") shared += 1;
       this.saveLibrary();
       this.pushState();
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
     if (tried === 0) return { ok: false, error: translate(this.language, "error.nothingToShare") };
+    if (limited && shared === 0) return { ok: false, error: translate(this.language, "error.share.limited") };
     if (unreachable && shared === 0) return { ok: false, error: translate(this.language, "error.unreachable") };
-    return { ok: true, shared };
+    return limited ? { ok: true, shared, limited: true } : { ok: true, shared };
+  }
+
+  /** The games of the last Steam look-up, kept so their icons can be offered without adding them. */
+  private steamLookup: SteamImportGame[] = [];
+  /** The icons steamShareIcons found on this PC, by Steam appid, ready to be sent as they were shown. */
+  private steamOffers = new Map<number, { id: string; name: string; ico: Uint8Array }>();
+
+  /**
+   * Of these games from the last Steam look-up, the ones the player does not have whose icon Tavora
+   * lacks and the Steam client on this PC keeps (named by its appinfo or the game's Steam shortcut).
+   * Only files already on this PC are read; nothing is downloaded and nothing is added to the library.
+   */
+  private async steamShareIcons(appids: number[]): Promise<SteamShareResult> {
+    const say = (key: MessageKey) => ({ status: "error" as const, error: translate(this.language, key) });
+    if (!this.library.onlineSearch) return say("error.onlineOff");
+    if (!this.library.steamIcons || this.options.steamIcons === "off") return say("error.steam.iconsOff");
+    const list = await this.loadHostedList();
+    if (!list) return say("error.unreachable");
+    const steamDir = await findSteamDir();
+    if (steamDir === null) return say("error.steam.notInstalled");
+    const wanted = new Set(appids);
+    const games = steamShareGames(
+      this.steamLookup.filter((game) => wanted.has(game.appid)),
+      (game) => steamGameStatus(this.library, game) === "new",
+      this.library.iconsOffered,
+      list,
+    );
+    const appInfo = await loadAppInfo(steamDir);
+    let clientIcons = new Map<number, string>();
+    try {
+      if (appInfo) clientIcons = readClientIcons(appInfo, new Set(games.map((game) => game.appid)));
+    } catch (error) {
+      if (!(error instanceof AppInfoError)) throw error;
+    }
+    const shortcuts = await readShortcutIcons(shortcutFolders()).catch(() => new Map<number, string[]>());
+    const views: SteamShareView[] = [];
+    for (const game of games) {
+      const hashes = [clientIcons.get(game.appid), ...(shortcuts.get(game.appid) ?? [])].filter((hash): hash is string => hash !== undefined);
+      for (const hash of hashes) {
+        const ico = await readSteamClientIcon(steamDir, hash);
+        const preview = ico && icoFrameNear(ico, 48);
+        if (!ico || !preview) continue;
+        this.steamOffers.set(game.appid, { id: game.id, name: game.name, ico });
+        views.push({ appid: game.appid, name: game.name, icon: `data:image/x-icon;base64,${Buffer.from(preview).toString("base64")}` });
+        break;
+      }
+    }
+    return { status: "ok", games: views.sort((a, b) => a.name.localeCompare(b.name)) };
   }
 
   private async dropIconFile(icon: GameIcon | null): Promise<void> {
@@ -1625,6 +2013,12 @@ export class Host {
 
   /** Deletes everything stored for a game that left the library for good. */
   private async deleteGameData(game: GameEntry): Promise<void> {
+    await this.forgetGameData(game);
+    await this.clearOrphanedSessions();
+  }
+
+  /** deleteGameData without the browser sessions, so many games can be deleted and the sessions cleared once. */
+  private async forgetGameData(game: GameEntry): Promise<void> {
     const records = this.workspace.games[game.id]?.instances ?? [];
     delete this.workspace.games[game.id];
     this.saveWorkspace();
@@ -1634,6 +2028,9 @@ export class Host {
     await this.files.noteGameDeleted(game.name, (root) => deleteModuleData(this.options.userData, game.id, root));
     await this.dropIconFile(game.icon);
     if (game.iconFile && !iconFileShared(this.library, game.iconFile, game.id)) await removeSteamIcon(this.steamIconDir, game.iconFile);
+  }
+
+  private async clearOrphanedSessions(): Promise<void> {
     // Sessions may already be open in this run, so clear them; their
     // directories are removed at the next start.
     const keep = new Set(Object.keys(this.library.games));
@@ -1865,6 +2262,7 @@ export class Host {
       baseUrl: options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL,
       fetch: (input, init) => fetch(input, init),
       os: deviceOs(process.platform),
+      deviceName: os.hostname(),
       language,
       canKeepSignIn: () => encryptor.isAvailable(),
       load: () => loadAccount(file, encryptor),
@@ -2035,6 +2433,32 @@ export class Host {
     if (!game) return;
     for (const record of this.records(game.id)) this.createView(record, game);
     this.layoutEpoch++;
+    if ([...this.views.values()].some((view) => view instanceof ModuleView)) {
+      this.endOpening();
+      this.opening = { startedAt: performance.now(), timer: setTimeout(() => this.endOpening(true), OPENING_CAP_MS) };
+    }
+  }
+
+  /** The game has opened once the host UI placed its panels and every visible module page has its data. */
+  private openingDone(): boolean {
+    if (this.panelBounds.size === 0) return false;
+    for (const instanceId of this.panelBounds.keys()) {
+      const view = this.views.get(instanceId);
+      if (view instanceof ModuleView && !view.revealed) return false;
+    }
+    return true;
+  }
+
+  /** Ends the wait for a game's panels; `show` places them and tells the host UI, which takes its loading cover away. */
+  private endOpening(show = false): void {
+    if (!this.opening) return;
+    clearTimeout(this.opening.timer);
+    const took = performance.now() - this.opening.startedAt;
+    this.opening = null;
+    if (!show) return;
+    timings.record("game-open", took);
+    this.applyBounds();
+    this.pushState();
   }
 
   /** openedAt is when the player asked for the panel; its time to a loaded page is measured from there. */
@@ -2060,7 +2484,10 @@ export class Host {
       baseCss: (moduleCss ??= moduleBaseCss(MODULE_FONTS)),
       ...(this.options.moduleStorageLimit === undefined ? {} : { storageLimit: this.options.moduleStorageLimit }),
       onStorageOver: () => void this.purgeModuleStorage(module.manifest.id, game.id),
-      onReveal: () => this.applyBounds(),
+      onReveal: () => {
+        this.applyBounds();
+        this.pushStateSoon();
+      },
       onOpenLink: (url) => this.openLinkFromModule(url),
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
       launch: () => this.launchOf(record),
@@ -2077,7 +2504,7 @@ export class Host {
           measured = true;
           timings.record("panel-open", performance.now() - openedAt!);
         }
-        this.pushState();
+        this.pushStateSoon();
       },
     });
     const contentsId = view.webContentsId;
@@ -2306,6 +2733,7 @@ export class Host {
   }
 
   private closeAllViews(): void {
+    this.endOpening();
     for (const instanceId of [...this.views.keys()]) this.destroyView(instanceId);
     this.panelBounds.clear();
   }
@@ -2338,11 +2766,13 @@ export class Host {
    * tab are hidden and paused, as are all panels while the window is.
    */
   private applyBounds(): void {
+    if (this.opening && this.openingDone()) return this.endOpening(true);
     for (const [instanceId, view] of this.views) {
       const rect = this.panelBounds.get(instanceId);
       if (rect) view.setBounds(rect);
-      // A module page stays hidden until it has its data, so switching games does not show it building itself.
-      view.setVisible(rect !== undefined && !this.overlay && (!(view instanceof ModuleView) || view.revealed));
+      // A module page stays hidden until it has its data, so switching games does not show it building itself;
+      // while a game opens, every panel waits for the others.
+      view.setVisible(rect !== undefined && !this.overlay && !this.opening && (!(view instanceof ModuleView) || view.revealed));
       if (rect && !this.windowHidden) view.resume();
       else view.suspend();
     }
@@ -2422,8 +2852,11 @@ export class Host {
   // ── State ────────────────────────────────────────────────────────────
 
   private supportsGame(module: InstalledModule, gameId: string): boolean {
-    const { games } = module.manifest;
-    const catalogId = this.library.games[gameId]?.catalogId;
+    const { games, workspaces } = module.manifest;
+    const entry = this.library.games[gameId];
+    // A workspace belongs to no game: only modules for any game that did not opt out go there.
+    if (entry?.kind === "workspace") return games.length === 0 && workspaces !== false;
+    const catalogId = entry?.catalogId;
     return games.length === 0 || games.includes(gameId) || (catalogId != null && games.includes(catalogId));
   }
 
@@ -2442,6 +2875,7 @@ export class Host {
   private gameView(game: GameEntry): GameView {
     return {
       id: game.id,
+      kind: game.kind,
       name: game.name,
       icon: game.icon.kind === "image" ? { kind: "image", url: ICON_URL + game.icon.file } : game.icon,
       ...this.ownIcon(game),
@@ -2506,6 +2940,7 @@ export class Host {
         version: module.manifest.version,
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
+        fromCatalog: this.catalogModules.has(module.manifest.id),
         publisher: this.publisherOf(module),
         publisherName: ((key) => (key ? this.publisherNames.name(key) : null))(this.publisherOf(module)),
         localDataWaiting: this.localDataWaiting(module),
@@ -2516,8 +2951,12 @@ export class Host {
           missing: this.grants.missing(module),
         },
         usedIn: this.gamesUsing(module.manifest.id),
+        notes: this.notesView(module),
+        update: ((pending) => (pending ? { version: pending.version, asks: { network: [...pending.asks.network], connectors: [...pending.asks.connectors] }, notes: pending.notes } : null))(
+          this.catalogUpdates.pending(module.manifest.id),
+        ),
       })),
-      moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder).map(({ folder, message }) => ({ folder, message })),
+      moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder).map(({ folder, message, kind }) => ({ folder, message, ...(kind ? { kind } : {}) })),
       developmentFolders: this.library.developmentFolders.map((folder) => {
         const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
         const projects = new Map<string, { project: string; moduleId: string | null; problem: string | null; kind: NonNullable<ModuleProblem["kind"]> | null }>();
@@ -2546,16 +2985,22 @@ export class Host {
         const name = type?.name ?? this.modules.get(record.moduleId)!.manifest.name;
         const panelType = record.panelType ?? null;
         const openedFrom = this.openedFrom.get(record.instanceId);
-        if (type === undefined) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: record.panelType ?? name, status: "unavailable" as const, content: null };
+        if (type === undefined) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: record.panelType ?? name, status: "unavailable" as const, waiting: false, content: null };
         const content = record.content?.title ?? null;
-        if (!(view instanceof BrowserPanel)) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status: view?.status ?? "loading", content };
+        if (!(view instanceof BrowserPanel)) {
+          const status = view?.status ?? "loading";
+          // Hidden until its page has its data.
+          const waiting = (status === "loading" || status === "ready") && !view?.revealed;
+          return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status, waiting, content };
+        }
         const browser = view.state;
         // A Browser tab is named after its page, like a browser tab.
         const title = (browser.title || browser.host).trim().slice(0, 80);
-        return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: title || name, status: view.status, content: null, browser, ...(openedFrom ? { openedFrom } : {}) };
+        return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: title || name, status: view.status, waiting: false, content: null, browser, ...(openedFrom ? { openedFrom } : {}) };
       }),
       layout: workspace.layout,
       layoutEpoch: this.layoutEpoch,
+      opening: this.opening !== null,
       pendingLink: this.pendingLink,
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
@@ -2602,11 +3047,38 @@ export class Host {
   }
 
   private pushState(): void {
+    clearImmediate(this.statePush);
+    this.statePush = undefined;
     if (!this.window.isDestroyed()) this.window.webContents.send("host:state", this.viewState());
+  }
+
+  private statePush: ReturnType<typeof setImmediate> | undefined;
+
+  /** Pushes the state once for a burst of changes, such as every panel of a game that just opened loading at once. */
+  private pushStateSoon(): void {
+    this.statePush ??= setImmediate(() => this.pushState());
   }
 
   private enqueue(write: () => Promise<void>, what: string): void {
     this.saving = this.saving.then(write).catch((error: unknown) => console.error(`[tavora] could not save ${what}`, error));
+  }
+
+  /**
+   * The system's open dialog, opening in the folder the player last picked from in this `place` while
+   * that folder is still there. Answers with what was picked, or nothing when cancelled; the caller
+   * remembers it (rememberPicked) only once it worked, so a zip that failed to install is not where it opens next.
+   */
+  private async pickPath(place: DialogPlace, options: OpenDialogOptions): Promise<string | undefined> {
+    const folder = this.library.dialogFolders[place];
+    const picked = await dialog.showOpenDialog(this.window, { ...options, ...(folder && existsSync(folder) ? { defaultPath: folder } : {}) });
+    const file = picked.filePaths[0];
+    return picked.canceled || !file ? undefined : file;
+  }
+
+  /** The dialog for `place` opens next time in the folder `picked` is in (for a picked folder, its parent), and the library is saved. */
+  private rememberPicked(place: DialogPlace, picked: string): void {
+    this.library.dialogFolders[place] = path.dirname(path.resolve(picked));
+    this.saveLibrary();
   }
 
   private saveLibrary(): void {

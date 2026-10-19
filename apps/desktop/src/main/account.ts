@@ -89,6 +89,8 @@ export interface AccountClientOptions {
   baseUrl: string;
   fetch: typeof fetch;
   os: DeviceOs;
+  /** This PC's name (its computer name), which a new sign-in goes by until the player renames it. */
+  deviceName?: string;
   language: () => Language;
   canKeepSignIn: () => boolean;
   load: () => Promise<SavedAccount | null>;
@@ -147,7 +149,7 @@ function device(value: unknown): AccountDevice | null {
   const raw = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
   const os = (["windows", "linux", "macos"] as const).find((name) => name === raw.os) ?? "other";
   return isText(raw.id, 40) && isText(raw.createdAt, 40) && isText(raw.lastUsedAt, 40) && typeof raw.current === "boolean"
-    ? { id: raw.id, os, createdAt: raw.createdAt, lastUsedAt: raw.lastUsedAt, current: raw.current }
+    ? { id: raw.id, os, name: isText(raw.name, 40) ? raw.name : null, createdAt: raw.createdAt, lastUsedAt: raw.lastUsedAt, current: raw.current }
     : null;
 }
 
@@ -210,7 +212,7 @@ export class AccountClient {
   async verify(code: string): Promise<void> {
     const pending = this.pending;
     if (pending?.kind !== "sign-in") throw new PlayerError("account.error.noCode");
-    const answer = await this.call("POST", "/verify", { email: pending.email, code, os: this.options.os });
+    const answer = await this.call("POST", "/verify", { email: pending.email, code, ...this.device() });
     if (answer.status === "no-account") {
       this.pending = { ...pending, step: "create" };
       this.pendingCode = code;
@@ -225,12 +227,12 @@ export class AccountClient {
     const pending = this.pending;
     if (pending?.kind === "discord-create" && this.pendingTicket) {
       if (!ageConfirmed) throw new PlayerError("account.error.ageRequired");
-      await this.signedIn(await this.call("POST", "/discord/create", { ticket: this.pendingTicket, os: this.options.os }));
+      await this.signedIn(await this.call("POST", "/discord/create", { ticket: this.pendingTicket, ...this.device() }));
       return;
     }
     if (pending?.kind !== "sign-in" || pending.step !== "create" || !this.pendingCode) throw new PlayerError("account.error.noCode");
     if (!ageConfirmed) throw new PlayerError("account.error.ageRequired");
-    await this.signedIn(await this.call("POST", "/verify", { email: pending.email, code: this.pendingCode, os: this.options.os, create: true }));
+    await this.signedIn(await this.call("POST", "/verify", { email: pending.email, code: this.pendingCode, ...this.device(), create: true }));
   }
 
   cancel(): void {
@@ -245,7 +247,7 @@ export class AccountClient {
   /** Signs in with Discord in the browser; a Discord login with no account yet asks first, like a new address. */
   async discordSignIn(): Promise<void> {
     this.ensure(false);
-    const answer = await this.call("POST", "/discord/sign-in", { ...(await this.discord()), os: this.options.os });
+    const answer = await this.call("POST", "/discord/sign-in", { ...(await this.discord()), ...this.device() });
     if (answer.status === "no-account" && typeof answer.ticket === "string") {
       const name = (answer.discord as Record<string, unknown> | undefined)?.name;
       this.pending = { kind: "discord-create", name: isText(name, 32) ? name : "" };
@@ -344,6 +346,15 @@ export class AccountClient {
     if (!this.options.enabled || !this.saved) return;
     const answer = await this.call("GET", "/", undefined, true);
     this.devices = Array.isArray(answer.devices) ? answer.devices.map(device).filter((item): item is AccountDevice => item !== null) : [];
+    // A sign-in from before devices had names gets this PC's.
+    const unnamed = this.devices.find((item) => item.current && item.name === null);
+    const name = this.options.deviceName?.trim().slice(0, 40);
+    if (unnamed && name) {
+      await this.call("PUT", `/devices/${encodeURIComponent(unnamed.id)}/name`, { name }, true).then(
+        () => (unnamed.name = name),
+        () => undefined,
+      );
+    }
     // The email or Discord may have changed on another PC.
     await this.updated(answer);
     // The developer side too; a service without it yet leaves it unknown.
@@ -387,6 +398,18 @@ export class AccountClient {
     this.ensure(true);
     await this.call("POST", "/sign-out", {}, true).catch(() => undefined);
     await this.forget();
+  }
+
+  /** What a sign-in tells the service about this PC. */
+  private device(): { os: DeviceOs; name?: string } {
+    const name = this.options.deviceName?.trim().slice(0, 40);
+    return { os: this.options.os, ...(name ? { name } : {}) };
+  }
+
+  async renameDevice(id: string, name: string): Promise<void> {
+    this.ensure(true);
+    await this.call("PUT", `/devices/${encodeURIComponent(id)}/name`, { name: name.trim() }, true);
+    await this.refresh();
   }
 
   async signOutDevice(id: string): Promise<void> {

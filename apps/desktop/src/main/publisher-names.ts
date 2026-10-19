@@ -12,6 +12,12 @@ export const NAME_FRESH_MS = 24 * 60 * 60_000;
 /** Keys kept in the file; the oldest checks go first. */
 const MAX_ENTRIES = 500;
 const NAME = /^[A-Za-z0-9][A-Za-z0-9 ._-]{1,30}[A-Za-z0-9]$/;
+
+/** A developer name in the only form the service allows: plain ASCII, no links or direction marks. */
+export function isPublisherName(value: unknown): value is string {
+  return typeof value === "string" && NAME.test(value);
+}
+
 /** A publisher key fingerprint, the owner id of a signed module. */
 const FINGERPRINT = /^[0-9a-f]{32}$/;
 
@@ -24,7 +30,7 @@ export interface PublisherNamesOptions {
   file: string;
   baseUrl: string;
   fetch: typeof fetch;
-  /** Whether the player allows Tavora to ask its service (Settings > General > Online game search). */
+  /** Whether the player allows Tavora to ask its service (Settings > Online > Online features). */
   online: () => boolean;
   /** A name became known or changed. */
   onChange: () => void;

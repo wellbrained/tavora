@@ -22,7 +22,7 @@ Lose the key and your next zip counts as a different publisher. Players can't in
 - **Never share it** and never commit it. Whoever has it can publish updates as you. The key isn't in your project folder, and the starter's `.gitignore` keeps `*.pem` files out of git in case you put one there.
 - On a new PC, copy the file back to `~/.tavora/publisher-key.pem` before you pack.
 
-Claiming back a lost or leaked key isn't possible yet. It's planned, but only for keys that were [linked to your account](#show-your-name) before they were lost. So link yours now.
+A lost or leaked key can be replaced by a new one only if it was [linked to your account](#show-your-name) before it was lost: see [A lost or leaked key](./publishing.md#a-lost-or-leaked-key). So link yours now.
 
 ## Show your name
 
@@ -46,8 +46,8 @@ The name is a label. What a player can install is still decided by the key's sig
 
 1. Raise `version` in `tavora.module.json` (and in `package.json`, to keep them the same). Tavora refuses a zip with the same or a lower version than the installed one.
 2. `npm run build`, then `npm run zip`, with the same key.
-3. Send the new zip. Players install it with **Settings > Modules > Install from zip**, over the old one, and keep their data.
+3. Send the new zip. Players install it with **Settings > Modules > Install zip**, over the old one, and keep their data.
 
 If the new version uses something from a newer SDK, raise [`minTavora`](../reference/manifest.md) too, so an older Tavora says it needs an update instead of loading a module it can't run. The [SDK changelog](../reference/changelog.md) says which Tavora each feature needs.
 
-There are no automatic updates or install links yet. They come with the module catalogue.
+Publish the new zip to the catalog too, and players who installed your module from it get the update on their own: see [Publishing to the catalog](./publishing.md#updates). There are no install links from web pages yet.

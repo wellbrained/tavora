@@ -28,10 +28,18 @@ export function fingerprint(key: KeyObject): string {
   return createHash("sha256").update(rawPublicKey(key)).digest("hex").slice(0, 32);
 }
 
-function rawPublicKey(key: KeyObject): Buffer {
+/** The raw 32-byte public half of an Ed25519 key (either half). */
+export function rawPublicKey(key: KeyObject): Buffer {
   const der = (key.type === "private" ? createPublicKey(key) : key).export({ format: "der", type: "spki" });
   if (der.length !== 44 || !der.subarray(0, 12).equals(ED25519_SPKI)) throw new Error("not an Ed25519 public key");
   return der.subarray(12);
+}
+
+/** An Ed25519 public key from its raw 32 bytes in base64, or null when it is not one. */
+export function publicKeyFromRaw(base64: string): KeyObject | null {
+  const raw = Buffer.from(base64, "base64");
+  if (raw.length !== 32 || raw.toString("base64") !== base64) return null;
+  return createPublicKey({ key: Buffer.concat([ED25519_SPKI, raw]), format: "der", type: "spki" });
 }
 
 function sha256(data: Buffer): string {
@@ -75,9 +83,8 @@ export function verifyFiles(files: readonly ZipFile[]): VerifyResult {
   }
   if (!isSignature(body)) return { ok: false, reason: "its signature file is not in a format this Tavora knows" };
 
-  const raw = Buffer.from(body.publicKey, "base64");
-  if (raw.length !== 32 || raw.toString("base64") !== body.publicKey) return { ok: false, reason: "its signature has no valid key" };
-  const publicKey = createPublicKey({ key: Buffer.concat([ED25519_SPKI, raw]), format: "der", type: "spki" });
+  const publicKey = publicKeyFromRaw(body.publicKey);
+  if (!publicKey) return { ok: false, reason: "its signature has no valid key" };
   const signature = Buffer.from(body.signature, "base64");
   if (signature.length !== 64 || !verify(null, signedBytes(body.publicKey, body.files), publicKey, signature)) {
     return { ok: false, reason: "its signature does not match" };

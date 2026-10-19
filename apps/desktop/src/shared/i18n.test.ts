@@ -65,9 +65,9 @@ describe("resolveLanguage", () => {
 
 describe("translate", () => {
   it("fills in placeholders and leaves unknown ones alone", () => {
-    expect(translate("en", "settings.updates.available", { version: "1.2.3" })).toBe("Version 1.2.3 is available.");
-    expect(translate("de", "settings.updates.available", { version: "1.2.3" })).toBe("Version 1.2.3 ist verfügbar.");
-    expect(translate("en", "settings.updates.available")).toBe("Version {version} is available.");
+    expect(translate("en", "settings.updates.available", { version: "1.2.3" })).toBe("1.2.3 is out.");
+    expect(translate("de", "settings.updates.available", { version: "1.2.3" })).toBe("1.2.3 ist da.");
+    expect(translate("en", "settings.updates.available")).toBe("{version} is out.");
   });
 
   it("falls back to the key itself for a text that does not exist", () => {

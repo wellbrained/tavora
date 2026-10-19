@@ -19,9 +19,17 @@ export type { RootItem, RootSort, Startup };
 
 export type GameIcon = { kind: "monogram"; text: string } | { kind: "image"; file: string };
 
+/**
+ * What an entry in the library is: a game, or a personal workspace that belongs to no game (for
+ * modules such as Notes or Whiteboard). Both keep their own layout and module data under their id.
+ */
+export type EntryKind = "game" | "workspace";
+
 export interface GameEntry {
   /** Stable id. Keys the game's workspace and module data, so it never changes. */
   id: string;
+  /** A workspace has no built-in game, Steam id or icon of its own. */
+  kind: EntryKind;
   /** Set when the game was picked from the built-in list. */
   catalogId: string | null;
   /** Display name. Renaming never changes the id. */
@@ -81,8 +89,14 @@ export interface Library {
   moduleFilesFolder: string | null;
   /** Module project folders a developer added in Settings > Modules; loaded straight from there (registry.ts). */
   developmentFolders: string[];
+  /** Per system file dialog, the folder the player last picked from in it; the dialog opens there next time. */
+  dialogFolders: Partial<Record<DialogPlace, string>>;
+  /** Per `owner:module id`, the module version whose patch notes the player has seen; newer notes are marked new. */
+  moduleNotesSeen: Record<string, string>;
   /** The Steam profile link or id the player chose to remember for the Steam import, or null. Kept only on this PC. */
   steamProfile: string | null;
+  /** Ids of games not in the library whose icon the player offered to the Tavora service (Steam import), so they are not offered again. */
+  iconsOffered: string[];
   /** The language of Tavora's texts: one of them, or the system's. */
   language: LanguageSetting;
   /** The picked theme and variation. Kept even while that theme is not installed, which shows the default. */
@@ -101,8 +115,16 @@ export const TRASH_DAYS = 30;
 export const MAX_NAME = 80;
 export const MAX_LABEL = 3;
 
+/** The system file dialogs that open where the player last picked from. */
+export const DIALOG_PLACES = ["install-module", "development-folder", "game-image", "module-files"] as const;
+export type DialogPlace = (typeof DIALOG_PLACES)[number];
+
 /** Most development folders kept. */
 export const MAX_DEVELOPMENT_FOLDERS = 20;
+/** Modules whose seen patch notes are remembered; more than anyone installs. */
+export const MAX_NOTES_SEEN = 1000;
+/** Offered icons of games not in the library that are remembered; as many as a Steam import can list. */
+export const MAX_ICONS_OFFERED = 5000;
 
 /** Absolute paths only, each once (ignoring case on Windows), at most MAX_DEVELOPMENT_FOLDERS. */
 export function cleanDevelopmentFolders(values: unknown[]): string[] {
@@ -140,7 +162,10 @@ export function emptyLibrary(): Library {
     moduleIcons: true,
     moduleFilesFolder: null,
     developmentFolders: [],
+    dialogFolders: {},
+    moduleNotesSeen: {},
     steamProfile: null,
+    iconsOffered: [],
     language: "system",
     theme: { ...DEFAULT_THEME },
     followSystem: true,
@@ -264,7 +289,8 @@ function customGameId(library: Library, name: string): string {
 export type NewGame =
   | { catalogId: string }
   | { name: string; steamAppId?: number | null }
-  | { online: { id: string; name: string; steamAppId?: number | null } };
+  | { online: { id: string; name: string; steamAppId?: number | null } }
+  | { workspace: string };
 
 function checkNotInLibrary(library: Library, id: string): void {
   const existing = library.games[id];
@@ -279,7 +305,13 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
   let name: string;
   let catalogId: string | null = null;
   let steamAppId: number | null = null;
-  if ("catalogId" in input) {
+  let kind: EntryKind = "game";
+  if ("workspace" in input) {
+    // A workspace is never linked to a built-in game, whatever its name.
+    name = cleanName(input.workspace);
+    id = customGameId(library, name);
+    kind = "workspace";
+  } else if ("catalogId" in input) {
     const known = catalogGame(input.catalogId);
     if (!known) throw new LibraryError("error.game.notBuiltIn");
     checkNotInLibrary(library, known.id);
@@ -306,15 +338,16 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
   if (!isGameId(id)) throw new LibraryError("error.game.badName");
   library.games[id] = {
     id,
+    kind,
     catalogId,
     name,
     icon: { kind: "monogram", text: monogram(name) },
-    useOriginalIcon: true,
+    useOriginalIcon: kind === "game",
     steamAppId,
     iconFile: null,
     iconCheckedAt: null,
     iconSharedAt: null,
-    showNews: true,
+    showNews: kind === "game",
     addedAt: now.toISOString(),
     lastPlayedAt: null,
     trashedAt: null,
@@ -323,9 +356,9 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
   return id;
 }
 
-/** Live games that have no icon yet and are due to be looked up. */
+/** Live games that have no icon yet and are due to be looked up. Workspaces have no icon to find. */
 export function gamesNeedingIcon(library: Library, now: Date): GameEntry[] {
-  return liveGames(library).filter((game) => needsIcon(game, now));
+  return liveGames(library).filter((game) => game.kind === "game" && needsIcon(game, now));
 }
 
 /** Records the outcome of looking for a game's icon: the saved file, or that none was found. */
@@ -346,6 +379,11 @@ export function recordIcon(library: Library, id: string, outcome: { file: string
 export function markIconShared(library: Library, id: string, now: Date): void {
   const game = library.games[id];
   if (game) game.iconSharedAt = now.toISOString();
+}
+
+/** Notes that the player offered the icon of a game that is not in the library, newest last. */
+export function markIconOffered(library: Library, id: string): void {
+  library.iconsOffered = [...library.iconsOffered.filter((other) => other !== id), id].slice(-MAX_ICONS_OFFERED);
 }
 
 /** True when another game in the library uses this icon file. */
@@ -380,7 +418,8 @@ export function useOriginalGameIcon(library: Library, id: string): GameIcon {
   const game = liveGame(library, id);
   const previous = game.icon;
   game.icon = { kind: "monogram", text: monogram(game.name) };
-  game.useOriginalIcon = true;
+  // A workspace has no icon of its own, so its letters are its original.
+  game.useOriginalIcon = game.kind === "game";
   return previous;
 }
 
@@ -550,10 +589,31 @@ export function sanitizeLibrary(raw: unknown): Library {
     if (!name || typeof game.addedAt !== "string" || !ISO.test(game.addedAt)) continue;
     // A game saved before Steam icons existed gets its Steam id from the built-in list, if it is there.
     // Diablo IV was saved with the Steam id of another game; it gets the right one and its icon is looked for again.
+    // Only an id made on this PC can be a workspace, so a built-in game is never turned into one.
+    if (game.kind === "workspace" && game.id.startsWith("local-")) {
+      library.games[game.id] = {
+        id: game.id,
+        kind: "workspace",
+        catalogId: null,
+        name,
+        icon: sanitizeIcon(game.icon, name),
+        useOriginalIcon: false,
+        steamAppId: null,
+        iconFile: null,
+        iconCheckedAt: null,
+        iconSharedAt: null,
+        showNews: false,
+        addedAt: game.addedAt,
+        lastPlayedAt: typeof game.lastPlayedAt === "string" && ISO.test(game.lastPlayedAt) ? game.lastPlayedAt : null,
+        trashedAt: typeof game.trashedAt === "string" && ISO.test(game.trashedAt) ? game.trashedAt : null,
+      };
+      continue;
+    }
     const wrongDiabloId = game.steamAppId === WRONG_DIABLO_ID && (game.id === "diablo-4" || game.catalogId === "diablo-4");
     const steamAppId = wrongDiabloId ? (catalogGame("diablo-4")?.steamAppId ?? null) : isSteamAppId(game.steamAppId) ? game.steamAppId : (catalogGame(game.id)?.steamAppId ?? null);
     library.games[game.id] = {
       id: game.id,
+      kind: "game",
       catalogId: typeof game.catalogId === "string" && catalogGame(game.catalogId) ? game.catalogId : null,
       name,
       icon: sanitizeIcon(game.icon, name),
@@ -613,8 +673,19 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.moduleIcons === "boolean") library.moduleIcons = saved.moduleIcons;
   if (typeof saved.moduleFilesFolder === "string" && saved.moduleFilesFolder.length <= 500 && path.isAbsolute(saved.moduleFilesFolder)) library.moduleFilesFolder = saved.moduleFilesFolder;
   if (Array.isArray(saved.developmentFolders)) library.developmentFolders = cleanDevelopmentFolders(saved.developmentFolders);
+  const dialogFolders = asRecord(saved.dialogFolders);
+  for (const place of DIALOG_PLACES) {
+    const folder = dialogFolders[place];
+    if (typeof folder === "string" && folder.length <= 500 && path.isAbsolute(folder)) library.dialogFolders[place] = folder;
+  }
+  for (const [key, version] of Object.entries(asRecord(saved.moduleNotesSeen)).slice(0, MAX_NOTES_SEEN)) {
+    if (key.length <= 200 && /^[^:]+:[^:]+$/.test(key) && typeof version === "string" && version.length <= 64) library.moduleNotesSeen[key] = version;
+  }
   if (isLanguageSetting(saved.language)) library.language = saved.language;
   if (typeof saved.steamProfile === "string" && saved.steamProfile.trim() && saved.steamProfile.length <= 200) library.steamProfile = saved.steamProfile.trim();
+  if (Array.isArray(saved.iconsOffered)) {
+    library.iconsOffered = [...new Set(saved.iconsOffered.filter((id): id is string => isGameId(id) && !id.startsWith("local-")))].slice(-MAX_ICONS_OFFERED);
+  }
   const theme = asRecord(saved.theme);
   if (isModuleId(theme.id) && isVariationId(theme.variation)) library.theme = { id: theme.id, variation: theme.variation };
   if (typeof saved.followSystem === "boolean") library.followSystem = saved.followSystem;

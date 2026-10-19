@@ -3,7 +3,7 @@
 
 import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { dialog, shell, type BrowserWindow } from "electron";
+import { shell, type OpenDialogOptions } from "electron";
 import type { Language } from "../shared/i18n";
 import { translate } from "../shared/i18n";
 import { LibraryError } from "./library";
@@ -12,12 +12,17 @@ import { copyStoredFiles, defaultFilesRoot, filesTarget, listStoredFiles, remove
 /** What the folder needs from the host around it. */
 export interface ModuleFilesFolderHost {
   userData: string;
-  window(): BrowserWindow;
+  /** Where the pictures go unless the player chose another folder: Pictures\Tavora. */
+  defaultFolder: string;
   language(): Language;
   /** The folder the player chose, or null for the default one. */
   chosenFolder(): string | null;
   /** Remembers the chosen folder (null for the default) and saves the library. */
   setChosenFolder(folder: string | null): void;
+  /** The system's open dialog, in the folder last picked from; what was picked, or nothing when cancelled. */
+  pick(options: OpenDialogOptions): Promise<string | undefined>;
+  /** Opens the dialog next to `picked` from now on. */
+  remember(picked: string): void;
   /** Shows the player a message. */
   notify(message: string): void;
   /** Tells the host UI that something here changed. */
@@ -34,7 +39,7 @@ export class ModuleFilesFolder {
 
   /** Where modules keep their pictures: the folder the player chose, or the default one. */
   root(): string {
-    return this.host.chosenFolder() ?? defaultFilesRoot(this.host.userData);
+    return this.host.chosenFolder() ?? this.host.defaultFolder;
   }
 
   get custom(): boolean {
@@ -55,23 +60,43 @@ export class ModuleFilesFolder {
 
   /** The player picks a place in the system dialog. */
   async change(): Promise<void> {
-    const picked = await dialog.showOpenDialog(this.host.window(), {
+    const folder = await this.host.pick({
       title: translate(this.host.language(), "dialog.chooseModuleFiles"),
       properties: ["openDirectory", "createDirectory"],
     });
-    const folder = picked.filePaths[0];
-    if (picked.canceled || !folder) return;
-    const target = await filesTarget(folder, this.root(), this.host.userData);
+    if (!folder) return;
+    const target = await filesTarget(folder, this.root(), this.host.userData, this.host.defaultFolder);
     if ("problem" in target) {
       const key = { same: "error.moduleFilesSame", nested: "error.moduleFilesNested", "inside-data": "error.moduleFilesInsideData", "not-writable": "error.moduleFilesNotWritable" } as const;
       throw new LibraryError(key[target.problem]);
     }
-    return this.move(target.root);
+    await this.move(target.root);
+    this.host.remember(folder);
   }
 
   /** Back to the default folder. */
   reset(): Promise<void> {
-    return this.move(defaultFilesRoot(this.host.userData));
+    return this.move(this.host.defaultFolder);
+  }
+
+  /**
+   * Pictures still in the old default folder, inside the app's data, move to the default folder. Runs at start
+   * before any module opens. If copying fails, the old folder stays in use as if the player had chosen it.
+   */
+  async moveFromOldDefault(log: (line: string) => void): Promise<void> {
+    const old = defaultFilesRoot(this.host.userData);
+    if (this.custom || path.resolve(old) === path.resolve(this.host.defaultFolder)) return;
+    const files = await listStoredFiles(old);
+    if (!files.length) return;
+    try {
+      await copyStoredFiles(old, this.host.defaultFolder, files);
+    } catch (error) {
+      log(`pictures stay in ${old}: ${error instanceof Error ? error.message : String(error)}`);
+      this.host.setChosenFolder(path.resolve(old));
+      return;
+    }
+    await removeStoredFiles(old, files);
+    log(`${files.length} pictures moved to ${this.host.defaultFolder}`);
   }
 
   /**
@@ -91,7 +116,7 @@ export class ModuleFilesFolder {
       } catch (error) {
         throw new LibraryError("error.moduleFilesFailed", { problem: error instanceof Error ? error.message : String(error) });
       }
-      this.host.setChosenFolder(path.resolve(target) === path.resolve(defaultFilesRoot(this.host.userData)) ? null : path.resolve(target));
+      this.host.setChosenFolder(path.resolve(target) === path.resolve(this.host.defaultFolder) ? null : path.resolve(target));
       this.available = true;
       this.host.notify(translate(this.host.language(), "notice.moduleFilesMoved", { count: files.length, folder: target }));
       await removeStoredFiles(from, files);

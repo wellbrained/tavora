@@ -2,7 +2,7 @@
 // up a module put into the player's modules folder and explains one that
 // cannot be loaded, and Remove takes a module away together with its panels.
 import { generateKeyPairSync } from "node:crypto";
-import { access, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
@@ -37,18 +37,21 @@ test("the modules page lists where modules came from, reloads, and removes one w
   await page.getByTestId("settings-nav-modules").click();
   await expect(page.getByTestId("module-origin-local.test.mini")).toHaveText("Your modules folder, in mini");
   await expect(page.getByTestId("remove-module-local.test.mini")).toBeVisible();
-  // Tavora's own modules are listed but cannot be removed here.
-  await expect(page.getByTestId("module-origin-tavora.notes")).toHaveText("Ships with Tavora");
+  // Tavora's own modules are listed, with the Official badge instead of a folder, but cannot be removed here.
+  await expect(page.getByTestId("module-tavora.notes")).toContainText("Official");
+  await expect(page.getByTestId("module-origin-tavora.notes")).toHaveCount(0);
   await expect(page.getByTestId("remove-module-tavora.notes")).toHaveCount(0);
 
   // A module added while Tavora runs appears on Reload; a broken one is explained.
   await addModule(userData, "later", "local.test.later");
   await mkdir(path.join(userData, "modules", "broken"));
   await writeFile(path.join(userData, "modules", "broken", "tavora.module.json"), "{ nope");
+  await rm(path.join(await addModule(userData, "unbuilt", "local.test.unbuilt"), "index.html"));
   await expect(page.getByTestId("module-local.test.later")).toHaveCount(0);
   await page.getByTestId("reload-modules").click();
   await expect(page.getByTestId("module-local.test.later")).toBeVisible();
-  await expect(page.getByTestId("module-problems")).toContainText("broken");
+  await expect(page.getByTestId("module-problems")).toContainText("broken can't load:");
+  await expect(page.getByTestId("module-problems")).toContainText("unbuilt isn't built yet.");
 
   // Open a panel of the module in a game, then remove the module.
   await page.getByTestId("settings-close").click();
@@ -92,11 +95,19 @@ test("data saved before modules had owners is moved under its owner and still fo
   await again.app.close();
 });
 
-/** Makes the next file dialog answer with this file, as if the player picked it. */
-async function pickFile(app: ElectronApplication, file: string) {
+/** Makes the next file dialog answer with this file, as if the player picked it (null: cancelled), and keeps the folder it opened in. */
+async function pickFile(app: ElectronApplication, file: string | null) {
   await app.evaluate(({ dialog }, picked) => {
-    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as typeof dialog.showOpenDialog;
+    dialog.showOpenDialog = (async (_window: unknown, options: { defaultPath?: string }) => {
+      (globalThis as { openedIn?: string | null }).openedIn = options.defaultPath ?? null;
+      return picked === null ? { canceled: true, filePaths: [] } : { canceled: false, filePaths: [picked] };
+    }) as unknown as typeof dialog.showOpenDialog;
   }, file);
+}
+
+/** The folder the last file dialog opened in, or null for the system's choice. */
+async function openedIn(app: ElectronApplication): Promise<string | null> {
+  return app.evaluate(() => (globalThis as { openedIn?: string | null }).openedIn ?? null);
 }
 
 test("a signed zip installs from Settings, updates only from its publisher, and a copycat is refused (S5)", async () => {
@@ -116,12 +127,19 @@ test("a signed zip installs from Settings, updates only from its publisher, and 
   await expect(page.getByTestId("module-publisher-wellbrained.mini")).toBeVisible();
   await expect(page.getByTestId("module-origin-wellbrained.mini")).toContainText("wellbrained.mini");
 
-  // The same id signed by someone else cannot replace it.
-  const copycat = path.join(work, "copycat.zip");
+  // The same id signed by someone else cannot replace it. The dialog opens where the last zip came from.
+  await mkdir(path.join(work, "other"));
+  const copycat = path.join(work, "other", "copycat.zip");
   await writeFile(copycat, (await packModule(path.join(source, "mini"), generateKeyPairSync("ed25519").privateKey)).zip);
   await pickFile(app, copycat);
   await page.getByTestId("install-module").click();
   await expect(page.getByText("comes from a different publisher")).toBeVisible();
+  expect(await openedIn(app)).toBe(path.resolve(work));
+
+  // Only a zip that installed moves it.
+  await pickFile(app, null);
+  await page.getByTestId("install-module").click();
+  await expect.poll(() => openedIn(app)).toBe(path.resolve(work));
   await app.close();
 });
 
@@ -204,7 +222,7 @@ test("a pictures folder that moved to a drive that is gone gives a notice; Use d
   await running.page.getByTestId("rail-settings").click();
   await running.page.getByTestId("settings-nav-modules").click();
   await expect(running.page.getByTestId("module-files-path")).toContainText(gone);
-  await expect(running.page.getByTestId("module-files-path")).toContainText("cannot be found");
+  await expect(running.page.getByTestId("module-files-path")).toContainText("Can't find this folder");
   await running.app.close();
   await expect(access(path.dirname(gone))).rejects.toThrow();
 
@@ -223,4 +241,46 @@ test("a pictures folder that moved to a drive that is gone gives a notice; Use d
   expect(await readdir(gone)).toEqual([]);
   await expect(running.page.getByTestId("reset-module-files")).toHaveCount(0);
   await running.app.close();
+});
+
+test("a module's patch notes show in Settings, and an update marks the new ones until they are read", async () => {
+  const userData = await newUserData();
+  const work = path.join(userData, "..", `${path.basename(userData)}-notes`);
+  const dir = await addModule(work, "mini", "wellbrained.mini");
+  const key = generateKeyPairSync("ed25519").privateKey;
+  async function release(version: string, changelog: { version: string; notes: string[] }[]): Promise<string> {
+    const manifest = JSON.parse(await readFile(path.join(dir, "tavora.module.json"), "utf8"));
+    await writeFile(path.join(dir, "tavora.module.json"), JSON.stringify({ ...manifest, version, changelog: "changelog.json" }));
+    await writeFile(path.join(dir, "changelog.json"), JSON.stringify(changelog));
+    const zip = path.join(work, `mini-${version}.zip`);
+    await writeFile(zip, (await packModule(dir, key)).zip);
+    return zip;
+  }
+  const first = await release("1.0.0", [{ version: "1.0.0", notes: ["First version."] }]);
+
+  const { app, page } = await launch(userData);
+  await page.getByTestId("rail-settings").click();
+  await page.getByTestId("settings-nav-modules").click();
+  await pickFile(app, first);
+  await page.getByTestId("install-module").click();
+  // A fresh install has nothing new to read.
+  await expect(page.getByTestId("module-notes-toggle-wellbrained.mini")).toBeVisible();
+  await expect(page.getByTestId("module-notes-new-wellbrained.mini")).toHaveCount(0);
+
+  const second = await release("1.1.0", [
+    { version: "1.1.0", notes: ["<b>Filters</b> by tag."] },
+    { version: "1.0.0", notes: ["First version."] },
+  ]);
+  await pickFile(app, second);
+  await page.getByTestId("install-module").click();
+  await expect(page.getByTestId("module-notes-new-wellbrained.mini")).toBeVisible();
+  await page.getByTestId("module-notes-toggle-wellbrained.mini").click();
+  // Newest first, as plain text.
+  await expect(page.getByTestId("module-notes-wellbrained.mini-1.1.0")).toContainText("<b>Filters</b> by tag.");
+  await expect(page.getByTestId("module-notes-wellbrained.mini-1.0.0")).toContainText("First version.");
+  await expect(page.getByTestId("module-notes-new-wellbrained.mini")).toHaveCount(0);
+
+  // Tavora's own modules have patch notes too.
+  await expect(page.getByTestId("module-notes-toggle-tavora.notes")).toBeVisible();
+  await app.close();
 });

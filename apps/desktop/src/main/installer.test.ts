@@ -60,7 +60,7 @@ describe("installZip", () => {
     const installed = await installZip(await zipFile(userData, [...files, signFiles(files, key)]), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
     expect(installed).toMatchObject({ owner: fingerprint(key), updated: false });
     expect(await readFile(path.join(userModules, "wellbrained.tracker", "dist", "index.html"), "utf8")).toBe("<p>hi</p>");
-    expect(await readOwnerRecords(userData)).toEqual({ "wellbrained.tracker": { id: "wellbrained.tracker", owner: fingerprint(key) } });
+    expect(await readOwnerRecords(userData)).toEqual({ "wellbrained.tracker": { id: "wellbrained.tracker", owner: fingerprint(key), sha256: installed.sha256 } });
     // Nothing is left half-way.
     expect(await readdir(path.join(userData, "module-staging"))).toEqual([]);
   });
@@ -116,7 +116,20 @@ describe("installZip", () => {
   it("refuses an id loaded from somewhere else, a reserved id, a tampered zip and a missing entry", async () => {
     const { userData, userModules } = await setup();
     const elsewhere = new Map([["wellbrained.tracker", loaded("wellbrained.tracker", "/dev/modules/tracker", "local")]]);
-    await expect(installZip(await zipFile(userData, packageFiles("wellbrained.tracker")), { userData, userModules, tavoraVersion: TAVORA, modules: elsewhere })).rejects.toMatchObject({ key: "error.installTaken" });
+    await expect(installZip(await zipFile(userData, packageFiles("wellbrained.tracker")), { userData, userModules, tavoraVersion: TAVORA, modules: elsewhere })).rejects.toMatchObject({
+      key: "error.installTaken",
+      params: { name: "Tracker", folder: "/dev/modules/tracker" },
+    });
+    // It says where the other copy comes from: a development folder, or a module that ships with Tavora.
+    const developing = new Map([["wellbrained.tracker", { ...loaded("wellbrained.tracker", "/projects/tracker", "local"), developmentFolder: "/projects" }]]);
+    await expect(installZip(await zipFile(userData, packageFiles("wellbrained.tracker")), { userData, userModules, tavoraVersion: TAVORA, modules: developing })).rejects.toMatchObject({
+      key: "error.installTakenDevelopment",
+      params: { folder: "/projects" },
+    });
+    const shipped = new Map([["wellbrained.tracker", { ...loaded("wellbrained.tracker", "/app/modules/tracker", "official"), provenance: "official" as const }]]);
+    await expect(installZip(await zipFile(userData, packageFiles("wellbrained.tracker")), { userData, userModules, tavoraVersion: TAVORA, modules: shipped })).rejects.toMatchObject({
+      key: "error.installTakenOfficial",
+    });
     await expect(installZip(await zipFile(userData, packageFiles("tavora.notes")), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() })).rejects.toMatchObject({ key: "error.installRefused" });
 
     const key = generateKeyPairSync("ed25519").privateKey;

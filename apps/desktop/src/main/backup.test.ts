@@ -76,6 +76,15 @@ describe("backupData", () => {
     expect(await list("backups")).toEqual(["2026-10-01"]);
   });
 
+  it("backs up the pictures folder wherever it is, but only the modules' own folders in it", async () => {
+    await seed();
+    await write("Pictures/Tavora/official/tavora.notes/poe2/fedcba9876543210fedcba9876543210.png", "moved");
+    await write("Pictures/Tavora/my holiday.jpg", "not Tavora's");
+    await backupData({ userData: dir, moduleFiles: path.join(dir, "Pictures", "Tavora"), now: at(2026, 10, 15) });
+    expect(await list("backups/2026-10-15/module-blobs")).toEqual(["official"]);
+    expect(await readFile(path.join(dir, "backups/2026-10-15/module-blobs/official/tavora.notes/poe2/fedcba9876543210fedcba9876543210.png"), "utf8")).toBe("moved");
+  });
+
   it("cleans up an interrupted snapshot instead of keeping a half one", async () => {
     await seed();
     await mkdir(path.join(dir, "backups", "2026-10-14.partial"), { recursive: true });

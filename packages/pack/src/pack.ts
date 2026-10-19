@@ -1,7 +1,7 @@
 import type { KeyObject } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { manifestFiles, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { CHANGELOG_LIMITS, manifestFiles, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { signFiles, SIGNATURE_FILE } from "./signature.ts";
 import { isSafeEntryName, readZip, writeZip, ZIP_LIMITS, ZipError, type ZipFile } from "./zip.ts";
 
@@ -11,7 +11,7 @@ export class PackError extends Error {}
 
 /**
  * The files of a module folder that go into its zip: the manifest, the folders
- * its entry pages are in (usually dist/), and the icons. When the entry page sits
+ * its entry pages are in (usually dist/), the icons and the changelog. When the entry page sits
  * next to the manifest, everything goes except node_modules and dot files.
  */
 export async function collectFiles(dir: string): Promise<{ manifest: ModuleManifest; files: ZipFile[] }> {
@@ -31,6 +31,10 @@ export async function collectFiles(dir: string): Promise<{ manifest: ModuleManif
   const folders = new Set(entries.map((entry) => (entry.includes("/") ? entry.split("/")[0]! : "")));
   for (const folder of folders) for (const name of await walk(dir, folder)) names.add(name);
   for (const icon of icons) names.add(icon);
+  if (manifest.changelog !== undefined) {
+    await checkChangelog(dir, manifest.changelog);
+    names.add(manifest.changelog);
+  }
   for (const entry of entries) if (!names.has(entry)) throw new PackError(`the entry page ${entry} is missing (is the module built?)`);
   names.delete(SIGNATURE_FILE);
 
@@ -77,4 +81,26 @@ export async function packModule(dir: string, key: KeyObject): Promise<{ manifes
     throw error;
   }
   return { manifest, zip };
+}
+
+/** A changelog the manifest names must be there and readable by Tavora, or players would see no patch notes. */
+async function checkChangelog(dir: string, name: string): Promise<void> {
+  let text: string;
+  try {
+    const info = await lstat(path.join(dir, name));
+    if (!info.isFile()) throw new Error();
+    if (info.size > CHANGELOG_LIMITS.maxBytes) throw new PackError(`the changelog ${name} is bigger than ${CHANGELOG_LIMITS.maxBytes / 1024} KB`);
+    text = await readFile(path.join(dir, name), "utf8");
+  } catch (error) {
+    if (error instanceof PackError) throw error;
+    throw new PackError(`the changelog ${name} is missing`);
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new PackError(`the changelog ${name} is not valid JSON`);
+  }
+  const result = validateChangelog(raw);
+  if (!result.ok) throw new PackError(`the changelog ${name} is not valid: ${result.errors.slice(0, 3).join("; ")}`);
 }
