@@ -9,6 +9,7 @@ import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets
 import { BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession, type BridgeContext } from "./bridge";
 import type { CheckedMenu } from "./module-menu";
+import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
 import type { PanelContent, PanelLaunch } from "./panel-content";
 import { LIMITS, type PanelOpenResult } from "@tavora/sdk/protocol";
 import type { DiscordConnector, DiscordListener } from "./discord";
@@ -52,6 +53,11 @@ export interface ModuleViewOptions {
   onOpenLink(url: string): void;
   /** Shows a module's menu in the host UI, over this panel (host.ts); resolves with the chosen id, or null. */
   showMenu(menu: CheckedMenu): Promise<string | null>;
+  tooltip?: {
+    show(request:TooltipRequest):Promise<boolean>;
+    move(anchor:TooltipAnchor):void;
+    close(id?:string,hoverOnly?:boolean):void;
+  };
   /** Why the panel's page is loading (panel.getLaunch); asked once for each page load. */
   launch(): PanelLaunch;
   /** What the panel shows now (panel.setContent), already checked. */
@@ -316,6 +322,21 @@ export class ModuleView {
 
   /** When the player last clicked or pressed a key in the page (reported by the preload from real input only). */
   private gestureAt = 0;
+  private pointer:{x:number;y:number;at:number}|null=null;
+  notePointer(raw:unknown):void{
+    if(raw===null){this.pointer=null;this.options.tooltip?.close(undefined,true);return;}
+    if(!raw||typeof raw!=="object")return;
+    const p=raw as {x:unknown;y:unknown};
+    if(typeof p.x!=="number"||typeof p.y!=="number"||!Number.isFinite(p.x)||!Number.isFinite(p.y))return;
+    this.pointer={x:p.x,y:p.y,at:Date.now()};
+  }
+  private tooltipAnchorAllowed(at:{x:number;y:number}):boolean{
+    return at.x>=0&&at.y>=0&&at.x<=this.viewport.width&&at.y<=this.viewport.height&&!this.suspended;
+  }
+  private tooltipPointerMatches(at:{x:number;y:number}):boolean{
+    const p=this.pointer;return !!p&&Date.now()-p.at<2000&&Math.abs(p.x-at.x)<40&&Math.abs(p.y-at.y)<40;
+  }
+  tooltipClosed(id:string):void{this.bridge?.emit("ui.tooltipClosed",{id});}
 
   /** Calls waiting for a click report that is still on its way (takeGestureSoon). */
   private readonly gestureWaiters = new Set<() => void>();
@@ -440,6 +461,20 @@ export class ModuleView {
         getLanguage: this.options.getLanguage,
         onBusy: (busy, served) => this.onBridgeBusy(busy, served),
         openLink: (url) => this.openLink(url),
+        tooltip:{
+          show:async request=>{
+            if(!this.tooltipAnchorAllowed(request.at))return false;
+            if(request.pinned)await this.takeGesture("ui.tooltip.show pinned");
+            else {
+              if(!this.tooltipPointerMatches(request.at))await new Promise(resolve=>setTimeout(resolve,40));
+              if(!this.tooltipPointerMatches(request.at)&&Date.now()-this.gestureAt>2000)return false;
+            }
+            if(this.bridge!==bridge)return false;
+            return this.options.tooltip?.show(request)??false;
+          },
+          move:anchor=>{if(this.tooltipAnchorAllowed(anchor.at)&&this.tooltipPointerMatches(anchor.at))this.options.tooltip?.move(anchor);},
+          close:(id,hoverOnly)=>this.options.tooltip?.close(id,hoverOnly),
+        },
         showMenu: async (menu) => {
           // One click opens one menu, so a page cannot keep menus coming on its own.
           await this.takeGesture("ui.showMenu");
@@ -448,6 +483,7 @@ export class ModuleView {
       },
       () => {
         if (this.bridge !== bridge) return;
+        this.options.tooltip?.close();
         this.bridge = undefined;
         this.options.discord.release(this.options.instanceId);
       },
@@ -556,6 +592,7 @@ export class ModuleView {
 
   /** Tells the module it is hidden; it should pause timers and animations. */
   suspend(): void {
+    this.options.tooltip?.close();
     if (this.suspended) return;
     this.suspended = true;
     this.bridge?.emit("lifecycle.suspend", null);
@@ -683,6 +720,7 @@ export class ModuleView {
   }
 
   private disconnect(): void {
+    this.options.tooltip?.close();this.pointer=null;
     // A page that goes away answers nothing more.
     for (const finish of [...this.navigations.values()]) finish("failed");
     this.bridge?.close();

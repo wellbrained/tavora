@@ -108,6 +108,7 @@ import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type 
 import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, developmentProjects, discoverModules, isDevelopmentModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
+import {TooltipWindow} from "./tooltip-window";
 import { AiUsageConnector } from "./ai-usage";
 import { readClaudeEmail } from "./ai-usage-claude";
 import { readCodexUsage } from "./ai-usage-codex";
@@ -326,6 +327,7 @@ export class Host {
   private currentTheme: TavoraTheme;
   private windowSaveTimer: ReturnType<typeof setTimeout> | undefined;
   readonly window: BrowserWindow;
+  private tooltips:TooltipWindow;
 
   private constructor(
     private readonly options: HostOptions,
@@ -420,6 +422,14 @@ export class Host {
     } else {
       this.window.once("ready-to-show", () => this.window.show());
     }
+    this.tooltips=new TooltipWindow({parent:this.window,preload:path.join(path.dirname(options.modulePreload),"tooltip.cjs"),hidden:!!options.hidden,theme:()=>this.currentTheme,language:()=>this.language,
+      closed:(owner,id)=>{const view=this.views.get(owner);if(view instanceof ModuleView)view.tooltipClosed(id);},
+      source:owner=>{
+        const view=this.views.get(owner),bounds=this.panelBounds.get(owner);
+        if(!(view instanceof ModuleView)||!bounds||this.overlay||this.opening||this.windowHidden||!view.revealed)return undefined;
+        const module=this.modules.get(view.moduleId);if(!module)return undefined;
+        return{root:module.root,name:module.manifest.name,bounds};
+      }});
     this.watchShortcuts(this.window.webContents);
   }
 
@@ -1267,6 +1277,10 @@ export class Host {
     ipcMain.on("tavora:gesture", (event: IpcMainEvent) => {
       if (event.senderFrame?.parent !== null) return;
       this.viewsByContents.get(event.sender.id)?.noteGesture();
+    });
+    ipcMain.on("tavora:pointer",(event:IpcMainEvent,point:unknown)=>{
+      if(event.senderFrame?.parent!==null)return;
+      this.viewsByContents.get(event.sender.id)?.notePointer(point);
     });
     ipcMain.on("tavora:pong", (event: IpcMainEvent) => {
       if (event.senderFrame?.parent !== null) return;
@@ -2517,6 +2531,7 @@ export class Host {
       },
       onOpenLink: (url) => this.openLinkFromModule(url),
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
+      tooltip:{show:request=>this.tooltips.show(record.instanceId,request),move:anchor=>this.tooltips.move(record.instanceId,anchor.id,anchor.at),close:(id,hoverOnly)=>this.tooltips.close(record.instanceId,id,hoverOnly)},
       launch: () => this.launchOf(record),
       setContent: (content) => this.setPanelContent(record, content),
       openPanel: (type, content) => this.openRelatedPanel(record, type, content),
@@ -2709,6 +2724,7 @@ export class Host {
   /** Sends Tavora's own shortcuts to the host UI, from the host page and from module panels. */
   private watchShortcuts(contents: WebContents): void {
     contents.on("before-input-event", (event, input) => {
+      if(input.key==="Escape"&&this.tooltips?.state.current){event.preventDefault();this.tooltips.close();return;}
       const shortcut = shortcutFor(input);
       if (!shortcut) return;
       event.preventDefault();
@@ -2749,6 +2765,7 @@ export class Host {
   }
 
   private destroyView(instanceId: string): void {
+    this.tooltips.close(instanceId);
     this.closeModuleMenu(instanceId);
     const view = this.views.get(instanceId);
     if (!view) return;
@@ -2793,6 +2810,7 @@ export class Host {
    * tab are hidden and paused, as are all panels while the window is.
    */
   private applyBounds(): void {
+    this.tooltips?.ensureVisible();
     if (this.opening && this.openingDone()) return this.endOpening(true);
     for (const [instanceId, view] of this.views) {
       const rect = this.panelBounds.get(instanceId);
@@ -2812,6 +2830,7 @@ export class Host {
    */
   private async setOverlay(open: boolean): Promise<void> {
     if (open === this.overlay) return;
+    if(open)this.tooltips.close();
     this.overlay = open;
     const change = ++this.overlayChanges;
     if (!open) return this.applyBounds();

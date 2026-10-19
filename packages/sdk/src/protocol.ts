@@ -351,6 +351,10 @@ export interface Methods {
   "ui.getLanguage": { params: undefined; result: string };
   /** Shows a menu drawn by Tavora above every panel. Only right after a click, right-click or key press in the panel. The chosen item's id, or null. */
   "ui.showMenu": { params: MenuRequest; result: string | null };
+  "ui.tooltip.show": { params: TooltipRequest; result: boolean };
+  "ui.tooltip.move": { params: TooltipAnchor; result: null };
+  "ui.tooltip.hide": { params: { id: string }; result: null };
+  "ui.tooltip.close": { params: { id: string }; result: null };
   /** Opens a web address in the game's Browser panel. Only right after a click or key press in the panel; http and https only. */
   "links.open": { params: { url: string }; result: null };
   "blobs.list": { params: undefined; result: BlobInfo[] };
@@ -392,6 +396,7 @@ export const RESERVED_METHODS: Readonly<Record<string, Capability>> = {
 
 /** Events the host pushes to the module. */
 export interface Events {
+  "ui.tooltipClosed": { id: string };
   "workspace.resize": TavoraViewport;
   "ui.theme": TavoraTheme;
   "ui.language": string;
@@ -550,6 +555,9 @@ export type MenuEntry =
       /** Items, separators and headings; a submenu holds no further submenus. */
       items: MenuEntry[];
     };
+
+export type { TooltipContent, TooltipAnchor, TooltipRequest } from "./tooltip-types.js";
+import type { TooltipRequest, TooltipAnchor } from "./tooltip-types.js";
 
 /** What ui.showMenu shows, and where. */
 export interface MenuRequest {

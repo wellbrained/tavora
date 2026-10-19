@@ -61,6 +61,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     isSuspended: () => false,
     openLink: () => {},
     showMenu: () => Promise.resolve(null),
+    tooltip:{show:async()=>false,move:()=>{},close:()=>{}},
     fetch: () => Promise.reject(new Error("no network in this test")),
   };
 }
@@ -600,4 +601,20 @@ describe("blobs", () => {
     }
     expect(await call(port, "blobs.list", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
   });
+});
+
+describe("shared tooltips",()=>{
+ it("forwards checked show/move/hide/close with the bound context",async()=>{
+  const calls:unknown[]=[];const p=await connected({...makeContext(),tooltip:{show:async r=>(calls.push(r),true),move:a=>{calls.push(a);},close:(id,hover)=>{calls.push({id,hover});}}});
+  const request={id:"item:1",at:{x:12,y:34},content:{title:"Item"},pinned:true};
+  expect(await call(p,"ui.tooltip.show",request)).toMatchObject({ok:true,result:true});
+  expect(await call(p,"ui.tooltip.move",{id:"item:1",at:{x:20,y:40}})).toMatchObject({ok:true,result:null});
+  await call(p,"ui.tooltip.hide",{id:"item:1"});await call(p,"ui.tooltip.close",{id:"item:1"});
+  expect(calls).toEqual([request,{id:"item:1",at:{x:20,y:40}},{id:"item:1",hover:true},{id:"item:1",hover:false}]);
+ });
+ it("rejects HTML and lets gesture denial propagate",async()=>{
+  const p=await connected({...makeContext(),tooltip:{show:async()=>{throw new HostError("PERMISSION_DENIED","real click required");},move:()=>{},close:()=>{}}});
+  expect(await call(p,"ui.tooltip.show",{id:"x",at:{x:0,y:0},content:{title:"x",html:"x"}})).toMatchObject({ok:false,error:{code:"INVALID_PARAMS"}});
+  expect(await call(p,"ui.tooltip.show",{id:"x",at:{x:0,y:0},content:{title:"x"},pinned:true})).toMatchObject({ok:false,error:{code:"PERMISSION_DENIED"}});
+ });
 });

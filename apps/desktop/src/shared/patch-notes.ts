@@ -18,6 +18,7 @@ export interface PatchNote {
 }
 
 export const PATCH_NOTES: readonly PatchNote[] = [
+  {version:"0.18.18",date:"2026-10-19",title:"Item details across panels",notes:["Item tooltips can open beside your mouse over neighbouring panels. Click to pin details, then press Escape to close them."]},
   {
     version: "0.18.17",
     date: "2026-10-19",

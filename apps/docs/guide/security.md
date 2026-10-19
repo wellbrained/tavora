@@ -67,7 +67,7 @@ Some calls change something outside the module's panel. They work only within 2 
 
 A module can still label a button misleadingly and get the player to click it. The result is the same as a link on any web page: the player sees the new tab, and the Browser panel is sandboxed.
 
-One call puts a module's text outside its panel without a click: **`panel.setContent`** names what the panel shows, and Tavora shows that name when the player hovers the panel's own tab. Tavora checks it first and shows only one line of plain text, at most 200 characters, below the panel's and the module's names, on that tab and nowhere else. The module learns nothing back.
+A module can name its panel content without a click: **`panel.setContent`** names what the panel shows, and Tavora shows that name when the player hovers the panel's own tab. Tavora checks it first and shows only one line of plain text, at most 200 characters, below the panel's and the module's names, on that tab and nowhere else. The module learns nothing back.
 
 A module's **patch notes** also show outside its panel, in Settings > Modules. They come from the changelog file in its package, not from the running page. Tavora reads at most 64 KB, checks the file first and shows only plain text lines (never HTML, Markdown or links), only for versions up to the installed one, and only when the player opens them.
 
@@ -150,3 +150,22 @@ Tavora keeps three lists for modules from other people: publisher keys that were
 - **Unsigned local modules are known only by their id.** Another local module put in the same folder under the same id gets its grants.
 - **A development folder is a module's whole bundle.** A module loaded from a development folder (Settings > Development) can read every file in its project folder, such as its sources or a `.env` file, because G6 is measured from that folder. It is an unsigned local module, known only by its id. Add only your own projects.
 - **WebAssembly is allowed only for Tavora's own modules** that ask for it, because the Whiteboard needs it. Community modules do not get it.
+
+## Shared item tooltips
+
+`ui.tooltip` renders checked, bounded plain content above neighbouring panels in a
+separate host-owned surface. It accepts text, semantic item colours, badges,
+requirements and modifier rows, plus a raster asset inside the calling module's
+bundle. No HTML, module styles, links, scripts, remote images or arbitrary file
+paths are accepted. Image reads stay inside that bundle and are limited to 512 KB.
+The surface has its own sandboxed renderer and session, no administrative host
+bridge, and no permissions. Its footer identifies the source module.
+
+Hover requires recent trusted pointer or keyboard input in a visible source panel.
+Hover details pass mouse input through and do not freeze the workspace. Pinning
+requires a real click or key press, once per gesture. One tooltip is shared by the
+window; ordinary hover cannot replace a pin. Only the owning panel can move or
+close its current tooltip by id. Escape and the host close button always dismiss
+it. Source hide, reload, close, game switch, app focus loss and host dialogs clear
+it; stale asynchronous requests cannot revive a closed tooltip. Tooltips stay
+inside Tavora's content bounds and do not open remote pages.

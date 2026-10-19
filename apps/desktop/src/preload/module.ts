@@ -36,3 +36,27 @@ for (const type of ["pointerdown", "keydown"]) {
 }
 
 ipcRenderer.on("tavora:ping", () => ipcRenderer.send("tavora:pong"));
+
+// Keep the last point as well as the first: dropping the trailing event can
+// reject a tooltip when the player crosses slots faster than the throttle.
+let pointerSentAt=0;
+let pointerTimer:ReturnType<typeof setTimeout>|undefined;
+let latestPointer:{x:number;y:number}|null=null;
+function sendPointer(){
+ clearTimeout(pointerTimer);pointerTimer=undefined;
+ if(!latestPointer)return;
+ pointerSentAt=performance.now();ipcRenderer.send("tavora:pointer",latestPointer);
+}
+window.addEventListener("pointermove",event=>{
+ if(!event.isTrusted)return;
+ latestPointer={x:event.clientX,y:event.clientY};
+ const wait=24-(performance.now()-pointerSentAt);
+ if(wait<=0)sendPointer();else if(!pointerTimer)pointerTimer=setTimeout(sendPointer,wait);
+},true);
+for(const type of ["pointerdown","pointerover"] as const)window.addEventListener(type,event=>{
+ if(!event.isTrusted)return;latestPointer={x:event.clientX,y:event.clientY};sendPointer();
+},true);
+window.addEventListener("pointerout",event=>{
+ if(!event.isTrusted||event.relatedTarget!==null)return;
+ clearTimeout(pointerTimer);pointerTimer=undefined;latestPointer=null;ipcRenderer.send("tavora:pointer",null);
+},true);

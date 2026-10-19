@@ -1,5 +1,7 @@
 // @tavora/sdk: thin typed client for modules running inside Tavora Desktop.
 // The host enforces every check; this package only marshals typed calls.
+import type { TooltipAnchor, TooltipRequest } from "./tooltip-types.js";
+export type { TooltipAnchor, TooltipRequest, TooltipContent } from "./tooltip-types.js";
 // Protocol reference: apps/docs/reference/protocol.md.
 
 import {
@@ -83,14 +85,14 @@ export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, PROTOCOL
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.7";
+export const SDK_VERSION = "0.2.8";
 
 /**
  * The oldest Tavora that has everything this SDK version offers. Put it in your manifest as
  * `minTavora`, so an older Tavora says it needs an update instead of loading a module it cannot run
  * (the starter, `npm create @tavora/module`, does). The changelog names it for every version.
  */
-export const MIN_TAVORA = "0.18.2";
+export const MIN_TAVORA = "0.18.18";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -196,6 +198,15 @@ export interface TavoraSDK {
      * Resolves with the chosen item's id, or null when the player closed the menu without choosing.
      */
     showMenu(request: MenuRequest): Promise<string | null>;
+    /** One shared tooltip above the workspace (Tavora 0.18.18+). A pin needs a real click/key press. */
+    tooltip: {
+      show(request: TooltipRequest): Promise<boolean>;
+      move(anchor: TooltipAnchor): Promise<void>;
+      /** Ends hover only; a pin remains until close, Escape, or a lifecycle change. */
+      hide(id: string): Promise<void>;
+      close(id: string): Promise<void>;
+      onClose(fn: (event: { id: string }) => void): Unsubscribe;
+    };
   };
   /**
    * Files (pictures) this module keeps in the current game, shared by all of its panels. They live
@@ -486,6 +497,13 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       onLanguageChange: (fn) => on("ui.language", fn),
       // The player may take their time choosing.
       showMenu: (request) => call("ui.showMenu", request, MENU_TIMEOUT_MS),
+      tooltip: {
+        show: request => call("ui.tooltip.show",request),
+        move: async anchor => { await call("ui.tooltip.move",anchor); },
+        hide: async id => { await call("ui.tooltip.hide",{id}); },
+        close: async id => { await call("ui.tooltip.close",{id}); },
+        onClose: fn => on("ui.tooltipClosed",fn),
+      },
     },
     blobs: {
       put: async (file) => {

@@ -1,0 +1,17 @@
+{
+  "name": "@tavora/poe2-builds",
+  "version": "0.1.0-alpha.17",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@tavora/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "8.3.4"
+  },
+  "license": "MIT"
+}

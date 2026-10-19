@@ -322,3 +322,25 @@ Values must be JSON: `null`, booleans, finite numbers, strings, arrays and plain
 - Removing or changing anything existing needs a new major version. A host should keep serving the previous major version for as long as published modules use it.
 - The manifest's `apiVersion` names the major version the module was built for, and `minTavora` the oldest Tavora that has everything it uses.
 - Before Tavora 1.0, version 1 may still change in ways that break modules. Each such change raises `@tavora/sdk`'s minor version and is marked **Breaking** in the [changelog](./changelog.md). From 1.0 on, the rules above apply.
+
+## Shared rich tooltips (Tavora 0.18.18+)
+
+- `ui.tooltip.show({ id, at: { x, y }, content, pinned? })` returns whether it was
+  accepted. Coordinates are CSS pixels relative to the source panel. Pinning needs
+  a genuine click/key press; hover must follow trusted source input. A current pin
+  rejects ordinary hover. The host prefers the right side, then left, bounded to
+  the application window.
+- `ui.tooltip.move({ id, at })` moves only the owner's matching unpinned tooltip.
+- `ui.tooltip.hide({ id })` ends hover, leaving a pin unchanged.
+- `ui.tooltip.close({ id })` explicitly closes the owner's matching tooltip.
+- `ui.tooltipClosed` carries `{ id }` when the host dismisses or replaces details.
+
+`TooltipContent` contains a title (200 characters), optional subtitle, rarity
+`tone`, bundle-relative raster `image` (`dist/...png`, JPEG, WebP or GIF), up to
+8 badges and requirements, 20 properties, and 12 sections with up to 100 rows in
+total. A row has text, optional right-aligned badges/status and a connected-affix
+marker. Content is limited to 40,000 characters; no HTML, CSS or links. Raster
+assets are capped at 512 KB. See the SDK's exported types for individual bounds.
+
+Use `ui.tooltip.onClose` to clear local pin state. Close details before changing
+source data or destroying the triggering UI. Underlying panels remain live.

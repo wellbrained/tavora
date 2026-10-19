@@ -67,3 +67,21 @@ The same small module built three ways: [vanilla TypeScript](https://github.com/
 - Bundle everything. A module's page has no network access, so no CDN scripts, web fonts or remote images. To reach a web API, list its host in `permissions.network` and use `tavora.network.fetch` once the player has granted it.
 - Use relative asset paths (Vite: `base: "./"`). The page is served from `tavora-module://<module-id>/`.
 - Point the manifest's `entry` at the built HTML file.
+
+### Details over neighbouring panels
+
+Requires Tavora 0.18.18. `tavora.ui.tooltip.show` accepts `TooltipRequest`, a bounded
+plain-data description, never HTML or CSS. Use a new id for each hover session,
+`move` while the pointer moves, and `hide` on pointer leave. A click may call
+`show` with `pinned: true`; `hide` then leaves it open. Call `close` before changing
+the source data, and use `onClose` to clear your local pin state. Escape and the
+host close button dismiss the current tooltip from anywhere in Tavora.
+
+```ts
+await tavora.ui.tooltip.show({
+  id: 'item:42', at: { x: event.clientX, y: event.clientY },
+  content: { title: 'Example spear', tone: 'rare',
+    sections: [{ rows: [{ text: 'Adds 10 to 22 Physical Damage', badges: ['[P5]'] }] }] },
+  pinned: false,
+});
+```

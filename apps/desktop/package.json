@@ -1,6 +1,6 @@
 {
   "name": "@tavora/desktop",
-  "version": "0.18.17",
+  "version": "0.18.18",
   "private": true,
   "type": "module",
   "scripts": {
@@ -85,7 +85,8 @@
         "filter": [
           "*/tavora.module.json",
           "*/changelog.json",
-          "*/dist/**"
+          "*/dist/**",
+          "!poe2-builds/**"
         ]
       },
       {
