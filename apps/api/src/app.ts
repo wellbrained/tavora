@@ -237,7 +237,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const found = catalog!.module(context.req.param("id"));
     if (!found) return context.json({ error: "Not found." }, 404);
     context.header("Cache-Control", "public, max-age=300");
-    return context.json({ module: listed(found.module), versions: found.versions });
+    return context.json({ module: listed(found.module), versions: found.versions, readme: found.readme });
   });
   catalogApp.get("/zips/:file", (context) => {
     const match = /^([0-9a-f]{64})\.zip$/.exec(context.req.param("file"));
@@ -248,9 +248,9 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
       headers: { "Content-Type": "application/zip", "Content-Disposition": "attachment", "Cache-Control": "public, max-age=31536000, immutable" },
     });
   });
-  catalogApp.get("/screenshots/:file", (context) => {
+  catalogApp.get("/pictures/:file", (context) => {
     const match = /^([0-9a-f]{64})\.(png|webp)$/.exec(context.req.param("file"));
-    const bytes = match ? catalog!.screenshot(match[1]!, match[2]!) : null;
+    const bytes = match ? catalog!.picture(match[1]!, match[2]!) : null;
     if (!bytes) return context.json({ error: "Not found." }, 404);
     // Checked to be a picture when it was uploaded (C10) and named by its hash, so it never changes.
     return new Response(new Uint8Array(bytes), {

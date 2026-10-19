@@ -18,8 +18,10 @@ interface Listed {
   body: Buffer;
   /** What GET /v1/catalog/modules/<id> lists as its versions. */
   versions?: { version: string; publishedAt: string; notes: string[] }[];
-  /** What the server sends for each screenshot hash. */
+  /** What the server sends for each picture hash (screenshots and the icon). */
   pictures?: Record<string, Buffer>;
+  /** The readme GET /v1/catalog/modules/<id> sends. */
+  readme?: string;
 }
 
 async function packed(id: string, name: string, key: KeyObject, version = "1.0.0", network: string[] = []): Promise<Buffer> {
@@ -81,9 +83,9 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
     const detail = /^\/v1\/catalog\/modules\/([^/]+)$/.exec(url.pathname);
     if (detail) {
       const item = modules.find((candidate) => candidate.entry.id === decodeURIComponent(detail[1]!));
-      return item ? send(200, { module: item.entry, versions: item.versions ?? [] }) : send(404, { error: "not found" });
+      return item ? send(200, { module: item.entry, versions: item.versions ?? [], readme: item.readme ?? null }) : send(404, { error: "not found" });
     }
-    const shot = /^\/v1\/catalog\/screenshots\/([0-9a-f]{64})\.(png|webp)$/.exec(url.pathname);
+    const shot = /^\/v1\/catalog\/pictures\/([0-9a-f]{64})\.(png|webp)$/.exec(url.pathname);
     const picture = shot && modules.map((item) => item.pictures?.[shot[1]!]).find((bytes) => bytes !== undefined);
     if (picture) {
       response.writeHead(200, { "content-type": `image/${shot[2]}` });
@@ -143,7 +145,7 @@ test("a player browses the catalog for a game, sees who publishes a module and i
   }
 });
 
-test("a player opens a module's info with its screenshots and homepage before installing", async () => {
+test("a player opens a module's page with its readme, screenshots, access and homepage before installing", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
   const tracker = await packed("wellbrained.tracker", "Tracker", key);
@@ -157,6 +159,8 @@ test("a player opens a module's info with its screenshots and homepage before in
     {
       entry: listing("wellbrained.tracker", "Tracker", tracker, owner, {
         homepage: "https://example.com/tracker",
+        permissions: { network: ["api.example.com"], connectors: [] },
+        icon: { sha256: hash(picture), type: "png", size: picture.length },
         screenshots: [
           { sha256: hash(picture), type: "png", size: picture.length },
           // Listed as a PNG but is not one: left out.
@@ -165,6 +169,8 @@ test("a player opens a module's info with its screenshots and homepage before in
       }),
       body: tracker,
       pictures: { [hash(picture)]: picture, [hash(fake)]: fake },
+      readme: "# Tracker\n\nTracks your **runs**. See [the wiki](https://example.com/wiki).\n\n- Splits by act\n- <img src=x onerror=alert(1)>",
+      versions: [{ version: "1.0.0", publishedAt: "2026-10-18T10:00:00.000Z", notes: ["First version."] }],
     },
   ]);
   const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
@@ -177,7 +183,16 @@ test("a player opens a module's info with its screenshots and homepage before in
     await expect(info).toBeVisible();
     await expect(info.getByTestId("catalog-info-screenshot")).toHaveAttribute("src", `data:image/png;base64,${picture.toString("base64")}`);
     await expect(info.getByRole("button", { name: /Screenshot \d of/ })).toHaveCount(0);
-    expect(asked).toContain(`/v1/catalog/screenshots/${hash(picture)}.png`);
+    // The readme is plain text: no links, pictures or HTML.
+    const readme = info.getByTestId("catalog-info-readme");
+    await expect(readme.locator("h4")).toHaveText("Tracker");
+    await expect(readme.locator("p")).toHaveText("Tracks your runs. See the wiki.");
+    await expect(readme.locator("li")).toHaveText(["Splits by act", "<img src=x onerror=alert(1)>"]);
+    await expect(readme.locator("a, img")).toHaveCount(0);
+    await expect(info.getByTestId("catalog-info-notes")).toContainText("First version.");
+    await expect(info.getByTestId("catalog-info-access")).toContainText("Talks to api.example.com");
+    await expect(info.getByTestId("catalog-icon")).toHaveAttribute("src", /^data:image\/png;base64,/);
+    expect(asked).toContain(`/v1/catalog/pictures/${hash(picture)}.png`);
     expect(await readdir(path.join(userData, "modules")).catch(() => [])).toEqual([]);
 
     // The game has no Browser panel yet, so the player picks where the homepage opens.

@@ -25,13 +25,15 @@ interface Options {
   key?: KeyObject | null;
   changelog?: unknown;
   homepage?: string;
+  readme?: Buffer;
+  icon?: ZipFile;
   /** Screenshot files, named in the manifest in this order and put in the zip. */
   screenshots?: ZipFile[];
   extra?: ZipFile[];
 }
 
 /** A module zip as tavora-pack makes it: manifest, page, optional changelog, and the signature. */
-function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], workspaces, key = publisher, changelog, homepage, screenshots = [], extra = [] }: Options = {}): Buffer {
+function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], workspaces, key = publisher, changelog, homepage, readme, icon, screenshots = [], extra = [] }: Options = {}): Buffer {
   const manifest = {
     id,
     name: "Timer",
@@ -43,6 +45,8 @@ function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], wo
     ...(workspaces === undefined ? {} : { workspaces }),
     ...(changelog === undefined ? {} : { changelog: "changelog.json" }),
     ...(homepage === undefined ? {} : { homepage }),
+    ...(readme === undefined ? {} : { readme: "README.md" }),
+    ...(icon === undefined ? {} : { icon: icon.name }),
     ...(screenshots.length ? { screenshots: screenshots.map((shot) => shot.name) } : {}),
     viewport: { minWidth: 200, minHeight: 150 },
     permissions: { network: ["api.example.com"] },
@@ -52,6 +56,8 @@ function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], wo
     { name: "dist/index.html", data: Buffer.from("<!doctype html><p>timer</p>") },
     ...(changelog === undefined ? [] : [{ name: "changelog.json", data: Buffer.from(JSON.stringify(changelog)) }]),
     ...screenshots,
+    ...(readme === undefined ? [] : [{ name: "README.md", data: readme }]),
+    ...(icon === undefined ? [] : [icon]),
     ...extra,
   ];
   return writeZip(key ? [...files, signFiles(files, key)] : files);
@@ -101,6 +107,7 @@ describe("adding to the catalog", () => {
         notes: ["First version."],
         homepage: null,
         screenshots: [],
+        icon: null,
       },
     ]);
   });
@@ -116,15 +123,32 @@ describe("adding to the catalog", () => {
       { sha256: sha(first), type: "png", size: first.length },
       { sha256: sha(second), type: "webp", size: second.length },
     ]);
-    expect(catalog.screenshot(sha(first), "png")).toEqual(first);
-    expect(catalog.screenshot(sha(second), "webp")).toEqual(second);
-    expect(catalog.screenshot(sha(first), "webp")).toBeNull();
+    expect(catalog.picture(sha(first), "png")).toEqual(first);
+    expect(catalog.picture(sha(second), "webp")).toEqual(second);
+    expect(catalog.picture(sha(first), "webp")).toBeNull();
 
     catalog.add(moduleZip({ version: "1.1.0", screenshots: [{ name: "shots/one.png", data: png(9) }] }));
-    expect(catalog.screenshot(sha(first), "png")).toBeNull();
-    expect(catalog.screenshot(sha(png(9)), "png")).not.toBeNull();
+    expect(catalog.picture(sha(first), "png")).toBeNull();
+    expect(catalog.picture(sha(png(9)), "png")).not.toBeNull();
     catalog.setListed("wellbrained.timer", false);
-    expect(catalog.screenshot(sha(png(9)), "png")).toBeNull();
+    expect(catalog.picture(sha(png(9)), "png")).toBeNull();
+  });
+
+  it("keeps the readme as text for the module's page, and lists the icon only when it is a real picture", () => {
+    const catalog = store();
+    const icon = png(64);
+    catalog.add(moduleZip({ readme: Buffer.from("\ufeff# Timer\r\n\r\nCounts **down**."), icon: { name: "icon.png", data: icon } }));
+    expect(catalog.module("wellbrained.timer")?.readme).toBe("# Timer\n\nCounts **down**.");
+    expect(catalog.index()[0]?.icon).toEqual({ sha256: sha(icon), type: "png", size: icon.length });
+    expect(catalog.picture(sha(icon), "png")).toEqual(icon);
+
+    catalog.add(moduleZip({ version: "1.1.0", icon: { name: "icon.png", data: Buffer.from("<svg/>") } }));
+    expect(catalog.index()[0]?.icon).toBeNull();
+    expect(catalog.module("wellbrained.timer")?.readme).toBeNull();
+    expect(catalog.picture(sha(icon), "png")).toBeNull();
+
+    expect(() => catalog.add(moduleZip({ version: "1.2.0", readme: Buffer.from([0xff, 0xfe, 0x00]) }))).toThrow(/readme/);
+    expect(() => catalog.add(moduleZip({ version: "1.2.0", readme: Buffer.alloc(21 * 1024, "a") }))).toThrow(/readme/);
   });
 
   it("refuses screenshots that are not real pictures, or too big", () => {
@@ -246,15 +270,15 @@ describe("catalog routes", () => {
     const { catalog, get } = setup();
     const shot = png();
     catalog.add(moduleZip({ screenshots: [{ name: "shot.png", data: shot }] }));
-    const answer = await get(`/v1/catalog/screenshots/${sha(shot)}.png`);
+    const answer = await get(`/v1/catalog/pictures/${sha(shot)}.png`);
     expect(answer.status).toBe(200);
     expect(answer.headers.get("content-type")).toBe("image/png");
     expect(answer.headers.get("x-content-type-options")).toBe("nosniff");
     expect(answer.headers.get("cache-control")).toContain("immutable");
     expect(Buffer.from(await answer.arrayBuffer())).toEqual(shot);
-    expect((await get(`/v1/catalog/screenshots/${sha(shot)}.webp`)).status).toBe(404);
-    expect((await get(`/v1/catalog/screenshots/${sha(shot)}.svg`)).status).toBe(404);
-    expect((await get(`/v1/catalog/screenshots/${"0".repeat(64)}.png`)).status).toBe(404);
+    expect((await get(`/v1/catalog/pictures/${sha(shot)}.webp`)).status).toBe(404);
+    expect((await get(`/v1/catalog/pictures/${sha(shot)}.svg`)).status).toBe(404);
+    expect((await get(`/v1/catalog/pictures/${"0".repeat(64)}.png`)).status).toBe(404);
   });
 
   it("names the publisher from the account the key is linked to, never from the listing", async () => {

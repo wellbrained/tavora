@@ -42,6 +42,7 @@ function listing(version: string, zip: Buffer, owner: string, fields: Partial<Ca
     notes: [],
     homepage: null,
     shots: [],
+    icon: null,
     ...fields,
   };
 }
@@ -65,7 +66,7 @@ async function setup(key: KeyObject, network: string[] = [], safety?: SafetyChec
   const updater = new CatalogUpdater({
     client: {
       index: async () => catalog.index,
-      details: async () => ({ entry: catalog.index[0]!, versions: catalog.versions }),
+      details: async () => ({ entry: catalog.index[0]!, versions: catalog.versions, readme: null }),
       download: async (zip) => {
         catalog.downloads.push(zip.sha256);
         return catalog.zips.get(zip.sha256)!;

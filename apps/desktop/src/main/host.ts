@@ -24,7 +24,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, DeveloperLink, GameView, HostAction, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, DeveloperLink, GameView, HostAction, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -84,7 +84,8 @@ import {
 import { MODULE_FONTS } from "./module-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir, keepNewerFile, SUPPORTED_VERSIONS } from "./backup";
-import { CatalogClient, type CatalogScope } from "./catalog-client";
+import { CatalogClient, catalogView, type CatalogScope } from "./catalog-client";
+import { parseReadme } from "./catalog-readme";
 import { CatalogUpdater, CHECK_INTERVAL_MS, type CatalogInstalled } from "./catalog-updates";
 import { DEFAULT_API_URL, OnlineSearch } from "./online";
 import { PublisherNames } from "./publisher-names";
@@ -1062,16 +1063,30 @@ export class Host {
     if (homepage && isWebUrl(homepage)) this.openLinkFromModule(homepage);
   }
 
-  /** A catalog module's screenshots, checked one by one (catalog-client.ts); those that fail are left out. */
-  private async catalogScreenshots(moduleId: string): Promise<string[]> {
-    if (!this.library.onlineSearch) return [];
+  /**
+   * A catalog module's page: the listing asked for again, its readme as plain text blocks and its
+   * screenshots, each checked on its own (catalog-client.ts); a screenshot that fails is left out.
+   */
+  private async catalogPage(moduleId: string): Promise<CatalogPageResult> {
+    if (!this.library.onlineSearch) return { status: "off" };
+    let details;
     try {
-      const { shots } = await this.catalog.module(moduleId);
-      const urls = await Promise.all(shots.map((shot) => this.catalog.screenshot(shot)));
-      return urls.filter((url): url is string => url !== null);
-    } catch {
-      return [];
+      details = await this.catalog.details(moduleId);
+    } catch (error) {
+      const key = error instanceof PlayerError ? error.key : "";
+      if (key === "error.catalogNotListed") return { status: "gone" };
+      if (key === "error.catalogUnavailable") return { status: "unavailable" };
+      if (key === "error.catalogBusy") return { status: "busy" };
+      return { status: "unreachable" };
     }
+    const shots = await Promise.all(details.entry.shots.map((shot) => this.catalog.picture(shot)));
+    return {
+      status: "ok",
+      module: catalogView(details.entry),
+      screenshots: shots.filter((url): url is string => url !== null),
+      readme: details.readme === null ? [] : parseReadme(details.readme),
+      versions: details.versions,
+    };
   }
 
   /** The modules installed from the catalog, as they are now, for the update check. */
@@ -1341,8 +1356,11 @@ export class Host {
       const scope = this.catalogScope();
       return scope ? this.catalog.list(scope) : { status: "ok", modules: [] };
     });
-    ipcMain.handle("host:catalog-screenshots", (event, moduleId: unknown): Promise<string[]> | string[] =>
-      fromHost(event) && isModuleId(moduleId) ? this.catalogScreenshots(moduleId) : [],
+    ipcMain.handle("host:catalog-page", async (event, moduleId: unknown): Promise<CatalogPageResult> =>
+      fromHost(event) && isModuleId(moduleId) ? this.catalogPage(moduleId) : { status: "gone" },
+    );
+    ipcMain.handle("host:catalog-icon", async (event, moduleId: unknown): Promise<string | null> =>
+      fromHost(event) && isModuleId(moduleId) && this.library.onlineSearch ? this.catalog.icon(moduleId) : null,
     );
     ipcMain.handle("host:steam-library", async (event, profile: unknown): Promise<SteamLibraryResult> => {
       if (!fromHost(event) || typeof profile !== "string") return { status: "error", error: translate(this.language, "error.notUnderstood") };

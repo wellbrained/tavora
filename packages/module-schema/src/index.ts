@@ -43,6 +43,11 @@ export interface ModuleManifest {
   changelog?: string;
   /** The module's web page, `http` or `https`, shown in the catalog. Tavora opens it like a module link. */
   homepage?: string;
+  /**
+   * A `.md` or `.txt` file inside the package introducing the module, at most MAX_README_BYTES, shown in the catalog.
+   * Tavora shows its headings, paragraphs and lists as plain text: no links, pictures or HTML.
+   */
+  readme?: string;
   /** Up to MAX_SCREENSHOTS pictures inside the package, `.png` or `.webp`, shown in the catalog before installing. */
   screenshots?: string[];
   games: string[];
@@ -74,11 +79,13 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "screenshots", "games", "workspaces", "viewport", "panels", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
 
 /** Most screenshots a manifest may name, and the longest homepage address. */
 export const MAX_SCREENSHOTS = 5;
+/** Largest readme file the catalog takes. */
+export const MAX_README_BYTES = 20 * 1024;
 /** Largest screenshot file the catalog takes and the app shows. */
 export const MAX_SCREENSHOT_BYTES = 1024 * 1024;
 export const MAX_HOMEPAGE_LENGTH = 300;
@@ -354,6 +361,10 @@ export function validateManifest(input: unknown): ManifestResult {
 
   if (input.homepage !== undefined && !isHomepage(input.homepage)) {
     errors.push(`homepage must be an http or https address of at most ${MAX_HOMEPAGE_LENGTH} characters`);
+  }
+  if (input.readme !== undefined) {
+    if (!isPackagePath(input.readme)) errors.push("readme must be a relative path inside the package");
+    else if (!/\.(md|txt)$/.test(input.readme)) errors.push("readme must be a .md or .txt file");
   }
   if (input.screenshots !== undefined) {
     const shots = input.screenshots;

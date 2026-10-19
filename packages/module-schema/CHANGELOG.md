@@ -5,6 +5,7 @@ What changed in `@tavora/module-schema`, newest first.
 ## Unreleased
 
 - `homepage`: the module's web page, `http` or `https`, shown in the catalog (`isHomepage`, `MAX_HOMEPAGE_LENGTH`). Needs Tavora 0.18.17 or newer.
+- `readme`: a `.md` or `.txt` file of at most 20 KB introducing the module (`MAX_README_BYTES`), shown as plain text on its catalog page. `tavora-pack` packs it. Needs Tavora 0.18.19 or newer.
 - `screenshots`: 1 to 5 PNG or WebP files in the package, shown in the catalog before installing (`MAX_SCREENSHOTS`, `MAX_SCREENSHOT_BYTES`). `manifestFiles` lists them, so `tavora-pack` packs them. Needs Tavora 0.18.17 or newer.
 
 ## 0.1.2
