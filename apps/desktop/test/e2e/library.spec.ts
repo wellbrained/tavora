@@ -112,6 +112,11 @@ test("games are renamed, favorited and put in folders from their menu", async ()
 
   await fromMenu(page, "poe2", "menu-favorite");
   await expect(page.getByTestId("rail-favorite-poe2")).toBeVisible();
+  // A favorite keeps its own menu items, the icon among them.
+  await page.getByTestId("rail-favorite-poe2").click({ button: "right" });
+  for (const item of ["menu-icon", "menu-icon-label"]) await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
+  await answerPrompt(page, "P2");
+  await expect(page.getByTestId("rail-favorite-poe2")).toContainText("P2");
 
   await fromMenu(page, "satisfactory", "menu-move-to-folder", "menu-new-folder");
   await answerPrompt(page, "Builders");

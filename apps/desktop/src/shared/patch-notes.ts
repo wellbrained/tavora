@@ -19,6 +19,12 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.4",
+    date: "2026-10-19",
+    title: "Favorites get their full menu",
+    notes: ["Right-click a favorite to change its icon, rename it or remove it again."],
+  },
+  {
     version: "0.19.3",
     date: "2026-10-19",
     title: "Import public guide pages",

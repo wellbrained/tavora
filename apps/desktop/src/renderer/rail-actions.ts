@@ -32,8 +32,6 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
   const library = lib();
   const favoriteIndex = library.favorites.indexOf(game.id);
   const isFavorite = favoriteIndex >= 0;
-  const where = placement(game.id);
-  const manual = library.sort === "manual" || where.folderId !== null;
 
   const items: MenuItem[] = [
     { label: t("menu.open"), testid: "menu-open", run: () => act({ type: "open-game", gameId: game.id }) },
@@ -57,9 +55,18 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
         run: () => act({ type: "favorite", gameId: game.id, index: favoriteIndex + 1 }),
       },
     );
-    return items;
+  } else {
+    placeItems(items, game);
   }
+  items.push(...ownItems(game));
+  return items;
+}
 
+/** Where on the main list a game goes: into or out of a folder, up or down. */
+function placeItems(items: MenuItem[], game: GameView): void {
+  const library = lib();
+  const where = placement(game.id);
+  const manual = library.sort === "manual" || where.folderId !== null;
   items.push({
     label: t("menu.moveToFolder"),
     testid: "menu-move-to-folder",
@@ -99,7 +106,11 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
       },
     );
   }
-  items.push(
+}
+
+/** What belongs to the game itself, wherever it sits on the rail (favorites included). */
+function ownItems(game: GameView): MenuItem[] {
+  return [
     {
       label: t("menu.rename"),
       testid: "menu-rename",
@@ -171,8 +182,7 @@ export function gameMenu(game: GameView, options: { inFavorites?: boolean } = {}
           run: () => submitAction({ type: "trash-game", gameId: game.id }),
         }),
     },
-  );
-  return items;
+  ];
 }
 
 export function folderMenu(folder: FolderView): MenuItem[] {
