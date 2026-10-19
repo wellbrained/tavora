@@ -43,7 +43,7 @@ The current preview is [Tavora 0.17.6 for Windows](https://updates.mytavora.app/
 
 Preview builds are unsigned, so Windows may show an unrecognized-app warning. Installed Windows builds check for updates through `updates.mytavora.app`; automatic downloading can be changed in Settings.
 
-An account is optional: email-code or Discord sign-in is available, but your local game library, notes and layouts do not require one. **Signing in does not sync game workspaces between PCs yet.** A public module catalogue is also still planned; outside modules currently arrive as ZIP files.
+An account is optional: email-code or Discord sign-in is available, but your local game library, notes and layouts do not require one. **Signing in does not sync game workspaces between PCs yet.** Modules from other people come from the module catalogue inside the app, or as ZIP files.
 
 ## Your data and module permissions
 
