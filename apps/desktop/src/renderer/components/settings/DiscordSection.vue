@@ -69,7 +69,7 @@ function revoke(module: ModuleView) {
             <ModuleIcon :module-id="module.id" size="size-4" />
           </span>
           <span class="min-w-0 flex-1 truncate font-medium">{{ module.name }}</span>
-          <Button variant="secondary" :aria-label="t('integrations.discord.revokeLabel', { name: module.name })" :data-testid="`discord-revoke-${module.id}`" @click="revoke(module)">
+          <Button variant="danger" :aria-label="t('integrations.discord.revokeLabel', { name: module.name })" :data-testid="`discord-revoke-${module.id}`" @click="revoke(module)">
             {{ t("integrations.grants.revoke") }}
           </Button>
         </li>

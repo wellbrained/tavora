@@ -184,6 +184,8 @@ const TITLE_BAR_HEIGHT = 47;
 
 export interface HostOptions {
   userData: string;
+  /** Where modules keep pictures unless the player chose another folder; left out, inside userData (module-files.ts). */
+  picturesFolder?: string | undefined;
   moduleDirs: string[];
   /** Modules that ship with Tavora, shown as Official. */
   officialModuleDirs: string[];
@@ -340,6 +342,7 @@ export class Host {
     this.currentTheme = moduleTheme(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation);
     this.files = new ModuleFilesFolder({
       userData: options.userData,
+      defaultFolder: options.picturesFolder ?? defaultFilesRoot(options.userData),
       language: () => this.language,
       chosenFolder: () => this.library.moduleFilesFolder ?? null,
       setChosenFolder: (folder) => {
@@ -472,6 +475,8 @@ export class Host {
     );
 
     const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
+    // Before any module opens, so none sees the pictures half moved.
+    await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
     host.moduleData = await listModuleData(userData, host.files.root());
     host.grants = await GrantStore.load(userData);
     host.safetyLists = safetyLists;
@@ -563,7 +568,7 @@ export class Host {
   /** The daily copy of the player's data, made a little after start so it never slows it. */
   private backupSoon(): void {
     setTimeout(() => {
-      backupData({ userData: this.options.userData, log: (line) => console.log(`[tavora] ${line}`) }).catch((error: unknown) => console.error("[tavora] backup failed", error));
+      backupData({ userData: this.options.userData, moduleFiles: this.files.root(), log: (line) => console.log(`[tavora] ${line}`) }).catch((error: unknown) => console.error("[tavora] backup failed", error));
     }, 30_000).unref();
   }
 
@@ -1641,6 +1646,8 @@ export class Host {
         return this.account.signOut();
       case "account-sign-out-device":
         return this.account.signOutDevice(action.deviceId);
+      case "account-rename-device":
+        return this.account.renameDevice(action.deviceId, action.name);
       case "account-email-code":
         return this.account.sendEmailCode(action.email);
       case "account-change-email":
@@ -2255,6 +2262,7 @@ export class Host {
       baseUrl: options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL,
       fetch: (input, init) => fetch(input, init),
       os: deviceOs(process.platform),
+      deviceName: os.hostname(),
       language,
       canKeepSignIn: () => encryptor.isAvailable(),
       load: () => loadAccount(file, encryptor),

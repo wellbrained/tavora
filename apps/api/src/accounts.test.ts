@@ -27,9 +27,9 @@ function setup(options: { mailer?: Mailer; mailDailyLimit?: number; discord?: Di
     });
   const lastCode = () => /\n {4}(\d{6})\n/.exec(inbox.mails()[0]?.text ?? "")?.[1] ?? "";
   /** Signs an address in, creating its account when needed, and returns the token. */
-  const signIn = async (email: string, os = "windows") => {
+  const signIn = async (email: string, os = "windows", name?: string) => {
     await call("POST", "/code", { email });
-    const answer = (await (await call("POST", "/verify", { email, code: lastCode(), os, create: true })).json()) as { token: string };
+    const answer = (await (await call("POST", "/verify", { email, code: lastCode(), os, create: true, ...(name === undefined ? {} : { name }) })).json()) as { token: string };
     return answer.token;
   };
   return { store, inbox, clock, app, call, lastCode, signIn };
@@ -158,6 +158,20 @@ describe("signed in", () => {
     expect((await call("GET", "", undefined, first)).status).toBe(401);
     expect((await call("POST", "/sign-out", {}, second)).status).toBe(204);
     expect((await call("GET", "", undefined, second)).status).toBe(401);
+  });
+
+  it("names devices from the sign-in, renames them, and never another account's", async () => {
+    const { call, signIn } = setup();
+    const mine = await signIn("me@example.com", "windows", "  DOMS-PC\u0007  ");
+    await signIn("me@example.com", "windows");
+    const theirs = await signIn("them@example.com");
+    const list = async (token: string) => ((await (await call("GET", "", undefined, token)).json()) as { devices: { id: string; name: string | null }[] }).devices;
+    const [first, second] = await list(mine);
+    expect([first!.name, second!.name]).toEqual(["DOMS-PC", null]);
+    expect((await call("PUT", `/devices/${second!.id}/name`, { name: "Laptop ".repeat(10) }, mine)).status).toBe(204);
+    expect((await list(mine))[1]!.name).toBe("Laptop ".repeat(10).slice(0, 40).trim());
+    expect((await call("PUT", `/devices/${second!.id}/name`, { name: "   " }, mine)).status).toBe(400);
+    expect((await call("PUT", `/devices/${second!.id}/name`, { name: "Mine now" }, theirs)).status).toBe(404);
   });
 
   it("cannot sign out another account's device", async () => {

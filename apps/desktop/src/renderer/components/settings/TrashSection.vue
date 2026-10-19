@@ -81,7 +81,7 @@ function deleteNow(gameId: string, name: string) {
       <Button variant="secondary" :disabled="!trashTicked.size" data-testid="trash-restore-selected" @click="restoreTicked">
         {{ t("settings.trash.restoreSelected") }}
       </Button>
-      <Button variant="secondary" class="text-destructive" :disabled="!trashTicked.size" data-testid="trash-delete-selected" @click="deleteTicked">
+      <Button variant="danger" :disabled="!trashTicked.size" data-testid="trash-delete-selected" @click="deleteTicked">
         {{ t("settings.trash.deleteSelected") }}
       </Button>
     </div>
@@ -114,7 +114,7 @@ function deleteNow(gameId: string, name: string) {
         <Button variant="secondary" :data-testid="`restore-${entry.game.id}`" @click="act({ type: 'restore-game', gameId: entry.game.id })">
           {{ t("settings.trash.restore") }}
         </Button>
-        <Button variant="secondary" class="text-destructive" :data-testid="`delete-${entry.game.id}`" @click="deleteNow(entry.game.id, entry.game.name)">
+        <Button variant="danger" :data-testid="`delete-${entry.game.id}`" @click="deleteNow(entry.game.id, entry.game.name)">
           {{ t("settings.trash.deleteNow") }}
         </Button>
       </li>

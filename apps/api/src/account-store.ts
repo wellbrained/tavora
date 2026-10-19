@@ -46,6 +46,8 @@ export interface Account {
 export interface Device {
   id: string;
   os: DeviceOs;
+  /** The PC's name, as the app sent it or the player renamed it; null for a sign-in from before names. */
+  name: string | null;
   createdAt: string;
   lastUsedAt: string;
 }
@@ -148,7 +150,7 @@ export class AccountStore {
       create table if not exists sessions (
         id text primary key, token_hash text not null unique,
         account_id text not null references accounts (id) on delete cascade,
-        os text not null, created_at integer not null, last_used_at integer not null
+        os text not null, name text, created_at integer not null, last_used_at integer not null
       );
       create index if not exists sessions_account on sessions (account_id);
       create table if not exists mail_days (day text primary key, sent integer not null);
@@ -183,6 +185,9 @@ export class AccountStore {
    * everything back on any problem.
    */
   private migrate(): void {
+    // Device names came later; older sign-ins have none.
+    const sessionColumns = (this.db.prepare("pragma table_info(sessions)").all() as unknown as { name: string }[]).map((column) => column.name);
+    if (!sessionColumns.includes("name")) this.db.exec("alter table sessions add column name text");
     const columns = (this.db.prepare("pragma table_info(accounts)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (columns.includes("discord_id")) return;
     const before = (this.db.prepare("select count(*) as n from accounts").get() as { n: number }).n;
@@ -503,12 +508,12 @@ export class AccountStore {
   // ── Sessions ───────────────────────────────────────────────────────────
 
   /** A new sign-in. The token goes to the app once; only its hash is kept. */
-  createSession(accountId: string, os: DeviceOs, now: number): { token: string; session: Session } {
+  createSession(accountId: string, os: DeviceOs, now: number, name: string | null = null): { token: string; session: Session } {
     const token = randomBytes(32).toString("base64url");
     const id = randomBytes(12).toString("base64url");
     this.db
-      .prepare("insert into sessions (id, token_hash, account_id, os, created_at, last_used_at) values (?, ?, ?, ?, ?, ?)")
-      .run(id, sha256(`session:${token}`), accountId, os, now, now);
+      .prepare("insert into sessions (id, token_hash, account_id, os, name, created_at, last_used_at) values (?, ?, ?, ?, ?, ?, ?)")
+      .run(id, sha256(`session:${token}`), accountId, os, name, now, now);
     return { token, session: { id, accountId } };
   }
 
@@ -528,13 +533,19 @@ export class AccountStore {
 
   devices(accountId: string): Device[] {
     return (
-      this.db.prepare("select id, os, created_at, last_used_at from sessions where account_id = ? order by created_at, rowid").all(accountId) as unknown as {
+      this.db.prepare("select id, os, name, created_at, last_used_at from sessions where account_id = ? order by created_at, rowid").all(accountId) as unknown as {
         id: string;
         os: DeviceOs;
+        name: string | null;
         created_at: number;
         last_used_at: number;
       }[]
-    ).map((row) => ({ id: row.id, os: row.os, createdAt: new Date(row.created_at).toISOString(), lastUsedAt: new Date(row.last_used_at).toISOString() }));
+    ).map((row) => ({ id: row.id, os: row.os, name: row.name, createdAt: new Date(row.created_at).toISOString(), lastUsedAt: new Date(row.last_used_at).toISOString() }));
+  }
+
+  /** Names one device of an account; false when the account has no such device. */
+  renameSession(accountId: string, id: string, name: string): boolean {
+    return Number(this.db.prepare("update sessions set name = ? where id = ? and account_id = ?").run(name, id, accountId).changes) > 0;
   }
 
   /** Signs out one device of an account; false when the account has no such device. */

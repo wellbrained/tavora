@@ -190,14 +190,14 @@ const showVariation = computed(() => {
           </li>
         </ul>
       </template>
-      <span class="flex flex-none flex-wrap justify-end gap-2">
+      <span class="flex flex-none flex-wrap items-center justify-end gap-2">
         <Button variant="secondary" data-testid="create-starter-theme" @click="act({ type: 'create-starter-theme' })">
           <CopyPlus :stroke-width="1.5" /> {{ t("settings.appearance.newTheme") }}
         </Button>
-        <Button variant="secondary" size="icon" data-testid="open-themes-folder" :aria-label="t('common.openFolder')" :title="t('common.openFolder')" @click="act({ type: 'open-themes-folder' })">
+        <Button variant="secondary" size="icon-sm" data-testid="open-themes-folder" :aria-label="t('common.openFolder')" :title="t('common.openFolder')" @click="act({ type: 'open-themes-folder' })">
           <FolderOpen :stroke-width="1.5" />
         </Button>
-        <Button variant="secondary" size="icon" data-testid="reload-themes" :aria-label="t('common.reload')" :title="t('common.reload')" @click="act({ type: 'reload-themes' })"><RefreshCw :stroke-width="1.5" /></Button>
+        <Button variant="secondary" size="icon-sm" data-testid="reload-themes" :aria-label="t('common.reload')" :title="t('common.reload')" @click="act({ type: 'reload-themes' })"><RefreshCw :stroke-width="1.5" /></Button>
       </span>
     </SettingRow>
     <SettingRow

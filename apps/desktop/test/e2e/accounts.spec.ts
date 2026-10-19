@@ -5,7 +5,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer as createHttpServer, type Server } from "node:http";
 import { createServer } from "node:net";
-import { tmpdir } from "node:os";
+import os, { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { desktopDir, launch } from "./harness";
@@ -100,8 +100,16 @@ test("a player creates an account with an emailed code, sees this PC, and signs 
     await page.getByTestId("account-create").click();
 
     await expect(page.getByTestId("account")).toContainText("player@example.com");
+    // The devices are folded away; each is named after its PC and can be renamed.
+    await expect(page.getByTestId("account-devices")).toHaveCount(0);
+    await page.getByTestId("account-devices-toggle").click();
     await expect(page.getByTestId("account-devices")).toContainText(process.platform === "win32" ? "Windows" : process.platform === "darwin" ? "macOS" : "Linux");
     await expect(page.getByTestId("account-devices")).toContainText("This PC");
+    await expect(page.getByTestId("account-devices")).toContainText(os.hostname().slice(0, 40));
+    await page.getByTestId("account-devices").getByRole("button", { name: "Rename" }).click();
+    await page.getByTestId("prompt-input").fill("Living room PC");
+    await page.getByTestId("prompt-input").press("Enter");
+    await expect(page.getByTestId("account-devices")).toContainText("Living room PC");
 
     await page.getByTestId("account-sign-out").click();
     await expect(page.getByTestId("account-email")).toBeVisible();

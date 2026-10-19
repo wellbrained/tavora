@@ -16,7 +16,7 @@ const encryptor = (available = true): Encryptor => ({
 
 const TOKEN = "t".repeat(43);
 const SAVED: SavedAccount = { token: TOKEN, email: "me@example.com", discord: null, createdAt: "2026-10-16T12:00:00.000Z" };
-const DEVICE = { id: "dev1", os: "windows", createdAt: SAVED.createdAt, lastUsedAt: SAVED.createdAt, current: true };
+const DEVICE = { id: "dev1", os: "windows", name: "DOMS-PC", createdAt: SAVED.createdAt, lastUsedAt: SAVED.createdAt, current: true };
 
 interface Call {
   method: string;
@@ -49,7 +49,7 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 
 const EMPTY_PROFILE: ProfileData = { name: "", initials: "", picture: null, updatedAt: null };
 
-function client(fetchImpl: typeof fetch, options: { saved?: SavedAccount | null; enabled?: boolean; canKeep?: boolean; profile?: ProfileData; discordLogin?: () => Promise<{ code: string; verifier: string }> } = {}) {
+function client(fetchImpl: typeof fetch, options: { saved?: SavedAccount | null; deviceName?: string; enabled?: boolean; canKeep?: boolean; profile?: ProfileData; discordLogin?: () => Promise<{ code: string; verifier: string }> } = {}) {
   const views: AccountView[] = [];
   const kept: (SavedAccount | null)[] = [];
   /** This PC's profile, and every profile the account put in its place. */
@@ -59,6 +59,7 @@ function client(fetchImpl: typeof fetch, options: { saved?: SavedAccount | null;
     baseUrl: "https://api.test/",
     fetch: fetchImpl,
     os: "windows",
+    ...(options.deviceName ? { deviceName: options.deviceName } : {}),
     language: () => "de",
     canKeepSignIn: () => options.canKeep ?? true,
     load: async () => options.saved ?? null,
@@ -231,6 +232,25 @@ describe("signed in", () => {
     await account.signOutDevice("dev2");
     expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual(["DELETE https://api.test/v1/account/devices/dev2", "GET https://api.test/v1/account"]);
     expect(account.view().devices).toEqual([DEVICE]);
+  });
+
+  it("names a device after its PC, gives an unnamed sign-in this PC's name, and renames one", async () => {
+    let devices: { name: string | null }[] = [{ ...DEVICE, name: null }];
+    const { calls, fetchImpl } = service({
+      "GET /": () => json({ devices }),
+      "PUT /devices/dev1/name": (body) => {
+        devices = [{ ...DEVICE, name: String(body?.name) }];
+        return new Response(null, { status: 204 });
+      },
+    });
+    const { account } = client(fetchImpl, { saved: SAVED, deviceName: "  GAMING-PC  " });
+    await account.init();
+    await account.refresh();
+    expect(calls.find((call) => call.method === "PUT")!.body).toEqual({ name: "GAMING-PC" });
+    expect(account.view().devices![0]!.name).toBe("GAMING-PC");
+    await account.renameDevice("dev1", " Living room ");
+    expect(calls.filter((call) => call.method === "PUT").at(-1)!.body).toEqual({ name: "Living room" });
+    expect(account.view().devices![0]!.name).toBe("Living room");
   });
 });
 

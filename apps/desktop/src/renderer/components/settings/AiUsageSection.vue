@@ -84,7 +84,7 @@ function revoke(module: ModuleView) {
             <span class="text-muted-foreground truncate font-mono text-xs" :title="account.directory">{{ account.directory }}</span>
           </div>
           <Button variant="ghost" size="sm" data-testid="ai-usage-edit" @click="startEdit(account)">{{ t("aiUsage.settings.edit") }}</Button>
-          <Button variant="ghost" size="sm" data-testid="ai-usage-remove" @click="act({ type: 'ai-usage-remove', accountId: account.id })">{{ t("aiUsage.settings.remove") }}</Button>
+          <Button variant="danger" size="sm" data-testid="ai-usage-remove" @click="act({ type: 'ai-usage-remove', accountId: account.id })">{{ t("aiUsage.settings.remove") }}</Button>
         </div>
       </li>
       <li v-if="view && accounts.length === 0 && editing !== 'new'" class="text-muted-foreground py-3 text-sm" data-testid="ai-usage-none">{{ t("aiUsage.settings.empty") }}</li>
@@ -125,7 +125,7 @@ function revoke(module: ModuleView) {
           </span>
           <span class="min-w-0 flex-1 truncate font-medium">{{ module.name }}</span>
           <Button
-            variant="secondary"
+            variant="danger"
             :aria-label="t('integrations.aiUsage.revokeLabel', { name: module.name })"
             :data-testid="`ai-usage-revoke-${module.id}`"
             @click="revoke(module)"

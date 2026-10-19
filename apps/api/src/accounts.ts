@@ -67,6 +67,14 @@ const profileAnswer = (profile: StoredProfile | null) =>
     ? { name: profile.name, initials: profile.initials, picture: profile.picture ? Buffer.from(profile.picture).toString("base64") : null, updatedAt: new Date(profile.updatedAt).toISOString() }
     : null;
 const deviceOs = (input: unknown): DeviceOs => (DEVICE_OS.includes(input as DeviceOs) ? (input as DeviceOs) : "other");
+/** Most characters a device name keeps. */
+export const MAX_DEVICE_NAME = 40;
+/** A device's name: printable text, trimmed, at most MAX_DEVICE_NAME characters; null for anything else. */
+export const deviceName = (input: unknown): string | null => {
+  if (typeof input !== "string") return null;
+  const name = [...input.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim()].slice(0, MAX_DEVICE_NAME).join("").trim();
+  return name || null;
+};
 const tooMany = (context: Context, wait: number) => {
   context.header("Retry-After", String(wait));
   return context.json({ error: "Too many requests.", reason: "too-many" }, 429);
@@ -169,7 +177,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
         if (!account) throw new Error("account could not be created");
       }
     }
-    const { token, session } = store.createSession(account.id, deviceOs(input.os), at);
+    const { token, session } = store.createSession(account.id, deviceOs(input.os), at, deviceName(input.name));
     return context.json({ status: existing ? "signed-in" : "created", token, device: session.id, account: accountAnswer(account) });
   });
 
@@ -194,6 +202,13 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
 
   signedIn.post("/sign-out", (context) => {
     store.deleteSession(context.get("account").id, context.get("session").id);
+    return context.body(null, 204);
+  });
+
+  signedIn.put("/devices/:id/name", async (context) => {
+    const name = deviceName((await body(context)).name);
+    if (!name) return context.json({ error: "Send { name }.", reason: "bad-request" }, 400);
+    if (!store.renameSession(context.get("account").id, context.req.param("id") ?? "", name)) return context.json({ error: "Not found.", reason: "not-found" }, 404);
     return context.body(null, 204);
   });
 
@@ -364,7 +379,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const existing = store.accountByDiscord(who.id);
     if (!existing) return context.json({ status: "no-account", ticket: store.holdDiscord(who, at), discord: { name: who.name } });
     store.setDiscord(existing.id, who);
-    const { token, session } = store.createSession(existing.id, deviceOs(input.os), at);
+    const { token, session } = store.createSession(existing.id, deviceOs(input.os), at, deviceName(input.name));
     return context.json({ status: "signed-in", token, device: session.id, account: accountAnswer({ ...existing, discord: who }) });
   });
 
@@ -378,7 +393,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (!who) return context.json({ error: "That Discord sign-in has expired. Sign in with Discord again.", reason: "discord-expired" }, 400);
     // Made a moment ago by another sign-in with the same Discord login: sign in to that one.
     const account = store.accountByDiscord(who.id) ?? store.createAccount({ discord: who }, at);
-    const { token, session } = store.createSession(account.id, deviceOs(input.os), at);
+    const { token, session } = store.createSession(account.id, deviceOs(input.os), at, deviceName(input.name));
     return context.json({ status: "created", token, device: session.id, account: accountAnswer(account) });
   });
 
