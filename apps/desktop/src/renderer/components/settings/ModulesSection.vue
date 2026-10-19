@@ -119,11 +119,25 @@ function remove(module: ModuleView) {
     >
       <template #below>
         <ul v-if="problems.length" class="mt-2 flex flex-col gap-1.5" :aria-label="t('settings.modules.problems')" data-testid="module-problems">
-          <li v-for="problem in problems" :key="problem.folder" class="text-sm">
-            <span class="text-destructive font-medium">{{ problem.folder }}</span>{{ " " }}
-            <span class="text-muted-foreground" :title="problem.message">{{
-              problem.kind === "not-built" ? t("settings.modules.notBuilt") : t("settings.modules.problem", { message: problem.message })
-            }}</span>
+          <li v-for="problem in problems" :key="problem.path" class="flex flex-col gap-0.5 text-sm">
+            <span>
+              <span class="text-destructive font-medium">{{ problem.folder }}</span>{{ " " }}
+              <span class="text-muted-foreground" :title="problem.message">{{
+                problem.kind === "not-built" ? t("settings.modules.notBuilt") : t("settings.modules.problem", { message: problem.message })
+              }}</span>
+            </span>
+            <span class="flex min-w-0 items-center gap-1">
+              <span class="text-muted-foreground min-w-0 truncate font-mono text-xs" :title="problem.path" data-testid="module-problem-path">{{ problem.path }}</span>
+              <Button
+                variant="ghost"
+                size="xs"
+                class="flex-none"
+                :data-testid="`open-module-problem-${problem.folder}`"
+                @click="act({ type: 'open-module-problem-folder', path: problem.path })"
+              >
+                <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
+              </Button>
+            </span>
           </li>
         </ul>
       </template>

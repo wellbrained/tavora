@@ -65,6 +65,8 @@ export function isDevelopmentModule(id: string): boolean {
 /** A folder that looks like a module but could not be loaded, and why, in words a player can read. */
 export interface ModuleProblem {
   folder: string;
+  /** The folder's full path, so Settings can show it and open it. */
+  path: string;
   message: string;
   /** For a development folder: its full path, so Settings shows the problem next to it. */
   developmentFolder?: string;
@@ -107,14 +109,14 @@ export async function discoverModules(
   ];
   for (const { dir, provenance, development: fromProject } of dirs) {
     const project = fromProject ? await developmentProjects(dir) : undefined;
-    if (project === "missing") problems.push({ folder: path.basename(dir), message: "this folder can't be found", developmentFolder: dir, kind: "missing" });
+    if (project === "missing") problems.push({ folder: path.basename(dir), path: dir, message: "this folder can't be found", developmentFolder: dir, kind: "missing" });
     else if (project?.length === 0) {
-      problems.push({ folder: path.basename(dir), message: "there is no tavora.module.json in this folder or in the folders directly inside it", developmentFolder: dir, kind: "no-module" });
+      problems.push({ folder: path.basename(dir), path: dir, message: "there is no tavora.module.json in this folder or in the folders directly inside it", developmentFolder: dir, kind: "no-module" });
     }
     const found = project === undefined ? await candidates(dir) : project === "missing" ? [] : project;
     for (const candidate of found) {
       const report = (message: string, kind?: ModuleProblem["kind"]) =>
-        problems.push({ folder: path.basename(candidate), message, ...(fromProject ? { developmentFolder: dir, developmentProject: candidate } : {}), ...(kind ? { kind } : {}) });
+        problems.push({ folder: path.basename(candidate), path: candidate, message, ...(fromProject ? { developmentFolder: dir, developmentProject: candidate } : {}), ...(kind ? { kind } : {}) });
       const installed = await loadModule(candidate, provenance, tavoraVersion, (message, kind) => {
         if (provenance === "local") report(message, kind);
       });

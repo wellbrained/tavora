@@ -905,6 +905,13 @@ export class Host {
     if (error) throw new LibraryError("error.openModulesFolder", { problem: error });
   }
 
+  /** Opens a folder Settings lists as not loading; only those, so the host UI cannot open any path. */
+  private async openModuleProblemFolder(dir: string): Promise<void> {
+    if (!this.moduleProblems.some((problem) => !problem.developmentFolder && problem.path === dir)) return;
+    const error = await shell.openPath(dir);
+    if (error) throw new LibraryError("error.openFolder", { problem: error });
+  }
+
   /** Moves a module out of the player's modules folder (to the recycle bin) and forgets it. */
   private async removeModule(moduleId: string): Promise<void> {
     const module = this.modules.get(moduleId);
@@ -1607,6 +1614,8 @@ export class Host {
         return this.openDeveloperLink(action.link);
       case "open-modules-folder":
         return this.openModulesFolder();
+      case "open-module-problem-folder":
+        return this.openModuleProblemFolder(action.path);
       case "remove-module":
         return this.removeModule(action.moduleId);
       case "grant-module":
@@ -3020,7 +3029,7 @@ export class Host {
           this.catalogUpdates.pending(module.manifest.id),
         ),
       })),
-      moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder).map(({ folder, message, kind }) => ({ folder, message, ...(kind ? { kind } : {}) })),
+      moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder).map(({ folder, path: full, message, kind }) => ({ folder, path: full, message, ...(kind ? { kind } : {}) })),
       developmentFolders: this.library.developmentFolders.map((folder) => {
         const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
         const projects = new Map<string, { project: string; moduleId: string | null; problem: string | null; kind: NonNullable<ModuleProblem["kind"]> | null }>();

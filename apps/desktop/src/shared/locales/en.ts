@@ -357,7 +357,7 @@ export const en = {
   "settings.appearance.newTheme": "New theme",
   "settings.appearance.reset": "Reset",
   "settings.modules.problem": "can't load: {message}.",
-  "settings.modules.notBuilt": "isn't built yet. Run npm run build in its folder, then reload.",
+  "settings.modules.notBuilt": "can't load, its files aren't built. Delete the folder, or run npm run build in it and hit Reload.",
   "settings.modules.problems": "Modules that could not be loaded",
   "settings.modules.removeTitle": "Remove {name}?",
   "settings.modules.removeMessage": "It goes to the recycle bin. Its data stays, so adding it back brings everything back.",

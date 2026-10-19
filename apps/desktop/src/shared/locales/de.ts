@@ -359,7 +359,7 @@ export const de: Record<keyof typeof en, string> = {
   "settings.appearance.newTheme": "Neues Design",
   "settings.appearance.reset": "Zurücksetzen",
   "settings.modules.problem": "lädt nicht: {message}.",
-  "settings.modules.notBuilt": "ist noch nicht gebaut. Führe npm run build in seinem Ordner aus und lade dann neu.",
+  "settings.modules.notBuilt": "lädt nicht, die Dateien sind nicht gebaut. Lösch den Ordner, oder führ darin npm run build aus und klick auf Neu laden.",
   "settings.modules.problems": "Module, die nicht geladen werden konnten",
   "settings.modules.removeTitle": "{name} entfernen?",
   "settings.modules.removeMessage": "Es kommt in den Papierkorb. Seine Daten bleiben, also ist beim erneuten Hinzufügen alles wieder da.",

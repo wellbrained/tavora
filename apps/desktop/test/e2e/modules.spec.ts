@@ -51,7 +51,9 @@ test("the modules page lists where modules came from, reloads, and removes one w
   await page.getByTestId("reload-modules").click();
   await expect(page.getByTestId("module-local.test.later")).toBeVisible();
   await expect(page.getByTestId("module-problems")).toContainText("broken can't load:");
-  await expect(page.getByTestId("module-problems")).toContainText("unbuilt isn't built yet.");
+  await expect(page.getByTestId("module-problems")).toContainText("unbuilt can't load, its files aren't built.");
+  await expect(page.getByTestId("module-problems")).toContainText(path.join("modules", "unbuilt"));
+  await expect(page.getByTestId("open-module-problem-unbuilt")).toBeVisible();
 
   // Open a panel of the module in a game, then remove the module.
   await page.getByTestId("settings-close").click();
