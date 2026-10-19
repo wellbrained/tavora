@@ -76,15 +76,15 @@ async function openHomepage() {
         <p v-if="error || homepageError" class="text-destructive mb-4 text-sm" role="alert">{{ error || homepageError }}</p>
 
         <section v-if="module.screenshots > 0" class="mb-6" :aria-label="t('catalog.screenshots', { name: module.name })" data-testid="catalog-info-screenshots">
-          <p v-if="!page" class="text-muted-foreground bg-muted/40 grid aspect-video place-items-center rounded-lg text-sm" role="status">{{ t("catalog.screenshotsLoading") }}</p>
-          <p v-else-if="!loaded?.screenshots.length" class="text-muted-foreground bg-muted/40 grid aspect-video place-items-center rounded-lg text-sm" role="status" data-testid="catalog-info-screenshots-missing">
+          <p v-if="!page" class="text-muted-foreground bg-muted/40 grid aspect-video max-w-[560px] place-items-center rounded-lg text-sm" role="status">{{ t("catalog.screenshotsLoading") }}</p>
+          <p v-else-if="!loaded?.screenshots.length" class="text-muted-foreground bg-muted/40 grid aspect-video max-w-[560px] place-items-center rounded-lg text-sm" role="status" data-testid="catalog-info-screenshots-missing">
             {{ t("catalog.screenshotsMissing") }}
           </p>
-          <template v-else>
+          <div v-else class="flex items-start gap-3">
             <img :src="loaded.screenshots[shown]" :alt="t('catalog.screenshot', { number: shown + 1, count: loaded.screenshots.length })"
-              class="bg-muted/40 aspect-video w-full rounded-lg border object-contain" draggable="false" data-testid="catalog-info-screenshot"
+              class="bg-muted/40 aspect-video min-w-0 max-w-[560px] flex-1 rounded-lg border object-contain" draggable="false" data-testid="catalog-info-screenshot"
             />
-            <div v-if="loaded.screenshots.length > 1" class="mt-2 flex gap-2">
+            <div v-if="loaded.screenshots.length > 1" class="flex flex-none flex-col gap-2">
               <button v-for="(shot, index) in loaded.screenshots" :key="index" type="button"
                 class="focus-visible:ring-ring h-14 w-24 overflow-hidden rounded-md border-2 outline-none focus-visible:ring-2"
                 :class="index === shown ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100'"
@@ -92,7 +92,7 @@ async function openHomepage() {
                 @click="shown = index"
               ><img :src="shot" alt="" class="size-full object-cover" draggable="false" /></button>
             </div>
-          </template>
+          </div>
         </section>
 
         <div class="grid gap-8 md:grid-cols-[minmax(0,1fr)_240px]">
