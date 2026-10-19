@@ -74,3 +74,19 @@ test('PoE2 Gear imports a portable build and sends artwork and stats to the shar
   await expect.poll(async()=> (await tooltip(app))?.visible).toBe(false);
  }finally{await app.close();}
 });
+
+test('a pinned tooltip closes on app focus loss or a hidden source',async()=>{
+ const {app,page}=await launch(undefined,[await fixture()]);try{
+  await openModule(page,ID);await waitForShown(app,ID);
+  await expect.poll(()=>inModule(app,ID,"document.querySelector('#result').textContent")).toBe('ready');
+  await input(app,'mouseMove');await input(app,'mouseDown');await input(app,'mouseUp');
+  await expect.poll(()=>inModule(app,ID,"document.querySelector('#result').textContent")).toBe('pinned');
+  await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>!w.webContents.getURL().startsWith('data:text/html'))!;w.blur();w.emit('blur');});
+  await expect.poll(async()=> (await tooltip(app))?.visible).toBe(false);
+  await expect.poll(()=>inModule(app,ID,"document.querySelector('#result').textContent")).toBe('closed');
+  await input(app,'mouseMove',250,300);await input(app,'mouseMove');await input(app,'mouseDown');await input(app,'mouseUp');
+  await expect.poll(()=>inModule(app,ID,"document.querySelector('#result').textContent")).toBe('pinned');
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>!w.webContents.getURL().startsWith('data:text/html'))!.hide());
+  await expect.poll(async()=> (await tooltip(app))?.visible).toBe(false);
+ }finally{await app.close();}
+});
