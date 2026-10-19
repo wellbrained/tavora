@@ -127,6 +127,17 @@ A developer can link a publisher key to their account, so players see a develope
 - **A name cannot pose as another.** Developer names are plain letters, digits, spaces, dots, dashes and underscores, unique when case and those separators are ignored, never Tavora's, changeable once every 30 days, and a name given up stays blocked for others for 30 days.
 - **Players learn a name, nothing else.** Tavora asks the service which name a key has (only while online features are on, at most once a day per key) and gets the name alone, never an account or an address. The name shown is a label: what a player installs is still decided by the key's signature, as before.
 
+## The cloud copy
+
+The cloud copy (Settings > Account) keeps your Tavora data on Tavora's service, so your other PCs get it. It is optional and off until you turn it on.
+
+- **Only you can read it.** It is encrypted on your PC with AES-256-GCM, under a random key made there. The key leaves your PC only as the recovery key Tavora shows you. The service keeps sealed parts, a sealed list of files and a version number; parts are named by a keyed hash, so their names say nothing without the key. The key is kept with your system's key store, and the copy can't be turned on where there is none.
+- **It holds your Tavora data and nothing else.** That is what the daily backup holds (library, layouts, profile, every module's data, pictures), plus the installed modules and who publishes them. Sign-ins (Tavora's, Discord's, AI usage accounts), grants and Browser panel data are never in it.
+- **A copy is checked before it is used.** Every part must open with the key and match its name, and every file its size and SHA-256. Every path must be one of the copy's own places: no `..`, absolute paths or other folders, and in the module files folder only Tavora's own folders. A copy is downloaded into a staging folder and swapped in only at start, before anything reads the data; what was there moves to the backups folder.
+- **Modules in a copy come from you.** Only your key can make a copy, so its modules are not checked again like a new install. The safety lists still apply at start, and grants are not copied: a module asks again on each PC.
+- **Older data never replaces newer.** The service takes a new version only from a PC that started from the current one. Otherwise you choose which side to keep, and the other is kept as a local backup.
+- **Modules and pages can't reach it.** No SDK call, bridge message or module view carries the copy, its key or whether it is on.
+
 ## Revoked keys, blocked modules and lost keys
 
 Tavora keeps three lists for modules from other people: publisher keys that were revoked, module zips it blocked, and new keys that replace an account's lost one. They are signed with Tavora's catalogue key, which is kept offline and never on the service.

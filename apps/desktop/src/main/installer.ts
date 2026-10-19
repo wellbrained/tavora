@@ -52,7 +52,8 @@ export function compareModuleVersions(a: string, b: string): number {
  */
 export type OwnerRecords = Record<string, { id: string; owner: string; signer?: string; sha256?: string; catalog?: true }>;
 
-const RECORDS = "module-owners.json";
+export const OWNER_RECORDS_FILE = "module-owners.json";
+const RECORDS = OWNER_RECORDS_FILE;
 
 /**
  * The owners the installer recorded. Kept by the host in its own file, never

@@ -28,6 +28,16 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     ],
   },
   {
+    version: "0.19.6",
+    date: "2026-10-19",
+    title: "Cloud copy",
+    notes: [
+      "New in Settings > Account: turn on the cloud copy, and your games, panels, modules and their data stay the same on every PC you sign in on.",
+      "It's encrypted on your PC with your own recovery key, so only you can read it. Keep the key safe: you need it on your other PCs.",
+      "Tavora picks up newer data when it starts, uploads your changes every few minutes and once more when you close it. If both PCs changed, you choose which to keep, and the other is saved as a local backup.",
+    ],
+  },
+  {
     version: "0.19.5",
     date: "2026-10-19",
     title: "Tavora spots your games",

@@ -1,11 +1,9 @@
-import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { mkdir, readFile, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { CloudCopy, copyRoots, CopyError, EMPTY_STATE, hasLocalChanges, loadCopyKey, safeCopyPath, saveCopyKey, swapInCopy, type CopyState } from "./cloud-copy";
+import { cleanUp, OWNER, pc, service } from "./cloud-copy.test-helper";
 import { copyKeys, newCopyKey, open, parseRecoveryKey, partId, recoveryKey, seal } from "./copy-crypto";
-
-const OWNER = "0123456789abcdef0123456789abcdef";
 
 describe("the copy's encryption", () => {
   it("opens what it sealed, and nothing sealed with another key", () => {
@@ -45,55 +43,7 @@ describe("the copy's encryption", () => {
   });
 });
 
-const dirs: string[] = [];
-afterEach(async () => {
-  for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });
-});
-
-/** A PC: its data folder, with a module files folder elsewhere that also holds the player's own files. */
-async function pc(files: Record<string, string> = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "tavora-copy-"));
-  dirs.push(root);
-  const userData = path.join(root, "data");
-  const moduleFiles = path.join(root, "Pictures", "Tavora");
-  for (const [name, content] of Object.entries(files)) {
-    const file = name.startsWith("module-blobs/") ? path.join(moduleFiles, name.slice("module-blobs/".length)) : path.join(userData, name);
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, content);
-  }
-  return { root, userData, moduleFiles, roots: copyRoots(userData, moduleFiles) };
-}
-
-/**
- * The real account service (apps/api), in memory. Loaded by a path the desktop typecheck does not follow:
- * the service is checked with its own settings (Node's types, no DOM).
- */
-async function loadService() {
-  const api = (file: string) => import(/* @vite-ignore */ new URL(`../../../api/src/${file}`, import.meta.url).href);
-  const [{ AccountStore }, { createApp }, { CopyStore }, { buildDataset, writeDatabase }, { createTestInbox }, { createRateLimiter }] = await Promise.all(
-    ["account-store.ts", "app.ts", "cloud-copy.ts", "dataset.ts", "mail.ts", "rate-limit.ts"].map(api),
-  );
-  return { AccountStore, createApp, CopyStore, buildDataset, writeDatabase, createTestInbox, createRateLimiter };
-}
-
-async function service() {
-  const { AccountStore, createApp, CopyStore, buildDataset, writeDatabase, createTestInbox, createRateLimiter } = await loadService();
-  const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
-  const roomy = () => createRateLimiter({ limit: 10_000, windowMs: 60_000 });
-  const inbox = createTestInbox();
-  const app = createApp({ db, rateLimiter: roomy(), accounts: { store: new AccountStore(":memory:"), mailer: inbox, codeRateLimiter: roomy(), verifyRateLimiter: roomy(), copies: new CopyStore(":memory:") } });
-  const routes: string[] = [];
-  const fetchImpl = (async (url: string, init?: RequestInit) => {
-    routes.push(`${init?.method ?? "GET"} ${new URL(url).pathname}`);
-    return app.request(url, init) as Promise<Response>;
-  }) as typeof fetch;
-  const json = (route: string, body: unknown) => app.request(`http://tavora.test/v1/account${route}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  await json("/code", { email: "me@example.com" });
-  const code = /\n {4}(\d{6})\n/.exec(inbox.mails()[0]?.text ?? "")?.[1] ?? "";
-  const { token } = (await (await json("/verify", { email: "me@example.com", code, create: true })).json()) as { token: string };
-  const client = () => new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: fetchImpl, token: () => token });
-  return { client, routes };
-}
+afterEach(cleanUp);
 
 const read = (dir: string, name: string) => readFile(path.join(dir, name), "utf8");
 
@@ -108,11 +58,13 @@ describe("the cloud copy", () => {
       "game-icons/elden-ring.png": "png",
       [`module-blobs/${OWNER}/notes/picture.webp`]: "webp",
       "module-blobs/my-own-photo.jpg": "not Tavora's",
+      "modules/dice/manifest.json": '{"id":"dice"}',
+      "module-owners.json": '{"folders":{}}',
     });
     const uploaded = await client().upload(key, a.roots, EMPTY_STATE);
     expect(uploaded).toMatchObject({ status: "uploaded", pictures: true, state: { version: 1 } });
     if (uploaded.status !== "uploaded") return;
-    expect(Object.keys(uploaded.state.files).sort()).toEqual(["game-icons/elden-ring.png", "library.json", `module-blobs/${OWNER}/notes/picture.webp`, "module-data/tavora.notes/elden-ring/storage.json", "workspace.json"]);
+    expect(Object.keys(uploaded.state.files).sort()).toEqual(["game-icons/elden-ring.png", "library.json", `module-blobs/${OWNER}/notes/picture.webp`, "module-data/tavora.notes/elden-ring/storage.json", "module-owners.json", "modules/dice/manifest.json", "workspace.json"]);
     expect(await client().remote()).toMatchObject({ version: 1 });
 
     const b = await pc({ "library.json": '{"version":1,"games":[]}', "module-data/other/x.json": "old", "module-blobs/holiday.jpg": "mine" });
@@ -124,6 +76,8 @@ describe("the cloud copy", () => {
     expect(await read(b.userData, "library.json")).toBe('{"version":1,"games":["elden-ring"]}');
     expect(await read(b.userData, "module-data/tavora.notes/elden-ring/storage.json")).toBe('{"a":1}');
     expect(await read(b.moduleFiles, `${OWNER}/notes/picture.webp`)).toBe("webp");
+    // The installed modules come along, so the layout's panels have them.
+    expect(await read(b.userData, "modules/dice/manifest.json")).toBe('{"id":"dice"}');
     // The player's own files in that folder stay where they are, and never went up.
     expect(await read(b.moduleFiles, "holiday.jpg")).toBe("mine");
     // What B had is kept aside.
