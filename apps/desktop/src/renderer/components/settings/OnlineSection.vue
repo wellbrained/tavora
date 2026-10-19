@@ -38,5 +38,4 @@ const steamIcons = computed({
       </Button>
     </SettingRow>
   </SettingGroup>
-  <p class="text-muted-foreground mt-4 max-w-prose text-xs leading-relaxed" data-testid="icon-notice">{{ t("settings.iconNotice") }}</p>
 </template>
