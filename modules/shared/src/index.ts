@@ -1,5 +1,6 @@
 // Shared by the official modules (Notes, To-Dos, UI Playground). Everything here uses only
-// the public @tavora/sdk, like any community module could.
+// the public @tavora/sdk, like any community module could. The app imports only the
+// components (components/ui/…), never this entry, so the SDK stays out of the host UI.
 
 import { connect, type TavoraSDK } from "@tavora/sdk";
 import { applyTheme } from "./theme";

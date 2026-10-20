@@ -2,7 +2,7 @@
 // A new PC gets the account's key from another PC instead of the recovery key being typed in. Shown
 // where the recovery key is asked for; the key itself stays in the main process.
 import { computed, ref } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import type { HostAction } from "../../../shared/host-api";
 import { act, pairing } from "../../host";
 import { t } from "../../i18n";

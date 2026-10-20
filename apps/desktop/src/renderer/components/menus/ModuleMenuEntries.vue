@@ -11,7 +11,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@tavora/official-ui/components/ui/dropdown-menu";
 import type { ModuleMenuEntry } from "../../../shared/host-api";
 
 const props = defineProps<{ entries: ModuleMenuEntry[]; prefix?: string }>();

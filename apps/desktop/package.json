@@ -20,6 +20,7 @@
     "@playwright/test": "1.64.1",
     "@tailwindcss/vite": "4.3.3",
     "@tavora/module-schema": "workspace:*",
+    "@tavora/official-ui": "workspace:*",
     "@tavora/pack": "workspace:*",
     "@tavora/sdk": "workspace:*",
     "@types/node": "^22.20.5",

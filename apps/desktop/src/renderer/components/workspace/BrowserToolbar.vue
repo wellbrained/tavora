@@ -4,7 +4,7 @@
 import { ArrowLeft, ArrowRight, ExternalLink, Minimize2, Plus, RotateCw, ShieldCheck, ShieldOff, Users, Volume2, VolumeX, X } from "@lucide/vue";
 import { computed, onMounted, ref, watch } from "vue";
 import type { BrowserCommand, BrowserState } from "../../../shared/host-api";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import { act, addressFocus, showToast } from "../../host";
 import { t } from "../../i18n";

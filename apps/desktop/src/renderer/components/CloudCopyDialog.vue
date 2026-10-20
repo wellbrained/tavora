@@ -2,7 +2,7 @@
 // The questions the cloud copy asks over the app: which side to keep when both
 // changed, a restart for newer data from another PC, and the wait at close.
 import { computed, ref } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, cloudCopy, copyLater, copyQuestion } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Right-click (or the keyboard menu key) on the wrapped element opens its menu.
-import { ContextMenu, ContextMenuContent, ContextMenuLabel, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuLabel, ContextMenuTrigger } from "@tavora/official-ui/components/ui/context-menu";
 import { useFloating, type MenuItem } from "@/host";
 import MenuEntries from "./MenuEntries.vue";
 

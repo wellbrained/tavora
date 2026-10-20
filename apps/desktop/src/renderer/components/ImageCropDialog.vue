@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Minus, Plus } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { useFloating } from "../host";
 import { t } from "../i18n";
 

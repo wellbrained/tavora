@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { dialog, type ConfirmRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";

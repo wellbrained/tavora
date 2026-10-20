@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // A game of the library just started and the player chose to be asked (Settings > General): switch to it?
 import { computed } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, dialog, state } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";

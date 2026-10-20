@@ -6,8 +6,8 @@
 // look, and the player's own themes.
 import { Check, CopyPlus, FolderOpen, RefreshCw } from "@lucide/vue";
 import { computed } from "vue";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { ThemeVariationView, ThemeView } from "../../../shared/host-api";
 import { act, state } from "../../host";

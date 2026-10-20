@@ -9,14 +9,14 @@ import {
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-} from "@/components/ui/context-menu";
+} from "@tavora/official-ui/components/ui/context-menu";
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@tavora/official-ui/components/ui/dropdown-menu";
 import type { MenuItem } from "@/host";
 
 const props = defineProps<{ items: MenuItem[]; kind: "dropdown" | "context" }>();

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Theme, components and helpers shared by the official Tavora modules. Bundled into each module; never loaded at runtime on its own.",
+  "description": "Theme, components and helpers shared by the official Tavora modules and the app. Bundled into each module and into the app; never loaded at runtime on its own.",
   "scripts": {
     "typecheck": "vue-tsc --noEmit -p ."
   },

@@ -9,7 +9,7 @@
 // Settings > Development instead.
 import { ArrowRightLeft, CloudDownload, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import { act, confirmAction, dialog, gamesUsing, listOf, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";

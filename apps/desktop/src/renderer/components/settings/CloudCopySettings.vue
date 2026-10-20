@@ -4,8 +4,8 @@
 // state, where it's kept, and the buttons to upload, restore, turn it off or
 // delete it. When it syncs is up to the main process. A folder works signed out too.
 import { computed, ref, watch } from "vue";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import type { HostAction } from "../../../shared/host-api";
 import { account, act, cloudCopy, confirmAction, copyLater, developerKeys, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";

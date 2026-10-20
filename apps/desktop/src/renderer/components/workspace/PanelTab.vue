@@ -7,7 +7,7 @@ import { RotateCw, Square, X } from "@lucide/vue";
 import type { IDockviewPanelHeaderProps } from "dockview-vue";
 import { computed, inject } from "vue";
 import type { InstanceStatus } from "../../../shared/host-api";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import { act, state } from "../../host";
 import { t } from "../../i18n";

@@ -7,7 +7,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import type { CatalogListResult, CatalogModuleView } from "../../shared/host-api";
 import { act, addModule, api, dialog, openSettings, state, type AddModuleRequest } from "../host";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { t } from "../i18n";
 import { ShieldCheck } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
