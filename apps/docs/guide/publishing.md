@@ -21,7 +21,11 @@ npm run zip
 npx tavora-pack publish <id>-<version>.zip
 ```
 
-`publish` checks that the zip is signed by your key, then asks Tavora to sign its SHA-256 with the same key (press **Allow**) and uploads it with that signature. Your secret key never leaves Tavora. From CI, pass `--key <file>` with an [exported key](./publisher-key.md#publishing-from-ci).
+`publish` checks that the zip is signed by your key and hands it to Tavora on this PC. Tavora shows the module and its version, and once you press **Allow**, signs the zip's SHA-256 with the same key and uploads it with your sign-in. Your secret key never leaves Tavora, and the key alone can't publish: the service also checks that the account signed in is the one the key is linked to.
+
+From CI, use an [exported key and a publish token](./publisher-key.md#publishing-from-ci).
+
+Every upload sends an email to your account's address, naming the module, the version and whether it came from Tavora or which publish token. If you didn't publish it, write to [tavora.app@gmail.com](mailto:tavora.app@gmail.com) right away.
 
 The service checks the zip the way Tavora's installer does: the size and compression limits, the manifest and every file it names, that each screenshot really is a PNG or WebP within the limits, the changelog and the signature over every file. A zip that passes is listed at once. There's no review before listing; a person at Tavora looks only at modules players report.
 
@@ -50,6 +54,9 @@ An account can publish 10 versions a day and keep 200 MB of zips in the catalog.
 
 | Message | What to do |
 | --- | --- |
+| Publishing needs your Tavora account now | Publish with Tavora open, or from CI with a key file and a publish token in `TAVORA_PUBLISH_TOKEN`. Update `tavora-pack` if it's older than 0.2.0. |
+| This publisher key is linked to another Tavora account | Sign in to Tavora with the account the key is linked to, or use that account's publish token. |
+| A publish token publishes only under id prefixes your account has | Publish the module's first version from Tavora, then CI can publish its updates. |
 | Your publisher key is not linked to a Tavora account yet | Press **Link** next to it in Settings > Account > Module developer. A key file: **Get a link code**, then `tavora-pack link <code> --key <file>`. |
 | Another developer publishes under this id prefix | Give the module an id with a prefix of your own. |
 | This id prefix is reserved | Pick another prefix; reserved words such as `tavora` and `local` are refused. |
@@ -71,6 +78,7 @@ Tavora can hand your modules to a new key, but only if the old key was linked to
 
 - **Leaked:** make a new key, link it to the same account, and ask Tavora to revoke the old key and move your modules to the new one. Ask by email to [tavora.app@gmail.com](mailto:tavora.app@gmail.com), from the address your account uses if it has one. A revoked key can't publish or install anything new. Modules players already have keep running, and so do the zips Tavora lists as published before the revocation.
 - **Lost:** make a new key the same way, and email the same address to ask for the move. Keys Tavora keeps are lost only with your recovery key.
+- **A publish token leaked:** remove it under Settings > Account > Module developer > Publish tokens. It stops working at once. A token alone can't publish; it needs your key too.
 
 Once Tavora has signed the statement, publish new versions of your modules with the new key as usual. The catalog takes them because the statement names your account, and players' Tavora updates to them and keeps their data.
 

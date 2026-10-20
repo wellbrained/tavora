@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.13",
+    date: "2026-10-20",
+    title: "Publishing needs your account",
+    notes: [
+      "Module developers: your publisher key alone can't publish any more. Tavora uploads for tavora-pack with your sign-in.",
+      "To publish from CI, make a publish token under Settings > Account.",
+      "You get an email every time a module of yours is published.",
+    ],
+  },
+  {
     version: "0.19.12",
     date: "2026-10-20",
     title: "Tavora keeps your publisher keys",

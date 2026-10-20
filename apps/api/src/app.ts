@@ -210,6 +210,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     ...(publishLimits ? { limits: publishLimits } : {}),
     ...(catalogueKey ? { catalogueKey } : {}),
     ...(accounts?.now ? { now: accounts.now } : {}),
+    ...(accounts ? { mail: { mailer: accounts.mailer, ...(accounts.mailDailyLimit === undefined ? {} : { mailDailyLimit: accounts.mailDailyLimit }) } } : {}),
     ...(accounts && maintainerEmail?.trim()
       ? { maintainer: { email: maintainerEmail.trim(), mailer: accounts.mailer, ...(accounts.mailDailyLimit === undefined ? {} : { mailDailyLimit: accounts.mailDailyLimit }) } }
       : {}),

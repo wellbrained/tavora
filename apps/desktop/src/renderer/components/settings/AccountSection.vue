@@ -6,7 +6,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { AccountDevice, HostAction } from "../../../shared/host-api";
+import type { AccountDevice, AccountPublishToken, HostAction } from "../../../shared/host-api";
 import { account, act, confirmAction, developerKeys, prompt, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import CloudCopySettings from "./CloudCopySettings.vue";
@@ -144,6 +144,24 @@ function exportKey(fingerprint: string) {
     message: t("account.developer.exportMessage"),
     confirm: t("account.developer.export"),
     run: () => submitAction({ type: "developer-key-export", fingerprint }),
+  });
+}
+
+// Publish tokens let CI publish with an exported key file; a new one's secret is shown once.
+const tokenName = ref("");
+async function makeToken() {
+  if (await run({ type: "account-publish-token-create", name: tokenName.value.trim() })) tokenName.value = "";
+}
+async function copyToken() {
+  if ((await act({ type: "account-publish-token-copy" })).ok) showToast(t("account.developer.tokenCopied"));
+}
+function removeToken(token: AccountPublishToken) {
+  confirmAction({
+    title: t("account.developer.tokenRemoveTitle"),
+    message: t("account.developer.tokenRemoveMessage"),
+    confirm: t("account.developer.tokenRemove"),
+    danger: true,
+    run: () => submitAction({ type: "account-publish-token-delete", id: token.id }),
   });
 }
 
@@ -399,6 +417,39 @@ function startDelete() {
               <Button variant="ghost" size="sm" :disabled="busy" data-testid="account-link-refresh" @click="run({ type: 'account-refresh' })">{{ t("account.developer.refresh") }}</Button>
             </div>
           </div>
+        </div>
+
+        <div class="mt-6" data-testid="publish-tokens">
+          <span class="text-sm font-medium">{{ t("account.developer.tokens") }}</span>
+          <p class="text-muted-foreground mt-1 text-xs">{{ t("account.developer.tokensHint") }}</p>
+          <div v-if="view?.newPublishToken" class="mt-2 flex flex-col gap-2 rounded-md border p-3" data-testid="publish-token-new">
+            <span class="text-sm">{{ t("account.developer.tokenNew", { name: view.newPublishToken.name }) }}</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <code class="bg-muted rounded px-2 py-1 font-mono text-sm break-all select-all" data-testid="publish-token-secret">{{ view.newPublishToken.token }}</code>
+              <Button variant="ghost" size="sm" data-testid="publish-token-copy" @click="copyToken">{{ t("account.developer.copy") }}</Button>
+              <Button variant="secondary" size="sm" data-testid="publish-token-done" @click="run({ type: 'account-publish-token-saved' })">{{ t("account.developer.tokenDone") }}</Button>
+            </div>
+          </div>
+          <p v-if="!view?.publishTokens?.length" class="text-muted-foreground mt-2 text-sm" data-testid="publish-tokens-none">{{ t("account.developer.noTokens") }}</p>
+          <ul v-else class="mt-2" data-testid="publish-tokens-list">
+            <li v-for="token in view.publishTokens" :key="token.id" class="flex min-h-10 items-center gap-3" :data-testid="`publish-token-${token.id}`">
+              <span class="min-w-0 flex-1 truncate text-sm">{{ token.name }}</span>
+              <span class="text-muted-foreground text-sm">
+                {{
+                  token.lastUsedAt
+                    ? t("account.developer.tokenUsed", { used: formatDate(token.lastUsedAt), date: formatDate(token.expiresAt) })
+                    : t("account.developer.tokenUntil", { date: formatDate(token.expiresAt) })
+                }}
+              </span>
+              <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.tokenRemoveLabel', { name: token.name })" @click="removeToken(token)">
+                {{ t("account.developer.tokenRemove") }}
+              </Button>
+            </li>
+          </ul>
+          <form class="mt-3 flex items-center gap-2" @submit.prevent="makeToken">
+            <Input v-model="tokenName" class="max-w-60" maxlength="40" autocomplete="off" spellcheck="false" :aria-label="t('account.developer.tokenName')" :placeholder="t('account.developer.tokenPlaceholder')" data-testid="publish-token-name" />
+            <Button type="submit" variant="secondary" :disabled="busy || !view?.developer || !tokenName.trim()" data-testid="publish-token-create">{{ t("account.developer.tokenCreate") }}</Button>
+          </form>
         </div>
       </div>
       </SettingGroup>
