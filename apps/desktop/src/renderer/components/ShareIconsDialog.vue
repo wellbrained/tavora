@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Loader } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { MAX_SHARE_BATCH } from "../../shared/host-actions";
 import type { HostAction } from "../../shared/host-api";
 import { account, act, api, dialog, openSettings, showToast, state, type ShareIconsRequest } from "../host";

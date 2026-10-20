@@ -4,7 +4,7 @@
 // group without panels.
 import { Plus, X } from "@lucide/vue";
 import type { IWatermarkPanelProps } from "dockview-vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { dialog } from "../../host";
 import { t } from "../../i18n";
 

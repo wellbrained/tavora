@@ -2,7 +2,7 @@ import { test,expect } from '@playwright/test';
 import path from 'node:path';
 import { readFile,writeFile } from 'node:fs/promises';
 import { launch,inModule,waitForShown } from './harness';
-const ID='local.poe2-builds',modules=path.resolve(import.meta.dirname,'../../../../modules');
+const ID='wellbrained.poe2-builds',modules=path.resolve(import.meta.dirname,'../../../../modules');
 
 test('Mobalytics guide imports through granted SDK, previews variants and survives restart',async({},info)=>{
  test.skip(!process.env.POE2_GUIDE_SMOKE_URL,'Set a public Mobalytics guide URL to run live source verification');
@@ -18,7 +18,7 @@ test('Mobalytics guide imports through granted SDK, previews variants and surviv
   await expect.poll(()=>inModule(app,ID,"({hidden:document.querySelector('#guide-preview').hidden,message:document.querySelector('#guide-error').textContent})"),{timeout:50000}).toMatchObject({hidden:false});
   expect(await inModule(app,ID,"document.querySelectorAll('#guide-variant option').length")).toBe(6);
   expect(await inModule(app,ID,"document.querySelector('#guide-variant').value")).toBe('4');
-  const image=await app.evaluate(async({webContents})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://local.poe2-builds/'))!;return(await wc.capturePage()).toPNG().toString('base64');});
+  const image=await app.evaluate(async({webContents})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://wellbrained.poe2-builds/'))!;return(await wc.capturePage()).toPNG().toString('base64');});
   await writeFile(info.outputPath('guide-preview.png'),Buffer.from(image,'base64'));
   await inModule(app,ID,"document.querySelector('#guide-save').click()");
   await expect.poll(()=>inModule(app,ID,"document.querySelector('#status').textContent")).toContain('Build saved with guide text');

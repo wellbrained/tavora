@@ -7,8 +7,8 @@
 import { computed, onMounted, ref } from "vue";
 import type { CatalogModuleView, CatalogPageResult } from "../../shared/host-api";
 import { act, api, dialog } from "../host";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { formatDate, t } from "../i18n";
 import { ExternalLink, X } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";

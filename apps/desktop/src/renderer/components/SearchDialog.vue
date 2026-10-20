@@ -4,7 +4,7 @@
 // closes.
 import { Blocks, Home, LayoutPanelLeft, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, SlidersHorizontal } from "@lucide/vue";
 import { computed, nextTick, ref, watch, type Component } from "vue";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { CatalogMatch, GameView, OnlineGame } from "../../shared/host-api";

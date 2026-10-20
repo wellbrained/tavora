@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The pack command asked Tavora to sign with a publisher key it keeps: nothing is signed without this click.
 import { computed } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, developerKeys } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";

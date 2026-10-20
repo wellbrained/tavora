@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Settings > Trash: removed games, kept for 30 days. Tick several to restore or delete them together.
 import { computed, ref, watch } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import { act, confirmAction, state, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";

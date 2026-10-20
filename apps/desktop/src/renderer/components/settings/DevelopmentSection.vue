@@ -7,7 +7,7 @@
 // with Tavora), and the way to the docs and to GitHub.
 import { BookOpen, Bug, CircleAlert, CircleCheck, FolderCode, MessageCircleQuestion, Trash2 } from "@lucide/vue";
 import { computed } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DevelopmentProblemKind } from "../../../shared/host-api";
 import { act, showToast, state } from "../../host";

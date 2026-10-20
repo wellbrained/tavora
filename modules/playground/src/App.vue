@@ -26,6 +26,7 @@ import { ConfirmDialog, connectModule, SegmentedControl } from "@tavora/official
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@tavora/official-ui/components/ui/context-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import {
   DropdownMenu,
@@ -65,13 +66,13 @@ interface PanelState {
 const SECTIONS = [
   { id: "colours", title: "Colours", keywords: "tokens theme palette swatches radius" },
   { id: "type", title: "Typography", keywords: "text fonts headings caption mono numbers link" },
-  { id: "buttons", title: "Buttons", keywords: "primary secondary ghost outline destructive link icon loading" },
+  { id: "buttons", title: "Buttons", keywords: "primary secondary ghost outline destructive danger remove link icon loading" },
   { id: "fields", title: "Text fields", keywords: "input textarea search label hint error" },
   { id: "choices", title: "Choices", keywords: "checkbox switch radio segmented select dropdown slider" },
   { id: "tabs", title: "Tabs", keywords: "tabs views" },
   { id: "status", title: "Badges and status", keywords: "badge chip tag status dot kbd shortcut" },
   { id: "progress", title: "Progress and loading", keywords: "progress spinner skeleton loading" },
-  { id: "menus", title: "Menus", keywords: "dropdown menu context submenu actions" },
+  { id: "menus", title: "Menus", keywords: "dropdown menu context right-click submenu actions" },
   { id: "dialogs", title: "Dialogs", keywords: "dialog modal confirm delete" },
   { id: "lists", title: "Lists and rows", keywords: "list row hover selected settings divider" },
   { id: "notices", title: "Notices", keywords: "alert callout info warning error success" },
@@ -243,7 +244,7 @@ function bump(by: number) {
           <Button variant="outline" :disabled="off">Outline</Button>
           <Button variant="ghost" :disabled="off">Ghost</Button>
           <Button variant="destructive" :disabled="off">Delete for good</Button>
-          <Button variant="secondary" class="text-destructive" :disabled="off">Danger</Button>
+          <Button variant="danger" :disabled="off">Remove</Button>
           <Button variant="link" :disabled="off">Link</Button>
         </Specimen>
         <Specimen label="Sizes">
@@ -494,6 +495,19 @@ function bump(by: number) {
               <DropdownMenuItem variant="destructive">Remove</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </Specimen>
+        <Specimen label="Right-click menu">
+          <ContextMenu>
+            <ContextMenuTrigger :disabled="off" class="text-muted-foreground flex h-16 w-56 items-center justify-center rounded-md border border-dashed text-sm">
+              Right-click here
+            </ContextMenuTrigger>
+            <ContextMenuContent class="w-48">
+              <ContextMenuItem><Pencil :stroke-width="1.5" /> Rename</ContextMenuItem>
+              <ContextMenuItem><Copy :stroke-width="1.5" /> Duplicate</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem variant="destructive"><Trash2 :stroke-width="1.5" /> Delete</ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
         </Specimen>
       </DemoSection>
 

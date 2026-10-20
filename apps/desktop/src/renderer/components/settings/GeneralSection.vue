@@ -2,7 +2,7 @@
 // Settings > General: the language, where Tavora starts, what happens when a game starts or closes,
 // the rail's order and the welcome tour.
 import { computed } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import type { GameStart, RootSort, Startup } from "../../../shared/host-api";
 import type { LanguageSetting } from "../../../shared/i18n";
 import { act, settingsOpen, state } from "../../host";

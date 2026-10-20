@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Another PC of the account asks for the recovery key: it gets it only after this click, once both show the same code.
 import { computed } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, pairing, showToast } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";

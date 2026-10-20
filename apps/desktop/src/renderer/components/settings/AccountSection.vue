@@ -4,8 +4,8 @@
 // talks to the service and keeps the sign-in; this page only sees the sign-in
 // methods, the devices and where a sign-in is.
 import { computed, onMounted, ref, watch } from "vue";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import type { AccountDevice, AccountPublishToken, HostAction } from "../../../shared/host-api";
 import { account, act, confirmAction, developerKeys, prompt, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
