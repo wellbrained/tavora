@@ -54,6 +54,7 @@ import {
   LibraryError,
   liveGames,
   MAX_DEVELOPMENT_FOLDERS,
+  markOpened,
   markPlayed,
   moveFolder,
   moveGame,
@@ -1889,7 +1890,7 @@ export class Host {
     if (this.pendingGameSwitch === gameId) this.pendingGameSwitch = null;
     if (this.gameId === gameId) return;
     this.showScreen("game");
-    markPlayed(this.library, gameId, new Date());
+    markOpened(this.library, gameId);
     this.saveLibrary();
     this.openCurrentGame();
   }
@@ -2300,6 +2301,9 @@ export class Host {
     const before = this.running;
     const started = [...running].filter((id) => !before.includes(id));
     this.running = [...before.filter((id) => running.has(id)), ...started];
+    const now = new Date();
+    for (const id of started) if (isLive(this.library, id)) markPlayed(this.library, id, now);
+    if (started.length) this.saveLibrary();
     if (!initial) {
       for (const id of before) if (!running.has(id)) this.gameClosed(id);
       // Several at once is rare; the last one counts.

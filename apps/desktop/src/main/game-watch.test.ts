@@ -46,12 +46,12 @@ describe("runningGames", () => {
     expect(runningGames(liveGames(library), [], [], 730).size).toBe(0);
   });
 
-  it("counts a game in the library twice once, as the one opened last", () => {
+  it("counts a game in the library twice once, as the one played last", () => {
     const library = emptyLibrary();
     addGame(library, { catalogId: "diablo-4" }, day(1));
     addGame(library, { name: "Diablo 4" }, day(2));
     const programs = ["G:\\Blizzard\\Diablo IV\\Diablo IV.exe"];
-    // Never opened: the one added last.
+    // Never played: the one added last.
     expect([...runningGames(liveGames(library), [DIABLO], programs, null)]).toEqual(["local-diablo-4"]);
     markPlayed(library, "diablo-4", day(3));
     expect([...runningGames(liveGames(library), [DIABLO], programs, null)]).toEqual(["diablo-4"]);

@@ -10,6 +10,7 @@ import {
   gamesNeedingIcon,
   LibraryError,
   markIconShared,
+  markOpened,
   markPlayed,
   monogram,
   moveFolder,
@@ -390,11 +391,12 @@ describe("Trash", () => {
   it("takes a game out of the rail and favorites, and restores it at the end", () => {
     const library = libraryWith("A", "B", "C");
     placeFavorite(library, "local-a");
-    markPlayed(library, "local-a", day(5));
+    markOpened(library, "local-a");
     trashGame(library, "local-a", day(6));
     expect(rootIds(library)).toEqual(["game:local-b", "game:local-c"]);
     expect(library.favorites).toEqual([]);
     expect(library.lastGameId).toBeNull();
+    expect(() => markOpened(library, "local-a")).toThrow(LibraryError);
     expect(() => markPlayed(library, "local-a", day(7))).toThrow(LibraryError);
 
     restoreGame(library, "local-a");
@@ -491,6 +493,15 @@ describe("sorting", () => {
     expect(sortedRoot(library).map((item) => item.id)).toEqual([folder, "local-a", "local-b"]);
     library.sort = "manual";
     expect(sortedRoot(library).map((item) => item.id)).toEqual(["local-a", "local-b", folder]);
+  });
+
+  it("keeps the rail's order when a game is opened", () => {
+    const library = libraryWith("A", "B", "C");
+    markPlayed(library, "local-a", day(10));
+    const before = sortedRoot(library).map((item) => item.id);
+    markOpened(library, "local-c");
+    expect(library.lastGameId).toBe("local-c");
+    expect(sortedRoot(library).map((item) => item.id)).toEqual(before);
   });
 
   it("lists recent games for the Welcome page", () => {

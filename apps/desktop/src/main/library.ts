@@ -443,9 +443,15 @@ export function setShowNews(library: Library, id: string, show: boolean): void {
   liveGame(library, id).showNews = show;
 }
 
+/** The game open in Tavora now. Opening one leaves the rail's order alone. */
+export function markOpened(library: Library, id: string): void {
+  liveGame(library, id);
+  library.lastGameId = id;
+}
+
+/** The game was seen running (game-watch.ts); "Recently played" sorts by this. */
 export function markPlayed(library: Library, id: string, now: Date): void {
   liveGame(library, id).lastPlayedAt = now.toISOString();
-  library.lastGameId = id;
 }
 
 /** Takes a game out of the top level or its folder. Favorites are separate shortcuts and stay. */
