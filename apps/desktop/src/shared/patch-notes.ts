@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.20",
+    date: "2026-10-20",
+    title: "Enshrouded skill cards",
+    notes: [
+      "Build bonuses stay on the right; use the toggle to give the tree more room.",
+      "Hover or focus a skill for a game-style card with its effects, rank and point cost.",
+    ],
+  },
+  {
     version: "0.19.19",
     date: "2026-10-20",
     title: "Enshrouded build bonuses",
