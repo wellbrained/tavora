@@ -34,9 +34,17 @@ pnpm --filter @tavora/desktop start
 ```
 
 Modules run from their built files. `pnpm dev` rebuilds them on every change;
-with `start`, rebuild a module after changing it. A new shared control goes in
-`shared/src/components` and gets a specimen in the playground; the app picks it up
-from there too (`@tavora/official-ui/components/ui/…`).
+with `start`, rebuild a module after changing it.
+
+## One UI kit
+
+`shared` is the only UI kit. The app and every official module take their
+controls from it (`@tavora/official-ui/components/ui/…`); nobody keeps a copy
+or starts another kit. Restyle a control with classes where it's used.
+
+Need a control or variant the kit doesn't have? Talk it through with the
+maintainer first. Once it's agreed, it goes in `shared/src/components` and gets
+a specimen in the playground.
 
 ## Standalone game modules
 
