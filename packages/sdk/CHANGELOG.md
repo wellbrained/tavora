@@ -1,6 +1,6 @@
 ## 0.2.10
 
-Requires the JSON export host (Tavora 0.19.9). Adds `files.exportJson(value, name?)`: gesture-gated, bounded JSON export to a new file in Downloads/Tavora.
+Requires the JSON export host (Tavora 0.19.17). Adds `files.exportJson(value, name?)`: gesture-gated, bounded JSON export to a new file in Downloads/Tavora.
 
 # Changelog
 

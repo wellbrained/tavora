@@ -360,6 +360,6 @@ assets are capped at 512 KB. See the SDK's exported types for individual bounds.
 Use `ui.tooltip.onClose` to clear local pin state. Close details before changing
 source data or destroying the triggering UI. Underlying panels remain live.
 
-## JSON exports (Tavora 0.19.9+)
+## JSON exports (Tavora 0.19.17+)
 
 `files.exportJson(value, name?)` in SDK 0.2.10 POSTs JSON to `/_exports/json/?name=...` in the module origin. Maximum 1 MiB before and after host formatting. A trusted click/key press is consumed once, shared with picture operations. Saves a new sanitized `.json` in Downloads/Tavora; no arbitrary paths or overwrite. Returns `{ fileName }`. No extra permission grant.

@@ -101,7 +101,7 @@ const watchers = await Promise.all(
     const name = path.basename(dir);
     const watcher = await build({
       configFile: path.join(dir, "vite.config.ts"),
-      root: path.join(dir, "src"),
+      root: existsSync(path.join(dir, "src", "index.html")) ? path.join(dir, "src") : dir,
       logLevel: "warn",
       build: { watch: {} },
     });
