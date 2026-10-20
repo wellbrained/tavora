@@ -54,8 +54,8 @@ import {
   LibraryError,
   liveGames,
   MAX_DEVELOPMENT_FOLDERS,
-  markOpened,
   markPlayed,
+  playedTimes,
   moveFolder,
   moveGame,
   placeFavorite,
@@ -315,6 +315,8 @@ export class Host {
   private pendingLink: string | null = null;
   /** The library games running on this PC, in the order they started, while "When a game starts" is not off (game-watch.ts). */
   private running: string[] = [];
+  /** When each game was last played as of startup: the rail keeps this order until the next start. */
+  private playedAtStart: Record<string, string> = {};
   /** A game that started while the player chose to be asked; waits for the answer. */
   private pendingGameSwitch: string | null = null;
   private readonly gameWatcher = new GameWatcher({
@@ -526,6 +528,7 @@ export class Host {
 
     const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
     created = host;
+    host.playedAtStart = playedTimes(library);
     host.copySync = copySync;
     host.developerKeys = new DeveloperKeys({
       accountKey: copySync.accountKey,
@@ -1890,7 +1893,7 @@ export class Host {
     if (this.pendingGameSwitch === gameId) this.pendingGameSwitch = null;
     if (this.gameId === gameId) return;
     this.showScreen("game");
-    markOpened(this.library, gameId);
+    markPlayed(this.library, gameId, new Date());
     this.saveLibrary();
     this.openCurrentGame();
   }
@@ -2301,9 +2304,6 @@ export class Host {
     const before = this.running;
     const started = [...running].filter((id) => !before.includes(id));
     this.running = [...before.filter((id) => running.has(id)), ...started];
-    const now = new Date();
-    for (const id of started) if (isLive(this.library, id)) markPlayed(this.library, id, now);
-    if (started.length) this.saveLibrary();
     if (!initial) {
       for (const id of before) if (!running.has(id)) this.gameClosed(id);
       // Several at once is rare; the last one counts.
@@ -3204,7 +3204,7 @@ export class Host {
       library: {
         games,
         folders: structuredClone(library.folders),
-        root: sortedRoot(library),
+        root: sortedRoot(library, this.playedAtStart),
         favorites: [...library.favorites],
         recent: recentGames(library, 8).map((entry) => entry.id),
         trash: trashedGames(library).map((entry) => ({

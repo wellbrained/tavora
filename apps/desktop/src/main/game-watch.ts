@@ -38,14 +38,14 @@ function isSameGame(entry: GameEntry, game: InstalledGame): boolean {
   return name !== "" && name === normalizeName(game.name);
 }
 
-/** Of several entries for one game, the one played most recently (then the one added last). */
+/** Of several entries for one game, the one opened most recently (then the one added last). */
 function mostRecent(entries: readonly GameEntry[]): GameEntry | undefined {
   return [...entries].sort((a, b) => (b.lastPlayedAt ?? "").localeCompare(a.lastPlayedAt ?? "") || b.addedAt.localeCompare(a.addedAt))[0];
 }
 
 /**
  * The ids of the library games running now. `programs` are the paths of running programs, `steamAppId` the game
- * Steam runs (0 or null for none). A game in the library twice counts once, as the entry played most recently;
+ * Steam runs (0 or null for none). A game in the library twice counts once, as the entry opened most recently;
  * a game installed twice (two launchers) counts when either copy runs.
  */
 export function runningGames(entries: readonly GameEntry[], installed: readonly InstalledGame[], programs: Iterable<string>, steamAppId: number | null): Set<string> {
