@@ -6,6 +6,7 @@ import { RotateCw, ScrollText, Search, Settings as SettingsIcon, X } from "@luci
 import { computed, nextTick, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import { act, hiddenSettings, settingsOpen, settingsTarget, state } from "../../host";
@@ -94,6 +95,12 @@ const results = computed<Result[]>(() => {
   }));
 });
 
+const resultsAnnouncement = computed(() => {
+  const text = query.value.trim();
+  if (!text) return "";
+  return results.value.length ? t("settings.results.count", { count: results.value.length }) : t("settings.results.none", { query: text });
+});
+
 function onSearchKey(event: KeyboardEvent) {
   if (event.key === "Escape" && query.value) {
     // Clear the search first; a second Escape closes Settings.
@@ -114,14 +121,14 @@ function onSearchKey(event: KeyboardEvent) {
       :show-close-button="false"
       :aria-describedby="undefined"
     >
-      <nav class="bg-background flex w-64 flex-none flex-col gap-5 overflow-y-auto border-r p-4" :aria-label="t('settings.sections')">
+      <nav class="bg-background flex w-56 flex-none flex-col gap-5 overflow-y-auto border-r p-4 lg:w-64" :aria-label="t('settings.sections')">
         <DialogTitle class="px-2 pt-1 text-xl font-semibold">{{ t("settings.title") }}</DialogTitle>
         <div class="relative">
-          <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" />
-          <input
+          <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" aria-hidden="true" />
+          <Input
             v-model="query"
             type="text"
-            class="bg-card placeholder:text-muted-foreground focus-visible:ring-ring h-10 w-full rounded-lg border pr-3 pl-9 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            class="h-10 pr-3 pl-9"
             :placeholder="t('settings.search')"
             :aria-label="t('settings.search')"
             autocomplete="off"
@@ -160,6 +167,7 @@ function onSearchKey(event: KeyboardEvent) {
             )
           "
           :title="t('settings.version')"
+          :aria-label="`Tavora ${version}, ${t('settings.version')}`"
           data-testid="settings-version"
           @click="show('patch-notes')"
         >
@@ -169,7 +177,7 @@ function onSearchKey(event: KeyboardEvent) {
 
       <div class="flex min-w-0 flex-1 flex-col">
         <header
-          :class="cn('flex h-[72px] flex-none items-center justify-between gap-4 border-b px-10 transition-colors duration-500', highlight === section && 'bg-primary/10')"
+          :class="cn('flex h-[72px] flex-none items-center justify-between gap-4 border-b px-6 transition-colors duration-500 lg:px-10', highlight === section && 'bg-primary/10')"
           :data-setting="section"
         >
           <div class="flex min-w-0 items-center gap-3">
@@ -186,7 +194,9 @@ function onSearchKey(event: KeyboardEvent) {
         </header>
 
         <div ref="scroller" class="relative min-h-0 flex-1 overflow-y-auto" data-testid="settings-body">
-          <div class="px-10 pt-8 pb-12">
+          <div class="px-6 pt-8 pb-12 lg:px-10">
+            <!-- Always there, so a screen reader hears how many results each search finds. -->
+            <p class="sr-only" role="status">{{ resultsAnnouncement }}</p>
             <template v-if="query.trim()">
               <p v-if="!results.length" class="text-muted-foreground" data-testid="settings-no-results">{{ t("settings.results.none", { query: query.trim() }) }}</p>
               <ul v-else class="-mx-3 flex flex-col gap-1" :aria-label="t('settings.results.title')" data-testid="settings-results">
@@ -221,7 +231,7 @@ function onSearchKey(event: KeyboardEvent) {
         </div>
 
         <!-- Settings that apply on start share one bar, so several changes need one restart. -->
-        <div v-if="state!.restartPending" class="bg-card flex flex-none items-center gap-4 border-t px-10 py-3" role="status" data-testid="restart-bar">
+        <div v-if="state!.restartPending" class="bg-card flex flex-none flex-wrap items-center gap-x-4 gap-y-2 border-t px-6 py-3 lg:px-10" role="status" data-testid="restart-bar">
           <RotateCw class="text-primary size-4 flex-none" :stroke-width="1.5" />
           <span class="flex-1">{{ t("settings.restart.message") }}</span>
           <Button data-testid="restart-now" @click="act({ type: 'restart' })">{{ t("common.restartNow") }}</Button>

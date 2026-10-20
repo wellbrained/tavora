@@ -65,7 +65,7 @@ function deleteNow(gameId: string, name: string) {
   <p class="text-muted-foreground mb-4 text-sm">{{ t("settings.trash.description") }}</p>
   <div data-testid="trash">
     <p v-if="!library.trash.length" class="text-muted-foreground rounded-xl border border-dashed py-10 text-center" data-testid="trash-empty">{{ t("settings.trash.empty") }}</p>
-    <div v-else class="bg-card sticky top-0 z-[5] -mx-3 flex min-h-12 items-center gap-3 border-b px-3 py-2">
+    <div v-else class="bg-card sticky top-0 z-[5] -mx-3 flex min-h-12 flex-wrap items-center gap-3 border-b px-3 py-2">
       <label class="flex flex-1 cursor-pointer items-center gap-3">
         <input
           type="checkbox"
@@ -91,7 +91,7 @@ function deleteNow(gameId: string, name: string) {
         :key="entry.game.id"
         :class="
           cn(
-            '-mx-3 flex min-h-16 items-center gap-4 rounded-lg border-b px-3 py-3 transition-colors duration-500 last:border-b-0',
+            '-mx-3 flex min-h-16 flex-wrap items-center gap-x-4 gap-y-2 border-b px-3 py-3 transition-colors duration-500 last:border-b-0',
             highlight === `trash-${entry.game.id}` && 'bg-primary/10',
           )
         "
@@ -107,7 +107,7 @@ function deleteNow(gameId: string, name: string) {
           @change="tickTrash(entry.game.id, ($event.target as HTMLInputElement).checked)"
         />
         <GameIcon :game="entry.game" :size="40" />
-        <span class="flex min-w-0 flex-1 flex-col gap-1">
+        <span class="flex min-w-0 flex-1 basis-40 flex-col gap-1">
           <span class="truncate font-medium">{{ entry.game.name }}</span>
           <span class="text-muted-foreground text-sm">{{ t("settings.trash.deleteOn", { date: formatDate(entry.purgeAt) }) }}</span>
         </span>

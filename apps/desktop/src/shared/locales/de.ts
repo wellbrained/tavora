@@ -478,6 +478,8 @@ export const de: Record<keyof typeof en, string> = {
   "settings.version": "Was ist neu",
   "settings.results.title": "Suchergebnisse",
   "settings.results.none": "Nichts passt zu „{query}“.",
+  "settings.results.count.one": "1 Treffer",
+  "settings.results.count.other": "{count} Treffer",
   "settings.results.trashUntil": "Im Papierkorb bis {date}",
   "settings.restart.message": "Manche Änderungen brauchen einen Neustart.",
   "settings.startup.home": "Startseite",

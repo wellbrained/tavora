@@ -61,7 +61,7 @@ function revoke(module: ModuleView) {
       <Button v-else variant="secondary" data-testid="discord-settings-connect" @click="act({ type: 'discord-connect' })">{{ t("discord.settings.connect") }}</Button>
     </SettingRow>
     <div class="py-4">
-      <p class="text-sm font-medium">{{ t("integrations.discord.modules") }}</p>
+      <p class="font-medium">{{ t("integrations.discord.modules") }}</p>
       <p v-if="!users.length" class="text-muted-foreground pt-1 text-sm" data-testid="discord-users-none">{{ t("integrations.discord.noModules") }}</p>
       <ul v-else class="mt-1 flex flex-col" data-testid="discord-users">
         <li v-for="module in users" :key="module.id" class="flex items-center gap-3 border-b py-2 last:border-b-0" :data-testid="`discord-user-${module.id}`">
