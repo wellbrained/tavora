@@ -61,14 +61,20 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
       .toBe(231);
     await waitForShown(app, ID);
     expect(await inModule(app, ID, 'getComputedStyle(document.body).fontFamily')).toMatch(/Inter|Segoe|sans-serif/);
-    const geometry = await inModule<{ overlaps: string[] }>(app, ID, `(() => {
+    const geometry = await inModule<{ overlaps: string[]; labelOverlaps: string[] }>(app, ID, `(() => {
       const nodes = [...document.querySelectorAll('[data-node]')].map(node => {
         const point = node.transform.baseVal.getItem(0).matrix;
         return { id: node.dataset.node, x: point.e, y: point.f, r: Number(node.querySelector('circle').getAttribute('r')) };
       });
-      return { overlaps: nodes.flatMap((a, i) => nodes.slice(i + 1).filter(b => Math.hypot(a.x-b.x,a.y-b.y) < a.r+b.r).map(b => a.id + ':' + b.id)) };
+      const labels = [...document.querySelectorAll('.class-label')].map(label => ({name: label.textContent, box: label.getBBox()}));
+      const labelOverlaps = labels.flatMap(label => nodes.filter(node => {
+        const b = label.box;
+        return Math.hypot(node.x - Math.max(b.x, Math.min(node.x,b.x+b.width)), node.y - Math.max(b.y, Math.min(node.y,b.y+b.height))) < node.r + 12;
+      }).map(node => label.name + ':' + node.id));
+      return { labelOverlaps, overlaps: nodes.flatMap((a, i) => nodes.slice(i + 1).filter(b => Math.hypot(a.x-b.x,a.y-b.y) < a.r+b.r).map(b => a.id + ':' + b.id)) };
     })()`);
     expect.soft(geometry.overlaps, 'skill hit areas must not overlap').toEqual([]);
+    expect.soft(geometry.labelOverlaps, 'class names must clear skill nodes').toEqual([]);
     await inModule(app, ID, 'document.querySelector("#new").click()');
     const controls = await inModule<{width:number;expectedWidth:number;save:string;primary:string;buttonHeight:number;selectAppearance:string}>(app, ID, `(() => {
       const dialog = document.querySelector('#dialog');
@@ -107,6 +113,16 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
         ),
       )
       .toBe("true");
+    await inModule(app, ID, 'document.querySelector("#bonuses").click()');
+    expect(await inModule(app, ID, 'document.querySelector("#bonuses-dialog").open')).toBe(true);
+    expect(await inModule(app, ID, '[...document.querySelectorAll("[data-bonus-node]")].map(n=>n.dataset.bonusNode)')).toEqual(["2"]);
+    expect(await inModule(app, ID, 'document.querySelector(".bonus-rank").textContent')).toMatch(/Rank 1\//);
+    expect(await inModule(app, ID, 'document.querySelector("#bonus-attributes").textContent')).toBe(await inModule(app, ID, 'document.querySelector("#stats").textContent'));
+    await capture('enshrouded-bonuses.png');
+    await inModule(app, ID, 'document.querySelector(".bonus-body").scrollTop=99999');
+    await capture('enshrouded-bonus-effects.png');
+    await inModule(app, ID, 'document.querySelector("#bonus-close").click()');
+    expect(await inModule(app, ID, 'document.querySelector("#bonuses-dialog").open')).toBe(false);
     const saved = await inModule<string>(
       app,
       ID,
@@ -221,6 +237,15 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
     expect(await inModule(app, ID, 'document.querySelector("#dialog").getBoundingClientRect().width')).toBe(368);
     await capture('enshrouded-dialog-narrow.png');
     await inModule(app, ID, 'document.querySelector("#dialog-cancel").click()');
+    await inModule(app, ID, 'document.querySelector("#bonuses").click()');
+    expect(await inModule(app, ID, '({width:document.querySelector("#bonuses-dialog").getBoundingClientRect().width,overflow:document.querySelector(".bonus-body").scrollWidth>document.querySelector(".bonus-body").clientWidth})')).toEqual({width:368,overflow:false});
+    await capture('enshrouded-bonuses-narrow.png');
+    await app.evaluate(({webContents}) => {
+      const wc = webContents.getAllWebContents().find(w => w.getURL().startsWith('tavora-module://local.enshrouded/'))!;
+      wc.sendInputEvent({type:"keyDown",keyCode:"ESCAPE"});
+      wc.sendInputEvent({type:"keyUp",keyCode:"ESCAPE"});
+    });
+    await expect.poll(() => inModule(app, ID, 'document.querySelector("#bonuses-dialog").open')).toBe(false);
     await app.close();
     running = await launch(userData, [path.dirname(moduleDir)], options);
     app = running.app;

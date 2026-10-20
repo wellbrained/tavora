@@ -17,8 +17,13 @@ export const escape = (s: unknown) =>
         c
       ]!,
   );
+// Frame diameters in the pinned upstream layout, in tree units.
+const nodeSize = (tier?: string) => tier === "large" ? 45 : tier === "medium" ? 25 : 20;
+
 export class Tree {
   private box = [-1150, -1150, 2300, 2300];
+  private fitBox = [...this.box];
+  private firstRender = true;
   private drag: { x: number; y: number; box: number[] } | null = null;
   private moved = false;
   private down: string | null = null;
@@ -134,7 +139,7 @@ export class Tree {
     this.svg.setAttribute("viewBox", this.box.join(" "));
   }
   fit() {
-    this.box = [-1150, -1150, 2300, 2300];
+    this.box = [...this.fitBox];
     this.view();
   }
   zoom(factor: number, x = 0.5, y = 0.5) {
@@ -154,6 +159,33 @@ export class Tree {
     this.view();
     this.svg.querySelector<SVGGElement>('[data-node="' + id + '"]')?.focus();
     this.inspect(id);
+  }
+  private placeLabels() {
+    const nodes = Object.values(SkillNodes.nodes).map(node => ({
+      ...resolveNodePosition(node),
+      radius: nodeSize(node.tier) / 2,
+    }));
+    // Place the entire text beyond the graph's supporting line in each class
+    // direction. Links lie inside that boundary too, so neither nodes nor
+    // branches can cross a label. Measure in SVG units, independent of zoom.
+    const labels = [...this.svg.querySelectorAll<SVGTextElement>(".class-label")]
+      .map((element, index) => ({element, label: TREE_LABELS[index], bounds: element.getBBox()}));
+    let extent = 1100;
+    for (const {element, label, bounds} of labels) {
+      const angle = (label.angle + 90) * Math.PI / 180;
+      const x = Math.cos(angle), y = Math.sin(angle);
+      const outer = Math.max(...nodes.map(node => node.x*x + node.y*y + node.radius));
+      const distance = outer + Math.abs(x)*bounds.width/2 + Math.abs(y)*bounds.height/2 + 32;
+      const centerOffset = bounds.y + bounds.height/2 - Number(element.getAttribute("y"));
+      element.setAttribute("x", String(x*distance));
+      element.setAttribute("y", String(y*distance-centerOffset));
+      extent = Math.max(extent, Math.abs(x*distance)+bounds.width/2+48, Math.abs(y*distance)+bounds.height/2+48);
+    }
+    this.fitBox = [-extent, -extent, extent*2, extent*2];
+    if (this.firstRender) {
+      this.box = [...this.fitBox];
+      this.firstRender = false;
+    }
   }
   render(selection: SkillSelection, query: string) {
     const focused = this.node(document.activeElement);
@@ -198,8 +230,7 @@ export class Tree {
               ? "selectable"
               : "locked",
           art = getNodeArt(node, state),
-          // Frame diameters in the pinned upstream layout, in tree units.
-          size = node.tier === "large" ? 45 : node.tier === "medium" ? 25 : 20;
+          size = nodeSize(node.tier);
         const name = getSkillName(node.type, "en");
         const match = !!q && name.toLowerCase().includes(q);
         const image = (path: string, s: number) =>
@@ -275,6 +306,7 @@ export class Tree {
       '</g><circle class="hub" r="198"/>' +
       labels +
       nodes;
+    this.placeLabels();
     this.view();
     if (focused)
       this.svg
