@@ -36,3 +36,9 @@ pnpm --filter @tavora/desktop start
 Modules run from their built files. `pnpm dev` rebuilds them on every change;
 with `start`, rebuild a module after changing it. A new shared control goes in
 `shared/src/components` and gets a specimen in the playground.
+
+## Standalone game modules
+
+`enshrouded` is a separate installable GPL-3.0-or-later Enshrouded 1.0 planner. It is excluded from the bundled official modules. See its README and upstream notices before distribution.
+
+A `.standalone` marker keeps a repo module out of the dev host's Official list; install its signed package or add it as a development folder.

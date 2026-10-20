@@ -1,0 +1,279 @@
+import {
+  SkillNodes,
+  resolveNodePosition,
+  resolveBaseAnchor,
+  getSelectableSkills,
+  getSkillName,
+  TREE_LABELS,
+  getTreeLabelName,
+  type SkillSelection,
+} from "../vendor/core";
+import { getNodeArt } from "./art";
+export const escape = (s: unknown) =>
+  String(s).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ]!,
+  );
+export class Tree {
+  private box = [-1150, -1150, 2300, 2300];
+  private drag: { x: number; y: number; box: number[] } | null = null;
+  private moved = false;
+  private down: string | null = null;
+  constructor(
+    private svg: SVGSVGElement,
+    private inspect: (id: string) => void,
+    private act: (id: string, refund: boolean) => void,
+  ) {
+    svg.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        this.zoom(
+          e.deltaY > 0 ? 1.15 : 1 / 1.15,
+          (this.point(e.clientX, e.clientY).x - this.box[0]) / this.box[2],
+          (this.point(e.clientX, e.clientY).y - this.box[1]) / this.box[3],
+        );
+      },
+      { passive: false },
+    );
+    svg.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      this.down = this.node(e.target);
+      this.moved = false;
+      this.drag = { x: e.clientX, y: e.clientY, box: [...this.box] };
+      svg.setPointerCapture(e.pointerId);
+    });
+    svg.addEventListener("pointermove", (e) => {
+      if (!this.drag) return;
+      const dx = e.clientX - this.drag.x,
+        dy = e.clientY - this.drag.y;
+      if (Math.hypot(dx, dy) > 4) this.moved = true;
+      if (this.moved) {
+        const scale = Math.max(
+          this.box[2] / svg.clientWidth,
+          this.box[3] / svg.clientHeight,
+        );
+        this.box = [
+          this.drag.box[0] - dx * scale,
+          this.drag.box[1] - dy * scale,
+          this.box[2],
+          this.box[3],
+        ];
+        this.view();
+      }
+    });
+    svg.addEventListener("pointerup", (e) => {
+      this.drag = null;
+      if (svg.hasPointerCapture(e.pointerId))
+        svg.releasePointerCapture(e.pointerId);
+      if (!this.moved && this.down) {
+        this.inspect(this.down);
+        this.act(this.down, false);
+      }
+      this.down = null;
+    });
+    svg.addEventListener("pointercancel", () => {
+      this.drag = null;
+      this.down = null;
+    });
+    svg.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      const id = this.node(e.target);
+      if (id) {
+        this.inspect(id);
+        this.act(id, true);
+      }
+    });
+    svg.addEventListener("focusin", (e) => {
+      const id = this.node(e.target);
+      if (id) this.inspect(id);
+    });
+    svg.addEventListener("pointerover", (e) => {
+      if (this.drag) return;
+      const id = this.node(e.target);
+      if (id) this.inspect(id);
+    });
+    svg.addEventListener("keydown", (e) => {
+      const id = this.node(e.target);
+      if (
+        id &&
+        (e.key === "Enter" ||
+          e.key === " " ||
+          e.key === "Delete" ||
+          e.key === "Backspace")
+      ) {
+        e.preventDefault();
+        this.inspect(id);
+        this.act(id, e.key === "Delete" || e.key === "Backspace" || e.shiftKey);
+      } else if (e.key.startsWith("Arrow")) {
+        e.preventDefault();
+        const step = this.box[2] * 0.08;
+        this.box[0] +=
+          e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+        this.box[1] +=
+          e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+        this.view();
+      }
+    });
+  }
+  private point(x: number, y: number) {
+    const matrix = this.svg.getScreenCTM();
+    return matrix
+      ? new DOMPoint(x, y).matrixTransform(matrix.inverse())
+      : { x: 0, y: 0 };
+  }
+  private node(target: EventTarget | null) {
+    return target instanceof Element
+      ? (target.closest("[data-node]")?.getAttribute("data-node") ?? null)
+      : null;
+  }
+  private view() {
+    this.svg.setAttribute("viewBox", this.box.join(" "));
+  }
+  fit() {
+    this.box = [-1150, -1150, 2300, 2300];
+    this.view();
+  }
+  zoom(factor: number, x = 0.5, y = 0.5) {
+    const w = Math.max(280, Math.min(3400, this.box[2] * factor));
+    const ratio = w / this.box[2];
+    this.box = [
+      this.box[0] + this.box[2] * x * (1 - ratio),
+      this.box[1] + this.box[3] * y * (1 - ratio),
+      w,
+      this.box[3] * ratio,
+    ];
+    this.view();
+  }
+  focus(id: string) {
+    const point = resolveNodePosition(SkillNodes.nodes[id]);
+    this.box = [point.x - 320, point.y - 320, 640, 640];
+    this.view();
+    this.svg.querySelector<SVGGElement>('[data-node="' + id + '"]')?.focus();
+    this.inspect(id);
+  }
+  render(selection: SkillSelection, query: string) {
+    const focused = this.node(document.activeElement);
+    const selectable = new Set(getSelectableSkills(selection));
+    const q = query.trim().toLowerCase();
+    const line = (
+      a: { x: number; y: number },
+      b: { x: number; y: number },
+      active: boolean,
+    ) =>
+      '<line x1="' +
+      a.x +
+      '" y1="' +
+      a.y +
+      '" x2="' +
+      b.x +
+      '" y2="' +
+      b.y +
+      '" class="' +
+      (active ? "active-link" : "") +
+      '"/>';
+    let links = "";
+    for (const node of Object.values(SkillNodes.nodes)) {
+      const a = resolveNodePosition(node);
+      if (node.base)
+        links += line(a, resolveBaseAnchor(node), !!selection[node.id]);
+      for (const id of SkillNodes.edges[node.id])
+        if (Number(id) > Number(node.id))
+          links += line(
+            a,
+            resolveNodePosition(SkillNodes.nodes[id]),
+            !!selection[node.id] && !!selection[id],
+          );
+    }
+    const nodes = Object.values(SkillNodes.nodes)
+      .map((node) => {
+        const point = resolveNodePosition(node),
+          level = selection[node.id] ?? 0,
+          state = level
+            ? "selected"
+            : selectable.has(node.id)
+              ? "selectable"
+              : "locked",
+          art = getNodeArt(node, state),
+          size = node.tier === "large" ? 76 : node.tier === "medium" ? 52 : 36;
+        const name = getSkillName(node.type, "en");
+        const match = !!q && name.toLowerCase().includes(q);
+        const image = (path: string, s: number) =>
+          '<image href="./skill-tree/' +
+          escape(path) +
+          '" x="' +
+          -s / 2 +
+          '" y="' +
+          -s / 2 +
+          '" width="' +
+          s +
+          '" height="' +
+          s +
+          '"/>';
+        return (
+          '<g data-node="' +
+          node.id +
+          '" role="button" tabindex="0" aria-label="' +
+          escape(name) +
+          ", " +
+          level +
+          "/" +
+          (SkillNodes.types[node.type].maxLevel ?? 1) +
+          '" aria-pressed="' +
+          !!level +
+          '" class="node ' +
+          state +
+          (match ? " match" : "") +
+          '" transform="translate(' +
+          point.x +
+          " " +
+          point.y +
+          ')"><title>' +
+          escape(name) +
+          '</title><circle r="' +
+          (size / 2 + 5) +
+          '"/>' +
+          image(art.frame, size) +
+          (art.icon ? image(art.icon, size * 0.68) : "") +
+          (level
+            ? '<text y="' +
+              (size / 2 + 15) +
+              '">' +
+              level +
+              "/" +
+              (SkillNodes.types[node.type].maxLevel ?? 1) +
+              "</text>"
+            : "") +
+          "</g>"
+        );
+      })
+      .join("");
+    const labels = TREE_LABELS.map((label) => {
+      const r = ((label.angle + 90) * Math.PI) / 180;
+      const distance = label.distance + 250;
+      return (
+        '<text class="class-label" x="' +
+        Math.cos(r) * distance +
+        '" y="' +
+        Math.sin(r) * distance +
+        '">' +
+        escape(getTreeLabelName(label.nameKey, "en")) +
+        "</text>"
+      );
+    }).join("");
+    this.svg.innerHTML =
+      '<g class="links">' +
+      links +
+      '</g><circle class="hub" r="198"/><text class="hub-title" y="-8">Enshrouded</text><text class="hub-subtitle" y="30">1.0</text>' +
+      labels +
+      nodes;
+    this.view();
+    if (focused)
+      this.svg
+        .querySelector<SVGGElement>('[data-node="' + focused + '"]')
+        ?.focus();
+  }
+}

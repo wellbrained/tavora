@@ -86,7 +86,8 @@
           "*/tavora.module.json",
           "*/changelog.json",
           "*/dist/**",
-          "!poe2-builds/**"
+          "!poe2-builds/**",
+          "!enshrouded/**"
         ]
       },
       {

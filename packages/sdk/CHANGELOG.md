@@ -1,3 +1,7 @@
+## 0.2.10
+
+Requires the JSON export host (Tavora 0.19.9). Adds `files.exportJson(value, name?)`: gesture-gated, bounded JSON export to a new file in Downloads/Tavora.
+
 # Changelog
 
 What changed in `@tavora/sdk` and the bridge protocol it speaks, newest first. Before Tavora 1.0 the SDK may still change in ways that break modules; each such change raises the minor version (0.2 → 0.3) and is marked **Breaking** here. Anything else raises the patch version. To make sure players have a Tavora that knows what your module uses, set [`minTavora`](https://docs.mytavora.app/reference/manifest) in its manifest.
