@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,6 +7,7 @@ import { AccountKey } from "./account-key";
 import { CloudCopy, ServiceStorage } from "./cloud-copy";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
+import { FolderPairing, Pairing } from "./pairing";
 
 afterEach(cleanUp);
 
@@ -304,5 +305,49 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(signedOut.sync.view()).toMatchObject({ on: true, problem: "signed-out" });
     await signedOut.sync.signedOut();
     expect(signedOut.sync.view().on).toBe(false);
+  });
+
+  it("goes on at a new PC once another PC sent the key through the copy's folder, signed out", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": JSON.stringify({ version: 1, games: { "elden-ring": {} } }) });
+    const onedrive = path.join(a.root, "OneDrive");
+    await mkdir(onedrive);
+    const atA = tavora(cloud, a, { signedIn: false });
+    await atA.sync.beforeLoad();
+    await atA.sync.turnOn(onedrive);
+    expect(atA.sync.view()).toMatchObject({ on: true, folder: onedrive });
+
+    const b = await pc({ "library.json": JSON.stringify({ version: 1, games: {} }) });
+    const atB = tavora(cloud, b, { signedIn: false });
+    await atB.sync.beforeLoad();
+    await atB.sync.turnOn(onedrive);
+    expect(atB.sync.view().askKey).toBe(true);
+
+    const pairing = (sync: CopySync, name: string) => {
+      const folder = new FolderPairing(onedrive, name);
+      return new Pairing({
+        accountKey: sync.accountKey,
+        service: () => null,
+        folder: () => (sync.place ? folder : null),
+        received: async (key) => {
+          await sync.accountKey.takeHere(key);
+          await sync.keyArrived();
+        },
+        onChange: () => undefined,
+        focus: () => undefined,
+      });
+    };
+    const fromA = pairing(atA.sync, "Desk");
+    const toB = pairing(atB.sync, "Laptop");
+    await toB.start();
+    await fromA.lookForRequests();
+    await toB.lookForAnswer();
+    await fromA.lookForRequests();
+    await fromA.decide(fromA.view().approve!.id, true);
+    await toB.lookForAnswer();
+    // B has the key and takes up the copy: it has data of its own, so the player keeps one side.
+    expect(atB.sync.view()).toMatchObject({ on: true, askKey: false, conflict: true, folder: onedrive });
+    fromA.dispose();
+    toB.dispose();
   });
 });

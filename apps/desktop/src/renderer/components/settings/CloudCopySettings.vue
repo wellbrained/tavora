@@ -7,9 +7,10 @@ import { computed, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { HostAction } from "../../../shared/host-api";
-import { account, act, cloudCopy, confirmAction, copyLater, showToast, submitAction } from "../../host";
+import { account, act, cloudCopy, confirmAction, copyLater, developerKeys, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
+import PairingAsk from "./PairingAsk.vue";
 import SettingRow from "./SettingRow.vue";
 
 const view = computed(() => cloudCopy.value);
@@ -142,6 +143,11 @@ function startOver() {
     <!-- Another PC made the account's key: its recovery key is asked for. -->
     <form v-if="view.askKey" class="flex flex-col gap-3 py-4" @submit.prevent="keyText.trim() && run({ type: 'cloud-copy-key', key: keyText })">
       <span class="text-muted-foreground">{{ t("cloudCopy.askKey.text") }}</span>
+      <!-- The Recovery key group above asks too while signed in: one place to get it from another PC. -->
+      <template v-if="developerKeys?.status !== 'ask'">
+        <PairingAsk />
+        <span class="text-muted-foreground text-sm">{{ t("pairing.typeKey") }}</span>
+      </template>
       <div class="flex gap-2">
         <Input v-model="keyText" class="max-w-120 font-mono" maxlength="200" autocomplete="off" spellcheck="false" :aria-label="t('cloudCopy.askKey.label')" data-testid="cloud-copy-key-input" />
         <Button type="submit" :disabled="busy || !keyText.trim()" data-testid="cloud-copy-key-submit">{{ t("cloudCopy.askKey.continue") }}</Button>

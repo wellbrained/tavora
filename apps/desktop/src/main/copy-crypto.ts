@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes, type KeyObject } from "node:crypto";
 import { deflateRawSync, inflateRawSync } from "node:zlib";
 
 // The cloud copy's encryption (decided 2026-10-19): only the player can read
@@ -48,6 +48,51 @@ const vaultKey = (rootKey: Uint8Array) => Buffer.from(hkdfSync("sha256", rootKey
 
 export const sealVault = (rootKey: Uint8Array, plain: Uint8Array): Buffer => sealWith(vaultKey(rootKey), VAULT_AAD, plain);
 export const openVault = (rootKey: Uint8Array, sealed: Uint8Array): Buffer => openWith(vaultKey(rootKey), VAULT_AAD, sealed);
+
+// Approving a new PC from an old one (pairing.ts): each side makes a one-time X25519 key. The old PC seals
+// the root key under a key both derive from the two one-time keys, and both show a short code made from
+// them, so the player sees that nobody swapped one on the way.
+const PAIRING_AAD = Buffer.from("tavora-pair-1");
+/** What comes before a raw X25519 public key in its DER form. */
+const X25519_SPKI = Buffer.from("302a300506032b656e032100", "hex");
+
+export interface PairingKey {
+  privateKey: KeyObject;
+  /** The raw 32 bytes, as sent. */
+  publicKey: Buffer;
+}
+
+export function newPairingKey(): PairingKey {
+  const { privateKey, publicKey } = generateKeyPairSync("x25519");
+  return { privateKey, publicKey: publicKey.export({ format: "der", type: "spki" }).subarray(X25519_SPKI.length) };
+}
+
+/** What the new PC sends first: a hash of its one-time key, so it can't pick the key after seeing the old PC's. */
+export const pairingCommit = (newPc: Uint8Array): Buffer => createHash("sha256").update("tavora-pair-commit").update(newPc).digest();
+
+/** The code both screens show: 6 characters from both one-time keys, "XXX-XXX". */
+export function pairingCode(newPc: Uint8Array, oldPc: Uint8Array): string {
+  const text = base32(createHash("sha256").update("tavora-pair-code").update(newPc).update(oldPc).digest().subarray(0, 4)).slice(0, 6);
+  return `${text.slice(0, 3)}-${text.slice(3)}`;
+}
+
+function pairingSealKey(own: KeyObject, theirs: Uint8Array, newPc: Uint8Array, oldPc: Uint8Array): Buffer {
+  if (theirs.length !== 32) throw new Error("not a one-time key");
+  const shared = diffieHellman({ privateKey: own, publicKey: createPublicKey({ key: Buffer.concat([X25519_SPKI, theirs]), format: "der", type: "spki" }) });
+  return Buffer.from(hkdfSync("sha256", shared, Buffer.concat([newPc, oldPc]), "tavora-pair-seal", 32));
+}
+
+/** On the old PC: the root key, sealed for the new PC. */
+export function sealForPc(own: PairingKey, newPc: Uint8Array, rootKey: Uint8Array): Buffer {
+  return sealWith(pairingSealKey(own.privateKey, newPc, newPc, own.publicKey), PAIRING_AAD, rootKey);
+}
+
+/** On the new PC: the root key back; throws for anything else. */
+export function openFromPc(own: PairingKey, oldPc: Uint8Array, sealed: Uint8Array): Buffer {
+  const key = openWith(pairingSealKey(own.privateKey, oldPc, own.publicKey, oldPc), PAIRING_AAD, sealed);
+  if (key.length !== COPY_KEY_BYTES) throw new Error("not a key");
+  return key;
+}
 
 function sealWith(key: Buffer, aad: Buffer, plain: Uint8Array): Buffer {
   const packed = deflateRawSync(plain);
