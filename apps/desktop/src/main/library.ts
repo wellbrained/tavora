@@ -208,13 +208,20 @@ function playedAt(game: GameEntry | undefined): string {
   return game?.lastPlayedAt ?? "";
 }
 
-/** The rail's top level in display order. Folders sort by their most recently played game. */
-export function sortedRoot(library: Library): RootItem[] {
+/** When each game was last played, kept at startup so the rail's order holds for the whole session. */
+export function playedTimes(library: Library): Record<string, string> {
+  return Object.fromEntries(Object.values(library.games).map((game) => [game.id, playedAt(game)]));
+}
+
+/**
+ * The rail's top level in display order. Folders sort by their most recently played game.
+ * `played` is from playedTimes at startup, so opening a game never moves it mid-session.
+ */
+export function sortedRoot(library: Library, played: Record<string, string> = playedTimes(library)): RootItem[] {
   if (library.sort === "manual") return [...library.root];
+  const at = (id: string): string => played[id] ?? "";
   const recency = (item: RootItem): string =>
-    item.kind === "game"
-      ? playedAt(library.games[item.id])
-      : library.folders[item.id]!.games.map((id) => playedAt(library.games[id])).sort().at(-1) ?? "";
+    item.kind === "game" ? at(item.id) : library.folders[item.id]!.games.map(at).sort().at(-1) ?? "";
   // Stable sort: equally recent items keep their manual order.
   return [...library.root].sort((a, b) => recency(b).localeCompare(recency(a)));
 }

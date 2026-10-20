@@ -11,6 +11,7 @@ import {
   LibraryError,
   markIconShared,
   markPlayed,
+  playedTimes,
   monogram,
   moveFolder,
   moveGame,
@@ -491,6 +492,16 @@ describe("sorting", () => {
     expect(sortedRoot(library).map((item) => item.id)).toEqual([folder, "local-a", "local-b"]);
     library.sort = "manual";
     expect(sortedRoot(library).map((item) => item.id)).toEqual(["local-a", "local-b", folder]);
+  });
+
+  it("keeps the order from startup when a game is played mid-session", () => {
+    const library = libraryWith("A", "B", "C");
+    markPlayed(library, "local-a", day(10));
+    const atStart = playedTimes(library);
+    markPlayed(library, "local-c", day(11));
+    expect(sortedRoot(library, atStart).map((item) => item.id)).toEqual(["local-a", "local-b", "local-c"]);
+    // The next start sorts by the new times.
+    expect(sortedRoot(library, playedTimes(library)).map((item) => item.id)).toEqual(["local-c", "local-a", "local-b"]);
   });
 
   it("lists recent games for the Welcome page", () => {
