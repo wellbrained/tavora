@@ -10,6 +10,7 @@ import type { AccountDevice, HostAction } from "../../../shared/host-api";
 import { account, act, confirmAction, developerKeys, prompt, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import CloudCopySettings from "./CloudCopySettings.vue";
+import RecoveryKeySettings from "./RecoveryKeySettings.vue";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
@@ -130,7 +131,6 @@ async function copyLinkCommand() {
 // The publisher keys Tavora keeps in the account's vault; it signs with them for tavora-pack.
 const keys = computed(() => developerKeys.value);
 const linked = computed(() => new Set((view.value?.publisherKeys ?? []).map((key) => key.fingerprint)));
-const recoveryText = ref("");
 async function makeKey() {
   if (await run({ type: "developer-key-create" })) showToast(t("account.developer.created"));
 }
@@ -145,9 +145,6 @@ function exportKey(fingerprint: string) {
     confirm: t("account.developer.export"),
     run: () => submitAction({ type: "developer-key-export", fingerprint }),
   });
-}
-async function copyRecoveryKey() {
-  if ((await act({ type: "developer-copy-recovery-key" })).ok) showToast(t("cloudCopy.key.copied"));
 }
 
 function unlinkKey(fingerprint: string) {
@@ -330,6 +327,8 @@ function startDelete() {
 
       </SettingGroup>
 
+      <RecoveryKeySettings />
+
       <CloudCopySettings />
 
       <!-- The developer side: only matters to people who make modules. -->
@@ -349,23 +348,7 @@ function startDelete() {
           <span class="text-sm font-medium">{{ t("account.developer.kept") }}</span>
           <p class="text-muted-foreground mt-1 text-xs">{{ t("account.developer.keptHint") }}</p>
 
-          <div v-if="keys?.recoveryKey" class="mt-3 flex flex-col gap-3 rounded-md border p-3" data-testid="developer-recovery-key">
-            <span class="font-medium">{{ t("account.developer.recoveryTitle") }}</span>
-            <span class="text-muted-foreground text-sm">{{ t("account.developer.recoveryText") }}</span>
-            <code class="bg-muted rounded px-3 py-2 font-mono text-sm tracking-wide break-all select-all" data-testid="developer-recovery-key-text">{{ keys.recoveryKey }}</code>
-            <div class="flex gap-2">
-              <Button variant="secondary" @click="copyRecoveryKey">{{ t("cloudCopy.key.copy") }}</Button>
-              <Button data-testid="developer-recovery-key-saved" @click="run({ type: 'developer-recovery-key-saved' })">{{ t("cloudCopy.key.saved") }}</Button>
-            </div>
-          </div>
-
-          <form v-if="keys?.status === 'ask'" class="mt-3 flex flex-col gap-2" @submit.prevent="recoveryText.trim() && run({ type: 'developer-recovery-key', key: recoveryText })">
-            <span class="text-muted-foreground text-sm">{{ t("account.developer.askKey") }}</span>
-            <div class="flex gap-2">
-              <Input v-model="recoveryText" class="max-w-120 font-mono" maxlength="200" autocomplete="off" spellcheck="false" :aria-label="t('cloudCopy.askKey.label')" data-testid="developer-recovery-key-input" />
-              <Button type="submit" :disabled="busy || !recoveryText.trim()" data-testid="developer-recovery-key-submit">{{ t("cloudCopy.askKey.continue") }}</Button>
-            </div>
-          </form>
+          <p v-if="keys?.status === 'ask'" class="text-muted-foreground mt-2 text-sm" data-testid="developer-keys-ask">{{ t("account.developer.askKey") }}</p>
           <p v-else-if="keys?.status === 'offline'" class="text-muted-foreground mt-2 text-sm">{{ t("account.developer.offline") }}</p>
           <template v-else>
             <p v-if="!keys?.keys.length" class="text-muted-foreground mt-2 text-sm" data-testid="developer-keys-none">{{ t("account.developer.noKept") }}</p>
@@ -465,6 +448,9 @@ function startDelete() {
       </SettingRow>
       </SettingGroup>
     </template>
+
+    <!-- Signed out, the cloud copy can still go in a folder of your own. -->
+    <CloudCopySettings v-if="!signedIn" />
 
     <p v-if="waitingDiscord" class="text-muted-foreground mt-4" role="status" data-testid="account-discord-waiting">{{ t("account.discord.waiting") }}</p>
     <p v-if="view && !view.canKeepSignIn" class="text-muted-foreground mt-4 text-sm" data-testid="account-cant-keep">{{ t("account.cantKeep") }}</p>

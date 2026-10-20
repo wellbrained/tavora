@@ -321,6 +321,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "developer-key-create":
     case "developer-key-add":
     case "developer-recovery-key-saved":
+    case "developer-show-recovery-key":
     case "developer-copy-recovery-key":
       return only() ? { type: a.type } : null;
     case "developer-key-export":
@@ -331,6 +332,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "developer-sign-answer":
       return only("id", "allow") && Number.isSafeInteger(a.id) && typeof a.allow === "boolean" ? { type: a.type, id: a.id as number, allow: a.allow } : null;
     case "cloud-copy-on":
+    case "cloud-copy-on-folder":
     case "cloud-copy-cancel":
     case "cloud-copy-new-key":
     case "cloud-copy-show-key":
@@ -345,6 +347,8 @@ export function parseAction(raw: unknown): HostAction | null {
       return only() ? { type: a.type } : null;
     case "cloud-copy-key":
       return only("key") && text(a.key, 200) ? { type: a.type, key: a.key } : null;
+    case "cloud-copy-move":
+      return only("to") && (a.to === "server" || a.to === "folder") ? { type: a.type, to: a.to } : null;
     case "cloud-copy-keep":
       return only("side") && (a.side === "pc" || a.side === "cloud") ? { type: a.type, side: a.side } : null;
     case "account-sign-out-device":

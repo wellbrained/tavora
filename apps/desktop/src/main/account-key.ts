@@ -167,6 +167,36 @@ export class AccountKey {
     throw new CopyError("failed", "the vault kept changing");
   }
 
+  /** Whether this PC is signed in, so the key goes through the account's vault. */
+  get signedIn(): boolean {
+    return this.options.token() !== null;
+  }
+
+  /**
+   * Signed out, for a copy in a folder of the player's own (decided 2026-10-20): the key is made here
+   * without the vault, or asked for when the folder holds a copy already. Signing in later gives the
+   * account a vault with it (setUp).
+   */
+  async setUpHere(hasCopy: boolean): Promise<KeySetUp> {
+    if (this.key) return { status: "ready", created: false };
+    if (hasCopy) return { status: "ask" };
+    await this.save(newCopyKey());
+    return { status: "ready", created: true };
+  }
+
+  /** Signed out: the recovery key typed in is kept here. Whether it opens the folder's copy is the check. */
+  async enterHere(text: string): Promise<void> {
+    const key = parseRecoveryKey(text);
+    if (!key) throw new PlayerError("cloudCopy.error.badKey");
+    await this.save(key);
+  }
+
+  /** Signed out, a lost key: a new one is made here. */
+  async startOverHere(): Promise<void> {
+    this.key = null;
+    await this.save(newCopyKey());
+  }
+
   /** Signed out: the key belongs to the account, so this PC forgets it. */
   async forget(): Promise<void> {
     this.key = null;

@@ -261,9 +261,14 @@ test("Tavora keeps a developer's publisher key and signs for tavora-pack after a
     await page.getByTestId("account-developer-save").click();
     await expect(page.getByTestId("developer-keys-none")).toBeVisible();
     await page.getByTestId("developer-key-create").click();
-    // The account had no key yet: its recovery key is shown once, and the new key is linked.
-    await expect(page.getByTestId("developer-recovery-key-text")).toHaveText(/^[0-9A-Z-]{40,}$/);
-    await page.getByTestId("developer-recovery-key-saved").click();
+    // The account had no key yet: its recovery key is shown once, in its own group, and can be shown again.
+    const recovery = page.getByTestId("recovery-key-text");
+    await expect(recovery).toHaveText(/^[0-9A-Z-]{40,}$/);
+    const recoveryKey = await recovery.textContent();
+    await page.getByTestId("recovery-key-saved").click();
+    await page.getByTestId("recovery-key-show").click();
+    await expect(recovery).toHaveText(recoveryKey!);
+    await page.getByTestId("recovery-key-saved").click();
     const kept = page.getByTestId("developer-keys-list").locator("li");
     await expect(kept).toHaveCount(1);
     const fingerprint = ((await kept.getAttribute("data-testid")) ?? "").replace("developer-key-", "");

@@ -206,13 +206,15 @@ export interface DeveloperKeysView {
    */
   status: "loading" | "ready" | "none" | "ask" | "signed-out" | "offline";
   keys: { fingerprint: string }[];
-  /** The account's recovery key, made just now: shown once. */
+  /** Whether this PC has the account's key (the recovery key opens it). */
+  hasKey: boolean;
+  /** The account's recovery key, while the player looks at it (made just now, or asked to see). */
   recoveryKey: string | null;
   request: SignRequestView | null;
 }
 
 /** Why the cloud copy could not sync last time, worded by the host UI. */
-export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "new-key";
+export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "new-key" | "no-folder" | "not-arrived";
 
 /**
  * Settings > Account > Cloud copy, and the questions it asks over the app. Sent on its own channel;
@@ -226,10 +228,12 @@ export interface CloudCopyView {
   busy: "checking" | "uploading" | "downloading" | null;
   /** Bytes read and sent of what changed, while uploading. */
   progress: { done: number; total: number } | null;
-  /** The copy as the service last had it; null when there is none or it was not read yet. */
+  /** The copy as it was last seen; null when there is none or it was not read yet. */
   copy: { size: number; savedAt: string } | null;
-  /** The most a copy may hold. */
-  limit: number;
+  /** The folder the copy is kept in, or null for Tavora's service. */
+  folder: string | null;
+  /** The most a copy may hold, or null for no limit (a folder). */
+  limit: number | null;
   /** False when the last copy left the pictures out to fit. */
   pictures: boolean;
   /** The recovery key, while the player looks at it (right after turning on, or when asked for). */
@@ -704,10 +708,15 @@ export type HostAction =
   | { type: "developer-key-link"; fingerprint: string }
   | { type: "developer-recovery-key"; key: string }
   | { type: "developer-recovery-key-saved" }
+  | { type: "developer-show-recovery-key" }
   | { type: "developer-copy-recovery-key" }
   | { type: "developer-sign-answer"; id: number; allow: boolean }
   /** Settings > Account > Cloud copy. Turning on makes a key, or asks for the one of a copy that exists. */
   | { type: "cloud-copy-on" }
+  /** Turns the copy on in a folder the player picks in the system's dialog. */
+  | { type: "cloud-copy-on-folder" }
+  /** Moves the copy, keeping its key: to the service, or to a folder the player picks in the system's dialog. */
+  | { type: "cloud-copy-move"; to: "server" | "folder" }
   | { type: "cloud-copy-key"; key: string }
   | { type: "cloud-copy-cancel" }
   /** Lost the recovery key: the copy is deleted and the account gets a new key. */

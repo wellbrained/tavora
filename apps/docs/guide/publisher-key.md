@@ -14,7 +14,7 @@ Tavora keeps your publisher key for you. In Tavora, sign in under **Settings > A
 
 `tavora-pack` never sees the secret key. When you pack or publish, it asks Tavora on this PC to sign, and Tavora asks you first: it shows the module and its version, and signs only after you press **Allow**. Keep Tavora open while you pack.
 
-- **On another PC**, sign in to Tavora and type in your recovery key under Module developer. Your keys are there.
+- **On another PC**, sign in to Tavora and type in your recovery key under Settings > Account > Recovery key. Your keys are there.
 - **Several keys?** Pick one with `--publisher <fingerprint>`; the first few characters are enough.
 - **A key from an older `tavora-pack`** in `~/.tavora/publisher-key.pem` still works: `tavora-pack` uses that file when it's there. Press **Add from a file** in Tavora to keep it there instead, then delete the file.
 

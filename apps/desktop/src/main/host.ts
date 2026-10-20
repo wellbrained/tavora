@@ -121,7 +121,7 @@ import { RpcClient } from "./discord-rpc";
 import { AccountKey } from "./account-key";
 import { DeveloperKeys } from "./developer-keys";
 import { startSignerServer, type SignerServer } from "./signer-server";
-import { CloudCopy } from "./cloud-copy";
+import { ServiceStorage } from "./cloud-copy";
 import { CopySync } from "./cloud-copy-sync";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
 import { discordLogin } from "./discord-login";
@@ -1856,6 +1856,8 @@ export class Host {
         return this.developerKeys.enterKey(action.key);
       case "developer-recovery-key-saved":
         return this.developerKeys.keySaved();
+      case "developer-show-recovery-key":
+        return this.developerKeys.showKey();
       case "developer-copy-recovery-key": {
         const key = this.developerKeys.view().recoveryKey;
         if (key) clipboard.writeText(key);
@@ -1865,6 +1867,21 @@ export class Host {
         return this.developerKeys.answer(action.id, action.allow);
       case "cloud-copy-on":
         return this.copySync.turnOn();
+      case "cloud-copy-on-folder": {
+        const folder = await this.pickPath("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
+        if (!folder) return;
+        await this.copySync.turnOn(folder);
+        this.rememberPicked("cloud-copy", folder);
+        return;
+      }
+      case "cloud-copy-move": {
+        if (action.to === "server") return this.copySync.move(null);
+        const folder = await this.pickPath("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
+        if (!folder) return;
+        await this.copySync.move(folder);
+        this.rememberPicked("cloud-copy", folder);
+        return;
+      }
       case "cloud-copy-key":
         return this.copySync.enterKey(action.key);
       case "cloud-copy-cancel":
@@ -2566,7 +2583,7 @@ export class Host {
       userData: options.userData,
       enabled: options.accounts === true,
       moduleFiles: () => host()?.files.root() ?? savedFolder ?? options.picturesFolder ?? defaultFilesRoot(options.userData),
-      cloud: new CloudCopy(service),
+      service: new ServiceStorage(service),
       accountKey: new AccountKey({
         file: path.join(options.userData, "account-key.json"),
         legacyFile: path.join(options.userData, "cloud-copy-key.json"),
@@ -2579,6 +2596,7 @@ export class Host {
       onChange: (view: CloudCopyView) => {
         const current = host();
         if (current && !current.window.isDestroyed()) current.window.webContents.send("host:cloud-copy", view);
+        current?.developerKeys?.keyMaybeChanged();
       },
       log: (line) => console.log(`[tavora] ${line}`),
     });

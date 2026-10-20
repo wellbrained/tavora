@@ -1,9 +1,10 @@
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
 import { AccountKey } from "./account-key";
-import { CloudCopy } from "./cloud-copy";
+import { CloudCopy, ServiceStorage } from "./cloud-copy";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
 
@@ -22,7 +23,7 @@ function tavora(cloud: Service, at: Pc, { signedIn = true } = {}) {
     userData: at.userData,
     enabled: true,
     moduleFiles: () => at.moduleFiles,
-    cloud: new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => (signedIn ? cloud.token : null) }),
+    service: new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => (signedIn ? cloud.token : null) }),
     accountKey: new AccountKey({
       file: path.join(at.userData, "account-key.json"),
       legacyFile: path.join(at.userData, "cloud-copy-key.json"),
@@ -95,7 +96,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(restarted.sync.view()).toMatchObject({ on: true, conflict: false });
     // B's own settings are not a change to send back.
     await restarted.sync.sync(true);
-    expect((await new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token }).remote())?.version).toBe(1);
+    expect((await new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token })).remote())?.version).toBe(1);
   });
 
   it("takes a newer copy at start when this PC did not change, and uploads changes made here", async () => {
@@ -193,7 +194,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     await until(() => closed === 1);
     // Then the window may close.
     expect(sync.holdClose(() => void closed++)).toBe(false);
-    expect((await new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token }).remote())?.version).toBe(2);
+    expect((await new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token })).remote())?.version).toBe(2);
   });
 
   it("lets the window close at once when the copy is off", async () => {
@@ -220,6 +221,27 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(atA.sync.view()).toMatchObject({ on: false, problem: "deleted" });
     // The data on the PCs stays.
     expect(await read(a.userData, "library.json")).toBe("a1");
+  });
+
+  it("moves from our server to a folder and back, keeping the recovery key", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a" });
+    const { sync, key } = await startCopy(cloud, a);
+    sync.keySaved();
+    const onedrive = await mkdtemp(path.join(os.tmpdir(), "tavora-onedrive-"));
+    try {
+      await sync.move(onedrive);
+      expect(sync.view()).toMatchObject({ on: true, folder: onedrive, limit: null, problem: null });
+      // The server's copy is gone, so the other PCs there turn off.
+      expect(await new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token })).remote()).toBeNull();
+      await sync.move(null);
+      expect(sync.view()).toMatchObject({ on: true, folder: null });
+      expect(await readdir(onedrive)).toEqual([]);
+      sync.showKey();
+      expect(sync.view().recoveryKey).toBe(key);
+    } finally {
+      await rm(onedrive, { recursive: true, force: true });
+    }
   });
 
   it("keeps the account's key when the copy is turned off, and forgets it when signed out", async () => {

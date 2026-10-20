@@ -52,6 +52,7 @@ export class DeveloperKeys {
     return {
       status: this.status,
       keys: this.keys.map((kept) => ({ fingerprint: kept.fingerprint })),
+      hasKey: this.options.accountKey.get() !== null,
       recoveryKey: this.recoveryKey,
       request: request ? { id: request.id, kind: request.kind, fingerprint: request.fingerprint, module: request.module } : null,
     };
@@ -73,6 +74,7 @@ export class DeveloperKeys {
     } catch {
       if (this.status === "loading") this.status = "offline";
     }
+    this.hadKey = this.options.accountKey.get() !== null;
     this.changed();
   }
 
@@ -147,6 +149,20 @@ export class DeveloperKeys {
     await guard(() => this.options.accountKey.enter(text));
     await this.refresh();
   }
+
+  showKey(): void {
+    this.recoveryKey = this.options.accountKey.recoveryKey();
+    this.changed();
+  }
+
+  /** The cloud copy may have made, taken or forgotten the account's key: read again when it did. */
+  keyMaybeChanged(): void {
+    const hasKey = this.options.accountKey.get() !== null;
+    if (hasKey === this.hadKey) return;
+    this.hadKey = hasKey;
+    void this.refresh();
+  }
+  private hadKey = false;
 
   keySaved(): void {
     this.recoveryKey = null;
