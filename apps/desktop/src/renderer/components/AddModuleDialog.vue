@@ -9,12 +9,12 @@
 import { computed, ref } from "vue";
 import { useEventListener } from "@vueuse/core";
 import { addModule, dialog, openSettings, state, type AddModuleRequest } from "../host";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
 import { t } from "../i18n";
 import { Blocks, ChevronDown, Code, Download, Gamepad2, Search, Settings2, ShieldCheck, Store, X } from "@lucide/vue";
-import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import ModuleIcon from "./ModuleIcon.vue";
 import CatalogBrowse from "./CatalogBrowse.vue";
 

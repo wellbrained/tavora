@@ -4,8 +4,8 @@
 // can show it again.
 import { ArrowLeft, Camera, Keyboard, PanelLeft, Plus, Search } from "@lucide/vue";
 import { computed, ref } from "vue";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
 import GameIcon from "../components/GameIcon.vue";
 import ImageCropDialog from "../components/ImageCropDialog.vue";

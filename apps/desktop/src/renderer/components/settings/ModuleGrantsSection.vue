@@ -2,7 +2,7 @@
 // Settings > Modules > Website access: every module the player allowed to reach websites,
 // with what it may reach, and taking that back (decision log, module grants row of 2026-10-16).
 import { computed } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import { confirmAction, gamesUsing, listOf, state, submitAction } from "../../host";
 import { t } from "../../i18n";

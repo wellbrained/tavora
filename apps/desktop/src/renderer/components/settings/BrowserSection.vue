@@ -4,7 +4,7 @@
 // toolbar, where the player is on the site; here they can be removed.
 import { X } from "@lucide/vue";
 import { computed } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, confirmAction, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";

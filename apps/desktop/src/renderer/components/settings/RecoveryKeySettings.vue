@@ -3,8 +3,8 @@
 // publisher keys Tavora keeps. A new PC gets it from another PC, or asks for it once. The key stays in the main process,
 // except while the player looks at it here.
 import { computed, ref } from "vue";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import type { HostAction } from "../../../shared/host-api";
 import { act, developerKeys, showToast } from "../../host";
 import { t } from "../../i18n";

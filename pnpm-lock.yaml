@@ -73,6 +73,9 @@ importers:
       '@tavora/module-schema':
         specifier: workspace:*
         version: link:../../packages/module-schema
+      '@tavora/official-ui':
+        specifier: workspace:*
+        version: link:../../modules/shared
       '@tavora/pack':
         specifier: workspace:*
         version: link:../../packages/pack

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // A module asked to open a link and the game has no Browser panel: ask where it should open.
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, dialog } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";

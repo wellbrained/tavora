@@ -6,7 +6,7 @@
 import { Check, ChevronDown, Search } from "@lucide/vue";
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui";
 import { computed, ref, watch } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import { LANGUAGES, type LanguageSetting } from "../../../shared/i18n";
 import { useFloating } from "../../host";

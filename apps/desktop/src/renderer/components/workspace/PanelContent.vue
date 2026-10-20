@@ -10,7 +10,7 @@
 // module's other panel types (the decision log, named panels round 4).
 import type { IDockviewPanelProps } from "dockview-vue";
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { ShieldAlert } from "@lucide/vue";
 import { act, dialog, frozen, needsGrant, state } from "../../host";
 import { t } from "../../i18n";
