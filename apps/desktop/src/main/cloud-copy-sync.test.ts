@@ -2,7 +2,7 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
-import { CloudCopy } from "./cloud-copy";
+import { CloudCopy, ServiceStorage } from "./cloud-copy";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
 
@@ -21,7 +21,7 @@ function tavora(cloud: Service, at: Pc, { signedIn = true } = {}) {
     userData: at.userData,
     enabled: true,
     moduleFiles: () => at.moduleFiles,
-    cloud: new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => (signedIn ? cloud.token : null) }),
+    service: new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => (signedIn ? cloud.token : null) }),
     encryptor,
     flush: async () => undefined,
     restart: () => void events.restarts++,
@@ -87,7 +87,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(restarted.sync.view()).toMatchObject({ on: true, conflict: false });
     // B's own settings are not a change to send back.
     await restarted.sync.sync(true);
-    expect((await new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token }).remote())?.version).toBe(1);
+    expect((await new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token })).remote())?.version).toBe(1);
   });
 
   it("takes a newer copy at start when this PC did not change, and uploads changes made here", async () => {
@@ -185,7 +185,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     await until(() => closed === 1);
     // Then the window may close.
     expect(sync.holdClose(() => void closed++)).toBe(false);
-    expect((await new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token }).remote())?.version).toBe(2);
+    expect((await new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token })).remote())?.version).toBe(2);
   });
 
   it("lets the window close at once when the copy is off", async () => {

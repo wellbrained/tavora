@@ -399,6 +399,9 @@ function startDelete() {
       </SettingGroup>
     </template>
 
+    <!-- Signed out, the cloud copy can still go in a folder of your own. -->
+    <CloudCopySettings v-if="!signedIn" />
+
     <p v-if="waitingDiscord" class="text-muted-foreground mt-4" role="status" data-testid="account-discord-waiting">{{ t("account.discord.waiting") }}</p>
     <p v-if="view && !view.canKeepSignIn" class="text-muted-foreground mt-4 text-sm" data-testid="account-cant-keep">{{ t("account.cantKeep") }}</p>
   </section>

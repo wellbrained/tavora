@@ -1,7 +1,7 @@
 import { mkdir, readFile, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { CloudCopy, copyRoots, CopyError, EMPTY_STATE, hasLocalChanges, loadCopyKey, safeCopyPath, saveCopyKey, swapInCopy, type CopyState } from "./cloud-copy";
+import { CloudCopy, copyRoots, CopyError, EMPTY_STATE, hasLocalChanges, loadCopyKey, safeCopyPath, saveCopyKey, ServiceStorage, swapInCopy, type CopyState } from "./cloud-copy";
 import { cleanUp, OWNER, pc, service } from "./cloud-copy.test-helper";
 import { copyKeys, newCopyKey, open, parseRecoveryKey, partId, recoveryKey, seal } from "./copy-crypto";
 
@@ -163,7 +163,7 @@ describe("the cloud copy", () => {
   });
 
   it("needs a sign-in", async () => {
-    const copy = new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: fetch, token: () => null });
+    const copy = new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: fetch, token: () => null }));
     await expect(copy.remote()).rejects.toBeInstanceOf(CopyError);
     await expect(copy.remote()).rejects.toMatchObject({ reason: "signed-out" });
   });

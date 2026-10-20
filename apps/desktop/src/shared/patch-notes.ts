@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.9",
+    date: "2026-10-20",
+    title: "Cloud copy in your own folder",
+    notes: [
+      "Keep your cloud copy in a folder of your own, like your OneDrive, Dropbox or Google Drive. No account needed.",
+      "It's encrypted on your PC, just like on our server.",
+    ],
+  },
+  {
     version: "0.19.8",
     date: "2026-10-19",
     title: "Tidier module library",

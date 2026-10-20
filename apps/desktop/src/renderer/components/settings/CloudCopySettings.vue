@@ -1,17 +1,20 @@
 <script setup lang="ts">
-// Settings > Account > Cloud copy: turning it on (a new recovery key, or the key
-// of a copy another PC made), its state, and the buttons to upload, restore,
-// turn it off or delete it. When it syncs is up to the main process.
+// Settings > Account > Cloud copy: turning it on, on our server or in a folder the
+// player picks (a new recovery key, or the key of a copy another PC made), its
+// state, and the buttons to upload, restore, turn it off or delete it. When it
+// syncs is up to the main process. A folder works signed out too.
 import { computed, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { HostAction } from "../../../shared/host-api";
-import { act, cloudCopy, confirmAction, copyLater, showToast, submitAction } from "../../host";
+import { account, act, cloudCopy, confirmAction, copyLater, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
 const view = computed(() => cloudCopy.value);
+const signedIn = computed(() => Boolean(account.value?.account));
+const inFolder = computed(() => view.value?.folder != null);
 const busy = ref(false);
 const keyText = ref("");
 watch(
@@ -43,9 +46,12 @@ const status = computed(() => {
   if (copy.busy === "checking") return t("cloudCopy.status.checking");
   if (copy.conflict || copy.restartToTake) return t("cloudCopy.status.waiting");
   if (copy.problem) return t(`cloudCopy.error.${copy.problem}`);
-  const saved = copy.copy
-    ? t("cloudCopy.status.saved", { date: formatDate(copy.copy.savedAt, { dateStyle: "medium", timeStyle: "short" }), size: megabytes(copy.copy.size), limit: megabytes(copy.limit) })
-    : t("cloudCopy.status.none");
+  const date = copy.copy ? formatDate(copy.copy.savedAt, { dateStyle: "medium", timeStyle: "short" }) : "";
+  const saved = !copy.copy
+    ? t("cloudCopy.status.none")
+    : copy.limit === null
+      ? t("cloudCopy.status.savedFolder", { date, size: megabytes(copy.copy.size) })
+      : t("cloudCopy.status.saved", { date, size: megabytes(copy.copy.size), limit: megabytes(copy.limit) });
   return copy.pictures ? saved : `${saved} ${t("cloudCopy.status.noPictures")}`;
 });
 
@@ -83,7 +89,7 @@ function turnOff() {
 function remove() {
   confirmAction({
     title: t("cloudCopy.delete.title"),
-    message: t("cloudCopy.delete.message"),
+    message: t(inFolder.value ? "cloudCopy.delete.messageFolder" : "cloudCopy.delete.message"),
     confirm: t("cloudCopy.delete.confirm"),
     danger: true,
     run: async () => {
@@ -124,8 +130,14 @@ function remove() {
     </form>
 
     <template v-else-if="!view.on">
-      <SettingRow :label="t('cloudCopy.off.label')" :description="view.canKeepKey ? (view.problem ? t(`cloudCopy.error.${view.problem}`) : t('cloudCopy.off.description')) : t('cloudCopy.cantKeep')">
-        <Button :disabled="busy || !view.canKeepKey || view.busy !== null" data-testid="cloud-copy-on" @click="run({ type: 'cloud-copy-on' })">{{ t("cloudCopy.turnOn") }}</Button>
+      <p class="text-muted-foreground border-b py-4 text-sm" data-testid="cloud-copy-off">
+        {{ view.canKeepKey ? (view.problem ? t(`cloudCopy.error.${view.problem}`) : t("cloudCopy.off.description")) : t("cloudCopy.cantKeep") }}
+      </p>
+      <SettingRow :label="t('cloudCopy.server.label')" :description="t(signedIn ? 'cloudCopy.server.description' : 'cloudCopy.server.signIn')">
+        <Button v-if="signedIn" :disabled="busy || !view.canKeepKey || view.busy !== null" data-testid="cloud-copy-on" @click="run({ type: 'cloud-copy-on' })">{{ t("cloudCopy.turnOn") }}</Button>
+      </SettingRow>
+      <SettingRow :label="t('cloudCopy.folder.label')" :description="t('cloudCopy.folder.description')">
+        <Button variant="secondary" :disabled="busy || !view.canKeepKey || view.busy !== null" data-testid="cloud-copy-on-folder" @click="run({ type: 'cloud-copy-on-folder' })">{{ t("cloudCopy.folder.pick") }}</Button>
       </SettingRow>
     </template>
 
@@ -135,6 +147,7 @@ function remove() {
         <Button v-else-if="view.restartToTake" :disabled="busy" @click="run({ type: 'cloud-copy-restart' })">{{ t("cloudCopy.newer.restart") }}</Button>
         <Button v-else variant="secondary" :disabled="busy || view.busy !== null" data-testid="cloud-copy-upload" @click="upload">{{ t("cloudCopy.upload") }}</Button>
       </SettingRow>
+      <SettingRow v-if="inFolder" :label="t('cloudCopy.folder.label')" :description="view.folder ?? ''" data-testid="cloud-copy-folder" />
       <SettingRow :label="t('cloudCopy.restore.label')" :description="t('cloudCopy.restore.description')">
         <Button variant="secondary" :disabled="busy || view.busy !== null" data-testid="cloud-copy-restore" @click="restore">{{ t("cloudCopy.restore.button") }}</Button>
       </SettingRow>
@@ -144,7 +157,7 @@ function remove() {
       <SettingRow :label="t('cloudCopy.turnOff.label')" :description="t('cloudCopy.turnOff.description')">
         <Button variant="secondary" :disabled="busy" data-testid="cloud-copy-off" @click="turnOff">{{ t("cloudCopy.turnOff.label") }}</Button>
       </SettingRow>
-      <SettingRow :label="t('cloudCopy.delete.label')" :description="t('cloudCopy.delete.description')">
+      <SettingRow :label="t('cloudCopy.delete.label')" :description="t(inFolder ? 'cloudCopy.delete.descriptionFolder' : 'cloudCopy.delete.description')">
         <Button variant="destructive" :disabled="busy" data-testid="cloud-copy-delete" @click="remove">{{ t("cloudCopy.delete.label") }}</Button>
       </SettingRow>
     </template>

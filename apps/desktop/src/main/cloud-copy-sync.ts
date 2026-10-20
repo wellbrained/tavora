@@ -4,7 +4,6 @@ import type { CloudCopyProblem, CloudCopyView } from "../shared/host-api";
 import { backupsDir } from "./backup";
 import {
   CloudCopy,
-  COPY_LIMIT,
   CopyError,
   copyRoots,
   EMPTY_STATE,
@@ -16,9 +15,11 @@ import {
   swapInCopy,
   type CopyRoot,
   type CopyState,
+  type CopyStorage,
   type SyncedFile,
 } from "./cloud-copy";
 import { newCopyKey, parseRecoveryKey, recoveryKey } from "./copy-crypto";
+import { checkFolder, FolderStorage } from "./copy-folder";
 import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
 import { PlayerError } from "./messages";
@@ -32,6 +33,8 @@ import { PlayerError } from "./messages";
 //   may close anyway.
 // - When both this PC and the copy changed, the player keeps one side; the other is
 //   kept as a local backup. Settings can also upload or restore by hand.
+// - The copy is kept on Tavora's service (needs a sign-in) or in a folder the player
+//   picks (decided 2026-10-20; no sign-in). Signing out only turns off the first.
 
 /** How often changes are looked for and uploaded while Tavora runs. */
 export const SYNC_EVERY_MS = 3 * 60_000;
@@ -61,7 +64,10 @@ export interface CopySyncOptions {
   enabled: boolean;
   /** The folder modules keep pictures in, which may be anywhere. */
   moduleFiles: () => string;
-  cloud: CloudCopy;
+  /** The copy on Tavora's service. */
+  service: CopyStorage;
+  /** The copy in a folder the player picked; FolderStorage unless a test says otherwise. */
+  folderStorage?: (folder: string) => CopyStorage;
   encryptor: Encryptor;
   /** Writes what Tavora still holds in memory (library, layout) to disk. */
   flush: () => Promise<void>;
@@ -73,6 +79,9 @@ export interface CopySyncOptions {
 
 export class CopySync {
   private key: Buffer | null = null;
+  /** The folder the copy is kept in, or null for Tavora's service. */
+  private folder: string | null = null;
+  private cloud: CloudCopy;
   private state: CopyState = EMPTY_STATE;
   private busy: CloudCopyView["busy"] = null;
   private progress: CloudCopyView["progress"] = null;
@@ -90,13 +99,24 @@ export class CopySync {
   private mayClose = false;
   private closeStarted = false;
 
-  constructor(private readonly options: CopySyncOptions) {}
+  constructor(private readonly options: CopySyncOptions) {
+    this.cloud = new CloudCopy(options.service);
+  }
+
+  /** Where the copy is kept from now on: a folder, or null for the service. */
+  private use(folder: string | null): void {
+    this.folder = folder;
+    this.cloud = new CloudCopy(folder === null ? this.options.service : (this.options.folderStorage ?? ((picked) => new FolderStorage(picked)))(folder));
+  }
 
   private get stateFile() {
     return path.join(this.options.userData, "cloud-copy.json");
   }
   private get keyFile() {
     return path.join(this.options.userData, "cloud-copy-key.json");
+  }
+  private get placeFile() {
+    return path.join(this.options.userData, "cloud-copy-place.json");
   }
   private get stagingDir() {
     return path.join(this.options.userData, "cloud-copy-staging");
@@ -128,7 +148,8 @@ export class CopySync {
       busy: this.busy,
       progress: this.progress,
       copy: this.copy,
-      limit: COPY_LIMIT,
+      folder: this.folder,
+      limit: this.cloud.storage.limit,
       pictures: this.state.pictures,
       recoveryKey: this.shownKey,
       askKey: this.askKey,
@@ -163,7 +184,8 @@ export class CopySync {
   /** What went wrong, for the settings page; a quiet run (in the background) keeps it there instead of throwing. */
   private noteProblem(error: unknown): CloudCopyProblem {
     const reason = error instanceof CopyError ? error.reason : "failed";
-    this.problem = reason === "unreachable" || reason === "unavailable" || reason === "too-many" ? "offline" : reason === "signed-out" ? "signed-out" : "failed";
+    this.problem =
+      reason === "unreachable" || reason === "unavailable" || reason === "too-many" ? "offline" : reason === "signed-out" || reason === "no-folder" || reason === "not-arrived" ? reason : "failed";
     if (!(error instanceof CopyError) || reason === "failed" || reason === "damaged") this.log(`cloud copy: ${error instanceof Error ? error.message : String(error)}`);
     return this.problem;
   }
@@ -183,6 +205,7 @@ export class CopySync {
     try {
       this.key = await loadCopyKey(this.keyFile, this.options.encryptor);
       this.state = this.key ? await loadCopyState(this.stateFile) : EMPTY_STATE;
+      if (this.key) this.use(await loadPlace(this.placeFile));
       if (await this.takeStaged()) return;
       if (!this.key) return;
       let late = false;
@@ -208,7 +231,7 @@ export class CopySync {
    * staging folder. True when a copy is staged. A changed PC gets the keep-which-side question instead.
    */
   private async fetchNewer(): Promise<boolean> {
-    const remote = await this.options.cloud.remote();
+    const remote = await this.cloud.remote(this.state.version);
     if (!remote) {
       // The copy was deleted (on another PC): it is off here too.
       if (this.state.version > 0) await this.forget("deleted");
@@ -216,7 +239,8 @@ export class CopySync {
     }
     this.copy = { size: remote.size, savedAt: remote.updatedAt };
     if (remote.version === this.state.version) return false;
-    if (await hasLocalChanges(this.roots(), this.state)) {
+    // Changed here, or this PC's last save lost against another PC's (in a synced folder): the player chooses.
+    if (remote.follows === false || (await hasLocalChanges(this.roots(), this.state))) {
       this.conflict = true;
       this.changed();
       return false;
@@ -228,7 +252,7 @@ export class CopySync {
   /** Downloads the copy into the staging folder, to be taken at the next start. */
   private async stage(take: boolean): Promise<Staged | null> {
     await rm(this.stagingDir, { recursive: true, force: true });
-    const copy = await this.options.cloud.download(this.key!, this.roots(), this.stagedData);
+    const copy = await this.cloud.download(this.key!, this.roots(), this.stagedData);
     if (!copy) return null;
     const staged: Staged = { v: 1, ...copy, take };
     await writeFileAtomic(this.stagedFile, JSON.stringify(staged));
@@ -238,7 +262,7 @@ export class CopySync {
   /** The copy as it is now in the staging folder: the one staged already when it is still current, else downloaded. */
   private async stageCurrent(take: boolean): Promise<Staged | null> {
     const staged = await this.readStaged();
-    const remote = staged ? await this.options.cloud.remote() : null;
+    const remote = staged ? await this.cloud.remote() : null;
     if (!staged || !remote || remote.version !== staged.version) return this.stage(take);
     if (staged.take !== take) await writeFileAtomic(this.stagedFile, JSON.stringify({ ...staged, take }));
     return { ...staged, take };
@@ -316,7 +340,7 @@ export class CopySync {
       if (!this.on || (this.waiting && !loud)) return;
       await this.options.flush();
       try {
-        const result = await this.options.cloud.upload(this.key!, this.roots(), this.state, (done, total) => {
+        const result = await this.cloud.upload(this.key!, this.roots(), this.state, (done, total) => {
           this.progress = { done, total };
           this.changed();
         });
@@ -345,11 +369,19 @@ export class CopySync {
 
   // ── Settings ───────────────────────────────────────────────────────
 
-  /** Turns the copy on: a new key when the account has no copy yet, else the copy's recovery key is asked for. */
-  async turnOn(): Promise<void> {
+  /**
+   * Turns the copy on, on the service or in `folder`: a new key when there is no copy there yet, else the
+   * copy's recovery key is asked for.
+   */
+  async turnOn(folder: string | null = null): Promise<void> {
     if (this.on) return;
     if (!this.options.encryptor.isAvailable()) throw new PlayerError("cloudCopy.error.cantKeep");
-    const remote = await this.exclusive("checking", () => this.options.cloud.remote()).catch((error: unknown) => {
+    this.use(folder);
+    const remote = await this.exclusive("checking", async () => {
+      if (folder !== null) await checkFolder(folder);
+      return this.cloud.remote();
+    }).catch((error: unknown) => {
+      this.use(null);
       throw CopySync.playerError(this.noteProblem(error));
     });
     if (remote) {
@@ -360,6 +392,7 @@ export class CopySync {
     }
     const key = newCopyKey();
     await saveCopyKey(this.keyFile, this.options.encryptor, key);
+    await savePlace(this.placeFile, this.folder);
     this.key = key;
     this.state = EMPTY_STATE;
     this.shownKey = recoveryKey(key);
@@ -379,7 +412,7 @@ export class CopySync {
         // Deleted in the meantime: start a new copy instead.
         this.key = null;
         this.askKey = false;
-        return await this.turnOn();
+        return await this.turnOn(this.folder);
       }
     } catch (error) {
       this.key = null;
@@ -387,6 +420,7 @@ export class CopySync {
       throw CopySync.playerError(this.noteProblem(error));
     }
     await saveCopyKey(this.keyFile, this.options.encryptor, key);
+    await savePlace(this.placeFile, this.folder);
     this.state = EMPTY_STATE;
     await saveCopyState(this.stateFile, this.state);
     this.askKey = false;
@@ -398,6 +432,8 @@ export class CopySync {
 
   cancelKey(): void {
     this.askKey = false;
+    this.use(null);
+    this.copy = null;
     this.changed();
   }
 
@@ -465,9 +501,9 @@ export class CopySync {
     await this.forget(null);
   }
 
-  /** Deletes the copy on the service and turns it off here. */
+  /** Deletes the copy where it is kept and turns it off here. */
   async remove(): Promise<void> {
-    await this.exclusive("checking", () => this.options.cloud.remove()).catch((error: unknown) => {
+    await this.exclusive("checking", () => this.cloud.remove()).catch((error: unknown) => {
       throw CopySync.playerError(this.noteProblem(error));
     });
     await this.forget(null);
@@ -475,9 +511,9 @@ export class CopySync {
     this.changed();
   }
 
-  /** Signed out: the copy belongs to the account, so it is off here until turned on again. */
+  /** Signed out: a copy on the service belongs to the account, so it is off here until turned on again. A folder's stays on. */
   async signedOut(): Promise<void> {
-    if (this.on || this.askKey) await this.forget(null);
+    if (this.folder === null && (this.on || this.askKey)) await this.forget(null);
   }
 
   private async forget(problem: CloudCopyProblem | null): Promise<void> {
@@ -490,6 +526,8 @@ export class CopySync {
     this.problem = problem;
     await saveCopyKey(this.keyFile, this.options.encryptor, null);
     await rm(this.stateFile, { force: true });
+    await rm(this.placeFile, { force: true });
+    this.use(null);
     await rm(this.stagingDir, { recursive: true, force: true });
     this.changed();
   }
@@ -523,6 +561,17 @@ export class CopySync {
     this.closing = false;
     close();
   }
+}
+
+/** Where the copy is kept: a folder, or null for the service. */
+async function loadPlace(file: string): Promise<string | null> {
+  const saved = await readJson(file);
+  return saved?.v === 1 && typeof saved.folder === "string" && path.isAbsolute(saved.folder) ? saved.folder : null;
+}
+
+async function savePlace(file: string, folder: string | null): Promise<void> {
+  if (folder === null) await rm(file, { force: true });
+  else await writeFileAtomic(file, JSON.stringify({ v: 1, folder }));
 }
 
 async function readJson(file: string): Promise<Record<string, unknown> | null> {
