@@ -117,6 +117,11 @@ export class CopySync {
     return this.options.accountKey.get();
   }
 
+  /** The account's key, which the publisher keys use too (developer-keys.ts). */
+  get accountKey(): AccountKey {
+    return this.options.accountKey;
+  }
+
   get on(): boolean {
     return this.copyOn && this.key !== null;
   }

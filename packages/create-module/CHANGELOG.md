@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.7
+
+- New projects start on `@tavora/pack` 0.2.0: Tavora keeps the publisher key and signs `npm run zip` after you allow it.
+
 ## 0.1.5
 
 - New projects start on `@tavora/pack` 0.1.3, which can publish to the module catalog.

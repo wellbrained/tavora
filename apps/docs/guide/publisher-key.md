@@ -10,7 +10,13 @@ Every zip you share is signed with your publisher key. To Tavora, the key is who
 
 ## Where it is
 
-`tavora-pack` makes the key the first time you pack, in `~/.tavora/publisher-key.pem` (on Windows `C:\Users\<you>\.tavora\publisher-key.pem`). It never leaves your PC. Pass `--key <file>` to use a key somewhere else.
+Tavora keeps your publisher key for you. In Tavora, sign in under **Settings > Account**, choose a **developer name** under Module developer and press **Make a key**. Tavora seals the key in your account's vault with your recovery key and links it to your account, so players see your name. If your account has no recovery key yet, Tavora shows you one now: keep it somewhere safe.
+
+`tavora-pack` never sees the secret key. When you pack or publish, it asks Tavora on this PC to sign, and Tavora asks you first: it shows the module and its version, and signs only after you press **Allow**. Keep Tavora open while you pack.
+
+- **On another PC**, sign in to Tavora and type in your recovery key under Module developer. Your keys are there.
+- **Several keys?** Pick one with `--publisher <fingerprint>`; the first few characters are enough.
+- **A key from an older `tavora-pack`** in `~/.tavora/publisher-key.pem` still works: `tavora-pack` uses that file when it's there. Press **Add from a file** in Tavora to keep it there instead, then delete the file.
 
 ## Back it up
 
@@ -18,34 +24,37 @@ Every zip you share is signed with your publisher key. To Tavora, the key is who
 Lose the key and your next zip counts as a different publisher. Players can't install it over the old one, and if they remove the old one first, your module starts with none of their data.
 :::
 
-- Copy `publisher-key.pem` somewhere safe that isn't this PC: a password manager, an encrypted USB stick.
-- **Never share it** and never commit it. Whoever has it can publish updates as you. The key isn't in your project folder, and the starter's `.gitignore` keeps `*.pem` files out of git in case you put one there.
-- On a new PC, copy the file back to `~/.tavora/publisher-key.pem` before you pack.
+Your recovery key is the backup: with it, any PC signed in to your account gets your publisher keys back. Without it, nobody can open the vault, not even Tavora. Keep it in a password manager or written down somewhere safe.
 
-A lost or leaked key can be replaced by a new one only if it was [linked to your account](#show-your-name) before it was lost: see [A lost or leaked key](./publishing.md#a-lost-or-leaked-key). So link yours now.
+A lost or leaked key can be replaced by a new one only if it was linked to your account before it was lost: see [A lost or leaked key](./publishing.md#a-lost-or-leaked-key). Keys Tavora makes are linked at once.
+
+## Publishing from CI
+
+A build server can't click Allow. Press **Export** next to the key in Tavora to save it as a file, store it as a secret of your CI, and pass it with `--key <file>`. **Anyone with the file can publish as you**: never commit it, and export it only where you need it.
 
 ## Show your name
 
-Players see who signed a module as the key's fingerprint, a long hex code. Link your key to a Tavora account and they see "by *your name*" instead: in Settings > Modules, in the permissions dialog, and when they install your zip.
+Players see who signed a module as the key's fingerprint, a long hex code. With your key linked to your Tavora account they see "by *your name*" instead: in Settings > Modules, in the permissions dialog, and when they install your zip.
 
-1. In Tavora, sign in under **Settings > Account** and choose a **developer name** under Module developer. It is public and unique (case, spaces, dots, dashes and underscores don't count), and you can change it once every 30 days.
-2. Press **Link a publisher key**. Tavora shows a one-time code, valid for 10 minutes.
-3. Copy the command it shows and run it in a terminal, in any folder:
+Keys Tavora keeps are linked when you make or add them; if that failed, press **Link** next to the key. A developer name is public and unique (case, spaces, dots, dashes and underscores don't count), and you can change it once every 30 days.
+
+To link a key file instead (one you sign with `--key`):
+
+1. Press **Get a link code** under Module developer. Tavora shows a one-time code, valid for 10 minutes.
+2. Copy the command it shows and run it in a terminal, in any folder:
 
    ```sh
-   npx @tavora/pack link ABCD-EFGH
+   npx @tavora/pack link ABCD-EFGH --key <file>
    ```
 
-   In a module project, `npx tavora-pack link ABCD-EFGH` does the same. Pass `--key` if you sign with another key file.
-
-The command signs the code with your key and sends the signature and the key's public half; the secret key stays on your PC. An account can link several keys, and a key belongs to one account. You can unlink a key in Settings > Account.
+The key signs the code, and only the signature and the key's public half are sent. An account can link several keys, and a key belongs to one account. You can unlink a key in Settings > Account.
 
 The name is a label. What a player can install is still decided by the key's signature.
 
 ## Updates
 
 1. Raise `version` in `tavora.module.json` (and in `package.json`, to keep them the same). Tavora refuses a zip with the same or a lower version than the installed one.
-2. `npm run build`, then `npm run zip`, with the same key.
+2. `npm run build`, then `npm run zip`, signed with the same key.
 3. Send the new zip. Players install it with **Settings > Modules > Install zip**, over the old one, and keep their data.
 
 If the new version uses something from a newer SDK, raise [`minTavora`](../reference/manifest.md) too, so an older Tavora says it needs an update instead of loading a module it can't run. The [SDK changelog](../reference/changelog.md) says which Tavora each feature needs.

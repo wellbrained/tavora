@@ -2,7 +2,8 @@ import type { KeyObject } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { CHANGELOG_LIMITS, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
-import { signFiles, SIGNATURE_FILE } from "./signature.ts";
+import { fileHashes, SIGNATURE_FILE, signatureFile } from "./signature.ts";
+import { asSigner, type Signer } from "./signer.ts";
 import { isSafeEntryName, readZip, writeZip, ZIP_LIMITS, ZipError, type ZipFile } from "./zip.ts";
 
 export const MANIFEST_FILE = "tavora.module.json";
@@ -74,10 +75,13 @@ async function walk(root: string, folder: string): Promise<string[]> {
   return found;
 }
 
-/** Packs a module folder into a zip signed with the publisher's key. */
-export async function packModule(dir: string, key: KeyObject): Promise<{ manifest: ModuleManifest; zip: Buffer }> {
+/** Packs a module folder into a zip signed with the publisher's key, or by Tavora with one it keeps. */
+export async function packModule(dir: string, key: KeyObject | Signer): Promise<{ manifest: ModuleManifest; zip: Buffer }> {
   const { manifest, files } = await collectFiles(dir);
-  const zip = writeZip([...files, signFiles(files, key)]);
+  const signer = asSigner(key);
+  const hashes = fileHashes(files);
+  const manifestFile = files.find((file) => file.name === MANIFEST_FILE)!;
+  const zip = writeZip([...files, signatureFile(signer.publicKey, hashes, await signer.signPackage(hashes, manifestFile.data))]);
   if (zip.length > ZIP_LIMITS.maxArchiveBytes) throw new PackError("the zip is bigger than a module zip may be");
   try {
     readZip(zip);

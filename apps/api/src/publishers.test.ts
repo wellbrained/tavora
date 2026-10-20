@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -69,6 +69,7 @@ describe("the real tavora-pack link command", () => {
     await new Promise<void>((resolve) => server.once("listening", () => resolve()));
     const { port } = server.address() as AddressInfo;
     const keyFile = path.join(await mkdtemp(path.join(tmpdir(), "tavora-link-")), "publisher-key.pem");
+    await writeFile(keyFile, generateKeyPairSync("ed25519").privateKey.export({ format: "pem", type: "pkcs8" }));
     const cli = fileURLToPath(new URL("../../../packages/pack/src/cli.ts", import.meta.url));
     try {
       const run = (code: string) =>

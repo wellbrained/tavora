@@ -38,6 +38,14 @@ Check `error.code`, not the message. The codes are in the [protocol reference](.
 | `NETWORK_ERROR` | `network.fetch` got no answer: offline, unknown host, bad certificate or over 15 seconds. |
 | `TIMEOUT` | No answer within 10 seconds. |
 
+## Packing can't sign
+
+- **"Open Tavora on this PC"**: `tavora-pack` asks Tavora to sign. Start Tavora, sign in, and pack again. From CI, pass an [exported key](./publisher-key.md#publishing-from-ci) with `--key <file>`.
+- **"Tavora has no publisher key yet"**: press **Make a key** in Settings > Account > Module developer.
+- **"doesn't have your recovery key yet"**: type it in under Settings > Account > Module developer.
+- **"the request was turned down"**: you pressed Turn down, or nobody answered within 2 minutes. Pack again and press **Allow**.
+- **"more than one publisher key"**: pick one with `--publisher <fingerprint>`.
+
 ## Installing the zip fails
 
 - **"comes from a different publisher, so it can't replace it"**: the zip is signed with another key than the installed version. Sign it with your original key; see [Your publisher key](./publisher-key.md).

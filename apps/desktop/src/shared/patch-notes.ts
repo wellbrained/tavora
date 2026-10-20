@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.11",
+    date: "2026-10-20",
+    title: "Tavora keeps your publisher keys",
+    notes: [
+      "Module developers: make a publisher key under Settings > Account. Your recovery key keeps it safe, so there's no key file to back up.",
+      "tavora-pack asks Tavora to sign, and Tavora asks you first.",
+      "Export a key to publish from CI.",
+    ],
+  },
+  {
     version: "0.19.10",
     date: "2026-10-20",
     title: "One recovery key for your account",

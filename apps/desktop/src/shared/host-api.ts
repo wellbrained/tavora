@@ -185,6 +185,32 @@ export interface AccountView {
   linkCode: { code: string; expiresAt: string } | null;
 }
 
+/** A signature the pack command asked Tavora for, waiting for the developer's click. */
+export interface SignRequestView {
+  id: number;
+  /** "package": signing a module zip as it is packed; "publish": listing a packed zip in the catalog. */
+  kind: "package" | "publish";
+  fingerprint: string;
+  /** From the module's manifest. */
+  module: { id: string; name: string; version: string } | null;
+}
+
+/**
+ * Settings > Account > Module developer: the publisher keys Tavora keeps in the account's key vault, and
+ * the pack command's sign request. Sent on its own channel; the keys themselves stay in the main process.
+ */
+export interface DeveloperKeysView {
+  /**
+   * "ready": the keys are read. "none": the account has no key yet (making a publisher key makes it, and
+   * shows its recovery key). "ask": another PC made it; its recovery key is typed in here first.
+   */
+  status: "loading" | "ready" | "none" | "ask" | "signed-out" | "offline";
+  keys: { fingerprint: string }[];
+  /** The account's recovery key, made just now: shown once. */
+  recoveryKey: string | null;
+  request: SignRequestView | null;
+}
+
 /** Why the cloud copy could not sync last time, worded by the host UI. */
 export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "new-key";
 
@@ -672,6 +698,14 @@ export type HostAction =
   /** Copies `tavora-pack link <code>` for the code shown now. */
   | { type: "account-copy-link-command" }
   | { type: "account-unlink-key"; fingerprint: string }
+  | { type: "developer-key-create" }
+  | { type: "developer-key-add" }
+  | { type: "developer-key-export"; fingerprint: string }
+  | { type: "developer-key-link"; fingerprint: string }
+  | { type: "developer-recovery-key"; key: string }
+  | { type: "developer-recovery-key-saved" }
+  | { type: "developer-copy-recovery-key" }
+  | { type: "developer-sign-answer"; id: number; allow: boolean }
   /** Settings > Account > Cloud copy. Turning on makes a key, or asks for the one of a copy that exists. */
   | { type: "cloud-copy-on" }
   | { type: "cloud-copy-key"; key: string }
@@ -873,6 +907,8 @@ export interface TavoraHostApi {
   onAccount(listener: (view: AccountView) => void): void;
   getCloudCopy(): Promise<CloudCopyView | null>;
   onCloudCopy(listener: (view: CloudCopyView) => void): void;
+  getDeveloperKeys(): Promise<DeveloperKeysView | null>;
+  onDeveloperKeys(listener: (view: DeveloperKeysView) => void): void;
   /** A module asked for a menu (or null: close the one shown). */
   onModuleMenu(listener: (menu: ModuleMenu | null) => void): void;
   /** The player chose an item of the module menu, or closed it (null). */

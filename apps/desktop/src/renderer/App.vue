@@ -3,6 +3,7 @@ import { TooltipProvider } from "reka-ui";
 import AddGameDialog from "./components/AddGameDialog.vue";
 import AddModuleDialog from "./components/AddModuleDialog.vue";
 import CloudCopyDialog from "./components/CloudCopyDialog.vue";
+import SignRequestDialog from "./components/SignRequestDialog.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import GrantDialog from "./components/GrantDialog.vue";
 import LinkChoiceDialog from "./components/LinkChoiceDialog.vue";
@@ -50,6 +51,7 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <GrantDialog v-else-if="dialog?.kind === 'grant'" :key="dialog.moduleId" :request="dialog" />
     <ModuleMenu />
     <CloudCopyDialog />
+    <SignRequestDialog />
 
     <!-- Over the toolbar: module panels are native views drawn above this
          page, so anything lower would be hidden behind them. -->

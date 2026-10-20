@@ -2,13 +2,15 @@
 // its test inbox, and the app reading the code out of the "mail". Discord login
 // runs against a pretend Discord: its sign-in page sends the app straight back.
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { generateKeyPairSync } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer, type Server } from "node:http";
 import { createServer } from "node:net";
 import os, { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { desktopDir, launch } from "./harness";
+import { readZip, verifyFiles } from "@tavora/pack";
+import { desktopDir, launch, signerAddressFor } from "./harness";
 
 const apiDir = path.resolve(desktopDir, "../api");
 let service: ChildProcess | undefined;
@@ -178,9 +180,21 @@ test("a player creates a Discord-only account in the browser, adds an email, and
     await app.close();
   }
 });
-test("a developer chooses a public name and links a publisher key with tavora-pack link", async () => {
+/** Runs the real pack command from its sources. */
+function tavoraPack(args: string[], env: Record<string, string> = {}): Promise<{ status: number | null; out: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "--conditions=source", path.resolve(desktopDir, "../../packages/pack/src/cli.ts"), ...args], { env: { ...process.env, ...env } });
+    let out = "";
+    child.stdout.on("data", (chunk: Buffer) => (out += chunk));
+    child.stderr.on("data", (chunk: Buffer) => (out += chunk));
+    child.on("close", (status) => resolve({ status, out }));
+  });
+}
+
+test("a developer chooses a public name and links a key file with tavora-pack link", async () => {
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: apiUrl } });
   const keyFile = path.join(await mkdtemp(path.join(tmpdir(), "tavora-key-")), "publisher-key.pem");
+  await writeFile(keyFile, generateKeyPairSync("ed25519").privateKey.export({ format: "pem", type: "pkcs8" }));
   try {
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-account").click();
@@ -210,13 +224,7 @@ test("a developer chooses a public name and links a publisher key with tavora-pa
     const code = command.split(" ").at(-1)!;
 
     // The real pack command signs the code with a key on this PC and sends only its public half.
-    const linked = await new Promise<{ status: number | null; out: string }>((resolve) => {
-      const child = spawn(process.execPath, ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "--conditions=source", path.resolve(desktopDir, "../../packages/pack/src/cli.ts"), "link", code, "--key", keyFile, "--api", apiUrl]);
-      let out = "";
-      child.stdout.on("data", (chunk: Buffer) => (out += chunk));
-      child.stderr.on("data", (chunk: Buffer) => (out += chunk));
-      child.on("close", (status) => resolve({ status, out }));
-    });
+    const linked = await tavoraPack(["link", code, "--key", keyFile, "--api", apiUrl]);
     expect(linked.out).toContain('"by example-dev"');
     expect(linked.status).toBe(0);
     const fingerprint = /Linked publisher key ([0-9a-f]{32})/.exec(linked.out)?.[1] ?? "";
@@ -229,6 +237,56 @@ test("a developer chooses a public name and links a publisher key with tavora-pa
   } finally {
     await app.close();
     await rm(path.dirname(keyFile), { recursive: true, force: true }).catch(() => undefined);
+  }
+});
+
+test("Tavora keeps a developer's publisher key and signs for tavora-pack after a click", async () => {
+  // A pretend Discord app turns on the test key store on Linux, which has no keyring here; the account's key needs one.
+  const { app, page, userData } = await launch(undefined, [], {
+    env: { TAVORA_API_URL: apiUrl, TAVORA_DISCORD_IPC: path.join(tmpdir(), "tavora-no-discord"), TAVORA_DISCORD_TOKEN_URL: `${discordUrl}/api/oauth2/token` },
+  });
+  const project = await mkdtemp(path.join(tmpdir(), "tavora-module-"));
+  // No key file in this home: tavora-pack must ask Tavora.
+  const home = await mkdtemp(path.join(tmpdir(), "tavora-home-"));
+  const env = { TAVORA_SIGNER_ADDRESS: signerAddressFor(userData), HOME: home, USERPROFILE: home };
+  try {
+    await mkdir(path.join(project, "dist"));
+    await writeFile(path.join(project, "dist", "index.html"), "<p>hi</p>");
+    const manifest = { id: "exampledev.tracker", name: "Tracker", version: "1.0.0", apiVersion: "1", entry: "dist/index.html", games: [], viewport: { minWidth: 100, minHeight: 100 }, permissions: { network: [] } };
+    await writeFile(path.join(project, "tavora.module.json"), JSON.stringify(manifest));
+
+    await signIn(page, "keeper@example.com", true);
+    await expect(page.getByTestId("developer-key-create")).toBeDisabled();
+    await page.getByTestId("account-developer-name").fill("key-keeper");
+    await page.getByTestId("account-developer-save").click();
+    await expect(page.getByTestId("developer-keys-none")).toBeVisible();
+    await page.getByTestId("developer-key-create").click();
+    // The account had no key yet: its recovery key is shown once, and the new key is linked.
+    await expect(page.getByTestId("developer-recovery-key-text")).toHaveText(/^[0-9A-Z-]{40,}$/);
+    await page.getByTestId("developer-recovery-key-saved").click();
+    const kept = page.getByTestId("developer-keys-list").locator("li");
+    await expect(kept).toHaveCount(1);
+    const fingerprint = ((await kept.getAttribute("data-testid")) ?? "").replace("developer-key-", "");
+    await expect(page.getByTestId(`account-key-${fingerprint}`)).toBeVisible();
+
+    // Turned down: nothing is signed.
+    const out = path.join(project, "out.zip");
+    let packing = tavoraPack([project, "--out", out], env);
+    await page.getByTestId("sign-refuse").click();
+    expect((await packing).out).toContain("turned down");
+
+    packing = tavoraPack([project, "--out", out], env);
+    await expect(page.getByTestId("sign-request")).toContainText("Sign Tracker 1.0.0?");
+    await expect(page.getByTestId("sign-request")).toContainText("exampledev.tracker");
+    await page.getByTestId("sign-allow").click();
+    const packed = await packing;
+    expect(packed.status, packed.out).toBe(0);
+    expect(verifyFiles(readZip(await readFile(out)))).toEqual({ ok: true, owner: fingerprint, signed: true });
+    await expect(page.getByTestId("sign-request")).toHaveCount(0);
+  } finally {
+    await app.close();
+    await rm(project, { recursive: true, force: true }).catch(() => undefined);
+    await rm(home, { recursive: true, force: true }).catch(() => undefined);
   }
 });
 

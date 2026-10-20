@@ -1,7 +1,7 @@
 {
   "name": "@tavora/pack",
-  "version": "0.1.3",
-  "description": "Packs a Tavora module into a zip signed with your publisher key, links the key to your Tavora account, publishes to the module catalog, and reads and checks such zips.",
+  "version": "0.2.0",
+  "description": "Packs a Tavora module into a zip signed with your publisher key (Tavora keeps it and signs for you), publishes to the module catalog, and reads and checks such zips.",
   "type": "module",
   "keywords": [
     "tavora",

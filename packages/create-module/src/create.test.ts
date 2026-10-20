@@ -37,7 +37,7 @@ describe("createModule", () => {
     expect(await readFile(path.join(dir, "src/index.html"), "utf8")).toContain("<title>Cool &quot;Module&quot; &lt;1&gt;</title>");
     const readme = await readFile(path.join(dir, "README.md"), "utf8");
     expect(readme).toContain("pnpm dev");
-    expect(readme).toContain("pnpm exec tavora-pack link");
+    expect(readme).toContain("pnpm exec tavora-pack . --key");
     for (const file of files) {
       const text = await readFile(path.join(dir, file), "utf8");
       // Vue templates use {{ name }} with spaces; ours never have them.
@@ -49,7 +49,7 @@ describe("createModule", () => {
     await createModule({ dir: root, id: "example.notes", name: "Notes", template: "vanilla" });
     const readme = await readFile(path.join(root, "README.md"), "utf8");
     expect(readme).toContain("npm run dev");
-    expect(readme).toContain("npx tavora-pack link");
+    expect(readme).toContain("npx tavora-pack . --key");
   });
 
   it("keeps Vue's own template braces", async () => {
