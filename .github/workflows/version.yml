@@ -1,8 +1,9 @@
 name: Version
 
-# Work in progress raises only the patch number. A pull request that raises the
-# minor or major number of the app needs the `feature-complete` label, which
-# only the maintainer adds (the decision log, 2026-10-16). Runs again when labels change.
+# A pull request leaves the app version alone and brings a change note in
+# apps/desktop/changes/ instead; main gives out the number when it merges (number.yml).
+# A note that raises the minor or major number needs the `feature-complete` label,
+# which only the maintainer adds (the decision log, 2026-10-16). Runs again when labels change.
 on:
   pull_request:
     branches: [main]
@@ -22,11 +23,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - name: Check the version change
+      - name: Check the version and change notes
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           LABELED: ${{ contains(github.event.pull_request.labels.*.name, 'feature-complete') }}
-        run: |
-          base=$(git show "$BASE_SHA:apps/desktop/package.json" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')
-          head=$(node -p 'require("./apps/desktop/package.json").version')
-          node apps/desktop/scripts/version-bump.mjs "$base" "$head" "$LABELED"
+        run: node apps/desktop/scripts/change-notes.mjs check "$BASE_SHA" "$LABELED"
