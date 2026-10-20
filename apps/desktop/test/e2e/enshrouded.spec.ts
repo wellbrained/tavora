@@ -127,6 +127,8 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
     expect(tooltipBounds.right).toBeLessThanOrEqual(tooltipBounds.width-8);
     expect(tooltipBounds.bottom).toBeLessThanOrEqual(tooltipBounds.height-8);
     expect(await inModule(app, ID, 'getComputedStyle(document.querySelector(".skill-card-body p")).fontWeight')).toBe("400");
+    expect(await inModule(app, ID, 'getComputedStyle(document.querySelector(".skill-card-body p")).fontFamily')).toMatch(/Inter/);
+    expect(await inModule(app, ID, 'getComputedStyle(document.querySelector("#skill-card-title")).fontFamily')).toMatch(/Inter/);
     expect(await inModule(app, ID, 'document.querySelectorAll("#tree title").length')).toBe(0);
     await capture('enshrouded-skill-tooltip.png');
     await inModule(app, ID, 'document.querySelectorAll("[data-node]")[1].dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
