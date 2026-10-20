@@ -114,6 +114,11 @@ export class AccountKey {
   async enter(text: string): Promise<void> {
     const key = parseRecoveryKey(text);
     if (!key) throw new PlayerError("cloudCopy.error.badKey");
+    await this.take(key);
+  }
+
+  /** The account's key, typed in as the recovery key or sent by another PC (pairing.ts): checked against the vault, then kept. */
+  async take(key: Buffer): Promise<void> {
     const vault = await this.vault();
     if (vault && !opens(key, vault.data)) throw new PlayerError("cloudCopy.error.wrongKey");
     // No vault (the account started over, or it was never made): the typed key becomes the account's.
@@ -188,6 +193,11 @@ export class AccountKey {
   async enterHere(text: string): Promise<void> {
     const key = parseRecoveryKey(text);
     if (!key) throw new PlayerError("cloudCopy.error.badKey");
+    await this.save(key);
+  }
+
+  /** Signed out: the key another PC sent through the folder (pairing.ts) is kept here, like one typed in. */
+  async takeHere(key: Buffer): Promise<void> {
     await this.save(key);
   }
 

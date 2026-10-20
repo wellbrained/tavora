@@ -225,6 +225,25 @@ export interface DeveloperKeysView {
   request: SignRequestView | null;
 }
 
+/**
+ * Approving a new PC from an old one, instead of typing the recovery key. Sent on its own channel; the
+ * keys stay in the main process.
+ */
+export interface PairingView {
+  /** This PC asks another one for the account's key. */
+  asking: {
+    /** Through Tavora's service (signed in), or the cloud copy's folder (signed out), which can take minutes. */
+    via: "service" | "folder";
+    /** "code": another PC answered; both show `code`. The rest end it: the player starts again or types the key in. */
+    step: "waiting" | "code" | "declined" | "expired" | "failed";
+    code: string | null;
+    /** The name of the PC that answered. */
+    from: string | null;
+  } | null;
+  /** Another PC asks this one: "Add <name>?", with the code both show. */
+  approve: { id: string; name: string | null; code: string } | null;
+}
+
 /** Why the cloud copy could not sync last time, worded by the host UI. */
 export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "new-key" | "no-folder" | "not-arrived";
 
@@ -728,6 +747,11 @@ export type HostAction =
   | { type: "developer-show-recovery-key" }
   | { type: "developer-copy-recovery-key" }
   | { type: "developer-sign-answer"; id: number; allow: boolean }
+  /** Asks another PC of the account for its key, instead of typing the recovery key. */
+  | { type: "pairing-start" }
+  | { type: "pairing-cancel" }
+  /** The player's answer to "Add <PC>?". */
+  | { type: "pairing-decide"; id: string; allow: boolean }
   /** Settings > Account > Cloud copy. Turning on makes a key, or asks for the one of a copy that exists. */
   | { type: "cloud-copy-on" }
   /** Turns the copy on in a folder the player picks in the system's dialog. */
@@ -935,6 +959,8 @@ export interface TavoraHostApi {
   onCloudCopy(listener: (view: CloudCopyView) => void): void;
   getDeveloperKeys(): Promise<DeveloperKeysView | null>;
   onDeveloperKeys(listener: (view: DeveloperKeysView) => void): void;
+  getPairing(): Promise<PairingView | null>;
+  onPairing(listener: (view: PairingView) => void): void;
   /** A module asked for a menu (or null: close the one shown). */
   onModuleMenu(listener: (menu: ModuleMenu | null) => void): void;
   /** The player chose an item of the module menu, or closed it (null). */

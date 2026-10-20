@@ -338,6 +338,11 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("key") && text(a.key, 200) ? { type: a.type, key: a.key } : null;
     case "developer-sign-answer":
       return only("id", "allow") && Number.isSafeInteger(a.id) && typeof a.allow === "boolean" ? { type: a.type, id: a.id as number, allow: a.allow } : null;
+    case "pairing-start":
+    case "pairing-cancel":
+      return only() ? { type: a.type } : null;
+    case "pairing-decide":
+      return only("id", "allow") && typeof a.id === "string" && /^[A-Za-z0-9_-]{16}$/.test(a.id) && typeof a.allow === "boolean" ? { type: a.type, id: a.id, allow: a.allow } : null;
     case "cloud-copy-on":
     case "cloud-copy-on-folder":
     case "cloud-copy-cancel":

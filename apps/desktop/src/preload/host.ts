@@ -1,7 +1,7 @@
 // Preload for the trusted host UI. Exposes a small, fixed API; the main
 // process still checks that every call comes from the host window.
 import { contextBridge, ipcRenderer } from "electron";
-import type { AccountView, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostShortcut, HostViewState, ModuleMenu, TavoraHostApi } from "../shared/host-api";
+import type { AccountView, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, PairingView, HostShortcut, HostViewState, ModuleMenu, TavoraHostApi } from "../shared/host-api";
 
 const api: TavoraHostApi = {
   getState: () => ipcRenderer.invoke("host:get-state"),
@@ -44,6 +44,10 @@ const api: TavoraHostApi = {
   getDeveloperKeys: () => ipcRenderer.invoke("host:get-developer-keys"),
   onDeveloperKeys: (listener) => {
     ipcRenderer.on("host:developer-keys", (_event, view: DeveloperKeysView) => listener(view));
+  },
+  getPairing: () => ipcRenderer.invoke("host:get-pairing"),
+  onPairing: (listener) => {
+    ipcRenderer.on("host:pairing", (_event, view: PairingView) => listener(view));
   },
   onModuleMenu: (listener) => {
     ipcRenderer.on("host:module-menu", (_event, menu: ModuleMenu | null) => listener(menu));

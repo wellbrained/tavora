@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Settings > Account > Recovery key: the one key the player keeps. It opens the cloud copy and the
-// publisher keys Tavora keeps, and a new PC asks for it once. The key stays in the main process,
+// publisher keys Tavora keeps. A new PC gets it from another PC, or asks for it once. The key stays in the main process,
 // except while the player looks at it here.
 import { computed, ref } from "vue";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import type { HostAction } from "../../../shared/host-api";
 import { act, developerKeys, showToast } from "../../host";
 import { t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
+import PairingAsk from "./PairingAsk.vue";
 import SettingRow from "./SettingRow.vue";
 
 const view = computed(() => developerKeys.value);
@@ -45,6 +46,8 @@ async function enter() {
 
     <form v-else-if="view.status === 'ask'" class="flex flex-col gap-3 py-4" @submit.prevent="keyText.trim() && enter()">
       <span class="text-muted-foreground">{{ t("recoveryKey.ask") }}</span>
+      <PairingAsk />
+      <span class="text-muted-foreground text-sm">{{ t("pairing.typeKey") }}</span>
       <div class="flex gap-2">
         <Input v-model="keyText" class="max-w-120 font-mono" maxlength="200" autocomplete="off" spellcheck="false" :aria-label="t('cloudCopy.askKey.label')" data-testid="recovery-key-input" />
         <Button type="submit" :disabled="busy || !keyText.trim()" data-testid="recovery-key-submit">{{ t("cloudCopy.askKey.continue") }}</Button>

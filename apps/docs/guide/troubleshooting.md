@@ -42,7 +42,7 @@ Check `error.code`, not the message. The codes are in the [protocol reference](.
 
 - **"Open Tavora on this PC"**: `tavora-pack` asks Tavora to sign. Start Tavora, sign in, and pack again. From CI, pass an [exported key](./publisher-key.md#publishing-from-ci) with `--key <file>`.
 - **"Tavora has no publisher key yet"**: press **Make a key** in Settings > Account > Module developer.
-- **"doesn't have your recovery key yet"**: type it in under Settings > Account > Recovery key.
+- **"doesn't have your recovery key yet"**: get it from your other PC, or type it in, under Settings > Account > Recovery key.
 - **"the request was turned down"**: you pressed Turn down, or nobody answered within 2 minutes. Pack again and press **Allow**.
 - **"more than one publisher key"**: pick one with `--publisher <fingerprint>`.
 
