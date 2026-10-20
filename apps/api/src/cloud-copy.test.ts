@@ -121,6 +121,26 @@ describe("the cloud copy", () => {
     expect(await (await copy("PUT", "", token, swapBody(1, [a.id], new Uint8Array([2])))).json()).toEqual({ version: 2, size: 101 });
   });
 
+  it("never numbers a new copy like a deleted one, so a PC that missed the delete can't write over it", async () => {
+    const { copy, signIn, copies, store } = setup();
+    const token = await signIn("me@example.com");
+    const a = part();
+    await copy("POST", "/parts", token, writeParts([a]));
+    await copy("PUT", "", token, swapBody(0, [a.id], new Uint8Array([1])));
+    await copy("PUT", "", token, swapBody(1, [a.id], new Uint8Array([2])));
+    await copy("DELETE", "", token);
+    // Another PC starts a new copy: it goes on from the deleted one's number.
+    await copy("POST", "/parts", token, writeParts([a]));
+    expect(await (await copy("PUT", "", token, swapBody(0, [a.id], new Uint8Array([3])))).json()).toMatchObject({ version: 3 });
+    // A PC that last saw version 2 of the deleted copy is refused.
+    expect((await copy("PUT", "", token, swapBody(2, [a.id], new Uint8Array([4])))).status).toBe(409);
+    // A deleted account takes the number with it.
+    const accountId = store.sessionByToken(token, Date.now())!.accountId;
+    copies.remove(accountId, true);
+    expect(copies.info(accountId)).toBeNull();
+    expect(copies.swap(accountId, 0, new Uint8Array([5]), [], Date.now())).toMatchObject({ ok: true, version: 1 });
+  });
+
   it("refuses a version whose parts are missing, and drops parts no version uses", async () => {
     const { copy, signIn, copies, store } = setup();
     const token = await signIn("me@example.com");
