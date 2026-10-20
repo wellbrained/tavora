@@ -242,6 +242,13 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     return {
       developer: developer ? { name: developer.name, changedAt: new Date(developer.changedAt).toISOString(), nextChangeAt: new Date(developer.changedAt + NAME_HOLD_MS).toISOString() } : null,
       keys: store.keys(accountId),
+      publishTokens: store.publishTokens(accountId, now()).map((token) => ({
+        id: token.id,
+        name: token.name,
+        createdAt: new Date(token.createdAt).toISOString(),
+        expiresAt: new Date(token.expiresAt).toISOString(),
+        lastUsedAt: token.lastUsedAt === null ? null : new Date(token.lastUsedAt).toISOString(),
+      })),
     };
   };
 
@@ -265,6 +272,23 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (!store.developer(account.id)) return context.json({ error: "Choose a developer name first.", reason: "no-developer-name" }, 409);
     const { code, expiresAt } = store.linkCode(account.id, now());
     return context.json({ code, expiresAt: new Date(expiresAt).toISOString() });
+  });
+
+  // A token for publishing from CI, shown this once; the service keeps only its hash.
+  signedIn.post("/publish-tokens", async (context) => {
+    const account = context.get("account");
+    const raw = (await body(context)).name;
+    const name = typeof raw === "string" ? raw.trim() : "";
+    if (!name || name.length > 40 || /[\u0000-\u001f\u007f]/.test(name)) return context.json({ error: "A token's name is 1 to 40 characters.", reason: "bad-name" }, 400);
+    if (!store.developer(account.id)) return context.json({ error: "Choose a developer name first.", reason: "no-developer-name" }, 409);
+    const created = store.createPublishToken(account.id, name, now());
+    if (!created) return context.json({ error: "This account has as many publish tokens as it can. Remove one first.", reason: "too-many-tokens" }, 409);
+    return context.json({ token: created.token, ...developerAnswer(account.id) }, 201);
+  });
+
+  signedIn.delete("/publish-tokens/:id", (context) => {
+    if (!store.deletePublishToken(context.get("account").id, context.req.param("id") ?? "")) return context.json({ error: "Not found.", reason: "not-found" }, 404);
+    return context.json(developerAnswer(context.get("account").id));
   });
 
   signedIn.delete("/keys/:fingerprint", (context) => {

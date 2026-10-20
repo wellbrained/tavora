@@ -180,6 +180,16 @@ test("a player creates a Discord-only account in the browser, adds an email, and
     await app.close();
   }
 });
+/** A built module's folder, ready for the pack command. */
+async function moduleProject(id: string): Promise<string> {
+  const project = await mkdtemp(path.join(tmpdir(), "tavora-module-"));
+  await mkdir(path.join(project, "dist"));
+  await writeFile(path.join(project, "dist", "index.html"), "<p>hi</p>");
+  const manifest = { id, name: "Tracker", version: "1.0.0", apiVersion: "1", entry: "dist/index.html", games: [], viewport: { minWidth: 100, minHeight: 100 }, permissions: { network: [] } };
+  await writeFile(path.join(project, "tavora.module.json"), JSON.stringify(manifest));
+  return project;
+}
+
 /** Runs the real pack command from its sources. */
 function tavoraPack(args: string[], env: Record<string, string> = {}): Promise<{ status: number | null; out: string }> {
   return new Promise((resolve) => {
@@ -195,6 +205,7 @@ test("a developer chooses a public name and links a key file with tavora-pack li
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: apiUrl } });
   const keyFile = path.join(await mkdtemp(path.join(tmpdir(), "tavora-key-")), "publisher-key.pem");
   await writeFile(keyFile, generateKeyPairSync("ed25519").privateKey.export({ format: "pem", type: "pkcs8" }));
+  const project = await moduleProject("keyfile.tracker");
   try {
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-account").click();
@@ -234,27 +245,40 @@ test("a developer chooses a public name and links a key file with tavora-pack li
     await expect(page.getByTestId("account-link")).toHaveCount(0);
     // Players' Tavora learns the name, and nothing else.
     expect(await (await fetch(`${apiUrl}/v1/publishers/${fingerprint}`)).json()).toEqual({ name: "example-dev" });
+
+    // The key file alone publishes nothing: it needs a publish token, made here and shown once.
+    const out = path.join(project, "out.zip");
+    const packed = await tavoraPack([project, "--key", keyFile, "--out", out]);
+    expect(packed.status, packed.out).toBe(0);
+    const keyOnly = await tavoraPack(["publish", out, "--key", keyFile, "--api", apiUrl], { TAVORA_PUBLISH_TOKEN: "" });
+    expect(keyOnly.out).toContain("Publishing needs your Tavora account");
+    await page.getByTestId("publish-token-name").fill("GitHub Actions");
+    await page.getByTestId("publish-token-create").click();
+    const secret = (await page.getByTestId("publish-token-secret").textContent()) ?? "";
+    expect(secret).toMatch(/^tvp_/);
+    await page.getByTestId("publish-token-done").click();
+    await expect(page.getByTestId("publish-token-secret")).toHaveCount(0);
+    await expect(page.getByTestId("publish-tokens-list")).toContainText("GitHub Actions");
+    // A token publishes only under prefixes the account has; this one is new.
+    const withToken = await tavoraPack(["publish", out, "--key", keyFile, "--api", apiUrl], { TAVORA_PUBLISH_TOKEN: secret });
+    expect(withToken.out).toContain("Publish this module's first version from Tavora");
   } finally {
     await app.close();
     await rm(path.dirname(keyFile), { recursive: true, force: true }).catch(() => undefined);
+    await rm(project, { recursive: true, force: true }).catch(() => undefined);
   }
 });
 
-test("Tavora keeps a developer's publisher key and signs for tavora-pack after a click", async () => {
+test("Tavora keeps a developer's publisher key, and signs and publishes for tavora-pack after a click", async () => {
   // A pretend Discord app turns on the test key store on Linux, which has no keyring here; the account's key needs one.
   const { app, page, userData } = await launch(undefined, [], {
     env: { TAVORA_API_URL: apiUrl, TAVORA_DISCORD_IPC: path.join(tmpdir(), "tavora-no-discord"), TAVORA_DISCORD_TOKEN_URL: `${discordUrl}/api/oauth2/token` },
   });
-  const project = await mkdtemp(path.join(tmpdir(), "tavora-module-"));
+  const project = await moduleProject("exampledev.tracker");
   // No key file in this home: tavora-pack must ask Tavora.
   const home = await mkdtemp(path.join(tmpdir(), "tavora-home-"));
   const env = { TAVORA_SIGNER_ADDRESS: signerAddressFor(userData), HOME: home, USERPROFILE: home };
   try {
-    await mkdir(path.join(project, "dist"));
-    await writeFile(path.join(project, "dist", "index.html"), "<p>hi</p>");
-    const manifest = { id: "exampledev.tracker", name: "Tracker", version: "1.0.0", apiVersion: "1", entry: "dist/index.html", games: [], viewport: { minWidth: 100, minHeight: 100 }, permissions: { network: [] } };
-    await writeFile(path.join(project, "tavora.module.json"), JSON.stringify(manifest));
-
     await signIn(page, "keeper@example.com", true);
     await expect(page.getByTestId("developer-key-create")).toBeDisabled();
     await page.getByTestId("account-developer-name").fill("key-keeper");
@@ -288,6 +312,20 @@ test("Tavora keeps a developer's publisher key and signs for tavora-pack after a
     expect(packed.status, packed.out).toBe(0);
     expect(verifyFiles(readZip(await readFile(out)))).toEqual({ ok: true, owner: fingerprint, signed: true });
     await expect(page.getByTestId("sign-request")).toHaveCount(0);
+
+    // Publishing: Tavora asks, then uploads with its own sign-in, and the account hears about it by email.
+    const publishing = tavoraPack(["publish", out], env);
+    await expect(page.getByTestId("sign-request")).toContainText("Publish Tracker 1.0.0?");
+    await page.getByTestId("sign-allow").click();
+    const published = await publishing;
+    expect(published.status, published.out).toBe(0);
+    expect(published.out).toContain("Published exampledev.tracker 1.0.0");
+    await expect
+      .poll(async () => {
+        const { mails } = (await (await fetch(`${inboxUrl}/mails`)).json()) as { mails: { to: string; text: string }[] };
+        return mails.some((mail) => mail.to === "keeper@example.com" && mail.text.includes("(exampledev.tracker) is now in Tavora's module catalog"));
+      })
+      .toBe(true);
   } finally {
     await app.close();
     await rm(project, { recursive: true, force: true }).catch(() => undefined);

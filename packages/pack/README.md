@@ -28,10 +28,17 @@ Players install the zip with **Settings > Modules > Install from zip**.
 
 ## Publish
 
-`tavora-pack publish <file.zip> [--key <key file> | --publisher <fingerprint>]` lists the zip in Tavora's module catalog, where players find it under **Browse** in the module library. The key must be linked to your account. The command sends the zip and the signature over its SHA-256 by the key that packed it, so only you can publish what you packed, even after you shared the zip by hand.
+`tavora-pack publish <file.zip> [--key <key file> | --publisher <fingerprint>]` lists the zip in Tavora's module catalog, where players find it under **Browse** in the module library. The key must be linked to your account, and publishing needs the account too: with a key Tavora keeps, Tavora uploads the zip with your sign-in once you press **Allow**. With a key file (CI), set `TAVORA_PUBLISH_TOKEN` to a publish token from **Settings > Account > Module developer > Publish tokens**:
+
+```sh
+TAVORA_PUBLISH_TOKEN=tvp_… npx tavora-pack publish <id>-<version>.zip --key <key file>
+```
+
+The upload carries the signature over the zip's SHA-256 by the key that packed it, so only you can publish what you packed, even after you shared the zip by hand. Your account's email address gets a mail for every upload.
 
 - The part of the module id before the first dot (`wellbrained` in `wellbrained.timer`) is your prefix. The first time you publish under a prefix it becomes yours, and nobody else can publish under it. An account holds at most 3; prefixes with `tavora` and a few other reserved words are refused.
 - A module stays with the key that published its first version. Every new version must be newer.
+- A publish token publishes only under prefixes your account has, so publish a module's first version from Tavora. A token works for a year.
 - An account can publish 10 versions a day and store 200 MB of zips.
 - The catalog checks each zip the way Tavora's installer does, and Tavora checks it again on the player's PC.
 

@@ -4,7 +4,7 @@ import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { fingerprint, packModule, publishZip, rawPublicKey, readZip, signedBytes, SignerError, tavoraSigner, verifyFiles, type SignerAnswer, type SignerRequest } from "./index.ts";
+import { fingerprint, packModule, PublishError, publishZip, rawPublicKey, readZip, signedBytes, SignerError, tavoraSigner, verifyFiles, type SignerAnswer, type SignerRequest } from "./index.ts";
 
 const servers: Server[] = [];
 afterEach(() => {
@@ -81,22 +81,23 @@ describe("tavoraSigner", () => {
     await expect(failure).rejects.toThrow(/turned down/);
   });
 
-  it("publishes with Tavora's signature over the zip", async () => {
+  it("hands the zip to Tavora, which signs and uploads it signed in, and says why it was refused", async () => {
     const { zip } = await packModule(await moduleFolder(), privateKey);
+    let refuse = false;
     const tavora = await fakeTavora((request) => {
       if (request.op === "keys") return { ok: true, keys: [{ publicKey }] };
-      if (request.op !== "sign-publish") return { ok: false, reason: "bad-request" };
-      return { ok: true, signature: "c2lnbmVk" };
+      if (request.op !== "publish") return { ok: false, reason: "bad-request" };
+      return refuse ? { ok: false, reason: "publish-refused", error: "wellbrained.tracker already has 1.0.0; a new version must be newer." } : { ok: true, published: { id: "wellbrained.tracker", version: "1.0.0", sha256: "x" } };
     });
     const signer = (await tavoraSigner({ address: tavora.address }))!;
-    let header: string | null = null;
-    const fake = (async (_url: string, init: RequestInit) => {
-      header = new Headers(init.headers).get("x-tavora-signature");
-      return new Response(JSON.stringify({ id: "wellbrained.tracker", version: "1.0.0", sha256: "x" }), { status: 200 });
+    const nothing = (async () => {
+      throw new Error("tavora-pack never uploads itself here");
     }) as unknown as typeof fetch;
-    await publishZip({ key: signer, zip, fetch: fake });
-    expect(header).toBe("c2lnbmVk");
+    expect(await publishZip({ key: signer, zip, fetch: nothing })).toEqual({ id: "wellbrained.tracker", version: "1.0.0", sha256: "x" });
     const request = tavora.requests[1]!;
-    expect(request.op === "sign-publish" && Buffer.from(request.zip, "base64").equals(zip)).toBe(true);
+    expect(request.op === "publish" && Buffer.from(request.zip, "base64").equals(zip)).toBe(true);
+    refuse = true;
+    await expect(publishZip({ key: signer, zip, fetch: nothing })).rejects.toThrow(PublishError);
+    await expect(publishZip({ key: signer, zip, fetch: nothing })).rejects.toThrow(/must be newer/);
   });
 });

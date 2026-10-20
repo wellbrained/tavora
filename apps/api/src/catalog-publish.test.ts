@@ -54,22 +54,28 @@ function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string) {
     accounts: { store, mailer: inbox, now: () => clock.now },
     ...(maintainerEmail ? { maintainerEmail } : {}),
   });
-  /** An account with a linked key. */
+  /** Each key's account sign-in; the first developer's is the one a bare publish() sends. */
+  const signIns = new Map<KeyObject, string>();
+  let firstSignIn: string | undefined;
+  /** An account with a linked key, signed in. */
   const developer = (email: string) => {
     const key = generateKeyPairSync("ed25519").privateKey;
     const account = store.createAccount({ email }, clock.now);
     store.linkKey(account.id, keyFingerprint(rawKey(key)), rawKey(key).toString("base64"), clock.now);
-    return { key, accountId: account.id };
+    const { token } = store.createSession(account.id, "windows", clock.now);
+    signIns.set(key, token);
+    firstSignIn ??= token;
+    return { key, accountId: account.id, token };
   };
-  const publish = (zip: Buffer, signature?: string, type = "application/zip") =>
+  const publish = (zip: Buffer, signature?: string, type = "application/zip", auth: string | null | undefined = firstSignIn) =>
     app.request("http://tavora.test/v1/catalog/publish", {
       method: "POST",
-      headers: { "content-type": type, ...(signature === undefined ? {} : { "x-tavora-signature": signature }) },
+      headers: { "content-type": type, ...(signature === undefined ? {} : { "x-tavora-signature": signature }), ...(auth ? { authorization: `Bearer ${auth}` } : {}) },
       body: new Uint8Array(zip),
     });
-  const send = (key: KeyObject, zip: Buffer) => publish(zip, publishSignature(key, zip));
+  const send = (key: KeyObject, zip: Buffer, auth: string | null | undefined = signIns.get(key) ?? firstSignIn) => publish(zip, publishSignature(key, zip), "application/zip", auth);
   const reason = async (response: Response) => ((await response.json()) as { reason?: string }).reason;
-  return { store, catalog, dir, inbox, clock, developer, publish, send, reason };
+  return { store, catalog, dir, inbox, clock, developer, publish, send, reason, app };
 }
 
 describe("publishing to the catalog", () => {
@@ -82,6 +88,43 @@ describe("publishing to the catalog", () => {
     expect(catalog.index().map((entry) => entry.id)).toEqual(["wellbrained.timer"]);
     expect(store.prefixes(accountId)).toEqual(["wellbrained"]);
     expect(catalog.uploadsSince(accountId, new Date(0))).toBe(1);
+  });
+
+  it("needs the account's sign-in or a publish token besides the key, and tells the developer (decided 2026-10-20)", async () => {
+    const { store, clock, inbox, developer, send, reason, app } = setup();
+    const { key, accountId } = developer("dev@example.com");
+    const other = developer("other@example.com");
+    // The key alone, a sign-in of another account, or a made-up token: nothing is published.
+    const keyOnly = await send(key, moduleZip(key), null);
+    expect(keyOnly.status).toBe(401);
+    expect(await reason(keyOnly)).toBe("sign-in-needed");
+    expect(await reason(await send(key, moduleZip(key), other.token))).toBe("wrong-account");
+    expect(await reason(await send(key, moduleZip(key), `tvp_${"x".repeat(43)}`))).toBe("sign-in-needed");
+
+    // A token claims no new prefix: the module's first version comes from Tavora, signed in.
+    const { token } = store.createPublishToken(accountId, "GitHub Actions", clock.now)!;
+    expect(await reason(await send(key, moduleZip(key), token))).toBe("token-new-prefix");
+    expect((await send(key, moduleZip(key))).status).toBe(201);
+    expect(inbox.mails()[0]).toMatchObject({ to: "dev@example.com", subject: "Timer 1.0.0 was published" });
+    expect(inbox.mails()[0]!.text).toContain("uploaded from Tavora");
+
+    const update = await app.request("http://tavora.test/v1/catalog/publish", {
+      method: "POST",
+      headers: { "content-type": "application/zip", "x-tavora-signature": publishSignature(key, moduleZip(key, "wellbrained.timer", "1.1.0")), authorization: `Bearer ${token}`, "accept-language": "de-DE" },
+      body: new Uint8Array(moduleZip(key, "wellbrained.timer", "1.1.0")),
+    });
+    expect(update.status).toBe(201);
+    expect(inbox.mails()[0]).toMatchObject({ subject: "Timer 1.1.0 wurde veröffentlicht" });
+    expect(inbox.mails()[0]!.text).toContain("„GitHub Actions“");
+    expect(store.publishTokens(accountId, clock.now)[0]?.lastUsedAt).toBe(clock.now);
+
+    // A removed or run-out token publishes nothing.
+    const id = store.publishTokens(accountId, clock.now)[0]!.id;
+    expect(store.deletePublishToken(accountId, id)).toBe(true);
+    expect(await reason(await send(key, moduleZip(key, "wellbrained.timer", "1.2.0"), token))).toBe("sign-in-needed");
+    const old = store.createPublishToken(accountId, "old", clock.now)!.token;
+    clock.now += 366 * 86_400_000;
+    expect(await reason(await send(key, moduleZip(key, "wellbrained.timer", "1.2.0"), old))).toBe("sign-in-needed");
   });
 
   it("refuses an upload not signed by the zip's own key, so a zip shared by hand cannot be published by others", async () => {
@@ -98,11 +141,11 @@ describe("publishing to the catalog", () => {
 
   it("refuses unlinked keys, unsigned or broken zips and other content types", async () => {
     const { developer, publish, send, reason } = setup();
+    const { key } = developer("dev@example.com");
     const unlinked = generateKeyPairSync("ed25519").privateKey;
     const unlinkedAnswer = await send(unlinked, moduleZip(unlinked));
     expect(unlinkedAnswer.status).toBe(403);
     expect(await reason(unlinkedAnswer)).toBe("key-not-linked");
-    const { key } = developer("dev@example.com");
     const unsigned = writeZip([{ name: "tavora.module.json", data: Buffer.from("{}") }]);
     const invalid = await send(key, unsigned);
     expect(invalid.status).toBe(400);

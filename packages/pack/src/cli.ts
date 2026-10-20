@@ -7,8 +7,9 @@
 //   Links a key file to your Tavora account with a code from Tavora, so players see your developer
 //   name. Keys Tavora keeps are linked by Tavora. Only the key's public half leaves this PC.
 // tavora-pack publish <file.zip> [--key <key file>]
-//   Publishes a zip packed with your key to Tavora's module catalog, signed the way it was packed. The
-//   key must be linked; its first module id prefix is yours from then on.
+//   Publishes a zip packed with your key to Tavora's module catalog. Tavora signs and uploads it with your
+//   sign-in; with a key file (CI), TAVORA_PUBLISH_TOKEN holds a publish token from Tavora. The key must
+//   be linked; its first module id prefix is yours from then on.
 // Installed from npm as @tavora/pack; in Tavora's own repository: pnpm tavora-pack ...
 import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -102,7 +103,8 @@ async function main(): Promise<number> {
       if (!(error instanceof ZipError)) throw error;
     }
     const by = await signer({ key: values.key, publisher: values.publisher ?? owner }, (message) => new PublishError(message));
-    const published = await publishZip({ key: by, zip, apiUrl: values.api ?? DEFAULT_API_URL });
+    const token = process.env.TAVORA_PUBLISH_TOKEN?.trim() || undefined;
+    const published = await publishZip({ key: by, zip, token, apiUrl: values.api ?? DEFAULT_API_URL });
     console.log(`Published ${published.id} ${published.version} to Tavora's module catalog.`);
     console.log(`Players find it under Browse in the module library. Zip sha256 ${published.sha256}`);
     return 0;
@@ -121,7 +123,7 @@ async function main(): Promise<number> {
 main().then(
   (code) => (process.exitCode = code),
   (error: unknown) => {
-    console.error(error instanceof PackError || error instanceof LinkError || error instanceof PublishError ? `tavora-pack: ${error.message}` : error);
+    console.error(error instanceof PackError || error instanceof LinkError || error instanceof PublishError || error instanceof SignerError ? `tavora-pack: ${error.message}` : error);
     process.exitCode = 1;
   },
 );

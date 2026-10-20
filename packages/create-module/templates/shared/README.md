@@ -28,10 +28,11 @@ A [Tavora](https://mytavora.app) module, made with `@tavora/create-module`. Tavo
 
 Choose a developer name under **Module developer** in Tavora before you make the key. Tavora links the key to your account, so players see your modules as "by" your name.
 
-To pack on a build server, which can't press Allow, export the key in Tavora, keep it as a secret there and run:
+To pack and publish on a build server, which can't press Allow, export the key in Tavora and make a publish token under **Module developer > Publish tokens**. Keep both as secrets there and run:
 
 ```sh
 {{exec}} tavora-pack . --key <file>
+TAVORA_PUBLISH_TOKEN=<token> {{exec}} tavora-pack publish <zip> --key <file>
 ```
 
 More in the [developer docs](https://docs.mytavora.app/).

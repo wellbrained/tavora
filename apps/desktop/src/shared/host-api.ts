@@ -183,6 +183,18 @@ export interface AccountView {
   publisherKeys: { fingerprint: string; linkedAt: string }[] | null;
   /** A one-time code for `tavora-pack link`, while it is valid. */
   linkCode: { code: string; expiresAt: string } | null;
+  /** Tokens that let CI publish with a key file; null until read from the service. */
+  publishTokens: AccountPublishToken[] | null;
+  /** A token just made: its secret is shown this once. */
+  newPublishToken: { name: string; token: string } | null;
+}
+
+export interface AccountPublishToken {
+  id: string;
+  name: string;
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt: string | null;
 }
 
 /** A signature the pack command asked Tavora for, waiting for the developer's click. */
@@ -702,6 +714,11 @@ export type HostAction =
   /** Copies `tavora-pack link <code>` for the code shown now. */
   | { type: "account-copy-link-command" }
   | { type: "account-unlink-key"; fingerprint: string }
+  /** Publish tokens, for publishing from CI: make one (its secret shown once), copy it, close it, remove one. */
+  | { type: "account-publish-token-create"; name: string }
+  | { type: "account-publish-token-copy" }
+  | { type: "account-publish-token-saved" }
+  | { type: "account-publish-token-delete"; id: string }
   | { type: "developer-key-create" }
   | { type: "developer-key-add" }
   | { type: "developer-key-export"; fingerprint: string }
