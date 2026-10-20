@@ -319,6 +319,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "account-unlink-key":
       return only("fingerprint") && typeof a.fingerprint === "string" && /^[0-9a-f]{32}$/.test(a.fingerprint) ? { type: a.type, fingerprint: a.fingerprint } : null;
     case "cloud-copy-on":
+    case "cloud-copy-on-folder":
     case "cloud-copy-cancel":
     case "cloud-copy-new-key":
     case "cloud-copy-show-key":
@@ -333,6 +334,8 @@ export function parseAction(raw: unknown): HostAction | null {
       return only() ? { type: a.type } : null;
     case "cloud-copy-key":
       return only("key") && text(a.key, 200) ? { type: a.type, key: a.key } : null;
+    case "cloud-copy-move":
+      return only("to") && (a.to === "server" || a.to === "folder") ? { type: a.type, to: a.to } : null;
     case "cloud-copy-keep":
       return only("side") && (a.side === "pc" || a.side === "cloud") ? { type: a.type, side: a.side } : null;
     case "account-sign-out-device":

@@ -119,7 +119,7 @@ import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
 import { AccountKey } from "./account-key";
-import { CloudCopy } from "./cloud-copy";
+import { ServiceStorage } from "./cloud-copy";
 import { CopySync } from "./cloud-copy-sync";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
 import { discordLogin } from "./discord-login";
@@ -1807,6 +1807,21 @@ export class Host {
         return this.account.unlinkKey(action.fingerprint);
       case "cloud-copy-on":
         return this.copySync.turnOn();
+      case "cloud-copy-on-folder": {
+        const folder = await this.pickPath("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
+        if (!folder) return;
+        await this.copySync.turnOn(folder);
+        this.rememberPicked("cloud-copy", folder);
+        return;
+      }
+      case "cloud-copy-move": {
+        if (action.to === "server") return this.copySync.move(null);
+        const folder = await this.pickPath("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
+        if (!folder) return;
+        await this.copySync.move(folder);
+        this.rememberPicked("cloud-copy", folder);
+        return;
+      }
       case "cloud-copy-key":
         return this.copySync.enterKey(action.key);
       case "cloud-copy-cancel":
@@ -2508,7 +2523,7 @@ export class Host {
       userData: options.userData,
       enabled: options.accounts === true,
       moduleFiles: () => host()?.files.root() ?? savedFolder ?? options.picturesFolder ?? defaultFilesRoot(options.userData),
-      cloud: new CloudCopy(service),
+      service: new ServiceStorage(service),
       accountKey: new AccountKey({
         file: path.join(options.userData, "account-key.json"),
         legacyFile: path.join(options.userData, "cloud-copy-key.json"),

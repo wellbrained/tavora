@@ -129,7 +129,7 @@ A developer can link a publisher key to their account, so players see a develope
 
 ## The cloud copy
 
-The cloud copy (Settings > Account) keeps your Tavora data on Tavora's service, so your other PCs get it. It is optional and off until you turn it on.
+The cloud copy (Settings > Account) keeps your Tavora data on Tavora's service or in a folder you pick, so your other PCs get it. It is optional and off until you turn it on.
 
 - **Only you can read it.** It is encrypted on your PC with AES-256-GCM, under a random key made there. The key leaves your PC only as the recovery key Tavora shows you. The service keeps sealed parts, a sealed list of files and a version number; parts are named by a keyed hash, so their names say nothing without the key. The key is kept with your system's key store, and the copy can't be turned on where there is none.
 - **One key for the account.** The key belongs to your account, not to one PC: the first PC that needs it makes it, and the others ask for your recovery key. A small vault sealed with a key derived from it (at most 64 KB) stays on the service and goes out only to a signed-in PC of the account; that it exists tells a new PC to ask for your key instead of making another. Signing out forgets the key on that PC; turning the copy off doesn't.
@@ -138,6 +138,7 @@ The cloud copy (Settings > Account) keeps your Tavora data on Tavora's service, 
 - **A copy is checked before it is used.** Every part must open with the key and match its name, and every file its size and SHA-256. Every path must be one of the copy's own places: no `..`, absolute paths or other folders, and in the module files folder only Tavora's own folders. A copy is downloaded into a staging folder and swapped in only at start, before anything reads the data; what was there moves to the backups folder.
 - **Modules in a copy come from you.** Only your key can make a copy, so its modules are not checked again like a new install. The safety lists still apply at start, and grants are not copied: a module asks again on each PC.
 - **Older data never replaces newer.** The service takes a new version only from a PC that started from the current one. Otherwise you choose which side to keep, and the other is kept as a local backup.
+- **A folder holds the same sealed copy.** In a folder you pick (usually one OneDrive, Dropbox or Google Drive syncs), Tavora writes only the sealed parts and lists, in a `Tavora` folder inside it, and your sync app moves them. Tavora's service is not used, and no account is needed: signed out, the key stays on your PC, kept like the account's key, and signing out doesn't turn a folder's copy off. Anything in that folder is checked like a download, since other apps and PCs can write there. Tavora only reads the names it writes, seals each list's version inside it so an old list can't pose as a newer one, never takes a list older than the one it last synced, and asks you which side to keep when two PCs saved at once. Deleting the copy removes only Tavora's files.
 - **Modules and pages can't reach it.** No SDK call, bridge message or module view carries the copy, its key, the vault or whether it is on.
 
 ## Revoked keys, blocked modules and lost keys
