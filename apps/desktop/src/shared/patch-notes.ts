@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.19",
+    date: "2026-10-20",
+    title: "Enshrouded build bonuses",
+    notes: [
+      "Open Build bonuses to see what your chosen skills grant at their current ranks.",
+      "Class names sit clear of the outer skill branches.",
+    ],
+  },
+  {
     version: "0.19.18",
     date: "2026-10-20",
     title: "Enshrouded build planning",
