@@ -108,7 +108,7 @@ describe("signing in", () => {
     // The token never reaches the host UI; a malformed device is dropped.
     const view = account.view();
     expect(JSON.stringify(view)).not.toContain(TOKEN);
-    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", discord: null, createdAt: SAVED.createdAt }, discordLogin: false, devices: [DEVICE], pending: null, profileChoice: null, developer: null, publisherKeys: [], linkCode: null });
+    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", discord: null, createdAt: SAVED.createdAt }, discordLogin: false, devices: [DEVICE], pending: null, profileChoice: null, developer: null, publisherKeys: [], keyRequests: [], linkCode: null });
   });
 
   it("asks before creating an account for a new address, then creates it with the same code", async () => {
@@ -538,6 +538,24 @@ describe("the developer side", () => {
     await account.linkPublisherKey(privateKey);
     expect(calls.find((call) => call.url.endsWith("/v1/publishers/link"))?.auth).toBeNull();
     expect(account.view().publisherKeys).toEqual([{ fingerprint, linkedAt: "2026-10-20T12:00:00.000Z" }]);
+  });
+
+  it("asks to replace a lost key, and shows where each request stands", async () => {
+    const next = "fedcba9876543210fedcba9876543210";
+    const request = { old: FINGERPRINT, new: next, leaked: true, requestedAt: "2026-10-20T12:00:00.000Z", status: "waiting" };
+    const { calls, fetchImpl } = service({
+      [`POST /keys/${FINGERPRINT}/replace`]: () => json({ developer: null, keys: [{ fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:00:00.000Z" }], requests: [request, { ...request, old: "NOPE" }, { ...request, old: next, status: "lost" }] }),
+      [`POST /keys/${next}/replace`]: () => json({ reason: "key-in-request" }, 409),
+      "POST /sign-out": () => new Response(null, { status: 204 }),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.replaceKey(FINGERPRINT, next, true);
+    expect(calls.at(-1)).toMatchObject({ method: "POST", auth: `Bearer ${TOKEN}`, body: { new: next, leaked: true, language: "de" } });
+    expect(account.view().keyRequests).toEqual([request]);
+    await expect(account.replaceKey(next, FINGERPRINT, false)).rejects.toMatchObject({ key: "account.error.keyInRequest" });
+    await account.signOut();
+    expect(account.view().keyRequests).toBeNull();
   });
 
   it("keeps only well-formed keys and names from the service", async () => {

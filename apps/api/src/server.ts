@@ -119,7 +119,7 @@ serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
 const adminToken = process.env.ADMIN_TOKEN?.trim();
 if (adminToken && adminToken.length >= 24) {
   const adminPort = Number(process.env.ADMIN_PORT ?? 4011);
-  serve({ fetch: createAdminApp({ token: adminToken, submissions, state, store: icons, catalog }).fetch, port: adminPort, hostname: "127.0.0.1" }, (info) => {
+  serve({ fetch: createAdminApp({ token: adminToken, submissions, state, store: icons, catalog, ...(accountStore ? { accounts: accountStore } : {}) }).fetch, port: adminPort, hostname: "127.0.0.1" }, (info) => {
     console.log(`[tavora-api] review page on http://127.0.0.1:${info.port} (local only)`);
   });
 } else {

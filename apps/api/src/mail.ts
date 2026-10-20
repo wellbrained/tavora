@@ -111,6 +111,22 @@ export function emailChangedMail(to: string, newEmail: string, language: MailLan
       };
 }
 
+/** Sent when the account asked to replace a publisher key: a stolen sign-in can't do it unnoticed. */
+export function keyRequestMail(to: string, fingerprint: string, leaked: boolean, language: MailLanguage): Mail {
+  const key = `${fingerprint.slice(0, 16)}…`;
+  return language === "de"
+    ? {
+        to,
+        subject: leaked ? "Du hast einen Herausgeberschlüssel als geleakt gemeldet" : "Du willst einen Herausgeberschlüssel ersetzen",
+        text: `In Tavora hast du gebeten, deinen Herausgeberschlüssel ${key} zu ersetzen${leaked ? ", weil er geleakt wurde" : ""}. Tavora prüft das und gibt dir Bescheid in der App.\n\nWenn du das nicht warst, schreib uns an tavora.app@gmail.com.\n\nTavora\n`,
+      }
+    : {
+        to,
+        subject: leaked ? "You reported a publisher key as leaked" : "You asked to replace a publisher key",
+        text: `In Tavora, you asked to replace your publisher key ${key}${leaked ? " because it was leaked" : ""}. Tavora checks it, and the app shows when it's done.\n\nIf this wasn't you, write to tavora.app@gmail.com.\n\nTavora\n`,
+      };
+}
+
 // ── Test inbox ───────────────────────────────────────────────────────────
 
 export interface TestInbox extends Mailer {

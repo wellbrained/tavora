@@ -181,8 +181,19 @@ export interface AccountView {
   developer: { name: string; nextChangeAt: string } | null;
   /** Publisher keys linked to the account (fingerprints only); null until read from the service. */
   publisherKeys: { fingerprint: string; linkedAt: string }[] | null;
+  /** "I lost this key": requests to replace a linked key, and where each stands; null until read from the service. */
+  keyRequests: KeyRequestView[] | null;
   /** A one-time code for `tavora-pack link`, while it is valid. */
   linkCode: { code: string; expiresAt: string } | null;
+}
+
+/** A request to replace a lost or leaked publisher key, which Tavora signs offline. */
+export interface KeyRequestView {
+  old: string;
+  new: string;
+  leaked: boolean;
+  requestedAt: string;
+  status: "waiting" | "done" | "declined";
 }
 
 /** A signature the pack command asked Tavora for, waiting for the developer's click. */
@@ -702,6 +713,8 @@ export type HostAction =
   /** Copies `tavora-pack link <code>` for the code shown now. */
   | { type: "account-copy-link-command" }
   | { type: "account-unlink-key"; fingerprint: string }
+  /** "I lost this key" or "It was leaked": its modules move to another key of the account once Tavora signs it. */
+  | { type: "account-replace-key"; fingerprint: string; leaked: boolean }
   | { type: "developer-key-create" }
   | { type: "developer-key-add" }
   | { type: "developer-key-export"; fingerprint: string }

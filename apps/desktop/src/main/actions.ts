@@ -318,6 +318,10 @@ export function parseAction(raw: unknown): HostAction | null {
       return only() ? { type: a.type } : null;
     case "account-unlink-key":
       return only("fingerprint") && typeof a.fingerprint === "string" && /^[0-9a-f]{32}$/.test(a.fingerprint) ? { type: a.type, fingerprint: a.fingerprint } : null;
+    case "account-replace-key":
+      return only("fingerprint", "leaked") && typeof a.fingerprint === "string" && /^[0-9a-f]{32}$/.test(a.fingerprint) && typeof a.leaked === "boolean"
+        ? { type: a.type, fingerprint: a.fingerprint, leaked: a.leaked }
+        : null;
     case "developer-key-create":
     case "developer-key-add":
     case "developer-recovery-key-saved":

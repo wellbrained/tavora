@@ -113,7 +113,7 @@ describe("developer names", () => {
     const second = await signIn("second@example.com");
     const put = (token: string, name: string) => request("PUT", "/v1/account/developer", { name }, token);
 
-    expect(await (await request("GET", "/v1/account/developer", undefined, first)).json()).toEqual({ developer: null, keys: [] });
+    expect(await (await request("GET", "/v1/account/developer", undefined, first)).json()).toEqual({ developer: null, keys: [], requests: [] });
     const set = await put(first, "wellbrained");
     expect(set.status).toBe(200);
     expect(await set.json()).toMatchObject({ developer: { name: "wellbrained", changedAt: "2026-10-17T12:00:00.000Z", nextChangeAt: "2026-11-16T12:00:00.000Z" } });

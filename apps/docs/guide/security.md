@@ -159,6 +159,7 @@ Tavora keeps three lists for modules from other people: publisher keys that were
 - **A revoked key installs nothing new.** A zip signed by it is refused, for a first install and for an update, unless Tavora listed that exact zip as signed before the revocation. A module already installed keeps running.
 - **A blocked zip stops at once.** Its panels close, it does not load, and Settings > Modules says why. Its data is kept, and it comes back only with a zip that is not blocked.
 - **A new key replaces a lost one only by a signed statement.** Updates signed by the new key are accepted for the old key's modules, and their data stays where it was. Without a statement, a zip from another key is another publisher, as before.
+- **Asking for one changes nothing by itself.** "Lost it?" in Settings > Account only queues a request on the service: both keys must be linked to the signed-in account, and the account's email address is told. A person at Tavora checks it, exports the waiting requests and signs them offline with the catalogue key, so a stolen sign-in or a service that was broken into still can't move a module to another key. The one thing a request does at once is stop the catalog from taking new uploads signed by a key reported as leaked.
 
 ## Known limits
 

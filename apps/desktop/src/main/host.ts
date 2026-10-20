@@ -1833,15 +1833,23 @@ export class Host {
       }
       case "account-unlink-key":
         return this.account.unlinkKey(action.fingerprint);
+      case "account-replace-key": {
+        const linked = (this.account.view().publisherKeys ?? []).map((key) => key.fingerprint);
+        if (!linked.includes(action.fingerprint)) throw new PlayerError("account.error.keyGone");
+        const next = await this.developerKeys.replacementFor(action.fingerprint, linked);
+        return this.account.replaceKey(action.fingerprint, next, action.leaked);
+      }
       case "developer-key-create":
-        return this.developerKeys.create();
+        await this.developerKeys.create();
+        return;
       case "developer-key-add": {
         const picked = await dialog.showOpenDialog(this.window, { properties: ["openFile"], filters: [{ name: "PEM", extensions: ["pem", "key"] }, { name: "*", extensions: ["*"] }] });
         const file = picked.filePaths[0];
         if (picked.canceled || !file) return;
         const text = await readFile(file, "utf8").catch(() => null);
         if (text === null || text.length > 10_000) throw new PlayerError("developerKeys.error.notKey");
-        return this.developerKeys.add(text);
+        await this.developerKeys.add(text);
+        return;
       }
       case "developer-key-export": {
         const pem = this.developerKeys.exportKey(action.fingerprint);

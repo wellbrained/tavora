@@ -147,6 +147,17 @@ function exportKey(fingerprint: string) {
   });
 }
 
+// "I lost this key": the newest request for each linked key, and the key whose choice is open.
+const requests = computed(() => new Map((view.value?.keyRequests ?? []).map((request) => [request.old, request])));
+const waiting = computed(() => new Set((view.value?.keyRequests ?? []).filter((request) => request.status === "waiting").flatMap((request) => [request.old, request.new])));
+const replacing = ref<string | null>(null);
+async function replaceKey(fingerprint: string, leaked: boolean) {
+  if (await run({ type: "account-replace-key", fingerprint, leaked })) {
+    replacing.value = null;
+    showToast(t("account.developer.replaceSent"));
+  }
+}
+
 function unlinkKey(fingerprint: string) {
   confirmAction({
     title: t("account.developer.unlinkTitle"),
@@ -376,12 +387,30 @@ function startDelete() {
           <span class="text-sm font-medium">{{ t("account.developer.keys") }}</span>
           <p v-if="!view?.publisherKeys?.length" class="text-muted-foreground mt-1 text-sm" data-testid="account-keys-none">{{ t("account.developer.noKeys") }}</p>
           <ul v-else class="mt-1" data-testid="account-keys">
-            <li v-for="key in view.publisherKeys" :key="key.fingerprint" class="flex min-h-10 items-center gap-3" :data-testid="`account-key-${key.fingerprint}`">
-              <span class="flex-1 font-mono text-sm" :title="key.fingerprint">{{ key.fingerprint.slice(0, 16) }}…</span>
-              <span class="text-muted-foreground text-sm">{{ t("account.developer.keyLinked", { date: formatDate(key.linkedAt) }) }}</span>
-              <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.unlinkLabel', { key: key.fingerprint.slice(0, 16) })" @click="unlinkKey(key.fingerprint)">
-                {{ t("account.developer.unlink") }}
-              </Button>
+            <li v-for="key in view.publisherKeys" :key="key.fingerprint" :data-testid="`account-key-${key.fingerprint}`">
+              <div class="flex min-h-10 items-center gap-3">
+                <span class="flex-1 font-mono text-sm" :title="key.fingerprint">{{ key.fingerprint.slice(0, 16) }}…</span>
+                <span class="text-muted-foreground text-sm">{{ t("account.developer.keyLinked", { date: formatDate(key.linkedAt) }) }}</span>
+                <span v-if="requests.get(key.fingerprint)?.status === 'waiting'" class="text-sm" data-testid="account-key-waiting">{{ t("account.developer.replaceWaiting") }}</span>
+                <span v-else-if="requests.get(key.fingerprint)?.status === 'done'" class="text-sm" data-testid="account-key-replaced">{{ t("account.developer.replaceDone") }}</span>
+                <template v-else>
+                  <span v-if="requests.get(key.fingerprint)?.status === 'declined'" class="text-muted-foreground text-sm">{{ t("account.developer.replaceDeclined") }}</span>
+                  <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.replaceLabel', { key: key.fingerprint.slice(0, 16) })" data-testid="account-key-replace" @click="replacing = replacing === key.fingerprint ? null : key.fingerprint">
+                    {{ t("account.developer.replace") }}
+                  </Button>
+                </template>
+                <Button v-if="!waiting.has(key.fingerprint)" variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.unlinkLabel', { key: key.fingerprint.slice(0, 16) })" @click="unlinkKey(key.fingerprint)">
+                  {{ t("account.developer.unlink") }}
+                </Button>
+              </div>
+              <div v-if="replacing === key.fingerprint" class="mb-2 flex flex-col gap-2 rounded-md border p-3" data-testid="account-key-replace-choice">
+                <span class="text-sm">{{ t("account.developer.replaceHint") }}</span>
+                <div class="flex flex-wrap items-center gap-2">
+                  <Button variant="secondary" size="sm" :disabled="busy" data-testid="account-key-lost" @click="replaceKey(key.fingerprint, false)">{{ t("account.developer.replaceLost") }}</Button>
+                  <Button variant="destructive" size="sm" :disabled="busy" data-testid="account-key-leaked" @click="replaceKey(key.fingerprint, true)">{{ t("account.developer.replaceLeaked") }}</Button>
+                  <Button variant="ghost" size="sm" @click="replacing = null">{{ t("common.cancel") }}</Button>
+                </div>
+              </div>
             </li>
           </ul>
         </div>

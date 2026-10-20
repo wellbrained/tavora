@@ -1,7 +1,7 @@
 import type { KeyObject } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
 import { linkRequest } from "@tavora/pack";
-import type { AccountDevice, AccountPending, AccountView, DeviceOs } from "../shared/host-api";
+import type { AccountDevice, AccountPending, AccountView, DeviceOs, KeyRequestView } from "../shared/host-api";
 import type { Language, MessageKey } from "../shared/i18n";
 import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
@@ -132,10 +132,11 @@ const REASONS: Record<string, MessageKey> = {
   "not-found": "account.error.keyGone",
   "key-taken": "account.error.keyTaken",
   "too-many-keys": "account.error.tooManyKeys",
+  "key-in-request": "account.error.keyInRequest",
 };
 
 /** The account's developer side as the service answers it; null for anything off. */
-function developerSide(value: unknown): { developer: { name: string; nextChangeAt: string } | null; keys: { fingerprint: string; linkedAt: string }[] } | null {
+function developerSide(value: unknown): { developer: { name: string; nextChangeAt: string } | null; keys: { fingerprint: string; linkedAt: string }[]; requests: KeyRequestView[] } | null {
   const raw = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
   if (!Array.isArray(raw.keys)) return null;
   const developer = (typeof raw.developer === "object" && raw.developer !== null ? raw.developer : null) as Record<string, unknown> | null;
@@ -143,9 +144,24 @@ function developerSide(value: unknown): { developer: { name: string; nextChangeA
     .map((item) => (typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {}))
     .filter((item) => typeof item.fingerprint === "string" && /^[0-9a-f]{32}$/.test(item.fingerprint) && isText(item.linkedAt, 40))
     .map((item) => ({ fingerprint: item.fingerprint as string, linkedAt: item.linkedAt as string }));
+  // Older services send no requests: there are none then.
+  const requests = (Array.isArray(raw.requests) ? raw.requests : [])
+    .map((item) => (typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {}))
+    .filter(
+      (item) =>
+        typeof item.old === "string" &&
+        /^[0-9a-f]{32}$/.test(item.old) &&
+        typeof item.new === "string" &&
+        /^[0-9a-f]{32}$/.test(item.new) &&
+        typeof item.leaked === "boolean" &&
+        isText(item.requestedAt, 40) &&
+        (item.status === "waiting" || item.status === "done" || item.status === "declined"),
+    )
+    .map((item) => ({ old: item.old as string, new: item.new as string, leaked: item.leaked as boolean, requestedAt: item.requestedAt as string, status: item.status as KeyRequestView["status"] }));
   return {
     developer: developer && isText(developer.name, 32) && isText(developer.nextChangeAt, 40) ? { name: developer.name, nextChangeAt: developer.nextChangeAt } : null,
     keys,
+    requests,
   };
 }
 
@@ -170,6 +186,7 @@ export class AccountClient {
   /** The developer side as last read: the public name and the linked publisher keys. */
   private developer: AccountView["developer"] = null;
   private publisherKeys: AccountView["publisherKeys"] = null;
+  private keyRequests: AccountView["keyRequests"] = null;
   /** The code for `tavora-pack link` the player asked for, until it runs out. */
   private linkCode: AccountView["linkCode"] = null;
   private readonly baseUrl: string;
@@ -202,6 +219,7 @@ export class AccountClient {
       profileChoice: this.saved && this.profileChoice ? { name: this.profileChoice.name, initials: this.profileChoice.initials, picture: this.profileChoice.picture !== null } : null,
       developer: this.saved ? this.developer : null,
       publisherKeys: this.saved ? this.publisherKeys : null,
+      keyRequests: this.saved ? this.keyRequests : null,
       linkCode: this.saved && this.linkCode && Date.parse(this.linkCode.expiresAt) > Date.now() ? this.linkCode : null,
     };
   }
@@ -401,6 +419,12 @@ export class AccountClient {
     this.takeDeveloper(await this.call("DELETE", `/keys/${encodeURIComponent(fingerprint)}`, undefined, true));
   }
 
+  /** "I lost this key": asks Tavora to move what `old` owns to `next`, another key linked to the account. */
+  async replaceKey(old: string, next: string, leaked: boolean): Promise<void> {
+    this.ensure(true);
+    this.takeDeveloper(await this.call("POST", `/keys/${encodeURIComponent(old)}/replace`, { new: next, leaked, language: this.options.language() }, true));
+  }
+
   private takeDeveloper(answer: Record<string, unknown>): void {
     const side = developerSide(answer);
     if (!side) return;
@@ -408,6 +432,7 @@ export class AccountClient {
     // A key linked meanwhile used the code up.
     if (this.publisherKeys && side.keys.length > this.publisherKeys.length) this.linkCode = null;
     this.publisherKeys = side.keys;
+    this.keyRequests = side.requests;
     this.changed();
   }
 
@@ -552,6 +577,7 @@ export class AccountClient {
     this.profileChoice = null;
     this.developer = null;
     this.publisherKeys = null;
+    this.keyRequests = null;
     this.linkCode = null;
     await this.options.save(null);
     this.changed();

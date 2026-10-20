@@ -97,13 +97,23 @@ export class DeveloperKeys {
   }
 
   /** Makes a new publisher key, keeps it in the vault and links it to the account. */
-  async create(): Promise<void> {
+  async create(): Promise<string> {
     const { privateKey } = generateKeyPairSync("ed25519");
-    await this.keep(privateKey.export({ format: "pem", type: "pkcs8" }).toString());
+    return this.keep(privateKey.export({ format: "pem", type: "pkcs8" }).toString());
+  }
+
+  /**
+   * The key to move a lost one's modules to: the newest key kept here that is linked to the account
+   * (`linked`, oldest first), or else a new key, made and linked now.
+   */
+  async replacementFor(old: string, linked: string[]): Promise<string> {
+    const kept = new Set(this.keys.map((key) => key.fingerprint));
+    const next = [...linked].reverse().find((fingerprint) => fingerprint !== old && kept.has(fingerprint));
+    return next ?? (await this.create());
   }
 
   /** Takes a publisher key from a file the developer picked (one the pack command made before). */
-  async add(text: string): Promise<void> {
+  async add(text: string): Promise<string> {
     let key: KeyObject;
     try {
       key = createPrivateKey(text);
@@ -111,10 +121,11 @@ export class DeveloperKeys {
       throw new PlayerError("developerKeys.error.notKey");
     }
     if (key.asymmetricKeyType !== "ed25519") throw new PlayerError("developerKeys.error.notKey");
-    await this.keep(key.export({ format: "pem", type: "pkcs8" }).toString());
+    return this.keep(key.export({ format: "pem", type: "pkcs8" }).toString());
   }
 
-  private async keep(pem: string): Promise<void> {
+  /** Keeps a key in the vault and links it; its fingerprint. */
+  private async keep(pem: string): Promise<string> {
     await this.ensureAccountKey();
     const added = parseKeys([pem])[0]!;
     await guard(() =>
@@ -128,6 +139,7 @@ export class DeveloperKeys {
     await this.load().catch(() => undefined);
     this.changed();
     await this.options.account.link(added.key);
+    return added.fingerprint;
   }
 
   /** Links a kept key that isn't linked yet (linking failed when it was made). */

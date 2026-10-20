@@ -69,8 +69,12 @@ If the module breaks the rules, Tavora can take it out of the catalog (players w
 
 Tavora can hand your modules to a new key, but only if the old key was linked to your account. It signs a statement, offline with its own key, that the new key replaces the old one. Players' Tavora then takes updates signed by the new key for the old key's modules, and their data stays where it was.
 
-- **Leaked:** make a new key, link it to the same account, and ask Tavora to revoke the old key and move your modules to the new one. Ask by email to [tavora.app@gmail.com](mailto:tavora.app@gmail.com), from the address your account uses if it has one. A revoked key can't publish or install anything new. Modules players already have keep running, and so do the zips Tavora lists as published before the revocation.
-- **Lost:** make a new key the same way, and email the same address to ask for the move. Keys Tavora keeps are lost only with your recovery key.
+Ask in the app: Settings > Account > Module developer, then **Lost it?** next to the key under Linked publisher keys.
+
+- **I lost it:** your modules move to your newest key that Tavora keeps and that is linked to your account. If there is none, Tavora makes one and links it. Keys Tavora keeps are lost only with your recovery key.
+- **It was leaked:** the same, and Tavora also revokes the old key. From the moment you ask, the catalog takes nothing new signed by it. Once revoked, it can't publish or install anything new. Modules players already have keep running, and so do the zips Tavora lists as published before the revocation.
+
+Your account's email address gets a note that you asked. The key shows **Waiting for Tavora** until a person at Tavora has checked the request and signed it, then **Done**. Both keys stay linked while it waits. If something can't be done in the app, write to [tavora.app@gmail.com](mailto:tavora.app@gmail.com).
 
 Once Tavora has signed the statement, publish new versions of your modules with the new key as usual. The catalog takes them because the statement names your account, and players' Tavora updates to them and keeps their data.
 

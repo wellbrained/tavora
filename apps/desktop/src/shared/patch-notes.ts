@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.13",
+    date: "2026-10-20",
+    title: "Lost a publisher key?",
+    notes: [
+      "Module developers: lost or leaked a publisher key? Press Lost it? next to it in Settings > Account. No email needed.",
+      "Your modules move to your newest key once Tavora checks it.",
+    ],
+  },
+  {
     version: "0.19.12",
     date: "2026-10-20",
     title: "Tavora keeps your publisher keys",
