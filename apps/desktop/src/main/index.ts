@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { app, protocol } from "electron";
 import { HOST_SCHEME, MODULE_SCHEME } from "./assets";
@@ -91,9 +91,14 @@ const moduleDirs = !app.isPackaged && process.env.TAVORA_MODULE_DIRS
   : [app.isPackaged ? path.join(process.resourcesPath, "modules") : path.join(repoRoot, "examples")];
 // Official modules (Notes, To-Dos) ship inside a packaged build and are
 // loaded from the repo's modules/ folder in a dev run.
+// A standalone repo module is installed with its publisher, not treated as Official in dev.
+const repoModules=path.join(repoRoot,"modules");
+const devOfficialModuleDirs=app.isPackaged?[]:readdirSync(repoModules,{withFileTypes:true})
+  .filter(entry=>entry.isDirectory()&&existsSync(path.join(repoModules,entry.name,"tavora.module.json"))&&!existsSync(path.join(repoModules,entry.name,".standalone")))
+  .map(entry=>path.join(repoModules,entry.name));
 const officialModuleDirs = !app.isPackaged && process.env.TAVORA_OFFICIAL_MODULE_DIRS
   ? dirList(process.env.TAVORA_OFFICIAL_MODULE_DIRS)
-  : [app.isPackaged ? path.join(process.resourcesPath, "official-modules") : path.join(repoRoot, "modules")];
+  : app.isPackaged ? [path.join(process.resourcesPath, "official-modules")] : devOfficialModuleDirs;
 
 // Themes work the same way: Tavora's own ship inside the app, and the
 // player's own live in the themes folder of their data folder.
