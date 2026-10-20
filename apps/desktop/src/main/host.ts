@@ -1813,6 +1813,14 @@ export class Host {
         this.rememberPicked("cloud-copy", folder);
         return;
       }
+      case "cloud-copy-move": {
+        if (action.to === "server") return this.copySync.move(null);
+        const folder = await this.pickPath("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
+        if (!folder) return;
+        await this.copySync.move(folder);
+        this.rememberPicked("cloud-copy", folder);
+        return;
+      }
       case "cloud-copy-key":
         return this.copySync.enterKey(action.key);
       case "cloud-copy-cancel":

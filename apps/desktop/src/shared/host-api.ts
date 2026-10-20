@@ -678,6 +678,8 @@ export type HostAction =
   | { type: "cloud-copy-on" }
   /** Turns the copy on in a folder the player picks in the system's dialog. */
   | { type: "cloud-copy-on-folder" }
+  /** Moves the copy, keeping its key: to the service, or to a folder the player picks in the system's dialog. */
+  | { type: "cloud-copy-move"; to: "server" | "folder" }
   | { type: "cloud-copy-key"; key: string }
   | { type: "cloud-copy-cancel" }
   | { type: "cloud-copy-show-key" }

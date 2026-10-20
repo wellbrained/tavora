@@ -333,6 +333,8 @@ export function parseAction(raw: unknown): HostAction | null {
       return only() ? { type: a.type } : null;
     case "cloud-copy-key":
       return only("key") && text(a.key, 200) ? { type: a.type, key: a.key } : null;
+    case "cloud-copy-move":
+      return only("to") && (a.to === "server" || a.to === "folder") ? { type: a.type, to: a.to } : null;
     case "cloud-copy-keep":
       return only("side") && (a.side === "pc" || a.side === "cloud") ? { type: a.type, side: a.side } : null;
     case "account-sign-out-device":

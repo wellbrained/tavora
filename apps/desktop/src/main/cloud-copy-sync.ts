@@ -106,7 +106,11 @@ export class CopySync {
   /** Where the copy is kept from now on: a folder, or null for the service. */
   private use(folder: string | null): void {
     this.folder = folder;
-    this.cloud = new CloudCopy(folder === null ? this.options.service : (this.options.folderStorage ?? ((picked) => new FolderStorage(picked)))(folder));
+    this.cloud = new CloudCopy(this.storageFor(folder));
+  }
+
+  private storageFor(folder: string | null): CopyStorage {
+    return folder === null ? this.options.service : (this.options.folderStorage ?? ((picked) => new FolderStorage(picked)))(folder);
   }
 
   private get stateFile() {
@@ -445,6 +449,45 @@ export class CopySync {
   keySaved(): void {
     this.shownKey = null;
     this.changed();
+  }
+
+  /**
+   * Moves the copy to `folder` (null: the service), keeping its key: all of it goes up there, then the copy
+   * where it was is deleted, so the other PCs turn it off and are turned on again where it is now. A place
+   * that has a copy already is left alone.
+   */
+  async move(folder: string | null): Promise<void> {
+    if (!this.on || folder === this.folder) return;
+    if (this.waiting) throw new PlayerError("cloudCopy.error.conflict");
+    const from = this.cloud;
+    const problem = this.problem;
+    await this.exclusive("uploading", async () => {
+      try {
+        await this.options.flush();
+        if (folder !== null) await checkFolder(folder);
+        const to = new CloudCopy(this.storageFor(folder));
+        if (await to.remote()) throw new PlayerError("cloudCopy.error.moveTaken");
+        const result = await to.upload(this.key!, this.roots(), EMPTY_STATE, (done, total) => {
+          this.progress = { done, total };
+          this.changed();
+        });
+        if (result.status === "too-big") throw new PlayerError("cloudCopy.error.too-big");
+        if (result.status !== "uploaded") throw new PlayerError("cloudCopy.error.moveTaken");
+        await savePlace(this.placeFile, folder);
+        this.use(folder);
+        this.state = result.state;
+        await saveCopyState(this.stateFile, this.state);
+        this.copy = { size: result.size, savedAt: this.now().toISOString() };
+        this.problem = null;
+      } catch (error) {
+        if (error instanceof PlayerError) throw error;
+        const failed = this.noteProblem(error);
+        // The copy where it is now is fine: this was only the move.
+        this.problem = problem;
+        throw CopySync.playerError(failed);
+      }
+    });
+    await from.remove().catch((error: unknown) => this.log(`cloud copy: the old copy was not deleted: ${error instanceof Error ? error.message : String(error)}`));
   }
 
   /** Takes the copy in place of this PC's data: downloaded now, swapped in at the restart. */

@@ -77,6 +77,21 @@ function restore() {
   });
 }
 
+/** Moves the copy to our server or another folder, keeping its recovery key. */
+function move(to: "server" | "folder") {
+  confirmAction({
+    title: t("cloudCopy.move.title"),
+    message: t("cloudCopy.move.message"),
+    confirm: t("cloudCopy.move.confirm"),
+    run: async () => {
+      const before = cloudCopy.value?.folder ?? null;
+      const error = await submitAction({ type: "cloud-copy-move", to });
+      if (!error && (cloudCopy.value?.folder ?? null) !== before) showToast(t("cloudCopy.moved"));
+      return error;
+    },
+  });
+}
+
 function turnOff() {
   confirmAction({
     title: t("cloudCopy.turnOff.title"),
@@ -147,7 +162,12 @@ function remove() {
         <Button v-else-if="view.restartToTake" :disabled="busy" @click="run({ type: 'cloud-copy-restart' })">{{ t("cloudCopy.newer.restart") }}</Button>
         <Button v-else variant="secondary" :disabled="busy || view.busy !== null" data-testid="cloud-copy-upload" @click="upload">{{ t("cloudCopy.upload") }}</Button>
       </SettingRow>
-      <SettingRow v-if="inFolder" :label="t('cloudCopy.folder.label')" :description="view.folder ?? ''" data-testid="cloud-copy-folder" />
+      <SettingRow :label="t('cloudCopy.where.label')" :description="view.folder ?? t('cloudCopy.where.server')" data-testid="cloud-copy-where">
+        <div class="flex flex-none gap-2">
+          <Button v-if="inFolder && signedIn" variant="ghost" :disabled="busy || view.busy !== null" data-testid="cloud-copy-move-server" @click="move('server')">{{ t("cloudCopy.where.useServer") }}</Button>
+          <Button variant="secondary" :disabled="busy || view.busy !== null" data-testid="cloud-copy-move-folder" @click="move('folder')">{{ t(inFolder ? "cloudCopy.where.changeFolder" : "cloudCopy.where.useFolder") }}</Button>
+        </div>
+      </SettingRow>
       <SettingRow :label="t('cloudCopy.restore.label')" :description="t('cloudCopy.restore.description')">
         <Button variant="secondary" :disabled="busy || view.busy !== null" data-testid="cloud-copy-restore" @click="restore">{{ t("cloudCopy.restore.button") }}</Button>
       </SettingRow>

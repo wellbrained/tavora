@@ -244,6 +244,57 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
     expect(JSON.parse(await read(b.userData, "library.json")).games).toHaveProperty("elden-ring");
   });
 
+  it("moves to another folder with the same key, and the other PCs turn off until turned on there", async () => {
+    const [first, second] = [await folder(), await folder()];
+    const a = await pc({ "library.json": "from a" });
+    const atA = tavora(a);
+    await atA.sync.beforeLoad();
+    await atA.sync.turnOn(first);
+    const key = atA.sync.view().recoveryKey!;
+    atA.sync.keySaved();
+
+    const b = await pc({ "library.json": "from a" });
+    const atB = tavora(b);
+    await atB.sync.beforeLoad();
+    await atB.sync.turnOn(first);
+    await atB.sync.enterKey(key);
+    await atB.sync.keep("cloud");
+    // The restart takes the copy.
+    await tavora(b).sync.beforeLoad();
+
+    await atA.sync.move(second);
+    expect(atA.sync.view()).toMatchObject({ on: true, folder: second, problem: null });
+    expect(await readdir(first)).toEqual([]);
+    // Still the same key: it opens the moved copy.
+    const c = await pc();
+    const copy = await new CloudCopy(new FolderStorage(second)).download(Buffer.from(atA.sync["key"]!), c.roots, path.join(c.root, "staging"));
+    expect(copy).not.toBeNull();
+    expect(atA.sync.view().recoveryKey).toBeNull();
+    atA.sync.showKey();
+    expect(atA.sync.view().recoveryKey).toBe(key);
+
+    // B finds its folder empty at the next start, and turns it on where the copy is now, with the same key.
+    const again = tavora(b);
+    await again.sync.beforeLoad();
+    expect(again.sync.view()).toMatchObject({ on: false, problem: "deleted" });
+    await again.sync.turnOn(second);
+    await again.sync.enterKey(key);
+    expect(again.sync.view()).toMatchObject({ on: true, folder: second });
+  });
+
+  it("won't move onto a copy that is there already", async () => {
+    const [first, second] = [await folder(), await folder()];
+    const other = tavora(await pc({ "library.json": "other" }));
+    await other.sync.beforeLoad();
+    await other.sync.turnOn(second);
+    const atA = tavora(await pc({ "library.json": "a" }));
+    await atA.sync.beforeLoad();
+    await atA.sync.turnOn(first);
+    await expect(atA.sync.move(second)).rejects.toMatchObject({ key: "cloudCopy.error.moveTaken" });
+    expect(atA.sync.view()).toMatchObject({ on: true, folder: first });
+    expect((await readdir(path.join(first, "Tavora"))).sort()).toEqual(["manifests", "parts"]);
+  });
+
   it("says when the folder can't be used", async () => {
     const atA = tavora(await pc());
     await atA.sync.beforeLoad();

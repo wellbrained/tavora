@@ -1,4 +1,5 @@
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
@@ -212,6 +213,27 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(atA.sync.view()).toMatchObject({ on: false, problem: "deleted" });
     // The data on the PCs stays.
     expect(await read(a.userData, "library.json")).toBe("a1");
+  });
+
+  it("moves from our server to a folder and back, keeping the recovery key", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a" });
+    const { sync, key } = await startCopy(cloud, a);
+    sync.keySaved();
+    const onedrive = await mkdtemp(path.join(os.tmpdir(), "tavora-onedrive-"));
+    try {
+      await sync.move(onedrive);
+      expect(sync.view()).toMatchObject({ on: true, folder: onedrive, limit: null, problem: null });
+      // The server's copy is gone, so the other PCs there turn off.
+      expect(await new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token })).remote()).toBeNull();
+      await sync.move(null);
+      expect(sync.view()).toMatchObject({ on: true, folder: null });
+      expect(await readdir(onedrive)).toEqual([]);
+      sync.showKey();
+      expect(sync.view().recoveryKey).toBe(key);
+    } finally {
+      await rm(onedrive, { recursive: true, force: true });
+    }
   });
 
   it("starts as usual offline or signed out, and says why it did not sync", async () => {
