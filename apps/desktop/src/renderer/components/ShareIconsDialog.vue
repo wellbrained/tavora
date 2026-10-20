@@ -2,6 +2,7 @@
 import { Loader } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
 import { Button } from "@/components/ui/button";
+import { MAX_SHARE_BATCH } from "../../shared/host-actions";
 import type { HostAction } from "../../shared/host-api";
 import { account, act, api, dialog, openSettings, showToast, state, type ShareIconsRequest } from "../host";
 import { t } from "../i18n";
@@ -9,8 +10,8 @@ import ModalDialog from "./ModalDialog.vue";
 
 const props = defineProps<{ request: ShareIconsRequest }>();
 
-/** Most icons in one action (MAX_SHARE_BATCH in main/actions.ts); more are sent in turns. */
-const BATCH = 50;
+/** Most icons in one action; more are sent in turns. */
+const BATCH = MAX_SHARE_BATCH;
 
 interface Row {
   key: string;
