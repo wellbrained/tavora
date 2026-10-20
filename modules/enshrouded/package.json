@@ -1,0 +1,18 @@
+{
+  "name": "@tavora/enshrouded",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@tavora/sdk": "workspace:*",
+    "i18next": "26.4.3"
+  },
+  "devDependencies": {
+    "vite": "8.3.4"
+  }
+}

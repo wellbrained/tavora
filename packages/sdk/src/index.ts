@@ -8,6 +8,7 @@ import {
   BLOB_PATH,
   CLIPBOARD_PATH,
   PICTURES_PATH,
+  JSON_EXPORT_PATH,
   HELLO_MESSAGE,
   LIMITS,
   PORT_MESSAGE,
@@ -87,14 +88,14 @@ export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, PROTOCOL
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.9";
+export const SDK_VERSION = "0.2.10";
 
 /**
  * The oldest Tavora that has everything this SDK version offers. Put it in your manifest as
  * `minTavora`, so an older Tavora says it needs an update instead of loading a module it cannot run
  * (the starter, `npm create @tavora/module`, does). The changelog names it for every version.
  */
-export const MIN_TAVORA = "0.19.3";
+export const MIN_TAVORA = "0.19.9";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -232,6 +233,10 @@ export interface TavoraSDK {
      * picture. PNG only, a complete one, at most 20 MB and 16384 pixels on a side (INVALID_PARAMS, QUOTA_EXCEEDED).
      */
     writeImage(png: Blob): Promise<void>;
+  };
+  files: {
+    /** Saves JSON (up to 1 MiB) in Downloads/Tavora after a click or key press. Never replaces a file. Tavora 0.19.9+. */
+    exportJson(value: JsonValue, name?: string): Promise<{ fileName: string }>;
   };
   pictures: {
     /**
@@ -548,6 +553,20 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         if (response.ok) return;
         const body = (await response.json().catch(() => null)) as { error?: ErrorPayload } | null;
         throw new TavoraError(body?.error ?? { code: "INTERNAL", message: `could not copy the picture (${response.status})` });
+      },
+    },
+    files: {
+      exportJson: async (value, name = 'Build') => {
+        const address = new URL(JSON_EXPORT_PATH, window.location.href);
+        address.searchParams.set('name', name);
+        const body = JSON.stringify(value);
+        if (new TextEncoder().encode(body).byteLength > 1024 * 1024) throw new TavoraError({code:'QUOTA_EXCEEDED',message:'JSON exports may be at most 1 MiB'});
+        let response: Response;
+        try { response = await fetch(address, {method:'POST',headers:{'Content-Type':'application/json'},body}); }
+        catch { throw new TavoraError({code:'INTERNAL',message:'could not export the JSON file'}); }
+        const result = await response.json().catch(() => null) as {fileName?:string;error?:ErrorPayload}|null;
+        if(response.ok && typeof result?.fileName === 'string') return {fileName:result.fileName};
+        throw new TavoraError(result?.error ?? {code:'INTERNAL',message:'could not export the JSON file'});
       },
     },
     pictures: {

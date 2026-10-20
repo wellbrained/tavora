@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "1.1.0",
+  "provenance": {
+    "gameBuild": "1269579|^/game38/branches/release_1.0|2026-10-16T12:58:37.402390Z",
+    "exportedAtUtc": "2026-10-16T19:21:17.7528755Z",
+    "sourceFileSha256": {
+      "enshrouded.exe": "82E5020A8736348CD0374F004B2F5E5EF456B5BD27AA5420DF34C7DD241CFEEB",
+      "enshrouded.kfc": "A030BCDB58A089F84DD00FB0C6939FD492A2DFF440BCB5B63F70EFC44B1B9320",
+      "enshrouded.kfc_resources": "CF47DB07AE2A959C22E88C661C8E7318A283E3EA063B7A74570ADA6A5AF9467B"
+    }
+  },
+  "leveling": {
+    "playerLevelCap": 50,
+    "skillPointsPerLevel": 2
+  },
+  "flame": {
+    "flameLevelCap": 11,
+    "apPerFlameLevel": 1
+  },
+  "biomes": {
+    "springlands": {
+      "points": 17,
+      "unlocks": 11
+    },
+    "revelwood": {
+      "points": 20,
+      "unlocks": 14
+    },
+    "nomad_highlands": {
+      "points": 15,
+      "unlocks": 9
+    },
+    "kindlewastes": {
+      "points": 20,
+      "unlocks": 12
+    },
+    "albaneve_summits": {
+      "points": 15,
+      "unlocks": 11
+    },
+    "veilwater_basin": {
+      "points": 15,
+      "unlocks": 9
+    },
+    "cinders_cradle": {
+      "points": 12,
+      "unlocks": 12
+    }
+  }
+}

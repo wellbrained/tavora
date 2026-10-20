@@ -236,3 +236,7 @@ of returned HTML. The window, tunnels and temporary storage are cleared after ea
 call; closing, reloading or disconnecting the source panel cancels its import.
 An import can fail when a site needs resources on domains that were not granted,
 requires interaction or changes its page format. No protection or verification is bypassed.
+
+## JSON file exports
+
+`files.exportJson` accepts at most 1 MiB of valid UTF-8 JSON after a real module click or key press, consumed once per request. The host serializes it as JSON and writes a new `.json` file inside Downloads/Tavora. Suggested names are sanitized, paths and extensions cannot be supplied, and existing files are never replaced. Modules receive only the resulting file name, never a filesystem path. Export does not grant arbitrary filesystem access.

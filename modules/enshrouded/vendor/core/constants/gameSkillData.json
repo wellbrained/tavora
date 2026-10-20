@@ -1,0 +1,6859 @@
+{
+  "schemaVersion": "1.0.0",
+  "provenance": {
+    "exportedAtUtc": "2026-10-15T23:23:31.2909651Z",
+    "sourceFileSha256": {
+      "enshrouded.exe": "4D6D43EA4A91E71C82D60B045DDE932179C99E32E40657EFE374688B2933589A",
+      "enshrouded.kfc": "13CA8DACE2DDC52E6F83800F6BBD70EF1B1ECC052ED2954EF147EEDE2B655EC9",
+      "enshrouded.kfc_resources": "790F0E312506ED8289C057A1DCDA82A5F883D6C43C221E20F680A991975F8FC4"
+    },
+    "parserRevision": "f201f7667ddd5d0d78f0a27368f2e7481b870618",
+    "parserSha256": "C1AEE11CFCFC4B4B3E9B08C3C81E69A3D1D3FE4DD43DACD7F0067D80743E52CC",
+    "gameBuild": "1267041|^/game38/branches/release_1.0|2026-10-15T17:07:04.598331Z"
+  },
+  "transform": {
+    "center": {
+      "x": 3999.5940755208335,
+      "y": 4000.5196126302085
+    },
+    "scale": 0.3380885790867056
+  },
+  "nodes": {
+    "1": {
+      "gameNodeId": "1196649862",
+      "type": "OPPORTUNITY",
+      "position": {
+        "kind": "cartesian",
+        "x": 35.34269271554923,
+        "y": 130.14905294408794
+      }
+    },
+    "2": {
+      "gameNodeId": "2193423673",
+      "type": "POWER_PARRY",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": -35.26548922003197,
+        "y": 129.35401651982937
+      },
+      "baseAnchor": {
+        "x": -51.00732597797168,
+        "y": 190.937478513266
+      }
+    },
+    "3": {
+      "gameNodeId": "3223249169",
+      "type": "MERCILESS_ATTACK",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": -95.3127777404748,
+        "y": 93.48113443912703
+      },
+      "baseAnchor": {
+        "x": -139.51398002168239,
+        "y": 140.73462616517037
+      }
+    },
+    "4": {
+      "gameNodeId": "802872125",
+      "type": "MASON",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": -129.6353718103357,
+        "y": 34.68970962249382
+      },
+      "baseAnchor": {
+        "x": -191.60042157259994,
+        "y": 50.50921760917391
+      }
+    },
+    "5": {
+      "gameNodeId": "4195583476",
+      "type": "PICKAXE_SPECIALIZATION",
+      "position": {
+        "kind": "cartesian",
+        "x": -64.57816522440297,
+        "y": 16.510349957081086
+      }
+    },
+    "6": {
+      "gameNodeId": "289243756",
+      "type": "PROSPECTOR",
+      "position": {
+        "kind": "cartesian",
+        "x": -130.0027625001587,
+        "y": -33.99848246002686
+      }
+    },
+    "7": {
+      "gameNodeId": "3077911823",
+      "type": "MINER",
+      "position": {
+        "kind": "cartesian",
+        "x": -56.272213677445684,
+        "y": -33.16886129098377
+      }
+    },
+    "8": {
+      "gameNodeId": "1353284146",
+      "type": "QUALITY_GEAR",
+      "position": {
+        "kind": "cartesian",
+        "x": -94.71336385831472,
+        "y": -95.85664142397145
+      }
+    },
+    "9": {
+      "gameNodeId": "2116701756",
+      "type": "LUMBERJACK",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": -34.57024505459073,
+        "y": -129.4743340130217
+      },
+      "baseAnchor": {
+        "x": -51.70199235531389,
+        "y": -191.6180028390417
+      }
+    },
+    "10": {
+      "gameNodeId": "2791798199",
+      "type": "FELLING_AXE_SPECIALIZATION",
+      "position": {
+        "kind": "cartesian",
+        "x": -17.260704101681828,
+        "y": -64.04660017329984
+      }
+    },
+    "11": {
+      "gameNodeId": "3126571237",
+      "type": "FISHERMANS_RESOLVE",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": 34.067431839843756,
+        "y": -128.1796759654204
+      },
+      "baseAnchor": {
+        "x": 51.96681190070031,
+        "y": -191.20339860741268
+      }
+    },
+    "12": {
+      "gameNodeId": "4292213056",
+      "type": "DOUBLE_JUMP",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": 93.40494895121272,
+        "y": -93.27013172810695
+      },
+      "baseAnchor": {
+        "x": 140.2546493371945,
+        "y": -139.82524272474294
+      }
+    },
+    "13": {
+      "gameNodeId": "2778233134",
+      "type": "WELL_RESTED",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": 129.82491382053485,
+        "y": -34.96891884291807
+      },
+      "baseAnchor": {
+        "x": 191.0704523171988,
+        "y": -51.264936928979886
+      }
+    },
+    "14": {
+      "gameNodeId": "29426941",
+      "type": "GIANT_SLAYER_HOOK",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": 128.081314419991,
+        "y": 33.8915366342691
+      },
+      "baseAnchor": {
+        "x": 190.6173013652491,
+        "y": 51.478415874710066
+      }
+    },
+    "15": {
+      "gameNodeId": "3655395818",
+      "type": "SAVIOUR",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": 94.3634168663384,
+        "y": 93.88558610844461
+      },
+      "baseAnchor": {
+        "x": 139.90120810290512,
+        "y": 140.00017495015243
+      }
+    },
+    "16": {
+      "gameNodeId": "3206142296",
+      "type": "GROUNDING_HOOK",
+      "position": {
+        "kind": "cartesian",
+        "x": 45.4095773060211,
+        "y": 45.80073984906111
+      }
+    },
+    "17": {
+      "gameNodeId": "3844459022",
+      "type": "ATTR_CONS",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": -69.0667533422582,
+        "y": 258.32358384405507
+      },
+      "baseAnchor": {
+        "x": -51.00732597797168,
+        "y": 190.937478513266
+      }
+    },
+    "18": {
+      "gameNodeId": "1023573379",
+      "type": "HEAVY_PLATES",
+      "position": {
+        "kind": "cartesian",
+        "x": -86.5487227721476,
+        "y": 322.04420147462866
+      }
+    },
+    "19": {
+      "gameNodeId": "2903868533",
+      "type": "ONE_HANDED_SPECIALIZATION",
+      "position": {
+        "kind": "cartesian",
+        "x": -352.8172506561453,
+        "y": 352.38814669460254
+      }
+    },
+    "20": {
+      "gameNodeId": "3385478732",
+      "type": "SHINY_PLATES",
+      "position": {
+        "kind": "cartesian",
+        "x": -160.24427414429107,
+        "y": 438.27948417865446
+      }
+    },
+    "21": {
+      "gameNodeId": "2214899032",
+      "type": "PURIFICATION",
+      "position": {
+        "kind": "cartesian",
+        "x": -82.89223205804555,
+        "y": 459.44287175206097
+      }
+    },
+    "22": {
+      "gameNodeId": "3086646529",
+      "type": "ATTR_CONS",
+      "position": {
+        "kind": "cartesian",
+        "x": -139.58265426430938,
+        "y": 520.597614976021
+      }
+    },
+    "23": {
+      "gameNodeId": "1746924892",
+      "type": "TOWER",
+      "position": {
+        "kind": "cartesian",
+        "x": -227.44045227281487,
+        "y": 483.60993202882815
+      }
+    },
+    "24": {
+      "gameNodeId": "3873499523",
+      "type": "WARDEN",
+      "position": {
+        "kind": "cartesian",
+        "x": -47.03833444345404,
+        "y": 534.1794321963338
+      }
+    },
+    "25": {
+      "gameNodeId": "220208207",
+      "type": "SOUL_LEECH",
+      "position": {
+        "kind": "cartesian",
+        "x": -253.55284253784265,
+        "y": 543.771540051721
+      }
+    },
+    "26": {
+      "gameNodeId": "3155992996",
+      "type": "SNAP",
+      "position": {
+        "kind": "cartesian",
+        "x": -17.15645462038629,
+        "y": 65.11553567021524
+      }
+    },
+    "27": {
+      "gameNodeId": "3576056527",
+      "type": "ABSORB",
+      "position": {
+        "kind": "cartesian",
+        "x": -53.523840772697135,
+        "y": 599.7570607771742
+      }
+    },
+    "28": {
+      "gameNodeId": "4239066035",
+      "type": "ATTR_STR",
+      "position": {
+        "kind": "cartesian",
+        "x": -282.5078677089171,
+        "y": 604.444903248036
+      }
+    },
+    "29": {
+      "gameNodeId": "660703408",
+      "type": "ATTR_CONS",
+      "position": {
+        "kind": "cartesian",
+        "x": -155.39902568702334,
+        "y": 579.7183790090985
+      }
+    },
+    "30": {
+      "gameNodeId": "2805707774",
+      "type": "ATTR_CONS",
+      "position": {
+        "kind": "cartesian",
+        "x": -58.28456708519321,
+        "y": 665.4008873659313
+      }
+    },
+    "31": {
+      "gameNodeId": "728443669",
+      "type": "THICK_SKIN",
+      "position": {
+        "kind": "cartesian",
+        "x": -174.749809452631,
+        "y": 652.4982187854441
+      }
+    },
+    "32": {
+      "gameNodeId": "2346031477",
+      "type": "NEMESIS",
+      "position": {
+        "kind": "cartesian",
+        "x": -265.81639493965105,
+        "y": 693.1680627465672
+      }
+    },
+    "33": {
+      "gameNodeId": "3435349512",
+      "type": "EARTH_AURA",
+      "position": {
+        "kind": "cartesian",
+        "x": -206.70371993995988,
+        "y": 769.8540802369507
+      }
+    },
+    "34": {
+      "gameNodeId": "4039776277",
+      "type": "MARTYR",
+      "position": {
+        "kind": "cartesian",
+        "x": -115.03276810135955,
+        "y": 732.54679792984
+      }
+    },
+    "35": {
+      "gameNodeId": "134064960",
+      "type": "ATTR_CONS",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": -188.48498814265645,
+        "y": 188.29269476055697
+      },
+      "baseAnchor": {
+        "x": -139.51398002168239,
+        "y": 140.73462616517037
+      }
+    },
+    "36": {
+      "gameNodeId": "2571965916",
+      "type": "WARRIOR_PATH",
+      "position": {
+        "kind": "cartesian",
+        "x": -236.2646797445977,
+        "y": 235.49517605157212
+      }
+    },
+    "37": {
+      "gameNodeId": "4261093250",
+      "type": "HEAVY_HANDED",
+      "position": {
+        "kind": "cartesian",
+        "x": -346.8931892768406,
+        "y": 200.38662508472302
+      }
+    },
+    "38": {
+      "gameNodeId": "1149171418",
+      "type": "ATTR_STR",
+      "position": {
+        "kind": "cartesian",
+        "x": -283.58073766764977,
+        "y": 284.10052684702026
+      }
+    },
+    "39": {
+      "gameNodeId": "3141319256",
+      "type": "SLASHER",
+      "position": {
+        "kind": "cartesian",
+        "x": -397.9082466098516,
+        "y": 302.4827726763478
+      }
+    },
+    "40": {
+      "gameNodeId": "3916335172",
+      "type": "BATTLE_HEAL",
+      "position": {
+        "kind": "cartesian",
+        "x": -427.4233135311954,
+        "y": 427.34492694576085
+      }
+    },
+    "41": {
+      "gameNodeId": "2506510512",
+      "type": "THRUST",
+      "position": {
+        "kind": "cartesian",
+        "x": 544.00158225629,
+        "y": -544.2559465884561
+      }
+    },
+    "42": {
+      "gameNodeId": "3653629718",
+      "type": "VETERAN",
+      "position": {
+        "kind": "cartesian",
+        "x": -201.1476270385772,
+        "y": 347.3962226013394
+      }
+    },
+    "43": {
+      "gameNodeId": "3646732803",
+      "type": "ATTR_CONS",
+      "position": {
+        "kind": "cartesian",
+        "x": -509.77883547268453,
+        "y": 429.2542689895679
+      }
+    },
+    "44": {
+      "gameNodeId": "3980909207",
+      "type": "ATTR_STR",
+      "position": {
+        "kind": "cartesian",
+        "x": -426.8980216080245,
+        "y": 512.9793963492176
+      }
+    },
+    "45": {
+      "gameNodeId": "2508204276",
+      "type": "SWIFT_BLADES",
+      "position": {
+        "kind": "cartesian",
+        "x": -514.8965522892212,
+        "y": 513.930600642527
+      }
+    },
+    "46": {
+      "gameNodeId": "527879180",
+      "type": "ATTR_CONS",
+      "position": {
+        "kind": "cartesian",
+        "x": -303.564859730946,
+        "y": 392.71907666506877
+      }
+    },
+    "47": {
+      "gameNodeId": "190967951",
+      "type": "ATTR_STR",
+      "position": {
+        "kind": "cartesian",
+        "x": -570.6104300669755,
+        "y": 571.1004218886677
+      }
+    },
+    "48": {
+      "gameNodeId": "3337133885",
+      "type": "BASH",
+      "position": {
+        "kind": "cartesian",
+        "x": -520.8321694305063,
+        "y": 299.774102068118
+      }
+    },
+    "49": {
+      "gameNodeId": "2402369183",
+      "type": "BREACH",
+      "position": {
+        "kind": "cartesian",
+        "x": -578.0080161811082,
+        "y": 333.62109399132424
+      }
+    },
+    "50": {
+      "gameNodeId": "168513822",
+      "type": "SHOCKWAVE",
+      "position": {
+        "kind": "cartesian",
+        "x": -635.5768413802043,
+        "y": 367.36193798662384
+      }
+    },
+    "51": {
+      "gameNodeId": "3904289011",
+      "type": "ATTR_STR",
+      "position": {
+        "kind": "cartesian",
+        "x": -546.460208186237,
+        "y": 383.091641194484
+      }
+    },
+    "52": {
+      "gameNodeId": "3781823445",
+      "type": "ATTR_CONS",
+      "position": {
+        "kind": "cartesian",
+        "x": -604.9082617897353,
+        "y": 282.00893392854925
+      }
+    },
+    "53": {
+      "gameNodeId": "1863946535",
+      "type": "ATTR_STR",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": -257.2951760552284,
+        "y": 68.7726041724163
+      },
+      "baseAnchor": {
+        "x": -191.60042157259994,
+        "y": 50.50921760917391
+      }
+    },
+    "54": {
+      "gameNodeId": "1173687821",
+      "type": "BARBARIAN_PATH",
+      "position": {
+        "kind": "cartesian",
+        "x": -322.20463397012475,
+        "y": 86.33653697121026
+      }
+    },
+    "55": {
+      "gameNodeId": "1131166881",
+      "type": "ATTR_CONS",
+      "position": {
+        "kind": "cartesian",
+        "x": -387.0804976341206,
+        "y": 103.49304661903452
+      }
+    },
+    "56": {
+      "gameNodeId": "601427122",
+      "type": "ATTR_CONS",
+      "position": {
+        "kind": "cartesian",
+        "x": -566.8389595211675,
+        "y": -195.7287175401345
+      }
+    },
+    "57": {
+      "gameNodeId": "3166359215",
+      "type": "ATTR_STR",
+      "position": {
+        "kind": "cartesian",
+        "x": -438.97800247665697,
+        "y": 159.30291976238402
+      }
+    },
+    "58": {
+      "gameNodeId": "4264247508",
+      "type": "TWO_HANDED_SPECIALIZATION",
+      "position": {
+        "kind": "cartesian",
+        "x": -483.5325634509969,
+        "y": 129.31340627058358
+      }
+    },
+    "59": {
+      "gameNodeId": "3804983481",
+      "type": "RELENTLESS",
+      "position": {
+        "kind": "cartesian",
+        "x": -533.076654825047,
+        "y": 142.13419402332326
+      }
+    },
+    "60": {
+      "gameNodeId": "2489448655",
+      "type": "TITAN_EDGE",
+      "position": {
+        "kind": "cartesian",
+        "x": -605.8338783243736,
+        "y": 107.00467760259525
+      }
+    },
+    "61": {
+      "gameNodeId": "2751446638",
+      "type": "BRUTE",
+      "position": {
+        "kind": "cartesian",
+        "x": -580.3983255467753,
+        "y": 211.81098154327594
+      }
+    },
+    "62": {
+      "gameNodeId": "1757117632",
+      "type": "BLOOD_RAGE",
+      "position": {
+        "kind": "cartesian",
+        "x": -644.3053211098629,
+        "y": 172.34112092267114
+      }
+    },
+    "63": {
+      "gameNodeId": "3433516950",
+      "type": "WHIRLWIND_CRESCENDO",
+      "position": {
+        "kind": "cartesian",
+        "x": -723.5610924412392,
+        "y": 126.39293505348257
+      }
+    },
+    "64": {
+      "gameNodeId": "4272552236",
+      "type": "BARBARIAN",
+      "position": {
+        "kind": "cartesian",
+        "x": -689.6256576683037,
+        "y": 252.30072069981708
+      }
+    },
+    "65": {
+      "gameNodeId": "3377542145",
+      "type": "HEAVY_SPECIALIZATION",
+      "position": {
+        "kind": "cartesian",
+        "x": -708.3846626087741,
+        "y": 191.40581703810437
+      }
+    },
+    "66": {
+      "gameNodeId": "899622224",
+      "type": "ATTR_STR",
+      "position": {
+        "kind": "cartesian",
+        "x": -773.168162718083,
+        "y": 207.52775582404564
+      }
+    },
+    "67": {
+      "gameNodeId": "3968160425",
+      "type": "STEADFAST",
+      "position": {
+        "kind": "cartesian",
+        "x": -401.16779689992336,
+        "y": -0.007538759006379156
+      }
+    },
+    "68": {
+      "gameNodeId": "1365673623",
+      "type": "ATTR_STR",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": -256.89749276078516,
+        "y": -68.93617323187851
+      },
+      "baseAnchor": {
+        "x": -190.93646050566306,
+        "y": -51.25907650683263
+      }
+    },
+    "69": {
+      "gameNodeId": "1003909512",
+      "type": "WET_DOG",
+      "position": {
+        "kind": "cartesian",
+        "x": -322.05993932189745,
+        "y": -86.81673390893826
+      }
+    },
+    "70": {
+      "gameNodeId": "904862120",
+      "type": "FINESSE",
+      "position": {
+        "kind": "cartesian",
+        "x": -345.8889110195779,
+        "y": -201.04238706339765
+      }
+    },
+    "71": {
+      "gameNodeId": "4023524580",
+      "type": "SOAKED_DOG",
+      "position": {
+        "kind": "cartesian",
+        "x": -418.3525356234428,
+        "y": -112.29768432288859
+      }
+    },
+    "72": {
+      "gameNodeId": "2711201416",
+      "type": "ATTR_STR",
+      "position": {
+        "kind": "cartesian",
+        "x": -459.54321428525844,
+        "y": -81.87161065169616
+      }
+    },
+    "73": {
+      "gameNodeId": "643526784",
+      "type": "ATTR_CONS",
+      "position": {
+        "kind": "cartesian",
+        "x": -438.726086865482,
+        "y": -159.95174828387036
+      }
+    },
+    "74": {
+      "gameNodeId": "2517449291",
+      "type": "CRASH_DOWN_ATTACK",
+      "position": {
+        "kind": "cartesian",
+        "x": -515.9663682251446,
+        "y": -137.89675113251104
+      }
+    },
+    "75": {
+      "gameNodeId": "3519088837",
+      "type": "ATTR_STR",
+      "position": {
+        "kind": "cartesian",
+        "x": -459.647711390025,
+        "y": 81.22558852954796
+      }
+    },
+    "76": {
+      "gameNodeId": "2091926037",
+      "type": "VIGOROUS_DEFLECTION",
+      "position": {
+        "kind": "cartesian",
+        "x": -588.6341996514365,
+        "y": -114.70623528425334
+      }
+    },
+    "77": {
+      "gameNodeId": "202635800",
+      "type": "CRASH_DOWN_FORCE",
+      "position": {
+        "kind": "cartesian",
+        "x": -608.7171234796659,
+        "y": -163.32759906416018
+      }
+    },
+    "78": {
+      "gameNodeId": "3170981638",
+      "type": "UPWARDS_SLASH_ATTACK",
+      "position": {
+        "kind": "cartesian",
+        "x": -607.9265442778856,
+        "y": -276.08971496378894
+      }
+    },
+    "79": {
+      "gameNodeId": "4071143870",
+      "type": "ATHLETE",
+      "position": {
+        "kind": "cartesian",
+        "x": -691.2006254850892,
+        "y": -185.47091525351334
+      }
+    },
+    "80": {
+      "gameNodeId": "2203998011",
+      "type": "BLOOD_WARRIOR",
+      "position": {
+        "kind": "cartesian",
+        "x": -664.1807777399639,
+        "y": -67.48221075126027
+      }
+    },
+    "81": {
+      "gameNodeId": "3304713733",
+      "type": "SPLASH_DASH",
+      "position": {
+        "kind": "cartesian",
+        "x": -776.4199541393964,
+        "y": -209.07017491125282
+      }
+    },
+    "82": {
+      "gameNodeId": "1065999155",
+      "type": "ATTR_ENDURANCE",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": -187.7642387597011,
+        "y": -188.75663109035526
+      },
+      "baseAnchor": {
+        "x": -140.5876753919851,
+        "y": -139.86502756241865
+      }
+    },
+    "83": {
+      "gameNodeId": "882997635",
+      "type": "RUNNER",
+      "position": {
+        "kind": "cartesian",
+        "x": -236.0673238382021,
+        "y": -234.98331082327394
+      }
+    },
+    "84": {
+      "gameNodeId": "291846185",
+      "type": "INNER_FIRES",
+      "position": {
+        "kind": "cartesian",
+        "x": 63.574079563173186,
+        "y": -17.65714927877007
+      }
+    },
+    "85": {
+      "gameNodeId": "3830325263",
+      "type": "KICK",
+      "position": {
+        "kind": "cartesian",
+        "x": -236.46401663876136,
+        "y": -409.58848065511563
+      }
+    },
+    "86": {
+      "gameNodeId": "2670026153",
+      "type": "WANDERLUST",
+      "position": {
+        "kind": "cartesian",
+        "x": -299.4252556249019,
+        "y": -358.17309871063725
+      }
+    },
+    "87": {
+      "gameNodeId": "1078926128",
+      "type": "ATTR_ENDURANCE",
+      "position": {
+        "kind": "cartesian",
+        "x": -329.53610461749764,
+        "y": -329.43994416958844
+      }
+    },
+    "88": {
+      "gameNodeId": "4141089830",
+      "type": "ARACHNOID",
+      "position": {
+        "kind": "cartesian",
+        "x": -358.24730321078346,
+        "y": -298.7390084455741
+      }
+    },
+    "89": {
+      "gameNodeId": "1779930900",
+      "type": "GOOD_METABOLISM",
+      "position": {
+        "kind": "cartesian",
+        "x": -364.93082577567816,
+        "y": -435.0622499884066
+      }
+    },
+    "90": {
+      "gameNodeId": "2166505620",
+      "type": "REBOUND",
+      "position": {
+        "kind": "cartesian",
+        "x": -376.27528239425163,
+        "y": -377.27221448854095
+      }
+    },
+    "91": {
+      "gameNodeId": "1222197801",
+      "type": "SWIFTSHOT_SUSTENANCE",
+      "position": {
+        "kind": "cartesian",
+        "x": -435.85827690654924,
+        "y": -365.42681558811273
+      }
+    },
+    "92": {
+      "gameNodeId": "1444116688",
+      "type": "ATTR_DEX",
+      "position": {
+        "kind": "cartesian",
+        "x": -472.35822415700784,
+        "y": -472.1589698040012
+      }
+    },
+    "93": {
+      "gameNodeId": "142828059",
+      "type": "DESSERT_STOMACH",
+      "position": {
+        "kind": "cartesian",
+        "x": -519.3712734926997,
+        "y": -521.310165270714
+      }
+    },
+    "94": {
+      "gameNodeId": "1899983678",
+      "type": "SWEET_TOOTH",
+      "position": {
+        "kind": "cartesian",
+        "x": -470.83575251607664,
+        "y": -561.6743593274527
+      }
+    },
+    "95": {
+      "gameNodeId": "2998370207",
+      "type": "LAST_MEAL",
+      "position": {
+        "kind": "cartesian",
+        "x": -514.0079967340774,
+        "y": -612.2325513564489
+      }
+    },
+    "96": {
+      "gameNodeId": "2932169734",
+      "type": "ATTR_ENDURANCE",
+      "position": {
+        "kind": "cartesian",
+        "x": -566.4586098696949,
+        "y": -565.8029029184584
+      }
+    },
+    "97": {
+      "gameNodeId": "3147036259",
+      "type": "STRATEGIC_MANEUVER",
+      "position": {
+        "kind": "cartesian",
+        "x": -656.4850942373128,
+        "y": -456.9246786204766
+      }
+    },
+    "98": {
+      "gameNodeId": "1669339746",
+      "type": "ATTR_ENDURANCE",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": -68.6300280805522,
+        "y": -258.0226938130581
+      },
+      "baseAnchor": {
+        "x": -51.70199235531389,
+        "y": -191.6180028390417
+      }
+    },
+    "99": {
+      "gameNodeId": "1393481644",
+      "type": "MITHRIDATIST",
+      "position": {
+        "kind": "cartesian",
+        "x": -85.84596736141903,
+        "y": -321.4496300070129
+      }
+    },
+    "100": {
+      "gameNodeId": "1087433670",
+      "type": "EAGLE_EYE",
+      "position": {
+        "kind": "cartesian",
+        "x": 0.1465655811193238,
+        "y": -400.81270484249393
+      }
+    },
+    "101": {
+      "gameNodeId": "232558175",
+      "type": "SNAKE_EATER",
+      "position": {
+        "kind": "cartesian",
+        "x": -69.72741276291494,
+        "y": -394.33966222795834
+      }
+    },
+    "102": {
+      "gameNodeId": "2555735449",
+      "type": "ATTR_ENDURANCE",
+      "position": {
+        "kind": "cartesian",
+        "x": -120.37276825370681,
+        "y": -450.1409510909795
+      }
+    },
+    "103": {
+      "gameNodeId": "3390913916",
+      "type": "BOUNTY_BONANZA",
+      "position": {
+        "kind": "cartesian",
+        "x": -92.77026248129322,
+        "y": -525.8998663058987
+      }
+    },
+    "104": {
+      "gameNodeId": "2661746342",
+      "type": "ATTR_DEX",
+      "position": {
+        "kind": "cartesian",
+        "x": -183.09653633114806,
+        "y": -501.8925231679335
+      }
+    },
+    "105": {
+      "gameNodeId": "237479378",
+      "type": "ATTR_ENDURANCE",
+      "position": {
+        "kind": "cartesian",
+        "x": -154.87530204583555,
+        "y": -579.0335075157209
+      }
+    },
+    "106": {
+      "gameNodeId": "411072318",
+      "type": "PRIMAL_FORCE",
+      "position": {
+        "kind": "cartesian",
+        "x": -110.58446006812206,
+        "y": -625.7957968164359
+      }
+    },
+    "107": {
+      "gameNodeId": "2584030793",
+      "type": "CULL_THE_HERD",
+      "position": {
+        "kind": "cartesian",
+        "x": -216.7939636778638,
+        "y": -595.7142499345764
+      }
+    },
+    "108": {
+      "gameNodeId": "2276004814",
+      "type": "VUKAH_LANGUAGE",
+      "position": {
+        "kind": "cartesian",
+        "x": -126.96656858093863,
+        "y": -723.4186676748295
+      }
+    },
+    "109": {
+      "gameNodeId": "1173146866",
+      "type": "VUKAH_CULTURE",
+      "position": {
+        "kind": "cartesian",
+        "x": -79.79933236396403,
+        "y": -798.7809726303466
+      }
+    },
+    "110": {
+      "gameNodeId": "1075009690",
+      "type": "ENDURANCE_OF_THE_FLAME",
+      "position": {
+        "kind": "cartesian",
+        "x": -189.86012381833626,
+        "y": -708.4565972271027
+      }
+    },
+    "111": {
+      "gameNodeId": "2233896186",
+      "type": "ATTR_DEX",
+      "position": {
+        "kind": "cartesian",
+        "x": -207.71146492581673,
+        "y": -776.1907373463974
+      }
+    },
+    "112": {
+      "gameNodeId": "1769595312",
+      "type": "CALM_SPIRIT",
+      "position": {
+        "kind": "cartesian",
+        "x": -250.49568316474367,
+        "y": -688.8254624217324
+      }
+    },
+    "113": {
+      "gameNodeId": "1770341796",
+      "type": "BEAST_MASTER",
+      "position": {
+        "kind": "cartesian",
+        "x": -338.7018048558043,
+        "y": -725.5696902263431
+      }
+    },
+    "114": {
+      "gameNodeId": "2282076069",
+      "type": "ATTR_DEX",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": 69.1773034652049,
+        "y": -257.6630619919934
+      },
+      "baseAnchor": {
+        "x": 51.96681190070031,
+        "y": -191.20339860741268
+      }
+    },
+    "115": {
+      "gameNodeId": "856922754",
+      "type": "MARKSMAN",
+      "position": {
+        "kind": "cartesian",
+        "x": 86.74321725176695,
+        "y": -322.46232746229
+      }
+    },
+    "116": {
+      "gameNodeId": "293824207",
+      "type": "SILENT_STRIDE",
+      "position": {
+        "kind": "cartesian",
+        "x": 199.85943471494107,
+        "y": -346.6521690983901
+      }
+    },
+    "117": {
+      "gameNodeId": "1442728401",
+      "type": "SNIPER",
+      "position": {
+        "kind": "cartesian",
+        "x": 168.20671690951832,
+        "y": -436.5007772726652
+      }
+    },
+    "118": {
+      "gameNodeId": "226037501",
+      "type": "COUNTER_BATTERY",
+      "position": {
+        "kind": "cartesian",
+        "x": 70.65957756267538,
+        "y": -462.56917310101005
+      }
+    },
+    "119": {
+      "gameNodeId": "137870545",
+      "type": "VITALITY_SURGE",
+      "position": {
+        "kind": "cartesian",
+        "x": 206.21824036818367,
+        "y": -564.7072516003927
+      }
+    },
+    "120": {
+      "gameNodeId": "1542383404",
+      "type": "SKILL_SHOT",
+      "position": {
+        "kind": "cartesian",
+        "x": 104.27182243536338,
+        "y": -590.7912477074112
+      }
+    },
+    "121": {
+      "gameNodeId": "3005573120",
+      "type": "FATAL_PRECISION",
+      "position": {
+        "kind": "cartesian",
+        "x": 317.23428063255847,
+        "y": -549.287160272453
+      }
+    },
+    "122": {
+      "gameNodeId": "1573526808",
+      "type": "BOW_SPECIALIZATION",
+      "position": {
+        "kind": "cartesian",
+        "x": 164.70614644099604,
+        "y": -614.1835766845427
+      }
+    },
+    "123": {
+      "gameNodeId": "3408597457",
+      "type": "BEE_STING",
+      "position": {
+        "kind": "cartesian",
+        "x": -3.9863526912074425,
+        "y": -650.1491524845601
+      }
+    },
+    "124": {
+      "gameNodeId": "543522262",
+      "type": "BLESSED_ARROWS",
+      "position": {
+        "kind": "cartesian",
+        "x": 228.82906967080515,
+        "y": -627.5309770189652
+      }
+    },
+    "125": {
+      "gameNodeId": "2054949573",
+      "type": "EAGLES_BANE",
+      "position": {
+        "kind": "cartesian",
+        "x": 116.01610841846221,
+        "y": -658.2480082685954
+      }
+    },
+    "126": {
+      "gameNodeId": "521283386",
+      "type": "RANGER",
+      "position": {
+        "kind": "cartesian",
+        "x": 190.33170896201668,
+        "y": -709.1928643475748
+      }
+    },
+    "127": {
+      "gameNodeId": "3651771067",
+      "type": "ATTR_DEX",
+      "position": {
+        "kind": "cartesian",
+        "x": 272.00090118302097,
+        "y": -718.6145659843281
+      }
+    },
+    "128": {
+      "gameNodeId": "3179300754",
+      "type": "MULTI_SHOT",
+      "position": {
+        "kind": "cartesian",
+        "x": 119.83941481086852,
+        "y": -758.1878094040799
+      }
+    },
+    "129": {
+      "gameNodeId": "2757603307",
+      "type": "RICOCHETS",
+      "position": {
+        "kind": "cartesian",
+        "x": 352.45393199673435,
+        "y": -756.3265063136489
+      }
+    },
+    "130": {
+      "gameNodeId": "530860338",
+      "type": "CHAIN_REACTION",
+      "position": {
+        "kind": "cartesian",
+        "x": 230.40742167502782,
+        "y": -791.2617208507904
+      }
+    },
+    "131": {
+      "gameNodeId": "3040026531",
+      "type": "MULTI_SHOT_TRIGGER",
+      "position": {
+        "kind": "cartesian",
+        "x": 196.799964189446,
+        "y": -800.410376340176
+      }
+    },
+    "132": {
+      "gameNodeId": "3060709718",
+      "type": "MULTI_SHOT_SPREAD",
+      "position": {
+        "kind": "cartesian",
+        "x": 72.84378165930438,
+        "y": -833.449455418631
+      }
+    },
+    "133": {
+      "gameNodeId": "1313439627",
+      "type": "ATTR_DEX",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": 188.19042626702952,
+        "y": -188.88589054222288
+      },
+      "baseAnchor": {
+        "x": 140.2546493371945,
+        "y": -139.82524272474294
+      }
+    },
+    "134": {
+      "gameNodeId": "494749233",
+      "type": "AIRBORNE",
+      "position": {
+        "kind": "cartesian",
+        "x": 235.75229175563828,
+        "y": -236.63231805789167
+      }
+    },
+    "135": {
+      "gameNodeId": "3088989644",
+      "type": "UPDRAFT",
+      "position": {
+        "kind": "cartesian",
+        "x": 346.4249608068781,
+        "y": -201.6373437230795
+      }
+    },
+    "136": {
+      "gameNodeId": "2369077220",
+      "type": "ATTR_ENDURANCE",
+      "position": {
+        "kind": "cartesian",
+        "x": 282.96963045491407,
+        "y": -282.57266251716493
+      }
+    },
+    "137": {
+      "gameNodeId": "3077082216",
+      "type": "QUICK_REFLEX_BLOCK",
+      "position": {
+        "kind": "cartesian",
+        "x": 363.63413171287067,
+        "y": -294.4539668208897
+      }
+    },
+    "138": {
+      "gameNodeId": "606477139",
+      "type": "SNEAK_ATTACK",
+      "position": {
+        "kind": "cartesian",
+        "x": 292.55563026468303,
+        "y": -368.33812473678637
+      }
+    },
+    "139": {
+      "gameNodeId": "1587016302",
+      "type": "CUTTHROAT",
+      "position": {
+        "kind": "cartesian",
+        "x": 238.54482417938377,
+        "y": -410.2602831319678
+      }
+    },
+    "140": {
+      "gameNodeId": "3055155591",
+      "type": "DAGGER_SPECIALIZATION",
+      "position": {
+        "kind": "cartesian",
+        "x": 438.34064717599415,
+        "y": -305.98760777131537
+      }
+    },
+    "141": {
+      "gameNodeId": "2701798535",
+      "type": "ATTR_DEX",
+      "position": {
+        "kind": "cartesian",
+        "x": 371.88494576694956,
+        "y": -371.8390253699367
+      }
+    },
+    "142": {
+      "gameNodeId": "1311628529",
+      "type": "BACKSTAB_MASTERY",
+      "position": {
+        "kind": "cartesian",
+        "x": 301.68798387556023,
+        "y": -440.1164101140505
+      }
+    },
+    "143": {
+      "gameNodeId": "1082068405",
+      "type": "VEILED_VIGOR",
+      "position": {
+        "kind": "cartesian",
+        "x": 422.1478880773438,
+        "y": -422.1406794829656
+      }
+    },
+    "144": {
+      "gameNodeId": "2832342611",
+      "type": "ATTR_ENDURANCE",
+      "position": {
+        "kind": "cartesian",
+        "x": 472.5381088518376,
+        "y": -471.9422167257098
+      }
+    },
+    "145": {
+      "gameNodeId": "1003933989",
+      "type": "SHELL_SHOCK",
+      "position": {
+        "kind": "cartesian",
+        "x": 548.0827472231755,
+        "y": -382.70441311326124
+      }
+    },
+    "146": {
+      "gameNodeId": "1090908724",
+      "type": "VILE_CONCOCTION",
+      "position": {
+        "kind": "cartesian",
+        "x": 636.2284487873095,
+        "y": -366.62985295144006
+      }
+    },
+    "147": {
+      "gameNodeId": "2968145550",
+      "type": "SLICE_AND_DICE",
+      "position": {
+        "kind": "cartesian",
+        "x": 384.40115665034597,
+        "y": -545.2379387333278
+      }
+    },
+    "148": {
+      "gameNodeId": "2561298721",
+      "type": "POISON_MASTERY",
+      "position": {
+        "kind": "cartesian",
+        "x": 559.9506798594657,
+        "y": -442.2459719647431
+      }
+    },
+    "149": {
+      "gameNodeId": "770186136",
+      "type": "DAGGER_MASTERY",
+      "position": {
+        "kind": "cartesian",
+        "x": 437.9380114121306,
+        "y": -563.5452371920961
+      }
+    },
+    "150": {
+      "gameNodeId": "1985702775",
+      "type": "POISONED_BLADES",
+      "position": {
+        "kind": "cartesian",
+        "x": 590.5103876638469,
+        "y": -540.9641227059959
+      }
+    },
+    "151": {
+      "gameNodeId": "3178698450",
+      "type": "EXPOSE_WEAKNESS",
+      "position": {
+        "kind": "cartesian",
+        "x": 540.8178047483475,
+        "y": -591.8571016677986
+      }
+    },
+    "152": {
+      "gameNodeId": "1262972838",
+      "type": "GRACEFUL_STRIDE",
+      "position": {
+        "kind": "cartesian",
+        "x": 614.4440215486079,
+        "y": -614.7784508030676
+      }
+    },
+    "153": {
+      "gameNodeId": "3959272851",
+      "type": "ATTR_SPIRIT",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": 257.8183494220361,
+        "y": -68.98437726756862
+      },
+      "baseAnchor": {
+        "x": 191.0704523171988,
+        "y": -51.264936928979886
+      }
+    },
+    "154": {
+      "gameNodeId": "3242233909",
+      "type": "COUNTERSTRIKE",
+      "position": {
+        "kind": "cartesian",
+        "x": 400.28554198643087,
+        "y": -0.7728603667436678
+      }
+    },
+    "155": {
+      "gameNodeId": "2150218293",
+      "type": "QUICK_CHARGE",
+      "position": {
+        "kind": "cartesian",
+        "x": 529.519241013068,
+        "y": -71.13193309048802
+      }
+    },
+    "156": {
+      "gameNodeId": "2826484814",
+      "type": "MANA_CURRENTS",
+      "position": {
+        "kind": "cartesian",
+        "x": 322.4497261789873,
+        "y": -86.787927045144
+      }
+    },
+    "157": {
+      "gameNodeId": "939257483",
+      "type": "ATTR_INT",
+      "position": {
+        "kind": "cartesian",
+        "x": 564.6165663825647,
+        "y": -204.92759932355662
+      }
+    },
+    "158": {
+      "gameNodeId": "4166833546",
+      "type": "ATTR_SPIRIT",
+      "position": {
+        "kind": "cartesian",
+        "x": 438.1351196950552,
+        "y": -160.20713062363947
+      }
+    },
+    "159": {
+      "gameNodeId": "3408936759",
+      "type": "BEGONE",
+      "position": {
+        "kind": "cartesian",
+        "x": 515.2993806491176,
+        "y": -139.206431670687
+      }
+    },
+    "160": {
+      "gameNodeId": "174576457",
+      "type": "SLEIGHT_OF_HAND",
+      "position": {
+        "kind": "cartesian",
+        "x": 451.0810398418123,
+        "y": -121.14865512954056
+      }
+    },
+    "161": {
+      "gameNodeId": "597251164",
+      "type": "ATTR_SPIRIT",
+      "position": {
+        "kind": "cartesian",
+        "x": 591.9192001315843,
+        "y": -104.2953191513905
+      }
+    },
+    "162": {
+      "gameNodeId": "3057307031",
+      "type": "BLOODLETTING",
+      "position": {
+        "kind": "cartesian",
+        "x": 711.3303363924801,
+        "y": -191.00455696019102
+      }
+    },
+    "163": {
+      "gameNodeId": "690056851",
+      "type": "ATTR_INT",
+      "position": {
+        "kind": "cartesian",
+        "x": 664.1679701037688,
+        "y": -58.88802548404646
+      }
+    },
+    "164": {
+      "gameNodeId": "2460851263",
+      "type": "ARCANE_CONCENTRATION",
+      "position": {
+        "kind": "cartesian",
+        "x": 579.6644796335752,
+        "y": -155.99810940455538
+      }
+    },
+    "165": {
+      "gameNodeId": "2464065620",
+      "type": "ATTR_SPIRIT",
+      "position": {
+        "kind": "cartesian",
+        "x": 604.8061858922407,
+        "y": -282.14361358306024
+      }
+    },
+    "166": {
+      "gameNodeId": "2900625199",
+      "type": "TERROR",
+      "position": {
+        "kind": "cartesian",
+        "x": 756.9090680429207,
+        "y": -133.80650663835513
+      }
+    },
+    "167": {
+      "gameNodeId": "677895850",
+      "type": "ATTR_SPIRIT",
+      "position": {
+        "kind": "cartesian",
+        "x": 460.2691912748239,
+        "y": -80.30646523259408
+      }
+    },
+    "168": {
+      "gameNodeId": "3528387231",
+      "type": "BLOOD_MAGIC",
+      "position": {
+        "kind": "cartesian",
+        "x": 721.9883807494117,
+        "y": -262.13538950191895
+      }
+    },
+    "169": {
+      "gameNodeId": "408134555",
+      "type": "SPELLSLINGER",
+      "position": {
+        "kind": "cartesian",
+        "x": 644.4644054331277,
+        "y": -173.20876605137397
+      }
+    },
+    "170": {
+      "gameNodeId": "31613866",
+      "type": "ATTR_SPIRIT",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": 257.89775401507353,
+        "y": 68.47099878472518
+      },
+      "baseAnchor": {
+        "x": 190.6173013652491,
+        "y": 51.478415874710066
+      }
+    },
+    "171": {
+      "gameNodeId": "3166875476",
+      "type": "MAGE_APPRENTICE",
+      "position": {
+        "kind": "cartesian",
+        "x": 322.2709420329175,
+        "y": 86.16187988299066
+      }
+    },
+    "172": {
+      "gameNodeId": "2500131673",
+      "type": "NECROMANCER",
+      "position": {
+        "kind": "cartesian",
+        "x": 394.4688666523879,
+        "y": 249.61004406381406
+      }
+    },
+    "173": {
+      "gameNodeId": "1407590399",
+      "type": "BONE_TO_ASH",
+      "position": {
+        "kind": "cartesian",
+        "x": 347.4430234373604,
+        "y": 200.6119624433428
+      }
+    },
+    "174": {
+      "gameNodeId": "4259351834",
+      "type": "DARK_ARTS",
+      "position": {
+        "kind": "cartesian",
+        "x": 416.4844091306995,
+        "y": 212.2652880714237
+      }
+    },
+    "175": {
+      "gameNodeId": "2378964554",
+      "type": "ATTR_INT",
+      "position": {
+        "kind": "cartesian",
+        "x": 416.6437135637164,
+        "y": 111.46008417533504
+      }
+    },
+    "176": {
+      "gameNodeId": "1778625218",
+      "type": "ARSONIST",
+      "position": {
+        "kind": "cartesian",
+        "x": 501.21191630100077,
+        "y": 182.6623973590281
+      }
+    },
+    "177": {
+      "gameNodeId": "3675065567",
+      "type": "ICEMAN",
+      "position": {
+        "kind": "cartesian",
+        "x": 525.8417023039301,
+        "y": 92.44870964732613
+      }
+    },
+    "178": {
+      "gameNodeId": "2465314888",
+      "type": "ATTR_SPIRIT",
+      "position": {
+        "kind": "cartesian",
+        "x": 544.4644730647661,
+        "y": 254.12818191587658
+      }
+    },
+    "179": {
+      "gameNodeId": "3316523540",
+      "type": "FIRE_RESISTANCE",
+      "position": {
+        "kind": "cartesian",
+        "x": 565.1804875672132,
+        "y": 205.2856078352001
+      }
+    },
+    "180": {
+      "gameNodeId": "2238298807",
+      "type": "ATTR_INT",
+      "position": {
+        "kind": "cartesian",
+        "x": 580.4922023560072,
+        "y": 155.41787258453905
+      }
+    },
+    "181": {
+      "gameNodeId": "2200866113",
+      "type": "ICE_RESISTANCE",
+      "position": {
+        "kind": "cartesian",
+        "x": 599.3304055366226,
+        "y": 53.6079777254027
+      }
+    },
+    "182": {
+      "gameNodeId": "1813568515",
+      "type": "RADIANT_AURA",
+      "position": {
+        "kind": "cartesian",
+        "x": 605.7255292989468,
+        "y": 281.8938715556863
+      }
+    },
+    "183": {
+      "gameNodeId": "1707727214",
+      "type": "ATTR_SPIRIT",
+      "position": {
+        "kind": "cartesian",
+        "x": 608.191859070214,
+        "y": 426.9551676023899
+      }
+    },
+    "184": {
+      "gameNodeId": "1012172970",
+      "type": "WIZARD",
+      "position": {
+        "kind": "cartesian",
+        "x": 645.7698763722965,
+        "y": 172.91346130533404
+      }
+    },
+    "185": {
+      "gameNodeId": "712870937",
+      "type": "FROST",
+      "position": {
+        "kind": "cartesian",
+        "x": 656.7641934028608,
+        "y": 115.37864306292349
+      }
+    },
+    "186": {
+      "gameNodeId": "4224393554",
+      "type": "ATTR_SPIRIT",
+      "position": {
+        "kind": "cartesian",
+        "x": 738.1707396622796,
+        "y": 197.81464263249114
+      }
+    },
+    "187": {
+      "gameNodeId": "3483736155",
+      "type": "ATTR_INT",
+      "position": {
+        "kind": "cartesian",
+        "x": 806.3256333294001,
+        "y": 215.68942542856064
+      }
+    },
+    "188": {
+      "gameNodeId": "1371376638",
+      "type": "CHAIN_HIT",
+      "position": {
+        "kind": "cartesian",
+        "x": 758.4971599036697,
+        "y": 254.7614376724081
+      }
+    },
+    "189": {
+      "gameNodeId": "4208308624",
+      "type": "MASS_DESTRUCTION",
+      "position": {
+        "kind": "cartesian",
+        "x": 700.383397986036,
+        "y": 305.18517015664537
+      }
+    },
+    "190": {
+      "gameNodeId": "3803217515",
+      "type": "THUNDER",
+      "position": {
+        "kind": "cartesian",
+        "x": 784.6864785270249,
+        "y": 158.36970944130144
+      }
+    },
+    "191": {
+      "gameNodeId": "1263598172",
+      "type": "SHOCK_RESISTANCE",
+      "position": {
+        "kind": "cartesian",
+        "x": 839.8744865935093,
+        "y": 111.72999375873678
+      }
+    },
+    "192": {
+      "gameNodeId": "2178463311",
+      "type": "ATTR_INT",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": 188.90341678122655,
+        "y": 188.2581925569295
+      },
+      "baseAnchor": {
+        "x": 139.90120810290512,
+        "y": 140.00017495015243
+      }
+    },
+    "193": {
+      "gameNodeId": "2877121847",
+      "type": "HEALER",
+      "position": {
+        "kind": "cartesian",
+        "x": 235.9086247070031,
+        "y": 235.26752754055622
+      }
+    },
+    "194": {
+      "gameNodeId": "3243069428",
+      "type": "BLINK",
+      "position": {
+        "kind": "cartesian",
+        "x": 198.68454388615197,
+        "y": 345.3425986150901
+      }
+    },
+    "195": {
+      "gameNodeId": "4098230685",
+      "type": "BLINK_ATTACK",
+      "position": {
+        "kind": "cartesian",
+        "x": 208.9224537539353,
+        "y": 417.2735851328108
+      }
+    },
+    "196": {
+      "gameNodeId": "2360135054",
+      "type": "EMERGENCY_BLINK",
+      "position": {
+        "kind": "cartesian",
+        "x": 257.3125372119181,
+        "y": 390.6352426153561
+      }
+    },
+    "197": {
+      "gameNodeId": "1468975901",
+      "type": "ATTR_SPIRIT",
+      "position": {
+        "kind": "cartesian",
+        "x": 305.383186392297,
+        "y": 305.2895021790979
+      }
+    },
+    "198": {
+      "gameNodeId": "1417816412",
+      "type": "WATER_AURA",
+      "position": {
+        "kind": "cartesian",
+        "x": 343.75739569483613,
+        "y": 408.95195076602283
+      }
+    },
+    "199": {
+      "gameNodeId": "2877196577",
+      "type": "HEALER_REVIVE",
+      "position": {
+        "kind": "cartesian",
+        "x": 462.01014935834365,
+        "y": 385.7793463488349
+      }
+    },
+    "200": {
+      "gameNodeId": "1569371409",
+      "type": "SHROUD_FILTER",
+      "position": {
+        "kind": "cartesian",
+        "x": 345.00261158939225,
+        "y": 492.5174435280276
+      }
+    },
+    "201": {
+      "gameNodeId": "3239982797",
+      "type": "SHROUD_RESISTANCE",
+      "position": {
+        "kind": "cartesian",
+        "x": 383.6117330247636,
+        "y": 546.4864837878831
+      }
+    },
+    "202": {
+      "gameNodeId": "3092706612",
+      "type": "SHROUD_MISTERY",
+      "position": {
+        "kind": "cartesian",
+        "x": 421.35598821705133,
+        "y": 601.4836566993753
+      }
+    },
+    "203": {
+      "gameNodeId": "1819719245",
+      "type": "ATTR_INT",
+      "position": {
+        "kind": "cartesian",
+        "x": 425.301785686451,
+        "y": 424.8488823579723
+      }
+    },
+    "204": {
+      "gameNodeId": "2152967169",
+      "type": "WATERS_OF_LIFE",
+      "position": {
+        "kind": "cartesian",
+        "x": 472.2790947011603,
+        "y": 471.91962796240966
+      }
+    },
+    "205": {
+      "gameNodeId": "610475778",
+      "type": "ATTR_INT",
+      "position": {
+        "kind": "cartesian",
+        "x": 513.4436903573628,
+        "y": 427.15640294316466
+      }
+    },
+    "206": {
+      "gameNodeId": "1587746322",
+      "type": "ATTR_SPIRIT",
+      "position": {
+        "kind": "cartesian",
+        "x": 433.4708839950963,
+        "y": 516.7962645313777
+      }
+    },
+    "207": {
+      "gameNodeId": "1966155335",
+      "type": "DIVINE_SURGE",
+      "position": {
+        "kind": "cartesian",
+        "x": 515.7337122172704,
+        "y": 517.6175490435634
+      }
+    },
+    "208": {
+      "gameNodeId": "1101080504",
+      "type": "RIGHTEOUS_FIRE",
+      "position": {
+        "kind": "cartesian",
+        "x": 610.4932716097882,
+        "y": 517.3903957794895
+      }
+    },
+    "209": {
+      "gameNodeId": "2587217951",
+      "type": "ATTR_INT",
+      "base": true,
+      "position": {
+        "kind": "cartesian",
+        "x": 69.30309618847838,
+        "y": 257.0692884222285
+      },
+      "baseAnchor": {
+        "x": 51.53743280196763,
+        "y": 191.37577205695507
+      }
+    },
+    "210": {
+      "gameNodeId": "1104997802",
+      "type": "ARCANE_DEFLECTION",
+      "position": {
+        "kind": "cartesian",
+        "x": 137.34920061066813,
+        "y": 374.8575004541199
+      }
+    },
+    "211": {
+      "gameNodeId": "1667913488",
+      "type": "EVASION_ATTACK",
+      "position": {
+        "kind": "cartesian",
+        "x": -1.518124473329084,
+        "y": 398.17257090829594
+      }
+    },
+    "212": {
+      "gameNodeId": "473572828",
+      "type": "ATTR_INT",
+      "position": {
+        "kind": "cartesian",
+        "x": 68.8369037337221,
+        "y": 394.14456244652075
+      }
+    },
+    "213": {
+      "gameNodeId": "552223285",
+      "type": "ETERNAL_SPARK",
+      "position": {
+        "kind": "cartesian",
+        "x": 86.39852538011996,
+        "y": 321.39740896834854
+      }
+    },
+    "214": {
+      "gameNodeId": "3901216476",
+      "type": "UNITY",
+      "position": {
+        "kind": "cartesian",
+        "x": 120.83089918879564,
+        "y": 451.4586656351037
+      }
+    },
+    "215": {
+      "gameNodeId": "3870348226",
+      "type": "STING",
+      "position": {
+        "kind": "cartesian",
+        "x": 114.96007685575829,
+        "y": 589.202357948811
+      }
+    },
+    "216": {
+      "gameNodeId": "1210493692",
+      "type": "WAND_SPECIALIZATION",
+      "position": {
+        "kind": "cartesian",
+        "x": 184.60236217208347,
+        "y": 508.3341451153696
+      }
+    },
+    "217": {
+      "gameNodeId": "3232917652",
+      "type": "LIFE_BURST",
+      "position": {
+        "kind": "cartesian",
+        "x": 51.39034446018724,
+        "y": 598.0991390976001
+      }
+    },
+    "218": {
+      "gameNodeId": "905182548",
+      "type": "WAND_MASTERY",
+      "position": {
+        "kind": "cartesian",
+        "x": 196.03563307559276,
+        "y": 567.2987412793963
+      }
+    },
+    "219": {
+      "gameNodeId": "738565796",
+      "type": "ARCANE_PROLIFERATION",
+      "position": {
+        "kind": "cartesian",
+        "x": 254.6418355359099,
+        "y": 546.0409266223777
+      }
+    },
+    "220": {
+      "gameNodeId": "1980671994",
+      "type": "LIFE_ESSENCES",
+      "position": {
+        "kind": "cartesian",
+        "x": 409.8243282543938,
+        "y": 343.2701552450439
+      }
+    },
+    "221": {
+      "gameNodeId": "3763211473",
+      "type": "EXALTED",
+      "position": {
+        "kind": "cartesian",
+        "x": 190.26749194186786,
+        "y": 709.6328774987013
+      }
+    },
+    "222": {
+      "gameNodeId": "3861731929",
+      "type": "ATTR_INT",
+      "position": {
+        "kind": "cartesian",
+        "x": 310.579482390301,
+        "y": 665.7789258650079
+      }
+    },
+    "223": {
+      "gameNodeId": "344823068",
+      "type": "BARRAGE",
+      "position": {
+        "kind": "cartesian",
+        "x": 120.78682221095572,
+        "y": -451.7650308961821
+      }
+    },
+    "224": {
+      "gameNodeId": "504202023",
+      "type": "TOTEM_MASTERY",
+      "position": {
+        "kind": "cartesian",
+        "x": 515.9131566925962,
+        "y": 137.95678606737155
+      }
+    },
+    "225": {
+      "gameNodeId": "1148578013",
+      "type": "AIRBORNE_ARCHITECT",
+      "position": {
+        "kind": "cartesian",
+        "x": 0.6665748702419423,
+        "y": -0.7510695012947199
+      }
+    },
+    "226": {
+      "gameNodeId": "1365862896",
+      "type": "SURVIVAL_INSTINCT",
+      "position": {
+        "kind": "cartesian",
+        "x": -200.0302673962196,
+        "y": -347.39528713489347
+      }
+    },
+    "227": {
+      "gameNodeId": "1781808122",
+      "type": "ADVANCED_NECROMANCY",
+      "position": {
+        "kind": "cartesian",
+        "x": 459.4711833689132,
+        "y": 266.05769025529145
+      }
+    },
+    "228": {
+      "gameNodeId": "2134094382",
+      "type": "AERIAL_WAND_ATTACK",
+      "position": {
+        "kind": "cartesian",
+        "x": 173.2689660685485,
+        "y": 646.2006586706982
+      }
+    },
+    "229": {
+      "gameNodeId": "2357176191",
+      "type": "BLAST_AND_CAST",
+      "position": {
+        "kind": "cartesian",
+        "x": 492.4879763349773,
+        "y": -205.83134245158894
+      }
+    },
+    "230": {
+      "gameNodeId": "2632701081",
+      "type": "WAND_EVASION_ATTACK",
+      "position": {
+        "kind": "cartesian",
+        "x": 95.16241526613315,
+        "y": 529.3677779899665
+      }
+    },
+    "231": {
+      "gameNodeId": "3532424874",
+      "type": "PUNCTURE",
+      "position": {
+        "kind": "cartesian",
+        "x": 138.61141998356703,
+        "y": -516.5805569744084
+      }
+    }
+  },
+  "edges": [
+    [
+      "1",
+      "2"
+    ],
+    [
+      "1",
+      "16"
+    ],
+    [
+      "1",
+      "26"
+    ],
+    [
+      "2",
+      "3"
+    ],
+    [
+      "3",
+      "26"
+    ],
+    [
+      "4",
+      "5"
+    ],
+    [
+      "4",
+      "6"
+    ],
+    [
+      "5",
+      "225"
+    ],
+    [
+      "6",
+      "7"
+    ],
+    [
+      "6",
+      "8"
+    ],
+    [
+      "7",
+      "8"
+    ],
+    [
+      "7",
+      "225"
+    ],
+    [
+      "8",
+      "9"
+    ],
+    [
+      "9",
+      "10"
+    ],
+    [
+      "10",
+      "225"
+    ],
+    [
+      "12",
+      "225"
+    ],
+    [
+      "13",
+      "84"
+    ],
+    [
+      "14",
+      "16"
+    ],
+    [
+      "17",
+      "18"
+    ],
+    [
+      "18",
+      "20"
+    ],
+    [
+      "18",
+      "21"
+    ],
+    [
+      "18",
+      "42"
+    ],
+    [
+      "18",
+      "211"
+    ],
+    [
+      "19",
+      "40"
+    ],
+    [
+      "20",
+      "22"
+    ],
+    [
+      "21",
+      "22"
+    ],
+    [
+      "22",
+      "23"
+    ],
+    [
+      "22",
+      "24"
+    ],
+    [
+      "22",
+      "29"
+    ],
+    [
+      "23",
+      "25"
+    ],
+    [
+      "24",
+      "27"
+    ],
+    [
+      "25",
+      "28"
+    ],
+    [
+      "25",
+      "29"
+    ],
+    [
+      "27",
+      "29"
+    ],
+    [
+      "27",
+      "30"
+    ],
+    [
+      "27",
+      "217"
+    ],
+    [
+      "28",
+      "31"
+    ],
+    [
+      "28",
+      "32"
+    ],
+    [
+      "28",
+      "44"
+    ],
+    [
+      "30",
+      "31"
+    ],
+    [
+      "30",
+      "34"
+    ],
+    [
+      "31",
+      "33"
+    ],
+    [
+      "32",
+      "33"
+    ],
+    [
+      "33",
+      "34"
+    ],
+    [
+      "35",
+      "36"
+    ],
+    [
+      "36",
+      "37"
+    ],
+    [
+      "36",
+      "38"
+    ],
+    [
+      "36",
+      "42"
+    ],
+    [
+      "37",
+      "54"
+    ],
+    [
+      "38",
+      "39"
+    ],
+    [
+      "38",
+      "46"
+    ],
+    [
+      "39",
+      "43"
+    ],
+    [
+      "40",
+      "43"
+    ],
+    [
+      "40",
+      "44"
+    ],
+    [
+      "41",
+      "144"
+    ],
+    [
+      "43",
+      "45"
+    ],
+    [
+      "43",
+      "51"
+    ],
+    [
+      "44",
+      "45"
+    ],
+    [
+      "44",
+      "46"
+    ],
+    [
+      "45",
+      "47"
+    ],
+    [
+      "48",
+      "49"
+    ],
+    [
+      "48",
+      "51"
+    ],
+    [
+      "48",
+      "52"
+    ],
+    [
+      "49",
+      "50"
+    ],
+    [
+      "50",
+      "51"
+    ],
+    [
+      "50",
+      "52"
+    ],
+    [
+      "52",
+      "61"
+    ],
+    [
+      "52",
+      "64"
+    ],
+    [
+      "53",
+      "54"
+    ],
+    [
+      "54",
+      "55"
+    ],
+    [
+      "54",
+      "67"
+    ],
+    [
+      "55",
+      "57"
+    ],
+    [
+      "55",
+      "75"
+    ],
+    [
+      "56",
+      "73"
+    ],
+    [
+      "56",
+      "78"
+    ],
+    [
+      "56",
+      "79"
+    ],
+    [
+      "57",
+      "58"
+    ],
+    [
+      "57",
+      "61"
+    ],
+    [
+      "58",
+      "75"
+    ],
+    [
+      "59",
+      "60"
+    ],
+    [
+      "59",
+      "61"
+    ],
+    [
+      "59",
+      "62"
+    ],
+    [
+      "60",
+      "63"
+    ],
+    [
+      "60",
+      "75"
+    ],
+    [
+      "61",
+      "64"
+    ],
+    [
+      "62",
+      "63"
+    ],
+    [
+      "62",
+      "64"
+    ],
+    [
+      "63",
+      "65"
+    ],
+    [
+      "63",
+      "66"
+    ],
+    [
+      "64",
+      "65"
+    ],
+    [
+      "64",
+      "66"
+    ],
+    [
+      "67",
+      "69"
+    ],
+    [
+      "67",
+      "72"
+    ],
+    [
+      "68",
+      "69"
+    ],
+    [
+      "69",
+      "70"
+    ],
+    [
+      "69",
+      "71"
+    ],
+    [
+      "69",
+      "72"
+    ],
+    [
+      "69",
+      "73"
+    ],
+    [
+      "70",
+      "73"
+    ],
+    [
+      "70",
+      "83"
+    ],
+    [
+      "72",
+      "74"
+    ],
+    [
+      "72",
+      "76"
+    ],
+    [
+      "73",
+      "74"
+    ],
+    [
+      "74",
+      "77"
+    ],
+    [
+      "76",
+      "79"
+    ],
+    [
+      "76",
+      "80"
+    ],
+    [
+      "78",
+      "81"
+    ],
+    [
+      "80",
+      "81"
+    ],
+    [
+      "81",
+      "97"
+    ],
+    [
+      "82",
+      "83"
+    ],
+    [
+      "83",
+      "85"
+    ],
+    [
+      "83",
+      "86"
+    ],
+    [
+      "83",
+      "87"
+    ],
+    [
+      "83",
+      "88"
+    ],
+    [
+      "83",
+      "226"
+    ],
+    [
+      "84",
+      "225"
+    ],
+    [
+      "85",
+      "102"
+    ],
+    [
+      "87",
+      "89"
+    ],
+    [
+      "87",
+      "91"
+    ],
+    [
+      "89",
+      "92"
+    ],
+    [
+      "90",
+      "92"
+    ],
+    [
+      "91",
+      "92"
+    ],
+    [
+      "92",
+      "93"
+    ],
+    [
+      "92",
+      "97"
+    ],
+    [
+      "93",
+      "94"
+    ],
+    [
+      "93",
+      "95"
+    ],
+    [
+      "93",
+      "96"
+    ],
+    [
+      "96",
+      "97"
+    ],
+    [
+      "98",
+      "99"
+    ],
+    [
+      "99",
+      "100"
+    ],
+    [
+      "99",
+      "101"
+    ],
+    [
+      "99",
+      "102"
+    ],
+    [
+      "99",
+      "226"
+    ],
+    [
+      "100",
+      "115"
+    ],
+    [
+      "101",
+      "102"
+    ],
+    [
+      "102",
+      "103"
+    ],
+    [
+      "102",
+      "104"
+    ],
+    [
+      "102",
+      "105"
+    ],
+    [
+      "105",
+      "106"
+    ],
+    [
+      "105",
+      "107"
+    ],
+    [
+      "105",
+      "108"
+    ],
+    [
+      "105",
+      "112"
+    ],
+    [
+      "108",
+      "109"
+    ],
+    [
+      "108",
+      "111"
+    ],
+    [
+      "110",
+      "111"
+    ],
+    [
+      "111",
+      "112"
+    ],
+    [
+      "112",
+      "113"
+    ],
+    [
+      "114",
+      "115"
+    ],
+    [
+      "115",
+      "116"
+    ],
+    [
+      "115",
+      "117"
+    ],
+    [
+      "115",
+      "118"
+    ],
+    [
+      "115",
+      "223"
+    ],
+    [
+      "116",
+      "134"
+    ],
+    [
+      "116",
+      "138"
+    ],
+    [
+      "117",
+      "119"
+    ],
+    [
+      "118",
+      "120"
+    ],
+    [
+      "119",
+      "121"
+    ],
+    [
+      "119",
+      "122"
+    ],
+    [
+      "120",
+      "122"
+    ],
+    [
+      "120",
+      "123"
+    ],
+    [
+      "121",
+      "124"
+    ],
+    [
+      "121",
+      "147"
+    ],
+    [
+      "122",
+      "126"
+    ],
+    [
+      "122",
+      "231"
+    ],
+    [
+      "123",
+      "125"
+    ],
+    [
+      "124",
+      "126"
+    ],
+    [
+      "125",
+      "126"
+    ],
+    [
+      "126",
+      "127"
+    ],
+    [
+      "126",
+      "128"
+    ],
+    [
+      "127",
+      "129"
+    ],
+    [
+      "128",
+      "132"
+    ],
+    [
+      "129",
+      "130"
+    ],
+    [
+      "131",
+      "132"
+    ],
+    [
+      "133",
+      "134"
+    ],
+    [
+      "134",
+      "135"
+    ],
+    [
+      "134",
+      "136"
+    ],
+    [
+      "135",
+      "156"
+    ],
+    [
+      "136",
+      "137"
+    ],
+    [
+      "136",
+      "138"
+    ],
+    [
+      "136",
+      "141"
+    ],
+    [
+      "137",
+      "140"
+    ],
+    [
+      "138",
+      "139"
+    ],
+    [
+      "138",
+      "142"
+    ],
+    [
+      "140",
+      "141"
+    ],
+    [
+      "141",
+      "142"
+    ],
+    [
+      "141",
+      "143"
+    ],
+    [
+      "143",
+      "144"
+    ],
+    [
+      "144",
+      "145"
+    ],
+    [
+      "144",
+      "147"
+    ],
+    [
+      "144",
+      "150"
+    ],
+    [
+      "144",
+      "151"
+    ],
+    [
+      "145",
+      "146"
+    ],
+    [
+      "145",
+      "165"
+    ],
+    [
+      "148",
+      "150"
+    ],
+    [
+      "149",
+      "151"
+    ],
+    [
+      "150",
+      "152"
+    ],
+    [
+      "151",
+      "152"
+    ],
+    [
+      "153",
+      "156"
+    ],
+    [
+      "154",
+      "156"
+    ],
+    [
+      "154",
+      "171"
+    ],
+    [
+      "155",
+      "161"
+    ],
+    [
+      "155",
+      "167"
+    ],
+    [
+      "156",
+      "158"
+    ],
+    [
+      "156",
+      "167"
+    ],
+    [
+      "157",
+      "159"
+    ],
+    [
+      "157",
+      "165"
+    ],
+    [
+      "157",
+      "229"
+    ],
+    [
+      "158",
+      "229"
+    ],
+    [
+      "159",
+      "160"
+    ],
+    [
+      "159",
+      "161"
+    ],
+    [
+      "161",
+      "163"
+    ],
+    [
+      "162",
+      "166"
+    ],
+    [
+      "162",
+      "168"
+    ],
+    [
+      "162",
+      "169"
+    ],
+    [
+      "163",
+      "166"
+    ],
+    [
+      "163",
+      "169"
+    ],
+    [
+      "164",
+      "169"
+    ],
+    [
+      "165",
+      "168"
+    ],
+    [
+      "165",
+      "169"
+    ],
+    [
+      "166",
+      "169"
+    ],
+    [
+      "168",
+      "169"
+    ],
+    [
+      "170",
+      "171"
+    ],
+    [
+      "171",
+      "173"
+    ],
+    [
+      "171",
+      "175"
+    ],
+    [
+      "172",
+      "173"
+    ],
+    [
+      "172",
+      "227"
+    ],
+    [
+      "173",
+      "174"
+    ],
+    [
+      "173",
+      "193"
+    ],
+    [
+      "175",
+      "176"
+    ],
+    [
+      "175",
+      "177"
+    ],
+    [
+      "176",
+      "178"
+    ],
+    [
+      "176",
+      "180"
+    ],
+    [
+      "176",
+      "224"
+    ],
+    [
+      "177",
+      "181"
+    ],
+    [
+      "177",
+      "185"
+    ],
+    [
+      "177",
+      "224"
+    ],
+    [
+      "178",
+      "179"
+    ],
+    [
+      "178",
+      "182"
+    ],
+    [
+      "179",
+      "182"
+    ],
+    [
+      "180",
+      "184"
+    ],
+    [
+      "181",
+      "185"
+    ],
+    [
+      "182",
+      "183"
+    ],
+    [
+      "182",
+      "184"
+    ],
+    [
+      "183",
+      "208"
+    ],
+    [
+      "184",
+      "185"
+    ],
+    [
+      "184",
+      "186"
+    ],
+    [
+      "186",
+      "187"
+    ],
+    [
+      "186",
+      "190"
+    ],
+    [
+      "187",
+      "188"
+    ],
+    [
+      "188",
+      "189"
+    ],
+    [
+      "190",
+      "191"
+    ],
+    [
+      "192",
+      "193"
+    ],
+    [
+      "193",
+      "194"
+    ],
+    [
+      "193",
+      "197"
+    ],
+    [
+      "194",
+      "195"
+    ],
+    [
+      "194",
+      "196"
+    ],
+    [
+      "194",
+      "213"
+    ],
+    [
+      "197",
+      "198"
+    ],
+    [
+      "197",
+      "220"
+    ],
+    [
+      "198",
+      "200"
+    ],
+    [
+      "198",
+      "203"
+    ],
+    [
+      "198",
+      "206"
+    ],
+    [
+      "199",
+      "205"
+    ],
+    [
+      "199",
+      "220"
+    ],
+    [
+      "200",
+      "201"
+    ],
+    [
+      "201",
+      "202"
+    ],
+    [
+      "202",
+      "222"
+    ],
+    [
+      "203",
+      "204"
+    ],
+    [
+      "205",
+      "207"
+    ],
+    [
+      "206",
+      "207"
+    ],
+    [
+      "207",
+      "208"
+    ],
+    [
+      "209",
+      "213"
+    ],
+    [
+      "210",
+      "213"
+    ],
+    [
+      "210",
+      "214"
+    ],
+    [
+      "211",
+      "213"
+    ],
+    [
+      "212",
+      "213"
+    ],
+    [
+      "212",
+      "214"
+    ],
+    [
+      "214",
+      "216"
+    ],
+    [
+      "214",
+      "230"
+    ],
+    [
+      "215",
+      "217"
+    ],
+    [
+      "215",
+      "228"
+    ],
+    [
+      "215",
+      "230"
+    ],
+    [
+      "216",
+      "218"
+    ],
+    [
+      "216",
+      "219"
+    ],
+    [
+      "217",
+      "228"
+    ],
+    [
+      "217",
+      "230"
+    ],
+    [
+      "218",
+      "219"
+    ],
+    [
+      "218",
+      "228"
+    ],
+    [
+      "219",
+      "228"
+    ],
+    [
+      "221",
+      "222"
+    ],
+    [
+      "221",
+      "228"
+    ]
+  ],
+  "retired": {},
+  "types": {
+    "ABSORB": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "4%",
+          "8%",
+          "12%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "4%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Absorb",
+      "description": [
+        "When you receive <b>Magic</b> damage, you have a <b>{{gameValue1}}</b> chance to restore <b>1</b> Mana per Health point lost."
+      ]
+    },
+    "ADVANCED_NECROMANCY": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "1"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Advanced Necromancy",
+      "description": [
+        "Increases the maximum amount of summoned Hollow allies from spells by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "AERIAL_WAND_ATTACK": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Use Item]",
+        "gameValue2": "25"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Utiliser un objet]"
+          }
+        }
+      },
+      "name": "Aerial Wand Attack",
+      "description": [
+        "When equipped with a Wand, you can perform a special attack by holding <b>{{gameValue1}}</b> during a jump.",
+        "It fires a magical projectile that deals <b>50%</b> additional weapon damage in a small blast radius.",
+        "<b>Cost:</b> {{gameValue2}} Stamina"
+      ]
+    },
+    "AIRBORNE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "12%",
+          "24%",
+          "36%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "12%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Airborne",
+      "description": [
+        "Gliders consume <b>{{gameValue1}}</b> less Stamina."
+      ]
+    },
+    "AIRBORNE_ARCHITECT": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Fly Mode]"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Mode de vol]"
+          }
+        }
+      },
+      "name": "Airborne Architect",
+      "description": [
+        "Turn into a spark inside the base to move freely through the air in first person while building. To toggle this mode, hold {{gameValue1}}."
+      ]
+    },
+    "ARACHNOID": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "20%",
+          "40%",
+          "60%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "20%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Arachnoid",
+      "description": [
+        "Stamina cost while climbing is reduced by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "ARCANE_CONCENTRATION": {
+      "cost": 5,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Arcane Concentration",
+      "description": [
+        "Gain one point of Spirit for every two levels of the Flame."
+      ]
+    },
+    "ARCANE_DEFLECTION": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10",
+          "20",
+          "30"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Arcane Deflection",
+      "description": [
+        "Successfully parrying an enemy's attack restores <b>{{gameValue1}}</b> Mana.",
+        "<b>Parry</b><br/>You can block when equipped with any Melee weapon, Ward, or Shield. A well-timed block will <b>parry</b> the attack and fill up the enemy's <i>Stun Bar</i>.<br/>Wait to see a <b>flash</b> on the enemy or projectile to perform a parry."
+      ]
+    },
+    "ARCANE_PROLIFERATION": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Arcane Proliferation",
+      "description": [
+        "Wand attacks have a <b>30%</b> chance to spawn double the amount of projectiles. Extra projectiles spawned deal <b>50%</b> less damage."
+      ]
+    },
+    "ARSONIST": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Arsonist",
+      "description": [
+        "All <b>Fire</b> damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "ATHLETE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "3",
+          "6",
+          "9"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "3"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Athlete",
+      "description": [
+        "Increases your maximum Health by <b>{{gameValue1}}</b> times your Strength attribute."
+      ]
+    },
+    "ATTR_CONS": {
+      "cost": 1,
+      "maxLevel": 1,
+      "stats": {
+        "CONS": 1
+      },
+      "gameValues": {
+        "gameValue1": "50"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Constitution",
+      "description": [
+        "Increases your Constitution attribute by 1.",
+        "Increases Health by {{gameValue1}} per Attribute Point."
+      ]
+    },
+    "ATTR_DEX": {
+      "cost": 1,
+      "maxLevel": 1,
+      "stats": {
+        "DEX": 1
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Dexterity",
+      "description": [
+        "Increases your Dexterity attribute by 1.",
+        "Increases Bow and Dagger damage by 5% per Attribute Point."
+      ]
+    },
+    "ATTR_ENDURANCE": {
+      "cost": 1,
+      "maxLevel": 1,
+      "stats": {
+        "ENDURANCE": 1
+      },
+      "gameValues": {
+        "gameValue1": "10"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Endurance",
+      "description": [
+        "Increases your Endurance attribute by 1.",
+        "Increases Stamina by {{gameValue1}} per Attribute Point."
+      ]
+    },
+    "ATTR_INT": {
+      "cost": 1,
+      "maxLevel": 1,
+      "stats": {
+        "INT": 1
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Intelligence",
+      "description": [
+        "Increases your Intelligence attribute by 1.",
+        "Increases Magic damage by 5% per Attribute Point."
+      ]
+    },
+    "ATTR_SPIRIT": {
+      "cost": 1,
+      "maxLevel": 1,
+      "stats": {
+        "SPIRIT": 1
+      },
+      "gameValues": {
+        "gameValue1": "20"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Spirit",
+      "description": [
+        "Increases your Spirit attribute by 1.",
+        "Increases Mana by {{gameValue1}} per Attribute Point."
+      ]
+    },
+    "ATTR_STR": {
+      "cost": 1,
+      "maxLevel": 1,
+      "stats": {
+        "STR": 1
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Strength",
+      "description": [
+        "Increases your Strength attribute by 1.",
+        "Increases Melee damage by 5% per Attribute Point."
+      ]
+    },
+    "BACKSTAB_MASTERY": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "20%",
+          "40%",
+          "60%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "20%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Backstab Mastery",
+      "description": [
+        "<b>Backstab</b> damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "BARBARIAN": {
+      "cost": 5,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Barbarian",
+      "description": [
+        "Gain one point of Strength for every two levels of the Flame."
+      ]
+    },
+    "BARBARIAN_PATH": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Barbarian's Path",
+      "description": [
+        "Damage with Two-Handed Axes, Clubs and Hammers is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "BARRAGE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "15%",
+          "30%",
+          "45%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "15%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Barrage",
+      "description": [
+        "Dealing damage with Bows has a <b>{{gameValue1}}</b> chance to restore <b>1</b> durability to that weapon."
+      ]
+    },
+    "BASH": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10",
+          "20",
+          "30"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Bash",
+      "description": [
+        "Parrying enemy attacks bashes them for <b>{{gameValue1}} Blunt</b> damage. Bash damage is increased by your Strength attribute.",
+        "<b>Parry</b><br/>You can block when equipped with any Melee weapon, Ward, or Shield. A well-timed block will <b>parry</b> the attack and fill up the enemy's <i>Stun Bar</i>.<br/>Wait to see a <b>flash</b> on the enemy or projectile to perform a parry."
+      ]
+    },
+    "BATTLE_HEAL": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "1%",
+          "2%",
+          "3%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "1%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Battle Heal",
+      "description": [
+        "Critical Strikes with Melee weapons heal you for <b>{{gameValue1}}</b> of your maximum Health."
+      ]
+    },
+    "BEAST_MASTER": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Beast Master",
+      "description": [
+        "When you are targeted by an attack, <b>Wild Animals</b> within <b>50</b> meters will attack the enemy."
+      ]
+    },
+    "BEE_STING": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "10"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Bee Sting",
+      "description": [
+        "Firing or aiming your Bow while airborne slows down your fall briefly. Every shot lifts you slightly, granting more airtime.",
+        "<b>Cost:</b> {{gameValue1}} Stamina per second"
+      ]
+    },
+    "BEGONE": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "30"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Begone!",
+      "description": [
+        "A magic-powered punch that pushes back and stuns enemies.",
+        "Replaces your unarmed attacks as long as you have the necessary Mana available.",
+        "<b>Cost:</b> {{gameValue1}} Mana"
+      ]
+    },
+    "BLAST_AND_CAST": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "10",
+        "gameValue2": "50%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Blast and Cast",
+      "description": [
+        "After a Critical Strike with a Wand, the base damage of your next Staff attack within {{gameValue1}} seconds is increased by <b>{{gameValue2}}</b>."
+      ]
+    },
+    "BLESSED_ARROWS": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "8",
+          "16",
+          "24"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "8"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Blessed Arrows",
+      "description": [
+        "Critical Strikes with Bows restore <b>{{gameValue1}}</b> Mana."
+      ]
+    },
+    "BLINK": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "20"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Blink",
+      "description": [
+        "Replaces the Dodge Roll ability with a short-range teleport.",
+        "Blink also replaces the sideways Dodge Roll of the Strategic Maneuver skill.",
+        "<b>Cost:</b> {{gameValue1}} Stamina"
+      ]
+    },
+    "BLINK_ATTACK": {
+      "cost": 2,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Blink Attack",
+      "description": [
+        "Blinking into an enemy triggers an explosion which deals <b>Fire</b> damage in a small radius.",
+        "Damage and Mana cost scale with the Intelligence attribute."
+      ]
+    },
+    "BLOOD_MAGIC": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Blood Magic",
+      "description": [
+        "When your Mana drops below <b>20%</b>, you restore up to <b>35%</b> of your maximum Mana at the cost of <b>1</b> Health per Mana restored.",
+        "This effect stops at <b>1</b> Health.",
+        "<b>Cooldown:</b> 2 minutes"
+      ]
+    },
+    "BLOOD_RAGE": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameValues": {
+        "gameValue2": "15%"
+      },
+      "gameLevelValues": {
+        "gameValue1": [
+          "5",
+          "10",
+          "15"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Blood Rage",
+      "description": [
+        "When an enemy within <b>{{gameValue1}}</b> meters is killed by a Melee weapon, you fall into <b>Blood Rage</b>.",
+        "<b>Blood Rage</b><br/>Increases Melee weapon damage by <b>{{gameValue2}}</b> for <b>10</b> seconds."
+      ]
+    },
+    "BLOOD_WARRIOR": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Blood Warrior",
+      "description": [
+        "Defeating an enemy with a <b>Sneak Attack</b> or <b>Merciless Attack</b> spawns a Health Orb.",
+        "Gathering an Orb restores <b>10%</b> of the respective resource."
+      ]
+    },
+    "BLOODLETTING": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "20%",
+          "40%",
+          "60%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "20%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Bloodletting",
+      "description": [
+        "Critical Strikes with spells have a <b>{{gameValue1}}</b> chance to spawn two Health, Mana, and/or Stamina Orbs.",
+        "Gathering an Orb restores <b>10%</b> of the respective resource."
+      ]
+    },
+    "BONE_TO_ASH": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Bone to Ash",
+      "description": [
+        "Damage against Hollow is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "BOUNTY_BONANZA": {
+      "cost": 2,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "+5"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Bounty Bonanza",
+      "description": [
+        "After defeating a <b>Fell</b> enemy with a <b>Skillshot</b>, your group gains an additional <b>{{gameValue1}}</b> Experience Points.",
+        "<b>Skillshot</b><br/>Striking enemy weak points, such as their heads, with Arrows is considered a Skillshot.",
+        "Skillshots deal 100% increased base damage against enemies without helmets and 50% against helmeted enemies. <br/>It can be further increased by the Skillshot damage attribute."
+      ]
+    },
+    "BOW_SPECIALIZATION": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Special Ability]"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Capacité spéciale]"
+          }
+        }
+      },
+      "name": "Bow Specialization",
+      "description": [
+        "Unlocks Special Abilities of Bows. <br/>Press <b>{{gameValue1}}</b> to unleash a powerful Special Ability after generating enough Focus.",
+        "<b>Focus</b><br/>Generate Focus by attacking. Focus can be built up with any weapon type and is used to trigger Special Abilities of weapons."
+      ]
+    },
+    "BREACH": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "+100%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Breach",
+      "description": [
+        "<b>Overpowered</b> enemies receive <b>{{gameValue1}}</b> increased Melee physical damage for <b>3</b> seconds.",
+        "<b>Overpower</b> <br/>Attacking blocking enemies or parrying their attacks fills their <i>Stun Bar</i> until they become <b>overpowered</b>.<br/><b>Overpowered</b> enemies are open for Merciless Attacks."
+      ]
+    },
+    "BRUTE": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Brute",
+      "description": [
+        "Melee <b>Blunt</b> damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "CALM_SPIRIT": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Calm Spirit",
+      "description": [
+        "<b>Wild Animals</b> within <b>50</b> meters will no longer attack you unless provoked.",
+        "Does not affect animals corrupted by the Shroud."
+      ]
+    },
+    "CHAIN_HIT": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Chain Hit",
+      "description": [
+        "Critical Strikes with Magic weapons hit an additional random target within <b>15</b> meters for <b>5 Shock</b> damage per Intelligence. <br/>The initial target can be hit twice instead of chaining to another one."
+      ]
+    },
+    "CHAIN_REACTION": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Echoing Explosives",
+      "description": [
+        "Every enemy hit with an <b>Explosive Arrow</b> has a <b>40%</b> chance to trigger a secondary explosion for <b>50%</b> damage in a small radius."
+      ]
+    },
+    "COUNTER_BATTERY": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "8%",
+          "16%",
+          "24%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "8%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Counter Battery",
+      "description": [
+        "Damage against <b>ranged</b> enemies is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "COUNTERSTRIKE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "8%",
+          "16%",
+          "24%"
+        ],
+        "gameValue2": [
+          "20%",
+          "40%",
+          "60%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "8%",
+        "gamePerLevelValue2": "20%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Counterstrike",
+      "description": [
+        "After receiving damage, there is a <b>{{gameValue1}}</b> chance to reflect <b>{{gameValue2}}</b> of the damage back to the attacker as <b>Fire</b> damage.",
+        "This magical attack can trigger other skills."
+      ]
+    },
+    "CRASH_DOWN_ATTACK": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Use Item]",
+        "gameValue2": "35",
+        "gameValue3": "60"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Utiliser un objet]"
+          }
+        }
+      },
+      "name": "Crash Down Attack",
+      "description": [
+        "When equipped with a Melee weapon, you can perform a special attack by holding <b>{{gameValue1}}</b> during a jump.",
+        "Crash Down deals 50% more weapon damage in a small blast radius and costs Stamina depending on weapon type used.",
+        "<b>Cost:</b> {{gameValue2}} - {{gameValue3}} Stamina",
+        "<b>Block Breaker</b> <br/>This special attack fills a blocking enemy's <i>Stun Bar</i> twice as much when hit.."
+      ]
+    },
+    "CRASH_DOWN_FORCE": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Crash Down: Force",
+      "description": [
+        "When attacking from a double jump, <b>Crash Down</b> deals <b>20%</b> more weapon damage."
+      ]
+    },
+    "CULL_THE_HERD": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Cull the Herd",
+      "description": [
+        "Damage against Wildlife is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "CUTTHROAT": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "100%",
+          "200%",
+          "300%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "100%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Cutthroat",
+      "description": [
+        "Sneak Attack Damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "DAGGER_MASTERY": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Dagger Mastery",
+      "description": [
+        "Damage with Daggers is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "DAGGER_SPECIALIZATION": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Special Ability]"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Capacité spéciale]"
+          }
+        }
+      },
+      "name": "Dagger Specialization",
+      "description": [
+        "Unlocks Special Abilities of Daggers. <br/>Press <b>{{gameValue1}}</b> to unleash a powerful Special Ability after generating enough Focus.",
+        "<b>Focus</b><br/>Generate Focus by attacking. Focus can be built up with any weapon type and is used to trigger Special Abilities of weapons."
+      ]
+    },
+    "DARK_ARTS": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Dark Arts",
+      "description": [
+        "All <b>Shroud</b> damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "DESSERT_STOMACH": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Dessert Stomach",
+      "description": [
+        "You gain one additional Food slot."
+      ]
+    },
+    "DIVINE_SURGE": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Divine Surge",
+      "description": [
+        "Healing spells can perform Critical Strikes that scale with your Critical Strike damage."
+      ]
+    },
+    "DOUBLE_JUMP": {
+      "cost": 2,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "10"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Double Jump",
+      "description": [
+        "Allows jumping a second time while airborne.",
+        "<b>Cost:</b> {{gameValue1}} Stamina"
+      ]
+    },
+    "EAGLE_EYE": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Block and Parry]",
+        "gameValue2": "[Ready ranged weapon]"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Bloquer et parer]",
+            "gameValue2": "[Préparez une arme à distance]"
+          }
+        }
+      },
+      "name": "Eagle Eye",
+      "description": [
+        "Greatly increases the zoom while aiming with Bows.",
+        "To aim, hold down the {{gameValue1}} while a Bow is selected in the Action bar.<br/>(Alternatively, hold {{gameValue2}} to aim your equipped Bow.)"
+      ]
+    },
+    "EAGLES_BANE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Eagle's Bane",
+      "description": [
+        "Damage against <b>flying</b> enemies is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "EARTH_AURA": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameValues": {
+        "gameValue1": "10%"
+      },
+      "gameLevelValues": {
+        "gameValue2": [
+          "4",
+          "8",
+          "12"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "4"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Earth Aura",
+      "description": [
+        "You emit a protective aura that increases Physical and Magical Resistances by <b>{{gameValue1}}</b> for you and all allies within <b>{{gameValue2}}</b> meters."
+      ]
+    },
+    "EMERGENCY_BLINK": {
+      "cost": 2,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Emergency Blink",
+      "description": [
+        "You can blink while being stunned. This will break the stunned state."
+      ]
+    },
+    "ENDURANCE_OF_THE_FLAME": {
+      "cost": 5,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Endurance of the Flame",
+      "description": [
+        "Gain one point of Endurance for every two levels of the Flame."
+      ]
+    },
+    "ETERNAL_SPARK": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "15%",
+          "30%",
+          "45%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "15%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Eternal Spark",
+      "description": [
+        "Dealing damage with Wand projectiles has a <b>{{gameValue1}}</b> chance to restore <b>1</b> durability to that weapon."
+      ]
+    },
+    "EVASION_ATTACK": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Use Item]",
+        "gameValue2": "25"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Utiliser un objet]"
+          }
+        }
+      },
+      "name": "Evasion Attack",
+      "description": [
+        "When equipped with a Melee weapon, you can perform an Evasion Attack by pressing <b>{{gameValue1}}</b> while evading. <br/>You will dash towards the enemy and deal <b>50%</b> additional weapon damage.",
+        "<b>Cost:</b> {{gameValue2}} Stamina",
+        "<b>Block Breaker</b> <br/>This special attack fills a blocking enemy's <i>Stun Bar</i> twice as much when hit."
+      ]
+    },
+    "EXALTED": {
+      "cost": 5,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Exalted",
+      "description": [
+        "Gain one point of Intelligence for every two levels of the Flame."
+      ]
+    },
+    "EXPOSE_WEAKNESS": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "25%",
+        "gameValue2": "5"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Expose Weakness",
+      "description": [
+        "Critical Strikes with Daggers break the armor of enemies, applying a <b>debuff</b> which lets them take <b>{{gameValue1}}</b> increased physical damage for <b>{{gameValue2}}</b> seconds."
+      ]
+    },
+    "FATAL_PRECISION": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "1%",
+          "2%",
+          "3%"
+        ],
+        "gameValue2": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "1%",
+        "gamePerLevelValue2": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Fatal Precision",
+      "description": [
+        "Critical Strike chance is increased by <b>{{gameValue1}}</b>.<br/>Critical Strike damage is increased by <b>{{gameValue2}}</b>."
+      ]
+    },
+    "FELLING_AXE_SPECIALIZATION": {
+      "cost": 2,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Special Ability]"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Capacité spéciale]"
+          }
+        }
+      },
+      "name": "Felling Axe Specialization",
+      "description": [
+        "Unlocks Special Abilities of Felling Axes. <br/>Press <b>{{gameValue1}}</b> to unleash a powerful Special Ability after generating enough Focus.",
+        "<b>Focus</b><br/>Generate Focus by attacking. Focus can be built up with any weapon type and is used to trigger Special Abilities of weapons."
+      ]
+    },
+    "FINESSE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "15%",
+          "30%",
+          "45%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "15%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Finesse",
+      "description": [
+        "Dealing damage with One-Handed Swords, One-Handed Axes, One-Handed Clubs or Daggers has a <b>{{gameValue1}}</b> chance to restore <b>1</b> durability to that weapon."
+      ]
+    },
+    "FIRE_RESISTANCE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Fire Resistance",
+      "description": [
+        "Increases your <b>Fire Resistance</b> by <b>{{gameValue1}}</b>, which reduces the amount of <b>Fire</b> damage received."
+      ]
+    },
+    "FISHERMANS_RESOLVE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5",
+          "10",
+          "15"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Fisherman’s Resolve",
+      "description": [
+        "Increases your Fishing Endurance by <b>{{gameValue1}}</b>.",
+        "Allows for extended battles with hooked fish."
+      ]
+    },
+    "FROST": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "3 s",
+          "6 s",
+          "9 s"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "3 s"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Frost",
+      "description": [
+        "When receiving Melee damage, the attacker will be slowed down for <b>{{gameValue1}}</b>."
+      ]
+    },
+    "GIANT_SLAYER_HOOK": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "30"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Giant Slayer Hook",
+      "description": [
+        "Use your <b>Grappling Hook</b> to pull yourself towards large enemies during combat.",
+        "The cost of this skill scales with enemy level. The higher the enemy level, the more it costs.",
+        "<b>Base Cost:</b> {{gameValue1}} Stamina"
+      ]
+    },
+    "GOOD_METABOLISM": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Good Metabolism",
+      "description": [
+        "Health, Mana, and Stamina Orbs restore <b>30%</b> instead of <b>10%</b> of their respective resource.",
+        "Health and Mana Potions restore <b>20%</b> more resources."
+      ]
+    },
+    "GRACEFUL_STRIDE": {
+      "cost": 5,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Graceful Stride",
+      "description": [
+        "Gain one point of Dexterity for every two levels of the Flame."
+      ]
+    },
+    "GROUNDING_HOOK": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "30"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Grounding Hook",
+      "description": [
+        "Use your <b>Grappling Hook</b> to pull <b>flying</b> enemies towards you during combat.",
+        "The cost of this skill scales with enemy level. The higher the enemy level, the more it costs.",
+        "<b>Base Cost:</b> {{gameValue1}} Stamina"
+      ]
+    },
+    "HEALER": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "15%",
+          "30%",
+          "45%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "15%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Healer",
+      "description": [
+        "Health gain from healing spells and Water Aura is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "HEALER_REVIVE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "8%",
+          "16%",
+          "24%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "8%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Healing Revive",
+      "description": [
+        "Revive players with <b>{{gameValue1}}</b> increased Health.",
+        "Default Health of revived players is <b>10%</b>."
+      ]
+    },
+    "HEAVY_HANDED": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Heavy Handed",
+      "description": [
+        "Filling up enemy <i>Stun Bars</i> is increased by <b>{{gameValue1}}</b> when attacking blocking enemies with Melee weapons.",
+        "<b>Overpower</b> <br/>Attacking blocking enemies or parrying their attacks fills their <i>Stun Bar</i> until they become <b>overpowered</b>.<br/><b>Overpowered</b> enemies are open for Merciless Attacks."
+      ]
+    },
+    "HEAVY_PLATES": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "4%",
+          "8%",
+          "12%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "4%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Heavy Plates",
+      "description": [
+        "Physical Armor points from equipped items are increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "HEAVY_SPECIALIZATION": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Heavy Hitter",
+      "description": [
+        "Increases the attack speed of all Two-Handed Melee weapons by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "ICE_RESISTANCE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Ice Resistance",
+      "description": [
+        "Increases your <b>Ice Resistance</b> by <b>{{gameValue1}}</b>, which reduces the amount of <b>Ice</b> damage received."
+      ]
+    },
+    "ICEMAN": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Iceman",
+      "description": [
+        "All <b>Ice</b> damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "INNER_FIRES": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "60 s",
+          "120 s",
+          "180 s"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "60 s"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Inner Fires",
+      "description": [
+        "<b>Time in the Shroud</b> is increased by <b>{{gameValue1}}</b>, allowing you to explore for longer.",
+        "<b>Time in the Shroud</b><br/>Should this time run out, the Shroud will consume you."
+      ]
+    },
+    "KICK": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Kick",
+      "description": [
+        "When equipped with a Melee weapon, you can perform a Kick by attacking while blocking.",
+        "Kicking deals little damage, but hits the target with massive force and pushes them back, filling their <i>Stun Bar</i>.",
+        "<i>Stun Bar</i> increase scales with Dexterity.<br/>Stun time depends on the enemy's size.",
+        "<b>Overpower</b> <br/>Attacking blocking enemies or parrying their attacks fills their <i>Stun Bar</i> until they become <b>overpowered</b>.<br/><b>Overpowered</b> enemies are open for Merciless Attacks."
+      ]
+    },
+    "LAST_MEAL": {
+      "cost": 5,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Last Meal",
+      "description": [
+        "Your Food buffs persist through death, but they last half as long."
+      ]
+    },
+    "LIFE_BURST": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "5"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Life Burst",
+      "description": [
+        "Defeating an enemy with a Magic weapon restores Health equal to <b>{{gameValue1}}</b> times your Intelligence to all players within <b>15</b> meters of the target."
+      ]
+    },
+    "LIFE_ESSENCES": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "3",
+          "6",
+          "9"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "3"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Life Essences",
+      "description": [
+        "Increases your maximum Health by <b>{{gameValue1}}</b> times your Intelligence attribute."
+      ]
+    },
+    "LUMBERJACK": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Lumberjack",
+      "description": [
+        "Tools deal <b>{{gameValue1}}</b> increased damage against wood.<br/>This includes trees and wooden terrain."
+      ]
+    },
+    "MAGE_APPRENTICE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Mage Apprentice",
+      "description": [
+        "Damage with Wands and Staves increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "MANA_CURRENTS": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5",
+          "10",
+          "15"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Mana Currents",
+      "description": [
+        "Base Mana Regeneration is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "MARKSMAN": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Marksman",
+      "description": [
+        "Damage with Bows is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "MARTYR": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Martyr",
+      "description": [
+        "When you are killed by an enemy, all allies within <b>30</b> meters are healed for <b>50%</b> of their maximum Health.",
+        "They also receive a <b>Final Blessing</b> buff, increasing their maximum Health by <b>100</b> points for <b>15</b> minutes."
+      ]
+    },
+    "MASON": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Mason",
+      "description": [
+        "Tools deal <b>{{gameValue1}}</b> increased damage against stone.<br/>This includes stone terrain and gemstone veins."
+      ]
+    },
+    "MASS_DESTRUCTION": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "15"
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "15"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Mass Destruction",
+      "description": [
+        "Critical Strikes with Magic weapons deal <b>2 Shock</b> damage per Intelligence to all enemies within <b>{{gameValue1}}</b> meters of the target."
+      ]
+    },
+    "MERCILESS_ATTACK": {
+      "cost": 2,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Contextual Action]",
+        "gameValue2": "+500%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Action contextuelle]"
+          }
+        }
+      },
+      "name": "Merciless Attack",
+      "description": [
+        "Perform a <b>Merciless Attack</b> by pressing <b>{{gameValue1}}</b> to deal <b>{{gameValue2}}</b> damage to an <b>overpowered</b> enemy.",
+        "<b>Overpower</b> <br/>Attacking blocking enemies or parrying their attacks fills their <i>Stun Bar</i> until they become <b>overpowered</b>.<br/><b>Overpowered</b> enemies are open for Merciless Attacks.",
+        "Wands, Staves and Bows cannot perform Merciless Attacks."
+      ]
+    },
+    "MINER": {
+      "cost": 2,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Miner",
+      "description": [
+        "Mining resources has a <b>10%</b> chance to grant one additional resource."
+      ]
+    },
+    "MITHRIDATIST": {
+      "cost": 2,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Mithridatist",
+      "description": [
+        "Gain a <b>25%</b> chance to avoid being poisoned."
+      ]
+    },
+    "MULTI_SHOT": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Multi Shot",
+      "description": [
+        "Shooting <i>Regular Arrows</i> has a <b>20%</b> chance to spawn a <b>Flurry of Arrows</b> that spreads slightly.",
+        "<i>Regular Arrows</i> fired this way will subtract from your ammunition.",
+        "<b>Flurry of Arrows</b> does not trigger on <i>Special Arrows</i>."
+      ]
+    },
+    "MULTI_SHOT_SPREAD": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Multi Shot Spread",
+      "description": [
+        "Adds a <b>25%</b> chance to spawn an additional <i>Regular Arrow</i> with your <b>Flurry of Arrows</b> from the <b>Multi Shot</b> skill.",
+        "This additional <i>Regular Arrow</i> does not subtract from your ammunition."
+      ]
+    },
+    "MULTI_SHOT_TRIGGER": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Multi Shot Trigger",
+      "description": [
+        "Shooting <i>Special Arrows</i> now triggers a <b>Flurry of Arrows</b> from the <b>Multi Shot</b> skill.",
+        "<i>Special Arrows</i> fired this way will subtract from your ammunition."
+      ]
+    },
+    "NECROMANCER": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Necromancer",
+      "description": [
+        "When killing an enemy with a Magic weapon, you have a <b>{{gameValue1}}</b> chance to summon a friendly <b>Skull Companion</b>."
+      ]
+    },
+    "NEMESIS": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Nemesis",
+      "description": [
+        "Increase the attention you draw from enemies by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "ONE_HANDED_SPECIALIZATION": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Special Ability]"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Capacité spéciale]"
+          }
+        }
+      },
+      "name": "One-Handed Specialization",
+      "description": [
+        "Unlocks Special Abilities of One-Handed Melee weapons. <br/>Press <b>{{gameValue1}}</b> to unleash a powerful Special Ability after generating enough Focus.",
+        "<b>Focus</b><br/>Generate Focus by attacking. Focus can be built up with any weapon type and is used to trigger Special Abilities of weapons."
+      ]
+    },
+    "OPPORTUNITY": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "40%",
+          "80%",
+          "120%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "40%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Opportunity",
+      "description": [
+        "Increases the damage multiplier of <b>Merciless Attacks</b> by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "PICKAXE_SPECIALIZATION": {
+      "cost": 2,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Special Ability]"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Capacité spéciale]"
+          }
+        }
+      },
+      "name": "Pickaxe Specialization",
+      "description": [
+        "Unlocks Special Abilities of Pickaxes. <br/>Press <b>{{gameValue1}}</b> to unleash a powerful Special Ability after generating enough Focus.",
+        "<b>Focus</b><br/>Generate Focus by attacking. Focus can be built up with any weapon type and is used to trigger Special Abilities of weapons."
+      ]
+    },
+    "POISON_MASTERY": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Venom Mastery",
+      "description": [
+        "Increases the damage dealt with the <b>Venomous Blades</b> Dagger perk by <b>100%</b>."
+      ]
+    },
+    "POISONED_BLADES": {
+      "cost": 2,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Venomous Blades",
+      "description": [
+        "Increases the chance to poison enemies to <b>30%</b> when using Daggers with the <b>Venomous Blades</b> perk."
+      ]
+    },
+    "POWER_PARRY": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Power Parry",
+      "description": [
+        "Your Parry Power is increased by <b>{{gameValue1}}</b>.",
+        "<b>Parry</b><br/>You can block when equipped with any Melee weapon, Ward, or Shield. A well-timed block will <b>parry</b> the attack and fill up the enemy's <i>Stun Bar</i>.<br/>Wait to see a <b>flash</b> on the enemy or projectile to perform a parry.",
+        "<b>Overpower</b> <br/>Attacking blocking enemies or parrying their attacks fills their <i>Stun Bar</i> until they become <b>overpowered</b>.<br/><b>Overpowered</b> enemies are open for Merciless Attacks."
+      ]
+    },
+    "PRIMAL_FORCE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Primal Force",
+      "description": [
+        "Damage against Vukah is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "PROSPECTOR": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Prospector",
+      "description": [
+        "Tools deal <b>{{gameValue1}}</b> increased damage against metal.<br/>This includes metal ore veins."
+      ]
+    },
+    "PUNCTURE": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Puncture",
+      "description": [
+        "Ranged <b>Piercing</b> damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "PURIFICATION": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "3",
+          "6",
+          "9"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "3"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Purification",
+      "description": [
+        "Defeating a Shroud infested enemy with a One- or Two-Handed Axe, Club, Hammer, Sword or Greatsword restores <b>{{gameValue1}}</b> seconds of <b>Time in the Shroud</b>.",
+        "<b>Time in the Shroud</b><br/>Should this time run out, the Shroud will consume you."
+      ]
+    },
+    "QUALITY_GEAR": {
+      "cost": 1,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "20%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Quality Gear",
+      "description": [
+        "Tools have a <b>{{gameValue1}}</b> chance to restore <b>1</b> durability on hit."
+      ]
+    },
+    "QUICK_CHARGE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "-10%",
+          "-20%",
+          "-30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "-10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Quick Charge",
+      "description": [
+        "Charge Time of spells is reduced by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "QUICK_REFLEX_BLOCK": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Quick Reflex Block",
+      "description": [
+        "Briefly increases your Block value when blocking with Daggers, ensuring a near-miss parry reduces Stamina minimally."
+      ]
+    },
+    "RADIANT_AURA": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "2.1",
+          "4.1",
+          "6.1"
+        ],
+        "gameValue2": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "2.1",
+        "gamePerLevelValue2": "1"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Radiant Aura",
+      "description": [
+        "All <b>Fell</b> enemies within <b>{{gameValue1}}</b> meters take <b>{{gameValue2}} Fire</b> damage per Intelligence per second."
+      ]
+    },
+    "RANGER": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "1",
+          "2",
+          "3"
+        ],
+        "gameValue2": [
+          "5",
+          "10",
+          "15"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "1",
+        "gamePerLevelValue2": "5"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Ranger",
+      "description": [
+        "Increases your Dexterity and Endurance attributes by <b>{{gameValue1}}</b>.",
+        "Base Stamina Regeneration is increased by <b>{{gameValue2}}</b>."
+      ]
+    },
+    "REBOUND": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Rebound",
+      "description": [
+        "Base Stamina Regeneration is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "RELENTLESS": {
+      "cost": 5,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "8%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Relentless",
+      "description": [
+        "Critical Strikes with Two-Handed weapons increase your Critical Strike chance by <b>{{gameValue1}}</b> for the next hit."
+      ]
+    },
+    "RICOCHETS": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Shrapnel Blast",
+      "description": [
+        "Every target hit with an <b>Explosive Arrow</b>, increases its damage by <b>10%</b>."
+      ]
+    },
+    "RIGHTEOUS_FIRE": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "20%",
+          "40%",
+          "60%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "20%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Righteous Fire",
+      "description": [
+        "Healing any target with a spell triggers a burst of fire that deals <b>{{gameValue1}}</b> of the heal amount as <b>Fire</b> damage to nearby <b>Fell</b> enemies."
+      ]
+    },
+    "RUNNER": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ],
+        "gameValue2": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%",
+        "gamePerLevelValue2": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Runner",
+      "description": [
+        "Sprint Speed is increased by <b>{{gameValue1}}</b> and Stamina cost while sprinting is decreased by <b>{{gameValue2}}</b>."
+      ]
+    },
+    "SAVIOUR": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "-1",
+          "-2",
+          "-3"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "-1"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Saviour",
+      "description": [
+        "Time to revive an ally is reduced by <b>{{gameValue1}}</b> seconds.",
+        "Default revive time is <b>6</b> seconds."
+      ]
+    },
+    "SHELL_SHOCK": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "8"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Shell Shock",
+      "description": [
+        "Infuse your <b>Ranged Explosives</b> with Mana. They now stun enemies for <b>2</b> seconds.",
+        "<b>Cost:</b> {{gameValue1}} Mana per stunned enemy"
+      ]
+    },
+    "SHINY_PLATES": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "4%",
+          "8%",
+          "12%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "4%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Shiny Plates",
+      "description": [
+        "Magical Armor points from equipped items are increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "SHOCK_RESISTANCE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Shock Resistance",
+      "description": [
+        "Increases your <b>Shock Resistance</b> by <b>{{gameValue1}}</b>, which reduces the amount of <b>Shock</b> damage received."
+      ]
+    },
+    "SHOCKWAVE": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Shockwave",
+      "description": [
+        "Trigger a Shockwave when you parry an attack or <b>overpower</b> an enemy.",
+        "The Shockwave pushes back nearby enemies. It also fills their <i>Stun Bar</i>, scaling with your Strength attribute.",
+        "<b>Parry</b><br/>You can block when equipped with any Melee weapon, Ward, or Shield. A well-timed block will <b>parry</b> the attack and fill up the enemy's <i>Stun Bar</i>.<br/>Wait to see a <b>flash</b> on the enemy or projectile to perform a parry.",
+        "<b>Overpower</b> <br/>Attacking blocking enemies or parrying their attacks fills their <i>Stun Bar</i> until they become <b>overpowered</b>.<br/><b>Overpowered</b> enemies are open for Merciless Attacks."
+      ]
+    },
+    "SHROUD_FILTER": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameValues": {
+        "gameValue2": "9",
+        "gameValue3": "20"
+      },
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Shroud Mitigation",
+      "description": [
+        "Dealing damage with a Magic weapon has a <b>{{gameValue1}}</b> chance to trigger a small flame burst that restores <b>{{gameValue2}}</b> seconds of <b>Time in the Shroud </b> to you and your allies within <b>{{gameValue3}}</b> meters.",
+        "<b>Time in the Shroud</b><br/>Should this time run out, the Shroud will consume you."
+      ]
+    },
+    "SHROUD_MISTERY": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameValues": {
+        "gameValue2": "15%"
+      },
+      "gameLevelValues": {
+        "gameValue1": [
+          "5",
+          "10",
+          "15"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Shared Misery",
+      "description": [
+        "When you receive <b>Shroud</b> damage, all players within <b>{{gameValue1}}</b> meters receive <b>{{gameValue2}}</b> increased <b>Shroud Resistance</b> for <b>30</b> seconds."
+      ]
+    },
+    "SHROUD_RESISTANCE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Shroud Resistance",
+      "description": [
+        "Increases your <b>Shroud Resistance</b> by <b>{{gameValue1}}</b>, which reduces the amount of <b>Shroud</b> damage received."
+      ]
+    },
+    "SILENT_STRIDE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "20%",
+          "40%",
+          "60%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "20%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Silent Stride",
+      "description": [
+        "Increases your movement speed while <b>sneaking</b> by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "SKILL_SHOT": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "20%",
+          "40%",
+          "60%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "20%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Skill Shot",
+      "description": [
+        "<b>Skillshot</b> damage is increased by <b>{{gameValue1}}</b>.",
+        "<b>Skillshot</b><br/>Striking enemy weak points, such as their heads, with Arrows is considered a Skillshot.",
+        "Skillshots deal 100% increased base damage against enemies without helmets and 50% against helmeted enemies. <br/>It can be further increased by the Skillshot damage attribute."
+      ]
+    },
+    "SLASHER": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Slasher",
+      "description": [
+        "Melee <b>Cutting</b> damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "SLEIGHT_OF_HAND": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "30%",
+          "60%",
+          "90%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "30%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Sleight of Hand",
+      "description": [
+        "Unarmed damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "SLICE_AND_DICE": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "10",
+        "gameValue2": "50%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Slice And Dice",
+      "description": [
+        "After a Critical Strike with a Dagger, the base damage of your next Bow attack within {{gameValue1}} seconds is increased by <b>{{gameValue2}}</b>."
+      ]
+    },
+    "SNAKE_EATER": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "4%",
+          "8%",
+          "12%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "4%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Snake Eater",
+      "description": [
+        "Increases your <b>Poison Resistance</b> by <b>{{gameValue1}}</b>, which reduces the amount of <b>Poison</b> damage received.",
+        "<b>Poison</b> damage bypasses armor and can only be mitigated by <b>Poison Resistance</b>."
+      ]
+    },
+    "SNAP": {
+      "cost": 2,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "20%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Snap",
+      "description": [
+        "Triggering a <b>Merciless Attack</b> restores <b>{{gameValue1}}</b> Mana."
+      ]
+    },
+    "SNEAK_ATTACK": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Contextual Action]"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Action contextuelle]"
+          }
+        }
+      },
+      "name": "Sneak Attack",
+      "description": [
+        "Perform a <b>Sneak Attack</b> by sneaking up to an unaware enemy and pressing <b>{{gameValue1}}</b>.",
+        "<b>Sneak Attack</b> deals <b>+900%</b> increased damage.",
+        "Wands, Staves and Bows cannot perform Sneak Attacks."
+      ]
+    },
+    "SNIPER": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "2%",
+          "4%",
+          "6%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "2%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Sniper",
+      "description": [
+        "Critical Strike chance with Bows is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "SOAKED_DOG": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Soaked Dog",
+      "description": [
+        "Weakens the effect of the <b>Wet</b> and <b>Soaked</b> debuffs.",
+        "Stamina and Stamina Regeneration is reduced by <b>10%</b> instead of <b>20%</b>.",
+        "<b>Wet</b> <br/>Reduces Stamina and Stamina Regeneration by <b>30%</b> for <b>15</b> minutes. Warmth reduces the remaining duration.",
+        "<b>Soaked</b> <br/>Reduces Stamina and Stamina Regeneration by <b>30%</b> for <b>30</b> seconds. Also reduces <b>Ice and Shock Resistances</b> by <b>30%</b> but increases <b>Fire Resistance</b> by <b>30%</b>.<br/><b>Soaked</b> can be applied to enemies.<br/><b>Soaked</b> duration can not be reduced by warmth, and transitions into the <b>Wet</b> debuff once it ends."
+      ]
+    },
+    "SOUL_LEECH": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5",
+          "10",
+          "15"
+        ],
+        "gameValue2": [
+          "15",
+          "30",
+          "45"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5",
+        "gamePerLevelValue2": "15"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Soul Leech",
+      "description": [
+        "When killing an enemy with a Melee weapon, all players within <b>{{gameValue1}}</b> meters of the target restore <b>{{gameValue2}}</b> Mana."
+      ]
+    },
+    "SPELLSLINGER": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Spellslinger",
+      "description": [
+        "Staff damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "SPLASH_DASH": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "40"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Splash Dash",
+      "description": [
+        "Allows you to perform an evasive dash while swimming or diving.",
+        "<b>Cost</b>: {{gameValue1}} Stamina"
+      ]
+    },
+    "STEADFAST": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "1"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Steadfast",
+      "description": [
+        "Defeating an enemy with a Melee weapon restores <b>{{gameValue1}}</b> durability to that weapon."
+      ]
+    },
+    "STING": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "20%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Sting",
+      "description": [
+        "Repeated Wand damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "STRATEGIC_MANEUVER": {
+      "cost": 1,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "20"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Strategic Maneuver",
+      "description": [
+        "Replaces the Dodge Roll ability with a sideways Dodge Roll while an enemy target is locked.",
+        "Use it to roll around your enemies, making it easier to flank them or deliver backstabs.",
+        "Blink replaces the sideways Dodge Roll of the Strategic Maneuver skill.",
+        "<b>Cost:</b> {{gameValue1}} Stamina"
+      ]
+    },
+    "SURVIVAL_INSTINCT": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "3",
+          "6",
+          "9"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "3"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Survival Instinct",
+      "description": [
+        "Defeating a Shroud infested enemy with a Bow or Dagger restores <b>{{gameValue1}}</b> seconds of <b>Time in the Shroud</b>.",
+        "<b>Time in the Shroud</b><br/>Should this time run out, the Shroud will consume you."
+      ]
+    },
+    "SWEET_TOOTH": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Sweet Tooth",
+      "description": [
+        "Stamina Regeneration of sweets is increased by <b>50%</b>."
+      ]
+    },
+    "SWIFT_BLADES": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "15%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Swift Blades",
+      "description": [
+        "Increases the attack speed of all One-Handed Melee weapons by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "SWIFTSHOT_SUSTENANCE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "12%",
+          "24%",
+          "36%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "12%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Swiftshot Sustenance",
+      "description": [
+        "Defeating an enemy with a Bow has a <b>{{gameValue1}}</b> chance to spawn a Stamina Orb.",
+        "Gathering an Orb restores <b>10%</b> of the respective resource."
+      ]
+    },
+    "TERROR": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "20%",
+          "40%",
+          "60%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "20%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Terror",
+      "description": [
+        "Critical Strikes with spells have a <b>{{gameValue1}}</b> chance to stun the target for <b>2</b> seconds."
+      ]
+    },
+    "THICK_SKIN": {
+      "cost": 5,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Thick Skin",
+      "description": [
+        "Gain one point of Constitution for every two levels of the Flame."
+      ]
+    },
+    "THRUST": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Thrust",
+      "description": [
+        "Melee <b>Piercing</b> damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "THUNDER": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Thunder",
+      "description": [
+        "All <b>Shock</b> damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "TITAN_EDGE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Titan Edge",
+      "description": [
+        "Damage with Two-Handed Greatswords is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "TOTEM_MASTERY": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "1"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Totem Mastery",
+      "description": [
+        "Increases the maximum amount of summoned totems by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "TOWER": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Tower",
+      "description": [
+        "While there are three or more enemies within <b>20</b> meters, you receive <b>{{gameValue1}}</b> increased <b>Physical Resistance</b>."
+      ]
+    },
+    "TWO_HANDED_SPECIALIZATION": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Special Ability]"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Capacité spéciale]"
+          }
+        }
+      },
+      "name": "Two-Handed Specialization",
+      "description": [
+        "Unlocks Special Abilities of Two-Handed Melee weapons. <br/>Press <b>{{gameValue1}}</b> to unleash a powerful Special Ability after generating enough Focus.",
+        "<b>Focus</b><br/>Generate Focus by attacking. Focus can be built up with any weapon type and is used to trigger Special Abilities of weapons."
+      ]
+    },
+    "UNITY": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "10%",
+          "20%",
+          "30%"
+        ],
+        "gameValue2": [
+          "2%",
+          "4%",
+          "6%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "10%",
+        "gamePerLevelValue2": "2%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Unity",
+      "description": [
+        "Damaging enemies with Wands has a <b>{{gameValue1}}</b> chance to restore <b>{{gameValue2}}</b> of your maximum Mana."
+      ]
+    },
+    "UPDRAFT": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Jump]",
+        "gameValue2": "100"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Sauter]"
+          }
+        }
+      },
+      "name": "Updraft",
+      "description": [
+        "Jumping with {{gameValue1}} while gliding lifts you upwards. Can be used once per flight.",
+        "<b>Charge</b><br/>As the Updraft charges before activation, the resulting lift is increased. A full charge grants you an additional boost. The charge is accelerated while inside your base.",
+        "<b>Cost:</b> {{gameValue2}} Mana"
+      ]
+    },
+    "UPWARDS_SLASH_ATTACK": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "25"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Upwards Slash Attack",
+      "description": [
+        "When equipped with a Melee weapon, launch a powerful upward strike during the ascent of your jump.",
+        "Use this skill to rapidly close the distance on <b>flying</b> enemies.",
+        "<b>Cost:</b> {{gameValue1}} Stamina"
+      ]
+    },
+    "VEILED_VIGOR": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "3",
+          "6",
+          "9"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "3"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Veiled Vigor",
+      "description": [
+        "Increases your maximum Health by <b>{{gameValue1}}</b> times your Dexterity attribute."
+      ]
+    },
+    "VETERAN": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "2%",
+          "4%",
+          "6%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "2%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Veteran",
+      "description": [
+        "Critical Strike chance with One- or Two-Handed Axes, Clubs, Hammers, Swords, Greatswords and Daggers is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "VIGOROUS_DEFLECTION": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "15",
+          "30",
+          "45"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "15"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Vigorous Deflection",
+      "description": [
+        "Successfully parrying an enemy's attack restores <b>{{gameValue1}}</b> Stamina.",
+        "<b>Parry</b><br/>You can block when equipped with any Melee weapon, Ward, or Shield. A well-timed block will <b>parry</b> the attack and fill up the enemy's <i>Stun Bar</i>.<br/>Wait to see a <b>flash</b> on the enemy or projectile to perform a parry."
+      ]
+    },
+    "VILE_CONCOCTION": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "12%",
+          "24%",
+          "36%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "12%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Vile Concoction",
+      "description": [
+        "Throwable damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "VITALITY_SURGE": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "3",
+          "6",
+          "9"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "3"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Vitality Surge",
+      "description": [
+        "Critical Strikes with Bows, Daggers and Throwables restore <b>{{gameValue1}}</b> Stamina."
+      ]
+    },
+    "VUKAH_CULTURE": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Vukah Culture",
+      "description": [
+        "When you are targeted by an attack, <b>Vukah</b> within <b>50</b> meters will attack the enemy."
+      ]
+    },
+    "VUKAH_LANGUAGE": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Vukah Language",
+      "description": [
+        "<b>Vukah</b> within <b>50</b> meters will no longer attack you unless provoked."
+      ]
+    },
+    "WAND_EVASION_ATTACK": {
+      "cost": 4,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Use Item]",
+        "gameValue2": "50"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Utiliser un objet]"
+          }
+        }
+      },
+      "name": "Wand Evasion Attack",
+      "description": [
+        "When equipped with a Wand, you can perform a Wand Evasion Attack by pressing <b>{{gameValue1}}</b> while evading.<br/>It fires a magical disc that pierces enemies and deals <b>50%</b> additional weapon damage.",
+        "<b>Cost:</b> {{gameValue2}} Mana"
+      ]
+    },
+    "WAND_MASTERY": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Wand Mastery",
+      "description": [
+        "Wand damage is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "WAND_SPECIALIZATION": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "[Special Ability]"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "gameLocaleValues": {
+        "fr": {
+          "gameValues": {
+            "gameValue1": "[Capacité spéciale]"
+          }
+        }
+      },
+      "name": "Wand Specialization",
+      "description": [
+        "Unlocks Special Abilities of Wands. <br/>Press <b>{{gameValue1}}</b> to unleash a powerful Special Ability after generating enough Focus.",
+        "<b>Focus</b><br/>Generate Focus by attacking. Focus can be built up with any weapon type and is used to trigger Special Abilities of weapons."
+      ]
+    },
+    "WANDERLUST": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Wanderlust",
+      "description": [
+        "Stamina cost for <b>sprinting on dirt roads</b> is reduced from <b>90% to 80%</b>.",
+        "Stamina cost for <b>sprinting on stone roads</b> is reduced from <b>75% to 50%</b>."
+      ]
+    },
+    "WARDEN": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "10%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Warden",
+      "description": [
+        "While there are three or more enemies within <b>20</b> meters, you receive <b>{{gameValue1}}</b> increased <b>Magical Resistance</b>."
+      ]
+    },
+    "WARRIOR_PATH": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5%",
+          "10%",
+          "15%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Warrior's Path",
+      "description": [
+        "Damage with One-Handed Axes, Clubs and Swords is increased by <b>{{gameValue1}}</b>."
+      ]
+    },
+    "WATER_AURA": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "5.1",
+          "10.1",
+          "15.1"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "5.1"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Water Aura",
+      "description": [
+        "You emit a healing aura that heals you and all injured allies within <b>{{gameValue1}}</b> meters.",
+        "The healing scales with your Intelligence attribute and restores <b>1</b> Health per <b>2</b> points of Intelligence."
+      ]
+    },
+    "WATERS_OF_LIFE": {
+      "cost": 2,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Waters Of Life",
+      "description": [
+        "Increases <b>Water Aura</b> healing to <b>2</b> Health per <b>2</b> points of Intelligence."
+      ]
+    },
+    "WELL_RESTED": {
+      "cost": 1,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "2",
+          "4",
+          "6"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "2"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Well Rested",
+      "description": [
+        "The base duration for the Rested buff is increased by <b>{{gameValue1}}</b> minutes.",
+        "<b>Rested</b><br/>The Rested buff increases your Stamina Maximum and Regeneration significantly.",
+        "It requires <b>shelter, sitting or sleeping,</b> as well as <b>warmth</b> from a heat source.",
+        "The buff can be refreshed <b>anywhere.</b>",
+        "Surrounding comfort items further increase its duration."
+      ]
+    },
+    "WET_DOG": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Wet Dog",
+      "description": [
+        "Weakens the effect of the <b>Wet</b> and <b>Soaked</b> debuffs.",
+        "Stamina and Stamina Regeneration is reduced by <b>20%</b> instead of <b>30%</b>.",
+        "<b>Wet</b> <br/>Reduces Stamina and Stamina Regeneration by <b>30%</b> for <b>15</b> minutes. Warmth reduces the remaining duration.",
+        "<b>Soaked</b> <br/>Reduces Stamina and Stamina Regeneration by <b>30%</b> for <b>30</b> seconds. Also reduces <b>Ice and Shock Resistances</b> by <b>30%</b> but increases <b>Fire Resistance</b> by <b>30%</b>.<br/><b>Soaked</b> can be applied to enemies.<br/><b>Soaked</b> duration can not be reduced by warmth, and transitions into the <b>Wet</b> debuff once it ends."
+      ]
+    },
+    "WHIRLWIND_CRESCENDO": {
+      "cost": 3,
+      "maxLevel": 1,
+      "gameValues": {
+        "gameValue1": "75"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Whirlwind Crescendo",
+      "description": [
+        "When equipped with a Two-Handed weapon, trigger a whirl attack at the end of an attack chain.",
+        "<b>Cost:</b> {{gameValue1}} Stamina"
+      ]
+    },
+    "WIZARD": {
+      "cost": 2,
+      "maxLevel": 3,
+      "gameLevelValues": {
+        "gameValue1": [
+          "2%",
+          "4%",
+          "6%"
+        ]
+      },
+      "gamePerLevelValues": {
+        "gamePerLevelValue1": "2%"
+      },
+      "gameTextLocales": [
+        "en",
+        "fr"
+      ],
+      "name": "Wizard",
+      "description": [
+        "Critical Strike chance with Wands and Staves is increased by <b>{{gameValue1}}</b>."
+      ]
+    }
+  },
+  "treeVersion": {
+    "contentHash": "e682a8724aa37d92aadd9ff8979c163ee50826560a0a67f8c8a8e3084a12ef10"
+  }
+}

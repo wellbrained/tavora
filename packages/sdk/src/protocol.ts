@@ -621,3 +621,6 @@ export const PICTURES_PATH = "/_pictures/";
 
 /** Document ids: host-generated UUIDs or module-chosen slugs. */
 export const DOCUMENT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+/** POST a bounded JSON document after a gesture; saves a new .json in Downloads/Tavora. */
+export const JSON_EXPORT_PATH = "/_exports/json/";

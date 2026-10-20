@@ -1,0 +1,15 @@
+# Enshrouded Builds
+
+Installable offline Tavora module for Enshrouded 1.0. One Tree panel supports pan/zoom, English skill details, search, connected point allocation/refunds, six attribute totals, named local builds and JSON import/export. UI controls are English/German; game text falls back to English.
+
+Requires Tavora 0.19.9 and SDK 0.2.10 for file exports. Build: `pnpm --filter @tavora/enshrouded build`. Add the folder under Settings > Development or install the signed ZIP. No network permissions, accounts or game installation required.
+
+Click a node to allocate/level up (at maximum, clicking refunds it); right-click to refund one level. Refunding a prerequisite also removes disconnected descendants after confirmation. Keyboard: Tab to a node, Enter/Space to allocate, Shift+Enter or Delete to refund; arrows pan. Scroll/+/− zoom; Fit tree restores the full view. Search highlights names; Enter focuses the first match.
+
+Builds save on every successful edit through Tavora documents, separately per game/module. Revision checks prevent overwriting a simultaneous save; conflicts display an error so the player can retry against the latest data. Import previews a name and point count and always creates a new build. Existing builds are never replaced by importing. Reset requires confirmation and only affects the current build. No delete operation.
+
+Export writes a versioned .json to Downloads/Tavora through the host API, without replacing files. This JSON also carries upstream-compatible skills, levels and tree hash. Import accepts this format and upstream planner JSON objects. Unversioned files require review in the preview; different hashes, unknown/disconnected skills, malformed levels and over-budget builds are rejected. Files are limited to 256 KiB. No URL, game save or share-code import.
+
+Tree build 1267041 (1.0), progression hotfix 1269579, 231 selectable nodes and maximum 212 points. This is the absolute planning cap, not the current character's earned points. Attributes include skill attributes only, not equipment, flame bonuses or combat calculations. No damage simulator.
+
+GPL-3.0-or-later, with bundled corresponding module/core source and license in the ZIP. See UPSTREAM.md for pinned revision, provenance and asset attribution. Upstream does not document a separate redistribution grant for game artwork: keep this a local review package until public asset permission is settled. No public catalogue publication.

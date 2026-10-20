@@ -6,7 +6,7 @@ import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./gamedata";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
-import { BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH } from "@tavora/sdk/protocol";
+import { BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH, JSON_EXPORT_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession, type BridgeContext } from "./bridge";
 import { moduleReadPage } from "./page-import";
 import type { CheckedMenu } from "./module-menu";
@@ -18,6 +18,7 @@ import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
 import { serveClipboard } from "./clipboard-http";
 import { savePictureFile, servePictureSave } from "./picture-save-http";
+import { saveJsonExport, serveJsonExport } from './json-export-http';
 import { isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
 import { moduleFetch, type TestHosts } from "./network";
@@ -134,6 +135,11 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
     if (url.pathname === CLIPBOARD_PATH) {
       const gesture = gestureOf(ses);
       return serveClipboard(request, { allowed: () => Date.now() - gesture.at <= GESTURE_MS, consume: () => void (gesture.at = 0), write: writeClipboardPicture });
+    }
+    if (url.pathname === JSON_EXPORT_PATH) {
+      const gesture = gestureOf(ses);
+      const downloads = !app.isPackaged && process.env.TAVORA_EXPORTS_DIR ? path.resolve(process.env.TAVORA_EXPORTS_DIR) : path.join(app.getPath('downloads'), 'Tavora');
+      return serveJsonExport(request, url, { allowed: () => Date.now() - gesture.at <= GESTURE_MS, consume: () => void (gesture.at = 0), save: (data, name) => saveJsonExport(downloads, data, name) });
     }
     if (url.pathname === PICTURES_PATH) {
       const gesture = gestureOf(ses);
