@@ -54,6 +54,7 @@ export class CopyStore {
       create table if not exists copies (
         account_id text primary key, version integer not null, manifest blob not null, size integer not null, updated_at integer not null
       );
+      create table if not exists retired (account_id text primary key, version integer not null);
       create table if not exists parts (
         account_id text not null, id blob not null, data blob not null, size integer not null, primary key (account_id, id)
       ) without rowid;
@@ -133,7 +134,8 @@ export class CopyStore {
     }
     if (missing > 0) return { ok: false, reason: "missing-parts", missing };
     if (size > COPY_LIMIT) return { ok: false, reason: "copy-full", size };
-    const version = base + 1;
+    // After a delete, numbers go on from the deleted copy's, so a PC that still knows that one never takes a new copy for it.
+    const version = Math.max(base, this.retired(accountId)) + 1;
     this.db.exec("begin");
     try {
       this.db
@@ -151,10 +153,18 @@ export class CopyStore {
     return { ok: true, version, size };
   }
 
-  /** Removes the account's copy and every part it stored; with the copy button or with the account. */
-  remove(accountId: string): void {
+  /** The version of the account's last deleted copy, 0 when none was. */
+  private retired(accountId: string): number {
+    return (this.db.prepare("select version from retired where account_id = ?").get(accountId) as { version: number } | undefined)?.version ?? 0;
+  }
+
+  /** Removes the account's copy and every part it stored; with the copy button or with the account (`forever`: its version number goes too). */
+  remove(accountId: string, forever = false): void {
     this.db.exec("begin");
     try {
+      const version = Math.max(this.info(accountId)?.version ?? 0, this.retired(accountId));
+      if (forever || version === 0) this.db.prepare("delete from retired where account_id = ?").run(accountId);
+      else this.db.prepare("insert into retired (account_id, version) values (?, ?) on conflict (account_id) do update set version = excluded.version").run(accountId, version);
       this.db.prepare("delete from parts where account_id = ?").run(accountId);
       this.db.prepare("delete from copies where account_id = ?").run(accountId);
       this.db.exec("commit");

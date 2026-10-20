@@ -4,7 +4,6 @@ import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { DATA_DIRS, DATA_FILES, PICTURE_DIRS } from "./backup";
 import { copyKeys, open, PART_ID_BYTES, partId, seal, type CopyKeys } from "./copy-crypto";
-import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
 import { OWNER_RECORDS_FILE } from "./installer";
 import { FILES_DIR } from "./module-files";
@@ -556,7 +555,7 @@ export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: str
 }
 
 // What this PC keeps about the copy: the state in cloud-copy.json (paths, sizes, hashes and part ids,
-// nothing of the content), and the copy key in cloud-copy-key.json, encrypted like the sign-in.
+// nothing of the content). The key is the account's (account-key.ts).
 
 export async function loadCopyState(file: string): Promise<CopyState> {
   try {
@@ -570,26 +569,4 @@ export async function loadCopyState(file: string): Promise<CopyState> {
 
 export async function saveCopyState(file: string, state: CopyState): Promise<void> {
   await writeFileAtomic(file, JSON.stringify({ v: 1, version: state.version, pictures: state.pictures, files: state.files }));
-}
-
-export async function loadCopyKey(file: string, encryptor: Encryptor): Promise<Buffer | null> {
-  if (!encryptor.isAvailable()) return null;
-  try {
-    const saved = JSON.parse(await readFile(file, "utf8")) as { v?: unknown; data?: unknown };
-    if (saved.v !== 1 || typeof saved.data !== "string") return null;
-    const key = Buffer.from(encryptor.decrypt(Buffer.from(saved.data, "base64")), "base64");
-    return key.length === 32 ? key : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Without the OS key store nothing is saved, so the copy can't be turned on there. */
-export async function saveCopyKey(file: string, encryptor: Encryptor, key: Uint8Array | null): Promise<void> {
-  if (!key) {
-    await rm(file, { force: true });
-    return;
-  }
-  if (!encryptor.isAvailable()) return;
-  await writeFileAtomic(file, JSON.stringify({ v: 1, data: encryptor.encrypt(Buffer.from(key).toString("base64")).toString("base64") }));
 }

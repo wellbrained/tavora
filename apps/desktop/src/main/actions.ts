@@ -321,6 +321,7 @@ export function parseAction(raw: unknown): HostAction | null {
     case "cloud-copy-on":
     case "cloud-copy-on-folder":
     case "cloud-copy-cancel":
+    case "cloud-copy-new-key":
     case "cloud-copy-show-key":
     case "cloud-copy-copy-key":
     case "cloud-copy-key-saved":

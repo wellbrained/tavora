@@ -186,7 +186,7 @@ export interface AccountView {
 }
 
 /** Why the cloud copy could not sync last time, worded by the host UI. */
-export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "no-folder" | "not-arrived";
+export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "new-key" | "no-folder" | "not-arrived";
 
 /**
  * Settings > Account > Cloud copy, and the questions it asks over the app. Sent on its own channel;
@@ -682,6 +682,8 @@ export type HostAction =
   | { type: "cloud-copy-move"; to: "server" | "folder" }
   | { type: "cloud-copy-key"; key: string }
   | { type: "cloud-copy-cancel" }
+  /** Lost the recovery key: the copy is deleted and the account gets a new key. */
+  | { type: "cloud-copy-new-key" }
   | { type: "cloud-copy-show-key" }
   /** Puts the recovery key on screen on the clipboard. */
   | { type: "cloud-copy-copy-key" }

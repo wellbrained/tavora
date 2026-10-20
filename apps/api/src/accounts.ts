@@ -100,7 +100,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   /** Everything on the server goes at once: the account, its sign-ins and its cloud copy. */
   const deleteAccount = (id: string) => {
     store.deleteAccount(id, now());
-    options.copies?.remove(id);
+    options.copies?.remove(id, true);
   };
 
   /** The day's emails are used up (for sign-ins already when only the reserved ones are left). */

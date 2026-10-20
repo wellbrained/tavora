@@ -19,12 +19,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.19.9",
+    version: "0.19.11",
     date: "2026-10-20",
     title: "Cloud copy in your own folder",
     notes: [
       "Keep your cloud copy in a folder of your own, like your OneDrive, Dropbox or Google Drive. No account needed.",
       "It's encrypted on your PC, just like on our server.",
+    ],
+  },
+  {
+    version: "0.19.10",
+    date: "2026-10-20",
+    title: "One recovery key for your account",
+    notes: [
+      "Your recovery key now belongs to your account. Turning the cloud copy off and on again no longer asks for it.",
+      "Lost your key? Start over with a new one, right where Tavora asks for it.",
     ],
   },
   {

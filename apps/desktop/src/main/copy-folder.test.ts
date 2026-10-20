@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
+import { AccountKey } from "./account-key";
 import { CloudCopy, EMPTY_STATE, ServiceStorage, swapInCopy } from "./cloud-copy";
 import { cleanUp, pc } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
@@ -208,7 +209,7 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
       enabled: true,
       moduleFiles: () => at.moduleFiles,
       service: offService,
-      encryptor,
+      accountKey: new AccountKey({ file: path.join(at.userData, "account-key.json"), encryptor, baseUrl: "http://tavora.test/v1/account", fetch: (() => Promise.reject(new Error("no service"))) as typeof fetch, token: () => null }),
       flush: async () => undefined,
       restart: () => void events.restarts++,
       onChange: (view) => views.push(view),
