@@ -30,7 +30,19 @@ A lost or leaked key can be replaced by a new one only if it was linked to your 
 
 ## Publishing from CI
 
-A build server can't click Allow. Press **Export** next to the key in Tavora to save it as a file, store it as a secret of your CI, and pass it with `--key <file>`. **Anyone with the file can publish as you**: never commit it, and export it only where you need it.
+A build server can't press Allow, so it needs two secrets:
+
+1. **The key file.** Press **Export** next to the key in Tavora and save it. Pass it with `--key <file>`.
+2. **A publish token.** Under Module developer > **Publish tokens**, type a name (like "GitHub Actions") and press **Make a token**. Copy it right away: Tavora shows it only once. Put it in the `TAVORA_PUBLISH_TOKEN` environment variable.
+
+```sh
+npx tavora-pack . --key publisher-key.pem
+TAVORA_PUBLISH_TOKEN=tvp_… npx tavora-pack publish <id>-<version>.zip --key publisher-key.pem
+```
+
+A token works for a year, only together with a key linked to your account, and only for id prefixes your account has already: publish a module's first version from Tavora. You get an email for every upload, naming the token. Remove a token you don't need any more, and it stops working at once.
+
+**With the file and a token, anyone can publish as you**: keep both as CI secrets, never commit them, and export the key only where you need it.
 
 ## Show your name
 

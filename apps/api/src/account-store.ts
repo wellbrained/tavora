@@ -20,6 +20,11 @@ export const CODES_PER_DAY = 10;
 const DAY_MS = 24 * 60 * 60_000;
 /** A sign-in unused for a year ends. */
 export const SESSION_IDLE_MS = 365 * DAY_MS;
+/** A publish token is good this long (decided 2026-10-20). */
+export const PUBLISH_TOKEN_TTL_MS = 365 * DAY_MS;
+export const MAX_PUBLISH_TOKENS = 10;
+/** Publish tokens start like this, so they are told apart from sign-ins (and found by secret scanners). */
+export const PUBLISH_TOKEN_PREFIX = "tvp_";
 /** How often a session's last use is written, so every request is not a write. */
 const SESSION_TOUCH_MS = 60 * 60_000;
 
@@ -41,6 +46,15 @@ export interface Account {
   email: string | null;
   discord: DiscordLogin | null;
   createdAt: string;
+}
+
+export interface PublishToken {
+  id: string;
+  /** What the developer called it, such as "GitHub Actions". */
+  name: string;
+  createdAt: number;
+  expiresAt: number;
+  lastUsedAt: number | null;
 }
 
 export interface Device {
@@ -216,6 +230,11 @@ export class AccountStore {
         account_id text primary key references accounts (id) on delete cascade,
         version integer not null, data blob not null, updated_at integer not null
       );
+      create table if not exists publish_tokens (
+        id text primary key, account_id text not null references accounts (id) on delete cascade, token_hash text not null unique,
+        name text not null, created_at integer not null, expires_at integer not null, last_used_at integer
+      );
+      create index if not exists publish_tokens_account on publish_tokens (account_id);
     `);
     this.migrate();
   }
@@ -340,6 +359,7 @@ export class AccountStore {
       if (developer) this.release(nameKey(developer.name), id, now);
       this.db.prepare("delete from vaults where account_id = ?").run(id);
       this.db.prepare("delete from key_requests where account_id = ?").run(id);
+      this.db.prepare("delete from publish_tokens where account_id = ?").run(id);
       this.db.prepare("delete from link_codes where account_id = ?").run(id);
       this.db.prepare("delete from publisher_keys where account_id = ?").run(id);
       this.db.prepare("delete from developers where account_id = ?").run(id);
@@ -554,6 +574,51 @@ export class AccountStore {
 
   removeVault(accountId: string): void {
     this.db.prepare("delete from vaults where account_id = ?").run(accountId);
+  }
+
+  // ── Publish tokens ─────────────────────────────────────────────────────
+
+  /**
+   * A token for publishing from CI (decided 2026-10-20): shown once, kept here only as a hash, good for a
+   * year. It publishes under the account's prefixes, never a new one, and only together with the key's
+   * signature. Null when the account has as many as it may.
+   */
+  createPublishToken(accountId: string, name: string, now: number): { token: string; publishToken: PublishToken } | null {
+    if (this.publishTokens(accountId, now).length >= MAX_PUBLISH_TOKENS) return null;
+    const token = `${PUBLISH_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
+    const id = randomBytes(12).toString("base64url");
+    const expiresAt = now + PUBLISH_TOKEN_TTL_MS;
+    this.db.prepare("insert into publish_tokens (id, account_id, token_hash, name, created_at, expires_at) values (?, ?, ?, ?, ?, ?)").run(id, accountId, sha256(`publish:${token}`), name, now, expiresAt);
+    return { token, publishToken: { id, name, createdAt: now, expiresAt, lastUsedAt: null } };
+  }
+
+  /** The account's publish tokens that haven't run out; those that have are dropped. */
+  publishTokens(accountId: string, now: number): PublishToken[] {
+    this.db.prepare("delete from publish_tokens where account_id = ? and expires_at <= ?").run(accountId, now);
+    const rows = this.db.prepare("select id, name, created_at, expires_at, last_used_at from publish_tokens where account_id = ? order by created_at, rowid").all(accountId) as unknown as {
+      id: string;
+      name: string;
+      created_at: number;
+      expires_at: number;
+      last_used_at: number | null;
+    }[];
+    return rows.map((row) => ({ id: row.id, name: row.name, createdAt: row.created_at, expiresAt: row.expires_at, lastUsedAt: row.last_used_at }));
+  }
+
+  /** The account a publish token belongs to, while it is good; marks it used. */
+  publishTokenAccount(token: string, now: number): { accountId: string; name: string } | null {
+    if (!token.startsWith(PUBLISH_TOKEN_PREFIX)) return null;
+    const row = this.db.prepare("select id, account_id, name, expires_at from publish_tokens where token_hash = ?").get(sha256(`publish:${token}`)) as
+      | { id: string; account_id: string; name: string; expires_at: number }
+      | undefined;
+    if (!row || row.expires_at <= now) return null;
+    this.db.prepare("update publish_tokens set last_used_at = ? where id = ?").run(now, row.id);
+    return { accountId: row.account_id, name: row.name };
+  }
+
+  /** False when the account has no such token. */
+  deletePublishToken(accountId: string, id: string): boolean {
+    return this.db.prepare("delete from publish_tokens where account_id = ? and id = ?").run(accountId, id).changes > 0;
   }
 
   // ── Profile ────────────────────────────────────────────────────────────

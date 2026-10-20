@@ -9,6 +9,8 @@ What changed in `@tavora/pack`, newest first.
 - `--publisher <fingerprint>` picks one of the keys Tavora keeps.
 - `tavora-pack link` is only for key files; Tavora links the keys it keeps.
 - `packModule` and `publishZip` take a key or a `Signer` (`keySigner`, `tavoraSigner`). `loadOrCreateKey` is gone; use `loadExistingKey`.
+- Publishing needs your account now, not only the key. With a key Tavora keeps, `tavora-pack publish` hands the zip to Tavora, which uploads it with your sign-in after you press Allow. With a key file (CI), set `TAVORA_PUBLISH_TOKEN` to a publish token from Settings > Account > Module developer. Older versions can't publish any more.
+- `publishZip` takes `token` and `language`, and resolves with `Published`.
 
 ## 0.1.3
 

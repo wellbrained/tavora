@@ -1,5 +1,5 @@
 import { createHash, createPrivateKey, generateKeyPairSync, sign, type KeyObject } from "node:crypto";
-import { fingerprint, MANIFEST_FILE, PUBLISH_STATEMENT, rawPublicKey, readZip, SIGNATURE_FILE, signedBytes, verifyFiles, ZipError, type SignerAnswer, type SignerRequest } from "@tavora/pack";
+import { fingerprint, MANIFEST_FILE, PublishError, rawPublicKey, readZip, SIGNATURE_FILE, signedBytes, verifyFiles, ZipError, type Published, type SignerAnswer, type SignerRequest } from "@tavora/pack";
 import type { DeveloperKeysView, SignRequestView } from "../shared/host-api";
 import type { AccountKey } from "./account-key";
 import { CopyError } from "./cloud-copy";
@@ -7,9 +7,9 @@ import { PlayerError } from "./messages";
 
 // The developer's publisher keys, kept in the account's key vault (decided 2026-10-20, "one recovery key").
 // Tavora makes a key or takes one from a file, links it to the account, and signs with it for the pack
-// command (signer-server.ts). Every signature waits for the developer's click on what it signs: the module
-// and its version, and whether it packs or publishes. A key leaves Tavora only when the developer exports
-// it to a file, for publishing from CI.
+// command (signer-server.ts), and publishes for it, uploading with the account's sign-in. Every signature
+// waits for the developer's click on what it signs: the module and its version, and whether it packs or
+// publishes. A key leaves Tavora only when the developer exports it to a file, for publishing from CI.
 
 /** At most this many keys in the vault; far more than anyone needs. */
 const MAX_KEYS = 20;
@@ -24,6 +24,8 @@ export interface DeveloperKeysOptions {
     signedIn(): boolean;
     /** Links a key to the signed-in account. */
     link(key: KeyObject): Promise<void>;
+    /** Signs the zip's publish statement with the key and uploads it with the account's sign-in. */
+    publish(key: KeyObject, zip: Buffer): Promise<Published>;
   };
   onChange: (view: DeveloperKeysView) => void;
   /** Brings Tavora to the front: a sign request is waiting. */
@@ -207,13 +209,30 @@ export class DeveloperKeys {
       return { ok: true, keys: this.keys.map((kept) => ({ publicKey: kept.publicKey })) };
     }
     if (this.keys.length === 0) await this.refresh();
-    const asked = request.op === "sign-package" ? packageRequest(request) : publishRequest(request);
+    if (request.op === "publish") return this.publish(request);
+    const asked = packageRequest(request);
     if (!asked) return { ok: false, reason: "bad-request" };
     const kept = this.keys.find((key) => key.publicKey === asked.publicKey);
     if (!kept) return { ok: false, reason: "unknown-key" };
     if (this.request) return { ok: false, reason: "busy" };
-    if (!(await this.ask({ kind: request.op === "sign-package" ? "package" : "publish", fingerprint: kept.fingerprint, module: asked.module }))) return { ok: false, reason: "refused" };
+    if (!(await this.ask({ kind: "package", fingerprint: kept.fingerprint, module: asked.module }))) return { ok: false, reason: "refused" };
     return { ok: true, signature: sign(null, asked.bytes, kept.key).toString("base64") };
+  }
+
+  /** A zip to publish, after the click: Tavora signs it and uploads it, signed in. */
+  private async publish(request: Extract<SignerRequest, { op: "publish" }>): Promise<SignerAnswer> {
+    const asked = publishRequest(request);
+    if (!asked) return { ok: false, reason: "bad-request" };
+    const kept = this.keys.find((key) => key.publicKey === asked.publicKey);
+    if (!kept) return { ok: false, reason: "unknown-key" };
+    if (this.request) return { ok: false, reason: "busy" };
+    if (!(await this.ask({ kind: "publish", fingerprint: kept.fingerprint, module: asked.module }))) return { ok: false, reason: "refused" };
+    try {
+      return { ok: true, published: await this.options.account.publish(kept.key, asked.zip) };
+    } catch (error) {
+      if (error instanceof PublishError) return { ok: false, reason: "publish-refused", error: error.message };
+      return { ok: false, reason: "failed" };
+    }
   }
 
   /** The developer's click on the request. */
@@ -266,7 +285,7 @@ async function guard<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-type Asked = { publicKey: string; bytes: Buffer; module: SignRequestView["module"] };
+type Asked = { publicKey: string; bytes: Buffer; module: NonNullable<SignRequestView["module"]> };
 
 /** What the manifest says about the module, shortened for the question. */
 function moduleOf(manifest: Buffer): SignRequestView["module"] {
@@ -296,8 +315,8 @@ function packageRequest(request: Extract<SignerRequest, { op: "sign-package" }>)
   return { publicKey: request.publicKey, bytes: signedBytes(request.publicKey, hashes), module };
 }
 
-/** A zip to publish: signed already by a kept key, which signs the publish statement over it. */
-function publishRequest(request: Extract<SignerRequest, { op: "sign-publish" }>): Asked | null {
+/** A zip to publish: signed already by a kept key. */
+function publishRequest(request: Extract<SignerRequest, { op: "publish" }>): { publicKey: string; zip: Buffer; module: NonNullable<SignRequestView["module"]> } | null {
   if (typeof request.zip !== "string") return null;
   const zip = Buffer.from(request.zip, "base64");
   let files;
@@ -313,6 +332,5 @@ function publishRequest(request: Extract<SignerRequest, { op: "sign-publish" }>)
   const manifest = files.find((file) => file.name === MANIFEST_FILE);
   const module = manifest ? moduleOf(manifest.data) : null;
   if (!module) return null;
-  const sha256 = createHash("sha256").update(zip).digest("hex");
-  return { publicKey: signature.publicKey, bytes: Buffer.from(`${PUBLISH_STATEMENT}\n${sha256}`, "utf8"), module };
+  return { publicKey: signature.publicKey, zip, module };
 }

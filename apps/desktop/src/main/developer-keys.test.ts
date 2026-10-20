@@ -2,7 +2,7 @@ import { createHash, createPublicKey, generateKeyPairSync, verify } from "node:c
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { fingerprint, packModule, PUBLISH_STATEMENT, readZip, tavoraSigner, verifyFiles } from "@tavora/pack";
+import { fingerprint, packModule, PUBLISH_STATEMENT, PublishError, publishSignature, publishZip, readZip, tavoraSigner, verifyFiles } from "@tavora/pack";
 import { afterEach, describe, expect, it } from "vitest";
 import type { DeveloperKeysView } from "../shared/host-api";
 import { AccountKey } from "./account-key";
@@ -21,7 +21,7 @@ const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.f
 type Service = Awaited<ReturnType<typeof service>>;
 
 /** Tavora on one PC of the test account, with its signer listening. `answer` clicks on each sign request. */
-async function tavora(cloud: Service, answer: ((view: DeveloperKeysView) => boolean | null) | null = () => true, options: { offline?: () => boolean } = {}) {
+async function tavora(cloud: Service, answer: ((view: DeveloperKeysView) => boolean | null) | null = () => true, options: { offline?: () => boolean; refusePublish?: boolean } = {}) {
   const { userData } = await pc({ "library.json": "{}" });
   const fetchImpl = (async (url: string, init?: RequestInit) => {
     if (options.offline?.()) throw new TypeError("fetch failed");
@@ -36,10 +36,20 @@ async function tavora(cloud: Service, answer: ((view: DeveloperKeysView) => bool
     token: () => cloud.token,
   });
   const linked: string[] = [];
+  const uploads: { signature: string; sha256: string }[] = [];
   let focused = 0;
   const keys: DeveloperKeys = new DeveloperKeys({
     accountKey,
-    account: { signedIn: () => true, link: async (key) => void linked.push(fingerprint(key)) },
+    account: {
+      signedIn: () => true,
+      link: async (key) => void linked.push(fingerprint(key)),
+      publish: async (key, zip) => {
+        if (options.refusePublish) throw new PublishError("The service refused it.");
+        const sha256 = createHash("sha256").update(zip).digest("hex");
+        uploads.push({ signature: publishSignature(key, zip), sha256 });
+        return { id: "wellbrained.tracker", version: "1.2.0", sha256 };
+      },
+    },
     onChange: (view) => {
       const request = view.request;
       if (!request || !answer) return;
@@ -52,7 +62,7 @@ async function tavora(cloud: Service, answer: ((view: DeveloperKeysView) => bool
   const address = process.platform === "win32" ? `\\\\.\\pipe\\tavora-signer-test-${path.basename(userData)}-${Math.random()}` : path.join(userData, "signer", "signer.sock");
   const server = (await startSignerServer({ handle: (request) => keys.handle(request), address }))!;
   servers.push(server);
-  return { keys, accountKey, linked, address, focused: () => focused };
+  return { keys, accountKey, linked, uploads, address, focused: () => focused };
 }
 
 async function moduleFolder(): Promise<string> {
@@ -160,21 +170,35 @@ describe("the publisher keys Tavora keeps", () => {
     expect(await a.keys.handle({ v: 1, op: "sign-package", publicKey: other, files: right, manifest: manifest.toString("base64") })).toEqual({ ok: false, reason: "unknown-key" });
   });
 
-  it("signs the publish statement for a zip its key packed", async () => {
+  it("publishes a zip its key packed after the click, uploading it signed in", async () => {
     const cloud = await service();
-    const a = await tavora(cloud);
+    const kinds: string[] = [];
+    const a = await tavora(cloud, (view) => {
+      kinds.push(view.request!.kind);
+      return true;
+    });
     await a.keys.create();
     const fp = a.keys.view().keys[0]!.fingerprint;
     const { privateKey } = generateKeyPairSync("ed25519");
     const { zip: foreign } = await packModule(await moduleFolder(), privateKey);
-    expect(await a.keys.handle({ v: 1, op: "sign-publish", zip: foreign.toString("base64") })).toEqual({ ok: false, reason: "unknown-key" });
+    expect(await a.keys.handle({ v: 1, op: "publish", zip: foreign.toString("base64") })).toEqual({ ok: false, reason: "unknown-key" });
 
     const signer = (await tavoraSigner({ address: a.address }))!;
     const { zip } = await packModule(await moduleFolder(), signer);
     const sha256 = createHash("sha256").update(zip).digest("hex");
-    const signature = await signer.signPublish(zip, sha256);
+    expect(await publishZip({ key: signer, zip })).toEqual({ id: "wellbrained.tracker", version: "1.2.0", sha256 });
+    expect(kinds).toEqual(["package", "publish"]);
     const key = createPublicKey(a.keys.exportKey(fp));
-    expect(verify(null, Buffer.from(`${PUBLISH_STATEMENT}\n${sha256}`), key, signature)).toBe(true);
+    expect(verify(null, Buffer.from(`${PUBLISH_STATEMENT}\n${sha256}`), key, Buffer.from(a.uploads[0]!.signature, "base64"))).toBe(true);
+  });
+
+  it("passes on why the catalog refused a publish", async () => {
+    const cloud = await service();
+    const a = await tavora(cloud, () => true, { refusePublish: true });
+    await a.keys.create();
+    const signer = (await tavoraSigner({ address: a.address }))!;
+    const { zip } = await packModule(await moduleFolder(), signer);
+    await expect(publishZip({ key: signer, zip })).rejects.toThrow(new PublishError("The service refused it."));
   });
 
   it("still signs offline with the keys read last", async () => {

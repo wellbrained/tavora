@@ -516,7 +516,11 @@ export class Host {
     host.copySync = copySync;
     host.developerKeys = new DeveloperKeys({
       accountKey: copySync.accountKey,
-      account: { signedIn: () => host.account.view().account !== null, link: (key) => host.account.linkPublisherKey(key) },
+      account: {
+        signedIn: () => host.account.view().account !== null,
+        link: (key) => host.account.linkPublisherKey(key),
+        publish: (key, zip) => host.account.publishModule(key, zip),
+      },
       onChange: (view) => {
         if (!host.window.isDestroyed()) host.window.webContents.send("host:developer-keys", view);
       },
@@ -1839,6 +1843,18 @@ export class Host {
         const next = await this.developerKeys.replacementFor(action.fingerprint, linked);
         return this.account.replaceKey(action.fingerprint, next, action.leaked);
       }
+      case "account-publish-token-create":
+        return this.account.createPublishToken(action.name);
+      case "account-publish-token-copy": {
+        const token = this.account.newPublishTokenText();
+        if (!token) throw new PlayerError("error.generic");
+        clipboard.writeText(token);
+        return;
+      }
+      case "account-publish-token-saved":
+        return this.account.publishTokenSaved();
+      case "account-publish-token-delete":
+        return this.account.deletePublishToken(action.id);
       case "developer-key-create":
         await this.developerKeys.create();
         return;

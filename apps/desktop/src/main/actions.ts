@@ -322,6 +322,13 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("fingerprint", "leaked") && typeof a.fingerprint === "string" && /^[0-9a-f]{32}$/.test(a.fingerprint) && typeof a.leaked === "boolean"
         ? { type: a.type, fingerprint: a.fingerprint, leaked: a.leaked }
         : null;
+    case "account-publish-token-create":
+      return only("name") && typeof a.name === "string" && a.name.trim() !== "" && a.name.trim().length <= 40 ? { type: a.type, name: a.name } : null;
+    case "account-publish-token-copy":
+    case "account-publish-token-saved":
+      return only() ? { type: a.type } : null;
+    case "account-publish-token-delete":
+      return only("id") && text(a.id, 40) ? { type: a.type, id: a.id } : null;
     case "developer-key-create":
     case "developer-key-add":
     case "developer-recovery-key-saved":

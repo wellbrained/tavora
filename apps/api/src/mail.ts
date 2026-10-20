@@ -127,6 +127,28 @@ export function keyRequestMail(to: string, fingerprint: string, leaked: boolean,
       };
 }
 
+/** After every publish (decided 2026-10-20), so a developer notices one they didn't make. */
+export function publishedMail(to: string, module: { id: string; name: string; version: string }, fingerprint: string, token: string | null, language: MailLanguage): Mail {
+  const key = fingerprint.slice(0, 16);
+  return language === "de"
+    ? {
+        to,
+        subject: `${module.name} ${module.version} wurde veröffentlicht`,
+        text:
+          `${module.name} ${module.version} (${module.id}) ist jetzt in Tavoras Modulkatalog, signiert mit deinem Herausgeberschlüssel ${key}` +
+          (token === null ? ", hochgeladen aus Tavora.\n\n" : `, hochgeladen mit dem Veröffentlichungs-Token „${token}“.\n\n`) +
+          "Wenn du das nicht warst, schreib uns sofort an tavora.app@gmail.com und entferne deine Tokens in Tavora: Einstellungen > Konto > Modul-Entwickler.\n\nTavora\n",
+      }
+    : {
+        to,
+        subject: `${module.name} ${module.version} was published`,
+        text:
+          `${module.name} ${module.version} (${module.id}) is now in Tavora's module catalog, signed with your publisher key ${key}` +
+          (token === null ? ", uploaded from Tavora.\n\n" : `, uploaded with the publish token "${token}".\n\n`) +
+          "If this wasn't you, write to tavora.app@gmail.com right away, and remove your tokens in Tavora: Settings > Account > Module developer.\n\nTavora\n",
+      };
+}
+
 // ── Test inbox ───────────────────────────────────────────────────────────
 
 export interface TestInbox extends Mailer {

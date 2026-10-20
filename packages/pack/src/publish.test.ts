@@ -11,7 +11,7 @@ describe("publishZip", () => {
   // The service checks exactly this text (apps/api catalog-publish.ts imports it from here).
   it("signs the agreed statement", () => expect(PUBLISH_STATEMENT).toBe("tavora-catalog-publish-1"));
 
-  it("sends the zip with the key's signature over its hash, and nothing else", async () => {
+  it("sends the zip with the key's signature over its hash and the publish token, and nothing else", async () => {
     const { privateKey } = generateKeyPairSync("ed25519");
     const zip = moduleZip(privateKey);
     const sent: { url: string; headers: Headers; body: Buffer }[] = [];
@@ -20,10 +20,15 @@ describe("publishZip", () => {
       return Response.json({ status: "published", id: "wellbrained.timer", version: "1.0.0", sha256: "ab" }, { status: 201 });
     }) as typeof fetch;
 
-    expect(await publishZip({ key: privateKey, zip, apiUrl: "https://api.example.test/", fetch: fakeFetch })).toEqual({ id: "wellbrained.timer", version: "1.0.0", sha256: "ab" });
+    // The key alone publishes nothing (decided 2026-10-20).
+    await expect(publishZip({ key: privateKey, zip, fetch: fakeFetch })).rejects.toThrow(/TAVORA_PUBLISH_TOKEN/);
+    expect(sent).toHaveLength(0);
+    expect(await publishZip({ key: privateKey, zip, token: "tvp_token", language: "de", apiUrl: "https://api.example.test/", fetch: fakeFetch })).toEqual({ id: "wellbrained.timer", version: "1.0.0", sha256: "ab" });
     expect(sent).toHaveLength(1);
     expect(sent[0]!.url).toBe("https://api.example.test/v1/catalog/publish");
     expect(sent[0]!.headers.get("content-type")).toBe("application/zip");
+    expect(sent[0]!.headers.get("authorization")).toBe("Bearer tvp_token");
+    expect(sent[0]!.headers.get("accept-language")).toBe("de");
     expect(sent[0]!.body).toEqual(zip);
     const sha256 = createHash("sha256").update(zip).digest("hex");
     const signature = Buffer.from(sent[0]!.headers.get("x-tavora-signature")!, "base64");
@@ -48,12 +53,14 @@ describe("publishZip", () => {
     const { privateKey } = generateKeyPairSync("ed25519");
     const answer = (status: number, body: unknown) => (async () => Response.json(body, { status })) as unknown as typeof fetch;
     const zip = moduleZip(privateKey);
-    await expect(publishZip({ key: privateKey, zip, fetch: answer(403, { reason: "key-not-linked" }) })).rejects.toThrow(/tavora-pack link/);
-    await expect(publishZip({ key: privateKey, zip, fetch: answer(409, { reason: "conflict", error: "wellbrained.timer already has 1.0.0; a new version must be newer." }) })).rejects.toThrow(/must be newer/);
-    await expect(publishZip({ key: privateKey, zip, fetch: answer(500, {}) })).rejects.toThrow(/\(500\)/);
+    const token = "tvp_token";
+    await expect(publishZip({ key: privateKey, zip, token, fetch: answer(403, { reason: "key-not-linked" }) })).rejects.toThrow(/tavora-pack link/);
+    await expect(publishZip({ key: privateKey, zip, token, fetch: answer(401, { reason: "sign-in-needed" }) })).rejects.toThrow(/publish token doesn.t work any more/);
+    await expect(publishZip({ key: privateKey, zip, token, fetch: answer(409, { reason: "conflict", error: "wellbrained.timer already has 1.0.0; a new version must be newer." }) })).rejects.toThrow(/must be newer/);
+    await expect(publishZip({ key: privateKey, zip, token, fetch: answer(500, {}) })).rejects.toThrow(/\(500\)/);
     const offline = (async () => {
       throw new TypeError("fetch failed");
     }) as unknown as typeof fetch;
-    await expect(publishZip({ key: privateKey, zip, fetch: offline })).rejects.toThrow(/could not be reached/);
+    await expect(publishZip({ key: privateKey, zip, token, fetch: offline })).rejects.toThrow(/could not be reached/);
   });
 });

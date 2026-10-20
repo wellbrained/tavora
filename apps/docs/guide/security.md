@@ -134,7 +134,14 @@ Tavora can keep a developer's publisher keys (Settings > Account > Module develo
 - **They are sealed with your recovery key.** The keys sit in your account's vault, sealed on your PC with a key derived from the recovery key, so the service only ever sees sealed bytes. Each PC keeps the vault as it last read it, sealed the same way, so signing works offline.
 - **Nothing is signed without your click.** `tavora-pack` asks Tavora over a named pipe on Windows, which only your Windows user may write to, or a socket in `~/.tavora` that only you may open. Neither can be reached from the network, a web page or a module. Tavora brings its window to the front and shows the module's id, name and version and whether it packs or publishes, and signs only after Allow. A request nobody answers is turned down after 2 minutes, and only one is asked at a time.
 - **What you see is what gets signed.** For packing, Tavora checks that the manifest it shows is the one the signed file hashes name. For publishing, it reads the module from the zip itself, and signs only for a zip that one of its keys already signed.
-- **A key leaves Tavora only when you export it**, to a file you pick, to publish from CI. Anyone with that file can publish as you.
+- **A key leaves Tavora only when you export it**, to a file you pick, to publish from CI. Packing works with that file alone; publishing also needs a publish token.
+
+### Publishing to the catalog
+
+- **The key alone publishes nothing.** Every upload carries the key's signature over the zip's SHA-256 and a sign-in of the account the key is linked to: Tavora's own, when Tavora uploads for `tavora-pack` after your Allow, or a publish token, from CI. An upload with only a key, or with the sign-in of another account, is refused.
+- **Publish tokens are narrow.** A token is shown once and the service keeps only its hash. It works for a year, is removed in Settings > Account > Module developer, and publishes only under id prefixes the account already has, so it can't claim a new one. It can't sign in, read the account or change anything else.
+- **Every upload is told.** The account's email address gets a mail for each published version, naming the module, the key and whether it came from Tavora or which token.
+- **Tavora uploads only what you allowed.** It reads the module from the zip it was handed, signs only for a zip one of its keys already signed, and sends nothing until you press Allow.
 
 ## The cloud copy
 
