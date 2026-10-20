@@ -1,8 +1,9 @@
 /**
  * What changed in each version, newest first. Shown when the version at the bottom
  * of the Settings sections list is pressed (it is not a menu item).
- * Every version bump of apps/desktop/package.json adds an entry here; a test
- * keeps the two in step. Write for players, in plain friendly words. At 1.0 these
+ * Entries are added when a pull request merges, from its change note in
+ * apps/desktop/changes/ (the Number workflow); a test keeps them in step with
+ * apps/desktop/package.json. Write for players, in plain friendly words. At 1.0 these
  * entries are replaced by a "1.0 release catalog" of all features, and a fresh
  * changelog starts (the decision log).
  */

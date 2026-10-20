@@ -2,10 +2,10 @@
 
 ## Versioning
 
-- Work in progress raises only the patch number. A minor raise needs the `feature-complete` label on the pull request; the Version check fails without it.
-- PRs that only change docs, CI or tooling keep the version.
+- Don't raise the version in a pull request. Add a change note to `apps/desktop/changes/` instead (see its README); main gives out the next number and writes the patch-notes entry when the pull request merges.
+- A note raises only the patch number. `bump: minor` is for a finished feature and needs the `feature-complete` label on the pull request; the Version check fails without it.
+- PRs that only change docs, CI or tooling add no note.
 - 1.0.0 is reserved for the first public release.
-- Keep `apps/desktop/package.json` and the root `package.json` on the same version, and add a patch-notes entry (`apps/desktop/src/shared/patch-notes.ts`) for every bump. If another pull request shipped the same number first, take the next one.
 
 ## Writing
 
