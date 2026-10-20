@@ -1,6 +1,6 @@
 {
   "$schema": "../../packages/module-schema/schema/tavora.module.schema.json",
-  "id": "local.poe2-builds",
+  "id": "wellbrained.poe2-builds",
   "name": "PoE 2 Builds",
   "description": "Import Mobalytics guides and poe.ninja or PoB characters. View saved builds in passive tree, skills, gear and guide panels.",
   "version": "0.1.0-alpha.20",

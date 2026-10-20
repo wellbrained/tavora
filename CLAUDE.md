@@ -16,6 +16,13 @@ Texts in the app are short and friendly, talking to the player as "you" (German:
 - Plain, casual words ("Can't find this folder", "Thanks!"), never stiff or technical ones.
 - Write English and German together; both follow these rules.
 
+## UI controls
+
+The app and the official modules share one kit: `@tavora/official-ui` (`modules/shared/src/components`). Never start another kit or copy a control into the app or a module.
+
+- Use what the kit has. Restyle with classes where it's used, not with a copy of the component.
+- A missing control or variant is a decision for the maintainer: ask before building it. Once agreed, it goes into the kit and gets a specimen in the UI Playground (`modules/playground`).
+
 ## Security
 
 The public [security model](apps/docs/guide/security.md) lists what the host guarantees. A change that adds a way for a module or a web page to reach something outside its panel updates that page in the same pull request.

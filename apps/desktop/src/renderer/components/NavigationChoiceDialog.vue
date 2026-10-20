@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // A panel could not switch to what another panel of its module asked for (it could not save, or did not answer in
 // time) and kept what it showed. Offer the explicit way out: the content in a new panel (named panels round 6).
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, dialog } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";

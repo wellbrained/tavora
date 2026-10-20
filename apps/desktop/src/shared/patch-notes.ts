@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.21",
+    date: "2026-10-20",
+    title: "One look for the app and modules",
+    notes: [
+      "Buttons, fields and switches in the app now match the module panels.",
+      "Screen readers say \"Close\" in your language in every dialog.",
+    ],
+  },
+  {
     version: "0.19.20",
     date: "2026-10-20",
     title: "Enshrouded skill cards",

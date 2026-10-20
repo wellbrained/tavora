@@ -2,8 +2,8 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { CatalogMatch, OnlineGame, OnlineSearchResult } from "../../shared/host-api";
 import { act, api, dialog, state } from "../host";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 

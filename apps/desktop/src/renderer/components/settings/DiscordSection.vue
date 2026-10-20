@@ -4,7 +4,7 @@
 // 2026-10-16). There is no secret to enter: the main process signs in with PKCE and keeps the
 // sign-in encrypted; none of it comes to this page or to a module.
 import { computed } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, confirmAction, discord, gamesUsing, listOf, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
