@@ -1,5 +1,10 @@
 export const english = {
   bonuses: "Build bonuses",
+  unlocked: "Unlocked",
+  available: "Available",
+  outOfReach: "Out of reach",
+  skillPoints: "Skill points",
+  noAttributes: "No attribute bonuses from the chosen skills.",
   bonusTotals: "Attribute totals",
   bonusFromAttributes: "Bonuses from attributes",
   bonusEffects: "Chosen skill effects",
@@ -49,6 +54,11 @@ export const english = {
 };
 export const german: typeof english = {
   bonuses: "Build-Boni",
+  unlocked: "Freigeschaltet",
+  available: "Verfügbar",
+  outOfReach: "Nicht erreichbar",
+  skillPoints: "Fertigkeitspunkte",
+  noAttributes: "Keine Attributboni durch die gewählten Fertigkeiten.",
   bonusTotals: "Attributsummen",
   bonusFromAttributes: "Boni durch Attribute",
   bonusEffects: "Gewählte Fertigkeitseffekte",

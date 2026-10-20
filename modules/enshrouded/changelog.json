@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.0-alpha.4",
+    "date": "2026-10-20",
+    "notes": [
+      "Build bonuses stay in the right sidebar; the right-aligned toggle remembers whether it is open.",
+      "Hover or focus a skill for a game-style tooltip with its icon, rank, point cost and formatted effects."
+    ]
+  },
+  {
     "version": "0.1.0-alpha.3",
     "date": "2026-10-20",
     "notes": [
