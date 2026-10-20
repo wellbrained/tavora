@@ -7,9 +7,10 @@ import { computed, onMounted, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AccountDevice, HostAction } from "../../../shared/host-api";
-import { account, act, confirmAction, prompt, showToast, submitAction } from "../../host";
+import { account, act, confirmAction, developerKeys, prompt, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import CloudCopySettings from "./CloudCopySettings.vue";
+import RecoveryKeySettings from "./RecoveryKeySettings.vue";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
@@ -127,6 +128,25 @@ const linkCommandText = computed(() => {
 async function copyLinkCommand() {
   if ((await act({ type: "account-copy-link-command" })).ok) showToast(t("account.developer.copied"));
 }
+// The publisher keys Tavora keeps in the account's vault; it signs with them for tavora-pack.
+const keys = computed(() => developerKeys.value);
+const linked = computed(() => new Set((view.value?.publisherKeys ?? []).map((key) => key.fingerprint)));
+async function makeKey() {
+  if (await run({ type: "developer-key-create" })) showToast(t("account.developer.created"));
+}
+async function addKey() {
+  const before = keys.value?.keys.length ?? 0;
+  if ((await run({ type: "developer-key-add" })) && (keys.value?.keys.length ?? 0) > before) showToast(t("account.developer.added"));
+}
+function exportKey(fingerprint: string) {
+  confirmAction({
+    title: t("account.developer.exportTitle"),
+    message: t("account.developer.exportMessage"),
+    confirm: t("account.developer.export"),
+    run: () => submitAction({ type: "developer-key-export", fingerprint }),
+  });
+}
+
 function unlinkKey(fingerprint: string) {
   confirmAction({
     title: t("account.developer.unlinkTitle"),
@@ -307,6 +327,8 @@ function startDelete() {
 
       </SettingGroup>
 
+      <RecoveryKeySettings />
+
       <CloudCopySettings />
 
       <!-- The developer side: only matters to people who make modules. -->
@@ -322,7 +344,35 @@ function startDelete() {
           <span class="text-muted-foreground text-xs" data-testid="account-developer-name-hint">{{ nameHint }}</span>
         </form>
 
-        <div class="mt-4">
+        <div class="mt-4" data-testid="developer-keys">
+          <span class="text-sm font-medium">{{ t("account.developer.kept") }}</span>
+          <p class="text-muted-foreground mt-1 text-xs">{{ t("account.developer.keptHint") }}</p>
+
+          <p v-if="keys?.status === 'ask'" class="text-muted-foreground mt-2 text-sm" data-testid="developer-keys-ask">{{ t("account.developer.askKey") }}</p>
+          <p v-else-if="keys?.status === 'offline'" class="text-muted-foreground mt-2 text-sm">{{ t("account.developer.offline") }}</p>
+          <template v-else>
+            <p v-if="!keys?.keys.length" class="text-muted-foreground mt-2 text-sm" data-testid="developer-keys-none">{{ t("account.developer.noKept") }}</p>
+            <ul v-else class="mt-2" data-testid="developer-keys-list">
+              <li v-for="key in keys.keys" :key="key.fingerprint" class="flex min-h-10 items-center gap-3" :data-testid="`developer-key-${key.fingerprint}`">
+                <span class="flex-1 font-mono text-sm" :title="key.fingerprint">{{ key.fingerprint.slice(0, 16) }}…</span>
+                <Button v-if="!linked.has(key.fingerprint)" variant="secondary" size="sm" :disabled="busy || !view?.developer" @click="run({ type: 'developer-key-link', fingerprint: key.fingerprint })">
+                  {{ t("account.developer.linkKept") }}
+                </Button>
+                <span v-if="!linked.has(key.fingerprint)" class="text-muted-foreground text-sm">{{ t("account.developer.notLinked") }}</span>
+                <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.exportLabel', { key: key.fingerprint.slice(0, 16) })" @click="exportKey(key.fingerprint)">
+                  {{ t("account.developer.export") }}
+                </Button>
+              </li>
+            </ul>
+            <div class="mt-3 flex items-center gap-2">
+              <Button :disabled="busy || !view?.developer" data-testid="developer-key-create" @click="makeKey">{{ t("account.developer.create") }}</Button>
+              <Button variant="secondary" :disabled="busy || !view?.developer" data-testid="developer-key-add" @click="addKey">{{ t("account.developer.add") }}</Button>
+              <span v-if="!view?.developer" class="text-muted-foreground text-sm">{{ t("account.developer.linkNeedsName") }}</span>
+            </div>
+          </template>
+        </div>
+
+        <div class="mt-6">
           <span class="text-sm font-medium">{{ t("account.developer.keys") }}</span>
           <p v-if="!view?.publisherKeys?.length" class="text-muted-foreground mt-1 text-sm" data-testid="account-keys-none">{{ t("account.developer.noKeys") }}</p>
           <ul v-else class="mt-1" data-testid="account-keys">
@@ -338,8 +388,8 @@ function startDelete() {
 
         <div class="mt-3 flex flex-col gap-3">
           <div class="flex items-center gap-3">
-            <Button variant="secondary" :disabled="busy || !view?.developer" data-testid="account-link-code" @click="run({ type: 'account-link-code' })">{{ t("account.developer.link") }}</Button>
-            <span v-if="!view?.developer" class="text-muted-foreground text-sm">{{ t("account.developer.linkNeedsName") }}</span>
+            <span class="text-muted-foreground text-sm">{{ t("account.developer.keyFile") }}</span>
+            <Button variant="ghost" size="sm" :disabled="busy || !view?.developer" data-testid="account-link-code" @click="run({ type: 'account-link-code' })">{{ t("account.developer.link") }}</Button>
           </div>
           <div v-if="view?.linkCode" class="flex flex-col gap-2 rounded-md border p-3" data-testid="account-link">
             <span class="text-sm">{{ t("account.developer.linkHint", { time: formatDate(view.linkCode.expiresAt, { timeStyle: "short" }) }) }}</span>

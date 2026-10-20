@@ -8,16 +8,19 @@ import { PlayerError } from "./messages";
 // The account's key (decided 2026-10-20, "one recovery key"): one random 256-bit root key per account,
 // made on the first PC that needs it and shown to the player once as the recovery key. Everything the
 // recovery key keeps safe is sealed under keys derived from it: the cloud copy, and the key vault on
-// Tavora's service. The vault is small and goes out only to a signed-in PC of the account; for now it is
-// empty, later it holds the account's publisher keys. Its being on the service tells a new PC that the
-// account already has a key, so the PC asks for the recovery key instead of making another.
+// Tavora's service. The vault is small and goes out only to a signed-in PC of the account; it holds the
+// account's publisher keys, which sign modules (developer-keys.ts). Its being on the service tells a new PC
+// that the account already has a key, so the PC asks for the recovery key instead of making another. Each PC
+// keeps the sealed vault as last read too, so signing works offline.
 //
 // Each PC keeps the root key in account-key.json, encrypted with the system's key store like the sign-in.
 // It belongs to the account: signing out forgets it, turning the cloud copy off does not.
 
 /** What the vault holds, before it is sealed. */
-interface VaultContent {
+export interface VaultContent {
   v: 1;
+  /** The account's publisher keys: Ed25519 private keys, PKCS#8 PEM. */
+  publisherKeys?: string[];
 }
 
 const EMPTY_VAULT: VaultContent = { v: 1 };
@@ -26,6 +29,8 @@ export interface AccountKeyOptions {
   file: string;
   /** Where the key was kept before it belonged to the account (the cloud copy's own key); moved once. */
   legacyFile?: string;
+  /** The sealed vault as last read, kept on this PC. */
+  cacheFile?: string;
   encryptor: Encryptor;
   /** The account service, ending in /v1/account. */
   baseUrl: string;
@@ -76,7 +81,8 @@ export class AccountKey {
     const vault = await this.vault();
     if (this.key) {
       if (!vault) {
-        await this.putVault(0, this.key);
+        // Gone from the service: put back what this PC last read.
+        await this.putVault(0, this.key, (await this.cached(this.key)) ?? EMPTY_VAULT);
         return { status: "ready", created: false };
       }
       if (opens(this.key, vault.data)) return { status: "ready", created: false };
@@ -87,9 +93,14 @@ export class AccountKey {
     if (vault) return { status: "ask" };
     const key = newCopyKey();
     // Another PC may have made one at the same moment: then its key is asked for.
-    if (!(await this.putVault(0, key))) return { status: "ask" };
+    if (!(await this.putVault(0, key, EMPTY_VAULT))) return { status: "ask" };
     await this.save(key);
     return { status: "ready", created: true };
+  }
+
+  /** Whether the account has a key already, made on this PC or another. */
+  async exists(): Promise<boolean> {
+    return (await this.vault()) !== null;
   }
 
   /** Whether this PC's key still opens the account's vault; false only when it surely doesn't (another PC started over). */
@@ -106,17 +117,54 @@ export class AccountKey {
     const vault = await this.vault();
     if (vault && !opens(key, vault.data)) throw new PlayerError("cloudCopy.error.wrongKey");
     // No vault (the account started over, or it was never made): the typed key becomes the account's.
-    if (!vault) await this.putVault(0, key);
+    if (!vault) await this.putVault(0, key, EMPTY_VAULT);
     await this.save(key);
   }
 
-  /** A lost key: the vault is replaced by one under a new key, made here. What the old key sealed can't be opened again. */
+  /**
+   * A lost key: the vault is replaced by one under a new key, made here. What the old key sealed can't be
+   * opened again, except the vault itself when this PC still has the old key: its publisher keys move over.
+   */
   async startOver(): Promise<void> {
+    const old = this.key ? await this.vault().catch(() => null) : null;
+    const content = (old && this.key && openContent(this.key, old.data)) || EMPTY_VAULT;
     await this.request("DELETE");
     this.key = null;
     const key = newCopyKey();
-    if (!(await this.putVault(0, key))) throw new CopyError("failed", "another PC made a key at the same moment");
+    if (!(await this.putVault(0, key, content))) throw new CopyError("failed", "another PC made a key at the same moment");
     await this.save(key);
+  }
+
+  /** What the vault holds; when the service can't be reached, what this PC last read. */
+  async content(): Promise<VaultContent> {
+    const key = this.key;
+    if (!key) throw new CopyError("failed", "no key on this PC");
+    let vault: { version: number; data: Uint8Array } | null;
+    try {
+      vault = await this.vault();
+    } catch (error) {
+      const cached = error instanceof CopyError && (error.reason === "unreachable" || error.reason === "unavailable") ? await this.cached(key) : null;
+      if (cached) return cached;
+      throw error;
+    }
+    if (!vault) return EMPTY_VAULT;
+    const content = openContent(key, vault.data);
+    if (!content) throw new CopyError("damaged");
+    return content;
+  }
+
+  /** Changes what the vault holds, made on top of what it holds now (tried again when another PC changed it first). */
+  async change(update: (content: VaultContent) => VaultContent): Promise<VaultContent> {
+    const key = this.key;
+    if (!key) throw new CopyError("failed", "no key on this PC");
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const vault = await this.vault();
+      const content = vault ? openContent(key, vault.data) : EMPTY_VAULT;
+      if (!content) throw new CopyError("damaged");
+      const next = update(content);
+      if (await this.putVault(vault?.version ?? 0, key, next)) return next;
+    }
+    throw new CopyError("failed", "the vault kept changing");
   }
 
   /** Whether this PC is signed in, so the key goes through the account's vault. */
@@ -153,6 +201,17 @@ export class AccountKey {
   async forget(): Promise<void> {
     this.key = null;
     await rm(this.options.file, { force: true });
+    if (this.options.cacheFile) await rm(this.options.cacheFile, { force: true });
+  }
+
+  private async cached(key: Buffer): Promise<VaultContent | null> {
+    if (!this.options.cacheFile) return null;
+    const sealed = await readFile(this.options.cacheFile).catch(() => null);
+    return sealed ? openContent(key, sealed) : null;
+  }
+
+  private async keep(sealed: Uint8Array): Promise<void> {
+    if (this.options.cacheFile) await writeFileAtomic(this.options.cacheFile, Buffer.from(sealed)).catch(() => undefined);
   }
 
   private async save(key: Buffer): Promise<void> {
@@ -188,28 +247,41 @@ export class AccountKey {
     if (response.status === 404) return null;
     const version = Number(response.headers.get("x-vault-version"));
     if (!response.ok || !Number.isInteger(version) || version < 1) throw new CopyError("failed", `the vault answered ${response.status}`);
-    return { version, data: new Uint8Array(await response.arrayBuffer()) };
+    const data = new Uint8Array(await response.arrayBuffer());
+    await this.keep(data);
+    return { version, data };
   }
 
-  /** Stores an empty vault sealed with `key`, made from version `base`. False when another PC changed it first. */
-  private async putVault(base: number, key: Buffer): Promise<boolean> {
-    const sealed = sealVault(key, Buffer.from(JSON.stringify(EMPTY_VAULT)));
+  /** Stores the vault's content sealed with `key`, made from version `base`. False when another PC changed it first. */
+  private async putVault(base: number, key: Buffer, content: VaultContent): Promise<boolean> {
+    const sealed = sealVault(key, Buffer.from(JSON.stringify(content)));
     const body = Buffer.alloc(4 + sealed.length);
     body.writeUInt32BE(base);
     sealed.copy(body, 4);
     const response = await this.request("PUT", body);
     if (response.status === 409) return false;
+    if (response.status === 413) throw new CopyError("failed", "the vault is full");
     if (!response.ok) throw new CopyError("failed", `the vault answered ${response.status}`);
+    await this.keep(sealed);
     return true;
   }
 }
 
 function opens(key: Buffer, sealed: Uint8Array): boolean {
+  return openContent(key, sealed) !== null;
+}
+
+/** The vault's content, or null when `key` doesn't open it. */
+function openContent(key: Buffer, sealed: Uint8Array): VaultContent | null {
+  let raw: { v?: unknown; publisherKeys?: unknown };
   try {
-    return (JSON.parse(openVault(key, sealed).toString("utf8")) as { v?: unknown }).v === 1;
+    raw = JSON.parse(openVault(key, sealed).toString("utf8")) as typeof raw;
   } catch {
-    return false;
+    return null;
   }
+  if (raw.v !== 1) return null;
+  const keys = Array.isArray(raw.publisherKeys) ? raw.publisherKeys.filter((pem): pem is string => typeof pem === "string") : [];
+  return keys.length > 0 ? { v: 1, publisherKeys: keys } : { v: 1 };
 }
 
 async function readKey(file: string, encryptor: Encryptor): Promise<Buffer | null> {

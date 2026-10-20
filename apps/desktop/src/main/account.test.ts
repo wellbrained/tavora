@@ -1,6 +1,8 @@
+import { createPublicKey, generateKeyPairSync, verify } from "node:crypto";
 import { mkdtemp, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fingerprint as packFingerprint, LINK_STATEMENT } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import type { AccountView } from "../shared/host-api";
 import { AccountClient, deviceOs, loadAccount, saveAccount, type ProfileData, type SavedAccount } from "./account";
@@ -515,6 +517,27 @@ describe("the developer side", () => {
     expect(account.view()).toMatchObject({ linkCode: null, publisherKeys: [{ fingerprint: FINGERPRINT }] });
     await account.signOut();
     expect(account.view()).toMatchObject({ developer: null, publisherKeys: null, linkCode: null });
+  });
+
+  it("links a publisher key Tavora keeps, signing a fresh code with it", async () => {
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const fingerprint = packFingerprint(privateKey);
+    let keys: unknown[] = [];
+    const { calls, fetchImpl } = service({
+      "POST /keys/code": () => json({ code: "ABCDEFGH", expiresAt: new Date(Date.now() + 600_000).toISOString() }),
+      "POST https://api.test/v1/publishers/link": (body) => {
+        const signed = verify(null, Buffer.from(`${LINK_STATEMENT}\nABCDEFGH`), createPublicKey(privateKey), Buffer.from(String(body?.signature), "base64"));
+        if (!signed) return json({ reason: "bad-signature" }, 400);
+        keys = [{ fingerprint, linkedAt: "2026-10-20T12:00:00.000Z" }];
+        return json({ status: "linked", fingerprint, name: null });
+      },
+      "GET /developer": () => developer(keys),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.linkPublisherKey(privateKey);
+    expect(calls.find((call) => call.url.endsWith("/v1/publishers/link"))?.auth).toBeNull();
+    expect(account.view().publisherKeys).toEqual([{ fingerprint, linkedAt: "2026-10-20T12:00:00.000Z" }]);
   });
 
   it("keeps only well-formed keys and names from the service", async () => {

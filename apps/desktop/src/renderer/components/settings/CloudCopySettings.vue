@@ -181,7 +181,7 @@ function startOver() {
       <SettingRow :label="t('cloudCopy.restore.label')" :description="t('cloudCopy.restore.description')">
         <Button variant="secondary" :disabled="busy || view.busy !== null" data-testid="cloud-copy-restore" @click="restore">{{ t("cloudCopy.restore.button") }}</Button>
       </SettingRow>
-      <SettingRow v-if="!view.recoveryKey" :label="t('cloudCopy.showKey.label')" :description="t('cloudCopy.showKey.description')">
+      <SettingRow v-if="!view.recoveryKey && !signedIn" :label="t('cloudCopy.showKey.label')" :description="t('cloudCopy.showKey.description')">
         <Button variant="ghost" :disabled="busy" data-testid="cloud-copy-show-key" @click="run({ type: 'cloud-copy-show-key' })">{{ t("cloudCopy.showKey.button") }}</Button>
       </SettingRow>
       <SettingRow :label="t('cloudCopy.turnOff.label')" :description="t('cloudCopy.turnOff.description')">

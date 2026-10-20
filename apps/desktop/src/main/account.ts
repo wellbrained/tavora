@@ -1,4 +1,6 @@
+import type { KeyObject } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
+import { linkRequest } from "@tavora/pack";
 import type { AccountDevice, AccountPending, AccountView, DeviceOs } from "../shared/host-api";
 import type { Language, MessageKey } from "../shared/i18n";
 import type { Encryptor } from "./discord-store";
@@ -128,6 +130,8 @@ const REASONS: Record<string, MessageKey> = {
   "name-reserved": "account.error.nameReserved",
   "no-developer-name": "account.error.noDeveloperName",
   "not-found": "account.error.keyGone",
+  "key-taken": "account.error.keyTaken",
+  "too-many-keys": "account.error.tooManyKeys",
 };
 
 /** The account's developer side as the service answers it; null for anything off. */
@@ -383,6 +387,15 @@ export class AccountClient {
     this.changed();
   }
 
+  /** Links a publisher key Tavora keeps to the account, the way `tavora-pack link` does with a key file. */
+  async linkPublisherKey(key: KeyObject): Promise<void> {
+    this.ensure(true);
+    const answer = await this.call("POST", "/keys/code", {}, true);
+    if (typeof answer.code !== "string" || !/^[A-Z0-9]{8}$/.test(answer.code)) throw new PlayerError("error.generic");
+    await this.call("POST", "/link", linkRequest(key, answer.code), false, "/v1/publishers");
+    this.takeDeveloper(await this.call("GET", "/developer", undefined, true));
+  }
+
   async unlinkKey(fingerprint: string): Promise<void> {
     this.ensure(true);
     this.takeDeveloper(await this.call("DELETE", `/keys/${encodeURIComponent(fingerprint)}`, undefined, true));
@@ -553,12 +566,12 @@ export class AccountClient {
    * a sign-in the service no longer knows (signed out from another device,
    * unused for a year, account deleted) is forgotten here too.
    */
-  private async call(method: string, path: string, body?: unknown, auth = false): Promise<Record<string, unknown>> {
+  private async call(method: string, path: string, body?: unknown, auth = false, root = "/v1/account"): Promise<Record<string, unknown>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.options.timeoutMs ?? ACCOUNT_TIMEOUT_MS);
     let response: Response;
     try {
-      response = await this.options.fetch(`${this.baseUrl}/v1/account${path === "/" ? "" : path}`, {
+      response = await this.options.fetch(`${this.baseUrl}${root}${path === "/" ? "" : path}`, {
         method,
         signal: controller.signal,
         credentials: "omit",

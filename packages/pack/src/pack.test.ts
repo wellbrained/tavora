@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { describe, expect, it } from "vitest";
-import { fingerprint, loadOrCreateKey, packModule, PackError, readZip, SIGNATURE_FILE, signFiles, verifyFiles, writeZip, ZIP_LIMITS, ZipError, type ZipFile } from "./index.ts";
+import { fingerprint, loadExistingKey, packModule, PackError, readZip, SIGNATURE_FILE, signFiles, verifyFiles, writeZip, ZIP_LIMITS, ZipError, type ZipFile } from "./index.ts";
 
 const manifest = {
   id: "wellbrained.tracker",
@@ -153,15 +153,13 @@ describe("readZip", () => {
   });
 });
 
-describe("loadOrCreateKey", () => {
-  it("makes a key once, private to the owner, and reuses it", async () => {
-    const file = path.join(await mkdtemp(path.join(tmpdir(), "tavora-key-")), "nested", "key.pem");
-    const first = await loadOrCreateKey(file);
-    const again = await loadOrCreateKey(file);
-    expect(first.created).toBe(true);
-    expect(again.created).toBe(false);
-    expect(again.key.export({ format: "pem", type: "pkcs8" })).toBe(await readFile(file, "utf8"));
-    if (process.platform !== "win32") expect((await stat(file)).mode & 0o077).toBe(0);
+describe("loadExistingKey", () => {
+  it("reads a key file and never makes one", async () => {
+    const file = path.join(await mkdtemp(path.join(tmpdir(), "tavora-key-")), "key.pem");
+    await expect(loadExistingKey(file)).rejects.toThrow(/no publisher key/);
+    const { privateKey } = generateKeyPairSync("ed25519");
+    await writeFile(file, privateKey.export({ format: "pem", type: "pkcs8" }));
+    expect(fingerprint((await loadExistingKey(file)).key)).toBe(fingerprint(privateKey));
   });
 });
 

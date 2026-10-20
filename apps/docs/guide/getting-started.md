@@ -111,9 +111,9 @@ npm run zip     # the same as npx tavora-pack .
 
 The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`), the icon and the changelog, plus `tavora.signature.json`. Your sources and `node_modules` stay out. Use `--out` to choose the file name.
 
-The first run makes your publisher key in `~/.tavora/publisher-key.pem`. **Back it up and never share it**: updates and your players' data depend on it. Read [Your publisher key](./publisher-key.md) before you send the first zip, and link the key to your account there so players see your name.
+Tavora signs the zip with your publisher key: make one under **Settings > Account > Module developer** first, keep Tavora open, and press **Allow** when it asks. Updates and your players' data depend on that key, and your recovery key is its backup. Read [Your publisher key](./publisher-key.md) before you send the first zip.
 
-Players install the zip with **Settings > Modules > Install zip**. To list it in Tavora's module catalog, where players find it under **Catalog** in the module library, publish it with your linked key:
+Players install the zip with **Settings > Modules > Install zip**. To list it in Tavora's module catalog, where players find it under **Catalog** in the module library, publish it with the same key:
 
 ```sh
 npx tavora-pack publish <id>-<version>.zip
