@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { launch, inModule, waitForShown } from './harness';
 
-const ID='local.poe2-builds',modules=path.resolve(import.meta.dirname,'../../../../modules');
+const ID='wellbrained.poe2-builds',modules=path.resolve(import.meta.dirname,'../../../../modules');
 const xml=`<PathOfBuilding2><Build className="Ranger" ascendClassName="Deadeye" level="80"/><Items activeItemSet="1"><Item id="1">Rarity: RARE
 Test Bow
 Obliterator Bow
@@ -27,13 +27,13 @@ test('PoB preview, new character, safe update, independent library group and res
  try{
   await running.page.getByTestId('add-module').click();await running.page.getByTestId('open-'+ID+'-gear').click();
   await running.page.getByTestId('grant-allow').click();await expect(running.page.getByTestId('grant-dialog')).toHaveCount(0);await running.page.getByTestId('add-module-dialog').getByRole('button',{name:'Close',exact:true}).click();await waitForShown(app,ID);
-  await app.evaluate(({BrowserWindow})=>{const host=BrowserWindow.getAllWindows()[0]!;const view=host.contentView.children.find(v=>(v as any).webContents?.getURL().startsWith('tavora-module://local.poe2-builds/'))!;view.setBounds({...view.getBounds(),width:400,height:608});});
+  await app.evaluate(({BrowserWindow})=>{const host=BrowserWindow.getAllWindows()[0]!;const view=host.contentView.children.find(v=>(v as any).webContents?.getURL().startsWith('tavora-module://wellbrained.poe2-builds/'))!;view.setBounds({...view.getBounds(),width:400,height:608});});
   expect(await inModule(app,ID,"document.querySelector('.add-build').getBoundingClientRect().right<=innerWidth")).toBe(true);
   expect(await inModule(app,ID,"document.querySelector('#app>header').firstElementChild.classList.contains('add-build')")).toBe(true);
   expect(await inModule(app,ID,"Array.from(document.querySelectorAll('#add-actions .menu-label')).map(n=>n.textContent)")).toEqual(['Import build','Import character','Load build file']);
   expect(await inModule(app,ID,"document.querySelector('#import-build').disabled")).toBe(false);
   await openImport(app);await readPob(app);
-  const image=await app.evaluate(async({webContents})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://local.poe2-builds/'))!;return(await wc.capturePage()).toPNG().toString('base64');});
+  const image=await app.evaluate(async({webContents})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://wellbrained.poe2-builds/'))!;return(await wc.capturePage()).toPNG().toString('base64');});
   await writeFile(info.outputPath('character-preview.png'),Buffer.from(image,'base64'));
   await inModule(app,ID,"document.querySelector('#character-name').value='Test character';document.querySelector('#character-save').click()");
   await expect.poll(()=>inModule(app,ID,"document.querySelector('#status').textContent")).toContain('Character saved');

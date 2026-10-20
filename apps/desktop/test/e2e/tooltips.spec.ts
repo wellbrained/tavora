@@ -54,7 +54,7 @@ test('hover crosses panel bounds without freezing; pin survives unrelated input,
 
 test('PoE2 Gear imports a portable build and sends artwork and stats to the shared surface',async({ },testInfo)=>{
  test.skip(!process.env.POE2_SMOKE_FILE,'Set POE2_SMOKE_FILE to an exported build');
- const id='local.poe2-builds',modules=path.resolve(import.meta.dirname,'../../../../modules');
+ const id='wellbrained.poe2-builds',modules=path.resolve(import.meta.dirname,'../../../../modules');
  const {app,page}=await launch(undefined,[modules]);try{
   await page.getByTestId('add-module').click();await page.getByTestId('open-'+id+'-gear').click();await page.keyboard.press('Escape');await waitForShown(app,id);
   const file=await readFile(process.env.POE2_SMOKE_FILE!,'utf8');
