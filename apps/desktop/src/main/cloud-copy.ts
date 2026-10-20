@@ -82,7 +82,7 @@ export const EMPTY_STATE: CopyState = { version: 0, pictures: true, files: {} };
 /** The manifest, sealed before it leaves: every file's path, size, hash and parts. */
 interface Manifest {
   v: 1;
-  /** The version it was saved as; left out by copies saved before 0.19.9. */
+  /** The version it was saved as, where the PC picks it (a folder); the service numbers its own. */
   version?: number;
   /** False when pictures were left out to fit; a restore keeps this PC's pictures then. */
   pictures: boolean;
@@ -217,10 +217,13 @@ export interface CopyStorage {
   putParts(parts: { id: Buffer; data: Buffer }[]): Promise<void>;
   /** Some of the asked parts, at least one when any of them is there. */
   getParts(ids: string[]): Promise<{ id: string; data: Uint8Array }[]>;
-  /** The version a new manifest gets when saved on top of `base`. */
-  nextVersion(base: number): number;
+  /**
+   * The version a new manifest gets when saved on top of `base`, sealed into it; null when the storage
+   * numbers versions itself (the service), so the manifest can't know its own.
+   */
+  nextVersion(base: number): number | null;
   /** Makes the manifest with these parts the new version, if the copy is still at `base`. */
-  swap(base: number, version: number, ids: string[], sealed: Uint8Array): Promise<SwapAnswer>;
+  swap(base: number, version: number | null, ids: string[], sealed: Uint8Array): Promise<SwapAnswer>;
   /** Deletes the copy. */
   remove(): Promise<void>;
 }
@@ -314,12 +317,12 @@ export class ServiceStorage implements CopyStorage {
     return parts;
   }
 
-  /** The service counts up by one. */
-  nextVersion(base: number): number {
-    return base + 1;
+  /** The service numbers versions itself (never reusing one after a delete). */
+  nextVersion(): null {
+    return null;
   }
 
-  async swap(base: number, _version: number, ids: string[], sealed: Uint8Array): Promise<SwapAnswer> {
+  async swap(base: number, _version: number | null, ids: string[], sealed: Uint8Array): Promise<SwapAnswer> {
     const body = Buffer.alloc(8 + ids.length * PART_ID_BYTES + sealed.length);
     body.writeUInt32BE(base, 0);
     body.writeUInt32BE(ids.length, 4);
@@ -421,9 +424,9 @@ export class CloudCopy {
       }
       await flush();
 
-      // The version goes inside the sealed manifest too, so an older manifest can't pose as a newer one.
+      // Where the PC picks the version, it goes inside the sealed manifest too, so an older manifest can't pose as a newer one.
       const version = this.storage.nextVersion(state.version);
-      const manifest: Manifest = { v: 1, version, pictures, files: Object.entries(files).map(([name, file]) => ({ path: name, size: file.size, sha256: file.sha256, parts: file.parts })) };
+      const manifest: Manifest = { v: 1, ...(version !== null ? { version } : {}), pictures, files: Object.entries(files).map(([name, file]) => ({ path: name, size: file.size, sha256: file.sha256, parts: file.parts })) };
       const sealed = seal(keys, Buffer.from(JSON.stringify(manifest)));
       const ids = [...new Set(manifest.files.flatMap((file) => file.parts))];
       const answer = await this.storage.swap(state.version, version, ids, sealed);

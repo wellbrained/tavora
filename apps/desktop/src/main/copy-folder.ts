@@ -156,7 +156,8 @@ export class FolderStorage implements CopyStorage {
     return (Math.floor(base / RANDOM_BITS) + 1) * RANDOM_BITS + randomInt(RANDOM_BITS);
   }
 
-  async swap(base: number, version: number, ids: string[], sealed: Uint8Array): Promise<SwapAnswer> {
+  async swap(base: number, picked: number | null, ids: string[], sealed: Uint8Array): Promise<SwapAnswer> {
+    const version = picked ?? this.nextVersion(base);
     const all = await this.manifests();
     const current = all[0]?.version ?? 0;
     if (current !== base) return { status: "conflict", version: current };
