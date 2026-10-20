@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // Settings > About: this version and its patch notes, updates, backups and the diagnostic info.
 import { computed, ref } from "vue";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { act, state, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";

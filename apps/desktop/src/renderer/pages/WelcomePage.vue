@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Plus } from "@lucide/vue";
 import { computed } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import GameIcon from "../components/GameIcon.vue";
 import { act, dialog, state } from "../host";
 import { t } from "../i18n";

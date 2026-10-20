@@ -9,7 +9,7 @@
 // version keeps running (catalog threat model, C4).
 import { Gauge, Globe, Headphones } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, aiUsage, dialog, discord, openPanels, openSettings, state, type GrantRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";

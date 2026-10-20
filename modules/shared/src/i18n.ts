@@ -4,6 +4,7 @@
 // `.other` forms and is read with `plural`.
 
 import { ref, type Ref } from "vue";
+import { setUiLanguage } from "./components/ui/text";
 
 export type Params = Record<string, string | number>;
 
@@ -34,6 +35,7 @@ export function createTranslator<K extends string>(en: Record<K, string>, de: Re
     language,
     setLanguage: (next) => {
       language.value = next;
+      setUiLanguage(next);
       if (typeof document !== "undefined") document.documentElement.lang = isGerman(next) ? "de" : "en";
     },
     t: (key, params) => fill(lookup(key), params),

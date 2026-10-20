@@ -4,7 +4,7 @@
 // still images (useFloating), so the menu lies above all of them. The main process checked the
 // entries and only accepts an answer it offered.
 import { computed, ref, watch } from "vue";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { api, moduleMenu, useFloating } from "../../host";
 import ModuleMenuEntries from "./ModuleMenuEntries.vue";
 

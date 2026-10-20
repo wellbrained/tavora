@@ -2,7 +2,7 @@
 // Picks an even grid of empty slots by pointing at its bottom-right cell,
 // like a table picker: up to GRID_LIMITS columns by rows.
 import { computed, ref, type Component } from "vue";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { GRID_LIMITS } from "../../../shared/layout-templates";
 import { act } from "../../host";

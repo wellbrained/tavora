@@ -12,7 +12,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@tavora/official-ui/components/ui/dropdown-menu";
 import { act, confirmAction, prompt, state, submitAction, type MenuItem } from "../../host";
 import { t, templateName } from "../../i18n";
 import MenuButton from "../menus/MenuButton.vue";

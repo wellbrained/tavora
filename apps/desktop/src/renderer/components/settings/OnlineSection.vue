@@ -2,8 +2,8 @@
 // Settings > Online: what Tavora asks its service for (game search, icons, the module catalog),
 // the game icons, and sharing icons the service is missing.
 import { computed } from "vue";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { act, dialog, state } from "../../host";
 import { t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";

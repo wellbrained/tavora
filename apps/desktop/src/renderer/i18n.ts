@@ -1,5 +1,6 @@
 // The host UI's texts. `t` reads the current language, so a text in a
 // template or a computed value changes when the language does.
+import { setUiLanguage } from "@tavora/official-ui/components/ui/text";
 import { ref } from "vue";
 import { hasMessage, intlLocale, translate, type Language, type MessageKey, type Params } from "../shared/i18n";
 
@@ -8,6 +9,7 @@ export const language = ref<Language>("en");
 export function setLanguage(next: Language): void {
   language.value = next;
   document.documentElement.lang = next;
+  setUiLanguage(next);
 }
 
 export function t(key: MessageKey, params?: Params): string {

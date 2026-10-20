@@ -4,8 +4,8 @@
 // revocable (decision log, module grants row of 2026-10-16). Logins stay in those folders; the main
 // process reads them and none of it comes to this page or to a module.
 import { computed, ref } from "vue";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import type { AiProvider, AiUsageAccount } from "../../../shared/host-api";
 import { act, aiUsage, confirmAction, gamesUsing, listOf, state, submitAction } from "../../host";
 import { t } from "../../i18n";

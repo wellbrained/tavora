@@ -4,9 +4,9 @@
 // component; settings-index.ts lists them and every setting the search can find.
 import { RotateCw, ScrollText, Search, Settings as SettingsIcon, X } from "@lucide/vue";
 import { computed, nextTick, ref, watch } from "vue";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import { act, hiddenSettings, settingsOpen, settingsTarget, state } from "../../host";
