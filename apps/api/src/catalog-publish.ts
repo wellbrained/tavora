@@ -143,6 +143,9 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (by.accountId !== key.accountId) return refuse(context, 403, "wrong-account", "This publisher key is linked to another Tavora account than the one publishing.");
     const trust = catalogTrust(catalog, catalogueKey);
     if (trust.revoked(checked.owner, checked.sha256)) return refuse(context, 403, "key-revoked", "This publisher key was revoked and publishes nothing new. Link a new key to your account.");
+    // Reported as leaked in the app: nothing new from it while the revocation waits to be signed.
+    const reported = store.keyRequest(checked.owner);
+    if (reported?.leaked && reported.declinedAt === null) return refuse(context, 403, "key-leaked", "You reported this publisher key as leaked, so it publishes nothing new. Publish with your new key.");
     // A successor key counts for its account's first key only when the succession names this account.
     const firstKey = (fingerprint: string) => {
       const first = trust.firstKey(fingerprint);

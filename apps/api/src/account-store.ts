@@ -108,6 +108,21 @@ export interface LinkedKey {
   linkedAt: string;
 }
 
+/**
+ * A developer's request to replace a lost or leaked publisher key with another key of the same
+ * account. Tavora's maintainer signs it offline as a succession (and a leaked key also as a
+ * revocation), so the service never vouches for a key on its own.
+ */
+export interface KeyRequest {
+  old: string;
+  new: string;
+  accountId: string;
+  leaked: boolean;
+  requestedAt: number;
+  /** When the maintainer turned it down; null while it waits or once it is signed. */
+  declinedAt: number | null;
+}
+
 export type NameChange = { ok: true; developer: Developer } | { ok: false; reason: "name-taken" | "name-reserved" | "name-too-soon"; nextChangeAt?: number };
 
 /** How long a checked Discord login waits for the player's yes to a new account. */
@@ -143,6 +158,24 @@ export function normalizeEmail(input: unknown): string | null {
   if (email.length < 3 || email.length > 254) return null;
   return /^[^\s@<>"(),;:]+@[^\s@<>"(),;:]+\.[^\s@<>"(),;:]+$/.test(email) ? email : null;
 }
+
+interface KeyRequestRow {
+  old: string;
+  account_id: string;
+  new: string;
+  leaked: number;
+  requested_at: number;
+  declined_at: number | null;
+}
+
+const keyRequestOf = (row: KeyRequestRow): KeyRequest => ({
+  old: row.old,
+  new: row.new,
+  accountId: row.account_id,
+  leaked: row.leaked === 1,
+  requestedAt: row.requested_at,
+  declinedAt: row.declined_at,
+});
 
 export class AccountStore {
   private readonly db: DatabaseSync;
@@ -188,6 +221,11 @@ export class AccountStore {
       create table if not exists link_codes (
         code_hash text primary key, account_id text not null references accounts (id) on delete cascade, expires_at integer not null
       );
+      create table if not exists key_requests (
+        old text primary key, account_id text not null references accounts (id) on delete cascade,
+        new text not null, leaked integer not null, requested_at integer not null, declined_at integer
+      );
+      create index if not exists key_requests_account on key_requests (account_id);
       create table if not exists vaults (
         account_id text primary key references accounts (id) on delete cascade,
         version integer not null, data blob not null, updated_at integer not null
@@ -320,6 +358,7 @@ export class AccountStore {
       const developer = this.developer(id);
       if (developer) this.release(nameKey(developer.name), id, now);
       this.db.prepare("delete from vaults where account_id = ?").run(id);
+      this.db.prepare("delete from key_requests where account_id = ?").run(id);
       this.db.prepare("delete from publish_tokens where account_id = ?").run(id);
       this.db.prepare("delete from link_codes where account_id = ?").run(id);
       this.db.prepare("delete from publisher_keys where account_id = ?").run(id);
@@ -416,6 +455,55 @@ export class AccountStore {
   /** Unlinks one of the account's keys; false when it has no such key. */
   unlinkKey(accountId: string, fingerprint: string): boolean {
     return Number(this.db.prepare("delete from publisher_keys where fingerprint = ? and account_id = ?").run(fingerprint, accountId).changes) > 0;
+  }
+
+  // ── Replacing a lost key ───────────────────────────────────────────────
+
+  /**
+   * Asks to replace a linked key with another key linked to the same account. One request per old key:
+   * asking again changes nothing, except that "leaked" can be added, and a turned-down request can be
+   * asked again.
+   */
+  requestReplacement(accountId: string, old: string, next: string, leaked: boolean, now: number): "ok" | "same" | "not-linked" | "open" {
+    if (old === next) return "same";
+    const linked = new Set(this.keys(accountId).map((key) => key.fingerprint));
+    if (!linked.has(old) || !linked.has(next)) return "not-linked";
+    const current = this.keyRequest(old);
+    if (current && current.declinedAt === null) {
+      if (current.new !== next) return "open";
+      if (leaked && !current.leaked) this.db.prepare("update key_requests set leaked = 1 where old = ?").run(old);
+      return "ok";
+    }
+    this.db
+      .prepare(
+        "insert into key_requests (old, account_id, new, leaked, requested_at, declined_at) values (?, ?, ?, ?, ?, null) on conflict (old) do update set account_id = excluded.account_id, new = excluded.new, leaked = excluded.leaked, requested_at = excluded.requested_at, declined_at = null",
+      )
+      .run(old, accountId, next, leaked ? 1 : 0, now);
+    return "ok";
+  }
+
+  keyRequest(old: string): KeyRequest | null {
+    const row = this.db.prepare("select * from key_requests where old = ?").get(old) as KeyRequestRow | undefined;
+    return row ? keyRequestOf(row) : null;
+  }
+
+  keyRequests(accountId: string): KeyRequest[] {
+    return (this.db.prepare("select * from key_requests where account_id = ? order by requested_at, rowid").all(accountId) as unknown as KeyRequestRow[]).map(keyRequestOf);
+  }
+
+  /** Every request, oldest first, for the maintainer's review page. */
+  allKeyRequests(): KeyRequest[] {
+    return (this.db.prepare("select * from key_requests order by requested_at, rowid").all() as unknown as KeyRequestRow[]).map(keyRequestOf);
+  }
+
+  /** The maintainer turns a request down; false when there is no open request for the key. */
+  declineKeyRequest(old: string, now: number): boolean {
+    return Number(this.db.prepare("update key_requests set declined_at = ? where old = ? and declined_at is null").run(now, old).changes) > 0;
+  }
+
+  /** When a key was linked to an account, in ms, or null. */
+  keyLinkedAt(fingerprint: string): number | null {
+    return (this.db.prepare("select linked_at from publisher_keys where fingerprint = ?").get(fingerprint) as { linked_at: number } | undefined)?.linked_at ?? null;
   }
 
   /** The account a publisher key is linked to, with the key's public half (base64), or null. */

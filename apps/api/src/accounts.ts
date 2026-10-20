@@ -1,9 +1,11 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cleanDeveloperName, DEVICE_OS, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
+import type { CatalogTrust } from "./catalog-trust.ts";
 import type { CopyStore } from "./cloud-copy.ts";
 import { DiscordError, isDiscordCode, isPkceVerifier, type DiscordClient, type DiscordIdentity } from "./discord.ts";
-import { codeMail, emailChangedMail, MailLimitError, mailLanguage, type Mail, type Mailer } from "./mail.ts";
+import { keyRequestStatus } from "./key-requests.ts";
+import { codeMail, emailChangedMail, keyRequestMail, MailLimitError, mailLanguage, type Mail, type Mailer } from "./mail.ts";
 import { inspectPng } from "./png.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 
@@ -28,6 +30,8 @@ export interface AccountOptions {
   discord?: DiscordClient;
   /** The cloud copies (cloud-copy.ts), deleted with their account. Absent: the copy routes answer 503. */
   copies?: CopyStore;
+  /** The signed lists as served (catalog-trust.ts), to tell when a key replacement was signed. Absent: requests stay waiting. */
+  trust?: CatalogTrust;
 }
 
 /** Of the day's emails, the last ones are kept for changing the address and deleting the account. */
@@ -242,6 +246,13 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     return {
       developer: developer ? { name: developer.name, changedAt: new Date(developer.changedAt).toISOString(), nextChangeAt: new Date(developer.changedAt + NAME_HOLD_MS).toISOString() } : null,
       keys: store.keys(accountId),
+      requests: store.keyRequests(accountId).map((request) => ({
+        old: request.old,
+        new: request.new,
+        leaked: request.leaked,
+        requestedAt: new Date(request.requestedAt).toISOString(),
+        status: keyRequestStatus(request, options.trust ?? null),
+      })),
       publishTokens: store.publishTokens(accountId, now()).map((token) => ({
         id: token.id,
         name: token.name,
@@ -251,6 +262,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
       })),
     };
   };
+  /** Whether a key is in a replacement that still waits to be signed. */
+  const inOpenRequest = (accountId: string, fingerprint: string) =>
+    store.keyRequests(accountId).some((request) => (request.old === fingerprint || request.new === fingerprint) && keyRequestStatus(request, options.trust ?? null) === "waiting");
 
   signedIn.get("/developer", (context) => context.json(developerAnswer(context.get("account").id)));
 
@@ -274,6 +288,27 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     return context.json({ code, expiresAt: new Date(expiresAt).toISOString() });
   });
 
+  // "I lost this key" (or "it was leaked"): asks to move what the old key owns to another key of the
+  // account. Tavora's maintainer signs it offline (key-requests.ts); the account's address hears of it.
+  signedIn.post("/keys/:fingerprint/replace", async (context) => {
+    const account = context.get("account");
+    const old = context.req.param("fingerprint") ?? "";
+    const input = await body(context);
+    if (!/^[0-9a-f]{32}$/.test(old) || typeof input.new !== "string" || !/^[0-9a-f]{32}$/.test(input.new) || typeof input.leaked !== "boolean") {
+      return context.json({ error: "Send { new, leaked, language }.", reason: "bad-request" }, 400);
+    }
+    const before = store.keyRequest(old);
+    const result = store.requestReplacement(account.id, old, input.new, input.leaked, now());
+    if (result === "same") return context.json({ error: "Pick another key to replace it with.", reason: "bad-request" }, 400);
+    if (result === "not-linked") return context.json({ error: "Both keys must be linked to this account.", reason: "not-found" }, 404);
+    if (result === "open") return context.json({ error: "This key already waits to be replaced.", reason: "key-in-request" }, 409);
+    const after = store.keyRequest(old);
+    const isNew = !before || before.declinedAt !== null || before.leaked !== after?.leaked;
+    // Best effort: the request stands even when the day's emails are used up.
+    if (isNew && account.email && !usedUp(false)) await send(context, keyRequestMail(account.email, old, input.leaked, mailLanguage(input.language)));
+    return context.json(developerAnswer(account.id));
+  });
+
   // A token for publishing from CI, shown this once; the service keeps only its hash.
   signedIn.post("/publish-tokens", async (context) => {
     const account = context.get("account");
@@ -292,6 +327,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   });
 
   signedIn.delete("/keys/:fingerprint", (context) => {
+    if (inOpenRequest(context.get("account").id, context.req.param("fingerprint") ?? "")) {
+      return context.json({ error: "This key waits to be replaced.", reason: "key-in-request" }, 409);
+    }
     if (!store.unlinkKey(context.get("account").id, context.req.param("fingerprint") ?? "")) return context.json({ error: "Not found.", reason: "not-found" }, 404);
     return context.json(developerAnswer(context.get("account").id));
   });

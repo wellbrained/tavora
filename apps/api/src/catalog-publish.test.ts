@@ -319,4 +319,21 @@ describe("publishing to the catalog", () => {
     catalog.setList("revocations", Buffer.from(signCatalogList(nextCatalogList("revocations", revoked, null, new Date(clock.now)), generateKeyPairSync("ed25519").privateKey)));
     expect((await send(key, moduleZip(key, "wellbrained.timer", "1.0.1"))).status).toBe(201);
   });
+
+  it("refuses uploads signed by a key the account reported as leaked, until the request is turned down", async () => {
+    const { store, clock, developer, send, reason } = setup();
+    const { key, accountId } = developer("dev@example.com");
+    const next = generateKeyPairSync("ed25519").privateKey;
+    store.linkKey(accountId, keyFingerprint(rawKey(next)), rawKey(next).toString("base64"), clock.now);
+    const old = keyFingerprint(rawKey(key));
+    expect(store.requestReplacement(accountId, old, keyFingerprint(rawKey(next)), false, clock.now)).toBe("ok");
+    // Lost is not leaked: the key may still publish.
+    expect((await send(key, moduleZip(key, "wellbrained.timer", "1.0.0"))).status).toBe(201);
+    expect(store.requestReplacement(accountId, old, keyFingerprint(rawKey(next)), true, clock.now)).toBe("ok");
+    const answer = await send(key, moduleZip(key, "wellbrained.timer", "1.0.1"));
+    expect(answer.status).toBe(403);
+    expect(await reason(answer)).toBe("key-leaked");
+    expect(store.declineKeyRequest(old, clock.now)).toBe(true);
+    expect((await send(key, moduleZip(key, "wellbrained.timer", "1.0.1"))).status).toBe(201);
+  });
 });

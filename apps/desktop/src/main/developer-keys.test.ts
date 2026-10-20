@@ -111,6 +111,20 @@ describe("the publisher keys Tavora keeps", () => {
     await expect(a.keys.add(rsa)).rejects.toMatchObject({ key: "developerKeys.error.notKey" });
   });
 
+  it("replaces a lost key with the newest kept key that is linked, or makes one", async () => {
+    const cloud = await service();
+    const a = await tavora(cloud);
+    const lost = "0123456789abcdef0123456789abcdef";
+    // Nothing kept here yet: a new key is made and linked.
+    const made = await a.keys.replacementFor(lost, [lost]);
+    expect(a.linked).toEqual([made]);
+    const second = await a.keys.create();
+    expect(await a.keys.replacementFor(lost, [lost, made, second])).toBe(second);
+    // A kept key the account hasn't linked, and the lost key itself, are never picked.
+    expect(await a.keys.replacementFor(second, [made, second])).toBe(made);
+    expect(await a.keys.replacementFor(lost, [lost, made])).toBe(made);
+  });
+
   it("signs for tavora-pack after the click, and never without it", async () => {
     const cloud = await service();
     let allow = true;

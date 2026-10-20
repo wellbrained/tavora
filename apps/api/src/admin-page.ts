@@ -1,5 +1,5 @@
 /**
- * The review page (icons, and modules reported from the catalog), as three small files served by the admin app. No outside
+ * The review page (icons, modules reported from the catalog, and requests to replace a publisher key), as three small files served by the admin app. No outside
  * resources, no inline script or style (the page's content security policy
  * allows only these files), and everything that came from a player is put in
  * with textContent, never as markup. Images are fetched with the token and shown
@@ -25,6 +25,7 @@ export const ADMIN_HTML = `<!doctype html>
       <button id="tab-pending" class="tab" type="button" role="tab" data-tab="pending">Needs review</button>
       <button id="tab-hosted" class="tab" type="button" role="tab" data-tab="hosted">Hosted</button>
       <button id="tab-reports" class="tab" type="button" role="tab" data-tab="reports">Reports</button>
+      <button id="tab-keys" class="tab" type="button" role="tab" data-tab="keys">Keys</button>
     </nav>
     <p id="status" role="status"></p>
     <button id="refresh" type="button">Refresh</button>
@@ -45,6 +46,14 @@ export const ADMIN_HTML = `<!doctype html>
   </section>
   <section id="panel-reports" role="tabpanel" hidden>
     <div id="reports" class="grid"></div>
+  </section>
+  <section id="panel-keys" role="tabpanel" hidden>
+    <div class="bulk">
+      <button id="get-successions" type="button">successions.json</button>
+      <button id="get-revocations" type="button">revocations.json</button>
+    </div>
+    <p class="hint">Each file holds every entry in force plus the waiting ones. Check it, sign it offline with <code>pnpm tavora-catalog-sign &lt;kind&gt; &lt;file&gt; --key &lt;catalogue key&gt; --out &lt;signed file&gt;</code>, then upload with <code>tavora-api-catalog set-list</code>. A request shows as done once the served list holds it.</p>
+    <div id="keys" class="grid"></div>
   </section>
 </main>
 <script src="/admin.js"></script>
@@ -93,6 +102,8 @@ button.ok { border-color: var(--ok); color: var(--ok); }
 button.bad { border-color: var(--bad); color: var(--bad); }
 button:disabled { opacity: 0.5; cursor: default; }
 .empty { color: var(--muted); }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+code { font-size: 12px; }
 .alert { border: 1px solid var(--bad); color: var(--bad); border-radius: 8px; padding: 8px 12px; margin: 0 0 16px; }
 `;
 
@@ -105,7 +116,7 @@ let token = sessionStorage.getItem("adminToken") || "";
 const pictures = new Map();
 let data = null;
 let tab = "pending";
-const TABS = ["pending", "hosted", "reports"];
+const TABS = ["pending", "hosted", "reports", "keys"];
 try { const saved = sessionStorage.getItem("adminTab"); if (TABS.includes(saved)) tab = saved; } catch {}
 
 function el(tag, className, text) {
@@ -261,6 +272,46 @@ function reportCard(report) {
   );
 }
 
+const short = (fingerprint) => fingerprint.slice(0, 12) + "\u2026";
+const DAY = 86400000;
+
+function keyCard(request) {
+  const asked = Date.parse(request.requestedAt);
+  const linked = request.newLinkedAt ? Date.parse(request.newLinkedAt) : null;
+  const badges = [
+    badge(request.leaked ? "leaked" : "lost", request.leaked ? "bad" : "gold"),
+    badge(request.status, request.status === "done" ? "ok" : request.status === "declined" ? "bad" : ""),
+    badge(request.developer || "(no developer name)", ""),
+    badge(request.email || "(no email)", ""),
+    badge("asked " + new Date(asked).toLocaleString(), ""),
+  ];
+  // a replacement key linked just before the request is worth a second look: it may be someone else's
+  if (linked !== null) badges.push(badge("new key linked " + new Date(linked).toLocaleString(), asked - linked < DAY ? "bad" : ""));
+  const buttons = request.status === "waiting"
+    ? [button("Decline", "bad", async () => {
+      if (!confirm("Turn down replacing " + short(request.old) + "?")) return;
+      await call("/api/keys/decline", { old: request.old });
+    })]
+    : [];
+  const node = card(null, short(request.old) + " \u2192 " + short(request.new), badges, buttons);
+  node.title = request.old + " \u2192 " + request.new + " (account " + request.account + ")";
+  return node;
+}
+
+// fetched with the token, then saved from a blob address
+async function download(kind) {
+  const response = await call("/api/keys/" + kind + ".json");
+  if (!response.ok) throw new Error("Couldn't get " + kind + ".json.");
+  const url = URL.createObjectURL(await response.blob());
+  const link = el("a");
+  link.href = url;
+  link.download = kind + ".json";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // one call per offer, one after another; an offer that fails (say, its game got an icon a moment ago) is skipped
 async function bulk(verb, past, rows, send) {
   if (!rows.length || !confirm(verb + " all " + rows.length + "?")) return;
@@ -293,6 +344,7 @@ async function render() {
   $("tab-pending").textContent = "Needs review (" + data.pending.length + ")";
   $("tab-hosted").textContent = "Hosted (" + data.hosted.length + ")";
   $("tab-reports").textContent = "Reports (" + data.reports.length + ")";
+  $("tab-keys").textContent = "Keys (" + data.keys.filter((request) => request.status === "waiting").length + ")";
   $("catalog-full").hidden = !data.catalogFullSince;
   if (data.catalogFullSince) $("catalog-full").textContent = "The module catalog is full since " + new Date(data.catalogFullSince).toLocaleString() + ". Uploads are refused until there is room.";
   // only the open tab loads its pictures
@@ -303,6 +355,10 @@ async function render() {
   }
   if (tab === "reports") {
     fill("reports", data.reports, reportCard, "No reports. Nice!");
+    return;
+  }
+  if (tab === "keys") {
+    fill("keys", data.keys, keyCard, "No key requests.");
     return;
   }
   const query = $("search").value.trim().toLowerCase();
@@ -323,6 +379,7 @@ async function load() {
     const catalog = await (await call("/api/reports")).json();
     data.reports = catalog.reports;
     data.catalogFullSince = catalog.catalogFullSince;
+    data.keys = (await (await call("/api/keys")).json()).requests;
     prune();
     await render();
     status("Up to date.");
@@ -340,6 +397,7 @@ for (const name of TABS) {
 }
 $("search").addEventListener("input", () => { render().catch((error) => status(String(error.message || error))); });
 $("refresh").addEventListener("click", load);
+for (const kind of ["successions", "revocations"]) $("get-" + kind).addEventListener("click", () => download(kind).catch((error) => status(String(error.message || error))));
 const pendingRows = () => (data ? data.pending : []);
 $("approve-all").addEventListener("click", () => bulk("Approve", "Approved", pendingRows().filter((row) => !row.hasIcon), (row) => call("/api/approve", { sha256: row.sha256 })).catch((error) => status(String(error.message || error))));
 $("deny-all").addEventListener("click", () => bulk("Deny", "Denied", pendingRows(), (row) => call("/api/deny", { sha256: row.sha256, block: false })).catch((error) => status(String(error.message || error))));

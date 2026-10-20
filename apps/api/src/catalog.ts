@@ -390,6 +390,15 @@ export class CatalogStore {
     return row.n;
   }
 
+  /** The zips (SHA-256) a key signed that the catalog took before a moment, oldest first. */
+  signedBy(fingerprint: string, before: Date): string[] {
+    return (
+      this.db
+        .prepare("select v.sha256 from versions v join modules m on m.id = v.module_id where coalesce(v.signer, m.owner) = ? and v.published_at < ? order by v.seq")
+        .all(fingerprint, before.toISOString()) as unknown as { sha256: string }[]
+    ).map((row) => row.sha256);
+  }
+
   /** Takes a module out of the catalog or puts it back. Its versions and zips are kept. */
   setListed(id: string, listed: boolean): boolean {
     return Number(this.db.prepare("update modules set listed = ? where id = ?").run(listed ? 1 : 0, id).changes) > 0;

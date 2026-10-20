@@ -181,6 +181,8 @@ export interface AccountView {
   developer: { name: string; nextChangeAt: string } | null;
   /** Publisher keys linked to the account (fingerprints only); null until read from the service. */
   publisherKeys: { fingerprint: string; linkedAt: string }[] | null;
+  /** "I lost this key": requests to replace a linked key, and where each stands; null until read from the service. */
+  keyRequests: KeyRequestView[] | null;
   /** A one-time code for `tavora-pack link`, while it is valid. */
   linkCode: { code: string; expiresAt: string } | null;
   /** Tokens that let CI publish with a key file; null until read from the service. */
@@ -195,6 +197,15 @@ export interface AccountPublishToken {
   createdAt: string;
   expiresAt: string;
   lastUsedAt: string | null;
+}
+
+/** A request to replace a lost or leaked publisher key, which Tavora signs offline. */
+export interface KeyRequestView {
+  old: string;
+  new: string;
+  leaked: boolean;
+  requestedAt: string;
+  status: "waiting" | "done" | "declined";
 }
 
 /** A signature the pack command asked Tavora for, waiting for the developer's click. */
@@ -733,6 +744,8 @@ export type HostAction =
   /** Copies `tavora-pack link <code>` for the code shown now. */
   | { type: "account-copy-link-command" }
   | { type: "account-unlink-key"; fingerprint: string }
+  /** "I lost this key" or "It was leaked": its modules move to another key of the account once Tavora signs it. */
+  | { type: "account-replace-key"; fingerprint: string; leaked: boolean }
   /** Publish tokens, for publishing from CI: make one (its secret shown once), copy it, close it, remove one. */
   | { type: "account-publish-token-create"; name: string }
   | { type: "account-publish-token-copy" }
