@@ -29,7 +29,7 @@ import { resolveLanguage, translate, type Language, type MessageKey } from "../s
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
-import { LAYOUT_LIMITS, layoutPanels, pruneLayout, templateLayout, vacateLayout, type SavedLayout } from "./layout";
+import { LAYOUT_LIMITS } from "./layout";
 import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { parseAction } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
@@ -144,13 +144,10 @@ import {
 import { writeFileAtomic } from "./fsutil";
 import {
   emptyGameWorkspace,
-  MAX_SNAPSHOTS,
-  planSnapshot,
+  GameWorkspaces,
   settlePanelTypes,
   WorkspaceError,
-  type GameWorkspace,
   type InstanceRecord,
-  type Snapshot,
   type WorkspaceState,
 } from "./workspace";
 import type { PanelContent, PanelLaunch } from "./panel-content";
@@ -332,8 +329,6 @@ export class Host {
   private overlayChanges = 0;
   /** True while the window is minimized or hidden. */
   private windowHidden = false;
-  /** Bumped whenever the main process replaces the current layout. */
-  private layoutEpoch = 0;
   /**
    * Set while a game just opened and its panels load: none is shown until every visible one has its data, so
    * the workspace appears at once rather than panel by panel.
@@ -342,6 +337,8 @@ export class Host {
   private readonly onlineSearch: OnlineSearch;
   /** Tavora's module catalog (catalog-client.ts). */
   private readonly catalog: CatalogClient;
+  /** Every game's panels, layout and snapshots (workspace.ts). */
+  private readonly workspaces: GameWorkspaces;
   /** Installs, updates and removes modules, and grants or takes back what they ask for (module-lifecycle.ts). */
   private readonly lifecycle: ModuleLifecycle;
   /** The modules installed from the catalog, by id, as the installer recorded them. */
@@ -361,7 +358,7 @@ export class Host {
     private moduleInfo: Map<string, ModuleInfo>,
     private moduleProblems: ModuleProblem[],
     private readonly library: Library,
-    private readonly workspace: WorkspaceState,
+    workspace: WorkspaceState,
     private readonly profile: Profile,
     windowState: WindowState,
     private themes: Map<string, InstalledTheme>,
@@ -387,6 +384,9 @@ export class Host {
     this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.catalog = new CatalogClient(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
+    this.workspaces = new GameWorkspaces(workspace, {
+      save: (state) => this.savedData.saveWorkspace(state),
+    });
     this.lifecycle = new ModuleLifecycle({
       userData: options.userData,
       tavoraVersion: app.getVersion(),
@@ -683,7 +683,7 @@ export class Host {
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
     this.noteModuleVersions();
-    settlePanelTypes(this.workspace, panelTypesOf(modules));
+    this.workspaces.settlePanelTypes(panelTypesOf(modules));
     this.syncPanelTypes();
     await this.watchDevelopmentFolders();
     void this.refreshPublisherNames();
@@ -702,7 +702,7 @@ export class Host {
       if (open && missing) this.destroyView(record.instanceId);
       else if (!open && !missing) this.createView(record, game);
     }
-    this.saveWorkspace();
+    this.workspaces.save();
   }
 
   /**
@@ -935,19 +935,7 @@ export class Host {
 
   /** Closes and forgets every panel whose module is not installed any more, in every game. Module data stays. */
   private dropPanelsOfMissingModules(): void {
-    let changed = false;
-    for (const workspace of Object.values(this.workspace.games)) {
-      const gone = new Set(workspace.instances.filter((record) => !this.modules.has(record.moduleId)).map((record) => record.instanceId));
-      if (gone.size === 0) continue;
-      changed = true;
-      workspace.instances = workspace.instances.filter((record) => !gone.has(record.instanceId));
-      workspace.layout = pruneLayout(workspace.layout, (id) => !gone.has(id));
-      for (const instanceId of gone) this.closeView(instanceId);
-    }
-    if (changed) {
-      this.layoutEpoch++;
-      this.saveWorkspace();
-    }
+    for (const instanceId of this.workspaces.dropMissingModules((moduleId) => this.modules.has(moduleId))) this.closeView(instanceId);
   }
 
   // ── Pictures of modules ──────────────────────────────────────────────
@@ -973,37 +961,19 @@ export class Host {
 
   /** The games, by id in the library, with a panel of this module. */
   private gamesUsing(moduleId: string): string[] {
-    return Object.entries(this.workspace.games)
-      .filter(([gameId, workspace]) => gameId in this.library.games && workspace.instances.some((record) => record.moduleId === moduleId))
-      .map(([gameId]) => gameId);
+    return this.workspaces.gamesUsing(moduleId).filter((gameId) => gameId in this.library.games);
   }
 
   /** Removes a module's panels in every game; a slot left with nothing stays as an empty slot. */
   private removeModulePanels(moduleId: string): void {
-    let changed = false;
-    for (const workspace of Object.values(this.workspace.games)) changed = this.vacateModule(workspace, moduleId) || changed;
-    if (changed) {
-      this.layoutEpoch++;
-      this.saveWorkspace();
-    }
+    for (const instanceId of this.workspaces.vacate(moduleId)) this.closeView(instanceId);
   }
 
   /** Takes a module out of the current game only: its panels close the same way, so the layout stays. Module data stays. */
   private removeModuleFromGame(moduleId: string): void {
     const game = this.game;
-    if (!game || !this.vacateModule(this.gameWorkspace(game.id), moduleId)) return;
-    this.layoutEpoch++;
-    this.saveWorkspace();
-  }
-
-  /** Closes a module's panels in one workspace, leaving empty slots; false when it had none. */
-  private vacateModule(workspace: GameWorkspace, moduleId: string): boolean {
-    const gone = new Set(workspace.instances.filter((record) => record.moduleId === moduleId).map((record) => record.instanceId));
-    if (gone.size === 0) return false;
-    workspace.instances = workspace.instances.filter((record) => !gone.has(record.instanceId));
-    workspace.layout = vacateLayout(workspace.layout, (id) => gone.has(id));
-    for (const instanceId of gone) this.closeView(instanceId);
-    return true;
+    if (!game) return;
+    for (const instanceId of this.workspaces.vacate(moduleId, game.id)) this.closeView(instanceId);
   }
 
   /** Installs a module from a zip the player picks. Answers with the module's id, or nothing when the player cancelled. */
@@ -1220,12 +1190,8 @@ export class Host {
     return entry ? { id: entry.id, displayName: entry.name, kind: entry.kind } : null;
   }
 
-  private gameWorkspace(gameId: string): GameWorkspace {
-    return (this.workspace.games[gameId] ??= emptyGameWorkspace());
-  }
-
   private records(gameId: string): InstanceRecord[] {
-    return this.gameWorkspace(gameId).instances;
+    return this.workspaces.panels(gameId);
   }
 
 
@@ -1405,9 +1371,8 @@ export class Host {
         return this.openGame(action.gameId);
       case "add-game": {
         const id = addGame(library, action, new Date());
-        this.workspace.games[id] = emptyGameWorkspace();
+        this.workspaces.addGames([id]);
         this.saveLibrary();
-        this.saveWorkspace();
         this.fetchIconsSoon();
         // A game added just now may have been installed since the last look.
         if (this.gameWatcher.active) void this.gameWatcher.refreshInstalled();
@@ -1851,21 +1816,21 @@ export class Host {
       case "discord-sign-out":
         return this.discord.signOut();
       case "save-layout":
-        return this.saveLayout(action.layout);
+        return this.workspaces.saveLayout(this.currentGameId(), action.layout);
       case "apply-layout-template":
-        return this.applyLayoutTemplate(layoutTemplate(action.templateId));
+        return this.workspaces.applyTemplate(this.currentGameId(), layoutTemplate(action.templateId));
       case "apply-layout-grid":
-        return this.applyLayoutTemplate(gridTemplate(action.columns, action.rows));
+        return this.workspaces.applyTemplate(this.currentGameId(), gridTemplate(action.columns, action.rows));
       case "save-snapshot":
-        return this.saveSnapshot(action.name);
+        return this.workspaces.saveSnapshot(this.currentGameId(), action.name);
       case "update-snapshot":
-        return this.updateSnapshot(action.snapshotId);
+        return this.workspaces.updateSnapshot(this.currentGameId(), action.snapshotId);
       case "apply-snapshot":
         return this.applySnapshot(action.snapshotId);
       case "rename-snapshot":
-        return this.renameSnapshot(action.snapshotId, action.name);
+        return this.workspaces.renameSnapshot(this.currentGameId(), action.snapshotId, action.name);
       case "delete-snapshot":
-        return this.deleteSnapshot(action.snapshotId);
+        return this.workspaces.deleteSnapshot(this.currentGameId(), action.snapshotId);
     }
     this.saveLibrary();
   }
@@ -2031,10 +1996,9 @@ export class Host {
   /** Adds the games of a Steam import that are not in the library yet. Answers with how many. */
   private importSteam(games: SteamImportGame[]): ActionResult {
     const added = importSteamGames(this.library, games, new Date());
-    for (const id of added) this.workspace.games[id] = emptyGameWorkspace();
+    this.workspaces.addGames(added);
     if (added.length > 0) {
       this.saveLibrary();
-      this.saveWorkspace();
       this.fetchIconsSoon();
     }
     return { ok: true, added: added.length };
@@ -2187,9 +2151,7 @@ export class Host {
 
   /** deleteGameData without the browser sessions, so many games can be deleted and the sessions cleared once. */
   private async forgetGameData(game: GameEntry): Promise<void> {
-    const records = this.workspace.games[game.id]?.instances ?? [];
-    delete this.workspace.games[game.id];
-    this.saveWorkspace();
+    const records = this.workspaces.forgetGame(game.id);
     await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
     this.data.forgetGame(game.id);
     // A folder the player chose can be gone (an unplugged drive): the game still goes, and they are told where its pictures may remain.
@@ -2224,15 +2186,10 @@ export class Host {
     const types = panelTypes(module.manifest);
     const panelType = options.panelType ?? continuingPanelType(module.manifest) ?? undefined;
     if (panelType !== undefined && !types.some((type) => type.id === panelType)) throw new WorkspaceError("error.panelTypeGone");
-    const records = this.records(game.id);
-    if (records.length >= LAYOUT_LIMITS.panels) {
-      throw new WorkspaceError("error.panelLimit", { max: LAYOUT_LIMITS.panels });
-    }
     const record: InstanceRecord = { instanceId: randomUUID(), moduleId, ...(panelType ? { panelType } : {}) };
-    records.push(record);
+    this.workspaces.openPanel(game.id, record);
     if (openedFrom) this.openedFrom.set(record.instanceId, openedFrom);
     this.launches.set(record.instanceId, options.launch ?? { reason: "add" });
-    this.saveWorkspace();
     this.createView(record, game, performance.now());
     return record.instanceId;
   }
@@ -2342,19 +2299,13 @@ export class Host {
     const module = this.modules.get(record.moduleId);
     if (!module || !panelTypes(module.manifest).some((type) => type.id === panelType)) throw new WorkspaceError("error.panelTypeGone");
     record.panelType = panelType;
-    this.saveWorkspace();
+    this.workspaces.save();
     this.createView(record, game, performance.now());
   }
 
   private closePanel(instanceId: string): void {
     const game = this.game;
-    if (!game) return;
-    const workspace = this.gameWorkspace(game.id);
-    const index = workspace.instances.findIndex((record) => record.instanceId === instanceId);
-    if (index < 0) return;
-    workspace.instances.splice(index, 1);
-    workspace.layout = pruneLayout(workspace.layout, (id) => id !== instanceId);
-    this.saveWorkspace();
+    if (!game || !this.workspaces.closePanel(game.id, instanceId)) return;
     this.closeView(instanceId);
   }
 
@@ -2610,108 +2561,20 @@ export class Host {
 
   // ── Layouts and snapshots ────────────────────────────────────────────
 
-  private currentWorkspace(): GameWorkspace {
+  /** The game shown now, whose layout the player is changing. */
+  private currentGameId(): string {
     const game = this.game;
     if (!game) throw new WorkspaceError("error.openGameFirst");
-    return this.gameWorkspace(game.id);
+    return game.id;
   }
 
-  private saveLayout(layout: SavedLayout | null): void {
-    const workspace = this.currentWorkspace();
-    const open = new Set(workspace.instances.map((record) => record.instanceId));
-    workspace.layout = pruneLayout(layout, (id) => open.has(id));
-    this.saveWorkspace();
-  }
-
-  /** Rearranges the open panels into a template's slots, in the order they are laid out now. */
-  private applyLayoutTemplate(template: LayoutTemplate | undefined): void {
-    if (!template) throw new WorkspaceError("error.templateGone");
-    const workspace = this.currentWorkspace();
-    const laidOut = layoutPanels(workspace.layout);
-    const rest = workspace.instances.map((record) => record.instanceId).filter((id) => !laidOut.includes(id));
-    workspace.layout = templateLayout(template, [...laidOut, ...rest]);
-    this.layoutEpoch++;
-    this.saveWorkspace();
-  }
-
-  private snapshot(snapshotId: string): Snapshot {
-    const found = this.currentWorkspace().snapshots.find((snapshot) => snapshot.id === snapshotId);
-    if (!found) throw new WorkspaceError("error.layoutGone");
-    return found;
-  }
-
-  private snapshotName(name: string, except?: string): string {
-    const trimmed = name.trim();
-    if (!trimmed) throw new WorkspaceError("error.layoutNeedsName");
-    const taken = this.currentWorkspace().snapshots.some(
-      (snapshot) => snapshot.id !== except && snapshot.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase(),
-    );
-    if (taken) throw new WorkspaceError("error.layoutTaken", { name: trimmed });
-    return trimmed;
-  }
-
-  /** The current layout as a snapshot body: placeholders named after the panels they came from. */
-  private captureLayout(): Pick<Snapshot, "layout" | "modules" | "panelTypes" | "savedAt"> {
-    const workspace = this.currentWorkspace();
-    const layout = workspace.layout;
-    const panels = layoutPanels(layout);
-    if (!layout || panels.length === 0) throw new WorkspaceError("error.layoutNeedsModule");
-    const recordOf = new Map(workspace.instances.map((record) => [record.instanceId, record]));
-    const panelTypes = Object.fromEntries(panels.flatMap((id) => (recordOf.get(id)!.panelType ? [[id, recordOf.get(id)!.panelType!]] : [])));
-    return {
-      layout: structuredClone(layout),
-      modules: Object.fromEntries(panels.map((id) => [id, recordOf.get(id)!.moduleId])),
-      panelTypes,
-      savedAt: new Date().toISOString(),
-    };
-  }
-
-  private saveSnapshot(name: string): string {
-    const workspace = this.currentWorkspace();
-    if (workspace.snapshots.length >= MAX_SNAPSHOTS) {
-      throw new WorkspaceError("error.layoutLimit", { max: MAX_SNAPSHOTS });
-    }
-    const snapshot: Snapshot = { id: randomUUID(), name: this.snapshotName(name), ...this.captureLayout() };
-    workspace.snapshots.push(snapshot);
-    this.saveWorkspace();
-    return snapshot.id;
-  }
-
-  private updateSnapshot(snapshotId: string): void {
-    Object.assign(this.snapshot(snapshotId), this.captureLayout());
-    this.saveWorkspace();
-  }
-
-  private renameSnapshot(snapshotId: string, name: string): void {
-    this.snapshot(snapshotId).name = this.snapshotName(name, snapshotId);
-    this.saveWorkspace();
-  }
-
-  private deleteSnapshot(snapshotId: string): void {
-    const workspace = this.currentWorkspace();
-    workspace.snapshots = workspace.snapshots.filter((snapshot) => snapshot.id !== this.snapshot(snapshotId).id);
-    this.saveWorkspace();
-  }
-
-  /**
-   * Replaces the open panels with the snapshot's. Panels of the same module
-   * are reused, the rest are closed; module data is never touched.
-   */
+  /** Replaces the open panels with the snapshot's; views start for the new panels and stop for the rest. */
   private applySnapshot(snapshotId: string): void {
-    const game = this.game!;
-    const snapshot = this.snapshot(snapshotId);
-    const workspace = this.gameWorkspace(game.id);
-    const plan = planSnapshot(snapshot, workspace.instances, randomUUID);
-    for (const record of plan.close) this.closeView(record.instanceId);
-    const existing = new Set(workspace.instances.map((record) => record.instanceId));
-    workspace.instances = plan.instances;
-    workspace.layout = plan.layout;
-    this.layoutEpoch++;
-    this.saveWorkspace();
-    for (const record of plan.instances) {
-      if (existing.has(record.instanceId)) continue;
+    const { opened, closed } = this.workspaces.applySnapshot(this.currentGameId(), snapshotId);
+    for (const record of closed) this.closeView(record.instanceId);
+    for (const record of opened) {
       this.launches.set(record.instanceId, { reason: "add" });
-      this.createView(record, game);
+      this.createView(record, this.game!);
     }
   }
 
@@ -2721,7 +2584,7 @@ export class Host {
     const game = this.game;
     if (!game) return;
     for (const record of this.records(game.id)) this.createView(record, game);
-    this.layoutEpoch++;
+    this.workspaces.relayout();
     if ([...this.views.values()].some((view) => view instanceof ModuleView)) {
       this.endOpening();
       this.opening = { startedAt: performance.now(), timer: setTimeout(() => this.endOpening(true), OPENING_CAP_MS) };
@@ -2899,7 +2762,7 @@ export class Host {
     if (content?.id === record.content?.id && content?.title === record.content?.title) return;
     if (content) record.content = content;
     else delete record.content;
-    this.saveWorkspace();
+    this.workspaces.save();
     this.pushState();
   }
 
@@ -3184,7 +3047,7 @@ export class Host {
   private viewState(): HostViewState {
     const library = this.library;
     const game = this.game;
-    const workspace = game ? this.gameWorkspace(game.id) : emptyGameWorkspace();
+    const workspace = game ? this.workspaces.game(game.id) : emptyGameWorkspace();
     const games: Record<string, GameView> = {};
     for (const entry of Object.values(library.games)) {
       if (entry.trashedAt === null) games[entry.id] = this.gameView(entry);
@@ -3295,7 +3158,7 @@ export class Host {
         return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: title || name, status: view.status, waiting: false, content: null, browser, ...(openedFrom ? { openedFrom } : {}) };
       }),
       layout: workspace.layout,
-      layoutEpoch: this.layoutEpoch,
+      layoutEpoch: this.workspaces.epoch,
       opening: this.opening !== null,
       pendingLink: this.pendingLink,
       runningGameId: this.running.filter((id) => id !== this.gameId && isLive(this.library, id)).at(-1) ?? null,
@@ -3382,10 +3245,6 @@ export class Host {
   /** Also tells the caller whether the write landed. */
   private saveProfile(): Promise<void> {
     return this.savedData.saveProfile(this.profile);
-  }
-
-  private saveWorkspace(): void {
-    this.savedData.saveWorkspace(this.workspace);
   }
 
   private saveWindowSoon(): void {
