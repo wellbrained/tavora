@@ -2,8 +2,20 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { SavedLayout } from "./layout";
-import { emptyWorkspace, loadWorkspace, planSnapshot, saveWorkspace, settlePanelTypes, type Snapshot } from "./workspace";
+import { gridTemplate } from "../shared/layout-templates";
+import { LAYOUT_LIMITS, layoutPanels, type SavedLayout } from "./layout";
+import {
+  emptyWorkspace,
+  GameWorkspaces,
+  loadWorkspace,
+  MAX_SNAPSHOTS,
+  planSnapshot,
+  saveWorkspace,
+  settlePanelTypes,
+  WorkspaceError,
+  type Snapshot,
+  type WorkspaceState,
+} from "./workspace";
 
 const A = "00000000-0000-4000-8000-00000000000a";
 const B = "00000000-0000-4000-8000-00000000000b";
@@ -186,5 +198,144 @@ describe("panel types", () => {
       { instanceId: C, moduleId: "m.plain" },
     ]);
     expect(state.games.poe2!.snapshots[0]!.panelTypes).toEqual({ [A]: "planner" });
+  });
+});
+
+describe("GameWorkspaces", () => {
+  const D = "00000000-0000-4000-8000-00000000000d";
+  /** poe2 shows notes (A) beside todos (B); satisfactory has a notes panel (C). */
+  const setup = () => {
+    const state: WorkspaceState = emptyWorkspace(["poe2", "satisfactory"]);
+    state.games.poe2 = {
+      instances: [
+        { instanceId: A, moduleId: "notes" },
+        { instanceId: B, moduleId: "todos" },
+      ],
+      layout: twoColumns(A, B),
+      snapshots: [],
+    };
+    state.games.satisfactory!.instances = [{ instanceId: C, moduleId: "notes" }];
+    const saved: WorkspaceState[] = [];
+    let next = 0;
+    const workspaces = new GameWorkspaces(state, {
+      save: (copy) => saved.push(copy),
+      newId: () => `00000000-0000-4000-8000-${String(++next).padStart(12, "0")}`,
+      now: () => new Date("2026-10-20T12:00:00.000Z"),
+    });
+    return { state, saved, workspaces };
+  };
+
+  it("saves a copy after each change", () => {
+    const { state, saved, workspaces } = setup();
+    workspaces.saveLayout("poe2", twoColumns(B, A));
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toEqual(state);
+    expect(saved[0]).not.toBe(state);
+  });
+
+  it("keeps only open panels in a saved layout, without bumping the epoch", () => {
+    const { state, workspaces } = setup();
+    workspaces.saveLayout("poe2", twoColumns(A, D));
+    expect(layoutPanels(state.games.poe2!.layout)).toEqual([A]);
+    expect(workspaces.epoch).toBe(0);
+  });
+
+  it("saves, renames, updates and deletes a snapshot", () => {
+    const { state, workspaces } = setup();
+    const id = workspaces.saveSnapshot("poe2", "  Mapping ");
+    const [snapshot] = state.games.poe2!.snapshots;
+    expect(snapshot).toEqual({
+      id,
+      name: "Mapping",
+      savedAt: "2026-10-20T12:00:00.000Z",
+      layout: twoColumns(A, B),
+      modules: { [A]: "notes", [B]: "todos" },
+      panelTypes: {},
+    });
+    workspaces.renameSnapshot("poe2", id, "Bossing");
+    workspaces.saveLayout("poe2", twoColumns(B, A));
+    workspaces.updateSnapshot("poe2", id);
+    expect(state.games.poe2!.snapshots[0]).toMatchObject({ name: "Bossing", layout: twoColumns(B, A) });
+    workspaces.deleteSnapshot("poe2", id);
+    expect(state.games.poe2!.snapshots).toEqual([]);
+  });
+
+  it("refuses an empty name, a name taken in any case, a missing snapshot and an empty layout", () => {
+    const { workspaces } = setup();
+    expect(() => workspaces.saveSnapshot("poe2", "  ")).toThrow(WorkspaceError);
+    const id = workspaces.saveSnapshot("poe2", "Mapping");
+    expect(() => workspaces.saveSnapshot("poe2", "mapping")).toThrow(WorkspaceError);
+    // Keeping its own name is fine.
+    workspaces.renameSnapshot("poe2", id, "MAPPING");
+    expect(() => workspaces.applySnapshot("poe2", S)).toThrow(WorkspaceError);
+    expect(() => workspaces.saveSnapshot("satisfactory", "Empty")).toThrow(WorkspaceError);
+  });
+
+  it("holds at most MAX_SNAPSHOTS snapshots a game", () => {
+    const { workspaces } = setup();
+    for (let i = 0; i < MAX_SNAPSHOTS; i++) workspaces.saveSnapshot("poe2", `Layout ${i}`);
+    expect(() => workspaces.saveSnapshot("poe2", "One more")).toThrow(WorkspaceError);
+  });
+
+  it("applies a snapshot, answering with the panels to start and to stop", () => {
+    const { state, workspaces } = setup();
+    const id = workspaces.saveSnapshot("poe2", "Notes only");
+    workspaces.vacate("notes", "poe2");
+    const before = workspaces.epoch;
+    const { opened, closed } = workspaces.applySnapshot("poe2", id);
+    const fresh = "00000000-0000-4000-8000-000000000002";
+    expect(opened).toEqual([{ instanceId: fresh, moduleId: "notes" }]);
+    expect(closed).toEqual([]);
+    expect(state.games.poe2!.instances.map((record) => record.instanceId)).toEqual([fresh, B]);
+    expect(workspaces.epoch).toBe(before + 1);
+  });
+
+  it("vacates a module in one game or in all, leaving empty slots", () => {
+    const { state, workspaces } = setup();
+    expect(workspaces.vacate("notes", "poe2")).toEqual([A]);
+    expect(state.games.poe2!.layout?.root.kind === "split" && state.games.poe2!.layout.root.children[0]).toMatchObject({ panels: [], active: null });
+    expect(state.games.satisfactory!.instances).toHaveLength(1);
+    expect(workspaces.vacate("notes")).toEqual([C]);
+    expect(workspaces.vacate("notes")).toEqual([]);
+    expect(workspaces.epoch).toBe(2);
+  });
+
+  it("drops panels of modules that are gone, slot and all", () => {
+    const { state, saved, workspaces } = setup();
+    expect(workspaces.dropMissingModules((moduleId) => moduleId !== "todos")).toEqual([B]);
+    expect(layoutPanels(state.games.poe2!.layout)).toEqual([A]);
+    expect(workspaces.dropMissingModules(() => true)).toEqual([]);
+    expect(saved).toHaveLength(1);
+  });
+
+  it("opens panels up to the limit and closes them with their slot", () => {
+    const { state, workspaces } = setup();
+    // satisfactory already has one panel.
+    for (let i = 2; i <= LAYOUT_LIMITS.panels; i++) {
+      const record = { instanceId: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`, moduleId: "notes" };
+      workspaces.openPanel("satisfactory", record);
+    }
+    expect(() => workspaces.openPanel("satisfactory", { instanceId: D, moduleId: "notes" })).toThrow(WorkspaceError);
+    expect(workspaces.closePanel("poe2", B)).toBe(true);
+    expect(workspaces.closePanel("poe2", B)).toBe(false);
+    expect(layoutPanels(state.games.poe2!.layout)).toEqual([A]);
+  });
+
+  it("lays the open panels out in a template, unplaced ones last", () => {
+    const { state, workspaces } = setup();
+    workspaces.openPanel("poe2", { instanceId: D, moduleId: "map" });
+    workspaces.applyTemplate("poe2", gridTemplate(3, 1));
+    expect(layoutPanels(state.games.poe2!.layout)).toEqual([A, B, D]);
+    expect(workspaces.epoch).toBe(1);
+    expect(() => workspaces.applyTemplate("poe2", undefined)).toThrow(WorkspaceError);
+  });
+
+  it("adds and forgets games", () => {
+    const { state, workspaces } = setup();
+    workspaces.addGames(["enshrouded"]);
+    expect(state.games.enshrouded).toEqual({ instances: [], layout: null, snapshots: [] });
+    expect(workspaces.forgetGame("poe2").map((record) => record.instanceId)).toEqual([A, B]);
+    expect(state.games.poe2).toBeUndefined();
+    expect(workspaces.gamesUsing("notes")).toEqual(["satisfactory"]);
   });
 });
