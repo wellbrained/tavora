@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.16",
+    date: "2026-10-20",
+    title: "Settings fit small windows",
+    notes: [
+      "In a small window, Settings moves buttons and switches under their text instead of squeezing it.",
+    ],
+  },
+  {
     version: "0.19.15",
     date: "2026-10-20",
     title: "Lost a publisher key?",
