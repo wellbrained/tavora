@@ -1,6 +1,8 @@
-import { mkdtemp, readFile, stat } from "node:fs/promises";
+import { createHash, createPublicKey, generateKeyPairSync, verify } from "node:crypto";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fingerprint as packFingerprint, LINK_STATEMENT, packModule, PUBLISH_STATEMENT } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import type { AccountView } from "../shared/host-api";
 import { AccountClient, deviceOs, loadAccount, saveAccount, type ProfileData, type SavedAccount } from "./account";
@@ -106,7 +108,7 @@ describe("signing in", () => {
     // The token never reaches the host UI; a malformed device is dropped.
     const view = account.view();
     expect(JSON.stringify(view)).not.toContain(TOKEN);
-    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", discord: null, createdAt: SAVED.createdAt }, discordLogin: false, devices: [DEVICE], pending: null, profileChoice: null, developer: null, publisherKeys: [], linkCode: null });
+    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", discord: null, createdAt: SAVED.createdAt }, discordLogin: false, devices: [DEVICE], pending: null, profileChoice: null, developer: null, publisherKeys: [], keyRequests: [], linkCode: null, publishTokens: [], newPublishToken: null });
   });
 
   it("asks before creating an account for a new address, then creates it with the same code", async () => {
@@ -515,6 +517,86 @@ describe("the developer side", () => {
     expect(account.view()).toMatchObject({ linkCode: null, publisherKeys: [{ fingerprint: FINGERPRINT }] });
     await account.signOut();
     expect(account.view()).toMatchObject({ developer: null, publisherKeys: null, linkCode: null });
+  });
+
+  it("links a publisher key Tavora keeps, signing a fresh code with it", async () => {
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const fingerprint = packFingerprint(privateKey);
+    let keys: unknown[] = [];
+    const { calls, fetchImpl } = service({
+      "POST /keys/code": () => json({ code: "ABCDEFGH", expiresAt: new Date(Date.now() + 600_000).toISOString() }),
+      "POST https://api.test/v1/publishers/link": (body) => {
+        const signed = verify(null, Buffer.from(`${LINK_STATEMENT}\nABCDEFGH`), createPublicKey(privateKey), Buffer.from(String(body?.signature), "base64"));
+        if (!signed) return json({ reason: "bad-signature" }, 400);
+        keys = [{ fingerprint, linkedAt: "2026-10-20T12:00:00.000Z" }];
+        return json({ status: "linked", fingerprint, name: null });
+      },
+      "GET /developer": () => developer(keys),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.linkPublisherKey(privateKey);
+    expect(calls.find((call) => call.url.endsWith("/v1/publishers/link"))?.auth).toBeNull();
+    expect(account.view().publisherKeys).toEqual([{ fingerprint, linkedAt: "2026-10-20T12:00:00.000Z" }]);
+  });
+
+  it("asks to replace a lost key, and shows where each request stands", async () => {
+    const next = "fedcba9876543210fedcba9876543210";
+    const request = { old: FINGERPRINT, new: next, leaked: true, requestedAt: "2026-10-20T12:00:00.000Z", status: "waiting" };
+    const { calls, fetchImpl } = service({
+      [`POST /keys/${FINGERPRINT}/replace`]: () => json({ developer: null, keys: [{ fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:00:00.000Z" }], requests: [request, { ...request, old: "NOPE" }, { ...request, old: next, status: "lost" }] }),
+      [`POST /keys/${next}/replace`]: () => json({ reason: "key-in-request" }, 409),
+      "POST /sign-out": () => new Response(null, { status: 204 }),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.replaceKey(FINGERPRINT, next, true);
+    expect(calls.at(-1)).toMatchObject({ method: "POST", auth: `Bearer ${TOKEN}`, body: { new: next, leaked: true, language: "de" } });
+    expect(account.view().keyRequests).toEqual([request]);
+    await expect(account.replaceKey(next, FINGERPRINT, false)).rejects.toMatchObject({ key: "account.error.keyInRequest" });
+    await account.signOut();
+    expect(account.view().keyRequests).toBeNull();
+  });
+
+  it("makes a publish token, shows its secret once, and removes one", async () => {
+    const token = { id: "abc", name: "GitHub Actions", createdAt: "2026-10-20T12:00:00.000Z", expiresAt: "2027-10-20T12:00:00.000Z", lastUsedAt: null };
+    const SECRET = `tvp_${"s".repeat(43)}`;
+    const { calls, fetchImpl } = service({
+      "POST /publish-tokens": (body) => json({ token: SECRET, developer: null, keys: [], publishTokens: [{ ...token, name: body?.name }, { id: "bad" }] }, 201),
+      "DELETE /publish-tokens/abc": () => json({ developer: null, keys: [], publishTokens: [] }),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.createPublishToken(" GitHub Actions ");
+    expect(calls.at(-1)).toMatchObject({ body: { name: "GitHub Actions" }, auth: `Bearer ${TOKEN}` });
+    expect(account.view()).toMatchObject({ publishTokens: [token], newPublishToken: { name: "GitHub Actions", token: SECRET } });
+    account.publishTokenSaved();
+    expect(account.view().newPublishToken).toBeNull();
+    expect(JSON.stringify(account.view())).not.toContain(SECRET);
+    await account.deletePublishToken("abc");
+    expect(account.view().publishTokens).toEqual([]);
+  });
+
+  it("publishes a module zip for tavora-pack with the sign-in", async () => {
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const dir = await mkdtemp(path.join(os.tmpdir(), "tavora-module-"));
+    await mkdir(path.join(dir, "dist"));
+    await writeFile(path.join(dir, "dist", "index.html"), "<p>hi</p>");
+    await writeFile(path.join(dir, "tavora.module.json"), JSON.stringify({ id: "me.tracker", name: "Tracker", version: "1.0.0", apiVersion: "1", entry: "dist/index.html", games: [], viewport: { minWidth: 100, minHeight: 100 }, permissions: { network: [] } }));
+    const { zip } = await packModule(dir, privateKey);
+    const sha256 = createHash("sha256").update(zip).digest("hex");
+    let sent: Headers | null = null;
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) !== "https://api.test/v1/catalog/publish") return json({ developer: null, keys: [] });
+      sent = new Headers(init?.headers);
+      return json({ id: "me.tracker", version: "1.0.0", sha256 }, 201);
+    }) as typeof fetch;
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    expect(await account.publishModule(privateKey, zip)).toEqual({ id: "me.tracker", version: "1.0.0", sha256 });
+    expect(sent!.get("authorization")).toBe(`Bearer ${TOKEN}`);
+    expect(sent!.get("accept-language")).toBe("de");
+    expect(verify(null, Buffer.from(`${PUBLISH_STATEMENT}\n${sha256}`), createPublicKey(privateKey), Buffer.from(sent!.get("x-tavora-signature")!, "base64"))).toBe(true);
   });
 
   it("keeps only well-formed keys and names from the service", async () => {

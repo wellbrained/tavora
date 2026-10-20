@@ -2,13 +2,15 @@
 // its test inbox, and the app reading the code out of the "mail". Discord login
 // runs against a pretend Discord: its sign-in page sends the app straight back.
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { generateKeyPairSync } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer, type Server } from "node:http";
 import { createServer } from "node:net";
 import os, { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { desktopDir, launch } from "./harness";
+import { readZip, verifyFiles } from "@tavora/pack";
+import { desktopDir, launch, signerAddressFor } from "./harness";
 
 const apiDir = path.resolve(desktopDir, "../api");
 let service: ChildProcess | undefined;
@@ -178,9 +180,32 @@ test("a player creates a Discord-only account in the browser, adds an email, and
     await app.close();
   }
 });
-test("a developer chooses a public name and links a publisher key with tavora-pack link", async () => {
+/** A built module's folder, ready for the pack command. */
+async function moduleProject(id: string): Promise<string> {
+  const project = await mkdtemp(path.join(tmpdir(), "tavora-module-"));
+  await mkdir(path.join(project, "dist"));
+  await writeFile(path.join(project, "dist", "index.html"), "<p>hi</p>");
+  const manifest = { id, name: "Tracker", version: "1.0.0", apiVersion: "1", entry: "dist/index.html", games: [], viewport: { minWidth: 100, minHeight: 100 }, permissions: { network: [] } };
+  await writeFile(path.join(project, "tavora.module.json"), JSON.stringify(manifest));
+  return project;
+}
+
+/** Runs the real pack command from its sources. */
+function tavoraPack(args: string[], env: Record<string, string> = {}): Promise<{ status: number | null; out: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "--conditions=source", path.resolve(desktopDir, "../../packages/pack/src/cli.ts"), ...args], { env: { ...process.env, ...env } });
+    let out = "";
+    child.stdout.on("data", (chunk: Buffer) => (out += chunk));
+    child.stderr.on("data", (chunk: Buffer) => (out += chunk));
+    child.on("close", (status) => resolve({ status, out }));
+  });
+}
+
+test("a developer chooses a public name and links a key file with tavora-pack link", async () => {
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: apiUrl } });
   const keyFile = path.join(await mkdtemp(path.join(tmpdir(), "tavora-key-")), "publisher-key.pem");
+  await writeFile(keyFile, generateKeyPairSync("ed25519").privateKey.export({ format: "pem", type: "pkcs8" }));
+  const project = await moduleProject("keyfile.tracker");
   try {
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-account").click();
@@ -210,13 +235,7 @@ test("a developer chooses a public name and links a publisher key with tavora-pa
     const code = command.split(" ").at(-1)!;
 
     // The real pack command signs the code with a key on this PC and sends only its public half.
-    const linked = await new Promise<{ status: number | null; out: string }>((resolve) => {
-      const child = spawn(process.execPath, ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "--conditions=source", path.resolve(desktopDir, "../../packages/pack/src/cli.ts"), "link", code, "--key", keyFile, "--api", apiUrl]);
-      let out = "";
-      child.stdout.on("data", (chunk: Buffer) => (out += chunk));
-      child.stderr.on("data", (chunk: Buffer) => (out += chunk));
-      child.on("close", (status) => resolve({ status, out }));
-    });
+    const linked = await tavoraPack(["link", code, "--key", keyFile, "--api", apiUrl]);
     expect(linked.out).toContain('"by example-dev"');
     expect(linked.status).toBe(0);
     const fingerprint = /Linked publisher key ([0-9a-f]{32})/.exec(linked.out)?.[1] ?? "";
@@ -226,9 +245,91 @@ test("a developer chooses a public name and links a publisher key with tavora-pa
     await expect(page.getByTestId("account-link")).toHaveCount(0);
     // Players' Tavora learns the name, and nothing else.
     expect(await (await fetch(`${apiUrl}/v1/publishers/${fingerprint}`)).json()).toEqual({ name: "example-dev" });
+
+    // The key file alone publishes nothing: it needs a publish token, made here and shown once.
+    const out = path.join(project, "out.zip");
+    const packed = await tavoraPack([project, "--key", keyFile, "--out", out]);
+    expect(packed.status, packed.out).toBe(0);
+    const keyOnly = await tavoraPack(["publish", out, "--key", keyFile, "--api", apiUrl], { TAVORA_PUBLISH_TOKEN: "" });
+    expect(keyOnly.out).toContain("Publishing needs your Tavora account");
+    await page.getByTestId("publish-token-name").fill("GitHub Actions");
+    await page.getByTestId("publish-token-create").click();
+    const secret = (await page.getByTestId("publish-token-secret").textContent()) ?? "";
+    expect(secret).toMatch(/^tvp_/);
+    await page.getByTestId("publish-token-done").click();
+    await expect(page.getByTestId("publish-token-secret")).toHaveCount(0);
+    await expect(page.getByTestId("publish-tokens-list")).toContainText("GitHub Actions");
+    // A token publishes only under prefixes the account has; this one is new.
+    const withToken = await tavoraPack(["publish", out, "--key", keyFile, "--api", apiUrl], { TAVORA_PUBLISH_TOKEN: secret });
+    expect(withToken.out).toContain("Publish this module's first version from Tavora");
   } finally {
     await app.close();
     await rm(path.dirname(keyFile), { recursive: true, force: true }).catch(() => undefined);
+    await rm(project, { recursive: true, force: true }).catch(() => undefined);
+  }
+});
+
+test("Tavora keeps a developer's publisher key, and signs and publishes for tavora-pack after a click", async () => {
+  // A pretend Discord app turns on the test key store on Linux, which has no keyring here; the account's key needs one.
+  const { app, page, userData } = await launch(undefined, [], {
+    env: { TAVORA_API_URL: apiUrl, TAVORA_DISCORD_IPC: path.join(tmpdir(), "tavora-no-discord"), TAVORA_DISCORD_TOKEN_URL: `${discordUrl}/api/oauth2/token` },
+  });
+  const project = await moduleProject("exampledev.tracker");
+  // No key file in this home: tavora-pack must ask Tavora.
+  const home = await mkdtemp(path.join(tmpdir(), "tavora-home-"));
+  const env = { TAVORA_SIGNER_ADDRESS: signerAddressFor(userData), HOME: home, USERPROFILE: home };
+  try {
+    await signIn(page, "keeper@example.com", true);
+    await expect(page.getByTestId("developer-key-create")).toBeDisabled();
+    await page.getByTestId("account-developer-name").fill("key-keeper");
+    await page.getByTestId("account-developer-save").click();
+    await expect(page.getByTestId("developer-keys-none")).toBeVisible();
+    await page.getByTestId("developer-key-create").click();
+    // The account had no key yet: its recovery key is shown once, in its own group, and can be shown again.
+    const recovery = page.getByTestId("recovery-key-text");
+    await expect(recovery).toHaveText(/^[0-9A-Z-]{40,}$/);
+    const recoveryKey = await recovery.textContent();
+    await page.getByTestId("recovery-key-saved").click();
+    await page.getByTestId("recovery-key-show").click();
+    await expect(recovery).toHaveText(recoveryKey!);
+    await page.getByTestId("recovery-key-saved").click();
+    const kept = page.getByTestId("developer-keys-list").locator("li");
+    await expect(kept).toHaveCount(1);
+    const fingerprint = ((await kept.getAttribute("data-testid")) ?? "").replace("developer-key-", "");
+    await expect(page.getByTestId(`account-key-${fingerprint}`)).toBeVisible();
+
+    // Turned down: nothing is signed.
+    const out = path.join(project, "out.zip");
+    let packing = tavoraPack([project, "--out", out], env);
+    await page.getByTestId("sign-refuse").click();
+    expect((await packing).out).toContain("turned down");
+
+    packing = tavoraPack([project, "--out", out], env);
+    await expect(page.getByTestId("sign-request")).toContainText("Sign Tracker 1.0.0?");
+    await expect(page.getByTestId("sign-request")).toContainText("exampledev.tracker");
+    await page.getByTestId("sign-allow").click();
+    const packed = await packing;
+    expect(packed.status, packed.out).toBe(0);
+    expect(verifyFiles(readZip(await readFile(out)))).toEqual({ ok: true, owner: fingerprint, signed: true });
+    await expect(page.getByTestId("sign-request")).toHaveCount(0);
+
+    // Publishing: Tavora asks, then uploads with its own sign-in, and the account hears about it by email.
+    const publishing = tavoraPack(["publish", out], env);
+    await expect(page.getByTestId("sign-request")).toContainText("Publish Tracker 1.0.0?");
+    await page.getByTestId("sign-allow").click();
+    const published = await publishing;
+    expect(published.status, published.out).toBe(0);
+    expect(published.out).toContain("Published exampledev.tracker 1.0.0");
+    await expect
+      .poll(async () => {
+        const { mails } = (await (await fetch(`${inboxUrl}/mails`)).json()) as { mails: { to: string; text: string }[] };
+        return mails.some((mail) => mail.to === "keeper@example.com" && mail.text.includes("(exampledev.tracker) is now in Tavora's module catalog"));
+      })
+      .toBe(true);
+  } finally {
+    await app.close();
+    await rm(project, { recursive: true, force: true }).catch(() => undefined);
+    await rm(home, { recursive: true, force: true }).catch(() => undefined);
   }
 });
 
@@ -292,5 +393,39 @@ test("the cloud copy takes one PC's games to another, with the recovery key", as
     await expect(again.page.getByTestId("rail-game-satisfactory")).toBeVisible();
   } finally {
     await again.app.close();
+  }
+});
+
+test("a new PC gets the recovery key from another PC, once both show the same code", async () => {
+  // The old PC looks for new ones every few seconds.
+  test.setTimeout(120_000);
+  const env = { TAVORA_API_URL: apiUrl, TAVORA_DISCORD_IPC: path.join(tmpdir(), "tavora-no-discord"), TAVORA_DISCORD_TOKEN_URL: `${discordUrl}/api/oauth2/token` };
+  const a = await launch(undefined, [], { env });
+  const b = await launch(undefined, [], { env, seed: false });
+  try {
+    await signIn(a.page, "pair@example.com", true);
+    await a.page.getByTestId("cloud-copy-on").click();
+    await expect(a.page.getByTestId("cloud-copy-key-text")).toBeVisible();
+    const key = (await a.page.getByTestId("cloud-copy-key-text").textContent())?.trim() ?? "";
+    await a.page.getByTestId("cloud-copy-key-saved").click();
+
+    await signIn(b.page, "pair@example.com");
+    await b.page.getByTestId("pairing-start").click();
+    await expect(b.page.getByTestId("pairing-start")).toHaveCount(0);
+    await expect(b.page.getByTestId("pairing-code")).toBeVisible({ timeout: 40_000 });
+    const code = (await b.page.getByTestId("pairing-code").textContent())?.trim() ?? "";
+    expect(code).toMatch(/^.{3}-.{3}$/);
+    await expect(a.page.getByTestId("pairing-approve")).toContainText("Add");
+    await expect(a.page.getByTestId("pairing-approve-code")).toHaveText(code, { timeout: 20_000 });
+    await a.page.getByTestId("pairing-add").click();
+    await expect(a.page.getByTestId("pairing-approve")).toHaveCount(0);
+
+    // B now has the account's key without anyone typing it.
+    await expect(b.page.getByTestId("recovery-key-show")).toBeVisible({ timeout: 15_000 });
+    await b.page.getByTestId("recovery-key-show").click();
+    await expect(b.page.getByTestId("recovery-key-text")).toHaveText(key);
+  } finally {
+    await a.app.close();
+    await b.app.close();
   }
 });

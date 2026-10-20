@@ -3,6 +3,6 @@
 // equal to the packages in Tavora's repository, so a release never ships an old starter.
 export const VERSIONS = {
   sdk: "0.2.9",
-  pack: "0.1.3",
+  pack: "0.2.0",
   minTavora: "0.19.3",
 } as const;

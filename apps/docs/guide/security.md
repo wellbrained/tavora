@@ -123,20 +123,49 @@ Tavora accounts are optional. Modules learn nothing about them: no SDK call, bri
 
 A developer can link a publisher key to their account, so players see a developer name instead of the key's fingerprint:
 
-- **Only whoever holds the key can link it.** The signed-in app gets a one-time code (10 minutes, used once); `tavora-pack link` signs it with the secret key, and the service checks that signature against the public half it was sent. The secret key never leaves the developer's PC, and the service keeps only public halves.
+- **Only whoever holds the key can link it.** The signed-in app gets a one-time code (10 minutes, used once); the key signs it (Tavora itself for a key it keeps, `tavora-pack link` for a key file), and the service checks that signature against the public half it was sent. The secret key never leaves the developer's PC, and the service keeps only public halves.
 - **A name cannot pose as another.** Developer names are plain letters, digits, spaces, dots, dashes and underscores, unique when case and those separators are ignored, never Tavora's, changeable once every 30 days, and a name given up stays blocked for others for 30 days.
 - **Players learn a name, nothing else.** Tavora asks the service which name a key has (only while online features are on, at most once a day per key) and gets the name alone, never an account or an address. The name shown is a label: what a player installs is still decided by the key's signature, as before.
 
+### Publisher keys Tavora keeps
+
+Tavora can keep a developer's publisher keys (Settings > Account > Module developer), so the recovery key is the only thing they have to keep safe.
+
+- **They are sealed with your recovery key.** The keys sit in your account's vault, sealed on your PC with a key derived from the recovery key, so the service only ever sees sealed bytes. Each PC keeps the vault as it last read it, sealed the same way, so signing works offline.
+- **Nothing is signed without your click.** `tavora-pack` asks Tavora over a named pipe on Windows, which only your Windows user may write to, or a socket in `~/.tavora` that only you may open. Neither can be reached from the network, a web page or a module. Tavora brings its window to the front and shows the module's id, name and version and whether it packs or publishes, and signs only after Allow. A request nobody answers is turned down after 2 minutes, and only one is asked at a time.
+- **What you see is what gets signed.** For packing, Tavora checks that the manifest it shows is the one the signed file hashes name. For publishing, it reads the module from the zip itself, and signs only for a zip that one of its keys already signed.
+- **A key leaves Tavora only when you export it**, to a file you pick, to publish from CI. Packing works with that file alone; publishing also needs a publish token.
+
+### Publishing to the catalog
+
+- **The key alone publishes nothing.** Every upload carries the key's signature over the zip's SHA-256 and a sign-in of the account the key is linked to: Tavora's own, when Tavora uploads for `tavora-pack` after your Allow, or a publish token, from CI. An upload with only a key, or with the sign-in of another account, is refused.
+- **Publish tokens are narrow.** A token is shown once and the service keeps only its hash. It works for a year, is removed in Settings > Account > Module developer, and publishes only under id prefixes the account already has, so it can't claim a new one. It can't sign in, read the account or change anything else.
+- **Every upload is told.** The account's email address gets a mail for each published version, naming the module, the key and whether it came from Tavora or which token.
+- **Tavora uploads only what you allowed.** It reads the module from the zip it was handed, signs only for a zip one of its keys already signed, and sends nothing until you press Allow.
+
 ## The cloud copy
 
-The cloud copy (Settings > Account) keeps your Tavora data on Tavora's service, so your other PCs get it. It is optional and off until you turn it on.
+The cloud copy (Settings > Account) keeps your Tavora data on Tavora's service or in a folder you pick, so your other PCs get it. It is optional and off until you turn it on.
 
 - **Only you can read it.** It is encrypted on your PC with AES-256-GCM, under a random key made there. The key leaves your PC only as the recovery key Tavora shows you. The service keeps sealed parts, a sealed list of files and a version number; parts are named by a keyed hash, so their names say nothing without the key. The key is kept with your system's key store, and the copy can't be turned on where there is none.
+- **One key for the account.** The key belongs to your account, not to one PC: the first PC that needs it makes it, and the others get it from one of your PCs ([below](#adding-a-pc-from-another-one)) or ask for your recovery key. A small vault sealed with a key derived from it (at most 64 KB, holding the publisher keys Tavora keeps) stays on the service and goes out only to a signed-in PC of the account; that it exists tells a new PC to ask for your key instead of making another. Signing out forgets the key on that PC; turning the copy off doesn't.
+- **A lost key starts over, never overwrites.** Start over makes a new key and replaces the copy with this PC's data under it. The publisher keys in the vault are lost with the old key; a key linked to the account can be replaced as [A lost or leaked key](./publishing.md#a-lost-or-leaked-key) says. A PC with the old key can't open the new copy, so it stops syncing and asks for the new key; it never writes over the copy.
 - **It holds your Tavora data and nothing else.** That is what the daily backup holds (library, layouts, profile, every module's data, pictures), plus the installed modules and who publishes them. Sign-ins (Tavora's, Discord's, AI usage accounts), grants and Browser panel data are never in it.
 - **A copy is checked before it is used.** Every part must open with the key and match its name, and every file its size and SHA-256. Every path must be one of the copy's own places: no `..`, absolute paths or other folders, and in the module files folder only Tavora's own folders. A copy is downloaded into a staging folder and swapped in only at start, before anything reads the data; what was there moves to the backups folder.
 - **Modules in a copy come from you.** Only your key can make a copy, so its modules are not checked again like a new install. The safety lists still apply at start, and grants are not copied: a module asks again on each PC.
 - **Older data never replaces newer.** The service takes a new version only from a PC that started from the current one. Otherwise you choose which side to keep, and the other is kept as a local backup.
-- **Modules and pages can't reach it.** No SDK call, bridge message or module view carries the copy, its key or whether it is on.
+- **A folder holds the same sealed copy.** In a folder you pick (usually one OneDrive, Dropbox or Google Drive syncs), Tavora writes only the sealed parts and lists, in a `Tavora` folder inside it, and your sync app moves them. Tavora's service is not used, and no account is needed: signed out, the key stays on your PC, kept like the account's key, and signing out doesn't turn a folder's copy off. Anything in that folder is checked like a download, since other apps and PCs can write there. Tavora only reads the names it writes, seals each list's version inside it so an old list can't pose as a newer one, never takes a list older than the one it last synced, and asks you which side to keep when two PCs saved at once. Deleting the copy removes only Tavora's files.
+- **Modules and pages can't reach it.** No SDK call, bridge message or module view carries the copy, its key, the vault or whether it is on.
+
+## Adding a PC from another one
+
+A new PC can get the account's key from a PC that has it, so you only type the recovery key when every PC is gone. It is the same key, so the new PC can open the cloud copy and the publisher keys Tavora keeps.
+
+- **Nothing on the way opens the key.** The new PC makes a one-time X25519 key and asks; an old PC answers with its own one-time key. On your click, the old PC seals the key with AES-256-GCM under a key both PCs derive from the two one-time keys, and only the new PC can open it.
+- **Signed in, Tavora's service only passes it on.** It holds the request in memory, for 10 minutes and one per account, between PCs signed in to the account; the sealed key goes to the new PC once and is gone. Signed out, with the cloud copy in a folder of your own, the same steps go through files in its `Tavora/pairing` folder instead. Such a request lasts 24 hours, since a sync app can be slow, and Tavora reads only the names it writes there.
+- **Nothing goes without a click on the old PC.** It shows "Add *PC name*?" with a 6-character code, and the new PC shows the same code. The code comes from both one-time keys, and the new PC commits to its key before it sees the old PC's, so no one in between, the service included, can swap a key and still get matching codes.
+- **A stolen email account isn't enough.** Someone who signs in with it can ask, but gets the key only if you click Add on one of your PCs. Only add a PC you are setting up yourself, and only when the codes match. If you didn't ask, click Not me and sign that PC out under Account.
+- **Modules and pages can't reach it.** Requests and answers stay in Tavora's main process, like the key itself.
 
 ## Revoked keys, blocked modules and lost keys
 
@@ -147,6 +176,7 @@ Tavora keeps three lists for modules from other people: publisher keys that were
 - **A revoked key installs nothing new.** A zip signed by it is refused, for a first install and for an update, unless Tavora listed that exact zip as signed before the revocation. A module already installed keeps running.
 - **A blocked zip stops at once.** Its panels close, it does not load, and Settings > Modules says why. Its data is kept, and it comes back only with a zip that is not blocked.
 - **A new key replaces a lost one only by a signed statement.** Updates signed by the new key are accepted for the old key's modules, and their data stays where it was. Without a statement, a zip from another key is another publisher, as before.
+- **Asking for one changes nothing by itself.** "Lost it?" in Settings > Account only queues a request on the service: both keys must be linked to the signed-in account, and the account's email address is told. A person at Tavora checks it, exports the waiting requests and signs them offline with the catalogue key, so a stolen sign-in or a service that was broken into still can't move a module to another key. The one thing a request does at once is stop the catalog from taking new uploads signed by a key reported as leaked.
 
 ## Known limits
 

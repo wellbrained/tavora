@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
-import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, type Connector, type ResolvedPanelType } from "@tavora/module-schema";
 import {
@@ -118,7 +118,11 @@ import { readClaudeEmail } from "./ai-usage-claude";
 import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
-import { CloudCopy } from "./cloud-copy";
+import { AccountKey } from "./account-key";
+import { DeveloperKeys } from "./developer-keys";
+import { FolderPairing, Pairing, ServicePairing } from "./pairing";
+import { startSignerServer, type SignerServer } from "./signer-server";
+import { ServiceStorage } from "./cloud-copy";
 import { CopySync } from "./cloud-copy-sync";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
 import { discordLogin } from "./discord-login";
@@ -289,6 +293,10 @@ export class Host {
   private readonly account: AccountClient;
   /** The cloud copy: made before the data is read, since a newer copy is taken before anything reads it. */
   private copySync!: CopySync;
+  /** The publisher keys the account's vault keeps, and the signer the pack command asks (developer-keys.ts). */
+  private developerKeys!: DeveloperKeys;
+  private pairing!: Pairing;
+  private signer: SignerServer | null = null;
   /** The developer names players see for publisher keys (publisher-names.ts). */
   private readonly publisherNames: PublisherNames;
   private screen: Screen = "welcome";
@@ -399,6 +407,7 @@ export class Host {
     });
     this.account = Host.accountClient(options, () => this.language, { get: () => this.profileData(), apply: (remote) => this.applyProfile(remote) }, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:account", view);
+      this.developerKeys?.accountChanged(view.account !== null);
     });
     this.publisherNames = new PublisherNames({
       file: path.join(options.userData, "publisher-names.json"),
@@ -507,6 +516,19 @@ export class Host {
     const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
     created = host;
     host.copySync = copySync;
+    host.developerKeys = new DeveloperKeys({
+      accountKey: copySync.accountKey,
+      account: {
+        signedIn: () => host.account.view().account !== null,
+        link: (key) => host.account.linkPublisherKey(key),
+        publish: (key, zip) => host.account.publishModule(key, zip),
+      },
+      onChange: (view) => {
+        if (!host.window.isDestroyed()) host.window.webContents.send("host:developer-keys", view);
+      },
+      focus: () => host.bringToFront(),
+    });
+    host.pairing = Host.pairing(options, host);
     // Before any module opens, so none sees the pictures half moved.
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
     host.moduleData = await listModuleData(userData, host.files.root());
@@ -554,6 +576,11 @@ export class Host {
     host.backupSoon();
     host.checkCatalogSoon();
     host.copySync.start();
+    if (options.accounts === true) {
+      void host.developerKeys.refresh();
+      host.pairing.watch();
+      host.signer = await startSignerServer({ handle: (request) => host.developerKeys.handle(request), log: (line) => console.log(`[tavora] ${line}`) });
+    }
     await host.startUpdates();
     return host;
   }
@@ -1365,6 +1392,8 @@ export class Host {
     ipcMain.handle("host:get-ai-usage", (event) => (fromHost(event) ? this.aiUsage.view() : null));
     ipcMain.handle("host:get-account", (event) => (fromHost(event) ? this.account.view() : null));
     ipcMain.handle("host:get-cloud-copy", (event) => (fromHost(event) ? this.copySync.view() : null));
+    ipcMain.handle("host:get-developer-keys", (event) => (fromHost(event) ? this.developerKeys.view() : null));
+    ipcMain.handle("host:get-pairing", (event) => (fromHost(event) ? this.pairing.view() : null));
     ipcMain.handle("host:module-notes", (event, moduleId: unknown) => {
       const module = fromHost(event) && typeof moduleId === "string" ? this.modules.get(moduleId) : undefined;
       return module ? installedNotes(this.moduleInfo.get(module.manifest.id)?.changelog ?? [], module.manifest.version) : [];
@@ -1444,8 +1473,18 @@ export class Host {
       this.discord.dispose();
       this.gameWatcher.stop();
       this.copySync.dispose();
+      this.pairing.dispose();
+      void this.signer?.close();
       clearInterval(this.catalogTimer);
     });
+  }
+
+  /** Shows the window in front, for a question that came from outside it (the pack command's sign request). */
+  private bringToFront(): void {
+    if (this.window.isDestroyed()) return;
+    if (this.window.isMinimized()) this.window.restore();
+    if (!this.window.isVisible()) this.window.show();
+    this.window.focus();
   }
 
   // ── Actions ──────────────────────────────────────────────────────────
@@ -1804,12 +1843,87 @@ export class Host {
       }
       case "account-unlink-key":
         return this.account.unlinkKey(action.fingerprint);
+      case "account-replace-key": {
+        const linked = (this.account.view().publisherKeys ?? []).map((key) => key.fingerprint);
+        if (!linked.includes(action.fingerprint)) throw new PlayerError("account.error.keyGone");
+        const next = await this.developerKeys.replacementFor(action.fingerprint, linked);
+        return this.account.replaceKey(action.fingerprint, next, action.leaked);
+      }
+      case "account-publish-token-create":
+        return this.account.createPublishToken(action.name);
+      case "account-publish-token-copy": {
+        const token = this.account.newPublishTokenText();
+        if (!token) throw new PlayerError("error.generic");
+        clipboard.writeText(token);
+        return;
+      }
+      case "account-publish-token-saved":
+        return this.account.publishTokenSaved();
+      case "account-publish-token-delete":
+        return this.account.deletePublishToken(action.id);
+      case "developer-key-create":
+        await this.developerKeys.create();
+        return;
+      case "developer-key-add": {
+        const picked = await dialog.showOpenDialog(this.window, { properties: ["openFile"], filters: [{ name: "PEM", extensions: ["pem", "key"] }, { name: "*", extensions: ["*"] }] });
+        const file = picked.filePaths[0];
+        if (picked.canceled || !file) return;
+        const text = await readFile(file, "utf8").catch(() => null);
+        if (text === null || text.length > 10_000) throw new PlayerError("developerKeys.error.notKey");
+        await this.developerKeys.add(text);
+        return;
+      }
+      case "developer-key-export": {
+        const pem = this.developerKeys.exportKey(action.fingerprint);
+        const picked = await dialog.showSaveDialog(this.window, { defaultPath: `publisher-key-${action.fingerprint.slice(0, 8)}.pem` });
+        if (picked.canceled || !picked.filePath) return;
+        await writeFile(picked.filePath, pem, { mode: 0o600 });
+        return;
+      }
+      case "developer-key-link":
+        return this.developerKeys.link(action.fingerprint);
+      case "developer-recovery-key":
+        return this.developerKeys.enterKey(action.key);
+      case "developer-recovery-key-saved":
+        return this.developerKeys.keySaved();
+      case "developer-show-recovery-key":
+        return this.developerKeys.showKey();
+      case "developer-copy-recovery-key": {
+        const key = this.developerKeys.view().recoveryKey;
+        if (key) clipboard.writeText(key);
+        return;
+      }
+      case "developer-sign-answer":
+        return this.developerKeys.answer(action.id, action.allow);
+      case "pairing-start":
+        return this.pairing.start();
+      case "pairing-cancel":
+        return this.pairing.cancel();
+      case "pairing-decide":
+        return this.pairing.decide(action.id, action.allow);
       case "cloud-copy-on":
         return this.copySync.turnOn();
+      case "cloud-copy-on-folder": {
+        const folder = await this.pickPath("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
+        if (!folder) return;
+        await this.copySync.turnOn(folder);
+        this.rememberPicked("cloud-copy", folder);
+        return;
+      }
+      case "cloud-copy-move": {
+        if (action.to === "server") return this.copySync.move(null);
+        const folder = await this.pickPath("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
+        if (!folder) return;
+        await this.copySync.move(folder);
+        this.rememberPicked("cloud-copy", folder);
+        return;
+      }
       case "cloud-copy-key":
         return this.copySync.enterKey(action.key);
       case "cloud-copy-cancel":
         return this.copySync.cancelKey();
+      case "cloud-copy-new-key":
+        return this.copySync.startOver();
       case "cloud-copy-show-key":
         return this.copySync.showKey();
       case "cloud-copy-copy-key": {
@@ -2493,29 +2607,72 @@ export class Host {
     const encryptor = Host.encryptor(options);
     const startToken = options.accounts === true ? ((await loadAccount(path.join(options.userData, "account.json"), encryptor))?.token ?? null) : null;
     const savedFolder = sanitizeLibrary(await readJsonOrSetAside(path.join(options.userData, "library.json"))).moduleFilesFolder;
+    const service = {
+      baseUrl: `${(options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, "")}/v1/account`,
+      fetch: ((input, init) => fetch(input, init)) as typeof fetch,
+      token: () => {
+        const current = host();
+        return current ? current.account.token() : startToken;
+      },
+    };
     const sync = new CopySync({
       userData: options.userData,
       enabled: options.accounts === true,
       moduleFiles: () => host()?.files.root() ?? savedFolder ?? options.picturesFolder ?? defaultFilesRoot(options.userData),
-      cloud: new CloudCopy({
-        baseUrl: `${(options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, "")}/v1/account`,
-        fetch: (input, init) => fetch(input, init),
-        token: () => {
-          const current = host();
-          return current ? current.account.token() : startToken;
-        },
+      service: new ServiceStorage(service),
+      accountKey: new AccountKey({
+        file: path.join(options.userData, "account-key.json"),
+        legacyFile: path.join(options.userData, "cloud-copy-key.json"),
+        cacheFile: path.join(options.userData, "account-vault.bin"),
+        encryptor,
+        ...service,
       }),
-      encryptor,
       flush: () => host()?.flush() ?? Promise.resolve(),
       restart: () => options.restart(),
       onChange: (view: CloudCopyView) => {
         const current = host();
         if (current && !current.window.isDestroyed()) current.window.webContents.send("host:cloud-copy", view);
+        current?.developerKeys?.keyMaybeChanged();
       },
       log: (line) => console.log(`[tavora] ${line}`),
     });
     await sync.beforeLoad();
     return sync;
+  }
+
+  /**
+   * Approving a new PC from an old one: through the service while signed in, or the cloud copy's folder.
+   * The key that comes is checked like a typed one, then the copy and the publisher keys go on with it.
+   */
+  private static pairing(options: HostOptions, host: Host): Pairing {
+    const service = new ServicePairing({
+      baseUrl: `${(options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, "")}/v1/account`,
+      fetch: (input, init) => fetch(input, init),
+      token: () => host.account.token(),
+    });
+    // One per folder, so it remembers what it asked and answered.
+    let folder: FolderPairing | null = null;
+    return new Pairing({
+      accountKey: host.copySync.accountKey,
+      service: () => (host.account.token() ? service : null),
+      folder: () => {
+        const place = host.copySync.place;
+        if (!place) return null;
+        if (folder?.folder !== place) folder = new FolderPairing(place, os.hostname());
+        return folder;
+      },
+      received: async (key, via) => {
+        if (via === "service") await host.copySync.accountKey.take(key);
+        else await host.copySync.accountKey.takeHere(key);
+        await host.copySync.keyArrived();
+        await host.developerKeys.refresh();
+      },
+      onChange: (view) => {
+        if (!host.window.isDestroyed()) host.window.webContents.send("host:pairing", view);
+      },
+      focus: () => host.bringToFront(),
+      log: (line) => console.log(`[tavora] ${line}`),
+    });
   }
 
   // ── Discord ──────────────────────────────────────────────────────────

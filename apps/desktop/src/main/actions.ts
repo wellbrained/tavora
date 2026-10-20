@@ -318,8 +318,39 @@ export function parseAction(raw: unknown): HostAction | null {
       return only() ? { type: a.type } : null;
     case "account-unlink-key":
       return only("fingerprint") && typeof a.fingerprint === "string" && /^[0-9a-f]{32}$/.test(a.fingerprint) ? { type: a.type, fingerprint: a.fingerprint } : null;
+    case "account-replace-key":
+      return only("fingerprint", "leaked") && typeof a.fingerprint === "string" && /^[0-9a-f]{32}$/.test(a.fingerprint) && typeof a.leaked === "boolean"
+        ? { type: a.type, fingerprint: a.fingerprint, leaked: a.leaked }
+        : null;
+    case "account-publish-token-create":
+      return only("name") && typeof a.name === "string" && a.name.trim() !== "" && a.name.trim().length <= 40 ? { type: a.type, name: a.name } : null;
+    case "account-publish-token-copy":
+    case "account-publish-token-saved":
+      return only() ? { type: a.type } : null;
+    case "account-publish-token-delete":
+      return only("id") && text(a.id, 40) ? { type: a.type, id: a.id } : null;
+    case "developer-key-create":
+    case "developer-key-add":
+    case "developer-recovery-key-saved":
+    case "developer-show-recovery-key":
+    case "developer-copy-recovery-key":
+      return only() ? { type: a.type } : null;
+    case "developer-key-export":
+    case "developer-key-link":
+      return only("fingerprint") && typeof a.fingerprint === "string" && /^[0-9a-f]{32}$/.test(a.fingerprint) ? { type: a.type, fingerprint: a.fingerprint } : null;
+    case "developer-recovery-key":
+      return only("key") && text(a.key, 200) ? { type: a.type, key: a.key } : null;
+    case "developer-sign-answer":
+      return only("id", "allow") && Number.isSafeInteger(a.id) && typeof a.allow === "boolean" ? { type: a.type, id: a.id as number, allow: a.allow } : null;
+    case "pairing-start":
+    case "pairing-cancel":
+      return only() ? { type: a.type } : null;
+    case "pairing-decide":
+      return only("id", "allow") && typeof a.id === "string" && /^[A-Za-z0-9_-]{16}$/.test(a.id) && typeof a.allow === "boolean" ? { type: a.type, id: a.id, allow: a.allow } : null;
     case "cloud-copy-on":
+    case "cloud-copy-on-folder":
     case "cloud-copy-cancel":
+    case "cloud-copy-new-key":
     case "cloud-copy-show-key":
     case "cloud-copy-copy-key":
     case "cloud-copy-key-saved":
@@ -332,6 +363,8 @@ export function parseAction(raw: unknown): HostAction | null {
       return only() ? { type: a.type } : null;
     case "cloud-copy-key":
       return only("key") && text(a.key, 200) ? { type: a.type, key: a.key } : null;
+    case "cloud-copy-move":
+      return only("to") && (a.to === "server" || a.to === "folder") ? { type: a.type, to: a.to } : null;
     case "cloud-copy-keep":
       return only("side") && (a.side === "pc" || a.side === "cloud") ? { type: a.type, side: a.side } : null;
     case "account-sign-out-device":

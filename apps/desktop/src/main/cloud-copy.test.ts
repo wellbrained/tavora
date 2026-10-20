@@ -1,7 +1,7 @@
 import { mkdir, readFile, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { CloudCopy, copyRoots, CopyError, EMPTY_STATE, hasLocalChanges, loadCopyKey, safeCopyPath, saveCopyKey, swapInCopy, type CopyState } from "./cloud-copy";
+import { CloudCopy, copyRoots, CopyError, EMPTY_STATE, hasLocalChanges, safeCopyPath, ServiceStorage, swapInCopy, type CopyState } from "./cloud-copy";
 import { cleanUp, OWNER, pc, service } from "./cloud-copy.test-helper";
 import { copyKeys, newCopyKey, open, parseRecoveryKey, partId, recoveryKey, seal } from "./copy-crypto";
 
@@ -163,7 +163,7 @@ describe("the cloud copy", () => {
   });
 
   it("needs a sign-in", async () => {
-    const copy = new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: fetch, token: () => null });
+    const copy = new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: fetch, token: () => null }));
     await expect(copy.remote()).rejects.toBeInstanceOf(CopyError);
     await expect(copy.remote()).rejects.toMatchObject({ reason: "signed-out" });
   });
@@ -188,22 +188,5 @@ describe("paths in a copy", () => {
     for (const bad of ["../library.json", "module-data/../../x", "module-data", "library.json/x", "elsewhere/x", "/library.json", "module-data//x", "module-data/a\\b", "module-blobs/photo.jpg", "C:/x", 5]) {
       expect(safeCopyPath(bad, roots)).toBeNull();
     }
-  });
-});
-
-describe("the copy key on this PC", () => {
-  const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
-
-  it("is kept encrypted, and not at all without the key store", async () => {
-    const { root } = await pc();
-    const file = path.join(root, "cloud-copy-key.json");
-    const key = newCopyKey();
-    await saveCopyKey(file, encryptor, key);
-    expect(await readFile(file, "utf8")).not.toContain(key.toString("hex"));
-    expect((await loadCopyKey(file, encryptor))?.equals(key)).toBe(true);
-    await saveCopyKey(file, encryptor, null);
-    expect(await loadCopyKey(file, encryptor)).toBeNull();
-    await saveCopyKey(file, { ...encryptor, isAvailable: () => false }, key);
-    expect(await loadCopyKey(file, encryptor)).toBeNull();
   });
 });

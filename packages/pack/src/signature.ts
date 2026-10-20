@@ -47,24 +47,34 @@ function sha256(data: Buffer): string {
 }
 
 /** What is signed: the format, the key and every file's hash in path order, as JSON. */
-function signedBytes(publicKey: string, files: Record<string, string>): Buffer {
+export function signedBytes(publicKey: string, files: Record<string, string>): Buffer {
   const sorted = Object.keys(files)
     .sort()
     .map((name) => [name, files[name]]);
   return Buffer.from(JSON.stringify({ format: FORMAT, publicKey, files: sorted }), "utf8");
 }
 
-/** The tavora.signature.json for these files, signed with the publisher's private key. */
-export function signFiles(files: readonly ZipFile[], privateKey: KeyObject): ZipFile {
-  const publicKey = rawPublicKey(privateKey).toString("base64");
+/** Every file's SHA-256 (hex), by name: what a signature covers. */
+export function fileHashes(files: readonly ZipFile[]): Record<string, string> {
   const hashes: Record<string, string> = {};
   for (const file of files) {
     if (file.name === SIGNATURE_FILE) throw new Error(`${SIGNATURE_FILE} is made by the pack command`);
     hashes[file.name] = sha256(file.data);
   }
-  const signature = sign(null, signedBytes(publicKey, hashes), privateKey).toString("base64");
-  const body: PackageSignature = { format: FORMAT, publicKey, files: hashes, signature };
+  return hashes;
+}
+
+/** The tavora.signature.json for these hashes, with a signature over signedBytes() made by their key. */
+export function signatureFile(publicKey: string, hashes: Record<string, string>, signature: Buffer): ZipFile {
+  const body: PackageSignature = { format: FORMAT, publicKey, files: hashes, signature: signature.toString("base64") };
   return { name: SIGNATURE_FILE, data: Buffer.from(`${JSON.stringify(body, null, 2)}\n`, "utf8") };
+}
+
+/** The tavora.signature.json for these files, signed with the publisher's private key. */
+export function signFiles(files: readonly ZipFile[], privateKey: KeyObject): ZipFile {
+  const publicKey = rawPublicKey(privateKey).toString("base64");
+  const hashes = fileHashes(files);
+  return signatureFile(publicKey, hashes, sign(null, signedBytes(publicKey, hashes), privateKey));
 }
 
 /**

@@ -20,6 +20,11 @@ export const CODES_PER_DAY = 10;
 const DAY_MS = 24 * 60 * 60_000;
 /** A sign-in unused for a year ends. */
 export const SESSION_IDLE_MS = 365 * DAY_MS;
+/** A publish token is good this long (decided 2026-10-20). */
+export const PUBLISH_TOKEN_TTL_MS = 365 * DAY_MS;
+export const MAX_PUBLISH_TOKENS = 10;
+/** Publish tokens start like this, so they are told apart from sign-ins (and found by secret scanners). */
+export const PUBLISH_TOKEN_PREFIX = "tvp_";
 /** How often a session's last use is written, so every request is not a write. */
 const SESSION_TOUCH_MS = 60 * 60_000;
 
@@ -41,6 +46,15 @@ export interface Account {
   email: string | null;
   discord: DiscordLogin | null;
   createdAt: string;
+}
+
+export interface PublishToken {
+  id: string;
+  /** What the developer called it, such as "GitHub Actions". */
+  name: string;
+  createdAt: number;
+  expiresAt: number;
+  lastUsedAt: number | null;
 }
 
 export interface Device {
@@ -94,6 +108,21 @@ export interface LinkedKey {
   linkedAt: string;
 }
 
+/**
+ * A developer's request to replace a lost or leaked publisher key with another key of the same
+ * account. Tavora's maintainer signs it offline as a succession (and a leaked key also as a
+ * revocation), so the service never vouches for a key on its own.
+ */
+export interface KeyRequest {
+  old: string;
+  new: string;
+  accountId: string;
+  leaked: boolean;
+  requestedAt: number;
+  /** When the maintainer turned it down; null while it waits or once it is signed. */
+  declinedAt: number | null;
+}
+
 export type NameChange = { ok: true; developer: Developer } | { ok: false; reason: "name-taken" | "name-reserved" | "name-too-soon"; nextChangeAt?: number };
 
 /** How long a checked Discord login waits for the player's yes to a new account. */
@@ -129,6 +158,24 @@ export function normalizeEmail(input: unknown): string | null {
   if (email.length < 3 || email.length > 254) return null;
   return /^[^\s@<>"(),;:]+@[^\s@<>"(),;:]+\.[^\s@<>"(),;:]+$/.test(email) ? email : null;
 }
+
+interface KeyRequestRow {
+  old: string;
+  account_id: string;
+  new: string;
+  leaked: number;
+  requested_at: number;
+  declined_at: number | null;
+}
+
+const keyRequestOf = (row: KeyRequestRow): KeyRequest => ({
+  old: row.old,
+  new: row.new,
+  accountId: row.account_id,
+  leaked: row.leaked === 1,
+  requestedAt: row.requested_at,
+  declinedAt: row.declined_at,
+});
 
 export class AccountStore {
   private readonly db: DatabaseSync;
@@ -174,6 +221,20 @@ export class AccountStore {
       create table if not exists link_codes (
         code_hash text primary key, account_id text not null references accounts (id) on delete cascade, expires_at integer not null
       );
+      create table if not exists key_requests (
+        old text primary key, account_id text not null references accounts (id) on delete cascade,
+        new text not null, leaked integer not null, requested_at integer not null, declined_at integer
+      );
+      create index if not exists key_requests_account on key_requests (account_id);
+      create table if not exists vaults (
+        account_id text primary key references accounts (id) on delete cascade,
+        version integer not null, data blob not null, updated_at integer not null
+      );
+      create table if not exists publish_tokens (
+        id text primary key, account_id text not null references accounts (id) on delete cascade, token_hash text not null unique,
+        name text not null, created_at integer not null, expires_at integer not null, last_used_at integer
+      );
+      create index if not exists publish_tokens_account on publish_tokens (account_id);
     `);
     this.migrate();
   }
@@ -296,6 +357,9 @@ export class AccountStore {
     try {
       const developer = this.developer(id);
       if (developer) this.release(nameKey(developer.name), id, now);
+      this.db.prepare("delete from vaults where account_id = ?").run(id);
+      this.db.prepare("delete from key_requests where account_id = ?").run(id);
+      this.db.prepare("delete from publish_tokens where account_id = ?").run(id);
       this.db.prepare("delete from link_codes where account_id = ?").run(id);
       this.db.prepare("delete from publisher_keys where account_id = ?").run(id);
       this.db.prepare("delete from developers where account_id = ?").run(id);
@@ -393,6 +457,55 @@ export class AccountStore {
     return Number(this.db.prepare("delete from publisher_keys where fingerprint = ? and account_id = ?").run(fingerprint, accountId).changes) > 0;
   }
 
+  // ── Replacing a lost key ───────────────────────────────────────────────
+
+  /**
+   * Asks to replace a linked key with another key linked to the same account. One request per old key:
+   * asking again changes nothing, except that "leaked" can be added, and a turned-down request can be
+   * asked again.
+   */
+  requestReplacement(accountId: string, old: string, next: string, leaked: boolean, now: number): "ok" | "same" | "not-linked" | "open" {
+    if (old === next) return "same";
+    const linked = new Set(this.keys(accountId).map((key) => key.fingerprint));
+    if (!linked.has(old) || !linked.has(next)) return "not-linked";
+    const current = this.keyRequest(old);
+    if (current && current.declinedAt === null) {
+      if (current.new !== next) return "open";
+      if (leaked && !current.leaked) this.db.prepare("update key_requests set leaked = 1 where old = ?").run(old);
+      return "ok";
+    }
+    this.db
+      .prepare(
+        "insert into key_requests (old, account_id, new, leaked, requested_at, declined_at) values (?, ?, ?, ?, ?, null) on conflict (old) do update set account_id = excluded.account_id, new = excluded.new, leaked = excluded.leaked, requested_at = excluded.requested_at, declined_at = null",
+      )
+      .run(old, accountId, next, leaked ? 1 : 0, now);
+    return "ok";
+  }
+
+  keyRequest(old: string): KeyRequest | null {
+    const row = this.db.prepare("select * from key_requests where old = ?").get(old) as KeyRequestRow | undefined;
+    return row ? keyRequestOf(row) : null;
+  }
+
+  keyRequests(accountId: string): KeyRequest[] {
+    return (this.db.prepare("select * from key_requests where account_id = ? order by requested_at, rowid").all(accountId) as unknown as KeyRequestRow[]).map(keyRequestOf);
+  }
+
+  /** Every request, oldest first, for the maintainer's review page. */
+  allKeyRequests(): KeyRequest[] {
+    return (this.db.prepare("select * from key_requests order by requested_at, rowid").all() as unknown as KeyRequestRow[]).map(keyRequestOf);
+  }
+
+  /** The maintainer turns a request down; false when there is no open request for the key. */
+  declineKeyRequest(old: string, now: number): boolean {
+    return Number(this.db.prepare("update key_requests set declined_at = ? where old = ? and declined_at is null").run(now, old).changes) > 0;
+  }
+
+  /** When a key was linked to an account, in ms, or null. */
+  keyLinkedAt(fingerprint: string): number | null {
+    return (this.db.prepare("select linked_at from publisher_keys where fingerprint = ?").get(fingerprint) as { linked_at: number } | undefined)?.linked_at ?? null;
+  }
+
   /** The account a publisher key is linked to, with the key's public half (base64), or null. */
   publisherKey(fingerprint: string): { accountId: string; publicKey: string } | null {
     const row = this.db.prepare("select account_id, public_key from publisher_keys where fingerprint = ?").get(fingerprint) as { account_id: string; public_key: string } | undefined;
@@ -439,6 +552,73 @@ export class AccountStore {
   countMail(day: string): void {
     this.db.prepare("insert into mail_days (day, sent) values (?, 1) on conflict (day) do update set sent = sent + 1").run(day);
     this.db.prepare("delete from mail_days where day < ?").run(new Date(Date.parse(`${day}T00:00:00Z`) - 7 * DAY_MS).toISOString().slice(0, 10));
+  }
+
+  // ── Key vault ──────────────────────────────────────────────────────────
+
+  /** The account's sealed key vault (vault.ts): bytes only the player's recovery key opens. */
+  vault(accountId: string): { version: number; data: Uint8Array; updatedAt: number } | null {
+    const row = this.db.prepare("select version, data, updated_at from vaults where account_id = ?").get(accountId) as { version: number; data: Uint8Array; updated_at: number } | undefined;
+    return row ? { version: row.version, data: row.data, updatedAt: row.updated_at } : null;
+  }
+
+  /** Stores a new vault, if the PC started from the current version (0 when there is none). */
+  putVault(accountId: string, base: number, data: Uint8Array, now: number): { ok: true; version: number } | { ok: false; version: number } {
+    const current = this.vault(accountId)?.version ?? 0;
+    if (current !== base) return { ok: false, version: current };
+    this.db
+      .prepare("insert into vaults (account_id, version, data, updated_at) values (?, ?, ?, ?) on conflict (account_id) do update set version = excluded.version, data = excluded.data, updated_at = excluded.updated_at")
+      .run(accountId, base + 1, data, now);
+    return { ok: true, version: base + 1 };
+  }
+
+  removeVault(accountId: string): void {
+    this.db.prepare("delete from vaults where account_id = ?").run(accountId);
+  }
+
+  // ── Publish tokens ─────────────────────────────────────────────────────
+
+  /**
+   * A token for publishing from CI (decided 2026-10-20): shown once, kept here only as a hash, good for a
+   * year. It publishes under the account's prefixes, never a new one, and only together with the key's
+   * signature. Null when the account has as many as it may.
+   */
+  createPublishToken(accountId: string, name: string, now: number): { token: string; publishToken: PublishToken } | null {
+    if (this.publishTokens(accountId, now).length >= MAX_PUBLISH_TOKENS) return null;
+    const token = `${PUBLISH_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
+    const id = randomBytes(12).toString("base64url");
+    const expiresAt = now + PUBLISH_TOKEN_TTL_MS;
+    this.db.prepare("insert into publish_tokens (id, account_id, token_hash, name, created_at, expires_at) values (?, ?, ?, ?, ?, ?)").run(id, accountId, sha256(`publish:${token}`), name, now, expiresAt);
+    return { token, publishToken: { id, name, createdAt: now, expiresAt, lastUsedAt: null } };
+  }
+
+  /** The account's publish tokens that haven't run out; those that have are dropped. */
+  publishTokens(accountId: string, now: number): PublishToken[] {
+    this.db.prepare("delete from publish_tokens where account_id = ? and expires_at <= ?").run(accountId, now);
+    const rows = this.db.prepare("select id, name, created_at, expires_at, last_used_at from publish_tokens where account_id = ? order by created_at, rowid").all(accountId) as unknown as {
+      id: string;
+      name: string;
+      created_at: number;
+      expires_at: number;
+      last_used_at: number | null;
+    }[];
+    return rows.map((row) => ({ id: row.id, name: row.name, createdAt: row.created_at, expiresAt: row.expires_at, lastUsedAt: row.last_used_at }));
+  }
+
+  /** The account a publish token belongs to, while it is good; marks it used. */
+  publishTokenAccount(token: string, now: number): { accountId: string; name: string } | null {
+    if (!token.startsWith(PUBLISH_TOKEN_PREFIX)) return null;
+    const row = this.db.prepare("select id, account_id, name, expires_at from publish_tokens where token_hash = ?").get(sha256(`publish:${token}`)) as
+      | { id: string; account_id: string; name: string; expires_at: number }
+      | undefined;
+    if (!row || row.expires_at <= now) return null;
+    this.db.prepare("update publish_tokens set last_used_at = ? where id = ?").run(now, row.id);
+    return { accountId: row.account_id, name: row.name };
+  }
+
+  /** False when the account has no such token. */
+  deletePublishToken(accountId: string, id: string): boolean {
+    return this.db.prepare("delete from publish_tokens where account_id = ? and id = ?").run(accountId, id).changes > 0;
   }
 
   // ── Profile ────────────────────────────────────────────────────────────

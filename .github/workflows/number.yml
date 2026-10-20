@@ -1,0 +1,59 @@
+name: Number
+
+# Gives merged change notes their version numbers (apps/desktop/changes/README.md).
+# For each note on main, oldest first: the next version in both package.json files
+# and its patch-notes entry, then the note is removed, all in one commit to main.
+# Runs one at a time, so two merges never get the same number. A push made with
+# GITHUB_TOKEN starts no workflow, so Checks is started by hand for the new commit:
+# `pnpm release` wants a green Checks run on the commit it builds.
+on:
+  push:
+    branches: [main]
+    paths: ["apps/desktop/changes/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: number-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  number:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Number the change notes
+        id: number
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Another merge can land while this runs; then start again from the new main.
+          for attempt in 1 2 3; do
+            git fetch --quiet origin main
+            git reset --quiet --hard origin/main
+            message=$(node apps/desktop/scripts/change-notes.mjs apply)
+            if [ -z "$message" ]; then echo "No change notes to number."; exit 0; fi
+            git add -A apps/desktop/changes apps/desktop/package.json package.json apps/desktop/src/shared/patch-notes.ts
+            git commit --quiet -m "$message"
+            if git push --quiet origin HEAD:main; then
+              echo "$message" | head -1
+              echo "pushed=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "::error::main kept moving; run the Number workflow again from the Actions tab."
+          exit 1
+      - if: steps.number.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref main -f e2e=false

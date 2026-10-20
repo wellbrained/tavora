@@ -136,7 +136,7 @@ Electron tests need a display and must run as a normal user with Chromium's sand
 
 GitHub **Checks** runs typechecking, unit tests, builds, and a Windows install/start check on pull requests and pushes to `main`. The full Electron suite also runs on release tags, or on a manual workflow run when selected. `pnpm check` runs it locally. The root checks and builds exclude `apps/docs`; the docs site has its own build/deploy commands.
 
-Deployed app changes raise the patch version. A minor bump needs the `feature-complete` label on the PR. Docs, CI and tooling-only changes keep the app version. Root and desktop versions must match, with a corresponding entry in `apps/desktop/src/shared/patch-notes.ts`.
+App changes don't raise the version in the PR. They add a change note to `apps/desktop/changes/` ([how](apps/desktop/changes/README.md)), and when the PR merges the **Number** workflow gives it the next patch version, raises the root and desktop `package.json` and adds its entry to `apps/desktop/src/shared/patch-notes.ts`. A note with `bump: minor` needs the `feature-complete` label on the PR. Docs, CI and tooling-only changes add no note.
 
 On the maintainer's PC, release from clean, up-to-date `main` after pushing and passing GitHub Checks:
 

@@ -1,17 +1,21 @@
 <script setup lang="ts">
-// Settings > Account > Cloud copy: turning it on (a new recovery key, or the key
-// of a copy another PC made), its state, and the buttons to upload, restore,
-// turn it off or delete it. When it syncs is up to the main process.
+// Settings > Account > Cloud copy: turning it on, on our server or in a folder the
+// player picks (a new recovery key, or the account's key another PC made), its
+// state, where it's kept, and the buttons to upload, restore, turn it off or
+// delete it. When it syncs is up to the main process. A folder works signed out too.
 import { computed, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { HostAction } from "../../../shared/host-api";
-import { act, cloudCopy, confirmAction, copyLater, showToast, submitAction } from "../../host";
+import { account, act, cloudCopy, confirmAction, copyLater, developerKeys, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
+import PairingAsk from "./PairingAsk.vue";
 import SettingRow from "./SettingRow.vue";
 
 const view = computed(() => cloudCopy.value);
+const signedIn = computed(() => Boolean(account.value?.account));
+const inFolder = computed(() => view.value?.folder != null);
 const busy = ref(false);
 const keyText = ref("");
 watch(
@@ -43,9 +47,12 @@ const status = computed(() => {
   if (copy.busy === "checking") return t("cloudCopy.status.checking");
   if (copy.conflict || copy.restartToTake) return t("cloudCopy.status.waiting");
   if (copy.problem) return t(`cloudCopy.error.${copy.problem}`);
-  const saved = copy.copy
-    ? t("cloudCopy.status.saved", { date: formatDate(copy.copy.savedAt, { dateStyle: "medium", timeStyle: "short" }), size: megabytes(copy.copy.size), limit: megabytes(copy.limit) })
-    : t("cloudCopy.status.none");
+  const date = copy.copy ? formatDate(copy.copy.savedAt, { dateStyle: "medium", timeStyle: "short" }) : "";
+  const saved = !copy.copy
+    ? t("cloudCopy.status.none")
+    : copy.limit === null
+      ? t("cloudCopy.status.savedFolder", { date, size: megabytes(copy.copy.size) })
+      : t("cloudCopy.status.saved", { date, size: megabytes(copy.copy.size), limit: megabytes(copy.limit) });
   return copy.pictures ? saved : `${saved} ${t("cloudCopy.status.noPictures")}`;
 });
 
@@ -71,6 +78,21 @@ function restore() {
   });
 }
 
+/** Moves the copy to our server or another folder, keeping its recovery key. */
+function move(to: "server" | "folder") {
+  confirmAction({
+    title: t("cloudCopy.move.title"),
+    message: t("cloudCopy.move.message"),
+    confirm: t("cloudCopy.move.confirm"),
+    run: async () => {
+      const before = cloudCopy.value?.folder ?? null;
+      const error = await submitAction({ type: "cloud-copy-move", to });
+      if (!error && (cloudCopy.value?.folder ?? null) !== before) showToast(t("cloudCopy.moved"));
+      return error;
+    },
+  });
+}
+
 function turnOff() {
   confirmAction({
     title: t("cloudCopy.turnOff.title"),
@@ -83,7 +105,7 @@ function turnOff() {
 function remove() {
   confirmAction({
     title: t("cloudCopy.delete.title"),
-    message: t("cloudCopy.delete.message"),
+    message: t(inFolder.value ? "cloudCopy.delete.messageFolder" : "cloudCopy.delete.message"),
     confirm: t("cloudCopy.delete.confirm"),
     danger: true,
     run: async () => {
@@ -91,6 +113,16 @@ function remove() {
       if (!error) showToast(t("cloudCopy.deleted"));
       return error;
     },
+  });
+}
+/** A lost recovery key: the copy is deleted and the account gets a new key, shown right away. */
+function startOver() {
+  confirmAction({
+    title: t("cloudCopy.newKey.title"),
+    message: t("cloudCopy.newKey.message"),
+    confirm: t("cloudCopy.newKey.button"),
+    danger: true,
+    run: () => submitAction({ type: "cloud-copy-new-key" }),
   });
 }
 </script>
@@ -108,9 +140,14 @@ function remove() {
       </div>
     </div>
 
-    <!-- A copy from another PC exists: its recovery key is asked for. -->
+    <!-- Another PC made the account's key: its recovery key is asked for. -->
     <form v-if="view.askKey" class="flex flex-col gap-3 py-4" @submit.prevent="keyText.trim() && run({ type: 'cloud-copy-key', key: keyText })">
       <span class="text-muted-foreground">{{ t("cloudCopy.askKey.text") }}</span>
+      <!-- The Recovery key group above asks too while signed in: one place to get it from another PC. -->
+      <template v-if="developerKeys?.status !== 'ask'">
+        <PairingAsk />
+        <span class="text-muted-foreground text-sm">{{ t("pairing.typeKey") }}</span>
+      </template>
       <div class="flex gap-2">
         <Input v-model="keyText" class="max-w-120 font-mono" maxlength="200" autocomplete="off" spellcheck="false" :aria-label="t('cloudCopy.askKey.label')" data-testid="cloud-copy-key-input" />
         <Button type="submit" :disabled="busy || !keyText.trim()" data-testid="cloud-copy-key-submit">{{ t("cloudCopy.askKey.continue") }}</Button>
@@ -119,13 +156,19 @@ function remove() {
       <p v-if="view.busy" class="text-muted-foreground text-sm" role="status">{{ status }}</p>
       <div class="flex items-center gap-3">
         <span class="text-muted-foreground text-sm">{{ t("cloudCopy.askKey.lost") }}</span>
-        <Button type="button" variant="danger" size="sm" :disabled="busy" @click="remove">{{ t("cloudCopy.delete.label") }}</Button>
+        <Button type="button" variant="danger" size="sm" :disabled="busy" data-testid="cloud-copy-new-key" @click="startOver">{{ t("cloudCopy.newKey.button") }}</Button>
       </div>
     </form>
 
     <template v-else-if="!view.on">
-      <SettingRow :label="t('cloudCopy.off.label')" :description="view.canKeepKey ? (view.problem ? t(`cloudCopy.error.${view.problem}`) : t('cloudCopy.off.description')) : t('cloudCopy.cantKeep')">
-        <Button :disabled="busy || !view.canKeepKey || view.busy !== null" data-testid="cloud-copy-on" @click="run({ type: 'cloud-copy-on' })">{{ t("cloudCopy.turnOn") }}</Button>
+      <p class="text-muted-foreground border-b py-4 text-sm" data-testid="cloud-copy-off">
+        {{ view.canKeepKey ? (view.problem ? t(`cloudCopy.error.${view.problem}`) : t("cloudCopy.off.description")) : t("cloudCopy.cantKeep") }}
+      </p>
+      <SettingRow :label="t('cloudCopy.server.label')" :description="t(signedIn ? 'cloudCopy.server.description' : 'cloudCopy.server.signIn')">
+        <Button v-if="signedIn" :disabled="busy || !view.canKeepKey || view.busy !== null" data-testid="cloud-copy-on" @click="run({ type: 'cloud-copy-on' })">{{ t("cloudCopy.turnOn") }}</Button>
+      </SettingRow>
+      <SettingRow :label="t('cloudCopy.folder.label')" :description="t('cloudCopy.folder.description')">
+        <Button variant="secondary" :disabled="busy || !view.canKeepKey || view.busy !== null" data-testid="cloud-copy-on-folder" @click="run({ type: 'cloud-copy-on-folder' })">{{ t("cloudCopy.folder.pick") }}</Button>
       </SettingRow>
     </template>
 
@@ -135,16 +178,22 @@ function remove() {
         <Button v-else-if="view.restartToTake" :disabled="busy" @click="run({ type: 'cloud-copy-restart' })">{{ t("cloudCopy.newer.restart") }}</Button>
         <Button v-else variant="secondary" :disabled="busy || view.busy !== null" data-testid="cloud-copy-upload" @click="upload">{{ t("cloudCopy.upload") }}</Button>
       </SettingRow>
+      <SettingRow :label="t('cloudCopy.where.label')" :description="view.folder ?? t('cloudCopy.where.server')" data-testid="cloud-copy-where">
+        <div class="flex flex-none gap-2">
+          <Button v-if="inFolder && signedIn" variant="ghost" :disabled="busy || view.busy !== null" data-testid="cloud-copy-move-server" @click="move('server')">{{ t("cloudCopy.where.useServer") }}</Button>
+          <Button variant="secondary" :disabled="busy || view.busy !== null" data-testid="cloud-copy-move-folder" @click="move('folder')">{{ t(inFolder ? "cloudCopy.where.changeFolder" : "cloudCopy.where.useFolder") }}</Button>
+        </div>
+      </SettingRow>
       <SettingRow :label="t('cloudCopy.restore.label')" :description="t('cloudCopy.restore.description')">
         <Button variant="secondary" :disabled="busy || view.busy !== null" data-testid="cloud-copy-restore" @click="restore">{{ t("cloudCopy.restore.button") }}</Button>
       </SettingRow>
-      <SettingRow v-if="!view.recoveryKey" :label="t('cloudCopy.showKey.label')" :description="t('cloudCopy.showKey.description')">
+      <SettingRow v-if="!view.recoveryKey && !signedIn" :label="t('cloudCopy.showKey.label')" :description="t('cloudCopy.showKey.description')">
         <Button variant="ghost" :disabled="busy" data-testid="cloud-copy-show-key" @click="run({ type: 'cloud-copy-show-key' })">{{ t("cloudCopy.showKey.button") }}</Button>
       </SettingRow>
       <SettingRow :label="t('cloudCopy.turnOff.label')" :description="t('cloudCopy.turnOff.description')">
         <Button variant="secondary" :disabled="busy" data-testid="cloud-copy-off" @click="turnOff">{{ t("cloudCopy.turnOff.label") }}</Button>
       </SettingRow>
-      <SettingRow :label="t('cloudCopy.delete.label')" :description="t('cloudCopy.delete.description')">
+      <SettingRow :label="t('cloudCopy.delete.label')" :description="t(inFolder ? 'cloudCopy.delete.descriptionFolder' : 'cloudCopy.delete.description')">
         <Button variant="destructive" :disabled="busy" data-testid="cloud-copy-delete" @click="remove">{{ t("cloudCopy.delete.label") }}</Button>
       </SettingRow>
     </template>

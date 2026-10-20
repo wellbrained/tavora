@@ -13,7 +13,7 @@ import { IconState } from "./icon-state.ts";
 import { normalize } from "./ids.ts";
 import { loadIconStore } from "./icons.ts";
 import { createBrevoMailer, createTestInbox, createTestInboxApp, type Mailer } from "./mail.ts";
-import { clientOf } from "./rate-limit.ts";
+import { clientOf, createRateLimiter } from "./rate-limit.ts";
 import { createSteamClient } from "./steam.ts";
 import { createSubmissions } from "./submissions.ts";
 
@@ -59,12 +59,14 @@ const submissions = createSubmissions({
 // before accounts go live); for development, TAVORA_TEST_INBOX_PORT keeps the
 // mail in memory and shows it on a local page. Never in production.
 let mailer: Mailer | undefined;
+let testInbox = false;
 const inboxPort = process.env.TAVORA_TEST_INBOX_PORT?.trim();
 if (inboxPort && process.env.NODE_ENV === "production") {
   console.warn("[tavora-api] TAVORA_TEST_INBOX_PORT is ignored in production.");
 } else if (inboxPort) {
   const inbox = createTestInbox();
   mailer = inbox;
+  testInbox = true;
   serve({ fetch: createTestInboxApp(inbox).fetch, port: Number(inboxPort), hostname: "127.0.0.1" }, (info) => {
     console.log(`[tavora-api] test inbox on http://127.0.0.1:${info.port} (local only, mail is never sent)`);
   });
@@ -99,6 +101,8 @@ const app = createApp({
           mailer,
           ...(copies ? { copies } : {}),
           ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
+          // With the local test inbox, the app tests sign in many PCs within an hour from one address.
+          ...(testInbox ? { codeRateLimiter: createRateLimiter({ limit: 100, windowMs: 3_600_000 }) } : {}),
           // Discord login: Tavora's public Discord app, no secret; DISCORD_API only for a pretend Discord in tests.
           discord: createDiscordClient(process.env.DISCORD_API ? { api: process.env.DISCORD_API } : {}),
         },
@@ -119,7 +123,7 @@ serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
 const adminToken = process.env.ADMIN_TOKEN?.trim();
 if (adminToken && adminToken.length >= 24) {
   const adminPort = Number(process.env.ADMIN_PORT ?? 4011);
-  serve({ fetch: createAdminApp({ token: adminToken, submissions, state, store: icons, catalog }).fetch, port: adminPort, hostname: "127.0.0.1" }, (info) => {
+  serve({ fetch: createAdminApp({ token: adminToken, submissions, state, store: icons, catalog, ...(accountStore ? { accounts: accountStore } : {}) }).fetch, port: adminPort, hostname: "127.0.0.1" }, (info) => {
     console.log(`[tavora-api] review page on http://127.0.0.1:${info.port} (local only)`);
   });
 } else {

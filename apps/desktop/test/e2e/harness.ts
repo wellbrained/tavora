@@ -112,6 +112,8 @@ export async function launch(
       // The system is pretended to be dark, so the theme tests do not depend on the PC they run on.
       TAVORA_SYSTEM_THEME: systemTheme ?? process.env.TAVORA_SYSTEM_THEME ?? "dark",
       TAVORA_MODULE_DIRS: [path.join(repoRoot, "examples"), FIXTURES, ...extraModuleDirs].join(path.delimiter),
+      // Each run's signer for tavora-pack listens on its own, never on the one of a Tavora this PC really runs.
+      TAVORA_SIGNER_ADDRESS: signerAddressFor(dir),
       ...env,
     },
   });
@@ -119,6 +121,11 @@ export async function launch(
   await expect(page.getByTestId("rail")).toBeVisible();
   await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0]!.setContentSize(size.width, size.height), WINDOW);
   return { app, page, userData: dir };
+}
+
+/** Where the Tavora using `userData` listens for tavora-pack. */
+export function signerAddressFor(userData: string): string {
+  return process.platform === "win32" ? `\\\\.\\pipe\\tavora-signer-e2e-${path.basename(userData)}` : path.join(userData, "signer.sock");
 }
 
 /** Runs JavaScript inside the nth panel of a module and returns the result. */

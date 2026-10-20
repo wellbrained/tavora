@@ -111,6 +111,44 @@ export function emailChangedMail(to: string, newEmail: string, language: MailLan
       };
 }
 
+/** Sent when the account asked to replace a publisher key: a stolen sign-in can't do it unnoticed. */
+export function keyRequestMail(to: string, fingerprint: string, leaked: boolean, language: MailLanguage): Mail {
+  const key = `${fingerprint.slice(0, 16)}…`;
+  return language === "de"
+    ? {
+        to,
+        subject: leaked ? "Du hast einen Herausgeberschlüssel als geleakt gemeldet" : "Du willst einen Herausgeberschlüssel ersetzen",
+        text: `In Tavora hast du gebeten, deinen Herausgeberschlüssel ${key} zu ersetzen${leaked ? ", weil er geleakt wurde" : ""}. Tavora prüft das und gibt dir Bescheid in der App.\n\nWenn du das nicht warst, schreib uns an tavora.app@gmail.com.\n\nTavora\n`,
+      }
+    : {
+        to,
+        subject: leaked ? "You reported a publisher key as leaked" : "You asked to replace a publisher key",
+        text: `In Tavora, you asked to replace your publisher key ${key}${leaked ? " because it was leaked" : ""}. Tavora checks it, and the app shows when it's done.\n\nIf this wasn't you, write to tavora.app@gmail.com.\n\nTavora\n`,
+      };
+}
+
+/** After every publish (decided 2026-10-20), so a developer notices one they didn't make. */
+export function publishedMail(to: string, module: { id: string; name: string; version: string }, fingerprint: string, token: string | null, language: MailLanguage): Mail {
+  const key = fingerprint.slice(0, 16);
+  return language === "de"
+    ? {
+        to,
+        subject: `${module.name} ${module.version} wurde veröffentlicht`,
+        text:
+          `${module.name} ${module.version} (${module.id}) ist jetzt in Tavoras Modulkatalog, signiert mit deinem Herausgeberschlüssel ${key}` +
+          (token === null ? ", hochgeladen aus Tavora.\n\n" : `, hochgeladen mit dem Veröffentlichungs-Token „${token}“.\n\n`) +
+          "Wenn du das nicht warst, schreib uns sofort an tavora.app@gmail.com und entferne deine Tokens in Tavora: Einstellungen > Konto > Modul-Entwickler.\n\nTavora\n",
+      }
+    : {
+        to,
+        subject: `${module.name} ${module.version} was published`,
+        text:
+          `${module.name} ${module.version} (${module.id}) is now in Tavora's module catalog, signed with your publisher key ${key}` +
+          (token === null ? ", uploaded from Tavora.\n\n" : `, uploaded with the publish token "${token}".\n\n`) +
+          "If this wasn't you, write to tavora.app@gmail.com right away, and remove your tokens in Tavora: Settings > Account > Module developer.\n\nTavora\n",
+      };
+}
+
 // ── Test inbox ───────────────────────────────────────────────────────────
 
 export interface TestInbox extends Mailer {

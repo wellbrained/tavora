@@ -5,7 +5,10 @@ import { accountRoutes, type AccountOptions } from "./accounts.ts";
 import { publishHandlers, type PublishLimits } from "./catalog-publish.ts";
 import { reportHandlers } from "./catalog-report.ts";
 import { copyRoutes } from "./cloud-copy.ts";
+import { pairingRoutes } from "./pairing.ts";
+import { vaultRoutes } from "./vault.ts";
 import { catalogFilter, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
+import { catalogTrust } from "./catalog-trust.ts";
 import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
@@ -209,6 +212,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     ...(publishLimits ? { limits: publishLimits } : {}),
     ...(catalogueKey ? { catalogueKey } : {}),
     ...(accounts?.now ? { now: accounts.now } : {}),
+    ...(accounts ? { mail: { mailer: accounts.mailer, ...(accounts.mailDailyLimit === undefined ? {} : { mailDailyLimit: accounts.mailDailyLimit }) } } : {}),
     ...(accounts && maintainerEmail?.trim()
       ? { maintainer: { email: maintainerEmail.trim(), mailer: accounts.mailer, ...(accounts.mailDailyLimit === undefined ? {} : { mailDailyLimit: accounts.mailDailyLimit }) } }
       : {}),
@@ -280,7 +284,9 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   // The cloud copy first: its bodies are bigger than the account routes allow, and it has its own limits.
   if (accounts?.copies) app.route("/v1/account/copy", copyRoutes({ copies: accounts.copies, accounts: accounts.store, clientKey: (request) => (clientKey ? clientKey(request) : "local"), ...(accounts.now ? { now: accounts.now } : {}) }));
   else app.all("/v1/account/copy", (context) => context.json({ error: "The cloud copy is not available right now.", reason: "unavailable" }, 503)).all("/v1/account/copy/*", (context) => context.json({ error: "The cloud copy is not available right now.", reason: "unavailable" }, 503));
-  if (accounts) app.route("/v1/account", accountRoutes(accounts, limiter, (request) => (clientKey ? clientKey(request) : "local")));
+  if (accounts) app.route("/v1/account/vault", vaultRoutes({ accounts: accounts.store, clientKey: (request) => (clientKey ? clientKey(request) : "local"), ...(accounts.now ? { now: accounts.now } : {}) }));
+  if (accounts) app.route("/v1/account/pairing", pairingRoutes({ accounts: accounts.store, clientKey: (request) => (clientKey ? clientKey(request) : "local"), ...(accounts.now ? { now: accounts.now } : {}) }));
+  if (accounts) app.route("/v1/account", accountRoutes({ ...(catalog ? { trust: catalogTrust(catalog, catalogueKey) } : {}), ...accounts }, limiter, (request) => (clientKey ? clientKey(request) : "local")));
   else app.all("/v1/account/*", (context) => context.json({ error: "Accounts are not available right now.", reason: "unavailable" }, 503));
   // Publisher keys belong to accounts, so they come and go with them.
   if (accounts) app.route("/v1/publishers", publisherRoutes({ store: accounts.store, ...(accounts.verifyRateLimiter ? { linkRateLimiter: accounts.verifyRateLimiter } : {}), ...(accounts.now ? { now: accounts.now } : {}) }, limiter, (request) => (clientKey ? clientKey(request) : "local")));

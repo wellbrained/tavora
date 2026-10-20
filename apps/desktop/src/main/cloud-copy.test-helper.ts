@@ -2,7 +2,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { CloudCopy, copyRoots } from "./cloud-copy";
+import { CloudCopy, copyRoots, ServiceStorage } from "./cloud-copy";
 
 export const OWNER = "0123456789abcdef0123456789abcdef";
 
@@ -52,7 +52,14 @@ export async function service() {
   await json("/code", { email: "me@example.com" });
   const code = /\n {4}(\d{6})\n/.exec(inbox.mails()[0]?.text ?? "")?.[1] ?? "";
   const { token } = (await (await json("/verify", { email: "me@example.com", code, create: true })).json()) as { token: string };
-  const client = () => new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: fetchImpl, token: () => token });
-  return { client, routes, fetch: fetchImpl, token };
+  /** Another sign-in of the same account: another PC. */
+  const signIn = async (name: string) => {
+    inbox.clear();
+    await json("/code", { email: "me@example.com" });
+    const again = /\n {4}(\d{6})\n/.exec(inbox.mails().at(-1)?.text ?? "")?.[1] ?? "";
+    return ((await (await json("/verify", { email: "me@example.com", code: again, os: "windows", name })).json()) as { token: string }).token;
+  };
+  const client = () => new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: fetchImpl, token: () => token }));
+  return { client, routes, fetch: fetchImpl, token, signIn };
 }
 

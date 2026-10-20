@@ -4,7 +4,6 @@ import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { DATA_DIRS, DATA_FILES, PICTURE_DIRS } from "./backup";
 import { copyKeys, open, PART_ID_BYTES, partId, seal, type CopyKeys } from "./copy-crypto";
-import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
 import { OWNER_RECORDS_FILE } from "./installer";
 import { FILES_DIR } from "./module-files";
@@ -14,11 +13,13 @@ import { FILES_DIR } from "./module-files";
 // player can read it (copy-crypto.ts). This is the engine: finding what changed,
 // uploading it, downloading a copy into a staging folder and swapping it in.
 // When it runs (at start, after changes, at close) and what the player sees is
-// decided by the host. The service keeps one version per account and takes a
-// new one only when this PC started from the current one, so a PC that missed
-// an update gets a conflict instead of overwriting newer work.
+// decided by the host. Where the copy is kept is a CopyStorage: Tavora's service
+// (ServiceStorage, one copy per account) or a folder the player picks
+// (copy-folder.ts, decided 2026-10-20). Either takes a new version only when this
+// PC started from the current one, so a PC that missed an update gets a conflict
+// instead of overwriting newer work.
 
-/** The most a copy may hold, as the service counts it (apps/api/src/cloud-copy.ts). */
+/** The most a copy on the service may hold, as the service counts it (apps/api/src/cloud-copy.ts). A folder has no limit. */
 export const COPY_LIMIT = 100 * 1024 * 1024;
 /** Files are cut into parts of at most this much, before compression and sealing. */
 export const PART_BYTES = 4 * 1024 * 1024;
@@ -80,6 +81,8 @@ export const EMPTY_STATE: CopyState = { version: 0, pictures: true, files: {} };
 /** The manifest, sealed before it leaves: every file's path, size, hash and parts. */
 interface Manifest {
   v: 1;
+  /** The version it was saved as, where the PC picks it (a folder); the service numbers its own. */
+  version?: number;
   /** False when pictures were left out to fit; a restore keeps this PC's pictures then. */
   pictures: boolean;
   files: { path: string; size: number; sha256: string; parts: string[] }[];
@@ -87,7 +90,7 @@ interface Manifest {
 
 export class CopyError extends Error {
   constructor(
-    readonly reason: "signed-out" | "unreachable" | "unavailable" | "too-many" | "damaged" | "failed",
+    readonly reason: "signed-out" | "unreachable" | "unavailable" | "too-many" | "damaged" | "failed" | "no-folder" | "not-arrived",
     message: string = reason,
   ) {
     super(message);
@@ -178,7 +181,53 @@ function sameAsSynced(found: Found[], state: CopyState): boolean {
   );
 }
 
-export interface CloudCopyOptions {
+/** The copy as its storage has it. */
+export interface RemoteCopy {
+  version: number;
+  size: number;
+  updatedAt: string;
+  /**
+   * False when the copy did not grow out of the version this PC last synced: two PCs saved at once into a
+   * synced folder, and the other one won. This PC's last save is not in the copy then.
+   */
+  follows?: boolean;
+}
+
+export type SwapAnswer =
+  | { status: "saved"; version: number; size: number }
+  | { status: "conflict"; version: number }
+  | { status: "missing-parts" }
+  | { status: "too-big"; size?: number };
+
+/**
+ * Where the copy is kept: Tavora's service (ServiceStorage) or a folder the player picks (copy-folder.ts).
+ * It only ever holds sealed parts and a sealed manifest; everything else happens in CloudCopy.
+ */
+export interface CopyStorage {
+  /** The most a copy may hold here, or null for no limit. Pictures are left out first to fit. */
+  readonly limit: number | null;
+  /** Parts that are missing may still be on their way (a synced folder), rather than lost. */
+  readonly arrivesLate: boolean;
+  /** The current copy, or null when there is none. `known` is the version this PC last synced. */
+  remote(known?: number): Promise<RemoteCopy | null>;
+  /** The current version and its sealed manifest, or null when there is none. */
+  manifest(): Promise<{ version: number; sealed: Uint8Array } | null>;
+  /** Stores parts it does not have yet. */
+  putParts(parts: { id: Buffer; data: Buffer }[]): Promise<void>;
+  /** Some of the asked parts, at least one when any of them is there. */
+  getParts(ids: string[]): Promise<{ id: string; data: Uint8Array }[]>;
+  /**
+   * The version a new manifest gets when saved on top of `base`, sealed into it; null when the storage
+   * numbers versions itself (the service), so the manifest can't know its own.
+   */
+  nextVersion(base: number): number | null;
+  /** Makes the manifest with these parts the new version, if the copy is still at `base`. */
+  swap(base: number, version: number | null, ids: string[], sealed: Uint8Array): Promise<SwapAnswer>;
+  /** Deletes the copy. */
+  remove(): Promise<void>;
+}
+
+export interface ServiceStorageOptions {
   /** The account service, ending in /v1/account. */
   baseUrl: string;
   fetch: typeof fetch;
@@ -187,15 +236,12 @@ export interface CloudCopyOptions {
   timeoutMs?: number;
 }
 
-/** The copy as the service has it. */
-export interface RemoteCopy {
-  version: number;
-  size: number;
-  updatedAt: string;
-}
+/** The copy on Tavora's service, one per account (apps/api/src/cloud-copy.ts). */
+export class ServiceStorage implements CopyStorage {
+  readonly limit = COPY_LIMIT;
+  readonly arrivesLate = false;
 
-export class CloudCopy {
-  constructor(private readonly options: CloudCopyOptions) {}
+  constructor(private readonly options: ServiceStorageOptions) {}
 
   private async request(method: string, route: string, body?: Uint8Array): Promise<Response> {
     const token = this.options.token();
@@ -231,13 +277,16 @@ export class CloudCopy {
     return { version: copy.version, size: copy.size, updatedAt: copy.updatedAt };
   }
 
-  /** Removes the copy from the service (Delete cloud copy). This PC's data stays. */
-  async remove(): Promise<void> {
-    const response = await this.request("DELETE", "");
+  async manifest(): Promise<{ version: number; sealed: Uint8Array } | null> {
+    const response = await this.request("GET", "/manifest");
+    if (response.status === 404) return null;
     if (!response.ok) return this.fail(response);
+    const version = Number(response.headers.get("x-copy-version"));
+    if (!Number.isInteger(version) || version < 1) throw new CopyError("failed", "the copy has no version");
+    return { version, sealed: new Uint8Array(await response.arrayBuffer()) };
   }
 
-  private async sendParts(parts: { id: Buffer; data: Buffer }[]): Promise<void> {
+  async putParts(parts: { id: Buffer; data: Buffer }[]): Promise<void> {
     if (parts.length === 0) return;
     // Each part: its id, its length (4 bytes, big-endian) and its bytes.
     const body = Buffer.concat(
@@ -252,6 +301,61 @@ export class CloudCopy {
     if (!response.ok) return this.fail(response);
   }
 
+  async getParts(ids: string[]): Promise<{ id: string; data: Uint8Array }[]> {
+    const answer = await this.request("POST", "/parts/get", Buffer.concat(ids.map((id) => Buffer.from(id, "hex"))));
+    if (!answer.ok) return this.fail(answer);
+    const body = Buffer.from(await answer.arrayBuffer());
+    const parts: { id: string; data: Uint8Array }[] = [];
+    let at = 0;
+    while (at + PART_ID_BYTES + 4 <= body.length) {
+      const id = body.subarray(at, at + PART_ID_BYTES).toString("hex");
+      const length = body.readUInt32BE(at + PART_ID_BYTES);
+      parts.push({ id, data: body.subarray(at + PART_ID_BYTES + 4, at + PART_ID_BYTES + 4 + length) });
+      at += PART_ID_BYTES + 4 + length;
+    }
+    return parts;
+  }
+
+  /** The service numbers versions itself (never reusing one after a delete). */
+  nextVersion(): null {
+    return null;
+  }
+
+  async swap(base: number, _version: number | null, ids: string[], sealed: Uint8Array): Promise<SwapAnswer> {
+    const body = Buffer.alloc(8 + ids.length * PART_ID_BYTES + sealed.length);
+    body.writeUInt32BE(base, 0);
+    body.writeUInt32BE(ids.length, 4);
+    ids.forEach((id, index) => Buffer.from(id, "hex").copy(body, 8 + index * PART_ID_BYTES));
+    Buffer.from(sealed).copy(body, 8 + ids.length * PART_ID_BYTES);
+    const response = await this.request("PUT", "", body);
+    const answer = (await response.json().catch(() => null)) as { reason?: unknown; version?: unknown; size?: unknown } | null;
+    if (response.ok && typeof answer?.version === "number" && typeof answer.size === "number") return { status: "saved", version: answer.version, size: answer.size };
+    if (response.status === 409 && answer?.reason === "copy-changed" && typeof answer.version === "number") return { status: "conflict", version: answer.version };
+    if (response.status === 409 && answer?.reason === "missing-parts") return { status: "missing-parts" };
+    if (response.status === 413) return { status: "too-big", ...(typeof answer?.size === "number" ? { size: answer.size } : {}) };
+    return this.fail(response);
+  }
+
+  /** Removes the copy from the service (Delete cloud copy). This PC's data stays. */
+  async remove(): Promise<void> {
+    const response = await this.request("DELETE", "");
+    if (!response.ok) return this.fail(response);
+  }
+}
+
+/** The engine: what changed goes up sealed, a copy comes down checked. Where it is kept is up to the storage. */
+export class CloudCopy {
+  constructor(readonly storage: CopyStorage) {}
+
+  remote(known?: number): Promise<RemoteCopy | null> {
+    return this.storage.remote(known);
+  }
+
+  /** Removes the copy (Delete cloud copy). This PC's data stays. */
+  remove(): Promise<void> {
+    return this.storage.remove();
+  }
+
   /**
    * Uploads what changed since `state` and makes it the copy's new version. Unchanged files are not read
    * again, and parts the copy already has are not sent again. Returns the state to keep on success.
@@ -259,14 +363,15 @@ export class CloudCopy {
    */
   async upload(copyKey: Uint8Array, roots: CopyRoot[], state: CopyState, progress?: (done: number, total: number) => void): Promise<UploadResult> {
     const keys = copyKeys(copyKey);
+    const limit = this.storage.limit;
     let found = await scanCopy(roots);
     let pictures = true;
     let total = found.reduce((sum, file) => sum + file.size, 0);
-    if (total > COPY_LIMIT) {
+    if (limit !== null && total > limit) {
       found = found.filter((file) => !file.picture);
       pictures = false;
       total = found.reduce((sum, file) => sum + file.size, 0);
-      if (total > COPY_LIMIT) return { status: "too-big", size: total };
+      if (total > limit) return { status: "too-big", size: total };
     }
     if (pictures === state.pictures && sameAsSynced(found, state)) return { status: "unchanged" };
 
@@ -276,7 +381,7 @@ export class CloudCopy {
       let batchBytes = 0;
       const sent = new Set(known);
       const flush = async () => {
-        await this.sendParts(batch);
+        await this.storage.putParts(batch);
         batch = [];
         batchBytes = 0;
       };
@@ -318,26 +423,19 @@ export class CloudCopy {
       }
       await flush();
 
-      const manifest: Manifest = { v: 1, pictures, files: Object.entries(files).map(([name, file]) => ({ path: name, size: file.size, sha256: file.sha256, parts: file.parts })) };
+      // Where the PC picks the version, it goes inside the sealed manifest too, so an older manifest can't pose as a newer one.
+      const version = this.storage.nextVersion(state.version);
+      const manifest: Manifest = { v: 1, ...(version !== null ? { version } : {}), pictures, files: Object.entries(files).map(([name, file]) => ({ path: name, size: file.size, sha256: file.sha256, parts: file.parts })) };
       const sealed = seal(keys, Buffer.from(JSON.stringify(manifest)));
       const ids = [...new Set(manifest.files.flatMap((file) => file.parts))];
-      const body = Buffer.alloc(8 + ids.length * PART_ID_BYTES + sealed.length);
-      body.writeUInt32BE(state.version, 0);
-      body.writeUInt32BE(ids.length, 4);
-      ids.forEach((id, index) => Buffer.from(id, "hex").copy(body, 8 + index * PART_ID_BYTES));
-      sealed.copy(body, 8 + ids.length * PART_ID_BYTES);
-      const response = await this.request("PUT", "", body);
-      const answer = (await response.json().catch(() => null)) as { reason?: unknown; version?: unknown; size?: unknown } | null;
-      if (response.ok && typeof answer?.version === "number" && typeof answer.size === "number") {
-        return { status: "uploaded", state: { version: answer.version, pictures, files }, pictures, size: answer.size };
-      }
-      if (response.status === 409 && answer?.reason === "copy-changed" && typeof answer.version === "number") return { status: "conflict", version: answer.version };
-      if (response.status === 409 && answer?.reason === "missing-parts") return "missing-parts";
-      if (response.status === 413) return { status: "too-big", size: typeof answer?.size === "number" ? answer.size : total };
-      return this.fail(response);
+      const answer = await this.storage.swap(state.version, version, ids, sealed);
+      if (answer.status === "saved") return { status: "uploaded", state: { version: answer.version, pictures, files }, pictures, size: answer.size };
+      if (answer.status === "conflict") return { status: "conflict", version: answer.version };
+      if (answer.status === "too-big") return { status: "too-big", size: answer.size ?? total };
+      return "missing-parts";
     };
 
-    // Parts of the last synced version are on the service; if some went missing anyway, send everything once more.
+    // Parts of the last synced version are in the copy; if some went missing anyway, send everything once more.
     const first = await attempt(new Set(Object.values(state.files).flatMap((file) => file.parts)));
     if (first !== "missing-parts") return first;
     const second = await attempt(new Set());
@@ -352,19 +450,18 @@ export class CloudCopy {
    */
   async download(copyKey: Uint8Array, roots: CopyRoot[], staging: string): Promise<{ version: number; pictures: boolean; files: Record<string, Omit<SyncedFile, "mtimeMs">> } | null> {
     const keys = copyKeys(copyKey);
-    const response = await this.request("GET", "/manifest");
-    if (response.status === 404) return null;
-    if (!response.ok) return this.fail(response);
-    const version = Number(response.headers.get("x-copy-version"));
-    if (!Number.isInteger(version) || version < 1) throw new CopyError("failed", "the copy has no version");
+    const current = await this.storage.manifest();
+    if (!current) return null;
+    const { version } = current;
     let manifest: Manifest;
     try {
-      manifest = JSON.parse(open(keys, new Uint8Array(await response.arrayBuffer())).toString("utf8")) as Manifest;
+      manifest = JSON.parse(open(keys, current.sealed).toString("utf8")) as Manifest;
     } catch {
       // Sealed with another key: the recovery key typed in is not this copy's, or the copy was changed.
       throw new CopyError("damaged", "the copy could not be opened with this key");
     }
     if (manifest?.v !== 1 || !Array.isArray(manifest.files)) throw new CopyError("damaged", "the copy's list is off");
+    if (manifest.version !== undefined && manifest.version !== version) throw new CopyError("damaged", "the copy's list belongs to another version");
     const files = manifest.files.filter(
       (file) =>
         safeCopyPath(file?.path, roots) &&
@@ -382,17 +479,10 @@ export class CloudCopy {
     const plain = new Map<string, Buffer>();
     let missing = wanted;
     while (missing.length > 0) {
-      const ask = missing.slice(0, ASK_IDS);
-      const answer = await this.request("POST", "/parts/get", Buffer.concat(ask.map((id) => Buffer.from(id, "hex"))));
-      if (!answer.ok) return this.fail(answer);
-      const body = Buffer.from(await answer.arrayBuffer());
-      let at = 0;
+      const asked = new Set(missing.slice(0, ASK_IDS));
       let got = 0;
-      while (at + PART_ID_BYTES + 4 <= body.length) {
-        const id = body.subarray(at, at + PART_ID_BYTES).toString("hex");
-        const length = body.readUInt32BE(at + PART_ID_BYTES);
-        const data = body.subarray(at + PART_ID_BYTES + 4, at + PART_ID_BYTES + 4 + length);
-        at += PART_ID_BYTES + 4 + length;
+      for (const { id, data } of await this.storage.getParts([...asked])) {
+        if (!asked.has(id)) continue;
         let content: Buffer;
         try {
           content = open(keys, data);
@@ -403,7 +493,8 @@ export class CloudCopy {
         plain.set(id, content);
         got++;
       }
-      if (got === 0) throw new CopyError("damaged", "parts of the copy are missing");
+      // In a synced folder the manifest may arrive before its parts: they come later.
+      if (got === 0) throw this.storage.arrivesLate ? new CopyError("not-arrived", "parts of the copy are not here yet") : new CopyError("damaged", "parts of the copy are missing");
       missing = missing.filter((id) => !plain.has(id));
     }
 
@@ -464,7 +555,7 @@ export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: str
 }
 
 // What this PC keeps about the copy: the state in cloud-copy.json (paths, sizes, hashes and part ids,
-// nothing of the content), and the copy key in cloud-copy-key.json, encrypted like the sign-in.
+// nothing of the content). The key is the account's (account-key.ts).
 
 export async function loadCopyState(file: string): Promise<CopyState> {
   try {
@@ -478,26 +569,4 @@ export async function loadCopyState(file: string): Promise<CopyState> {
 
 export async function saveCopyState(file: string, state: CopyState): Promise<void> {
   await writeFileAtomic(file, JSON.stringify({ v: 1, version: state.version, pictures: state.pictures, files: state.files }));
-}
-
-export async function loadCopyKey(file: string, encryptor: Encryptor): Promise<Buffer | null> {
-  if (!encryptor.isAvailable()) return null;
-  try {
-    const saved = JSON.parse(await readFile(file, "utf8")) as { v?: unknown; data?: unknown };
-    if (saved.v !== 1 || typeof saved.data !== "string") return null;
-    const key = Buffer.from(encryptor.decrypt(Buffer.from(saved.data, "base64")), "base64");
-    return key.length === 32 ? key : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Without the OS key store nothing is saved, so the copy can't be turned on there. */
-export async function saveCopyKey(file: string, encryptor: Encryptor, key: Uint8Array | null): Promise<void> {
-  if (!key) {
-    await rm(file, { force: true });
-    return;
-  }
-  if (!encryptor.isAvailable()) return;
-  await writeFileAtomic(file, JSON.stringify({ v: 1, data: encryptor.encrypt(Buffer.from(key).toString("base64")).toString("base64") }));
 }

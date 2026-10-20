@@ -19,6 +19,8 @@ export interface CatalogTrust {
   revoked(fingerprint: string, sha256: string): boolean;
   /** The first key of a key's account by its successions, and that account; the key itself and null without one. */
   firstKey(fingerprint: string): { key: string; account: string | null };
+  /** The signed list of a kind as it is served, or null without a validly signed one. */
+  signed<K extends CatalogListKind>(kind: K): CatalogListOf<K> | null;
 }
 
 export function catalogTrust(catalog: CatalogStore, publicKey: string = CATALOGUE_PUBLIC_KEY): CatalogTrust {
@@ -27,6 +29,7 @@ export function catalogTrust(catalog: CatalogStore, publicKey: string = CATALOGU
     return bytes ? readCatalogList(kind, bytes.toString("utf8"), publicKey) : null;
   };
   return {
+    signed: list,
     revoked(fingerprint, sha256) {
       const revocation = list("revocations")?.revoked.find((entry) => entry.fingerprint === fingerprint);
       return revocation !== undefined && !revocation.allow.includes(sha256);

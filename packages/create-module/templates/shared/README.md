@@ -22,16 +22,17 @@ A [Tavora](https://mytavora.app) module, made with `@tavora/create-module`. Tavo
 {{run}} zip
 ```
 
-`zip` packs the built module into `{{id}}-0.1.0.zip`, signed with your publisher key. The first run makes the key in `~/.tavora/publisher-key.pem`. **Back it up and never share it**: the data your module saves for players belongs to that key, so a new key means a new publisher. Players install the zip with **Settings > Modules > Install from zip**; a newer zip signed with the same key updates it.
+`zip` packs the built module into `{{id}}-0.1.0.zip`, signed with your publisher key. Tavora keeps the key: make one under **Settings > Account > Module developer**, keep Tavora open while you pack, and press **Allow** when it asks. The data your module saves for players belongs to that key, so a new key means a new publisher; your recovery key is its backup. Players install the zip with **Settings > Modules > Install from zip**; a newer zip signed with the same key updates it.
 
 ## Show your name instead of a fingerprint
 
-In Tavora, sign in under **Settings > Account**, choose a developer name under **Module developer** and press **Link a publisher key**. Then run the command it shows here, for example:
+Choose a developer name under **Module developer** in Tavora before you make the key. Tavora links the key to your account, so players see your modules as "by" your name.
+
+To pack and publish on a build server, which can't press Allow, export the key in Tavora and make a publish token under **Module developer > Publish tokens**. Keep both as secrets there and run:
 
 ```sh
-{{exec}} tavora-pack link ABCD-EFGH
+{{exec}} tavora-pack . --key <file>
+TAVORA_PUBLISH_TOKEN=<token> {{exec}} tavora-pack publish <zip> --key <file>
 ```
-
-Players then see your modules as "by" your name.
 
 More in the [developer docs](https://docs.mytavora.app/).

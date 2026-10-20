@@ -181,12 +181,82 @@ export interface AccountView {
   developer: { name: string; nextChangeAt: string } | null;
   /** Publisher keys linked to the account (fingerprints only); null until read from the service. */
   publisherKeys: { fingerprint: string; linkedAt: string }[] | null;
+  /** "I lost this key": requests to replace a linked key, and where each stands; null until read from the service. */
+  keyRequests: KeyRequestView[] | null;
   /** A one-time code for `tavora-pack link`, while it is valid. */
   linkCode: { code: string; expiresAt: string } | null;
+  /** Tokens that let CI publish with a key file; null until read from the service. */
+  publishTokens: AccountPublishToken[] | null;
+  /** A token just made: its secret is shown this once. */
+  newPublishToken: { name: string; token: string } | null;
+}
+
+export interface AccountPublishToken {
+  id: string;
+  name: string;
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt: string | null;
+}
+
+/** A request to replace a lost or leaked publisher key, which Tavora signs offline. */
+export interface KeyRequestView {
+  old: string;
+  new: string;
+  leaked: boolean;
+  requestedAt: string;
+  status: "waiting" | "done" | "declined";
+}
+
+/** A signature the pack command asked Tavora for, waiting for the developer's click. */
+export interface SignRequestView {
+  id: number;
+  /** "package": signing a module zip as it is packed; "publish": listing a packed zip in the catalog. */
+  kind: "package" | "publish";
+  fingerprint: string;
+  /** From the module's manifest. */
+  module: { id: string; name: string; version: string } | null;
+}
+
+/**
+ * Settings > Account > Module developer: the publisher keys Tavora keeps in the account's key vault, and
+ * the pack command's sign request. Sent on its own channel; the keys themselves stay in the main process.
+ */
+export interface DeveloperKeysView {
+  /**
+   * "ready": the keys are read. "none": the account has no key yet (making a publisher key makes it, and
+   * shows its recovery key). "ask": another PC made it; its recovery key is typed in here first.
+   */
+  status: "loading" | "ready" | "none" | "ask" | "signed-out" | "offline";
+  keys: { fingerprint: string }[];
+  /** Whether this PC has the account's key (the recovery key opens it). */
+  hasKey: boolean;
+  /** The account's recovery key, while the player looks at it (made just now, or asked to see). */
+  recoveryKey: string | null;
+  request: SignRequestView | null;
+}
+
+/**
+ * Approving a new PC from an old one, instead of typing the recovery key. Sent on its own channel; the
+ * keys stay in the main process.
+ */
+export interface PairingView {
+  /** This PC asks another one for the account's key. */
+  asking: {
+    /** Through Tavora's service (signed in), or the cloud copy's folder (signed out), which can take minutes. */
+    via: "service" | "folder";
+    /** "code": another PC answered; both show `code`. The rest end it: the player starts again or types the key in. */
+    step: "waiting" | "code" | "declined" | "expired" | "failed";
+    code: string | null;
+    /** The name of the PC that answered. */
+    from: string | null;
+  } | null;
+  /** Another PC asks this one: "Add <name>?", with the code both show. */
+  approve: { id: string; name: string | null; code: string } | null;
 }
 
 /** Why the cloud copy could not sync last time, worded by the host UI. */
-export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted";
+export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "new-key" | "no-folder" | "not-arrived";
 
 /**
  * Settings > Account > Cloud copy, and the questions it asks over the app. Sent on its own channel;
@@ -200,10 +270,12 @@ export interface CloudCopyView {
   busy: "checking" | "uploading" | "downloading" | null;
   /** Bytes read and sent of what changed, while uploading. */
   progress: { done: number; total: number } | null;
-  /** The copy as the service last had it; null when there is none or it was not read yet. */
+  /** The copy as it was last seen; null when there is none or it was not read yet. */
   copy: { size: number; savedAt: string } | null;
-  /** The most a copy may hold. */
-  limit: number;
+  /** The folder the copy is kept in, or null for Tavora's service. */
+  folder: string | null;
+  /** The most a copy may hold, or null for no limit (a folder). */
+  limit: number | null;
   /** False when the last copy left the pictures out to fit. */
   pictures: boolean;
   /** The recovery key, while the player looks at it (right after turning on, or when asked for). */
@@ -672,10 +744,37 @@ export type HostAction =
   /** Copies `tavora-pack link <code>` for the code shown now. */
   | { type: "account-copy-link-command" }
   | { type: "account-unlink-key"; fingerprint: string }
+  /** "I lost this key" or "It was leaked": its modules move to another key of the account once Tavora signs it. */
+  | { type: "account-replace-key"; fingerprint: string; leaked: boolean }
+  /** Publish tokens, for publishing from CI: make one (its secret shown once), copy it, close it, remove one. */
+  | { type: "account-publish-token-create"; name: string }
+  | { type: "account-publish-token-copy" }
+  | { type: "account-publish-token-saved" }
+  | { type: "account-publish-token-delete"; id: string }
+  | { type: "developer-key-create" }
+  | { type: "developer-key-add" }
+  | { type: "developer-key-export"; fingerprint: string }
+  | { type: "developer-key-link"; fingerprint: string }
+  | { type: "developer-recovery-key"; key: string }
+  | { type: "developer-recovery-key-saved" }
+  | { type: "developer-show-recovery-key" }
+  | { type: "developer-copy-recovery-key" }
+  | { type: "developer-sign-answer"; id: number; allow: boolean }
+  /** Asks another PC of the account for its key, instead of typing the recovery key. */
+  | { type: "pairing-start" }
+  | { type: "pairing-cancel" }
+  /** The player's answer to "Add <PC>?". */
+  | { type: "pairing-decide"; id: string; allow: boolean }
   /** Settings > Account > Cloud copy. Turning on makes a key, or asks for the one of a copy that exists. */
   | { type: "cloud-copy-on" }
+  /** Turns the copy on in a folder the player picks in the system's dialog. */
+  | { type: "cloud-copy-on-folder" }
+  /** Moves the copy, keeping its key: to the service, or to a folder the player picks in the system's dialog. */
+  | { type: "cloud-copy-move"; to: "server" | "folder" }
   | { type: "cloud-copy-key"; key: string }
   | { type: "cloud-copy-cancel" }
+  /** Lost the recovery key: the copy is deleted and the account gets a new key. */
+  | { type: "cloud-copy-new-key" }
   | { type: "cloud-copy-show-key" }
   /** Puts the recovery key on screen on the clipboard. */
   | { type: "cloud-copy-copy-key" }
@@ -871,6 +970,10 @@ export interface TavoraHostApi {
   onAccount(listener: (view: AccountView) => void): void;
   getCloudCopy(): Promise<CloudCopyView | null>;
   onCloudCopy(listener: (view: CloudCopyView) => void): void;
+  getDeveloperKeys(): Promise<DeveloperKeysView | null>;
+  onDeveloperKeys(listener: (view: DeveloperKeysView) => void): void;
+  getPairing(): Promise<PairingView | null>;
+  onPairing(listener: (view: PairingView) => void): void;
   /** A module asked for a menu (or null: close the one shown). */
   onModuleMenu(listener: (menu: ModuleMenu | null) => void): void;
   /** The player chose an item of the module menu, or closed it (null). */

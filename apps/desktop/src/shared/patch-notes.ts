@@ -1,8 +1,9 @@
 /**
  * What changed in each version, newest first. Shown when the version at the bottom
  * of the Settings sections list is pressed (it is not a menu item).
- * Every version bump of apps/desktop/package.json adds an entry here; a test
- * keeps the two in step. Write for players, in plain friendly words. At 1.0 these
+ * Entries are added when a pull request merges, from its change note in
+ * apps/desktop/changes/ (the Number workflow); a test keeps them in step with
+ * apps/desktop/package.json. Write for players, in plain friendly words. At 1.0 these
  * entries are replaced by a "1.0 release catalog" of all features, and a fresh
  * changelog starts (the decision log).
  */
@@ -19,10 +20,62 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.19.9",
+    version: "0.19.15",
     date: "2026-10-20",
-    title: "Settings fit small windows",
-    notes: ["In a small window, Settings moves buttons and switches under their text instead of squeezing it."],
+    title: "Lost a publisher key?",
+    notes: [
+      "Module developers: lost or leaked a publisher key? Press Lost it? next to it in Settings > Account. No email needed.",
+      "Your modules move to your newest key once Tavora checks it.",
+    ],
+  },
+  {
+    version: "0.19.14",
+    date: "2026-10-20",
+    title: "Add a PC from your other PC",
+    notes: [
+      "On a new PC, get your recovery key from your other PC instead of typing it in.",
+      "Both PCs show the same code. Check it, then click Add on your other PC.",
+      "Works with your own cloud copy folder too, no account needed.",
+    ],
+  },
+  {
+    version: "0.19.13",
+    date: "2026-10-20",
+    title: "Publishing needs your account",
+    notes: [
+      "Module developers: your publisher key alone can't publish any more. Tavora uploads for tavora-pack with your sign-in.",
+      "To publish from CI, make a publish token under Settings > Account.",
+      "You get an email every time a module of yours is published.",
+    ],
+  },
+  {
+    version: "0.19.12",
+    date: "2026-10-20",
+    title: "Tavora keeps your publisher keys",
+    notes: [
+      "Module developers: make a publisher key under Settings > Account. Your recovery key keeps it safe, so there's no key file to back up.",
+      "tavora-pack asks Tavora to sign, and Tavora asks you first.",
+      "Export a key to publish from CI.",
+      "Your recovery key has its own place in Settings > Account.",
+    ],
+  },
+  {
+    version: "0.19.11",
+    date: "2026-10-20",
+    title: "Cloud copy in your own folder",
+    notes: [
+      "Keep your cloud copy in a folder of your own, like your OneDrive, Dropbox or Google Drive. No account needed.",
+      "It's encrypted on your PC, just like on our server.",
+    ],
+  },
+  {
+    version: "0.19.10",
+    date: "2026-10-20",
+    title: "One recovery key for your account",
+    notes: [
+      "Your recovery key now belongs to your account. Turning the cloud copy off and on again no longer asks for it.",
+      "Lost your key? Start over with a new one, right where Tavora asks for it.",
+    ],
   },
   {
     version: "0.19.8",

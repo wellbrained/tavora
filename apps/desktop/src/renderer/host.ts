@@ -1,7 +1,7 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import type { AccountView, ActionResult, AiUsageView, CloudCopyView, DiscordView, HostAction, HostShortcut, HostViewState, ModuleMenu } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
 import type { SettingsSection } from "./components/settings/settings-index";
 import { numberedGames } from "./shortcuts";
@@ -48,6 +48,20 @@ api.onCloudCopy((next) => (cloudCopy.value = next));
 void api.getCloudCopy().then((initial) => {
   if (initial && !cloudCopy.value) cloudCopy.value = initial;
 });
+/** Settings > Account > Module developer, and the pack command's sign request over the app. */
+export const developerKeys = shallowRef<DeveloperKeysView | null>(null);
+api.onDeveloperKeys((next) => (developerKeys.value = next));
+void api.getDeveloperKeys().then((initial) => {
+  if (initial && !developerKeys.value) developerKeys.value = initial;
+});
+
+/** Approving a new PC from an old one: this PC asking, or another PC asking this one. */
+export const pairing = shallowRef<PairingView | null>(null);
+api.onPairing((next) => (pairing.value = next));
+void api.getPairing().then((initial) => {
+  if (initial && !pairing.value) pairing.value = initial;
+});
+
 /** The question the cloud copy asks over the app, unless the player put it off for now. */
 export const copyLater = ref<"conflict" | "newer" | null>(null);
 export const copyQuestion = computed<"closing" | "conflict" | "newer" | null>(() => {
@@ -360,6 +374,7 @@ export const overlayOpen = computed(
     openMenus.value > 0 ||
     dialog.value !== null ||
     copyQuestion.value !== null ||
+    developerKeys.value?.request != null ||
     settingsOpen.value ||
     searchOpen.value ||
     dragging.value,

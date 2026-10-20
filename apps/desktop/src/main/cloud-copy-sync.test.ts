@@ -1,10 +1,13 @@
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
-import { CloudCopy } from "./cloud-copy";
+import { AccountKey } from "./account-key";
+import { CloudCopy, ServiceStorage } from "./cloud-copy";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
+import { FolderPairing, Pairing } from "./pairing";
 
 afterEach(cleanUp);
 
@@ -21,8 +24,15 @@ function tavora(cloud: Service, at: Pc, { signedIn = true } = {}) {
     userData: at.userData,
     enabled: true,
     moduleFiles: () => at.moduleFiles,
-    cloud: new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => (signedIn ? cloud.token : null) }),
-    encryptor,
+    service: new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => (signedIn ? cloud.token : null) }),
+    accountKey: new AccountKey({
+      file: path.join(at.userData, "account-key.json"),
+      legacyFile: path.join(at.userData, "cloud-copy-key.json"),
+      encryptor,
+      baseUrl: "http://tavora.test/v1/account",
+      fetch: cloud.fetch,
+      token: () => (signedIn ? cloud.token : null),
+    }),
     flush: async () => undefined,
     restart: () => void events.restarts++,
     onChange: (view) => views.push(view),
@@ -87,7 +97,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(restarted.sync.view()).toMatchObject({ on: true, conflict: false });
     // B's own settings are not a change to send back.
     await restarted.sync.sync(true);
-    expect((await new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token }).remote())?.version).toBe(1);
+    expect((await new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token })).remote())?.version).toBe(1);
   });
 
   it("takes a newer copy at start when this PC did not change, and uploads changes made here", async () => {
@@ -185,7 +195,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     await until(() => closed === 1);
     // Then the window may close.
     expect(sync.holdClose(() => void closed++)).toBe(false);
-    expect((await new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token }).remote())?.version).toBe(2);
+    expect((await new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token })).remote())?.version).toBe(2);
   });
 
   it("lets the window close at once when the copy is off", async () => {
@@ -214,6 +224,78 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(await read(a.userData, "library.json")).toBe("a1");
   });
 
+  it("moves from our server to a folder and back, keeping the recovery key", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a" });
+    const { sync, key } = await startCopy(cloud, a);
+    sync.keySaved();
+    const onedrive = await mkdtemp(path.join(os.tmpdir(), "tavora-onedrive-"));
+    try {
+      await sync.move(onedrive);
+      expect(sync.view()).toMatchObject({ on: true, folder: onedrive, limit: null, problem: null });
+      // The server's copy is gone, so the other PCs there turn off.
+      expect(await new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token })).remote()).toBeNull();
+      await sync.move(null);
+      expect(sync.view()).toMatchObject({ on: true, folder: null });
+      expect(await readdir(onedrive)).toEqual([]);
+      sync.showKey();
+      expect(sync.view().recoveryKey).toBe(key);
+    } finally {
+      await rm(onedrive, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the account's key when the copy is turned off, and forgets it when signed out", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const { sync } = await startCopy(cloud, a);
+    await sync.turnOff();
+    expect(sync.view().on).toBe(false);
+    // On again without typing the key, and without showing it again.
+    sync.keySaved();
+    await sync.turnOn();
+    expect(sync.view()).toMatchObject({ on: true, askKey: false, recoveryKey: null });
+
+    await sync.signedOut();
+    expect(sync.view().on).toBe(false);
+    await sync.turnOn();
+    expect(sync.view()).toMatchObject({ on: false, askKey: true });
+  });
+
+  it("starts over with a new key when the old one is lost, and other PCs then ask for it", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const { key, sync: running } = await startCopy(cloud, a);
+    const b = await pc({ "library.json": "b0" });
+    const atB = tavora(cloud, b);
+    await atB.sync.turnOn();
+    expect(atB.sync.view().askKey).toBe(true);
+    await atB.sync.startOver();
+    const newKey = atB.sync.view().recoveryKey;
+    expect(newKey).toMatch(/^[0-9A-Z]{4}-/);
+    expect(newKey).not.toBe(key);
+    // B's data is the new copy.
+    expect(atB.sync.view()).toMatchObject({ on: true, askKey: false, problem: null, copy: { size: expect.any(Number) } });
+
+    // A sees a newer copy its old key can't open: its key and copy are forgotten, and its data stays.
+    const atA = tavora(cloud, a);
+    await atA.sync.beforeLoad();
+    expect(atA.sync.view()).toMatchObject({ on: false, problem: "new-key" });
+    // A, had it still been running with the old key, never overwrites the new copy: it can't open it, and stops.
+    await writeFile(path.join(a.userData, "library.json"), "a2");
+    await running.sync();
+    expect(running.view().conflict).toBe(true);
+    await expect(running.keep("pc")).rejects.toMatchObject({ key: "cloudCopy.error.new-key" });
+    expect(running.view()).toMatchObject({ on: false, problem: "new-key" });
+    await writeFile(path.join(a.userData, "library.json"), "a1");
+    await atA.sync.turnOn();
+    expect(atA.sync.view().askKey).toBe(true);
+    await expect(atA.sync.enterKey(key)).rejects.toMatchObject({ key: "cloudCopy.error.wrongKey" });
+    await atA.sync.enterKey(newKey!);
+    expect(atA.sync.view()).toMatchObject({ on: true, conflict: true });
+    expect(await read(a.userData, "library.json")).toBe("a1");
+  });
+
   it("starts as usual offline or signed out, and says why it did not sync", async () => {
     const cloud = await service();
     const a = await pc({ "library.json": "a1" });
@@ -223,5 +305,49 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(signedOut.sync.view()).toMatchObject({ on: true, problem: "signed-out" });
     await signedOut.sync.signedOut();
     expect(signedOut.sync.view().on).toBe(false);
+  });
+
+  it("goes on at a new PC once another PC sent the key through the copy's folder, signed out", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": JSON.stringify({ version: 1, games: { "elden-ring": {} } }) });
+    const onedrive = path.join(a.root, "OneDrive");
+    await mkdir(onedrive);
+    const atA = tavora(cloud, a, { signedIn: false });
+    await atA.sync.beforeLoad();
+    await atA.sync.turnOn(onedrive);
+    expect(atA.sync.view()).toMatchObject({ on: true, folder: onedrive });
+
+    const b = await pc({ "library.json": JSON.stringify({ version: 1, games: {} }) });
+    const atB = tavora(cloud, b, { signedIn: false });
+    await atB.sync.beforeLoad();
+    await atB.sync.turnOn(onedrive);
+    expect(atB.sync.view().askKey).toBe(true);
+
+    const pairing = (sync: CopySync, name: string) => {
+      const folder = new FolderPairing(onedrive, name);
+      return new Pairing({
+        accountKey: sync.accountKey,
+        service: () => null,
+        folder: () => (sync.place ? folder : null),
+        received: async (key) => {
+          await sync.accountKey.takeHere(key);
+          await sync.keyArrived();
+        },
+        onChange: () => undefined,
+        focus: () => undefined,
+      });
+    };
+    const fromA = pairing(atA.sync, "Desk");
+    const toB = pairing(atB.sync, "Laptop");
+    await toB.start();
+    await fromA.lookForRequests();
+    await toB.lookForAnswer();
+    await fromA.lookForRequests();
+    await fromA.decide(fromA.view().approve!.id, true);
+    await toB.lookForAnswer();
+    // B has the key and takes up the copy: it has data of its own, so the player keeps one side.
+    expect(atB.sync.view()).toMatchObject({ on: true, askKey: false, conflict: true, folder: onedrive });
+    fromA.dispose();
+    toB.dispose();
   });
 });

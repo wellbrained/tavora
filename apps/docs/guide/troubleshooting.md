@@ -38,6 +38,21 @@ Check `error.code`, not the message. The codes are in the [protocol reference](.
 | `NETWORK_ERROR` | `network.fetch` got no answer: offline, unknown host, bad certificate or over 15 seconds. |
 | `TIMEOUT` | No answer within 10 seconds. |
 
+## Packing can't sign
+
+- **"Open Tavora on this PC"**: `tavora-pack` asks Tavora to sign. Start Tavora, sign in, and pack again. From CI, pass an [exported key](./publisher-key.md#publishing-from-ci) with `--key <file>`.
+- **"Tavora has no publisher key yet"**: press **Make a key** in Settings > Account > Module developer.
+- **"doesn't have your recovery key yet"**: get it from your other PC, or type it in, under Settings > Account > Recovery key.
+- **"the request was turned down"**: you pressed Turn down, or nobody answered within 2 minutes. Pack again and press **Allow**.
+- **"more than one publisher key"**: pick one with `--publisher <fingerprint>`.
+
+## Publishing is refused
+
+- **"Publishing needs your Tavora account now"**: publish with Tavora open on this PC, or from CI with a [publish token](./publisher-key.md#publishing-from-ci) in `TAVORA_PUBLISH_TOKEN`. An older `tavora-pack` gets this too: update it to 0.2.0 or newer.
+- **"linked to another Tavora account"**: sign in to Tavora with the account the key is linked to.
+- **"publishes only under id prefixes your account has"**: publish the module's first version from Tavora; CI can publish the updates.
+- **"This publish token doesn't work any more"**: the token was removed or ran out after a year. Make a new one in Tavora and put it in your CI's secrets. From Tavora, sign in again.
+
 ## Installing the zip fails
 
 - **"comes from a different publisher, so it can't replace it"**: the zip is signed with another key than the installed version. Sign it with your original key; see [Your publisher key](./publisher-key.md).
