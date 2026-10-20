@@ -198,7 +198,8 @@ export class Tree {
               ? "selectable"
               : "locked",
           art = getNodeArt(node, state),
-          size = node.tier === "large" ? 76 : node.tier === "medium" ? 52 : 36;
+          // Frame diameters in the pinned upstream layout, in tree units.
+          size = node.tier === "large" ? 45 : node.tier === "medium" ? 25 : 20;
         const name = getSkillName(node.type, "en");
         const match = !!q && name.toLowerCase().includes(q);
         const image = (path: string, s: number) =>
@@ -207,12 +208,14 @@ export class Tree {
           '" x="' +
           -s / 2 +
           '" y="' +
-          -s / 2 +
+          -s * 1.5 +
           '" width="' +
           s +
           '" height="' +
-          s +
-          '"/>';
+          s * 3 +
+          '" preserveAspectRatio="xMidYMid meet"' +
+          (art.dim ? ' style="filter:brightness(.5)"' : '') +
+          '/>';
         return (
           '<g data-node="' +
           node.id +
@@ -234,13 +237,15 @@ export class Tree {
           ')"><title>' +
           escape(name) +
           '</title><circle r="' +
-          (size / 2 + 5) +
+          size / 2 +
           '"/>' +
           image(art.frame, size) +
-          (art.icon ? image(art.icon, size * 0.68) : "") +
-          (level
+          (art.icon
+            ? image(art.icon, size - (state === "locked" ? 20 : 15) - (art.iconOffset ?? 0))
+            : "") +
+          ((SkillNodes.types[node.type].maxLevel ?? 1) > 1
             ? '<text y="' +
-              (size / 2 + 15) +
+              (size / 2) +
               '">' +
               level +
               "/" +
@@ -267,7 +272,7 @@ export class Tree {
     this.svg.innerHTML =
       '<g class="links">' +
       links +
-      '</g><circle class="hub" r="198"/><text class="hub-title" y="-8">Enshrouded</text><text class="hub-subtitle" y="30">1.0</text>' +
+      '</g><circle class="hub" r="198"/>' +
       labels +
       nodes;
     this.view();
