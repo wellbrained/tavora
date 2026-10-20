@@ -5,9 +5,9 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { SUPPORTED_VERSIONS } from "./backup";
 import { emptyLibrary, sanitizeLibrary } from "./library";
 import { sanitizeProfile } from "./profile";
+import { SUPPORTED_VERSIONS } from "./saved-data";
 import { emptyWorkspace, loadWorkspace, saveWorkspace } from "./workspace";
 
 /** library.json as 0.1.0 wrote it. */

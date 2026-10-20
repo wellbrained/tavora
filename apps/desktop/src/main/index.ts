@@ -1,10 +1,11 @@
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { app, protocol } from "electron";
 import { HOST_SCHEME, MODULE_SCHEME } from "./assets";
 import { errorLog } from "./diagnostics";
 import { Host } from "./host";
 import { parseTestHosts } from "./network";
+import { readGrayscaleText } from "./saved-data";
 import { reportStartupFailure } from "./startup-failure";
 import { findUnsafeSwitch } from "./unsafe-switches";
 
@@ -42,19 +43,10 @@ app.setPath("userData", userData);
 
 // OLED panels don't use the RGB subpixel layout ClearType assumes, so small
 // text gets colour fringes there. Chromium only takes this switch before the
-// app is ready, so the setting is read straight from library.json and a
+// app is ready, so the setting is read straight from the saved library and a
 // change applies on the next start.
-const grayscaleText = readGrayscaleText();
+const grayscaleText = readGrayscaleText(app.getPath("userData"));
 if (grayscaleText) app.commandLine.appendSwitch("disable-lcd-text");
-
-function readGrayscaleText(): boolean {
-  try {
-    const saved: unknown = JSON.parse(readFileSync(path.join(app.getPath("userData"), "library.json"), "utf8"));
-    return (saved as { grayscaleText?: unknown } | null)?.grayscaleText === true;
-  } catch {
-    return false;
-  }
-}
 
 // Last line of defence for any webContents the host did not configure itself.
 app.on("web-contents-created", (_event, contents) => {

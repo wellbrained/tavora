@@ -20,6 +20,7 @@ import type { AccountKey } from "./account-key";
 import { checkFolder, FolderStorage } from "./copy-folder";
 import { writeFileAtomic } from "./fsutil";
 import { PlayerError } from "./messages";
+import { LIBRARY_FILE, libraryFile, PC_SETTINGS } from "./saved-data";
 
 // When the cloud copy syncs (decided 2026-10-19), using the engine in cloud-copy.ts:
 // - At start, before anything reads the data, a newer copy is taken when this PC has
@@ -42,9 +43,6 @@ export const START_BUDGET_MS = 6_000;
 export const CLOSE_QUIET_MS = 3_000;
 /** Local backups made when a side was replaced, kept in the backups folder. */
 const KEEP_BACKUPS = 3;
-
-/** Library settings that belong to this PC: a copy from another PC never changes them. */
-const PC_SETTINGS = ["moduleFilesFolder", "developmentFolders", "dialogFolders", "steamProfile"] as const;
 
 /** A downloaded copy waiting in the staging folder: taken at the next start. */
 interface Staged {
@@ -324,7 +322,7 @@ export class CopySync {
       this.conflict = true;
       return false;
     }
-    const library = path.join(this.options.userData, "library.json");
+    const library = libraryFile(this.options.userData);
     const ownSettings = await readJson(library);
     const keepIn = await this.backupFolder("this-pc");
     const roots = this.roots();
@@ -740,9 +738,9 @@ async function keepPcSettings(file: string, own: Record<string, unknown> | null,
   }
   if (!changed) return;
   await writeFileAtomic(file, JSON.stringify(taken, null, 2));
-  const synced = state.files["library.json"];
+  const synced = state.files[LIBRARY_FILE];
   const info = await stat(file);
-  if (synced) state.files["library.json"] = { ...synced, size: info.size, mtimeMs: info.mtimeMs };
+  if (synced) state.files[LIBRARY_FILE] = { ...synced, size: info.size, mtimeMs: info.mtimeMs };
 }
 
 /** The copy was sealed with a key the account no longer has: another PC started over. */

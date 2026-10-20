@@ -41,8 +41,7 @@ import { ModuleLifecycle } from "./module-lifecycle";
 import type { TestHosts } from "./network";
 import { shortcutFor } from "./shortcuts";
 import { IconError, importIcon, removeIcon } from "./icons";
-import { readJsonOrSetAside } from "./json";
-import { clipInitials, clipName, type Profile, removePicture, sanitizeProfile, savePicture } from "./profile";
+import { clipInitials, clipName, type Profile, removePicture, savePicture } from "./profile";
 import {
   addGame,
   createFolder,
@@ -66,7 +65,6 @@ import {
   renameFolder,
   renameGame,
   restoreGame,
-  sanitizeLibrary,
   searchCatalog,
   setFolderLabel,
   setGameImage,
@@ -85,7 +83,8 @@ import {
 } from "./library";
 import { MODULE_FONTS } from "./module-fonts";
 import { moduleBaseCss } from "./module-style";
-import { backupData, backupsDir, keepNewerFile, SUPPORTED_VERSIONS } from "./backup";
+import { backupData, backupsDir } from "./backup";
+import { loadLibrary, SavedData } from "./saved-data";
 import { CatalogClient, catalogView, type CatalogScope } from "./catalog-client";
 import { parseReadme } from "./catalog-readme";
 import { CHECK_INTERVAL_MS } from "./catalog-updates";
@@ -145,8 +144,6 @@ import { writeFileAtomic } from "./fsutil";
 import {
   emptyGameWorkspace,
   GameWorkspaces,
-  loadWorkspace,
-  saveWorkspace,
   settlePanelTypes,
   WorkspaceError,
   type InstanceRecord,
@@ -346,7 +343,6 @@ export class Host {
   private catalogTimer: ReturnType<typeof setInterval> | undefined;
   /** Looks for new versions; only in an installed (packaged) app. */
   private updates: UpdateManager | null = null;
-  private saving: Promise<void> = Promise.resolve();
   /** The active theme as modules get it; rebuilt when the theme changes. */
   private currentTheme: TavoraTheme;
   private windowSaveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -364,6 +360,8 @@ export class Host {
     windowState: WindowState,
     private themes: Map<string, InstalledTheme>,
     private themeProblems: ThemeProblem[],
+    /** Reads and writes library.json and the other data files (saved-data.ts). */
+    private readonly savedData: SavedData,
   ) {
     this.currentTheme = moduleTheme(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation);
     this.files = new ModuleFilesFolder({
@@ -384,7 +382,7 @@ export class Host {
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.catalog = new CatalogClient(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.workspaces = new GameWorkspaces(workspace, {
-      save: (state) => this.enqueue(() => saveWorkspace(path.join(this.options.userData, "workspace.json"), state), "workspace"),
+      save: (state) => this.savedData.saveWorkspace(state),
     });
     this.lifecycle = new ModuleLifecycle({
       userData: options.userData,
@@ -474,11 +472,10 @@ export class Host {
     const { userData } = options;
     let created: Host | undefined;
     const copySync = await Host.cloudCopy(options, () => created);
+    const savedData = new SavedData(userData);
     // A file saved by a newer Tavora is copied aside before this one can overwrite it.
-    for (const [name, version] of Object.entries(SUPPORTED_VERSIONS)) {
-      await keepNewerFile(path.join(userData, name), version).catch(() => null);
-    }
-    const library = sanitizeLibrary(await readJsonOrSetAside(path.join(userData, "library.json")));
+    await savedData.keepNewerFiles();
+    const library = await savedData.loadLibrary();
     const moduleProblems: ModuleProblem[] = [];
     const modules = await discoverModules({ ...Host.moduleSources(options, library.developmentFolders), tavoraVersion: app.getVersion() }, moduleProblems);
     const ownerRecords = await readOwnerRecords(userData);
@@ -499,17 +496,11 @@ export class Host {
       console.error("[tavora] moving module data under its owner failed", error),
     );
     const expired = purgeExpired(library, new Date());
-    const workspace = await loadWorkspace(
-      path.join(userData, "workspace.json"),
-      Object.keys(library.games),
-      (id) => modules.has(id),
-    );
+    const workspace = await savedData.loadWorkspace(Object.keys(library.games), (id) => modules.has(id));
     settlePanelTypes(workspace, panelTypesOf(modules));
-    const savedProfile = await readJsonOrSetAside(path.join(userData, "profile.json"));
-    const profile = sanitizeProfile(savedProfile);
-    const savedWindow = await readJsonOrSetAside<WindowState>(path.join(userData, "window.json"));
+    const { profile, saved: profileSaved } = await savedData.loadProfile();
     const windowState = initialBounds(
-      savedWindow,
+      await savedData.loadWindow(),
       screen.getAllDisplays().map((display) => display.workArea),
       screen.getPrimaryDisplay().workArea,
     );
@@ -523,7 +514,7 @@ export class Host {
       options.devServer,
     );
 
-    const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems);
+    const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems, savedData);
     created = host;
     host.copySync = copySync;
     host.developerKeys = new DeveloperKeys({
@@ -560,7 +551,7 @@ export class Host {
       if (host.library.followSystem) host.applyTheme();
     });
     // The id is made once and kept, so a new profile is written straight away.
-    if (savedProfile === null) host.saveProfile().catch(() => undefined); // logged by saveProfile
+    if (!profileSaved) host.saveProfile().catch(() => undefined); // logged by saveProfile
     // Browser storage of games that are gone, removed before any session opens it.
     for (const dir of await orphanedPartitions(userData, new Set(Object.keys(library.games)))) {
       await rm(dir, { recursive: true, force: true });
@@ -2455,7 +2446,7 @@ export class Host {
   private static async cloudCopy(options: HostOptions, host: () => Host | undefined): Promise<CopySync> {
     const encryptor = Host.encryptor(options);
     const startToken = options.accounts === true ? ((await loadAccount(path.join(options.userData, "account.json"), encryptor))?.token ?? null) : null;
-    const savedFolder = sanitizeLibrary(await readJsonOrSetAside(path.join(options.userData, "library.json"))).moduleFilesFolder;
+    const savedFolder = (await loadLibrary(options.userData)).moduleFilesFolder;
     const service = {
       baseUrl: `${(options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, "")}/v1/account`,
       fetch: ((input, init) => fetch(input, init)) as typeof fetch,
@@ -3225,10 +3216,6 @@ export class Host {
     this.statePush ??= setImmediate(() => this.pushState());
   }
 
-  private enqueue(write: () => Promise<void>, what: string): void {
-    this.saving = this.saving.then(write).catch((error: unknown) => console.error(`[tavora] could not save ${what}`, error));
-  }
-
   /**
    * The system's open dialog, opening in the folder the player last picked from in this `place` while
    * that folder is still there. Answers with what was picked, or nothing when cancelled; the caller
@@ -3248,16 +3235,12 @@ export class Host {
   }
 
   private saveLibrary(): void {
-    const body = JSON.stringify(this.library, null, 2);
-    this.enqueue(() => writeFileAtomic(path.join(this.options.userData, "library.json"), body), "library");
+    this.savedData.saveLibrary(this.library);
   }
 
-  /** Queues the write like the others, and also tells the caller whether it landed. */
+  /** Also tells the caller whether the write landed. */
   private saveProfile(): Promise<void> {
-    const body = JSON.stringify(this.profile, null, 2);
-    const write = this.saving.then(() => writeFileAtomic(path.join(this.options.userData, "profile.json"), body));
-    this.saving = write.catch((error: unknown) => console.error("[tavora] could not save profile", error));
-    return write;
+    return this.savedData.saveProfile(this.profile);
   }
 
   private saveWindowSoon(): void {
@@ -3269,12 +3252,12 @@ export class Host {
     clearTimeout(this.windowSaveTimer);
     if (this.window.isDestroyed()) return;
     const state: WindowState = { bounds: this.window.getNormalBounds(), maximized: this.window.isMaximized() };
-    this.enqueue(() => writeFileAtomic(path.join(this.options.userData, "window.json"), JSON.stringify(state)), "window");
+    this.savedData.saveWindow(state);
   }
 
   /** Resolves once pending writes are on disk. */
   flush(): Promise<void> {
-    return this.saving;
+    return this.savedData.flush();
   }
 }
 
