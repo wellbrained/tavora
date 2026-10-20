@@ -147,6 +147,11 @@ export class CopySync {
     return this.options.accountKey.get();
   }
 
+  /** The folder the copy is kept in (or is being turned on in), or null for the service. */
+  get place(): string | null {
+    return this.folder;
+  }
+
   /** The account's key, which the publisher keys use too (developer-keys.ts). */
   get accountKey(): AccountKey {
     return this.options.accountKey;
@@ -449,6 +454,15 @@ export class CopySync {
       if (error instanceof PlayerError) throw error;
       throw CopySync.playerError(this.noteProblem(error));
     });
+    await this.goOnWithKey(here);
+  }
+
+  /** Another PC sent the account's key (pairing.ts), and it is kept: a copy that waited for it goes on. */
+  async keyArrived(): Promise<void> {
+    if (this.askKey) await this.goOnWithKey(this.keyHere);
+  }
+
+  private async goOnWithKey(here: boolean): Promise<void> {
     this.askKey = false;
     try {
       await this.startCopy();

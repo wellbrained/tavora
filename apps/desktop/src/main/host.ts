@@ -120,6 +120,7 @@ import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
 import { AccountKey } from "./account-key";
 import { DeveloperKeys } from "./developer-keys";
+import { FolderPairing, Pairing, ServicePairing } from "./pairing";
 import { startSignerServer, type SignerServer } from "./signer-server";
 import { ServiceStorage } from "./cloud-copy";
 import { CopySync } from "./cloud-copy-sync";
@@ -294,6 +295,7 @@ export class Host {
   private copySync!: CopySync;
   /** The publisher keys the account's vault keeps, and the signer the pack command asks (developer-keys.ts). */
   private developerKeys!: DeveloperKeys;
+  private pairing!: Pairing;
   private signer: SignerServer | null = null;
   /** The developer names players see for publisher keys (publisher-names.ts). */
   private readonly publisherNames: PublisherNames;
@@ -522,6 +524,7 @@ export class Host {
       },
       focus: () => host.bringToFront(),
     });
+    host.pairing = Host.pairing(options, host);
     // Before any module opens, so none sees the pictures half moved.
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
     host.moduleData = await listModuleData(userData, host.files.root());
@@ -571,6 +574,7 @@ export class Host {
     host.copySync.start();
     if (options.accounts === true) {
       void host.developerKeys.refresh();
+      host.pairing.watch();
       host.signer = await startSignerServer({ handle: (request) => host.developerKeys.handle(request), log: (line) => console.log(`[tavora] ${line}`) });
     }
     await host.startUpdates();
@@ -1385,6 +1389,7 @@ export class Host {
     ipcMain.handle("host:get-account", (event) => (fromHost(event) ? this.account.view() : null));
     ipcMain.handle("host:get-cloud-copy", (event) => (fromHost(event) ? this.copySync.view() : null));
     ipcMain.handle("host:get-developer-keys", (event) => (fromHost(event) ? this.developerKeys.view() : null));
+    ipcMain.handle("host:get-pairing", (event) => (fromHost(event) ? this.pairing.view() : null));
     ipcMain.handle("host:module-notes", (event, moduleId: unknown) => {
       const module = fromHost(event) && typeof moduleId === "string" ? this.modules.get(moduleId) : undefined;
       return module ? installedNotes(this.moduleInfo.get(module.manifest.id)?.changelog ?? [], module.manifest.version) : [];
@@ -1464,6 +1469,7 @@ export class Host {
       this.discord.dispose();
       this.gameWatcher.stop();
       this.copySync.dispose();
+      this.pairing.dispose();
       void this.signer?.close();
       clearInterval(this.catalogTimer);
     });
@@ -1865,6 +1871,12 @@ export class Host {
       }
       case "developer-sign-answer":
         return this.developerKeys.answer(action.id, action.allow);
+      case "pairing-start":
+        return this.pairing.start();
+      case "pairing-cancel":
+        return this.pairing.cancel();
+      case "pairing-decide":
+        return this.pairing.decide(action.id, action.allow);
       case "cloud-copy-on":
         return this.copySync.turnOn();
       case "cloud-copy-on-folder": {
@@ -2602,6 +2614,41 @@ export class Host {
     });
     await sync.beforeLoad();
     return sync;
+  }
+
+  /**
+   * Approving a new PC from an old one: through the service while signed in, or the cloud copy's folder.
+   * The key that comes is checked like a typed one, then the copy and the publisher keys go on with it.
+   */
+  private static pairing(options: HostOptions, host: Host): Pairing {
+    const service = new ServicePairing({
+      baseUrl: `${(options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, "")}/v1/account`,
+      fetch: (input, init) => fetch(input, init),
+      token: () => host.account.token(),
+    });
+    // One per folder, so it remembers what it asked and answered.
+    let folder: FolderPairing | null = null;
+    return new Pairing({
+      accountKey: host.copySync.accountKey,
+      service: () => (host.account.token() ? service : null),
+      folder: () => {
+        const place = host.copySync.place;
+        if (!place) return null;
+        if (folder?.folder !== place) folder = new FolderPairing(place, os.hostname());
+        return folder;
+      },
+      received: async (key, via) => {
+        if (via === "service") await host.copySync.accountKey.take(key);
+        else await host.copySync.accountKey.takeHere(key);
+        await host.copySync.keyArrived();
+        await host.developerKeys.refresh();
+      },
+      onChange: (view) => {
+        if (!host.window.isDestroyed()) host.window.webContents.send("host:pairing", view);
+      },
+      focus: () => host.bringToFront(),
+      log: (line) => console.log(`[tavora] ${line}`),
+    });
   }
 
   // ── Discord ──────────────────────────────────────────────────────────

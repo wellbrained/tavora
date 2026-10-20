@@ -19,6 +19,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.13",
+    date: "2026-10-20",
+    title: "Add a PC from your other PC",
+    notes: [
+      "On a new PC, get your recovery key from your other PC instead of typing it in.",
+      "Both PCs show the same code. Check it, then click Add on your other PC.",
+      "Works with your own cloud copy folder too, no account needed.",
+    ],
+  },
+  {
     version: "0.19.12",
     date: "2026-10-20",
     title: "Tavora keeps your publisher keys",

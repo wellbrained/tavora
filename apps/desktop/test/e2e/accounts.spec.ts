@@ -357,3 +357,37 @@ test("the cloud copy takes one PC's games to another, with the recovery key", as
     await again.app.close();
   }
 });
+
+test("a new PC gets the recovery key from another PC, once both show the same code", async () => {
+  // The old PC looks for new ones every few seconds.
+  test.setTimeout(120_000);
+  const env = { TAVORA_API_URL: apiUrl, TAVORA_DISCORD_IPC: path.join(tmpdir(), "tavora-no-discord"), TAVORA_DISCORD_TOKEN_URL: `${discordUrl}/api/oauth2/token` };
+  const a = await launch(undefined, [], { env });
+  const b = await launch(undefined, [], { env, seed: false });
+  try {
+    await signIn(a.page, "pair@example.com", true);
+    await a.page.getByTestId("cloud-copy-on").click();
+    await expect(a.page.getByTestId("cloud-copy-key-text")).toBeVisible();
+    const key = (await a.page.getByTestId("cloud-copy-key-text").textContent())?.trim() ?? "";
+    await a.page.getByTestId("cloud-copy-key-saved").click();
+
+    await signIn(b.page, "pair@example.com");
+    await b.page.getByTestId("pairing-start").click();
+    await expect(b.page.getByTestId("pairing-start")).toHaveCount(0);
+    await expect(b.page.getByTestId("pairing-code")).toBeVisible({ timeout: 40_000 });
+    const code = (await b.page.getByTestId("pairing-code").textContent())?.trim() ?? "";
+    expect(code).toMatch(/^.{3}-.{3}$/);
+    await expect(a.page.getByTestId("pairing-approve")).toContainText("Add");
+    await expect(a.page.getByTestId("pairing-approve-code")).toHaveText(code, { timeout: 20_000 });
+    await a.page.getByTestId("pairing-add").click();
+    await expect(a.page.getByTestId("pairing-approve")).toHaveCount(0);
+
+    // B now has the account's key without anyone typing it.
+    await expect(b.page.getByTestId("recovery-key-show")).toBeVisible({ timeout: 15_000 });
+    await b.page.getByTestId("recovery-key-show").click();
+    await expect(b.page.getByTestId("recovery-key-text")).toHaveText(key);
+  } finally {
+    await a.app.close();
+    await b.app.close();
+  }
+});
