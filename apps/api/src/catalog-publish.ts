@@ -5,15 +5,17 @@ import type { AccountStore } from "./account-store.ts";
 import { MAIL_RESERVED } from "./accounts.ts";
 import { CatalogError, checkCatalogZip, type CatalogStore, type CheckedZip } from "./catalog.ts";
 import { catalogTrust } from "./catalog-trust.ts";
-import type { Mail, Mailer } from "./mail.ts";
+import { mailLanguage, publishedMail, type Mail, type Mailer } from "./mail.ts";
 import { signedStatement } from "./publishers.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 
 /**
  * Publishing to the catalog (Milestone E, step 3): `tavora-pack publish` sends a zip it packed, with
- * the publisher key's signature over PUBLISH_STATEMENT and the zip's SHA-256. No sign-in is needed: the
- * key must be linked to an account (which takes a sign-in), and the account holds the module id's
- * prefix (C5). Signing the hash, not only the files, means a zip shared by hand cannot be published
+ * the publisher key's signature over PUBLISH_STATEMENT and the zip's SHA-256. The key must be linked to
+ * an account, and the account holds the module id's prefix (C5). The upload also carries the account's
+ * sign-in (Tavora uploads for tavora-pack) or one of its publish tokens (CI), so a stolen key alone
+ * publishes nothing (decided 2026-10-20; key-only uploads stopped at once). A token publishes only under
+ * prefixes the account holds already. The account's address gets an email after every publish. Signing the hash, not only the files, means a zip shared by hand cannot be published
  * by whoever received it; only the key's holder decides what lists. A revoked key publishes nothing
  * new (C6), and a successor key publishes the modules of the key it replaces (C7), both by the lists
  * signed with the catalogue key.
@@ -45,6 +47,8 @@ export interface PublishOptions {
   catalogueKey?: string;
   /** Who is told when the catalog is full (MAINTAINER_EMAIL), and how. Absent: only the review page shows it. */
   maintainer?: { email: string; mailer: Mailer; mailDailyLimit?: number };
+  /** How the developer is told about each publish. Absent: nobody is (tests that don't look). */
+  mail?: { mailer: Mailer; mailDailyLimit?: number };
 }
 
 export function catalogFullMail(to: string, usedBytes: number, catalogBytes: number): Mail {
@@ -60,10 +64,10 @@ export function catalogFullMail(to: string, usedBytes: number, catalogBytes: num
 }
 
 /** The middleware and handler for POST /v1/catalog/publish. */
-export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, maintainer }: PublishOptions) {
+export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, maintainer, mail }: PublishOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
   const { uploadsPerDay, accountBytes, catalogBytes } = { ...PUBLISH_LIMITS, ...limits };
-  const refuse = (context: Context, status: 400 | 403 | 409 | 413 | 415 | 429 | 503 | 507, reason: string, error: string) => context.json({ error, reason }, status);
+  const refuse = (context: Context, status: 400 | 401 | 403 | 409 | 413 | 415 | 429 | 503 | 507, reason: string, error: string) => context.json({ error, reason }, status);
 
   const limit = bodyLimit({
     maxSize: ZIP_LIMITS.maxArchiveBytes,
@@ -84,6 +88,31 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     }
   };
 
+  /** Who uploads: a signed-in Tavora, or a publish token (with its name). Null without either. */
+  const uploader = (store: AccountStore, context: Context, at: number): { accountId: string; token: string | null } | null => {
+    const match = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "");
+    if (!match) return null;
+    const byToken = store.publishTokenAccount(match[1]!, at);
+    if (byToken) return { accountId: byToken.accountId, token: byToken.name };
+    const session = store.sessionByToken(match[1]!, at);
+    return session ? { accountId: session.accountId, token: null } : null;
+  };
+
+  // The developer hears of every publish; best effort, and never with the emails kept for sign-in codes.
+  const tellPublished = async (store: AccountStore, context: Context, accountId: string, checked: CheckedZip, token: string | null, at: number) => {
+    const to = store.account(accountId)?.email;
+    if (!mail || !to) return;
+    const day = new Date(at).toISOString().slice(0, 10);
+    if (mail.mailDailyLimit !== undefined && store.mailsSent(day) >= Math.max(0, mail.mailDailyLimit - MAIL_RESERVED)) return;
+    const language = mailLanguage((context.req.header("accept-language") ?? "").slice(0, 2).toLowerCase());
+    try {
+      await mail.mailer.send(publishedMail(to, { id: checked.manifest.id, name: checked.manifest.name, version: checked.manifest.version }, checked.owner, token, language));
+      store.countMail(day);
+    } catch {
+      // Published all the same; the email is best effort.
+    }
+  };
+
   const handler = async (context: Context) => {
     const wait = limiter.check(clientKey(context.req.raw));
     if (wait > 0) {
@@ -92,6 +121,10 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     }
     if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
     if ((context.req.header("content-type") ?? "").toLowerCase() !== "application/zip") return refuse(context, 415, "bad-request", "Send the zip as application/zip.");
+    const by = uploader(store, context, now());
+    if (!by) {
+      return refuse(context, 401, "sign-in-needed", "Publishing needs your Tavora sign-in now: update tavora-pack and publish with Tavora open, or from CI with a publish token.");
+    }
     const signature = context.req.header("x-tavora-signature");
     const bytes = Buffer.from(await context.req.arrayBuffer());
 
@@ -107,6 +140,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (!signedStatement(Buffer.from(key.publicKey, "base64"), `${PUBLISH_STATEMENT}\n${checked.sha256}`, signature)) {
       return refuse(context, 403, "bad-signature", "The upload is not signed by the key that signed the zip.");
     }
+    if (by.accountId !== key.accountId) return refuse(context, 403, "wrong-account", "This publisher key is linked to another Tavora account than the one publishing.");
     const trust = catalogTrust(catalog, catalogueKey);
     if (trust.revoked(checked.owner, checked.sha256)) return refuse(context, 403, "key-revoked", "This publisher key was revoked and publishes nothing new. Link a new key to your account.");
     // A successor key counts for its account's first key only when the succession names this account.
@@ -120,6 +154,9 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (held === "taken") return refuse(context, 403, "prefix-taken", `The id prefix "${prefix}" belongs to another developer.`);
     if (held === "reserved") return refuse(context, 403, "prefix-reserved", `The id prefix "${prefix}" is reserved.`);
     if (held === "too-many") return refuse(context, 403, "too-many-prefixes", "Your account holds as many id prefixes as it can. Publish under one of them.");
+    if (held === "free" && by.token !== null) {
+      return refuse(context, 403, "token-new-prefix", `A publish token publishes only under your account's id prefixes. Publish the first module under "${prefix}" from Tavora.`);
+    }
 
     const at = now();
     if (catalog.uploadsSince(key.accountId, new Date(at - 86_400_000)) >= uploadsPerDay) {
@@ -143,6 +180,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     }
     catalog.clearFull();
     if (held === "free") store.reservePrefix(key.accountId, prefix, at);
+    await tellPublished(store, context, key.accountId, checked, by.token, at);
     return context.json({ status: "published", id: checked.manifest.id, version: checked.manifest.version, sha256: checked.sha256 }, 201);
   };
 

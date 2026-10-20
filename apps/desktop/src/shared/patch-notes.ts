@@ -19,13 +19,23 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.19.13",
+    version: "0.19.14",
     date: "2026-10-20",
     title: "Add a PC from your other PC",
     notes: [
       "On a new PC, get your recovery key from your other PC instead of typing it in.",
       "Both PCs show the same code. Check it, then click Add on your other PC.",
       "Works with your own cloud copy folder too, no account needed.",
+    ],
+  },
+  {
+    version: "0.19.13",
+    date: "2026-10-20",
+    title: "Publishing needs your account",
+    notes: [
+      "Module developers: your publisher key alone can't publish any more. Tavora uploads for tavora-pack with your sign-in.",
+      "To publish from CI, make a publish token under Settings > Account.",
+      "You get an email every time a module of yours is published.",
     ],
   },
   {

@@ -7,7 +7,7 @@ import { sign, type KeyObject } from "node:crypto";
 import { connect } from "node:net";
 import { homedir, userInfo } from "node:os";
 import path from "node:path";
-import { PUBLISH_STATEMENT } from "./publish.ts";
+import { PUBLISH_STATEMENT, PublishError, type Published } from "./publish.ts";
 import { fingerprint, publicKeyFromRaw, rawPublicKey, signedBytes } from "./signature.ts";
 
 export interface Signer {
@@ -17,8 +17,10 @@ export interface Signer {
   fingerprint: string;
   /** The signature over a package's file hashes. `manifest` is the package's tavora.module.json, so Tavora can show what it signs. */
   signPackage(files: Record<string, string>, manifest: Buffer): Promise<Buffer>;
-  /** The signature that lets the catalog list this zip (PUBLISH_STATEMENT and its SHA-256). */
-  signPublish(zip: Buffer, sha256: string): Promise<Buffer>;
+  /** The signature that lets the catalog list this zip (PUBLISH_STATEMENT and its SHA-256); a key file's. */
+  signPublish?(zip: Buffer, sha256: string): Promise<Buffer>;
+  /** Signs and uploads the zip, signed in: Tavora's. */
+  publish?(zip: Buffer): Promise<Published>;
 }
 
 export class SignerError extends Error {}
@@ -61,11 +63,13 @@ export const MAX_SIGNER_MESSAGE = 72 * 1024 * 1024;
 export type SignerRequest =
   | { v: 1; op: "keys" }
   | { v: 1; op: "sign-package"; publicKey: string; files: Record<string, string>; manifest: string }
-  | { v: 1; op: "sign-publish"; zip: string };
+  | { v: 1; op: "publish"; zip: string };
 
 export type SignerAnswer =
   | { ok: true; keys: { publicKey: string }[] }
   | { ok: true; signature: string }
+  | { ok: true; published: Published }
+  | { ok: false; reason: "publish-refused"; error: string }
   | { ok: false; reason: "no-recovery-key" | "signed-out" | "unknown-key" | "refused" | "busy" | "bad-request" | "failed" };
 
 const REASONS: Record<string, string> = {
@@ -114,6 +118,7 @@ export async function askTavora(request: SignerRequest, address = signerAddress(
 }
 
 function answerError(answer: SignerAnswer): SignerError {
+  if (!answer.ok && answer.reason === "publish-refused") return new SignerError(typeof answer.error === "string" ? answer.error.slice(0, 500) : REASONS.failed!);
   return new SignerError(!answer.ok ? (REASONS[answer.reason] ?? REASONS.failed!) : REASONS.failed!);
 }
 
@@ -145,6 +150,14 @@ export async function tavoraSigner(options: { publisher?: string; address?: stri
   return {
     ...chosen,
     signPackage: (files, manifest) => signature({ v: 1, op: "sign-package", publicKey: chosen.publicKey, files, manifest: manifest.toString("base64") }),
-    signPublish: (zip) => signature({ v: 1, op: "sign-publish", zip: zip.toString("base64") }),
+    publish: async (zip) => {
+      const answer = await askTavora({ v: 1, op: "publish", zip: zip.toString("base64") }, address, 10 * 60_000);
+      if (!answer) throw new SignerError("Tavora was closed. Open it and try again.");
+      if (!answer.ok && answer.reason === "publish-refused") throw new PublishError(answerError(answer).message);
+      if (!answer.ok || !("published" in answer)) throw answerError(answer);
+      const { id, version, sha256 } = answer.published;
+      if (typeof id !== "string" || typeof version !== "string" || typeof sha256 !== "string") throw new SignerError(REASONS.failed!);
+      return { id, version, sha256 };
+    },
   };
 }

@@ -113,7 +113,7 @@ describe("developer names", () => {
     const second = await signIn("second@example.com");
     const put = (token: string, name: string) => request("PUT", "/v1/account/developer", { name }, token);
 
-    expect(await (await request("GET", "/v1/account/developer", undefined, first)).json()).toEqual({ developer: null, keys: [] });
+    expect(await (await request("GET", "/v1/account/developer", undefined, first)).json()).toEqual({ developer: null, keys: [], publishTokens: [] });
     const set = await put(first, "wellbrained");
     expect(set.status).toBe(200);
     expect(await set.json()).toMatchObject({ developer: { name: "wellbrained", changedAt: "2026-10-17T12:00:00.000Z", nextChangeAt: "2026-11-16T12:00:00.000Z" } });
@@ -132,6 +132,34 @@ describe("developer names", () => {
     expect(await (await put(second, "wellbrained")).json()).toMatchObject({ reason: "name-taken" });
     clock.now += NAME_HOLD_MS;
     expect((await put(second, "wellbrained")).status).toBe(200);
+  });
+});
+
+describe("publish tokens", () => {
+  it("are shown once, kept as a hash, listed without the secret, at most 10, and removable", async () => {
+    const { request, signIn, store } = setup();
+    const token = await signIn("ci@example.com");
+    expect(await (await request("POST", "/v1/account/publish-tokens", { name: "CI" }, token)).json()).toMatchObject({ reason: "no-developer-name" });
+    await request("PUT", "/v1/account/developer", { name: "ci-dev" }, token);
+    expect(await (await request("POST", "/v1/account/publish-tokens", { name: " " }, token)).json()).toMatchObject({ reason: "bad-name" });
+
+    const made = await request("POST", "/v1/account/publish-tokens", { name: "GitHub Actions" }, token);
+    expect(made.status).toBe(201);
+    const answer = (await made.json()) as { token: string; publishTokens: { id: string; name: string; expiresAt: string; lastUsedAt: null }[] };
+    expect(answer.token).toMatch(/^tvp_[A-Za-z0-9_-]{43}$/);
+    expect(answer.publishTokens).toEqual([{ id: expect.any(String), name: "GitHub Actions", createdAt: "2026-10-17T12:00:00.000Z", expiresAt: "2027-10-17T12:00:00.000Z", lastUsedAt: null }]);
+    const listed = JSON.stringify(await (await request("GET", "/v1/account/developer", undefined, token)).json());
+    expect(listed).toContain("GitHub Actions");
+    expect(listed).not.toContain(answer.token);
+    // A publish token is no sign-in.
+    expect((await request("GET", "/v1/account/developer", undefined, answer.token)).status).toBe(401);
+
+    for (let i = 1; i < 10; i++) await request("POST", "/v1/account/publish-tokens", { name: `t${i}` }, token);
+    expect(await (await request("POST", "/v1/account/publish-tokens", { name: "one too many" }, token)).json()).toMatchObject({ reason: "too-many-tokens" });
+    const id = answer.publishTokens[0]!.id;
+    expect((await request("DELETE", `/v1/account/publish-tokens/${id}`, undefined, token)).status).toBe(200);
+    expect((await request("DELETE", `/v1/account/publish-tokens/${id}`, undefined, token)).status).toBe(404);
+    expect(store.publishTokenAccount(answer.token, Date.parse("2026-10-17T12:00:00Z"))).toBeNull();
   });
 });
 
