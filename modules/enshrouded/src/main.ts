@@ -242,6 +242,13 @@ function dialog(title: string, body: string, yes: string, field?: string) {
       resolve(null);
     };
     panel.oncancel = () => resolve(null);
+    panel.onclick = (event) => {
+      const bounds = panel.getBoundingClientRect();
+      if (event.target === panel && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) {
+        panel.close();
+        resolve(null);
+      }
+    };
   });
 }
 async function ask(title: string, body: string, yes: string) {
@@ -268,11 +275,11 @@ async function nameBuild(rename = false) {
 }
 function setup() {
   root.innerHTML =
-    '<header class="toolbar"><button id="new">' +
+    '<header class="toolbar"><button id="new" class="primary">' +
     esc(copy.new) +
-    '</button><select id="build" aria-label="' +
+    '</button><span class="build-picker"><select id="build" aria-label="' +
     esc(copy.build) +
-    '"></select><button id="rename">' +
+    '"></select><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span><button id="rename">' +
     esc(copy.rename) +
     '</button><button id="import">' +
     esc(copy.import) +
@@ -302,11 +309,11 @@ function setup() {
     esc(copy.statsHint) +
     "</p></section>" +
     (copy === german ? "<p>" + esc(copy.skillLanguage) + "</p>" : "") +
-    '</aside></main><footer id="status" role="status" aria-live="polite"></footer><input id="file" type="file" accept=".json,application/json" hidden><dialog id="dialog"><form id="dialog-form"><h2 id="dialog-title"></h2><p id="dialog-body"></p><label id="name-field">' +
+    '</aside></main><footer id="status" role="status" aria-live="polite"></footer><input id="file" type="file" accept=".json,application/json" hidden><dialog id="dialog" aria-labelledby="dialog-title" aria-describedby="dialog-body"><form id="dialog-form"><h2 id="dialog-title"></h2><p id="dialog-body"></p><label id="name-field">' +
     esc(copy.name) +
     '<input id="name" maxlength="100" required></label><p id="dialog-error" role="alert"></p><div class="dialog-actions"><button id="dialog-cancel" type="button">' +
     esc(copy.cancel) +
-    '</button><button id="dialog-yes" type="submit">' +
+    '</button><button id="dialog-yes" class="primary" type="submit">' +
     esc(copy.save) +
     "</button></div></form></dialog>";
   tree = new Tree(

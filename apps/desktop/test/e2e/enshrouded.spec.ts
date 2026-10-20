@@ -34,6 +34,14 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
   const options = { seed: false, env: { TAVORA_EXPORTS_DIR: exports, TAVORA_OFFICIAL_MODULE_DIRS:officialDirs } };
   let running = await launch(userData, [path.dirname(moduleDir)], options);
   let app = running.app;
+  const capture = async (name: string) => {
+    await inModule(app, ID, 'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    const png = await app.evaluate(async ({webContents}) => {
+      const wc = webContents.getAllWebContents().find(w => w.getURL().startsWith('tavora-module://local.enshrouded/'))!;
+      return (await wc.capturePage()).toPNG().toString('base64');
+    });
+    await writeFile(info.outputPath(name), Buffer.from(png, 'base64'));
+  };
   try {
     await running.page.getByTestId("add-module").click();
     await running.page.getByTestId("open-" + ID).click();
@@ -51,7 +59,30 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
         ).catch(() => 0),
       )
       .toBe(231);
+    await waitForShown(app, ID);
+    expect(await inModule(app, ID, 'getComputedStyle(document.body).fontFamily')).toMatch(/Inter|Segoe|sans-serif/);
+    const geometry = await inModule<{ overlaps: string[] }>(app, ID, `(() => {
+      const nodes = [...document.querySelectorAll('[data-node]')].map(node => {
+        const point = node.transform.baseVal.getItem(0).matrix;
+        return { id: node.dataset.node, x: point.e, y: point.f, r: Number(node.querySelector('circle').getAttribute('r')) };
+      });
+      return { overlaps: nodes.flatMap((a, i) => nodes.slice(i + 1).filter(b => Math.hypot(a.x-b.x,a.y-b.y) < a.r+b.r).map(b => a.id + ':' + b.id)) };
+    })()`);
+    expect.soft(geometry.overlaps, 'skill hit areas must not overlap').toEqual([]);
     await inModule(app, ID, 'document.querySelector("#new").click()');
+    const controls = await inModule<{width:number;expectedWidth:number;save:string;primary:string;buttonHeight:number;selectAppearance:string}>(app, ID, `(() => {
+      const dialog = document.querySelector('#dialog');
+      const save = document.querySelector('#dialog-yes');
+      const swatch = document.createElement('span');
+      swatch.style.backgroundColor = 'var(--primary)'; document.body.append(swatch);
+      const primary = getComputedStyle(swatch).backgroundColor; swatch.remove();
+      return { width: dialog.getBoundingClientRect().width, expectedWidth: Math.min(420, innerWidth-32), save: getComputedStyle(save).backgroundColor, primary, buttonHeight: document.querySelector('#new').getBoundingClientRect().height, selectAppearance: getComputedStyle(document.querySelector('#build')).appearance };
+    })()`);
+    expect.soft(controls.width).toBeCloseTo(controls.expectedWidth, 0);
+    expect.soft(controls.save).toBe(controls.primary);
+    expect.soft(controls.buttonHeight).toBe(32);
+    expect.soft(controls.selectAppearance).toBe('none');
+    await capture('enshrouded-dialog.png');
     await inModule(
       app,
       ID,
@@ -161,6 +192,9 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
         ),
       )
       .toBe("Imported wizard");
+    await inModule(app, ID, 'document.querySelector("#tree").setAttribute("viewBox","-250 -280 800 800")');
+    await capture('enshrouded-zoomed.png');
+    await inModule(app, ID, 'document.querySelector("#fit").click()');
     const state = await inModule(
       app,
       ID,
@@ -183,6 +217,10 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
     await expect.poll(()=>inModule(app,ID,'innerWidth')).toBe(400);
     expect(await inModule(app,ID,'({overflow:document.documentElement.scrollWidth>innerWidth,treeHeight:document.querySelector("#tree").getBoundingClientRect().height})')).toMatchObject({overflow:false,treeHeight:expect.any(Number)});
     const narrow=await app.evaluate(async({webContents})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://local.enshrouded/'))!;return(await wc.capturePage()).toPNG().toString('base64');});await writeFile(info.outputPath('enshrouded-narrow.png'),Buffer.from(narrow,'base64'));
+    await inModule(app, ID, 'document.querySelector("#new").click()');
+    expect(await inModule(app, ID, 'document.querySelector("#dialog").getBoundingClientRect().width')).toBe(368);
+    await capture('enshrouded-dialog-narrow.png');
+    await inModule(app, ID, 'document.querySelector("#dialog-cancel").click()');
     await app.close();
     running = await launch(userData, [path.dirname(moduleDir)], options);
     app = running.app;
