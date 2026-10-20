@@ -6,7 +6,6 @@ import {
 } from "@tavora/sdk";
 import {
   getSkillName,
-  getSkillDescription,
   getPointsUsed,
   getStatsFromSkills,
   BasicStats,
@@ -24,6 +23,7 @@ import {
 } from "./model";
 import { BuildRepository } from "./repository";
 import { summarizeBonuses } from "./bonuses";
+import { SkillTooltip } from "./tooltip";
 import { Tree, escape as esc } from "./tree";
 import { english, german } from "./copy";
 import "./style.css";
@@ -32,14 +32,16 @@ const $ = <T extends HTMLElement = HTMLElement>(s: string) =>
 let sdk: TavoraSDK,
   repo: BuildRepository,
   tree: Tree,
+  skillTooltip: SkillTooltip,
   copy = english,
   build: Build | null = null,
   id: string | null = null,
   busy = false,
-  inspected: string | null = null;
+  bonusesVisible = true;
 let loadRevision = 0;
 let documentRevision = 0;
 const root = $("#app");
+const emptySelection = {};
 const text = (value: string) => {
   const doc = new DOMParser().parseFromString(value, "text/html");
   for (const lineBreak of doc.querySelectorAll("br")) lineBreak.replaceWith(" ");
@@ -62,7 +64,7 @@ function controls() {
     HTMLButtonElement | HTMLSelectElement
   >(".toolbar button,.toolbar select,.details button"))
     control.disabled =
-      busy || (!build && !["new", "import"].includes(control.id));
+      busy || (!build && !["new", "import", "bonuses"].includes(control.id));
 }
 async function job(run: () => Promise<void>) {
   if (busy) return;
@@ -101,11 +103,18 @@ async function show(next: string | null) {
   build = loaded?.build ?? null;
   documentRevision = loaded?.revision ?? 0;
   id = next;
-  inspected = null;
   await library();
   draw();
-  await sdk.panel.setState({ build: id });
+  await remember();
   await sdk.panel.setContent(build && id ? { id, title: build.name } : null);
+}
+function remember() {
+  return sdk.panel.setState({build: id, bonuses: bonusesVisible});
+}
+function sidebar() {
+  $("#bonuses-sidebar").hidden = !bonusesVisible;
+  $("#bonuses").setAttribute("aria-expanded", String(bonusesVisible));
+  $("#bonuses").setAttribute("aria-pressed", String(bonusesVisible));
 }
 function attributeRows(stats: ReturnType<typeof getStatsFromSkills>) {
   const de = [
@@ -119,7 +128,7 @@ function attributeRows(stats: ReturnType<typeof getStatsFromSkills>) {
   return Object.entries(BasicStats)
     .map(
       ([key, value], i) =>
-        "<div><dt>" +
+        (stats[key as keyof typeof stats] ?? 0) === 0 ? "" : "<div><dt>" +
         esc(copy === german ? de[i] : value.name) +
         "</dt><dd>+" +
         (stats[key as keyof typeof stats] ?? 0) +
@@ -134,7 +143,10 @@ function renderBonuses() {
     getPointsUsed(build?.selection ?? {}) + " / " +
     MAX_SKILL_POINTS_ABSOLUTE + " " + copy.points;
   $("#bonus-attributes").innerHTML = attributeRows(summary.attributes);
+  $("#bonus-no-attributes").hidden = Object.values(summary.attributes).some(value => value !== 0);
+  $("#bonus-derived-section").hidden = !Object.values(summary.fromAttributes).some(value => value !== 0);
   $("#bonus-derived").innerHTML = Object.entries(summary.fromAttributes)
+    .filter(([, value]) => value !== 0)
     .map(([key, value]) => {
       const percent = ["melee", "bowDagger", "magic"].includes(key);
       return "<div><dt>" +
@@ -160,41 +172,9 @@ function draw() {
     points + " / " + MAX_SKILL_POINTS_ABSOLUTE + " " + copy.points;
   $("#remaining").textContent =
     MAX_SKILL_POINTS_ABSOLUTE - points + " " + copy.remaining;
-  const stats = getStatsFromSkills(build?.selection ?? {});
-  $("#stats").innerHTML = attributeRows(stats);
-  if ($<HTMLDialogElement>("#bonuses-dialog").open) renderBonuses();
+  renderBonuses();
+  skillTooltip.refresh();
   $("#empty").hidden = !!build;
-  details();
-  controls();
-}
-function details() {
-  if (!inspected) {
-    $("#detail-content").innerHTML = "<p>" + esc(copy.ready) + "</p>";
-    return;
-  }
-  const node = SkillNodes.nodes[inspected],
-    meta = SkillNodes.types[node.type],
-    level = build?.selection[inspected] ?? 0;
-  $("#detail-content").innerHTML =
-    "<h2>" +
-    esc(getSkillName(node.type, "en")) +
-    '</h2><p class="level">' +
-    level +
-    " / " +
-    (meta.maxLevel ?? 1) +
-    " · " +
-    meta.cost +
-    (copy === german ? " Punkte / Stufe</p>" : " points / level</p>") +
-    getSkillDescription(node.type, "en", Math.max(1, level))
-      .map((paragraph) => "<p>" + esc(text(paragraph)) + "</p>")
-      .join("") +
-    '<div class="detail-actions"><button id="allocate">' +
-    esc(copy.allocate) +
-    '</button><button id="refund">' +
-    esc(copy.refund) +
-    "</button></div>";
-  $("#allocate").onclick = () => act(inspected!, false);
-  $("#refund").onclick = () => act(inspected!, true);
   controls();
 }
 async function mutate(change: (build: Build) => Build) {
@@ -242,6 +222,7 @@ function act(nodeId: string, refund: boolean) {
   );
 }
 function dialog(title: string, body: string, yes: string, field?: string) {
+  skillTooltip.hide(true);
   const panel = $<HTMLDialogElement>("#dialog");
   $("#dialog-title").textContent = title;
   $("#dialog-body").textContent = body;
@@ -319,7 +300,7 @@ function setup() {
     esc(copy.export) +
     '</button><button id="reset">' +
     esc(copy.reset) +
-    '</button><button id="bonuses">' + esc(copy.bonuses) + '</button></header><section class="summary"><strong id="points"></strong><span id="remaining"></span><span class="version">' +
+    '</button><button id="bonuses" aria-controls="bonuses-sidebar" aria-expanded="true" aria-pressed="true">' + esc(copy.bonuses) + '</button></header><section class="summary"><strong id="points"></strong><span id="remaining"></span><span class="version">' +
     esc(copy.version) +
     '</span></section><main><section class="tree-area"><div class="tree-toolbar"><input id="search" type="search" maxlength="100" placeholder="' +
     esc(copy.search) +
@@ -333,40 +314,21 @@ function setup() {
     esc(copy.new) +
     '</button></div><p class="tree-hint">' +
     esc(copy.hint) +
-    '</p></section><aside class="details"><h1>' +
-    esc(copy.details) +
-    '</h1><div id="detail-content"></div><section class="attributes"><h2>' +
-    esc(copy.stats) +
-    '</h2><dl id="stats"></dl><p>' +
-    esc(copy.statsHint) +
-    "</p></section>" +
-    (copy === german ? "<p>" + esc(copy.skillLanguage) + "</p>" : "") +
+    '</p></section><aside id="bonuses-sidebar" class="details bonus-sidebar" aria-labelledby="bonuses-title"><header class="bonus-header"><h1 id="bonuses-title">' + esc(copy.bonuses) + '</h1><p id="bonus-build"></p></header><div class="bonus-body"><p id="bonus-hint">' + esc(copy.bonusHint) + '</p><h3>' + esc(copy.bonusTotals) + '</h3><dl id="bonus-attributes"></dl><p id="bonus-no-attributes">' + esc(copy.noAttributes) + '</p><section id="bonus-derived-section"><h3>' + esc(copy.bonusFromAttributes) + '</h3><dl id="bonus-derived"></dl></section><h3>' + esc(copy.bonusEffects) + '</h3><p>' + esc(copy.bonusConditions) + '</p><ul id="bonus-effects"></ul></div>' +
     '</aside></main><footer id="status" role="status" aria-live="polite"></footer><input id="file" type="file" accept=".json,application/json" hidden><dialog id="dialog" aria-labelledby="dialog-title" aria-describedby="dialog-body"><form id="dialog-form"><h2 id="dialog-title"></h2><p id="dialog-body"></p><label id="name-field">' +
     esc(copy.name) +
     '<input id="name" maxlength="100" required></label><p id="dialog-error" role="alert"></p><div class="dialog-actions"><button id="dialog-cancel" type="button">' +
     esc(copy.cancel) +
     '</button><button id="dialog-yes" class="primary" type="submit">' +
     esc(copy.save) +
-    '</button></div></form></dialog><dialog id="bonuses-dialog" aria-labelledby="bonuses-title" aria-describedby="bonus-hint"><div class="bonus-shell"><header><h2 id="bonuses-title">' + esc(copy.bonuses) + '</h2><p id="bonus-build"></p></header><div class="bonus-body"><p id="bonus-hint">' + esc(copy.bonusHint) + '</p><h3>' + esc(copy.bonusTotals) + '</h3><dl id="bonus-attributes"></dl><h3>' + esc(copy.bonusFromAttributes) + '</h3><dl id="bonus-derived"></dl><h3>' + esc(copy.bonusEffects) + '</h3><p>' + esc(copy.bonusConditions) + '</p><ul id="bonus-effects"></ul></div><footer class="dialog-actions"><button id="bonus-close" class="primary">' + esc(copy.close) + '</button></footer></div></dialog>';
-  tree = new Tree(
-    $<SVGSVGElement & HTMLElement>("#tree"),
-    (node) => {
-      inspected = node;
-      details();
-    },
-    act,
-  );
-  const bonusesDialog = $<HTMLDialogElement>("#bonuses-dialog");
+    '</button></div></form></dialog><div id="skill-tooltip" class="skill-tooltip" role="tooltip" hidden></div>';
+  skillTooltip = new SkillTooltip($("#skill-tooltip"), () => build?.selection ?? emptySelection, copy);
+  tree = new Tree($<SVGSVGElement & HTMLElement>("#tree"), act, skillTooltip);
   $("#bonuses").onclick = () => {
-    renderBonuses();
-    bonusesDialog.showModal();
-    $(".bonus-body").scrollTop = 0;
-    $("#bonus-close").focus({preventScroll: true});
-  };
-  $("#bonus-close").onclick = () => bonusesDialog.close();
-  bonusesDialog.onclick = (event) => {
-    const bounds = bonusesDialog.getBoundingClientRect();
-    if (event.target === bonusesDialog && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) bonusesDialog.close();
+    bonusesVisible = !bonusesVisible;
+    skillTooltip.hide(true);
+    sidebar();
+    void remember().catch(error);
   };
   $("#new").onclick = () => void nameBuild();
   $("#empty-new").onclick = () => void nameBuild();
@@ -455,7 +417,9 @@ async function start() {
   sdk.ui.onThemeChange(theme);
   setup();
   const launch = await sdk.panel.getLaunch();
-  const state = await sdk.panel.getState<{ build?: string }>();
+  const state = await sdk.panel.getState<{ build?: string; bonuses?: boolean }>();
+  bonusesVisible = state?.bonuses !== false;
+  sidebar();
   const first =
     (launch.reason === "add" ? null : launch.content?.id) ??
     state?.build ??

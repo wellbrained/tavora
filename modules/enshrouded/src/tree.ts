@@ -29,13 +29,14 @@ export class Tree {
   private down: string | null = null;
   constructor(
     private svg: SVGSVGElement,
-    private inspect: (id: string) => void,
     private act: (id: string, refund: boolean) => void,
+    private tooltip: {show(id: string, at: {x:number; y:number}): void; hide(immediate?: boolean): void},
   ) {
     svg.addEventListener(
       "wheel",
       (e) => {
         e.preventDefault();
+        this.tooltip.hide(true);
         this.zoom(
           e.deltaY > 0 ? 1.15 : 1 / 1.15,
           (this.point(e.clientX, e.clientY).x - this.box[0]) / this.box[2],
@@ -52,11 +53,17 @@ export class Tree {
       svg.setPointerCapture(e.pointerId);
     });
     svg.addEventListener("pointermove", (e) => {
-      if (!this.drag) return;
+      if (!this.drag) {
+        const id = this.node(e.target);
+        if (id) this.tooltip.show(id, {x:e.clientX, y:e.clientY});
+        else this.tooltip.hide();
+        return;
+      }
       const dx = e.clientX - this.drag.x,
         dy = e.clientY - this.drag.y;
       if (Math.hypot(dx, dy) > 4) this.moved = true;
       if (this.moved) {
+        this.tooltip.hide(true);
         const scale = Math.max(
           this.box[2] / svg.clientWidth,
           this.box[3] / svg.clientHeight,
@@ -75,8 +82,8 @@ export class Tree {
       if (svg.hasPointerCapture(e.pointerId))
         svg.releasePointerCapture(e.pointerId);
       if (!this.moved && this.down) {
-        this.inspect(this.down);
         this.act(this.down, false);
+        this.tooltip.show(this.down, {x:e.clientX, y:e.clientY});
       }
       this.down = null;
     });
@@ -88,18 +95,19 @@ export class Tree {
       e.preventDefault();
       const id = this.node(e.target);
       if (id) {
-        this.inspect(id);
         this.act(id, true);
+        this.tooltip.show(id, {x:e.clientX, y:e.clientY});
       }
     });
     svg.addEventListener("focusin", (e) => {
       const id = this.node(e.target);
-      if (id) this.inspect(id);
+      if (id) this.showTooltip(id);
     });
-    svg.addEventListener("pointerover", (e) => {
-      if (this.drag) return;
-      const id = this.node(e.target);
-      if (id) this.inspect(id);
+    svg.addEventListener("pointerleave", event => {
+      if (!(event.relatedTarget instanceof Element && event.relatedTarget.closest('[role="tooltip"]'))) this.tooltip.hide();
+    });
+    svg.addEventListener("focusout", event => {
+      if (!(event.relatedTarget instanceof Element && event.relatedTarget.closest('[role="tooltip"]'))) this.tooltip.hide();
     });
     svg.addEventListener("keydown", (e) => {
       const id = this.node(e.target);
@@ -111,9 +119,11 @@ export class Tree {
           e.key === "Backspace")
       ) {
         e.preventDefault();
-        this.inspect(id);
         this.act(id, e.key === "Delete" || e.key === "Backspace" || e.shiftKey);
+      } else if (e.key === "Escape") {
+        this.tooltip.hide(true);
       } else if (e.key.startsWith("Arrow")) {
+        this.tooltip.hide(true);
         e.preventDefault();
         const step = this.box[2] * 0.08;
         this.box[0] +=
@@ -123,6 +133,12 @@ export class Tree {
         this.view();
       }
     });
+  }
+  private showTooltip(id: string) {
+    const node = this.svg.querySelector<SVGGElement>('[data-node="' + id + '"]');
+    if (!node) return;
+    const bounds = node.getBoundingClientRect();
+    this.tooltip.show(id, {x:bounds.x+bounds.width/2, y:bounds.y+bounds.height/2});
   }
   private point(x: number, y: number) {
     const matrix = this.svg.getScreenCTM();
@@ -139,10 +155,12 @@ export class Tree {
     this.svg.setAttribute("viewBox", this.box.join(" "));
   }
   fit() {
+    this.tooltip.hide(true);
     this.box = [...this.fitBox];
     this.view();
   }
   zoom(factor: number, x = 0.5, y = 0.5) {
+    this.tooltip.hide(true);
     const w = Math.max(280, Math.min(3400, this.box[2] * factor));
     const ratio = w / this.box[2];
     this.box = [
@@ -158,7 +176,7 @@ export class Tree {
     this.box = [point.x - 320, point.y - 320, 640, 640];
     this.view();
     this.svg.querySelector<SVGGElement>('[data-node="' + id + '"]')?.focus();
-    this.inspect(id);
+    this.showTooltip(id);
   }
   private placeLabels() {
     const nodes = Object.values(SkillNodes.nodes).map(node => ({
@@ -265,9 +283,7 @@ export class Tree {
           point.x +
           " " +
           point.y +
-          ')"><title>' +
-          escape(name) +
-          '</title><circle r="' +
+          ')"><circle r="' +
           size / 2 +
           '"/>' +
           image(art.frame, size) +

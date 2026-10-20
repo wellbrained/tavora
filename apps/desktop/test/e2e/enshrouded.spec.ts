@@ -102,7 +102,7 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
     await inModule(
       app,
       ID,
-      'document.querySelectorAll("[data-node]")[1].dispatchEvent(new FocusEvent("focusin",{bubbles:true}));document.querySelector("#allocate").click()',
+      'document.querySelectorAll("[data-node]")[1].dispatchEvent(new FocusEvent("focusin",{bubbles:true}));document.querySelectorAll("[data-node]")[1].dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}))',
     );
     await expect
       .poll(() =>
@@ -113,16 +113,31 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
         ),
       )
       .toBe("true");
-    await inModule(app, ID, 'document.querySelector("#bonuses").click()');
-    expect(await inModule(app, ID, 'document.querySelector("#bonuses-dialog").open')).toBe(true);
+    expect(await inModule(app, ID, 'document.querySelector("#bonuses-sidebar").hidden')).toBe(false);
     expect(await inModule(app, ID, '[...document.querySelectorAll("[data-bonus-node]")].map(n=>n.dataset.bonusNode)')).toEqual(["2"]);
     expect(await inModule(app, ID, 'document.querySelector(".bonus-rank").textContent')).toMatch(/Rank 1\//);
-    expect(await inModule(app, ID, 'document.querySelector("#bonus-attributes").textContent')).toBe(await inModule(app, ID, 'document.querySelector("#stats").textContent'));
+    expect(await inModule(app, ID, 'document.querySelector("#bonus-no-attributes").hidden')).toBe(false);
+    expect(await inModule(app, ID, 'Math.abs(document.querySelector("#bonuses").getBoundingClientRect().right-(document.querySelector(".toolbar").getBoundingClientRect().right-12))')).toBeLessThan(1);
     await capture('enshrouded-bonuses.png');
-    await inModule(app, ID, 'document.querySelector(".bonus-body").scrollTop=99999');
-    await capture('enshrouded-bonus-effects.png');
-    await inModule(app, ID, 'document.querySelector("#bonus-close").click()');
-    expect(await inModule(app, ID, 'document.querySelector("#bonuses-dialog").open')).toBe(false);
+    await inModule(app, ID, 'document.querySelectorAll("[data-node]")[1].dispatchEvent(new PointerEvent("pointermove",{clientX:innerWidth-12,clientY:innerHeight-12,bubbles:true}))');
+    expect(await inModule(app, ID, '({hidden:document.querySelector("#skill-tooltip").hidden,node:document.querySelector("#skill-tooltip").dataset.tooltipNode,title:document.querySelector("#skill-card-title").textContent,strong:document.querySelectorAll(".skill-card-body strong").length})')).toMatchObject({hidden:false,node:"2",title:"Power Parry",strong:expect.any(Number)});
+    const tooltipBounds = await inModule<{left:number;top:number;right:number;bottom:number;width:number;height:number}>(app, ID, '(()=>{const b=document.querySelector("#skill-tooltip").getBoundingClientRect();return{left:b.left,top:b.top,right:b.right,bottom:b.bottom,width:innerWidth,height:innerHeight}})()');
+    expect(tooltipBounds.left).toBeGreaterThanOrEqual(8);
+    expect(tooltipBounds.top).toBeGreaterThanOrEqual(8);
+    expect(tooltipBounds.right).toBeLessThanOrEqual(tooltipBounds.width-8);
+    expect(tooltipBounds.bottom).toBeLessThanOrEqual(tooltipBounds.height-8);
+    expect(await inModule(app, ID, 'getComputedStyle(document.querySelector(".skill-card-body p")).fontWeight')).toBe("400");
+    expect(await inModule(app, ID, 'getComputedStyle(document.querySelector(".skill-card-body p")).fontFamily')).toMatch(/Inter/);
+    expect(await inModule(app, ID, 'getComputedStyle(document.querySelector("#skill-card-title")).fontFamily')).toMatch(/Inter/);
+    expect(await inModule(app, ID, 'document.querySelectorAll("#tree title").length')).toBe(0);
+    await capture('enshrouded-skill-tooltip.png');
+    await inModule(app, ID, 'document.querySelectorAll("[data-node]")[1].dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
+    expect(await inModule(app, ID, 'document.querySelector("#skill-tooltip").hidden')).toBe(true);
+    await inModule(app, ID, 'document.querySelectorAll("[data-node]")[1].focus()');
+    expect(await inModule(app, ID, 'document.querySelector("#skill-tooltip").hidden')).toBe(false);
+    expect(await inModule(app, ID, 'document.querySelectorAll("[data-node]")[1].getAttribute("aria-describedby")')).toBe("skill-tooltip");
+    await inModule(app, ID, 'document.querySelector("#tree").dispatchEvent(new PointerEvent("pointerleave"))');
+    await expect.poll(() => inModule(app, ID, 'document.querySelector("#skill-tooltip").hidden')).toBe(true);
     const saved = await inModule<string>(
       app,
       ID,
@@ -237,15 +252,13 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
     expect(await inModule(app, ID, 'document.querySelector("#dialog").getBoundingClientRect().width')).toBe(368);
     await capture('enshrouded-dialog-narrow.png');
     await inModule(app, ID, 'document.querySelector("#dialog-cancel").click()');
-    await inModule(app, ID, 'document.querySelector("#bonuses").click()');
-    expect(await inModule(app, ID, '({width:document.querySelector("#bonuses-dialog").getBoundingClientRect().width,overflow:document.querySelector(".bonus-body").scrollWidth>document.querySelector(".bonus-body").clientWidth})')).toEqual({width:368,overflow:false});
+    expect(await inModule(app, ID, 'document.querySelector(".bonus-body").scrollWidth>document.querySelector(".bonus-body").clientWidth')).toBe(false);
     await capture('enshrouded-bonuses-narrow.png');
-    await app.evaluate(({webContents}) => {
-      const wc = webContents.getAllWebContents().find(w => w.getURL().startsWith('tavora-module://local.enshrouded/'))!;
-      wc.sendInputEvent({type:"keyDown",keyCode:"ESCAPE"});
-      wc.sendInputEvent({type:"keyUp",keyCode:"ESCAPE"});
-    });
-    await expect.poll(() => inModule(app, ID, 'document.querySelector("#bonuses-dialog").open')).toBe(false);
+    await inModule(app, ID, 'document.querySelectorAll("[data-node]")[1].dispatchEvent(new PointerEvent("pointermove",{clientX:390,clientY:590,bubbles:true}))');
+    expect(await inModule(app, ID, '(()=>{const b=document.querySelector("#skill-tooltip").getBoundingClientRect();return b.left>=8&&b.right<=innerWidth-8&&b.top>=8&&b.bottom<=innerHeight-8})()')).toBe(true);
+    await capture('enshrouded-skill-tooltip-narrow.png');
+    await inModule(app, ID, 'document.querySelector("#bonuses").click()');
+    expect(await inModule(app, ID, 'document.querySelector("#bonuses-sidebar").hidden')).toBe(true);
     await app.close();
     running = await launch(userData, [path.dirname(moduleDir)], options);
     app = running.app;
@@ -258,6 +271,8 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
         ).catch(() => null),
       )
       .toBe("Imported wizard");
+    expect(await inModule(app, ID, 'document.querySelector("#bonuses-sidebar").hidden')).toBe(true);
+    await inModule(app, ID, 'document.querySelector("#bonuses").click()');
     expect(
       await inModule(
         app,
@@ -276,7 +291,7 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
         inModule(
           app,
           ID,
-          'document.querySelectorAll("[aria-pressed=true]").length',
+          'document.querySelectorAll("[data-node][aria-pressed=true]").length',
         ),
       )
       .toBe(0);
