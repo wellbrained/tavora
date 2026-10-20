@@ -2,8 +2,9 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, ran
 import { deflateRawSync, inflateRawSync } from "node:zlib";
 
 // The cloud copy's encryption (decided 2026-10-19): only the player can read
-// the copy. A random 256-bit copy key is made on the PC when the player turns
-// the copy on and never leaves it except as the recovery key the player keeps.
+// the copy. A random 256-bit copy key (since 2026-10-20 the account's root key,
+// account-key.ts) is made on the PC and never leaves it except as the recovery
+// key the player keeps.
 // Everything sent is sealed with AES-256-GCM under a key derived from it; each
 // part is named by an HMAC of its content under a second derived key, so equal
 // content is stored once and the service cannot tell which file a part is.
@@ -32,18 +33,34 @@ export const partId = (keys: CopyKeys, plain: Uint8Array): Buffer => createHmac(
 
 /** Compressed when that helps (settings and documents do, pictures don't), then sealed: nonce, ciphertext, tag. */
 export function seal(keys: CopyKeys, plain: Uint8Array): Buffer {
-  const packed = deflateRawSync(plain);
-  const body = packed.length < plain.length ? Buffer.concat([Buffer.from([1]), packed]) : Buffer.concat([Buffer.from([0]), plain]);
-  const nonce = randomBytes(NONCE_BYTES);
-  const cipher = createCipheriv("aes-256-gcm", keys.seal, nonce).setAAD(AAD);
-  return Buffer.concat([nonce, cipher.update(body), cipher.final(), cipher.getAuthTag()]);
+  return sealWith(keys.seal, AAD, plain);
 }
 
 /** The plain content back; throws for anything not sealed with this key, or changed since. */
 export function open(keys: CopyKeys, sealed: Uint8Array): Buffer {
+  return openWith(keys.seal, AAD, sealed);
+}
+
+// The key vault (account-key.ts) is sealed the same way, under its own key derived from the same root
+// key and with its own bound purpose, so a part of the copy never opens as a vault, nor the other way.
+const VAULT_AAD = Buffer.from("tavora-vault-1");
+const vaultKey = (rootKey: Uint8Array) => Buffer.from(hkdfSync("sha256", rootKey, Buffer.alloc(0), "tavora-vault-seal", 32));
+
+export const sealVault = (rootKey: Uint8Array, plain: Uint8Array): Buffer => sealWith(vaultKey(rootKey), VAULT_AAD, plain);
+export const openVault = (rootKey: Uint8Array, sealed: Uint8Array): Buffer => openWith(vaultKey(rootKey), VAULT_AAD, sealed);
+
+function sealWith(key: Buffer, aad: Buffer, plain: Uint8Array): Buffer {
+  const packed = deflateRawSync(plain);
+  const body = packed.length < plain.length ? Buffer.concat([Buffer.from([1]), packed]) : Buffer.concat([Buffer.from([0]), plain]);
+  const nonce = randomBytes(NONCE_BYTES);
+  const cipher = createCipheriv("aes-256-gcm", key, nonce).setAAD(aad);
+  return Buffer.concat([nonce, cipher.update(body), cipher.final(), cipher.getAuthTag()]);
+}
+
+function openWith(key: Buffer, aad: Buffer, sealed: Uint8Array): Buffer {
   if (sealed.length < NONCE_BYTES + TAG_BYTES + 1) throw new Error("not a sealed part");
   const data = Buffer.from(sealed);
-  const decipher = createDecipheriv("aes-256-gcm", keys.seal, data.subarray(0, NONCE_BYTES)).setAAD(AAD);
+  const decipher = createDecipheriv("aes-256-gcm", key, data.subarray(0, NONCE_BYTES)).setAAD(aad);
   decipher.setAuthTag(data.subarray(data.length - TAG_BYTES));
   const body = Buffer.concat([decipher.update(data.subarray(NONCE_BYTES, data.length - TAG_BYTES)), decipher.final()]);
   if (body[0] === 0) return body.subarray(1);

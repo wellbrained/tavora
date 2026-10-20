@@ -19,6 +19,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.10",
+    date: "2026-10-20",
+    title: "One recovery key for your account",
+    notes: [
+      "Your recovery key now belongs to your account. Turning the cloud copy off and on again no longer asks for it.",
+      "Lost your key? Start over with a new one, right where Tavora asks for it.",
+    ],
+  },
+  {
     version: "0.19.8",
     date: "2026-10-19",
     title: "Tidier module library",
