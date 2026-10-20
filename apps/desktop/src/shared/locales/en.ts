@@ -369,6 +369,8 @@ export const en = {
   "settings.version": "What's new",
   "settings.results.title": "Search results",
   "settings.results.none": "Nothing matches \"{query}\".",
+  "settings.results.count.one": "1 result",
+  "settings.results.count.other": "{count} results",
   "settings.results.trashUntil": "In Trash until {date}",
   "settings.restart.message": "Some changes need a restart.",
   "settings.startup.home": "Home",

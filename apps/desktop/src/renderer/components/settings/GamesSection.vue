@@ -91,7 +91,7 @@ function removeSelected() {
     <div class="flex items-center gap-3 pb-3">
       <Input v-model="filter" class="flex-1" :placeholder="t('steamImport.filter')" :aria-label="t('steamImport.filterLabel')" autocomplete="off" maxlength="80" data-testid="games-filter" />
     </div>
-    <div class="bg-card sticky top-0 z-[5] -mx-3 flex min-h-12 items-center gap-3 border-y px-3 py-2">
+    <div class="bg-card sticky top-0 z-[5] -mx-3 flex min-h-12 flex-wrap items-center gap-3 border-y px-3 py-2">
       <label class="flex flex-1 cursor-pointer items-center gap-3">
         <input
           type="checkbox"
