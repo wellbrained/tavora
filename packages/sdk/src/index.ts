@@ -95,7 +95,7 @@ export const SDK_VERSION = "0.2.10";
  * `minTavora`, so an older Tavora says it needs an update instead of loading a module it cannot run
  * (the starter, `npm create @tavora/module`, does). The changelog names it for every version.
  */
-export const MIN_TAVORA = "0.19.9";
+export const MIN_TAVORA = "0.19.17";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -235,7 +235,7 @@ export interface TavoraSDK {
     writeImage(png: Blob): Promise<void>;
   };
   files: {
-    /** Saves JSON (up to 1 MiB) in Downloads/Tavora after a click or key press. Never replaces a file. Tavora 0.19.9+. */
+    /** Saves JSON (up to 1 MiB) in Downloads/Tavora after a click or key press. Never replaces a file. Tavora 0.19.17+. */
     exportJson(value: JsonValue, name?: string): Promise<{ fileName: string }>;
   };
   pictures: {

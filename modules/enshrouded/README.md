@@ -2,7 +2,7 @@
 
 Installable offline Tavora module for Enshrouded 1.0. One Tree panel supports pan/zoom, English skill details, search, connected point allocation/refunds, six attribute totals, named local builds and JSON import/export. UI controls are English/German; game text falls back to English.
 
-Requires Tavora 0.19.9 and SDK 0.2.10 for file exports. Build: `pnpm --filter @tavora/enshrouded build`. Add the folder under Settings > Development or install the signed ZIP. No network permissions, accounts or game installation required.
+Requires Tavora 0.19.17 and SDK 0.2.10 for file exports. Build: `pnpm --filter @tavora/enshrouded build`. Add the folder under Settings > Development or install the signed ZIP. No network permissions, accounts or game installation required.
 
 Click a node to allocate/level up (at maximum, clicking refunds it); right-click to refund one level. Refunding a prerequisite also removes disconnected descendants after confirmation. Keyboard: Tab to a node, Enter/Space to allocate, Shift+Enter or Delete to refund; arrows pan. Scroll/+/− zoom; Fit tree restores the full view. Search highlights names; Enter focuses the first match.
 
