@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.22",
+    date: "2026-10-20",
+    title: "Your rail stays put",
+    notes: [
+      "Picking a game no longer moves it on the rail.",
+      "\"Recently played\" now sorts your games when Tavora starts.",
+    ],
+  },
+  {
     version: "0.19.21",
     date: "2026-10-20",
     title: "One look for the app and modules",
