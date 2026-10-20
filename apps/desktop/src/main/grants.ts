@@ -9,7 +9,7 @@ import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
 
 export const GRANTS_FILE = "grants.json";
-/** The format of grants.json; raised when an older Tavora could misread it (see backup.ts). */
+/** The format of grants.json; raised when an older Tavora could misread it (see saved-data.ts). */
 export const GRANTS_VERSION = 1;
 
 /** What a module may do, as far as grants decide it. */

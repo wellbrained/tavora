@@ -1,13 +1,8 @@
-import { copyFile, cp, mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
+import { copyFile, cp, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { FILES_DIR } from "./module-files";
-
-/**
- * The file versions this Tavora understands (the "version" inside each file). A test keeps these
- * equal to what the code writes; raise one when its format changes in a way an older Tavora could misread.
- */
-export const SUPPORTED_VERSIONS = { "library.json": 1, "workspace.json": 2, "profile.json": 1, "grants.json": 1 } as const;
+import { DATA_FILES, hasLibrary } from "./saved-data";
 
 /** How many daily snapshots are kept. */
 export const BACKUP_KEEP = 7;
@@ -15,8 +10,7 @@ export const BACKUP_KEEP = 7;
 export const BACKUP_MAX_BYTES = 300 * 1024 * 1024;
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-/** The player's own data: games and layout, profile, and every module's settings and documents. */
-export const DATA_FILES = ["library.json", "workspace.json", "profile.json"];
+/** With DATA_FILES (saved-data.ts), the player's own data: every module's settings and documents. */
 export const DATA_DIRS = ["module-data"];
 /** Pictures: the player's own images and profile picture, and the pictures modules keep (FILES_DIR, wherever its folder is). Left out of a snapshot that would be too big. */
 export const PICTURE_DIRS = ["game-icons", "profile", FILES_DIR];
@@ -82,7 +76,7 @@ export async function backupData(options: BackupOptions): Promise<BackupResult> 
   const day = dayName(options.now ?? new Date());
   const target = path.join(root, day);
 
-  if (!(await exists(path.join(userData, "library.json")))) return { status: "nothing" };
+  if (!(await hasLibrary(userData))) return { status: "nothing" };
   if (await exists(target)) return { status: "exists", dir: target };
 
   const source = (name: string) => (name === FILES_DIR && options.moduleFiles ? options.moduleFiles : path.join(userData, name));
@@ -155,23 +149,4 @@ export async function pruneBackups(root: string, keep: number): Promise<string[]
     removed.push(name);
   }
   return removed;
-}
-
-/**
- * A file written by a newer Tavora (its `version` is above what this one
- * understands) is copied aside before this version can overwrite it, so
- * going back to an older Tavora never loses what the newer one saved.
- * Returns the copy's path, or null when nothing was needed.
- */
-export async function keepNewerFile(file: string, supportedVersion: number): Promise<string | null> {
-  let version: unknown;
-  try {
-    version = (JSON.parse(await readFile(file, "utf8")) as { version?: unknown } | null)?.version;
-  } catch {
-    return null; // missing or unreadable files are handled where they are read
-  }
-  if (typeof version !== "number" || !(version > supportedVersion)) return null;
-  const copy = `${file}.from-version-${version}`;
-  if (!(await exists(copy))) await copyFile(file, copy);
-  return copy;
 }

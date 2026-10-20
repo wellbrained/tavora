@@ -2,11 +2,12 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
-import { DATA_DIRS, DATA_FILES, PICTURE_DIRS } from "./backup";
+import { DATA_DIRS, PICTURE_DIRS } from "./backup";
 import { copyKeys, open, PART_ID_BYTES, partId, seal, type CopyKeys } from "./copy-crypto";
 import { writeFileAtomic } from "./fsutil";
 import { OWNER_RECORDS_FILE } from "./installer";
 import { FILES_DIR } from "./module-files";
+import { DATA_FILES } from "./saved-data";
 
 // The cloud copy (decided 2026-10-19): one copy of the player's Tavora data per
 // account, the same data as the daily backup, encrypted on this PC so only the
