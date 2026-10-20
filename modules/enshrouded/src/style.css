@@ -74,9 +74,26 @@ select {
   text-overflow: ellipsis;
 
 }
-.build-picker { position: relative; display: flex; flex: 1; min-width: 110px; max-width: 260px; }
-.build-picker select { width: 100%; max-width: none; }
-.build-picker > svg { position: absolute; right: 12px; top: 8px; width: 16px; height: 16px; color: var(--muted-foreground, #aeb5c1); pointer-events: none; }
+.build-picker {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 110px;
+  max-width: 260px;
+}
+.build-picker select {
+  width: 100%;
+  max-width: none;
+}
+.build-picker > svg {
+  position: absolute;
+  right: 12px;
+  top: 8px;
+  width: 16px;
+  height: 16px;
+  color: var(--muted-foreground, #aeb5c1);
+  pointer-events: none;
+}
 select option {
   color: var(--foreground, #e3e5ea);
   background: var(--background, #232731);
@@ -303,15 +320,45 @@ dialog {
   padding: 24px;
   box-shadow: 0 10px 25px #0005;
 }
-dialog::backdrop { background: #0008; }
-dialog form { display: grid; gap: 16px; }
-dialog h2 { font-size: 20px; font-weight: 600; line-height: 1.3; margin: 0; }
-dialog p { line-height: 1.5; margin: 0; color: var(--muted-foreground, #aeb5c1); }
-dialog p:empty { display: none; }
-dialog label { display: flex; flex-direction: column; gap: 8px; font-weight: 500; }
-dialog input { width: 100%; font-weight: 400; }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
-#dialog-error { color: var(--destructive, #f2a6a0); }
+dialog::backdrop {
+  background: #0008;
+}
+dialog form {
+  display: grid;
+  gap: 16px;
+}
+dialog h2 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+}
+dialog p {
+  line-height: 1.5;
+  margin: 0;
+  color: var(--muted-foreground, #aeb5c1);
+}
+dialog p:empty {
+  display: none;
+}
+dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-weight: 500;
+}
+dialog input {
+  width: 100%;
+  font-weight: 400;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+#dialog-error {
+  color: var(--destructive, #f2a6a0);
+}
 @media (max-width: 680px) {
   main {
     flex-direction: column;
@@ -352,4 +399,77 @@ dialog input { width: 100%; font-weight: 400; }
   * {
     scroll-behavior: auto !important;
   }
+}
+
+/* Read-only build summary: fixed header/footer and one scrolling column. */
+#bonuses-dialog {
+  width: min(680px, calc(100vw - 32px));
+  padding: 0;
+  overflow: hidden;
+}
+.bonus-shell {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 34px);
+}
+.bonus-shell > header {
+  padding: 24px 24px 16px;
+  flex-shrink: 0;
+}
+.bonus-shell > header p {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.bonus-body {
+  padding: 0 24px 24px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.bonus-body h3 {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  margin: 24px 0 12px;
+}
+.bonus-body dl {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.bonus-body dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border, #414650);
+}
+.bonus-body dd {
+  margin: 0;
+  color: var(--foreground, #e3e5ea);
+}
+#bonus-effects {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+}
+#bonus-effects li {
+  padding: 16px 0;
+  border-top: 1px solid var(--border, #414650);
+  overflow-wrap: anywhere;
+}
+#bonus-effects h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.bonus-rank {
+  font-size: 12px;
+  color: var(--muted-foreground, #aeb5c1);
+}
+#bonus-effects p {
+  margin: 8px 0 0;
+  color: var(--foreground, #e3e5ea);
+}
+.bonus-shell > footer {
+  padding: 16px 24px;
+  flex-shrink: 0;
 }

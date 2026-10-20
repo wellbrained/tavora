@@ -23,6 +23,7 @@ import {
   type Build,
 } from "./model";
 import { BuildRepository } from "./repository";
+import { summarizeBonuses } from "./bonuses";
 import { Tree, escape as esc } from "./tree";
 import { english, german } from "./copy";
 import "./style.css";
@@ -41,7 +42,8 @@ let documentRevision = 0;
 const root = $("#app");
 const text = (value: string) => {
   const doc = new DOMParser().parseFromString(value, "text/html");
-  return doc.body.textContent ?? "";
+  for (const lineBreak of doc.querySelectorAll("br")) lineBreak.replaceWith(" ");
+  return (doc.body.textContent ?? "").replace(/\s+/g, " ").trim();
 };
 function status(message: string) {
   $("#status").textContent = message;
@@ -105,14 +107,7 @@ async function show(next: string | null) {
   await sdk.panel.setState({ build: id });
   await sdk.panel.setContent(build && id ? { id, title: build.name } : null);
 }
-function draw() {
-  tree.render(build?.selection ?? {}, $<HTMLInputElement>("#search").value);
-  const points = getPointsUsed(build?.selection ?? {});
-  $("#points").textContent =
-    points + " / " + MAX_SKILL_POINTS_ABSOLUTE + " " + copy.points;
-  $("#remaining").textContent =
-    MAX_SKILL_POINTS_ABSOLUTE - points + " " + copy.remaining;
-  const stats = getStatsFromSkills(build?.selection ?? {});
+function attributeRows(stats: ReturnType<typeof getStatsFromSkills>) {
   const de = [
     "Konstitution",
     "Stärke",
@@ -121,7 +116,7 @@ function draw() {
     "Geist",
     "Intelligenz",
   ];
-  $("#stats").innerHTML = Object.entries(BasicStats)
+  return Object.entries(BasicStats)
     .map(
       ([key, value], i) =>
         "<div><dt>" +
@@ -131,6 +126,43 @@ function draw() {
         "</dd></div>",
     )
     .join("");
+}
+function renderBonuses() {
+  const summary = summarizeBonuses(build?.selection ?? {});
+  $("#bonus-build").textContent =
+    (build?.name ?? "") + " · " +
+    getPointsUsed(build?.selection ?? {}) + " / " +
+    MAX_SKILL_POINTS_ABSOLUTE + " " + copy.points;
+  $("#bonus-attributes").innerHTML = attributeRows(summary.attributes);
+  $("#bonus-derived").innerHTML = Object.entries(summary.fromAttributes)
+    .map(([key, value]) => {
+      const percent = ["melee", "bowDagger", "magic"].includes(key);
+      return "<div><dt>" +
+        esc(copy[key as keyof typeof summary.fromAttributes]) +
+        "</dt><dd>+" + value + (percent ? "%" : "") + "</dd></div>";
+    })
+    .join("");
+  $("#bonus-effects").innerHTML = summary.effects.length
+    ? summary.effects.map(effect =>
+        '<li data-bonus-node="' + esc(effect.id) + '"><h4>' +
+        esc(effect.name) + '</h4><span class="bonus-rank">' +
+        esc(copy.rank) + " " + effect.level + "/" + effect.maxLevel +
+        "</span>" + effect.paragraphs
+          .map(paragraph => "<p>" + esc(text(paragraph)) + "</p>")
+          .join("") + "</li>"
+      ).join("")
+    : "<li>" + esc(copy.bonusEmpty) + "</li>";
+}
+function draw() {
+  tree.render(build?.selection ?? {}, $<HTMLInputElement>("#search").value);
+  const points = getPointsUsed(build?.selection ?? {});
+  $("#points").textContent =
+    points + " / " + MAX_SKILL_POINTS_ABSOLUTE + " " + copy.points;
+  $("#remaining").textContent =
+    MAX_SKILL_POINTS_ABSOLUTE - points + " " + copy.remaining;
+  const stats = getStatsFromSkills(build?.selection ?? {});
+  $("#stats").innerHTML = attributeRows(stats);
+  if ($<HTMLDialogElement>("#bonuses-dialog").open) renderBonuses();
   $("#empty").hidden = !!build;
   details();
   controls();
@@ -287,7 +319,7 @@ function setup() {
     esc(copy.export) +
     '</button><button id="reset">' +
     esc(copy.reset) +
-    '</button></header><section class="summary"><strong id="points"></strong><span id="remaining"></span><span class="version">' +
+    '</button><button id="bonuses">' + esc(copy.bonuses) + '</button></header><section class="summary"><strong id="points"></strong><span id="remaining"></span><span class="version">' +
     esc(copy.version) +
     '</span></section><main><section class="tree-area"><div class="tree-toolbar"><input id="search" type="search" maxlength="100" placeholder="' +
     esc(copy.search) +
@@ -315,7 +347,7 @@ function setup() {
     esc(copy.cancel) +
     '</button><button id="dialog-yes" class="primary" type="submit">' +
     esc(copy.save) +
-    "</button></div></form></dialog>";
+    '</button></div></form></dialog><dialog id="bonuses-dialog" aria-labelledby="bonuses-title" aria-describedby="bonus-hint"><div class="bonus-shell"><header><h2 id="bonuses-title">' + esc(copy.bonuses) + '</h2><p id="bonus-build"></p></header><div class="bonus-body"><p id="bonus-hint">' + esc(copy.bonusHint) + '</p><h3>' + esc(copy.bonusTotals) + '</h3><dl id="bonus-attributes"></dl><h3>' + esc(copy.bonusFromAttributes) + '</h3><dl id="bonus-derived"></dl><h3>' + esc(copy.bonusEffects) + '</h3><p>' + esc(copy.bonusConditions) + '</p><ul id="bonus-effects"></ul></div><footer class="dialog-actions"><button id="bonus-close" class="primary">' + esc(copy.close) + '</button></footer></div></dialog>';
   tree = new Tree(
     $<SVGSVGElement & HTMLElement>("#tree"),
     (node) => {
@@ -324,6 +356,18 @@ function setup() {
     },
     act,
   );
+  const bonusesDialog = $<HTMLDialogElement>("#bonuses-dialog");
+  $("#bonuses").onclick = () => {
+    renderBonuses();
+    bonusesDialog.showModal();
+    $(".bonus-body").scrollTop = 0;
+    $("#bonus-close").focus({preventScroll: true});
+  };
+  $("#bonus-close").onclick = () => bonusesDialog.close();
+  bonusesDialog.onclick = (event) => {
+    const bounds = bonusesDialog.getBoundingClientRect();
+    if (event.target === bonusesDialog && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) bonusesDialog.close();
+  };
   $("#new").onclick = () => void nameBuild();
   $("#empty-new").onclick = () => void nameBuild();
   $("#rename").onclick = () => void nameBuild(true);

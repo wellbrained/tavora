@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.0-alpha.3",
+    "date": "2026-10-20",
+    "notes": [
+      "Open Build bonuses to see attribute totals and all chosen skill effects at their current ranks.",
+      "Class names now sit clear of the tree’s outer branches."
+    ]
+  },
+  {
     "version": "0.1.0-alpha.2",
     "date": "2026-10-20",
     "notes": [
