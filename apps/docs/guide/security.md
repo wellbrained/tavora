@@ -132,11 +132,13 @@ A developer can link a publisher key to their account, so players see a develope
 The cloud copy (Settings > Account) keeps your Tavora data on Tavora's service, so your other PCs get it. It is optional and off until you turn it on.
 
 - **Only you can read it.** It is encrypted on your PC with AES-256-GCM, under a random key made there. The key leaves your PC only as the recovery key Tavora shows you. The service keeps sealed parts, a sealed list of files and a version number; parts are named by a keyed hash, so their names say nothing without the key. The key is kept with your system's key store, and the copy can't be turned on where there is none.
+- **One key for the account.** The key belongs to your account, not to one PC: the first PC that needs it makes it, and the others ask for your recovery key. A small vault sealed with a key derived from it (at most 64 KB) stays on the service and goes out only to a signed-in PC of the account; that it exists tells a new PC to ask for your key instead of making another. Signing out forgets the key on that PC; turning the copy off doesn't.
+- **A lost key starts over, never overwrites.** Start over makes a new key and replaces the copy with this PC's data under it. A PC with the old key can't open the new copy, so it stops syncing and asks for the new key; it never writes over the copy.
 - **It holds your Tavora data and nothing else.** That is what the daily backup holds (library, layouts, profile, every module's data, pictures), plus the installed modules and who publishes them. Sign-ins (Tavora's, Discord's, AI usage accounts), grants and Browser panel data are never in it.
 - **A copy is checked before it is used.** Every part must open with the key and match its name, and every file its size and SHA-256. Every path must be one of the copy's own places: no `..`, absolute paths or other folders, and in the module files folder only Tavora's own folders. A copy is downloaded into a staging folder and swapped in only at start, before anything reads the data; what was there moves to the backups folder.
 - **Modules in a copy come from you.** Only your key can make a copy, so its modules are not checked again like a new install. The safety lists still apply at start, and grants are not copied: a module asks again on each PC.
 - **Older data never replaces newer.** The service takes a new version only from a PC that started from the current one. Otherwise you choose which side to keep, and the other is kept as a local backup.
-- **Modules and pages can't reach it.** No SDK call, bridge message or module view carries the copy, its key or whether it is on.
+- **Modules and pages can't reach it.** No SDK call, bridge message or module view carries the copy, its key, the vault or whether it is on.
 
 ## Revoked keys, blocked modules and lost keys
 

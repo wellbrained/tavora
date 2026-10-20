@@ -2,6 +2,7 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
+import { AccountKey } from "./account-key";
 import { CloudCopy } from "./cloud-copy";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
@@ -22,7 +23,14 @@ function tavora(cloud: Service, at: Pc, { signedIn = true } = {}) {
     enabled: true,
     moduleFiles: () => at.moduleFiles,
     cloud: new CloudCopy({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => (signedIn ? cloud.token : null) }),
-    encryptor,
+    accountKey: new AccountKey({
+      file: path.join(at.userData, "account-key.json"),
+      legacyFile: path.join(at.userData, "cloud-copy-key.json"),
+      encryptor,
+      baseUrl: "http://tavora.test/v1/account",
+      fetch: cloud.fetch,
+      token: () => (signedIn ? cloud.token : null),
+    }),
     flush: async () => undefined,
     restart: () => void events.restarts++,
     onChange: (view) => views.push(view),
@@ -211,6 +219,57 @@ describe("the cloud copy, as Tavora runs it", () => {
     await atA.sync.beforeLoad();
     expect(atA.sync.view()).toMatchObject({ on: false, problem: "deleted" });
     // The data on the PCs stays.
+    expect(await read(a.userData, "library.json")).toBe("a1");
+  });
+
+  it("keeps the account's key when the copy is turned off, and forgets it when signed out", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const { sync } = await startCopy(cloud, a);
+    await sync.turnOff();
+    expect(sync.view().on).toBe(false);
+    // On again without typing the key, and without showing it again.
+    sync.keySaved();
+    await sync.turnOn();
+    expect(sync.view()).toMatchObject({ on: true, askKey: false, recoveryKey: null });
+
+    await sync.signedOut();
+    expect(sync.view().on).toBe(false);
+    await sync.turnOn();
+    expect(sync.view()).toMatchObject({ on: false, askKey: true });
+  });
+
+  it("starts over with a new key when the old one is lost, and other PCs then ask for it", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const { key, sync: running } = await startCopy(cloud, a);
+    const b = await pc({ "library.json": "b0" });
+    const atB = tavora(cloud, b);
+    await atB.sync.turnOn();
+    expect(atB.sync.view().askKey).toBe(true);
+    await atB.sync.startOver();
+    const newKey = atB.sync.view().recoveryKey;
+    expect(newKey).toMatch(/^[0-9A-Z]{4}-/);
+    expect(newKey).not.toBe(key);
+    // B's data is the new copy.
+    expect(atB.sync.view()).toMatchObject({ on: true, askKey: false, problem: null, copy: { size: expect.any(Number) } });
+
+    // A sees a newer copy its old key can't open: its key and copy are forgotten, and its data stays.
+    const atA = tavora(cloud, a);
+    await atA.sync.beforeLoad();
+    expect(atA.sync.view()).toMatchObject({ on: false, problem: "new-key" });
+    // A, had it still been running with the old key, never overwrites the new copy: it can't open it, and stops.
+    await writeFile(path.join(a.userData, "library.json"), "a2");
+    await running.sync();
+    expect(running.view().conflict).toBe(true);
+    await expect(running.keep("pc")).rejects.toMatchObject({ key: "cloudCopy.error.new-key" });
+    expect(running.view()).toMatchObject({ on: false, problem: "new-key" });
+    await writeFile(path.join(a.userData, "library.json"), "a1");
+    await atA.sync.turnOn();
+    expect(atA.sync.view().askKey).toBe(true);
+    await expect(atA.sync.enterKey(key)).rejects.toMatchObject({ key: "cloudCopy.error.wrongKey" });
+    await atA.sync.enterKey(newKey!);
+    expect(atA.sync.view()).toMatchObject({ on: true, conflict: true });
     expect(await read(a.userData, "library.json")).toBe("a1");
   });
 

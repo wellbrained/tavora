@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Settings > Account > Cloud copy: turning it on (a new recovery key, or the key
-// of a copy another PC made), its state, and the buttons to upload, restore,
+// Settings > Account > Cloud copy: turning it on (a new recovery key, or the
+// account's key another PC made), its state, and the buttons to upload, restore,
 // turn it off or delete it. When it syncs is up to the main process.
 import { computed, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
@@ -93,6 +93,16 @@ function remove() {
     },
   });
 }
+/** A lost recovery key: the copy is deleted and the account gets a new key, shown right away. */
+function startOver() {
+  confirmAction({
+    title: t("cloudCopy.newKey.title"),
+    message: t("cloudCopy.newKey.message"),
+    confirm: t("cloudCopy.newKey.button"),
+    danger: true,
+    run: () => submitAction({ type: "cloud-copy-new-key" }),
+  });
+}
 </script>
 
 <template>
@@ -108,7 +118,7 @@ function remove() {
       </div>
     </div>
 
-    <!-- A copy from another PC exists: its recovery key is asked for. -->
+    <!-- Another PC made the account's key: its recovery key is asked for. -->
     <form v-if="view.askKey" class="flex flex-col gap-3 py-4" @submit.prevent="keyText.trim() && run({ type: 'cloud-copy-key', key: keyText })">
       <span class="text-muted-foreground">{{ t("cloudCopy.askKey.text") }}</span>
       <div class="flex gap-2">
@@ -119,7 +129,7 @@ function remove() {
       <p v-if="view.busy" class="text-muted-foreground text-sm" role="status">{{ status }}</p>
       <div class="flex items-center gap-3">
         <span class="text-muted-foreground text-sm">{{ t("cloudCopy.askKey.lost") }}</span>
-        <Button type="button" variant="danger" size="sm" :disabled="busy" @click="remove">{{ t("cloudCopy.delete.label") }}</Button>
+        <Button type="button" variant="danger" size="sm" :disabled="busy" data-testid="cloud-copy-new-key" @click="startOver">{{ t("cloudCopy.newKey.button") }}</Button>
       </div>
     </form>
 

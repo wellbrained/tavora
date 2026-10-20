@@ -320,6 +320,7 @@ export function parseAction(raw: unknown): HostAction | null {
       return only("fingerprint") && typeof a.fingerprint === "string" && /^[0-9a-f]{32}$/.test(a.fingerprint) ? { type: a.type, fingerprint: a.fingerprint } : null;
     case "cloud-copy-on":
     case "cloud-copy-cancel":
+    case "cloud-copy-new-key":
     case "cloud-copy-show-key":
     case "cloud-copy-copy-key":
     case "cloud-copy-key-saved":

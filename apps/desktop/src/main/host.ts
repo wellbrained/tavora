@@ -118,6 +118,7 @@ import { readClaudeEmail } from "./ai-usage-claude";
 import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
+import { AccountKey } from "./account-key";
 import { CloudCopy } from "./cloud-copy";
 import { CopySync } from "./cloud-copy-sync";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
@@ -1810,6 +1811,8 @@ export class Host {
         return this.copySync.enterKey(action.key);
       case "cloud-copy-cancel":
         return this.copySync.cancelKey();
+      case "cloud-copy-new-key":
+        return this.copySync.startOver();
       case "cloud-copy-show-key":
         return this.copySync.showKey();
       case "cloud-copy-copy-key": {
@@ -2493,19 +2496,25 @@ export class Host {
     const encryptor = Host.encryptor(options);
     const startToken = options.accounts === true ? ((await loadAccount(path.join(options.userData, "account.json"), encryptor))?.token ?? null) : null;
     const savedFolder = sanitizeLibrary(await readJsonOrSetAside(path.join(options.userData, "library.json"))).moduleFilesFolder;
+    const service = {
+      baseUrl: `${(options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, "")}/v1/account`,
+      fetch: ((input, init) => fetch(input, init)) as typeof fetch,
+      token: () => {
+        const current = host();
+        return current ? current.account.token() : startToken;
+      },
+    };
     const sync = new CopySync({
       userData: options.userData,
       enabled: options.accounts === true,
       moduleFiles: () => host()?.files.root() ?? savedFolder ?? options.picturesFolder ?? defaultFilesRoot(options.userData),
-      cloud: new CloudCopy({
-        baseUrl: `${(options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, "")}/v1/account`,
-        fetch: (input, init) => fetch(input, init),
-        token: () => {
-          const current = host();
-          return current ? current.account.token() : startToken;
-        },
+      cloud: new CloudCopy(service),
+      accountKey: new AccountKey({
+        file: path.join(options.userData, "account-key.json"),
+        legacyFile: path.join(options.userData, "cloud-copy-key.json"),
+        encryptor,
+        ...service,
       }),
-      encryptor,
       flush: () => host()?.flush() ?? Promise.resolve(),
       restart: () => options.restart(),
       onChange: (view: CloudCopyView) => {

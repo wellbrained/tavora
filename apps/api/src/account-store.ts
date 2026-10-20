@@ -174,6 +174,10 @@ export class AccountStore {
       create table if not exists link_codes (
         code_hash text primary key, account_id text not null references accounts (id) on delete cascade, expires_at integer not null
       );
+      create table if not exists vaults (
+        account_id text primary key references accounts (id) on delete cascade,
+        version integer not null, data blob not null, updated_at integer not null
+      );
     `);
     this.migrate();
   }
@@ -296,6 +300,7 @@ export class AccountStore {
     try {
       const developer = this.developer(id);
       if (developer) this.release(nameKey(developer.name), id, now);
+      this.db.prepare("delete from vaults where account_id = ?").run(id);
       this.db.prepare("delete from link_codes where account_id = ?").run(id);
       this.db.prepare("delete from publisher_keys where account_id = ?").run(id);
       this.db.prepare("delete from developers where account_id = ?").run(id);
@@ -439,6 +444,28 @@ export class AccountStore {
   countMail(day: string): void {
     this.db.prepare("insert into mail_days (day, sent) values (?, 1) on conflict (day) do update set sent = sent + 1").run(day);
     this.db.prepare("delete from mail_days where day < ?").run(new Date(Date.parse(`${day}T00:00:00Z`) - 7 * DAY_MS).toISOString().slice(0, 10));
+  }
+
+  // ── Key vault ──────────────────────────────────────────────────────────
+
+  /** The account's sealed key vault (vault.ts): bytes only the player's recovery key opens. */
+  vault(accountId: string): { version: number; data: Uint8Array; updatedAt: number } | null {
+    const row = this.db.prepare("select version, data, updated_at from vaults where account_id = ?").get(accountId) as { version: number; data: Uint8Array; updated_at: number } | undefined;
+    return row ? { version: row.version, data: row.data, updatedAt: row.updated_at } : null;
+  }
+
+  /** Stores a new vault, if the PC started from the current version (0 when there is none). */
+  putVault(accountId: string, base: number, data: Uint8Array, now: number): { ok: true; version: number } | { ok: false; version: number } {
+    const current = this.vault(accountId)?.version ?? 0;
+    if (current !== base) return { ok: false, version: current };
+    this.db
+      .prepare("insert into vaults (account_id, version, data, updated_at) values (?, ?, ?, ?) on conflict (account_id) do update set version = excluded.version, data = excluded.data, updated_at = excluded.updated_at")
+      .run(accountId, base + 1, data, now);
+    return { ok: true, version: base + 1 };
+  }
+
+  removeVault(accountId: string): void {
+    this.db.prepare("delete from vaults where account_id = ?").run(accountId);
   }
 
   // ── Profile ────────────────────────────────────────────────────────────
