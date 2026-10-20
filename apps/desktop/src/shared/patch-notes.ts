@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.18",
+    date: "2026-10-20",
+    title: "Enshrouded build planning",
+    notes: [
+      "Skill icons have room around them when you zoom in.",
+      "Build dialogs, buttons and the build picker follow your Tavora theme.",
+    ],
+  },
+  {
     version: "0.19.17",
     date: "2026-10-20",
     title: "Enshrouded skill builds",
