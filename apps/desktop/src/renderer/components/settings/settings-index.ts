@@ -94,6 +94,8 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["browser-clear-shared", "browser"],
   ["development-folders", "development"],
   ["development-modules", "development"],
+  ["module-developer", "development"],
+  ["publish-ci", "development"],
   ["developer-docs", "development"],
   ["shortcuts", "shortcuts"],
   ["games", "games"],

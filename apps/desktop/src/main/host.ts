@@ -35,7 +35,7 @@ import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/lay
 import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
-import { applyOwners, readOwnerRecords } from "./installer";
+import { applyOwners, checkZipData, readOwnerRecords } from "./installer";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
 import { ModuleLifecycle } from "./module-lifecycle";
@@ -123,6 +123,7 @@ import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
 import { AccountKey } from "./account-key";
 import { DeveloperKeys } from "./developer-keys";
+import { ModulePublisher } from "./module-publish";
 import { FolderPairing, Pairing, ServicePairing } from "./pairing";
 import { startSignerServer, type SignerServer } from "./signer-server";
 import { ServiceStorage } from "./cloud-copy";
@@ -175,6 +176,10 @@ const DEVELOPER_LINKS: Record<DeveloperLink, string> = {
   discussions: "https://github.com/wellbrained/tavora/discussions",
   issue: "https://github.com/wellbrained/tavora/issues/new?template=module-developer.yml",
 };
+
+/** The command that starts a module project, which the developer onboarding copies. */
+const CREATE_MODULE_COMMAND = "npm create @tavora/module";
+
 /** Folders watched in one development folder for a new project, at most. */
 const MAX_DEVELOPMENT_SUBFOLDERS = 100;
 
@@ -293,6 +298,8 @@ export class Host {
   private copySync!: CopySync;
   /** The publisher keys the account's vault keeps, and the signer the pack command asks (developer-keys.ts). */
   private developerKeys!: DeveloperKeys;
+  /** The review screen and Publish for dev modules from project folders (module-publish.ts). */
+  private publisher!: ModulePublisher;
   private pairing!: Pairing;
   private signer: SignerServer | null = null;
   /** The developer names players see for publisher keys (publisher-names.ts). */
@@ -537,6 +544,7 @@ export class Host {
       },
       focus: () => host.bringToFront(),
     });
+    host.publisher = host.modulePublisher();
     host.pairing = Host.pairing(options, host);
     // Before any module opens, so none sees the pictures half moved.
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
@@ -1251,6 +1259,7 @@ export class Host {
     ipcMain.handle("host:get-account", (event) => (fromHost(event) ? this.account.view() : null));
     ipcMain.handle("host:get-cloud-copy", (event) => (fromHost(event) ? this.copySync.view() : null));
     ipcMain.handle("host:get-developer-keys", (event) => (fromHost(event) ? this.developerKeys.view() : null));
+    ipcMain.handle("host:get-publish", (event) => (fromHost(event) ? this.publisher.view() : null));
     ipcMain.handle("host:get-pairing", (event) => (fromHost(event) ? this.pairing.view() : null));
     ipcMain.handle("host:module-notes", (event, moduleId: unknown) => {
       const module = fromHost(event) && typeof moduleId === "string" ? this.modules.get(moduleId) : undefined;
@@ -1335,6 +1344,53 @@ export class Host {
       void this.signer?.close();
       clearInterval(this.catalogTimer);
     });
+  }
+
+  private modulePublisher(): ModulePublisher {
+    const linked = () => (this.account.view().publisherKeys ?? []).map((key) => key.fingerprint);
+    return new ModulePublisher({
+      key: (prefer) => this.developerKeys.keyFor(linked(), prefer),
+      account: {
+        prefixes: () => this.account.view().prefixes,
+        developerName: () => this.account.view().developer?.name ?? null,
+        checkPrefix: (prefix) => this.account.checkPrefix(prefix),
+        upload: (key, zip) => this.account.uploadModule(key, zip),
+      },
+      listed: async (id) => {
+        try {
+          const { entry } = await this.catalog.details(id);
+          return { version: entry.version, owner: entry.owner };
+        } catch (error) {
+          if (error instanceof PlayerError && error.key === "error.catalogNotListed") return null;
+          throw error;
+        }
+      },
+      // The installer's checks as if nothing were installed: the module itself is loaded from its project.
+      check: async (zip) => {
+        await checkZipData(zip, { userData: this.options.userData, userModules: path.join(this.options.userData, "publish-check"), modules: new Map(), tavoraVersion: app.getVersion(), safety: this.safetyLists });
+      },
+      icon: (id) => this.moduleInfo.get(id)?.icon ?? null,
+      translate: (error) => translate(this.language, error.key, error.params),
+      onChange: (view) => {
+        if (!this.window.isDestroyed()) this.window.webContents.send("host:publish", view);
+      },
+    });
+  }
+
+  /** The project folder a dev module was loaded from, for Publish and Save as zip. */
+  private projectOf(moduleId: string): string {
+    const project = this.modules.get(moduleId)?.developmentProject;
+    if (!project) throw new PlayerError("publish.error.noProject");
+    return project;
+  }
+
+  /** Packs a dev module signed with a kept key and saves the zip where the developer picks. */
+  private async saveModuleZip(moduleId: string): Promise<string | undefined> {
+    const { manifest, zip } = await this.publisher.pack(this.projectOf(moduleId));
+    const picked = await dialog.showSaveDialog(this.window, { defaultPath: `${manifest.id}-${manifest.version}.zip`, filters: [{ name: "Zip", extensions: ["zip"] }] });
+    if (picked.canceled || !picked.filePath) return undefined;
+    await writeFile(picked.filePath, zip);
+    return path.basename(picked.filePath);
   }
 
   /** Shows the window in front, for a question that came from outside it (the pack command's sign request). */
@@ -1702,6 +1758,16 @@ export class Host {
         if (key) clipboard.writeText(key);
       },
       "developer-sign-answer": (action) => this.developerKeys.answer(action.id, action.allow),
+      "account-prefix-check": async (action) => void (await this.account.checkPrefix(action.prefix)),
+      "account-prefix-claim": (action) => this.account.claimPrefix(action.prefix),
+      "publish-review": (action) => this.publisher.open(this.projectOf(action.moduleId)),
+      "publish-refresh": () => this.publisher.refresh(),
+      "publish-write": (action) => this.publisher.writeVersion(action.version, action.notes),
+      "publish-set-id": (action) => this.publisher.setId(action.id),
+      "publish-upload": () => this.publisher.publish(),
+      "publish-close": () => this.publisher.close(),
+      "save-module-zip": (action) => this.saveModuleZip(action.moduleId),
+      "developer-copy-create-command": () => clipboard.writeText(CREATE_MODULE_COMMAND),
       "pairing-start": () => this.pairing.start(),
       "pairing-cancel": () => this.pairing.cancel(),
       "pairing-decide": (action) => this.pairing.decide(action.id, action.allow),
@@ -3004,6 +3070,7 @@ export class Host {
         })),
         provenance: module.provenance,
         development: isDevelopmentModule(module.manifest.id) || module.developmentFolder !== undefined,
+        project: module.developmentProject !== undefined,
         version: module.manifest.version,
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,

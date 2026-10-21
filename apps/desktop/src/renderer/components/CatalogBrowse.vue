@@ -15,7 +15,8 @@ import { CircleCheck, Gamepad2, ShieldCheck } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
 import CatalogModuleDialog from "./CatalogModuleDialog.vue";
 
-const props = defineProps<{ query: string }>();
+/** `open`: a module whose page opens once the list is in, such as one just published. */
+const props = defineProps<{ query: string; open?: string | undefined }>();
 /** How many modules are listed for the search, or null while there is no list. */
 const emit = defineEmits<{ count: [number | null] }>();
 
@@ -31,6 +32,7 @@ const info = ref<CatalogModuleView | null>(null);
 async function load() {
   result.value = null;
   result.value = await api.browseCatalog();
+  if (props.open && result.value.status === "ok") info.value = result.value.modules.find((module) => module.id === props.open) ?? null;
 }
 onMounted(load);
 

@@ -189,7 +189,27 @@ export interface AccountView {
   publishTokens: AccountPublishToken[] | null;
   /** A token just made: its secret is shown this once. */
   newPublishToken: { name: string; token: string } | null;
+  /** The module id prefixes the account holds, and how many it may; null until read from the service. */
+  prefixes: { held: AccountPrefix[]; max: number } | null;
+  /** The prefix checked last (Check, Claim it), and what the catalog said about it. */
+  prefixCheck: { prefix: string; state: PrefixState } | null;
 }
+
+/** A module id prefix (the part before the first dot) the account holds in the catalog. */
+export interface AccountPrefix {
+  prefix: string;
+  /** When it was claimed, or first published under (milliseconds). */
+  claimedAt: number;
+  /** Something was published under it already. */
+  published: boolean;
+}
+
+/**
+ * What the catalog says about an id prefix for this account: "held" is yours, "free" can become yours,
+ * "taken" is another developer's, "reserved" nobody may have, "too-many" means you hold as many as you
+ * may, and "invalid" isn't a prefix at all.
+ */
+export type PrefixState = "held" | "free" | "taken" | "reserved" | "too-many" | "invalid";
 
 export interface AccountPublishToken {
   id: string;
@@ -235,6 +255,48 @@ export interface DeveloperKeysView {
   recoveryKey: string | null;
   request: SignRequestView | null;
 }
+
+/**
+ * The review screen before a dev module goes to the catalog (module-publish.ts). Tavora packs the project
+ * folder as it is, signed with a kept publisher key, and shows what would be published. Its Publish uploads
+ * exactly that zip; the click is the approval. Sent on its own channel; null while no review is open.
+ */
+export interface PublishView {
+  /** The project folder, as Settings > Development lists it. */
+  project: string;
+  /** "checking": packing and asking the catalog; "publishing": uploading; "published": done (see `published`). */
+  status: "checking" | "ready" | "publishing" | "published";
+  /** From the manifest; null when it can't be read. */
+  module: { id: string; name: string; version: string; icon: string | null } | null;
+  /** This version's patch notes from the project's changelog. */
+  notes: string[];
+  asks: ModulePermissions;
+  /** The zip's size in bytes, once packed. */
+  size: number | null;
+  /** When the newest built file was written (milliseconds), and whether source files changed after it. */
+  builtAt: number | null;
+  sourceNewer: boolean;
+  /** What the catalog lists: nothing yet, an older version, or unknown (offline). */
+  catalog: { kind: "first" } | { kind: "update"; version: string } | { kind: "unknown" };
+  /** What stops publishing, each with its fix on the screen. Publish works when this is empty. */
+  problems: PublishProblem[];
+  /** The id prefix becomes the account's with this publish (it may also be claimed right away). */
+  newPrefix: { prefix: string; max: number } | null;
+  /** The prefix the account would use for a new id: one it holds, or one made from the developer name. */
+  ownPrefix: string | null;
+  /** Why the last Publish didn't go through, in words. */
+  error: string | null;
+  published: { id: string; version: string } | null;
+}
+
+export type PublishProblem =
+  /** The catalog lists this version or a newer one: the screen offers the next versions. */
+  | { kind: "version"; listed: string; next: { patch: string; minor: string; major: string } }
+  /** The id's prefix isn't the account's; the id can be changed while nothing is published under it. */
+  | { kind: "prefix"; prefix: string; state: Exclude<PrefixState, "held" | "free"> }
+  | { kind: "not-built" }
+  /** Packing or the installer's checks refused it; `message` says why. */
+  | { kind: "invalid"; message: string };
 
 /**
  * Approving a new PC from an old one, instead of typing the recovery key. Sent on its own channel; the
@@ -466,6 +528,8 @@ export interface HostViewState {
     provenance: "official" | "local";
     /** A playground or example for module authors, listed under Development. */
     development: boolean;
+    /** Loaded from a project folder (Settings > Development), so it can be published or saved as a zip. */
+    project: boolean;
     version: string;
     /** Where it was found, without a full path: Tavora itself, an example, the player's modules folder or a development folder. */
     origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
@@ -771,6 +835,8 @@ export interface TavoraHostApi {
   onCloudCopy(listener: (view: CloudCopyView) => void): void;
   getDeveloperKeys(): Promise<DeveloperKeysView | null>;
   onDeveloperKeys(listener: (view: DeveloperKeysView) => void): void;
+  getPublish(): Promise<PublishView | null>;
+  onPublish(listener: (view: PublishView | null) => void): void;
   getPairing(): Promise<PairingView | null>;
   onPairing(listener: (view: PairingView) => void): void;
   /** A module asked for a menu (or null: close the one shown). */

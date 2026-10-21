@@ -4,19 +4,28 @@
 // in; Tavora loads every project in it and reloads its panels when the build
 // changes. Each project says what it loads or what to do next. Below are the
 // modules loaded for development (the folders' and the examples that ship
-// with Tavora), and the way to the docs and to GitHub.
-import { BookOpen, Bug, CircleAlert, CircleCheck, FolderCode, MessageCircleQuestion, Trash2 } from "@lucide/vue";
+// with Tavora), each from a project with Publish and Save as zip, then what
+// a module developer has with the account, and the way to the docs and to
+// GitHub. Until publishing is set up, a card offers the developer onboarding.
+import { BookOpen, Bug, CircleAlert, CircleCheck, FileArchive, FolderCode, MessageCircleQuestion, Rocket, Trash2, Upload } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DevelopmentProblemKind } from "../../../shared/host-api";
-import { act, showToast, state } from "../../host";
+import { account, act, developerKeys, developerReady, dialog, publishModule, saveModuleZip, showToast, state } from "../../host";
 import { t } from "../../i18n";
+import ModuleDeveloperSettings from "../developer/ModuleDeveloperSettings.vue";
 import ModuleRow from "./ModuleRow.vue";
+import RecoveryKeySettings from "./RecoveryKeySettings.vue";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
 defineProps<{ highlight: string | null }>();
+
+/** Publishing needs the account; in builds without accounts there is none of it. */
+const accounts = computed(() => account.value?.enabled === true);
+/** The account's recovery key is on screen (made with a key here) or needed on this PC. */
+const recoveryKey = computed(() => Boolean(developerKeys.value?.recoveryKey) || developerKeys.value?.status === "ask");
 
 const modules = computed(() => state.value!.modules);
 const folders = computed(() => state.value!.developmentFolders);
@@ -53,6 +62,17 @@ function loads(moduleId: string): string {
 </script>
 
 <template>
+  <SettingGroup v-if="accounts && !developerReady">
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-3 py-4" data-testid="developer-start-card">
+      <Rocket class="text-primary size-6 flex-none" :stroke-width="1.5" aria-hidden="true" />
+      <div class="flex min-w-0 flex-1 basis-56 flex-col gap-0.5">
+        <span class="font-medium">{{ t("devStart.card.title") }}</span>
+        <span class="text-muted-foreground text-sm">{{ t("devStart.card.text") }}</span>
+      </div>
+      <Button class="flex-none" data-testid="developer-start-open" @click="dialog = { kind: 'developer-start' }">{{ t("devStart.card.start") }}</Button>
+    </div>
+  </SettingGroup>
+
   <SettingGroup>
     <SettingRow
       :label="t('settings.development-folders.label')"
@@ -105,10 +125,24 @@ function loads(moduleId: string): string {
       data-setting="development-modules"
     >
       <ul class="flex flex-col" :aria-label="t('settings.development-modules.label')" data-testid="development-module-list">
-        <ModuleRow v-for="module in developmentModules" :key="module.id" :module="module" />
+        <ModuleRow v-for="module in developmentModules" :key="module.id" :module="module">
+          <template v-if="module.project && accounts">
+            <Button variant="ghost" :aria-label="t('publish.saveZip')" :title="t('publish.saveZip')" :data-testid="`save-zip-${module.id}`" @click="saveModuleZip(module.id)">
+              <FileArchive :stroke-width="1.5" /> {{ t("publish.saveZip") }}
+            </Button>
+            <Button variant="secondary" :data-testid="`publish-${module.id}`" @click="publishModule(module.id)">
+              <Upload :stroke-width="1.5" /> {{ t("publish.button") }}
+            </Button>
+          </template>
+        </ModuleRow>
       </ul>
     </div>
   </SettingGroup>
+
+  <template v-if="accounts && account?.account">
+    <RecoveryKeySettings v-if="recoveryKey" />
+    <ModuleDeveloperSettings :highlight="highlight" />
+  </template>
 
   <SettingGroup :title="t('settings.heading.help')">
     <SettingRow

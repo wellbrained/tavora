@@ -39,3 +39,13 @@ export function templateName(template: { id: string; name: string }): string {
   const key = `layout.template.${template.id}`;
   return hasMessage(key) ? t(key) : template.name;
 }
+
+/** How long ago a moment was, in the language's own words ("2 minutes ago"). */
+export function formatAgo(at: number, now = Date.now()): string {
+  const seconds = Math.round((at - now) / 1000);
+  const format = new Intl.RelativeTimeFormat(intlLocale(language.value), { numeric: "auto" });
+  if (Math.abs(seconds) < 60) return format.format(seconds, "second");
+  if (Math.abs(seconds) < 3600) return format.format(Math.round(seconds / 60), "minute");
+  if (Math.abs(seconds) < 86_400) return format.format(Math.round(seconds / 3600), "hour");
+  return format.format(Math.round(seconds / 86_400), "day");
+}
