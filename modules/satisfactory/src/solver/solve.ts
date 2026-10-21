@@ -25,7 +25,7 @@ const DEFAULT_POWER_EXPONENT = 1.321928;
 
 export const solve: Solve = ({ data, plan, world }) => {
   const invalid = checkPlan(data, plan);
-  if (invalid) return fail({ code: "INVALID_PLAN", message: invalid });
+  if (invalid) return fail(invalid);
   const usable = usableIn(world);
   const resources = new Set(data.resources);
   const choices = plan.recipeChoices ?? {};
@@ -161,21 +161,29 @@ function fail(error: SolveError) {
   return { ok: false as const, error };
 }
 
+type InvalidPlan = Extract<SolveError, { code: "INVALID_PLAN" }>;
+
 /** Why the plan cannot be solved as it stands, or null. */
-function checkPlan(data: GameData, plan: Plan): string | null {
-  if (!Array.isArray(plan.targets) || plan.targets.length === 0) return "Add at least one item to make.";
+function checkPlan(data: GameData, plan: Plan): InvalidPlan | null {
+  const invalid = (reason: InvalidPlan["reason"], message: string, ids: { item?: ItemId; recipe?: RecipeId } = {}): InvalidPlan => ({
+    code: "INVALID_PLAN",
+    reason,
+    ...ids,
+    message,
+  });
+  if (!Array.isArray(plan.targets) || plan.targets.length === 0) return invalid("NO_TARGETS", "The plan has no targets.");
   for (const [list, what] of [
     [plan.targets, "target"],
     [plan.fixedInputs ?? [], "fixed input"],
   ] as const) {
-    for (const rate of list) {
-      if (!Object.hasOwn(data.items, rate.item)) return `Unknown item in a ${what}: ${rate.item}.`;
-      if (!Number.isFinite(rate.perMinute) || rate.perMinute <= 0) return `Each ${what} needs a rate above 0.`;
+    for (const { item, perMinute } of list) {
+      if (!Object.hasOwn(data.items, item)) return invalid("UNKNOWN_ITEM", `Unknown item in a ${what}: ${item}.`, { item });
+      if (!Number.isFinite(perMinute) || perMinute <= 0) return invalid("BAD_RATE", `The ${what} ${item} needs a rate above 0.`, { item });
     }
   }
   for (const [item, recipe] of Object.entries(plan.recipeChoices ?? {})) {
-    if (!Object.hasOwn(data.items, item)) return `Unknown item in a recipe choice: ${item}.`;
-    if (!Object.hasOwn(data.recipes, recipe)) return `Unknown recipe: ${recipe}.`;
+    if (!Object.hasOwn(data.items, item)) return invalid("UNKNOWN_ITEM", `Unknown item in a recipe choice: ${item}.`, { item, recipe });
+    if (!Object.hasOwn(data.recipes, recipe)) return invalid("UNKNOWN_RECIPE", `Unknown recipe for ${item}: ${recipe}.`, { item, recipe });
   }
   return null;
 }

@@ -144,10 +144,17 @@ describe("worlds", () => {
   it.each([
     ["an empty name", world("   ")],
     ["a long name", world("x".repeat(101))],
-    ["an unknown alternate", world("Main", { unlockedAlternates: ["Recipe_Nothing_C"] })],
+    ["a damaged alternate", world("Main", { unlockedAlternates: [5 as unknown as string] })],
   ])("refuses %s", async (_, value) => {
     const { repo } = repository();
-    await expect(repo.putWorld(value)).rejects.toThrow(/name|recipe/);
+    await expect(repo.putWorld(value)).rejects.toThrow(/name|alternates/);
+  });
+
+  it("keeps alternates the game data no longer has", async () => {
+    const { repo } = repository();
+    const saved = await repo.putWorld(world("Main", { unlockedAlternates: ["Recipe_Gone_C"] }));
+    expect((await repo.listWorlds()).map((entry) => entry.value.unlockedAlternates)).toEqual([["Recipe_Gone_C"]]);
+    expect((await repo.getWorld(saved.id))?.value.unlockedAlternates).toEqual(["Recipe_Gone_C"]);
   });
 
   it("refuses to delete a world while a plan uses it", async () => {
@@ -191,11 +198,28 @@ describe("plans", () => {
     await expect(repo.deletePlan(saved.id, { ifRevision: 1 })).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
-  it("leaves out stored documents that do not pass the checks", async () => {
+  it("stores a new plan without targets", async () => {
+    const { repo } = repository();
+    const main = await repo.ensureWorld();
+    const saved = await repo.putPlan(plan(main.id, { targets: [], fixedInputs: [], recipeChoices: {} }));
+    expect((await repo.getPlan(saved.id))?.value.targets).toEqual([]);
+  });
+
+  it("keeps stored plans with ids the game data no longer has", async () => {
+    const { fake, repo } = repository();
+    const main = await repo.ensureWorld();
+    const gone = { ...plan(main.id), targets: [{ item: "Desc_Gone_C", perMinute: 1 }], recipeChoices: { Desc_IronScrew_C: "Recipe_Gone_C" } };
+    fake.raw("plan-gone", gone as unknown as JsonValue);
+    expect((await repo.listPlans()).map((entry) => entry.value)).toEqual([gone]);
+    const changed = await repo.putPlan({ ...gone, name: "Renamed" }, { id: "plan-gone", ifRevision: 1 });
+    expect(changed.value.targets).toEqual(gone.targets);
+  });
+
+  it("leaves out stored documents of a broken shape", async () => {
     const { fake, repo } = repository();
     const main = await repo.ensureWorld();
     const good = await repo.putPlan(plan(main.id));
-    fake.raw("plan-unknown-item", { ...plan(main.id), targets: [{ item: "Desc_Nothing_C", perMinute: 1 }] } as unknown as JsonValue);
+    fake.raw("plan-text-rate", { ...plan(main.id), targets: [{ item: "Desc_IronPlate_C", perMinute: "1" }] } as unknown as JsonValue);
     fake.raw("plan-zero", { ...plan(main.id), targets: [{ item: "Desc_IronPlate_C", perMinute: 0 }] } as unknown as JsonValue);
     fake.raw("plan-newer", { ...plan(main.id), version: 2 } as unknown as JsonValue);
     fake.raw("world-nameless", { ...world(), name: "" } as unknown as JsonValue);
@@ -300,7 +324,6 @@ describe("export and import", () => {
     ["a rate of 0", file({}, { targets: [{ item: "Desc_IronScrew_C", perMinute: 0 }] }), "Rates need to be above 0 and at most 1,000,000 a minute."],
     ["an endless rate", file({}, { targets: [{ item: "Desc_IronScrew_C", perMinute: 1e9 }] }), "Rates need to be above 0 and at most 1,000,000 a minute."],
     ["a rate as text", file({}, { targets: [{ item: "Desc_IronScrew_C", perMinute: "5" }] }), "Rates need to be above 0 and at most 1,000,000 a minute."],
-    ["no targets", file({}, { targets: [] }), "Add at least one item to make."],
     ["a target twice", file({}, { targets: [{ item: "Desc_IronScrew_C", perMinute: 5 }, { item: "Desc_IronScrew_C", perMinute: 5 }] }), "This plan lists Screws twice in its targets."],
     ["too many targets", file({}, { targets: Array.from({ length: 101 }, () => ({ item: "Desc_IronScrew_C", perMinute: 1 })) }), "A plan can have at most 100 targets."],
     ["no name", file({}, { name: " " }), "Choose a name between 1 and 100 characters."],
@@ -309,6 +332,12 @@ describe("export and import", () => {
     const main = await repo.ensureWorld();
     await expect(repo.importPlan(value, main.id)).rejects.toThrow(message);
     expect(await repo.listPlans()).toEqual([]);
+  });
+
+  it("imports a plan without targets", async () => {
+    const { repo } = repository();
+    const main = await repo.ensureWorld();
+    expect((await repo.importPlan(file({}, { targets: [] }), main.id)).value.targets).toEqual([]);
   });
 
   it("refuses to import into a world that is gone", async () => {

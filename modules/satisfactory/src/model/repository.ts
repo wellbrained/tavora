@@ -1,7 +1,8 @@
 // Worlds and plans as module documents. Both kinds share the module's document
 // list and are told apart by their format; ids start with "world-" or "plan-"
-// so a deleted document's kind is still known. Documents that do not pass the
-// checks are left out rather than breaking the list.
+// so a deleted document's kind is still known. Documents of a broken shape are
+// left out rather than breaking the list; ids the game data no longer has are
+// kept, for the solver to report.
 
 import { TavoraError, type DocumentSummary, type JsonValue, type TavoraDocument, type TavoraSDK } from "@tavora/sdk";
 import type { GameData } from "../contracts/data";
@@ -71,7 +72,7 @@ export class DocumentRepository implements Repository {
   }
 
   async putWorld(world: World, options: { id?: string; ifRevision?: number } = {}): Promise<Stored<World>> {
-    return this.put("world", readWorld(world, this.data), options);
+    return this.put("world", readWorld(world), options);
   }
 
   async deleteWorld(id: string): Promise<void> {
@@ -90,7 +91,7 @@ export class DocumentRepository implements Repository {
   }
 
   async putPlan(plan: Plan, options: { id?: string; ifRevision?: number } = {}): Promise<Stored<Plan>> {
-    const value = readPlan(plan, this.data);
+    const value = readPlan(plan);
     if (!(await this.getWorld(value.worldId))) throw new Error("This plan's world is gone. Choose another world.");
     return this.put("plan", value, options);
   }
@@ -155,8 +156,8 @@ export class DocumentRepository implements Repository {
     const kind = formatKind(document.data);
     let value: World | Plan | null = null;
     try {
-      if (kind === "world") value = readWorld(document.data, this.data);
-      if (kind === "plan") value = readPlan(document.data, this.data);
+      if (kind === "world") value = readWorld(document.data);
+      if (kind === "plan") value = readPlan(document.data);
     } catch {
       value = null;
     }

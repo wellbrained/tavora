@@ -1,6 +1,9 @@
 // Checks worlds, plans and plan files read from storage or from a file the
 // player picked. Each reader returns a clean copy or throws an Error whose
-// message can be shown to the player.
+// message can be shown to the player. Stored worlds and plans are checked for
+// their shape only: after a game update they may name items or recipes the
+// data no longer has, and the solver reports those. Imported files must only
+// name ids the game data has.
 
 import type { GameData } from "../contracts/data";
 import type { Plan, Rate, World } from "../contracts/plan";
@@ -31,13 +34,13 @@ export interface PlanFile {
   plan: Plan;
 }
 
-export function readWorld(value: unknown, data: GameData): World {
+export function readWorld(value: unknown): World {
   const raw = record(value, "This isn't a world.");
   if (raw.format !== WORLD_FORMAT || raw.version !== 1) throw new Error("This isn't a world.");
   const alternates = list(raw.unlockedAlternates, LIMITS.unlockedAlternates, "This world has too many unlocked alternates.");
   const unlockedAlternates: string[] = [];
   for (const recipe of alternates) {
-    if (typeof recipe !== "string" || !Object.hasOwn(data.recipes, recipe)) throw new Error(`This world has a recipe the planner doesn't know: ${String(recipe)}.`);
+    if (typeof recipe !== "string" || recipe.length === 0) throw new Error("This world's alternates are damaged.");
     if (unlockedAlternates.includes(recipe)) throw new Error("This world lists an alternate twice.");
     unlockedAlternates.push(recipe);
   }
@@ -45,19 +48,20 @@ export function readWorld(value: unknown, data: GameData): World {
   return { format: WORLD_FORMAT, version: 1, name: name(raw.name), unlockedAlternates, showAllAlternates: raw.showAllAlternates };
 }
 
-export function readPlan(value: unknown, data: GameData): Plan {
+/** With `data`, every item and recipe must also be in it. */
+export function readPlan(value: unknown, data?: GameData): Plan {
   const raw = record(value, "This isn't a plan.");
   if (raw.format !== PLAN_FORMAT || raw.version !== 1) throw new Error("This isn't a plan.");
   if (typeof raw.worldId !== "string" || !DOCUMENT_ID.test(raw.worldId)) throw new Error("This plan isn't in a world.");
   const targets = rates(raw.targets, "targets", data);
-  if (targets.length === 0) throw new Error("Add at least one item to make.");
   const choices = record(raw.recipeChoices ?? {}, "This plan's recipe choices are damaged.");
   const entries = Object.entries(choices);
   if (entries.length > LIMITS.recipeChoices) throw new Error("This plan has too many recipe choices.");
   const recipeChoices: Record<string, string> = {};
   for (const [item, recipe] of entries) {
     knownItem(item, data);
-    if (typeof recipe !== "string" || !Object.hasOwn(data.recipes, recipe)) throw new Error(`This plan uses a recipe the planner doesn't know: ${String(recipe)}.`);
+    if (typeof recipe !== "string" || recipe.length === 0) throw new Error("This plan's recipe choices are damaged.");
+    if (data && !Object.hasOwn(data.recipes, recipe)) throw new Error(`This plan uses a recipe the planner doesn't know: ${recipe}.`);
     recipeChoices[item] = recipe;
   }
   return {
@@ -99,12 +103,13 @@ function name(value: unknown): string {
   return trimmed;
 }
 
-function knownItem(item: unknown, data: GameData): string {
-  if (typeof item !== "string" || !Object.hasOwn(data.items, item)) throw new Error(`This plan uses an item the planner doesn't know: ${String(item)}.`);
+function knownItem(item: unknown, data: GameData | undefined): string {
+  if (typeof item !== "string" || item.length === 0) throw new Error("Something in this plan is damaged.");
+  if (data && !Object.hasOwn(data.items, item)) throw new Error(`This plan uses an item the planner doesn't know: ${item}.`);
   return item;
 }
 
-function rates(value: unknown, what: string, data: GameData): Rate[] {
+function rates(value: unknown, what: string, data: GameData | undefined): Rate[] {
   const result: Rate[] = [];
   for (const entry of list(value, LIMITS.rates, `A plan can have at most ${LIMITS.rates} ${what}.`)) {
     const rate = record(entry, `This plan's ${what} are damaged.`);
@@ -113,7 +118,7 @@ function rates(value: unknown, what: string, data: GameData): Rate[] {
     if (typeof perMinute !== "number" || !Number.isFinite(perMinute) || perMinute <= 0 || perMinute > LIMITS.maxPerMinute) {
       throw new Error(`Rates need to be above 0 and at most ${LIMITS.maxPerMinute.toLocaleString("en")} a minute.`);
     }
-    if (result.some((other) => other.item === item)) throw new Error(`This plan lists ${data.items[item]!.name.en} twice in its ${what}.`);
+    if (result.some((other) => other.item === item)) throw new Error(`This plan lists ${data?.items[item]?.name.en ?? item} twice in its ${what}.`);
     result.push({ item, perMinute });
   }
   return result;

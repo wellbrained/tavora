@@ -126,22 +126,26 @@ describe("alternate recipes", () => {
 });
 
 describe("invalid plans", () => {
-  const invalid = (input: Parameters<typeof plan>) => attempt({ plan: plan(...input) });
+  const NOTHING = "Desc_Nothing_C";
   it.each([
-    ["an unknown target", [{ Desc_Nothing_C: 1 }]],
-    ["a zero rate", [{ [PLATE]: 0 }]],
-    ["a negative rate", [{ [PLATE]: -5 }]],
-    ["an endless rate", [{ [PLATE]: Infinity }]],
-    ["a rate that is not a number", [{ [PLATE]: Number.NaN }]],
-    ["no targets", [{}]],
-    ["an unknown fixed input", [{ [PLATE]: 10 }, { fixedInputs: { Desc_Nothing_C: 5 } }]],
-    ["a fixed input of 0", [{ [PLATE]: 10 }, { fixedInputs: { [INGOT]: 0 } }]],
-    ["an unknown recipe", [{ [PLATE]: 10 }, { recipeChoices: { [PLATE]: "Recipe_Nothing_C" } }]],
-    ["a choice for an unknown item", [{ [PLATE]: 10 }, { recipeChoices: { Desc_Nothing_C: "Recipe_IronPlate_C" } }]],
-  ] as [string, Parameters<typeof plan>][])("refuses %s", (_, input) => {
-    const outcome = invalid(input);
-    expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.error.code).toBe("INVALID_PLAN");
+    ["an unknown target", [{ [NOTHING]: 1 }], { reason: "UNKNOWN_ITEM", item: NOTHING }],
+    ["a zero rate", [{ [PLATE]: 0 }], { reason: "BAD_RATE", item: PLATE }],
+    ["a negative rate", [{ [PLATE]: -5 }], { reason: "BAD_RATE", item: PLATE }],
+    ["an endless rate", [{ [PLATE]: Infinity }], { reason: "BAD_RATE", item: PLATE }],
+    ["a rate that is not a number", [{ [PLATE]: Number.NaN }], { reason: "BAD_RATE", item: PLATE }],
+    ["no targets", [{}], { reason: "NO_TARGETS" }],
+    ["an unknown fixed input", [{ [PLATE]: 10 }, { fixedInputs: { [NOTHING]: 5 } }], { reason: "UNKNOWN_ITEM", item: NOTHING }],
+    ["a fixed input of 0", [{ [PLATE]: 10 }, { fixedInputs: { [INGOT]: 0 } }], { reason: "BAD_RATE", item: INGOT }],
+    ["an unknown recipe", [{ [PLATE]: 10 }, { recipeChoices: { [PLATE]: "Recipe_Nothing_C" } }], { reason: "UNKNOWN_RECIPE", item: PLATE, recipe: "Recipe_Nothing_C" }],
+    ["a choice for an unknown item", [{ [PLATE]: 10 }, { recipeChoices: { [NOTHING]: "Recipe_IronPlate_C" } }], { reason: "UNKNOWN_ITEM", item: NOTHING, recipe: "Recipe_IronPlate_C" }],
+  ] as [string, Parameters<typeof plan>, Record<string, string>][])("refuses %s", (_, input, expected) => {
+    const outcome = attempt({ plan: plan(...input) });
+    expect(outcome).toMatchObject({ ok: false, error: { code: "INVALID_PLAN", ...expected, message: expect.any(String) } });
+  });
+
+  it("ignores unlocked alternates the game data no longer has", () => {
+    const result = solved({ plan: plan({ [PLATE]: 20 }), world: world({ unlockedAlternates: ["Recipe_Gone_C"] }) });
+    expect(machinesOf(result)).toEqual({ Recipe_IronPlate_C: 1, Recipe_IngotIron_C: 1 });
   });
 });
 
