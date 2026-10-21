@@ -77,7 +77,7 @@ describe("rating a catalog module", () => {
         version: "1.1.0",
         createdAt: "2026-10-21T12:00:00.000Z",
         updatedAt: "2026-10-21T12:01:00.000Z",
-        author: { name: "Mara", initials: "MA", picture: createHash("sha256").update(PNG).digest("hex") },
+        author: { name: "Mara", initials: "MA", picture: { sha256: createHash("sha256").update(PNG).digest("hex"), size: PNG.length } },
         reply: null,
       },
     ]);
@@ -87,8 +87,8 @@ describe("rating a catalog module", () => {
   it("gives the author's picture only with a shown review and its hash", async () => {
     const { player, rate, call } = setup();
     const mara = player("mara@example.com");
-    const { review } = (await (await rate(mara.token, { stars: 4, text: "Nice", version: "1.0.0" })).json()) as { review: { id: string; author: { picture: string } } };
-    const picture = await call("GET", `/reviews/${review.id}/picture/${review.author.picture}.png`);
+    const { review } = (await (await rate(mara.token, { stars: 4, text: "Nice", version: "1.0.0" })).json()) as { review: { id: string; author: { picture: { sha256: string } } } };
+    const picture = await call("GET", `/reviews/${review.id}/picture/${review.author.picture.sha256}.png`);
     expect(picture.status).toBe(200);
     expect(picture.headers.get("content-type")).toBe("image/png");
     expect(Buffer.from(await picture.arrayBuffer())).toEqual(PNG);

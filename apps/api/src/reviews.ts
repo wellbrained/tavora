@@ -273,7 +273,8 @@ function reviewAnswer(review: StoredReview, accounts: AccountStore) {
     author: {
       name,
       initials: name ? profile!.initials : null,
-      picture: profile?.picture ? createHash("sha256").update(profile.picture).digest("hex") : null,
+      // Fetched by the review it belongs to, and checked against this hash and size by the app.
+      picture: profile?.picture ? { sha256: createHash("sha256").update(profile.picture).digest("hex"), size: profile.picture.length } : null,
     },
     reply: review.reply && !review.hidden ? { text: review.reply.text, updatedAt: new Date(review.reply.updatedAt).toISOString() } : null,
   };
