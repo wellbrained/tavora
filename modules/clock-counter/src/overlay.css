@@ -1,0 +1,93 @@
+/* The overlay OBS draws over the game: transparent, nothing but the text, which fills the Browser Source. */
+@import "@fontsource-variable/inter/wght.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+main {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  padding: 4vh 3vw;
+  color: var(--color, #fff);
+  font-family: "Inter Variable", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+/* Nothing published (yet), or the item was deleted. */
+main[hidden] {
+  display: none;
+}
+
+main[data-font="mono"] {
+  font-family: "JetBrains Mono Variable", ui-monospace, Consolas, monospace;
+}
+
+main[data-font="system"] {
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+main[data-align="left"] {
+  align-items: flex-start;
+  text-align: left;
+}
+main[data-align="center"] {
+  align-items: center;
+  text-align: center;
+}
+main[data-align="right"] {
+  align-items: flex-end;
+  text-align: right;
+}
+
+main[data-outline="true"] {
+  -webkit-text-stroke: 0.04em rgb(0 0 0 / 0.85);
+  paint-order: stroke fill;
+  text-shadow: 0 0.04em 0.12em rgb(0 0 0 / 0.6);
+}
+
+.label {
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.value {
+  font-weight: 700;
+}
+
+.lap {
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.label:empty,
+.lap:empty {
+  display: none;
+}
+
+/* A countdown that reached 0 without a text of its own. */
+main[data-done="flash"] .value {
+  animation: flash 1s steps(2, jump-none) infinite;
+}
+
+@keyframes flash {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  main[data-done="flash"] .value {
+    animation: none;
+  }
+}
