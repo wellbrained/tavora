@@ -8,7 +8,7 @@
 // made for other games (its manifest's `games`) is not listed at all.
 import { computed, ref } from "vue";
 import { useEventListener } from "@vueuse/core";
-import { addModule, dialog, openSettings, state, type AddModuleRequest } from "../host";
+import { account, addModule, dialog, openSettings, publishModule, saveModuleZip, state, type AddModuleRequest, type MenuItem } from "../host";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ import { Blocks, ChevronDown, Code, Download, Gamepad2, Search, Settings2, Shiel
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import ModuleIcon from "./ModuleIcon.vue";
 import CatalogBrowse from "./CatalogBrowse.vue";
+import MenuButton from "./menus/MenuButton.vue";
 
 type ModuleView = NonNullable<typeof state.value>["modules"][number];
 type Kind = "official" | "local" | "development";
@@ -40,7 +41,9 @@ function kindOf(module: ModuleView): Kind {
   return module.development ? "development" : module.provenance;
 }
 
-const view = ref<View>((dialog.value as AddModuleRequest).view ?? "all");
+/** A module whose catalog page to open, such as one just published: the library starts in the catalog. */
+const browse = (dialog.value as AddModuleRequest).browse;
+const view = ref<View>(browse ? "catalog" : ((dialog.value as AddModuleRequest).view ?? "all"));
 const query = ref("");
 /** How many modules the catalog lists for the search, once it has loaded. */
 const catalogCount = ref<number | null>(null);
@@ -136,6 +139,15 @@ function closeMenuFirst(event: KeyboardEvent) {
   expanded.value = null;
 }
 
+/** A module from a project folder can be published or saved as a zip from its menu (with accounts on). */
+function projectMenu(module: ModuleView): MenuItem[] {
+  return [
+    { label: t("publish.button"), testid: `menu-publish-${module.id}`, run: () => publishModule(module.id) },
+    { label: t("publish.saveZip"), testid: `menu-save-zip-${module.id}`, run: () => saveModuleZip(module.id) },
+  ];
+}
+const accounts = computed(() => account.value?.enabled === true);
+
 const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text-primary shrink-0";
 </script>
 
@@ -218,7 +230,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
           </DialogClose>
         </header>
 
-        <CatalogBrowse v-if="view === 'catalog'" :query="query" @count="catalogCount = $event" />
+        <CatalogBrowse v-if="view === 'catalog'" :query="query" :open="browse" @count="catalogCount = $event" />
         <div v-else class="min-h-0 flex-1 overflow-y-auto px-5 pb-8 sm:px-8" data-testid="module-results">
           <section v-for="group in groups" :key="group.id" :aria-label="group.label" class="pt-6">
             <h3 v-if="showHeadings" class="text-primary flex items-center gap-2 pb-3 text-xs font-semibold tracking-wider uppercase">
@@ -248,6 +260,16 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                         :data-testid="`provenance-${module.id}`"
                         >{{ provenanceLabel(module.provenance) }}</span
                       >
+                      <MenuButton
+                        v-if="module.project && accounts"
+                        :items="() => projectMenu(module)"
+                        :title="module.name"
+                        :label="t('publish.more', { name: module.name })"
+                        :testid="`module-menu-${module.id}`"
+                        side="bottom"
+                        align="end"
+                        class="-my-1 ml-auto"
+                      />
                     </div>
                     <p v-if="module.description" class="text-muted-foreground mt-0.5 line-clamp-2 text-sm" :title="module.description">{{ module.description }}</p>
                   </div>

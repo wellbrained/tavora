@@ -1,7 +1,7 @@
 // Preload for the trusted host UI. Exposes a small, fixed API; the main
 // process still checks that every call comes from the host window.
 import { contextBridge, ipcRenderer } from "electron";
-import type { AccountView, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, PairingView, HostShortcut, HostViewState, ModuleMenu, TavoraHostApi } from "../shared/host-api";
+import type { AccountView, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, PairingView, PublishView, HostShortcut, HostViewState, ModuleMenu, TavoraHostApi } from "../shared/host-api";
 
 const api: TavoraHostApi = {
   getState: () => ipcRenderer.invoke("host:get-state"),
@@ -14,6 +14,7 @@ const api: TavoraHostApi = {
   browseCatalog: () => ipcRenderer.invoke("host:browse-catalog"),
   catalogPage: (moduleId) => ipcRenderer.invoke("host:catalog-page", moduleId),
   catalogIcon: (moduleId) => ipcRenderer.invoke("host:catalog-icon", moduleId),
+  catalogReviews: (moduleId) => ipcRenderer.invoke("host:catalog-reviews", moduleId),
   setPanelBounds: (bounds) => ipcRenderer.send("host:panel-bounds", bounds),
   setOverlay: (open) => ipcRenderer.send("host:overlay", open),
   onState: (listener) => {
@@ -44,6 +45,10 @@ const api: TavoraHostApi = {
   getDeveloperKeys: () => ipcRenderer.invoke("host:get-developer-keys"),
   onDeveloperKeys: (listener) => {
     ipcRenderer.on("host:developer-keys", (_event, view: DeveloperKeysView) => listener(view));
+  },
+  getPublish: () => ipcRenderer.invoke("host:get-publish"),
+  onPublish: (listener) => {
+    ipcRenderer.on("host:publish", (_event, view: PublishView | null) => listener(view));
   },
   getPairing: () => ipcRenderer.invoke("host:get-pairing"),
   onPairing: (listener) => {

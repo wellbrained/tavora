@@ -189,7 +189,27 @@ export interface AccountView {
   publishTokens: AccountPublishToken[] | null;
   /** A token just made: its secret is shown this once. */
   newPublishToken: { name: string; token: string } | null;
+  /** The module id prefixes the account holds, and how many it may; null until read from the service. */
+  prefixes: { held: AccountPrefix[]; max: number } | null;
+  /** The prefix checked last (Check, Claim it), and what the catalog said about it. */
+  prefixCheck: { prefix: string; state: PrefixState } | null;
 }
+
+/** A module id prefix (the part before the first dot) the account holds in the catalog. */
+export interface AccountPrefix {
+  prefix: string;
+  /** When it was claimed, or first published under (milliseconds). */
+  claimedAt: number;
+  /** Something was published under it already. */
+  published: boolean;
+}
+
+/**
+ * What the catalog says about an id prefix for this account: "held" is yours, "free" can become yours,
+ * "taken" is another developer's, "reserved" nobody may have, "too-many" means you hold as many as you
+ * may, and "invalid" isn't a prefix at all.
+ */
+export type PrefixState = "held" | "free" | "taken" | "reserved" | "too-many" | "invalid";
 
 export interface AccountPublishToken {
   id: string;
@@ -235,6 +255,48 @@ export interface DeveloperKeysView {
   recoveryKey: string | null;
   request: SignRequestView | null;
 }
+
+/**
+ * The review screen before a dev module goes to the catalog (module-publish.ts). Tavora packs the project
+ * folder as it is, signed with a kept publisher key, and shows what would be published. Its Publish uploads
+ * exactly that zip; the click is the approval. Sent on its own channel; null while no review is open.
+ */
+export interface PublishView {
+  /** The project folder, as Settings > Development lists it. */
+  project: string;
+  /** "checking": packing and asking the catalog; "publishing": uploading; "published": done (see `published`). */
+  status: "checking" | "ready" | "publishing" | "published";
+  /** From the manifest; null when it can't be read. */
+  module: { id: string; name: string; version: string; icon: string | null } | null;
+  /** This version's patch notes from the project's changelog. */
+  notes: string[];
+  asks: ModulePermissions;
+  /** The zip's size in bytes, once packed. */
+  size: number | null;
+  /** When the newest built file was written (milliseconds), and whether source files changed after it. */
+  builtAt: number | null;
+  sourceNewer: boolean;
+  /** What the catalog lists: nothing yet, an older version, or unknown (offline). */
+  catalog: { kind: "first" } | { kind: "update"; version: string } | { kind: "unknown" };
+  /** What stops publishing, each with its fix on the screen. Publish works when this is empty. */
+  problems: PublishProblem[];
+  /** The id prefix becomes the account's with this publish (it may also be claimed right away). */
+  newPrefix: { prefix: string; max: number } | null;
+  /** The prefix the account would use for a new id: one it holds, or one made from the developer name. */
+  ownPrefix: string | null;
+  /** Why the last Publish didn't go through, in words. */
+  error: string | null;
+  published: { id: string; version: string } | null;
+}
+
+export type PublishProblem =
+  /** The catalog lists this version or a newer one: the screen offers the next versions. */
+  | { kind: "version"; listed: string; next: { patch: string; minor: string; major: string } }
+  /** The id's prefix isn't the account's; the id can be changed while nothing is published under it. */
+  | { kind: "prefix"; prefix: string; state: Exclude<PrefixState, "held" | "free"> }
+  | { kind: "not-built" }
+  /** Packing or the installer's checks refused it; `message` says why. */
+  | { kind: "invalid"; message: string };
 
 /**
  * Approving a new PC from an old one, instead of typing the recovery key. Sent on its own channel; the
@@ -466,6 +528,8 @@ export interface HostViewState {
     provenance: "official" | "local";
     /** A playground or example for module authors, listed under Development. */
     development: boolean;
+    /** Loaded from a project folder (Settings > Development), so it can be published or saved as a zip. */
+    project: boolean;
     version: string;
     /** Where it was found, without a full path: Tavora itself, an example, the player's modules folder or a development folder. */
     origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
@@ -546,6 +610,45 @@ export interface HostViewState {
   appearance: AppearanceView;
   /** The language setting, and the language it comes to now (the system's, when following it). */
   language: { setting: LanguageSetting; resolved: Language };
+  /** Settings > Streaming: Stream overlays and the hotkeys set for module actions. */
+  streaming: StreamingView;
+  /** Tavora's hotkey dialog, opened by a module's hotkeys.set; null while it is closed. */
+  hotkeyRequest: HotkeyRequestView | null;
+}
+
+/**
+ * Stream overlays (main/overlays.ts): whether they are on, the port, and how the server stands: off, running, or
+ * not running because the port is in use or something else failed.
+ */
+export interface StreamingView {
+  overlays: { enabled: boolean; port: number; status: "off" | "running" | "in-use" | "failed" };
+  /** Every hotkey set for a module action, in every game (main/hotkeys.ts). `taken`: another program holds the key right now. */
+  hotkeys: HotkeyView[];
+}
+
+export interface HotkeyView {
+  owner: string;
+  gameId: string;
+  gameName: string;
+  moduleId: string;
+  moduleName: string;
+  action: string;
+  actionName: string;
+  target: string;
+  label: string;
+  accelerator: string;
+  taken: boolean;
+}
+
+/** What Tavora's hotkey dialog shows: which action of which module, for what, and the key it has now. */
+export interface HotkeyRequestView {
+  id: number;
+  moduleName: string;
+  actionName: string;
+  label: string;
+  current: string | null;
+  /** Why the last key was refused, in the player's language. */
+  error: string | null;
 }
 
 /** What a module may do as far as grants decide it (main/grants.ts): hosts for network.fetch and connectors. */
@@ -556,7 +659,7 @@ export interface ModulePermissions {
 }
 
 /** The connectors Tavora has (module-schema CONNECTORS). */
-export type ModuleConnector = "ai-usage" | "discord";
+export type ModuleConnector = "ai-usage" | "discord" | "stream-overlay";
 
 /** Everything the host UI can ask the main process to do: the table in host-actions.ts. */
 export type { HostAction, HostActionType } from "./host-actions";
@@ -663,7 +766,60 @@ export interface CatalogModuleView {
   screenshots: number;
   /** Whether the listing has an icon; catalogIcon fetches it. */
   icon: boolean;
+  /** Every version's ratings together, or null without any. Below MIN_RATINGS_SHOWN the app says "New". */
+  rating: CatalogRating | null;
 }
+
+/** Ratings a module needs before its average shows; below that it says "New". */
+export const MIN_RATINGS_SHOWN = 3;
+
+/** A catalog module's ratings: the average to one decimal, how many, and how many gave 1, 2, 3, 4 and 5 stars. */
+export interface CatalogRating {
+  average: number;
+  count: number;
+  stars: [number, number, number, number, number];
+}
+
+/** A review on a catalog module's page. Every text is plain text; the account behind it is never known here. */
+export interface CatalogReviewView {
+  id: string;
+  stars: number;
+  text: string;
+  /** The version it was given on. */
+  version: string;
+  /** When it was written or last changed. */
+  date: string;
+  /** The author's profile name and picture (a checked PNG data address); null when they have none. */
+  author: { name: string | null; initials: string | null; picture: string | null };
+  /** The publisher's one reply. */
+  reply: { text: string; date: string } | null;
+}
+
+/** The player's own rating of a module. `hidden`: Tavora hid its text after a report; its stars still count. */
+export interface CatalogOwnReview {
+  stars: number;
+  text: string | null;
+  version: string;
+  hidden: boolean;
+}
+
+/** A catalog module's ratings and reviews, and what the player can do there. */
+export interface CatalogReviews {
+  rating: CatalogRating | null;
+  /** The newest reviews with text, newest first. */
+  reviews: CatalogReviewView[];
+  /** The player's own rating; null without one, or signed out. */
+  mine: CatalogOwnReview | null;
+  /**
+   * `rate`: signed in, with the module installed. `sign-in`: signed out. `install`: not installed.
+   * `own`: the player's own module, which they can't rate but can reply under its reviews.
+   */
+  can: "rate" | "sign-in" | "install" | "own";
+  /** The installed version a new rating is given on; null when it isn't installed. */
+  installedVersion: string | null;
+}
+
+export type CatalogReviewsResult = ({ status: "ok" } & CatalogReviews) | { status: "off" | "unavailable" | "busy" | "unreachable" | "gone" };
 
 /** One block of a catalog module's readme, as plain text (catalog-readme.ts). */
 export type ReadmeBlock =
@@ -710,6 +866,8 @@ export interface TavoraHostApi {
   catalogPage(moduleId: string): Promise<CatalogPageResult>;
   /** The icon of a module from the last catalog list, as a checked data address, or null. Never rejects. */
   catalogIcon(moduleId: string): Promise<string | null>;
+  /** A catalog module's ratings and reviews, and the player's own rating. Never rejects. */
+  catalogReviews(moduleId: string): Promise<CatalogReviewsResult>;
   /** Where the visible panels are. Panels not listed are hidden. */
   setPanelBounds(bounds: PanelBounds[]): void;
   /**
@@ -732,6 +890,8 @@ export interface TavoraHostApi {
   onCloudCopy(listener: (view: CloudCopyView) => void): void;
   getDeveloperKeys(): Promise<DeveloperKeysView | null>;
   onDeveloperKeys(listener: (view: DeveloperKeysView) => void): void;
+  getPublish(): Promise<PublishView | null>;
+  onPublish(listener: (view: PublishView | null) => void): void;
   getPairing(): Promise<PairingView | null>;
   onPairing(listener: (view: PairingView) => void): void;
   /** A module asked for a menu (or null: close the one shown). */
@@ -741,4 +901,4 @@ export interface TavoraHostApi {
 }
 
 /** `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). */
-export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}` | `address:${string}` | `panel:${string}`;
+export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}` | `address:${string}` | `panel:${string}` | `setting:${string}`;

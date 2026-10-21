@@ -20,6 +20,57 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.30",
+    date: "2026-10-21",
+    title: "Examples and project folders",
+    notes: [
+      "Settings > Development lists each project folder with its modules under it, so a module shows up only once.",
+      "The examples that ship with Tavora have their own list. Open one's folder to read the code, or make a copy to start your own module.",
+      "The UI Playground is listed with the other official modules now.",
+    ],
+  },
+  {
+    version: "0.19.29",
+    date: "2026-10-21",
+    title: "Publish modules from Tavora",
+    notes: [
+      "New to making modules? Want to make modules? in Settings > Development walks you from sign-in to your first project.",
+      "Check and claim your prefix right in Tavora.",
+      "Publish next to your module shows what goes out, sets the version and notes for you, and uploads it with one click.",
+      "Save as zip packs a module to share by hand.",
+      "Your developer name, keys and publish tokens moved to Settings > Development.",
+    ],
+  },
+  {
+    version: "0.19.28",
+    date: "2026-10-21",
+    title: "Rate modules",
+    notes: [
+      "Catalog cards show a module's rating and how many rated it. Click the arrow to see how many gave each star.",
+      "Rate a module you installed with 1 to 5 stars and an optional review, on its page. You need to be signed in.",
+      "Developers can reply once under each review of their module.",
+      "Sort the catalog by name, rating or newest.",
+    ],
+  },
+  {
+    version: "0.19.27",
+    date: "2026-10-21",
+    title: "Clearer module warnings",
+    notes: [
+      "Modules that cannot load now have their own space in Settings, with readable paths and an Open folder button for each warning.",
+    ],
+  },
+  {
+    version: "0.19.26",
+    date: "2026-10-21",
+    title: "Stream overlays and hotkeys",
+    notes: [
+      "Turn on Stream overlays in Settings > Streaming, and modules can show their overlays in OBS.",
+      "Modules can offer hotkeys. You pick the keys in Tavora, and they work while the game is open here.",
+      "Settings > Streaming lists every hotkey, so you can remove any of them.",
+    ],
+  },
+  {
     version: "0.19.25",
     date: "2026-10-21",
     title: "Patch notes in their own window",

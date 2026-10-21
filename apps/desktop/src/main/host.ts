@@ -9,6 +9,7 @@ import {
   BrowserWindow,
   clipboard,
   dialog,
+  globalShortcut,
   ipcMain,
   nativeImage,
   nativeTheme,
@@ -24,7 +25,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, DeveloperLink, GameView, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, GameView, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -34,7 +35,7 @@ import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/lay
 import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
-import { applyOwners, readOwnerRecords } from "./installer";
+import { applyOwners, checkZipData, readOwnerRecords } from "./installer";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
 import { ModuleLifecycle } from "./module-lifecycle";
@@ -100,6 +101,7 @@ import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus,
 import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, steamShareGames, submitIcon } from "./share-icons";
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
 import { GameWatcher } from "./game-watch";
+import { Streaming } from "./streaming";
 import { findInstalledGames } from "./launcher-games";
 import { findSteamDir, isSteamAppId, loadAppInfo, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
@@ -110,7 +112,7 @@ import { isWebUrl, siteOfUrl } from "./browser-url";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, developmentProjects, discoverModules, isDevelopmentModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, developmentProjects, discoverModules, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
@@ -121,6 +123,7 @@ import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
 import { AccountKey } from "./account-key";
 import { DeveloperKeys } from "./developer-keys";
+import { ModulePublisher } from "./module-publish";
 import { FolderPairing, Pairing, ServicePairing } from "./pairing";
 import { startSignerServer, type SignerServer } from "./signer-server";
 import { ServiceStorage } from "./cloud-copy";
@@ -141,6 +144,7 @@ import {
   type InstalledTheme,
   type ThemeProblem,
 } from "./themes";
+import { copyExample, slugOf } from "./example-copy";
 import { writeFileAtomic } from "./fsutil";
 import {
   emptyGameWorkspace,
@@ -173,6 +177,10 @@ const DEVELOPER_LINKS: Record<DeveloperLink, string> = {
   discussions: "https://github.com/wellbrained/tavora/discussions",
   issue: "https://github.com/wellbrained/tavora/issues/new?template=module-developer.yml",
 };
+
+/** The command that starts a module project, which the developer onboarding copies. */
+const CREATE_MODULE_COMMAND = "npm create @tavora/module";
+
 /** Folders watched in one development folder for a new project, at most. */
 const MAX_DEVELOPMENT_SUBFOLDERS = 100;
 
@@ -291,6 +299,8 @@ export class Host {
   private copySync!: CopySync;
   /** The publisher keys the account's vault keeps, and the signer the pack command asks (developer-keys.ts). */
   private developerKeys!: DeveloperKeys;
+  /** The review screen and Publish for dev modules from project folders (module-publish.ts). */
+  private publisher!: ModulePublisher;
   private pairing!: Pairing;
   private signer: SignerServer | null = null;
   /** The developer names players see for publisher keys (publisher-names.ts). */
@@ -303,6 +313,8 @@ export class Host {
   private grants!: GrantStore;
   /** The catalog's signed safety lists (revoked keys, blocked zips, successions). */
   private safetyLists!: SafetyLists;
+  /** Stream overlays and hotkeys for module actions (streaming.ts); made before any module panel opens. */
+  private streaming!: Streaming;
   /** Modules in the player's folder whose zip Tavora blocked: not loaded, data kept. */
   private blockedModules = new Map<string, InstalledModule>();
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
@@ -533,11 +545,13 @@ export class Host {
       },
       focus: () => host.bringToFront(),
     });
+    host.publisher = host.modulePublisher();
     host.pairing = Host.pairing(options, host);
     // Before any module opens, so none sees the pictures half moved.
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
     host.moduleData = await listModuleData(userData, host.files.root());
     host.grants = await GrantStore.load(userData);
+    host.streaming = await Host.streamingService(host);
     host.safetyLists = safetyLists;
     host.blockedModules = blockedModules;
     await host.moveAiUsagePanelData();
@@ -838,6 +852,56 @@ export class Host {
     return path.resolve(folder);
   }
 
+  /** The development folder the player added that is `folder`, as it is kept in the library. */
+  private developmentFolder(folder: string): string | undefined {
+    const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
+    return this.library.developmentFolders.find((item) => key(item) === key(folder));
+  }
+
+  /**
+   * Copies an example that ships with Tavora into a new project, named after the module, in a development
+   * folder that holds projects or in a folder the player picks (`folder` null). A picked folder outside the
+   * development folders gets the new project added as one. Answers with the new project, or nothing when cancelled.
+   */
+  private async copyExampleModule(moduleId: string, name: string, folder: string | null): Promise<string | void> {
+    const example = this.modules.get(moduleId);
+    if (!example || !isExampleModule(moduleId)) throw new LibraryError("error.copyNoExample");
+    let parent: string | undefined;
+    if (folder !== null) {
+      parent = this.developmentFolder(folder);
+      if (!parent) throw new LibraryError("error.copyNoFolder");
+    } else {
+      parent = await this.pickPath("development-folder", { title: translate(this.language, "dialog.copyExample"), properties: ["openDirectory", "createDirectory"] });
+      if (!parent) return;
+      this.rememberPicked("development-folder", parent);
+    }
+    if (!existsSync(parent)) throw new LibraryError("error.copyNoFolder");
+    // A project can't hold another one: Tavora only looks for projects directly inside a folder without a manifest.
+    if (existsSync(path.join(parent, MANIFEST))) throw new LibraryError("error.copyIntoProject", { folder: path.basename(parent) });
+    const known = this.developmentFolder(parent) !== undefined;
+    if (!known && this.library.developmentFolders.length >= MAX_DEVELOPMENT_FOLDERS) throw new LibraryError("error.tooManyDevelopmentFolders");
+    const slug = slugOf(name);
+    const id = `${this.publisher.ownPrefix() ?? "local"}.${slug}`;
+    if (this.modules.has(id)) throw new LibraryError("error.copyIdTaken", { id });
+    const project = path.join(path.resolve(parent), slug);
+    await copyExample(example.root, project, { id, name: name.trim() });
+    if (!known) {
+      this.library.developmentFolders = cleanDevelopmentFolders([...this.library.developmentFolders, project]);
+      this.saveLibrary();
+    }
+    await this.reloadModules();
+    return project;
+  }
+
+  /** Opens the folder of an example that ships with Tavora, to look at its sources; only an example's. */
+  private async openExampleFolder(moduleId: string): Promise<void> {
+    const example = this.modules.get(moduleId);
+    if (!example || !isExampleModule(moduleId)) return;
+    if (this.options.hidden) return;
+    const error = await shell.openPath(example.root);
+    if (error) throw new LibraryError("error.openFolder", { problem: error });
+  }
+
   /** Opens one of Tavora's pages for module developers in the player's browser. The renderer names the page, never an address. */
   private openDeveloperLink(link: DeveloperLink): void {
     const url = Object.hasOwn(DEVELOPER_LINKS, link) ? DEVELOPER_LINKS[link] : undefined;
@@ -860,6 +924,7 @@ export class Host {
   private async deleteLeftoverData(owner: string, moduleId: string): Promise<void> {
     if (this.modules.get(moduleId)?.owner === owner) throw new LibraryError("error.dataInUse");
     this.data.forgetModule(owner, moduleId);
+    this.streaming.forgetModule(owner, moduleId);
     for (const partition of await deleteModuleDataOf(this.options.userData, owner, moduleId, this.files.root())) {
       const ses = session.fromPartition(partition);
       await ses.clearStorageData();
@@ -1048,6 +1113,57 @@ export class Host {
       readme: details.readme === null ? [] : parseReadme(details.readme),
       versions: details.versions,
     };
+  }
+
+  /**
+   * A catalog module's ratings and reviews (decided 2026-10-21), with the player's own rating and what
+   * they can do. Rating needs a sign-in and the module installed; the service can't check the second,
+   * so it is checked here. Each reviewer's picture is fetched by its hash and checked like a listed picture.
+   */
+  private async catalogReviews(moduleId: string): Promise<CatalogReviewsResult> {
+    if (!this.library.onlineSearch) return { status: "off" };
+    const token = this.account.token();
+    let listed;
+    let own: { mine: CatalogReviews["mine"]; own: boolean } = { mine: null, own: false };
+    try {
+      listed = await this.catalog.reviews(moduleId);
+      if (token) own = await this.catalog.ownReview(moduleId, token).catch(() => own);
+    } catch (error) {
+      const key = error instanceof PlayerError ? error.key : "";
+      if (key === "error.catalogNotListed") return { status: "gone" };
+      if (key === "error.catalogUnavailable" || key === "error.reviewsUnavailable") return { status: "unavailable" };
+      if (key === "error.catalogBusy") return { status: "busy" };
+      return { status: "unreachable" };
+    }
+    const pictures = await Promise.all(listed.reviews.map((review) => (review.author.picture ? this.catalog.reviewerPicture(review.id, review.author.picture) : null)));
+    const installedVersion = this.modules.get(moduleId)?.manifest.version ?? null;
+    return {
+      status: "ok",
+      rating: listed.rating,
+      reviews: listed.reviews.map((review, index) => ({ ...review, author: { ...review.author, picture: pictures[index] ?? null } })),
+      mine: own.mine,
+      can: own.own ? "own" : !token ? "sign-in" : installedVersion === null ? "install" : "rate",
+      installedVersion,
+    };
+  }
+
+  /** Rates an installed catalog module on its installed version, which must be one the catalog published. */
+  private async rateCatalogModule(moduleId: string, stars: number, text: string | null): Promise<void> {
+    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    const token = this.account.token();
+    if (!token) throw new PlayerError("account.error.signedOut");
+    const version = this.modules.get(moduleId)?.manifest.version;
+    if (!version) throw new PlayerError("error.reviewInstall");
+    const { versions } = await this.catalog.details(moduleId);
+    if (!versions.some((published) => published.version === version)) throw new PlayerError("error.reviewVersion");
+    await this.catalog.rate(moduleId, token, { stars, text: text?.trim() || null, version });
+  }
+
+  private async catalogReviewAction(run: (token: string) => Promise<void>): Promise<void> {
+    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    const token = this.account.token();
+    if (!token) throw new PlayerError("account.error.signedOut");
+    await run(token);
   }
 
   /**
@@ -1245,6 +1361,7 @@ export class Host {
     ipcMain.handle("host:get-account", (event) => (fromHost(event) ? this.account.view() : null));
     ipcMain.handle("host:get-cloud-copy", (event) => (fromHost(event) ? this.copySync.view() : null));
     ipcMain.handle("host:get-developer-keys", (event) => (fromHost(event) ? this.developerKeys.view() : null));
+    ipcMain.handle("host:get-publish", (event) => (fromHost(event) ? this.publisher.view() : null));
     ipcMain.handle("host:get-pairing", (event) => (fromHost(event) ? this.pairing.view() : null));
     ipcMain.handle("host:module-notes", (event, moduleId: unknown) => {
       const module = fromHost(event) && typeof moduleId === "string" ? this.modules.get(moduleId) : undefined;
@@ -1270,6 +1387,9 @@ export class Host {
     });
     ipcMain.handle("host:catalog-page", async (event, moduleId: unknown): Promise<CatalogPageResult> =>
       fromHost(event) && isModuleId(moduleId) ? this.catalogPage(moduleId) : { status: "gone" },
+    );
+    ipcMain.handle("host:catalog-reviews", async (event, moduleId: unknown): Promise<CatalogReviewsResult> =>
+      fromHost(event) && isModuleId(moduleId) ? this.catalogReviews(moduleId) : { status: "gone" },
     );
     ipcMain.handle("host:catalog-icon", async (event, moduleId: unknown): Promise<string | null> =>
       fromHost(event) && isModuleId(moduleId) && this.library.onlineSearch ? this.catalog.icon(moduleId) : null,
@@ -1329,6 +1449,53 @@ export class Host {
       void this.signer?.close();
       clearInterval(this.catalogTimer);
     });
+  }
+
+  private modulePublisher(): ModulePublisher {
+    const linked = () => (this.account.view().publisherKeys ?? []).map((key) => key.fingerprint);
+    return new ModulePublisher({
+      key: (prefer) => this.developerKeys.keyFor(linked(), prefer),
+      account: {
+        prefixes: () => this.account.view().prefixes,
+        developerName: () => this.account.view().developer?.name ?? null,
+        checkPrefix: (prefix) => this.account.checkPrefix(prefix),
+        upload: (key, zip) => this.account.uploadModule(key, zip),
+      },
+      listed: async (id) => {
+        try {
+          const { entry } = await this.catalog.details(id);
+          return { version: entry.version, owner: entry.owner };
+        } catch (error) {
+          if (error instanceof PlayerError && error.key === "error.catalogNotListed") return null;
+          throw error;
+        }
+      },
+      // The installer's checks as if nothing were installed: the module itself is loaded from its project.
+      check: async (zip) => {
+        await checkZipData(zip, { userData: this.options.userData, userModules: path.join(this.options.userData, "publish-check"), modules: new Map(), tavoraVersion: app.getVersion(), safety: this.safetyLists });
+      },
+      icon: (id) => this.moduleInfo.get(id)?.icon ?? null,
+      translate: (error) => translate(this.language, error.key, error.params),
+      onChange: (view) => {
+        if (!this.window.isDestroyed()) this.window.webContents.send("host:publish", view);
+      },
+    });
+  }
+
+  /** The project folder a dev module was loaded from, for Publish and Save as zip. */
+  private projectOf(moduleId: string): string {
+    const project = this.modules.get(moduleId)?.developmentProject;
+    if (!project) throw new PlayerError("publish.error.noProject");
+    return project;
+  }
+
+  /** Packs a dev module signed with a kept key and saves the zip where the developer picks. */
+  private async saveModuleZip(moduleId: string): Promise<string | undefined> {
+    const { manifest, zip } = await this.publisher.pack(this.projectOf(moduleId));
+    const picked = await dialog.showSaveDialog(this.window, { defaultPath: `${manifest.id}-${manifest.version}.zip`, filters: [{ name: "Zip", extensions: ["zip"] }] });
+    if (picked.canceled || !picked.filePath) return undefined;
+    await writeFile(picked.filePath, zip);
+    return path.basename(picked.filePath);
   }
 
   /** Shows the window in front, for a question that came from outside it (the pack command's sign request). */
@@ -1487,6 +1654,11 @@ export class Host {
       "set-module-icons": saved((action) => {
         this.library.moduleIcons = action.enabled;
       }),
+      "set-stream-overlays": (action) => this.streaming.setOverlays(action.enabled),
+      "set-overlay-port": (action) => this.streaming.setPort(action.port),
+      "reset-overlay-links": () => this.streaming.resetLinks(),
+      "hotkey-answer": (action) => this.streaming.answer(action.id, action.choice, action.accelerator),
+      "remove-hotkey": (action) => this.streaming.removeHotkey(action),
       "set-language": saved((action) => {
         this.library.language = action.language;
         for (const view of this.views.values()) view.applyLanguage(this.language);
@@ -1546,6 +1718,8 @@ export class Host {
       "open-module-problem-folder": (action) => this.openModuleProblemFolder(action.path),
       "add-development-folder": () => this.addDevelopmentFolder(),
       "remove-development-folder": (action) => this.removeDevelopmentFolder(action.folder),
+      "copy-example": (action) => this.copyExampleModule(action.moduleId, action.name, action.folder),
+      "open-example-folder": (action) => this.openExampleFolder(action.moduleId),
       "open-developer-link": (action) => this.openDeveloperLink(action.link),
       "reload-modules": () => this.reloadModules(),
       "remove-module": (action) => this.lifecycle.remove(action.moduleId),
@@ -1559,6 +1733,13 @@ export class Host {
       },
       "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId),
       "open-catalog-homepage": (action) => this.openCatalogHomepage(action.moduleId),
+      "rate-catalog-module": (action) => this.rateCatalogModule(action.moduleId, action.stars, action.text),
+      "unrate-catalog-module": (action) => this.catalogReviewAction((token) => this.catalog.unrate(action.moduleId, token)),
+      "reply-catalog-review": (action) => this.catalogReviewAction((token) => this.catalog.reply(action.reviewId, token, action.text?.trim() || null)),
+      "report-catalog-review": (action) => {
+        if (!this.library.onlineSearch) throw new PlayerError("error.reportOff");
+        return this.catalog.reportReview(action.reviewId);
+      },
       "apply-module-update": (action) => this.lifecycle.applyUpdate(action.moduleId, action.version),
       "delete-module-data": (action) => this.deleteLeftoverData(action.owner, action.moduleId),
       "move-local-data": (action) => this.moveLocalData(action.moduleId),
@@ -1691,6 +1872,16 @@ export class Host {
         if (key) clipboard.writeText(key);
       },
       "developer-sign-answer": (action) => this.developerKeys.answer(action.id, action.allow),
+      "account-prefix-check": async (action) => void (await this.account.checkPrefix(action.prefix)),
+      "account-prefix-claim": (action) => this.account.claimPrefix(action.prefix),
+      "publish-review": (action) => this.publisher.open(this.projectOf(action.moduleId)),
+      "publish-refresh": () => this.publisher.refresh(),
+      "publish-write": (action) => this.publisher.writeVersion(action.version, action.notes),
+      "publish-set-id": (action) => this.publisher.setId(action.id),
+      "publish-upload": () => this.publisher.publish(),
+      "publish-close": () => this.publisher.close(),
+      "save-module-zip": (action) => this.saveModuleZip(action.moduleId),
+      "developer-copy-create-command": () => clipboard.writeText(CREATE_MODULE_COMMAND),
       "pairing-start": () => this.pairing.start(),
       "pairing-cancel": () => this.pairing.cancel(),
       "pairing-decide": (action) => this.pairing.decide(action.id, action.allow),
@@ -2048,6 +2239,7 @@ export class Host {
     const records = this.workspaces.forgetGame(game.id);
     await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
     this.data.forgetGame(game.id);
+    this.streaming.forgetGame(game.id);
     // A folder the player chose can be gone (an unplugged drive): the game still goes, and they are told where its pictures may remain.
     await this.files.noteGameDeleted(game.name, (root) => deleteModuleData(this.options.userData, game.id, root));
     await this.dropIconFile(game.icon);
@@ -2545,6 +2737,8 @@ export class Host {
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
       aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
       discord: this.discord,
+      overlay: this.streaming.overlayFor(module, game.id),
+      hotkeys: this.streaming.hotkeysFor(module, game.id),
       ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
       onStatus: (status) => {
         if (!measured && status === "ready") {
@@ -2989,7 +3183,8 @@ export class Host {
           minHeight: type.viewport.minHeight,
         })),
         provenance: module.provenance,
-        development: isDevelopmentModule(module.manifest.id) || module.developmentFolder !== undefined,
+        development: isExampleModule(module.manifest.id) || module.developmentFolder !== undefined,
+        project: module.developmentProject !== undefined,
         version: module.manifest.version,
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
@@ -3057,6 +3252,8 @@ export class Host {
       pendingLink: this.pendingLink,
       runningGameId: this.running.filter((id) => id !== this.gameId && isLive(this.library, id)).at(-1) ?? null,
       pendingGameSwitch: this.pendingGameSwitch && isLive(this.library, this.pendingGameSwitch) ? this.pendingGameSwitch : null,
+      streaming: this.streaming.view(),
+      hotkeyRequest: this.streaming.request(),
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
@@ -3104,6 +3301,8 @@ export class Host {
   private pushState(): void {
     clearImmediate(this.statePush);
     this.statePush = undefined;
+    // Hotkeys follow the game shown now and its panels, which most changes that push the state can move.
+    this.streaming?.sync();
     if (!this.window.isDestroyed()) this.window.webContents.send("host:state", this.viewState());
   }
 
@@ -3153,9 +3352,40 @@ export class Host {
     this.savedData.saveWindow(state);
   }
 
-  /** Resolves once pending writes are on disk. */
-  flush(): Promise<void> {
+  /** Resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
+  async flush(): Promise<void> {
+    await this.streaming?.shutdown();
     return this.savedData.flush();
+  }
+
+  /** Stream overlays and hotkeys, lent what they need of the host. */
+  private static streamingService(host: Host): Promise<Streaming> {
+    return Streaming.create({
+      userData: host.options.userData,
+      settings: () => host.library,
+      saveSettings: (next) => {
+        if (next.streamOverlays !== undefined) host.library.streamOverlays = next.streamOverlays;
+        if (next.overlayPort !== undefined) host.library.overlayPort = next.overlayPort;
+        host.saveLibrary();
+      },
+      module: (moduleId) => host.modules.get(moduleId),
+      overlayGranted: (moduleId) => host.connectorsOf(moduleId).has("stream-overlay"),
+      gameId: () => host.gameId,
+      gameName: (gameId) => host.library.games[gameId]?.name ?? null,
+      panels: () => [...host.views.values()].filter((view): view is ModuleView => view instanceof ModuleView),
+      shortcuts: globalShortcut,
+      writeClipboard: (text) => clipboard.writeText(text),
+      openSetting: (setting) => {
+        host.bringToFront();
+        host.window.webContents.send("host:shortcut", `setting:${setting}`);
+      },
+      focus: () => {
+        host.bringToFront();
+        host.window.webContents.focus();
+      },
+      language: () => host.language,
+      changed: () => host.pushStateSoon(),
+    });
   }
 }
 

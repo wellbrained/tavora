@@ -1,5 +1,5 @@
 /**
- * The review page (icons, modules reported from the catalog, and requests to replace a publisher key), as three small files served by the admin app. No outside
+ * The review page (icons, modules and reviews reported from the catalog, and requests to replace a publisher key), as three small files served by the admin app. No outside
  * resources, no inline script or style (the page's content security policy
  * allows only these files), and everything that came from a player is put in
  * with textContent, never as markup. Images are fetched with the token and shown
@@ -25,6 +25,7 @@ export const ADMIN_HTML = `<!doctype html>
       <button id="tab-pending" class="tab" type="button" role="tab" data-tab="pending">Needs review</button>
       <button id="tab-hosted" class="tab" type="button" role="tab" data-tab="hosted">Hosted</button>
       <button id="tab-reports" class="tab" type="button" role="tab" data-tab="reports">Reports</button>
+      <button id="tab-reviews" class="tab" type="button" role="tab" data-tab="reviews">Reviews</button>
       <button id="tab-keys" class="tab" type="button" role="tab" data-tab="keys">Keys</button>
     </nav>
     <p id="status" role="status"></p>
@@ -46,6 +47,10 @@ export const ADMIN_HTML = `<!doctype html>
   </section>
   <section id="panel-reports" role="tabpanel" hidden>
     <div id="reports" class="grid"></div>
+  </section>
+  <section id="panel-reviews" role="tabpanel" hidden>
+    <p class="hint">Reported reviews. Hide takes the text and the publisher's reply off the module page; the stars still count.</p>
+    <div id="reviews" class="grid"></div>
   </section>
   <section id="panel-keys" role="tabpanel" hidden>
     <div class="bulk">
@@ -103,6 +108,8 @@ button.bad { border-color: var(--bad); color: var(--bad); }
 button:disabled { opacity: 0.5; cursor: default; }
 .empty { color: var(--muted); }
 .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+.quote { margin: 6px 0 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.quote.reply { color: var(--muted); }
 code { font-size: 12px; }
 .alert { border: 1px solid var(--bad); color: var(--bad); border-radius: 8px; padding: 8px 12px; margin: 0 0 16px; }
 `;
@@ -116,7 +123,7 @@ let token = sessionStorage.getItem("adminToken") || "";
 const pictures = new Map();
 let data = null;
 let tab = "pending";
-const TABS = ["pending", "hosted", "reports", "keys"];
+const TABS = ["pending", "hosted", "reports", "reviews", "keys"];
 try { const saved = sessionStorage.getItem("adminTab"); if (TABS.includes(saved)) tab = saved; } catch {}
 
 function el(tag, className, text) {
@@ -272,6 +279,30 @@ function reportCard(report) {
   );
 }
 
+function reviewCard(report) {
+  const review = report.review;
+  const node = card(
+    null,
+    review.moduleName + " " + "\u2605".repeat(review.stars),
+    [
+      badge(report.count + (report.count === 1 ? " report" : " reports"), "gold"),
+      badge(review.author || "(no name)", ""),
+      badge(review.version, ""),
+      ...(review.hidden ? [badge("hidden", "bad")] : []),
+    ],
+    [
+      review.hidden
+        ? button("Show", "ok", () => call("/api/reviews/hidden", { id: review.id, hidden: false }))
+        : button("Hide", "bad", () => call("/api/reviews/hidden", { id: review.id, hidden: true })),
+      button("Dismiss", "", () => call("/api/reviews/dismiss", { id: review.id })),
+    ],
+  );
+  const info = node.querySelector(".info");
+  info.appendChild(el("p", "quote", review.text || ""));
+  if (review.reply) info.appendChild(el("p", "quote reply", "Reply: " + review.reply));
+  return node;
+}
+
 const short = (fingerprint) => fingerprint.slice(0, 12) + "\u2026";
 const DAY = 86400000;
 
@@ -344,6 +375,7 @@ async function render() {
   $("tab-pending").textContent = "Needs review (" + data.pending.length + ")";
   $("tab-hosted").textContent = "Hosted (" + data.hosted.length + ")";
   $("tab-reports").textContent = "Reports (" + data.reports.length + ")";
+  $("tab-reviews").textContent = "Reviews (" + data.reviews.length + ")";
   $("tab-keys").textContent = "Keys (" + data.keys.filter((request) => request.status === "waiting").length + ")";
   $("catalog-full").hidden = !data.catalogFullSince;
   if (data.catalogFullSince) $("catalog-full").textContent = "The module catalog is full since " + new Date(data.catalogFullSince).toLocaleString() + ". Uploads are refused until there is room.";
@@ -355,6 +387,10 @@ async function render() {
   }
   if (tab === "reports") {
     fill("reports", data.reports, reportCard, "No reports. Nice!");
+    return;
+  }
+  if (tab === "reviews") {
+    fill("reviews", data.reviews, reviewCard, "No reported reviews.");
     return;
   }
   if (tab === "keys") {
@@ -380,6 +416,7 @@ async function load() {
     data.reports = catalog.reports;
     data.catalogFullSince = catalog.catalogFullSince;
     data.keys = (await (await call("/api/keys")).json()).requests;
+    data.reviews = (await (await call("/api/reviews")).json()).reports;
     prune();
     await render();
     status("Up to date.");

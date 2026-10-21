@@ -46,20 +46,20 @@ export const DISCORD_MODULE_ID = "tavora.discord";
 export const AI_USAGE_MODULE_ID = "tavora.ai-usage";
 
 /**
- * Modules that ship with Tavora as starting points for module authors: the
- * UI Playground and the example modules. The module library lists them under
- * Development instead of next to the modules players use.
+ * The example modules that ship with Tavora as starting points for module
+ * authors. Settings > Development lists them under Examples, to open or copy,
+ * and the module library lists them under Development instead of next to the
+ * modules players use.
  */
-const DEVELOPMENT_MODULES = new Set([
-  "tavora.playground",
+const EXAMPLE_MODULES = new Set([
   "local.example.vanilla-module",
   "local.example.react-module",
   "local.example.vue-module",
   "local.example.panels-module",
 ]);
 
-export function isDevelopmentModule(id: string): boolean {
-  return DEVELOPMENT_MODULES.has(id);
+export function isExampleModule(id: string): boolean {
+  return EXAMPLE_MODULES.has(id);
 }
 
 /** A folder that looks like a module but could not be loaded, and why, in words a player can read. */
@@ -273,7 +273,7 @@ export async function describeModules(userModules: string, modules: Map<string, 
   const info = new Map<string, ModuleInfo>();
   for (const [id, module] of modules) {
     const own = module.provenance === "local" && path.dirname(module.root) === userRoot;
-    const kind = module.provenance === "official" ? "official" : isDevelopmentModule(id) ? "example" : own ? "own" : "dev";
+    const kind = module.provenance === "official" ? "official" : isExampleModule(id) ? "example" : own ? "own" : "dev";
     // A development folder is shown by its full path, so the developer can tell projects apart.
     const origin = { kind, folder: module.developmentFolder ?? path.basename(module.root) } as const;
     const icon = await moduleIconUrl(module.root, module.manifest.icon);

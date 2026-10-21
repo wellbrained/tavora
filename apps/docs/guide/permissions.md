@@ -14,7 +14,7 @@ List what your module needs under `permissions` in [`tavora.module.json`](../ref
 ```
 
 - **`network`**: the exact hosts you call with `tavora.network.fetch`, HTTPS only, at most 32. No wildcards, IP addresses or local names. Your page itself still has no network: no `fetch`, remote images, CDN scripts or web fonts.
-- **`connectors`**: `"ai-usage"` for the player's Claude and Codex usage, `"discord"` for the Discord app on this PC. Tavora keeps the sign-in; you get answers, never a token.
+- **`connectors`**: `"ai-usage"` for the player's Claude and Codex usage, `"discord"` for the Discord app on this PC, `"stream-overlay"` to show your [overlay page](../reference/manifest.md#overlay) in OBS. Tavora keeps the sign-in; you get answers, never a token.
 
 Ask for as little as you can. Every host and connector is a line in the dialog the player reads.
 
@@ -30,7 +30,7 @@ When a player adds your module, Tavora shows its own dialog, which your page can
 
 How to get your name there is in [Your publisher key](./publisher-key.md#show-your-name).
 
-If the player cancels, the module isn't added. They can take a grant back any time in Settings (Modules > Website access for websites, Integrations for Discord and AI usage), which removes the module's panels. An update that asks for more keeps what was granted, and its panels offer the player to review the new hosts, which they can put off with **Not now**.
+If the player cancels, the module isn't added. They can take a grant back any time in Settings (Modules > Website access for websites, Integrations for Discord and AI usage, Streaming for overlays), which removes the module's panels. An update that asks for more keeps what was granted, and its panels offer the player to review the new hosts, which they can put off with **Not now**.
 
 ## Check before you call
 
@@ -63,6 +63,8 @@ Some calls need no grant but only work right after the player clicked or pressed
 - `tavora.clipboard.writeImage(png)`: copies a PNG.
 - `tavora.pictures.save(png, name)`: saves a PNG in the player's `Pictures\Tavora` folder.
 - `tavora.ui.showMenu(...)`: a menu Tavora draws above every panel.
+- `tavora.overlay.copyLink(key)`: copies an overlay's link for OBS.
+- `tavora.hotkeys.set(action, target, label)`: opens Tavora's hotkey dialog.
 - `discord.connect`, `discord.allowControl`, joining a voice channel, muting and unmuting.
 
 Call them straight from the click or key handler. Called later, for example after a timer, an extra `await` on something slow, or on page load, they fail with `PERMISSION_DENIED`.

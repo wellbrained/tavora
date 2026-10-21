@@ -100,16 +100,16 @@ test("official modules are marked Official, other installed modules Local", asyn
   await app.close();
 });
 
-test("the playground and the example modules are listed under Development", async () => {
+test("the example modules are listed under Development, the playground with the official modules", async () => {
   const { app, page } = await launch();
   await page.getByTestId("add-module").click();
   const development = page.getByRole("region", { name: "Development" });
-  await expect(development.getByTestId(`module-${PLAYGROUND}`)).toBeVisible();
   await expect(development.getByTestId(`module-${VUE}`)).toBeVisible();
+  await expect(development.getByTestId(`module-${PLAYGROUND}`)).toHaveCount(0);
   await expect(development.getByTestId(`module-${NOTES}`)).toHaveCount(0);
   await page.getByTestId("module-category-official").click();
   await expect(page.getByTestId(`module-${NOTES}`)).toBeVisible();
-  await expect(page.getByTestId(`module-${PLAYGROUND}`)).toHaveCount(0);
+  await expect(page.getByTestId(`module-${PLAYGROUND}`)).toBeVisible();
   await app.close();
 });
 

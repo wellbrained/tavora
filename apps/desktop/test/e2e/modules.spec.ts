@@ -42,8 +42,11 @@ test("the modules page lists where modules came from, reloads, and removes one w
   await expect(page.getByTestId("module-origin-tavora.notes")).toHaveCount(0);
   await expect(page.getByTestId("remove-module-tavora.notes")).toHaveCount(0);
 
+  await expect(page.getByTestId("module-problems")).toHaveCount(0);
+
   // A module added while Tavora runs appears on Reload; a broken one is explained.
   await addModule(userData, "later", "local.test.later");
+  await addModule(userData, "duplicate", VANILLA);
   await mkdir(path.join(userData, "modules", "broken"));
   await writeFile(path.join(userData, "modules", "broken", "tavora.module.json"), "{ nope");
   await rm(path.join(await addModule(userData, "unbuilt", "local.test.unbuilt"), "index.html"));
@@ -54,6 +57,45 @@ test("the modules page lists where modules came from, reloads, and removes one w
   await expect(page.getByTestId("module-problems")).toContainText("unbuilt can't load, its files aren't built.");
   await expect(page.getByTestId("module-problems")).toContainText(path.join("modules", "unbuilt"));
   await expect(page.getByTestId("open-module-problem-unbuilt")).toBeVisible();
+
+  const warnings = page.getByTestId("module-problems");
+  await expect(warnings).toContainText("another module with the same id is already loaded");
+  await expect(warnings).toHaveAttribute("aria-live", "polite");
+  const warningGroup = page.locator("section").filter({ has: warnings });
+  await expect(warningGroup.getByRole("heading", { name: "Modules that could not be loaded", exact: true })).toBeVisible();
+  await expect(warningGroup.getByTestId("install-module")).toHaveCount(0);
+  await expect(page.locator('[data-setting="own-modules"]').getByTestId("module-problems")).toHaveCount(0);
+  await app.evaluate(({ shell }) => {
+    shell.openPath = async (folder) => {
+      (globalThis as { warningFolder?: string }).warningFolder = folder;
+      return "";
+    };
+  });
+  await page.getByRole("button", { name: "Open folder: unbuilt", exact: true }).click();
+  await expect.poll(() => app.evaluate(() => (globalThis as { warningFolder?: string }).warningFolder)).toBe(path.join(userData, "modules", "unbuilt"));
+  await page.screenshot({ path: "test-results/module-warnings-wide.png" });
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(800, 900));
+  await expect.poll(() => page.getByRole("dialog", { name: "Settings", exact: true }).evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return bounds.left >= 0 && bounds.right <= window.innerWidth;
+  })).toBe(true);
+  await expect(page.getByTestId("open-module-problem-unbuilt")).toBeVisible();
+  expect(await warnings.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  for (const row of await warnings.getByRole("listitem").all()) {
+    const button = await row.getByRole("button").boundingBox();
+    for (const text of await row.locator("p").all()) {
+      const bounds = await text.boundingBox();
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(button!.x);
+      expect(await text.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    }
+  }
+  await page.screenshot({ path: "test-results/module-warnings-narrow.png" });
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1400, 900));
+  await rm(path.join(userData, "modules", "broken"), { recursive: true });
+  await rm(path.join(userData, "modules", "unbuilt"), { recursive: true });
+  await rm(path.join(userData, "modules", "duplicate"), { recursive: true });
+  await page.getByTestId("reload-modules").click();
+  await expect(warnings).toHaveCount(0);
 
   // Open a panel of the module in a game, then remove the module.
   await page.getByTestId("settings-close").click();

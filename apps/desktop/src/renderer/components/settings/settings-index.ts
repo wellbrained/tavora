@@ -1,4 +1,4 @@
-import { Blocks, Cloud, FolderCode, Gamepad2, Globe, Info, Keyboard, Palette, Plug, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
+import { Blocks, Cloud, FolderCode, Gamepad2, Globe, Info, Keyboard, Palette, Plug, Radio, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
 import type { MessageKey } from "../../../shared/i18n";
 import { t } from "../../i18n";
 
@@ -22,6 +22,7 @@ export const GROUPS = [
     sections: [
       { id: "modules", icon: Blocks },
       { id: "integrations", icon: Plug },
+      { id: "streaming", icon: Radio },
       { id: "browser", icon: Globe },
       { id: "development", icon: FolderCode },
     ],
@@ -83,12 +84,18 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["discord-connection", "integrations"],
   ["steam-import", "games"],
   ["ai-usage-accounts", "integrations"],
+  ["stream-overlays", "streaming"],
+  ["overlay-port", "streaming"],
+  ["overlay-links", "streaming"],
+  ["hotkeys", "streaming"],
   ["browser-shared-sites", "browser"],
   ["browser-adblock-off", "browser"],
   ["browser-clear-game", "browser"],
   ["browser-clear-shared", "browser"],
   ["development-folders", "development"],
-  ["development-modules", "development"],
+  ["development-examples", "development"],
+  ["module-developer", "development"],
+  ["publish-ci", "development"],
   ["developer-docs", "development"],
   ["shortcuts", "shortcuts"],
   ["games", "games"],

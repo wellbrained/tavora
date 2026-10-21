@@ -5,8 +5,12 @@ import AddModuleDialog from "./components/AddModuleDialog.vue";
 import CloudCopyDialog from "./components/CloudCopyDialog.vue";
 import PairingDialog from "./components/PairingDialog.vue";
 import SignRequestDialog from "./components/SignRequestDialog.vue";
+import CopyExampleDialog from "./components/developer/CopyExampleDialog.vue";
+import DeveloperStartDialog from "./components/developer/DeveloperStartDialog.vue";
+import PublishDialog from "./components/developer/PublishDialog.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import GrantDialog from "./components/GrantDialog.vue";
+import HotkeyDialog from "./components/HotkeyDialog.vue";
 import LinkChoiceDialog from "./components/LinkChoiceDialog.vue";
 import NavigationChoiceDialog from "./components/NavigationChoiceDialog.vue";
 import GameRail from "./components/GameRail.vue";
@@ -50,9 +54,13 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <GameSwitchDialog v-else-if="dialog?.kind === 'game-switch'" :key="dialog.gameId" :game-id="dialog.gameId" />
     <ConfirmDialog v-else-if="dialog?.kind === 'confirm'" :key="dialog.title" :request="dialog" />
     <GrantDialog v-else-if="dialog?.kind === 'grant'" :key="dialog.moduleId" :request="dialog" />
+    <DeveloperStartDialog v-else-if="dialog?.kind === 'developer-start'" :then="dialog.then" />
+    <CopyExampleDialog v-else-if="dialog?.kind === 'copy-example'" :key="dialog.moduleId" :module-id="dialog.moduleId" />
     <ModuleMenu />
     <CloudCopyDialog />
     <SignRequestDialog />
+    <HotkeyDialog />
+    <PublishDialog />
     <PairingDialog />
 
     <!-- Over the toolbar: module panels are native views drawn above this

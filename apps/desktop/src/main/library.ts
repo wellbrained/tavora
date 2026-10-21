@@ -6,6 +6,7 @@ import { isSite } from "./browser-url";
 import { isLanguageSetting, type LanguageSetting } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { CATALOG, catalogGame } from "./catalog";
+import { DEFAULT_OVERLAY_PORT, MAX_OVERLAY_PORT, MIN_OVERLAY_PORT } from "./overlays";
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
 import { DEFAULT_THEME, isVariationId } from "./themes";
 
@@ -89,6 +90,10 @@ export interface Library {
   steamIcons: boolean;
   /** The panel tabs show an icon before the module name. */
   moduleIcons: boolean;
+  /** Stream overlays: Tavora serves module overlays to streaming software on this PC (overlays.ts). Off until the player turns it on. */
+  streamOverlays: boolean;
+  /** The port Stream overlays listen on, on 127.0.0.1. */
+  overlayPort: number;
   /** Where modules keep their pictures, when the player moved it from the default folder. */
   moduleFilesFolder: string | null;
   /** Module project folders a developer added in Settings > Modules; loaded straight from there (registry.ts). */
@@ -168,6 +173,8 @@ export function emptyLibrary(): Library {
     autoUpdate: true,
     steamIcons: true,
     moduleIcons: true,
+    streamOverlays: false,
+    overlayPort: DEFAULT_OVERLAY_PORT,
     moduleFilesFolder: null,
     developmentFolders: [],
     dialogFolders: {},
@@ -690,6 +697,8 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.autoUpdate === "boolean") library.autoUpdate = saved.autoUpdate;
   if (typeof saved.steamIcons === "boolean") library.steamIcons = saved.steamIcons;
   if (typeof saved.moduleIcons === "boolean") library.moduleIcons = saved.moduleIcons;
+  if (typeof saved.streamOverlays === "boolean") library.streamOverlays = saved.streamOverlays;
+  if (Number.isInteger(saved.overlayPort) && (saved.overlayPort as number) >= MIN_OVERLAY_PORT && (saved.overlayPort as number) <= MAX_OVERLAY_PORT) library.overlayPort = saved.overlayPort as number;
   if (typeof saved.moduleFilesFolder === "string" && saved.moduleFilesFolder.length <= 500 && path.isAbsolute(saved.moduleFilesFolder)) library.moduleFilesFolder = saved.moduleFilesFolder;
   if (Array.isArray(saved.developmentFolders)) library.developmentFolders = cleanDevelopmentFolders(saved.developmentFolders);
   const dialogFolders = asRecord(saved.dialogFolders);

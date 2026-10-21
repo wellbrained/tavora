@@ -62,6 +62,8 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     openLink: () => {},
     showMenu: () => Promise.resolve(null),
     tooltip:{show:async()=>false,move:()=>{},close:()=>{}},
+    overlay: { publish: () => {}, remove: () => {}, copyLink: () => Promise.resolve("copied"), resetLink: () => {} },
+    hotkeys: { list: () => [], set: () => Promise.resolve("cancelled"), remove: () => {} },
     fetch: () => Promise.reject(new Error("no network in this test")),
     readPage: () => Promise.reject(new Error("no pages in this test")),
   };

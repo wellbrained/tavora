@@ -1,11 +1,11 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import type { AccountView, ActionResult, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
-import type { SettingsSection } from "./components/settings/settings-index";
+import { SETTING_SECTIONS, type SettingsSection } from "./components/settings/settings-index";
 import { numberedGames } from "./shortcuts";
-import { setLanguage } from "./i18n";
+import { setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
 
 export const api = window.tavoraHost;
@@ -54,6 +54,44 @@ api.onDeveloperKeys((next) => (developerKeys.value = next));
 void api.getDeveloperKeys().then((initial) => {
   if (initial && !developerKeys.value) developerKeys.value = initial;
 });
+
+/** The review screen before a dev module goes to the catalog; null while none is open. */
+export const publish = shallowRef<PublishView | null>(null);
+api.onPublish((next) => (publish.value = next));
+void api.getPublish().then((initial) => {
+  if (initial && !publish.value) publish.value = initial;
+});
+
+/**
+ * Publishing is set up: signed in, with a developer name and a publisher key Tavora keeps that is linked
+ * to the account. Until then Publish and Save as zip open the developer onboarding instead.
+ */
+export const developerReady = computed(() => {
+  const view = account.value;
+  const keys = developerKeys.value;
+  if (!view?.account || !view.developer || keys?.status !== "ready") return false;
+  const linked = new Set((view.publisherKeys ?? []).map((key) => key.fingerprint));
+  return keys.keys.some((key) => linked.has(key.fingerprint));
+});
+
+/** Publish on a dev module: the review screen, or the onboarding first while publishing isn't set up. */
+export function publishModule(moduleId: string): void {
+  if (!developerReady.value) {
+    dialog.value = { kind: "developer-start", then: moduleId };
+    return;
+  }
+  void act({ type: "publish-review", moduleId });
+}
+
+/** Save as zip on a dev module: signed with the kept key, so it needs the same setup as Publish. */
+export async function saveModuleZip(moduleId: string): Promise<void> {
+  if (!developerReady.value) {
+    dialog.value = { kind: "developer-start" };
+    return;
+  }
+  const result = await act({ type: "save-module-zip", moduleId });
+  if (result.ok && result.id) showToast(t("publish.zipSaved", { file: result.id }));
+}
 
 /** Approving a new PC from an old one: this PC asking, or another PC asking this one. */
 export const pairing = shallowRef<PairingView | null>(null);
@@ -152,6 +190,8 @@ export interface AddModuleRequest {
   kind: "add-module";
   slot?: string;
   view?: "catalog";
+  /** Opens the catalog with this module's page, such as one just published. */
+  browse?: string;
 }
 
 /** Asking where a link from a module should open (HostViewState.pendingLink). */
@@ -201,7 +241,11 @@ export type DialogRequest =
   | { kind: "add-game" }
   | { kind: "steam-import" }
   | AddModuleRequest
-  | GrantRequest;
+  | GrantRequest
+  /** The developer onboarding; `then` is the module whose Publish opened it, reviewed once it is done. */
+  | { kind: "developer-start"; then?: string }
+  /** Make a copy of an example that ships with Tavora (Settings > Development). */
+  | { kind: "copy-example"; moduleId: string };
 
 export const dialog = shallowRef<DialogRequest | null>(null);
 
@@ -254,6 +298,11 @@ export const panelToShow = shallowRef<{ instanceId: string } | null>(null);
 function runShortcut(shortcut: HostShortcut): void {
   if (shortcut.startsWith("address:")) addressFocus.value = { instanceId: shortcut.slice("address:".length) };
   else if (shortcut.startsWith("panel:")) panelToShow.value = { instanceId: shortcut.slice("panel:".length) };
+  else if (shortcut.startsWith("setting:")) {
+    const setting = shortcut.slice("setting:".length);
+    const section = SETTING_SECTIONS.find(([id]) => id === setting)?.[1];
+    if (section) openSettings({ section, setting });
+  }
   else if (shortcut === "search") searchOpen.value = !searchOpen.value;
   else if (shortcut === "shortcuts") openSettings({ section: "shortcuts" });
   else if (shortcut === "settings") openSettings();
@@ -376,6 +425,8 @@ export const overlayOpen = computed(
     dialog.value !== null ||
     copyQuestion.value !== null ||
     developerKeys.value?.request != null ||
+    state.value?.hotkeyRequest != null ||
+    publish.value !== null ||
     settingsOpen.value ||
     searchOpen.value ||
     dragging.value,

@@ -2,25 +2,35 @@
 // Settings > Development: for module developers. A development folder is a
 // module's project folder, or the folder a developer keeps several projects
 // in; Tavora loads every project in it and reloads its panels when the build
-// changes. Each project says what it loads or what to do next. Below are the
-// modules loaded for development (the folders' and the examples that ship
-// with Tavora), and the way to the docs and to GitHub.
-import { BookOpen, Bug, CircleAlert, CircleCheck, FolderCode, MessageCircleQuestion, Trash2 } from "@lucide/vue";
+// changes. Each folder lists its modules, with Publish and Save as zip, or
+// says what to do next for a project that loaded nothing. Below are the
+// examples that ship with Tavora, to open or copy as a new project, then what
+// a module developer has with the account, and the way to the docs and to
+// GitHub. Until publishing is set up, a card offers the developer onboarding.
+import { BookOpen, Bug, CircleAlert, Copy, FileArchive, FolderCode, FolderOpen, MessageCircleQuestion, Rocket, Trash2, Upload } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DevelopmentProblemKind } from "../../../shared/host-api";
-import { act, showToast, state } from "../../host";
+import { account, act, developerKeys, developerReady, dialog, publishModule, saveModuleZip, showToast, state } from "../../host";
 import { t } from "../../i18n";
+import ModuleDeveloperSettings from "../developer/ModuleDeveloperSettings.vue";
 import ModuleRow from "./ModuleRow.vue";
+import RecoveryKeySettings from "./RecoveryKeySettings.vue";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
 defineProps<{ highlight: string | null }>();
 
+/** Publishing needs the account; in builds without accounts there is none of it. */
+const accounts = computed(() => account.value?.enabled === true);
+/** The account's recovery key is on screen (made with a key here) or needed on this PC. */
+const recoveryKey = computed(() => Boolean(developerKeys.value?.recoveryKey) || developerKeys.value?.status === "ask");
+
 const modules = computed(() => state.value!.modules);
 const folders = computed(() => state.value!.developmentFolders);
-const developmentModules = computed(() => modules.value.filter((module) => module.development).sort((a, b) => a.name.localeCompare(b.name)));
+const examples = computed(() => modules.value.filter((module) => module.origin.kind === "example").sort((a, b) => a.name.localeCompare(b.name)));
+const moduleById = (id: string) => modules.value.find((module) => module.id === id);
 
 async function addFolder() {
   const result = await act({ type: "add-development-folder" });
@@ -45,14 +55,20 @@ function advice(kind: DevelopmentProblemKind | null, message: string | null, fol
   if (kind === "missing") return t("settings.devFolders.missing");
   return t("settings.devFolders.problem", { message: message ?? "" });
 }
-
-function loads(moduleId: string): string {
-  const module = modules.value.find((item) => item.id === moduleId);
-  return module ? t("settings.devFolders.loads", { name: module.name, version: module.version }) : "";
-}
 </script>
 
 <template>
+  <SettingGroup v-if="accounts && !developerReady">
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-3 py-4" data-testid="developer-start-card">
+      <Rocket class="text-primary size-6 flex-none" :stroke-width="1.5" aria-hidden="true" />
+      <div class="flex min-w-0 flex-1 basis-56 flex-col gap-0.5">
+        <span class="font-medium">{{ t("devStart.card.title") }}</span>
+        <span class="text-muted-foreground text-sm">{{ t("devStart.card.text") }}</span>
+      </div>
+      <Button class="flex-none" data-testid="developer-start-open" @click="dialog = { kind: 'developer-start' }">{{ t("devStart.card.start") }}</Button>
+    </div>
+  </SettingGroup>
+
   <SettingGroup>
     <SettingRow
       :label="t('settings.development-folders.label')"
@@ -83,32 +99,59 @@ function loads(moduleId: string): string {
           <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" /> {{ advice(entry.kind, entry.problem, entry.folder) }}
         </p>
         <p v-else-if="!entry.projects.length" class="text-muted-foreground pl-7 text-sm" data-testid="development-folder-status">{{ t("settings.devFolders.empty") }}</p>
-        <ul v-else class="flex flex-col gap-2 pl-7">
-          <li v-for="project in entry.projects" :key="project.project" class="flex gap-2 text-sm" data-testid="development-project">
-            <CircleCheck v-if="project.moduleId" class="text-success mt-0.5 size-4 flex-none" :stroke-width="1.5" />
-            <CircleAlert v-else class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" />
-            <span class="flex min-w-0 flex-col">
-              <span v-if="project.project !== entry.folder" class="truncate font-mono text-xs" :title="project.project">{{ baseName(project.project) }}</span>
-              <span :class="cn('text-muted-foreground', !project.moduleId && 'text-foreground')" data-testid="development-project-status">{{
-                project.moduleId ? loads(project.moduleId) : advice(project.kind, project.problem, project.project)
-              }}</span>
-            </span>
-          </li>
+        <ul v-else class="flex flex-col pl-7">
+          <template v-for="project in entry.projects" :key="project.project">
+            <ModuleRow v-if="project.moduleId && moduleById(project.moduleId)" :module="moduleById(project.moduleId)!" hide-origin>
+              <template v-if="accounts">
+                <Button
+                  variant="ghost"
+                  :aria-label="t('publish.saveZip')"
+                  :title="t('publish.saveZip')"
+                  :data-testid="`save-zip-${project.moduleId}`"
+                  @click="saveModuleZip(project.moduleId)"
+                >
+                  <FileArchive :stroke-width="1.5" /> {{ t("publish.saveZip") }}
+                </Button>
+                <Button variant="secondary" :data-testid="`publish-${project.moduleId}`" @click="publishModule(project.moduleId)">
+                  <Upload :stroke-width="1.5" /> {{ t("publish.button") }}
+                </Button>
+              </template>
+            </ModuleRow>
+            <li v-else class="flex gap-2 border-b py-3 text-sm last:border-b-0" data-testid="development-project">
+              <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" />
+              <span class="flex min-w-0 flex-col">
+                <span v-if="project.project !== entry.folder" class="truncate font-mono text-xs" :title="project.project">{{ baseName(project.project) }}</span>
+                <span data-testid="development-project-status">{{ advice(project.kind, project.problem, project.project) }}</span>
+              </span>
+            </li>
+          </template>
         </ul>
       </li>
     </ul>
   </SettingGroup>
 
-  <SettingGroup :title="t('settings.development-modules.label')" :description="t('settings.development-modules.description')">
+  <SettingGroup v-if="examples.length" :title="t('settings.development-examples.label')" :description="t('settings.development-examples.description')">
     <div
-      :class="cn('-mx-5 px-5 transition-colors duration-500', highlight === 'development-modules' && 'bg-primary/10')"
-      data-setting="development-modules"
+      :class="cn('-mx-5 px-5 transition-colors duration-500', highlight === 'development-examples' && 'bg-primary/10')"
+      data-setting="development-examples"
     >
-      <ul class="flex flex-col" :aria-label="t('settings.development-modules.label')" data-testid="development-module-list">
-        <ModuleRow v-for="module in developmentModules" :key="module.id" :module="module" />
+      <ul class="flex flex-col" :aria-label="t('settings.development-examples.label')" data-testid="development-examples">
+        <ModuleRow v-for="module in examples" :key="module.id" :module="module" hide-origin>
+          <Button variant="ghost" :data-testid="`open-example-${module.id}`" @click="act({ type: 'open-example-folder', moduleId: module.id })">
+            <FolderOpen :stroke-width="1.5" /> {{ t("examples.open") }}
+          </Button>
+          <Button variant="secondary" :data-testid="`copy-example-${module.id}`" @click="dialog = { kind: 'copy-example', moduleId: module.id }">
+            <Copy :stroke-width="1.5" /> {{ t("examples.copy") }}
+          </Button>
+        </ModuleRow>
       </ul>
     </div>
   </SettingGroup>
+
+  <template v-if="accounts && account?.account">
+    <RecoveryKeySettings v-if="recoveryKey" />
+    <ModuleDeveloperSettings :highlight="highlight" />
+  </template>
 
   <SettingGroup :title="t('settings.heading.help')">
     <SettingRow
