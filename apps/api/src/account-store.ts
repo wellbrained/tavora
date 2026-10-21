@@ -532,6 +532,13 @@ export class AccountStore {
     this.db.prepare("insert into module_prefixes (prefix, account_id, reserved_at) values (?, ?, ?)").run(prefix, accountId, now);
   }
 
+  /** The prefixes an account holds, with when each was reserved (by a claim or its first publish). */
+  heldPrefixes(accountId: string): { prefix: string; reservedAt: number }[] {
+    return (this.db.prepare("select prefix, reserved_at from module_prefixes where account_id = ? order by prefix").all(accountId) as unknown as { prefix: string; reserved_at: number }[]).map(
+      (row) => ({ prefix: row.prefix, reservedAt: row.reserved_at }),
+    );
+  }
+
   prefixes(accountId: string): string[] {
     return (this.db.prepare("select prefix from module_prefixes where account_id = ? order by prefix").all(accountId) as unknown as { prefix: string }[]).map((row) => row.prefix);
   }

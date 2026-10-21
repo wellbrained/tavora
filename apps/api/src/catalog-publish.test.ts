@@ -38,7 +38,7 @@ function hostile(zip: Buffer, name: string, change: (out: Buffer, central: numbe
   throw new Error(`no entry ${name}`);
 }
 
-function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string) {
+function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string, prefixRateLimiter = roomy()) {
   const store = new AccountStore(":memory:");
   const dir = mkdtempSync(path.join(tmpdir(), "tavora-catalog-"));
   const catalog = new CatalogStore(dir);
@@ -51,7 +51,7 @@ function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string) {
     publishRateLimiter: roomy(),
     publishLimits: limits,
     catalogueKey: catalogPublicKey(catalogue),
-    accounts: { store, mailer: inbox, now: () => clock.now },
+    accounts: { store, mailer: inbox, now: () => clock.now, prefixRateLimiter },
     ...(maintainerEmail ? { maintainerEmail } : {}),
   });
   /** Each key's account sign-in; the first developer's is the one a bare publish() sends. */
@@ -75,7 +75,14 @@ function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string) {
     });
   const send = (key: KeyObject, zip: Buffer, auth: string | null | undefined = signIns.get(key) ?? firstSignIn) => publish(zip, publishSignature(key, zip), "application/zip", auth);
   const reason = async (response: Response) => ((await response.json()) as { reason?: string }).reason;
-  return { store, catalog, dir, inbox, clock, developer, publish, send, reason, app };
+  /** The account's prefix routes, signed in with a token. */
+  const prefixes = (method: "GET" | "POST", token: string, prefix?: string) =>
+    app.request(`http://tavora.test/v1/account/prefixes${prefix === undefined ? "" : `/${prefix}`}`, {
+      method,
+      headers: { authorization: `Bearer ${token}`, ...(method === "POST" ? { "content-type": "application/json" } : {}) },
+      ...(method === "POST" ? { body: "{}" } : {}),
+    });
+  return { store, catalog, dir, inbox, clock, developer, publish, send, reason, prefixes, app };
 }
 
 describe("publishing to the catalog", () => {
@@ -335,5 +342,88 @@ describe("publishing to the catalog", () => {
     expect(await reason(answer)).toBe("key-leaked");
     expect(store.declineKeyRequest(old, clock.now)).toBe(true);
     expect((await send(key, moduleZip(key, "wellbrained.timer", "1.0.1"))).status).toBe(201);
+  });
+});
+
+describe("claiming an id prefix before the first publish", () => {
+  it("tells what a prefix is to the account, and claims a free one", async () => {
+    const { developer, prefixes } = setup();
+    const first = developer("first@example.com");
+    const second = developer("second@example.com");
+    const state = async (token: string, prefix: string) => ((await (await prefixes("GET", token, prefix)).json()) as { state: string }).state;
+    expect(await (await prefixes("GET", first.token, "wellbrained")).json()).toEqual({ prefix: "wellbrained", state: "free" });
+
+    const claimed = await prefixes("POST", first.token, "wellbrained");
+    expect(claimed.status).toBe(200);
+    expect(await claimed.json()).toEqual({ prefix: "wellbrained", state: "held" });
+    // Claiming again changes nothing.
+    expect(await (await prefixes("POST", first.token, "wellbrained")).json()).toEqual({ prefix: "wellbrained", state: "held" });
+    expect(await state(first.token, "wellbrained")).toBe("held");
+    expect(await state(second.token, "wellbrained")).toBe("taken");
+    expect(await state(second.token, "tavoratools")).toBe("reserved");
+    expect(await state(second.token, "local")).toBe("reserved");
+    for (const prefix of ["Wellbrained", "9lives", "well-brained", "a".repeat(127)]) expect(await state(second.token, prefix)).toBe("invalid");
+  });
+
+  it("refuses taken, reserved and invalid prefixes, and counts claims toward the three", async () => {
+    const { store, developer, prefixes, reason } = setup();
+    const first = developer("first@example.com");
+    const second = developer("second@example.com");
+    await prefixes("POST", first.token, "wellbrained");
+    const taken = await prefixes("POST", second.token, "wellbrained");
+    expect(taken.status).toBe(403);
+    expect(await reason(taken)).toBe("prefix-taken");
+    expect(await reason(await prefixes("POST", second.token, "official"))).toBe("prefix-reserved");
+    const invalid = await prefixes("POST", second.token, "Not-OK");
+    expect(invalid.status).toBe(400);
+    expect(await reason(invalid)).toBe("invalid");
+
+    for (const prefix of ["alpha", "beta", "gamma"]) expect((await prefixes("POST", second.token, prefix)).status).toBe(200);
+    expect(await reason(await prefixes("POST", second.token, "delta"))).toBe("too-many-prefixes");
+    expect(((await (await prefixes("GET", second.token, "delta")).json()) as { state: string }).state).toBe("too-many");
+    // A held one is still held at the limit.
+    expect(((await (await prefixes("POST", second.token, "alpha")).json()) as { state: string }).state).toBe("held");
+    expect(store.prefixes(second.accountId)).toEqual(["alpha", "beta", "gamma"]);
+  });
+
+  it("lists the account's prefixes with when each was claimed and whether it has a module", async () => {
+    const { clock, developer, prefixes, send } = setup();
+    const { key, token } = developer("dev@example.com");
+    expect(await (await prefixes("GET", token)).json()).toEqual({ prefixes: [], max: 3 });
+    await prefixes("POST", token, "notes");
+    clock.now += 1000;
+    expect((await send(key, moduleZip(key, "wellbrained.timer"))).status).toBe(201);
+    expect(await (await prefixes("GET", token)).json()).toEqual({
+      prefixes: [
+        { prefix: "notes", claimedAt: Date.parse("2026-10-18T12:00:00Z"), published: false },
+        { prefix: "wellbrained", claimedAt: Date.parse("2026-10-18T12:00:01Z"), published: true },
+      ],
+      max: 3,
+    });
+  });
+
+  it("lets a publish token publish a first version under a claimed prefix", async () => {
+    const { store, clock, developer, prefixes, send, reason } = setup();
+    const { key, accountId, token } = developer("dev@example.com");
+    const { token: ci } = store.createPublishToken(accountId, "GitHub Actions", clock.now)!;
+    expect(await reason(await send(key, moduleZip(key), ci))).toBe("token-new-prefix");
+    await prefixes("POST", token, "wellbrained");
+    expect((await send(key, moduleZip(key), ci)).status).toBe(201);
+  });
+
+  it("needs a sign-in, never a publish token, and limits claims per client", async () => {
+    const { store, clock, developer, prefixes, reason } = setup({}, undefined, createRateLimiter({ limit: 2, windowMs: 3_600_000 }));
+    const { accountId, token } = developer("dev@example.com");
+    const { token: ci } = store.createPublishToken(accountId, "GitHub Actions", clock.now)!;
+    for (const method of ["GET", "POST"] as const) expect((await prefixes(method, ci, "wellbrained")).status).toBe(401);
+    expect((await prefixes("POST", token, "alpha")).status).toBe(200);
+    // Checking is not a claim and does not count.
+    expect((await prefixes("GET", token, "beta")).status).toBe(200);
+    expect((await prefixes("POST", token, "beta")).status).toBe(200);
+    const limited = await prefixes("POST", token, "gamma");
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBeTruthy();
+    expect(await reason(limited)).toBe("too-many");
+    expect(store.prefixes(accountId)).toEqual(["alpha", "beta"]);
   });
 });
