@@ -25,7 +25,7 @@ async function readPob(app:ElectronApplication,value=xml){
 test('PoB preview, new character, safe update, independent library group and restart',async({},info)=>{
  const running=await launch(undefined,[modules]);let app=running.app;
  try{
-  await running.page.getByTestId('add-module').click();await running.page.getByTestId('open-'+ID+'-gear').click();
+  await running.page.getByTestId('add-module').click();await running.page.getByTestId('panel-menu-toggle-'+ID).click();await running.page.getByTestId('open-'+ID+'-gear').click();
   await running.page.getByTestId('grant-allow').click();await expect(running.page.getByTestId('grant-dialog')).toHaveCount(0);await running.page.getByTestId('add-module-dialog').getByRole('button',{name:'Close',exact:true}).click();await waitForShown(app,ID);
   await app.evaluate(({BrowserWindow})=>{const host=BrowserWindow.getAllWindows()[0]!;const view=host.contentView.children.find(v=>(v as any).webContents?.getURL().startsWith('tavora-module://wellbrained.poe2-builds/'))!;view.setBounds({...view.getBounds(),width:400,height:608});});
   expect(await inModule(app,ID,"document.querySelector('.add-build').getBoundingClientRect().right<=innerWidth")).toBe(true);
@@ -61,7 +61,7 @@ test('PoB preview, new character, safe update, independent library group and res
 test('real poe.ninja import uses granted SDK network and saves its exact snapshot',async()=>{
  test.skip(!process.env.POE2_CHARACTER_SMOKE_URL,'Set a public character URL to run live source verification');
  const {app,page}=await launch(undefined,[modules]);try{
-  await page.getByTestId('add-module').click();await page.getByTestId('open-'+ID+'-gear').click();await page.getByTestId('grant-allow').click();await expect(page.getByTestId('grant-dialog')).toHaveCount(0);await page.getByTestId('add-module-dialog').getByRole('button',{name:'Close',exact:true}).click();await waitForShown(app,ID);
+  await page.getByTestId('add-module').click();await page.getByTestId('panel-menu-toggle-'+ID).click();await page.getByTestId('open-'+ID+'-gear').click();await page.getByTestId('grant-allow').click();await expect(page.getByTestId('grant-dialog')).toHaveCount(0);await page.getByTestId('add-module-dialog').getByRole('button',{name:'Close',exact:true}).click();await waitForShown(app,ID);
   await openImport(app);
   await inModule(app,ID,`document.querySelector('#character-input').value=${JSON.stringify(process.env.POE2_CHARACTER_SMOKE_URL)};document.querySelector('#character-read').click()`);
   await expect.poll(()=>inModule(app,ID,"({preview:document.querySelector('#character-preview').hidden,error:document.querySelector('#character-error').textContent})"),{timeout:35000}).toMatchObject({preview:false});
@@ -79,7 +79,7 @@ test('real poe.ninja import uses granted SDK network and saves its exact snapsho
 test('local real PoB XML supports browser file selection',async()=>{
  test.skip(!process.env.POE2_CHARACTER_SMOKE_XML,'Set a local PoB XML file');
  const {app,page}=await launch(undefined,[modules]);try{
-  await page.getByTestId('add-module').click();await page.getByTestId('open-'+ID+'-skills').click();await page.getByTestId('grant-allow').click();await expect(page.getByTestId('grant-dialog')).toHaveCount(0);await page.getByTestId('add-module-dialog').getByRole('button',{name:'Close',exact:true}).click();await waitForShown(app,ID);await openImport(app);
+  await page.getByTestId('add-module').click();await page.getByTestId('panel-menu-toggle-'+ID).click();await page.getByTestId('open-'+ID+'-skills').click();await page.getByTestId('grant-allow').click();await expect(page.getByTestId('grant-dialog')).toHaveCount(0);await page.getByTestId('add-module-dialog').getByRole('button',{name:'Close',exact:true}).click();await waitForShown(app,ID);await openImport(app);
   const file=await readFile(process.env.POE2_CHARACTER_SMOKE_XML!,'utf8');
   await inModule(app,ID,`document.querySelector('#character-source').value='xml';document.querySelector('#character-source').dispatchEvent(new Event('change'));const dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(file)}],'character.xml',{type:'text/xml'}));document.querySelector('#character-file').files=dt.files;document.querySelector('#character-read').click()`);
   await expect.poll(()=>inModule(app,ID,"document.querySelector('#character-preview').hidden")).toBe(false);
