@@ -22,7 +22,6 @@ export const en = {
   "planner.worldHeading": "World",
   "planner.newWorld": "New world",
   "planner.renameWorld": "Rename world",
-  "planner.deleteWorld": "Delete world",
   "planner.myWorld": "My world",
   "planner.empty": "Plan a production line: pick what you want to make and see the machines it takes.",
   "planner.targets": "Make",
@@ -33,7 +32,6 @@ export const en = {
   "planner.rateFor": "Per minute of {item}",
   "planner.remove": "Remove {item}",
   "planner.noTargets": "Add something to make, and the factory shows up here.",
-  "planner.saving": "Saving…",
 
   "results.production": "Production",
   "results.item": "Item and recipe",
@@ -43,7 +41,6 @@ export const en = {
   "results.clock": "Clock",
   "results.power": "Power",
   "results.pickRecipe": "Recipe for {item}",
-  "results.alternate": "Alternate",
   "results.raw": "Raw resources",
   "results.imports": "Bring in",
   "results.importsHint": "No recipe you can use makes these.",
@@ -54,7 +51,11 @@ export const en = {
   "results.buildCost": "Build cost",
   "results.showInCodex": "Show {item} in the Codex",
 
-  "error.invalid": "Something in this plan doesn't add up. Check the rates.",
+  "error.unknownItem": "{item} is no longer in the game.",
+  "error.unknownRecipe": "A recipe you picked ({recipe}) is no longer in the game.",
+  "error.badRate": "Check the rates: each one needs to be above 0.",
+  "error.noTargets": "Add something to make.",
+  "error.removeItem": "Remove it from the plan",
   "error.locked": "{recipe} is an alternate you haven't unlocked in this world.",
   "error.wrong": "{recipe} doesn't make {item}.",
   "error.infeasible": "These recipes can't reach your targets. Try other ones.",
@@ -69,7 +70,6 @@ export const en = {
   "notice.importFailed": "Couldn't import this file. {error}",
   "notice.notJson": "This file isn't a plan.",
   "notice.saveFailed": "Couldn't save. {error}",
-  "notice.worldInUse": "A plan still uses this world. Move or delete that plan first.",
   "notice.openFailed": "Couldn't open that.",
 
   "dialog.newPlan": "New plan",
@@ -82,8 +82,6 @@ export const en = {
   "dialog.save": "Save",
   "confirm.deletePlan": "Delete “{name}”?",
   "confirm.deletePlanHint": "The plan is gone for good.",
-  "confirm.deleteWorld": "Delete “{name}”?",
-  "confirm.deleteWorldHint": "The alternates ticked for it are gone for good.",
 
   "alt.title": "Alternate recipes",
   "alt.description": "Tick the alternates you've unlocked in {world}.",
@@ -160,7 +158,6 @@ export const en = {
   "unlock.awesomeShop": "AWESOME Shop: {name}",
   "unlock.unknown": "Not known",
 
-  "search.items": "Search items",
   "search.noItems": "No item matches.",
 } as const;
 
@@ -186,7 +183,6 @@ export const de: Record<keyof typeof en, string> = {
   "planner.worldHeading": "Welt",
   "planner.newWorld": "Neue Welt",
   "planner.renameWorld": "Welt umbenennen",
-  "planner.deleteWorld": "Welt löschen",
   "planner.myWorld": "Meine Welt",
   "planner.empty": "Plane eine Fertigung: Wähle, was du herstellen willst, und sieh, welche Maschinen du brauchst.",
   "planner.targets": "Herstellen",
@@ -197,7 +193,6 @@ export const de: Record<keyof typeof en, string> = {
   "planner.rateFor": "Pro Minute von {item}",
   "planner.remove": "{item} entfernen",
   "planner.noTargets": "Füge etwas zum Herstellen hinzu, dann erscheint hier die Fabrik.",
-  "planner.saving": "Speichere…",
 
   "results.production": "Fertigung",
   "results.item": "Gegenstand und Rezept",
@@ -207,7 +202,6 @@ export const de: Record<keyof typeof en, string> = {
   "results.clock": "Takt",
   "results.power": "Strom",
   "results.pickRecipe": "Rezept für {item}",
-  "results.alternate": "Alternative",
   "results.raw": "Rohstoffe",
   "results.imports": "Herbringen",
   "results.importsHint": "Kein Rezept, das du nutzen kannst, stellt sie her.",
@@ -218,7 +212,11 @@ export const de: Record<keyof typeof en, string> = {
   "results.buildCost": "Baukosten",
   "results.showInCodex": "{item} im Kodex zeigen",
 
-  "error.invalid": "Etwas in diesem Plan passt nicht. Prüfe die Mengen.",
+  "error.unknownItem": "{item} gibt es im Spiel nicht mehr.",
+  "error.unknownRecipe": "Ein gewähltes Rezept ({recipe}) gibt es im Spiel nicht mehr.",
+  "error.badRate": "Prüfe die Mengen: Jede muss größer als 0 sein.",
+  "error.noTargets": "Füge etwas zum Herstellen hinzu.",
+  "error.removeItem": "Aus dem Plan entfernen",
   "error.locked": "{recipe} ist eine Alternative, die du in dieser Welt noch nicht freigeschaltet hast.",
   "error.wrong": "{recipe} stellt {item} nicht her.",
   "error.infeasible": "Mit diesen Rezepten erreichst du deine Ziele nicht. Probier andere.",
@@ -233,7 +231,6 @@ export const de: Record<keyof typeof en, string> = {
   "notice.importFailed": "Diese Datei konnte nicht importiert werden. {error}",
   "notice.notJson": "Diese Datei ist kein Plan.",
   "notice.saveFailed": "Konnte nicht speichern. {error}",
-  "notice.worldInUse": "Ein Plan nutzt diese Welt noch. Verschiebe oder lösche ihn zuerst.",
   "notice.openFailed": "Das konnte nicht geöffnet werden.",
 
   "dialog.newPlan": "Neuer Plan",
@@ -246,8 +243,6 @@ export const de: Record<keyof typeof en, string> = {
   "dialog.save": "Speichern",
   "confirm.deletePlan": "„{name}“ löschen?",
   "confirm.deletePlanHint": "Der Plan ist dann endgültig weg.",
-  "confirm.deleteWorld": "„{name}“ löschen?",
-  "confirm.deleteWorldHint": "Die dafür angehakten Alternativen sind dann endgültig weg.",
 
   "alt.title": "Alternative Rezepte",
   "alt.description": "Hake die Alternativen an, die du in {world} freigeschaltet hast.",
@@ -324,6 +319,5 @@ export const de: Record<keyof typeof en, string> = {
   "unlock.awesomeShop": "AWESOME-Shop: {name}",
   "unlock.unknown": "Nicht bekannt",
 
-  "search.items": "Gegenstände suchen",
   "search.noItems": "Kein Gegenstand passt.",
 };

@@ -77,6 +77,23 @@ export function chooseRecipe(plan: Plan, data: GameData, item: ItemId, recipe: R
   return { ...plan, recipeChoices };
 }
 
+/** Takes an item out of a plan: its targets, supplies and recipe choice (for items that left the game). */
+export function removeItem(plan: Plan, item: ItemId): Plan {
+  const recipeChoices = { ...plan.recipeChoices };
+  delete recipeChoices[item];
+  return {
+    ...plan,
+    targets: plan.targets.filter((rate) => rate.item !== item),
+    fixedInputs: plan.fixedInputs.filter((rate) => rate.item !== item),
+    recipeChoices,
+  };
+}
+
+/** Drops every choice of a recipe, so its items go back to their default recipe. */
+export function dropRecipe(plan: Plan, recipe: RecipeId): Plan {
+  return { ...plan, recipeChoices: Object.fromEntries(Object.entries(plan.recipeChoices).filter(([, chosen]) => chosen !== recipe)) };
+}
+
 export function isUnlocked(world: World, recipe: Recipe): boolean {
   return !recipe.alternate || world.showAllAlternates || world.unlockedAlternates.includes(recipe.id);
 }

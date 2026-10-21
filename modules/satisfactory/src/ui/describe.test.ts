@@ -23,7 +23,13 @@ describe("solveErrorText", () => {
     );
     expect(solveErrorText({ code: "WRONG_RECIPE", recipe: "Recipe_IronRod_C", item: "Desc_IronScrew_C" }, sampleData, "en", t)).toBe("Iron Rod doesn't make Screws.");
     expect(solveErrorText({ code: "INFEASIBLE" }, sampleData, "en", t)).toBe(en["error.infeasible"]);
-    expect(solveErrorText({ code: "INVALID_PLAN", message: "x" }, sampleData, "en", t)).toBe(en["error.invalid"]);
+    expect(solveErrorText({ code: "INVALID_PLAN", reason: "BAD_RATE", message: "x" }, sampleData, "en", t)).toBe(en["error.badRate"]);
+    expect(solveErrorText({ code: "INVALID_PLAN", reason: "NO_TARGETS", message: "x" }, sampleData, "en", t)).toBe(en["error.noTargets"]);
+    // An item that left the game has no name any more: its id stands in.
+    expect(solveErrorText({ code: "INVALID_PLAN", reason: "UNKNOWN_ITEM", item: "Desc_Gone_C", message: "x" }, sampleData, "en", t)).toBe("Desc_Gone_C is no longer in the game.");
+    expect(solveErrorText({ code: "INVALID_PLAN", reason: "UNKNOWN_RECIPE", recipe: "Recipe_Gone_C", message: "x" }, sampleData, "en", t)).toBe(
+      "A recipe you picked (Recipe_Gone_C) is no longer in the game.",
+    );
   });
 });
 

@@ -17,15 +17,16 @@ function rates(map: Map<ItemId, number>): Rate[] {
 }
 
 export const fakeSolve: Solve = ({ data, plan, world }: SolveInput) => {
-  if (!plan.targets.length) return { ok: false, error: { code: "INVALID_PLAN", message: "no targets" } };
+  if (!plan.targets.length) return { ok: false, error: { code: "INVALID_PLAN", reason: "NO_TARGETS", message: "no targets" } };
   for (const rate of [...plan.targets, ...plan.fixedInputs]) {
-    if (!data.items[rate.item] || !(rate.perMinute > 0) || !Number.isFinite(rate.perMinute)) {
-      return { ok: false, error: { code: "INVALID_PLAN", message: `bad rate for ${rate.item}` } };
+    if (!data.items[rate.item]) return { ok: false, error: { code: "INVALID_PLAN", reason: "UNKNOWN_ITEM", item: rate.item, message: `unknown item ${rate.item}` } };
+    if (!(rate.perMinute > 0) || !Number.isFinite(rate.perMinute)) {
+      return { ok: false, error: { code: "INVALID_PLAN", reason: "BAD_RATE", item: rate.item, message: `bad rate for ${rate.item}` } };
     }
   }
   for (const [item, id] of Object.entries(plan.recipeChoices)) {
     const recipe = data.recipes[id];
-    if (!recipe) return { ok: false, error: { code: "INVALID_PLAN", message: `unknown recipe ${id}` } };
+    if (!recipe) return { ok: false, error: { code: "INVALID_PLAN", reason: "UNKNOWN_RECIPE", item, recipe: id, message: `unknown recipe ${id}` } };
     if (!recipe.products.some((product) => product.item === item)) return { ok: false, error: { code: "WRONG_RECIPE", recipe: id, item } };
     if (!usable(world, recipe)) return { ok: false, error: { code: "LOCKED_RECIPE", recipe: id, item } };
   }

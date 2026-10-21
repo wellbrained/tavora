@@ -27,11 +27,20 @@ export function unlockText(unlock: Unlock, language: string, t: T): string {
   }
 }
 
-/** One short sentence for the player; LOCKED_RECIPE and WRONG_RECIPE also name the recipe. */
+/** One short sentence for the player, never the solver's own message. */
 export function solveErrorText(error: SolveError, data: GameData, language: string, t: T): string {
   switch (error.code) {
     case "INVALID_PLAN":
-      return t("error.invalid");
+      switch (error.reason) {
+        case "UNKNOWN_ITEM":
+          return t("error.unknownItem", { item: error.item ? itemName(data, error.item, language) : "?" });
+        case "UNKNOWN_RECIPE":
+          return t("error.unknownRecipe", { recipe: error.recipe ?? "?" });
+        case "BAD_RATE":
+          return t("error.badRate");
+        case "NO_TARGETS":
+          return t("error.noTargets");
+      }
     case "LOCKED_RECIPE":
       return t("error.locked", { recipe: recipeName(data, error.recipe, language) });
     case "WRONG_RECIPE":

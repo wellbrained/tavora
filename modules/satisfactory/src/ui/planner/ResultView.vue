@@ -103,7 +103,7 @@ function showInCodex(item: string) {
                       <span class="truncate">{{ names.recipe(row.recipe) }}</span>
                       <ChevronDown :stroke-width="1.5" />
                     </Button>
-                    <span v-else v-tip="() => recipeTooltip(data, row.recipe, language, locale(), t)" class="text-muted-foreground min-w-0 truncate text-xs">
+                    <span v-else v-tip="() => recipeTooltip(data, row.recipe, language, locale(), t)" class="text-muted-foreground min-w-0 truncate text-xs leading-6">
                       {{ names.recipe(row.recipe) }}
                     </span>
                   </div>
@@ -123,7 +123,7 @@ function showInCodex(item: string) {
             </td>
             <td class="px-2 py-2 text-right tabular-nums" :title="t('results.machinesExact', { exact: formatNumber(row.machines, locale(), 4), rounded: row.machinesRounded })">
               <span class="font-medium">{{ row.machinesRounded }}</span>
-              <span class="text-muted-foreground block text-xs">{{ formatNumber(row.machines, locale(), 2) }}</span>
+              <span v-if="Math.abs(row.machines - row.machinesRounded) > 1e-6" class="text-muted-foreground block text-xs">{{ formatNumber(row.machines, locale(), 2) }}</span>
             </td>
             <td class="hidden px-2 py-2 text-right tabular-nums @lg:table-cell">{{ formatClock(row.clockPercent, locale()) }}</td>
             <td class="hidden px-3 py-2 text-right tabular-nums @lg:table-cell">{{ formatPower(row.powerMW, locale()) }}</td>

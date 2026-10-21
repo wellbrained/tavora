@@ -22,7 +22,7 @@ import { language, t } from "../../i18n";
 import { parsePlannerContent } from "../content";
 import { useModule, useNames } from "../context";
 import { solveErrorText } from "../describe";
-import { canPlan, chooseRecipe, emptyPlan, planForItem, setAlternate, uniqueName } from "../planEdit";
+import { canPlan, chooseRecipe, dropRecipe, emptyPlan, planForItem, removeItem, setAlternate, uniqueName } from "../planEdit";
 import AlternatesDialog from "./AlternatesDialog.vue";
 import NameDialog from "./NameDialog.vue";
 import RateEditor from "./RateEditor.vue";
@@ -348,6 +348,14 @@ function useStandardRecipe(item: string) {
   });
 }
 
+function removeGone(item: string) {
+  edit((current) => removeItem(current, item));
+}
+
+function dropGone(recipe: string) {
+  edit((current) => dropRecipe(current, recipe));
+}
+
 const canTarget = (item: string) => canPlan(data, item);
 </script>
 
@@ -457,6 +465,13 @@ const canTarget = (item: string) => canPlan(data, item);
                   {{ t("error.openAlternates") }}
                 </Button>
                 <Button size="sm" variant="secondary" data-testid="error-standard" @click="useStandardRecipe(solved.error.item)">{{ t("error.useDefault") }}</Button>
+              </div>
+              <!-- After a game update a stored plan may name things the game no longer has. -->
+              <div v-else-if="solved.error.code === 'INVALID_PLAN' && solved.error.reason === 'UNKNOWN_ITEM' && solved.error.item" class="flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" data-testid="error-remove-item" @click="removeGone(solved.error.item)">{{ t("error.removeItem") }}</Button>
+              </div>
+              <div v-else-if="solved.error.code === 'INVALID_PLAN' && solved.error.reason === 'UNKNOWN_RECIPE' && solved.error.recipe" class="flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" data-testid="error-drop-recipe" @click="dropGone(solved.error.recipe)">{{ t("error.useDefault") }}</Button>
               </div>
             </div>
             <ResultView v-else-if="solved && solved.ok" :result="solved.result" @choose-recipe="(item, recipe) => edit((current) => chooseRecipe(current, data, item, recipe))" />

@@ -6,11 +6,13 @@ import {
   canPlan,
   chooseRecipe,
   defaultRate,
+  dropRecipe,
   emptyPlan,
   isUnlocked,
   parseRate,
   planForItem,
   recipesMaking,
+  removeItem,
   removeRate,
   setAlternate,
   setRate,
@@ -118,5 +120,30 @@ describe("uniqueName", () => {
   it("numbers a name that is taken, ignoring case", () => {
     expect(uniqueName("New plan", [])).toBe("New plan");
     expect(uniqueName("New plan", ["new plan", "New plan 2"])).toBe("New plan 3");
+  });
+});
+
+describe("removeItem and dropRecipe", () => {
+  const plan = {
+    ...emptyPlan("P", "w"),
+    targets: [
+      { item: "Desc_Gone_C", perMinute: 5 },
+      { item: "Desc_IronPlate_C", perMinute: 10 },
+    ],
+    fixedInputs: [{ item: "Desc_Gone_C", perMinute: 1 }],
+    recipeChoices: { Desc_Gone_C: "Recipe_Gone_C", Desc_IronScrew_C: "Recipe_Alternate_Screw_C" },
+  };
+
+  it("takes an item out of targets, supplies and choices", () => {
+    expect(removeItem(plan, "Desc_Gone_C")).toEqual({
+      ...plan,
+      targets: [{ item: "Desc_IronPlate_C", perMinute: 10 }],
+      fixedInputs: [],
+      recipeChoices: { Desc_IronScrew_C: "Recipe_Alternate_Screw_C" },
+    });
+  });
+
+  it("drops every choice of a recipe", () => {
+    expect(dropRecipe(plan, "Recipe_Gone_C").recipeChoices).toEqual({ Desc_IronScrew_C: "Recipe_Alternate_Screw_C" });
   });
 });

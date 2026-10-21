@@ -11,7 +11,7 @@ import { perMinute } from "../planEdit";
 import type { Entry } from "../search";
 import EntryLink from "./EntryLink.vue";
 
-const props = defineProps<{ recipeId: string; /** The item the card is shown for; its line is not a link. */ focus?: string; title?: boolean }>();
+const props = defineProps<{ recipeId: string; /** The item the card is shown for; its line is not a link. */ focus?: string; hideTitle?: boolean }>();
 const emit = defineEmits<{ go: [entry: Entry] }>();
 
 const context = useModule();
@@ -24,9 +24,8 @@ const unlocks = computed(() =>
 
 <template>
   <article v-if="recipe" class="bg-card min-w-0 rounded-lg border p-3" data-testid="recipe-card">
-    <header v-if="title !== false" class="mb-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+    <header v-if="!hideTitle" class="mb-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
       <EntryLink :entry="{ kind: 'recipe', id: recipe.id }" class="font-medium" @go="(entry) => emit('go', entry)" />
-      <Badge v-if="recipe.alternate" variant="outline">{{ t("codex.alternate") }}</Badge>
     </header>
     <div class="flex flex-col gap-2 @md:flex-row @md:items-center">
       <ul class="flex min-w-0 flex-1 flex-col gap-1" role="list" :aria-label="t('codex.ingredients')">

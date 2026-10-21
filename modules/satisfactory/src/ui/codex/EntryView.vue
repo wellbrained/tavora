@@ -103,9 +103,8 @@ const go = (next: Entry) => emit("go", next);
     <template v-else-if="recipe">
       <header class="flex min-w-0 flex-wrap items-center gap-2">
         <h2 class="text-lg font-semibold">{{ localize(recipe.name, language) }}</h2>
-        <Badge v-if="recipe.alternate" variant="outline">{{ t("codex.alternate") }}</Badge>
       </header>
-      <RecipeCard :recipe-id="recipe.id" :title="false" @go="go" />
+      <RecipeCard :recipe-id="recipe.id" hide-title @go="go" />
     </template>
 
     <!-- Building -->
