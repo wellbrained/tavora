@@ -203,6 +203,17 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "developer-show-recovery-key" }],
   [{ type: "developer-copy-recovery-key" }],
   [{ type: "developer-sign-answer", id: 7, allow: false }],
+  [{ type: "account-prefix-check", prefix: "wellbrained" }],
+  [{ type: "account-prefix-claim", prefix: "wellbrained" }],
+  [{ type: "publish-review", moduleId: "wellbrained.tracker" }],
+  [{ type: "publish-refresh" }],
+  [{ type: "publish-write", version: "1.2.4", notes: ["Faster timers.", "A new sound."] }],
+  [{ type: "publish-write", version: "2.0.0-beta.1", notes: [] }],
+  [{ type: "publish-set-id", id: "wellbrained.tracker" }],
+  [{ type: "publish-upload" }],
+  [{ type: "publish-close" }],
+  [{ type: "save-module-zip", moduleId: "wellbrained.tracker" }],
+  [{ type: "developer-copy-create-command" }],
   [{ type: "cloud-copy-cancel" }],
   [{ type: "cloud-copy-new-key" }],
   [{ type: "cloud-copy-show-key" }],
@@ -426,6 +437,14 @@ describe("parseAction", () => {
     [{ type: "set-overlay-port", port: "47820" }],
     [{ type: "hotkey-answer", id: 3, choice: "press" }],
     [{ type: "remove-hotkey", owner: "official", moduleId: "tavora.clock-counter", gameId: "poe2", action: "Start", target: "item-1" }],
+    // Publishing: a version is semver, notes are a short list of lines, ids are module ids.
+    [{ type: "publish-write", version: "1.2", notes: [] }],
+    [{ type: "publish-write", version: "1.2.4", notes: "Faster" }],
+    [{ type: "publish-write", version: "1.2.4", notes: Array.from({ length: 21 }, () => "x") }],
+    [{ type: "publish-set-id", id: "Not An Id" }],
+    [{ type: "publish-review", moduleId: "../x" }],
+    [{ type: "account-prefix-check", prefix: "" }],
+    [{ type: "publish-upload", zip: "x" }],
   ])("rejects %j", (action) => {
     expect(parseAction(action)).toBeNull();
   });

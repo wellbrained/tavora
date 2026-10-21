@@ -215,10 +215,14 @@ test("a developer chooses a public name and links a key file with tavora-pack li
     await page.getByTestId("account-verify").click();
     await page.getByTestId("account-age").check();
     await page.getByTestId("account-create").click();
+    await expect(page.getByTestId("account-sign-out")).toBeVisible();
 
-    // Linking needs a name first.
+    // The developer settings are under Development; linking a key file is part of publishing from CI.
+    await page.getByTestId("settings-nav-development").click();
     const developer = page.getByTestId("account-developer");
     await expect(developer).toBeVisible();
+    await page.getByTestId("developer-ci-toggle").click();
+    // Linking needs a name first.
     await expect(page.getByTestId("account-link-code")).toBeDisabled();
     await expect(page.getByTestId("account-keys-none")).toBeVisible();
     await page.getByTestId("account-developer-name").fill("Tavora Team");
@@ -280,6 +284,7 @@ test("Tavora keeps a developer's publisher key, and signs and publishes for tavo
   const env = { TAVORA_SIGNER_ADDRESS: signerAddressFor(userData), HOME: home, USERPROFILE: home };
   try {
     await signIn(page, "keeper@example.com", true);
+    await page.getByTestId("settings-nav-development").click();
     await expect(page.getByTestId("developer-key-create")).toBeDisabled();
     await page.getByTestId("account-developer-name").fill("key-keeper");
     await page.getByTestId("account-developer-save").click();
@@ -290,9 +295,11 @@ test("Tavora keeps a developer's publisher key, and signs and publishes for tavo
     await expect(recovery).toHaveText(/^[0-9A-Z-]{40,}$/);
     const recoveryKey = await recovery.textContent();
     await page.getByTestId("recovery-key-saved").click();
+    await page.getByTestId("settings-nav-account").click();
     await page.getByTestId("recovery-key-show").click();
     await expect(recovery).toHaveText(recoveryKey!);
     await page.getByTestId("recovery-key-saved").click();
+    await page.getByTestId("settings-nav-development").click();
     const kept = page.getByTestId("developer-keys-list").locator("li");
     await expect(kept).toHaveCount(1);
     const fingerprint = ((await kept.getAttribute("data-testid")) ?? "").replace("developer-key-", "");

@@ -151,6 +151,16 @@ export class DeveloperKeys {
     await this.options.account.link(kept.key);
   }
 
+  /**
+   * The key Tavora signs a module with on the review screen: `prefer` (the key the catalog lists the
+   * module under) when it is kept here and linked, else the newest kept key that is linked. Null without one.
+   */
+  keyFor(linked: readonly string[], prefer?: string): { key: KeyObject; fingerprint: string } | null {
+    const usable = this.keys.filter((kept) => linked.includes(kept.fingerprint));
+    const kept = usable.find((item) => item.fingerprint === prefer) ?? usable.at(-1);
+    return kept ? { key: kept.key, fingerprint: kept.fingerprint } : null;
+  }
+
   /** The key as a file's text, for publishing from CI. */
   exportKey(fingerprint: string): string {
     const kept = this.keys.find((key) => key.fingerprint === fingerprint);

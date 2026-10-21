@@ -402,6 +402,23 @@ export function hostActionTable(c: HostChecks) {
     "developer-show-recovery-key": {},
     "developer-copy-recovery-key": {},
     "developer-sign-answer": { id: check<number>((value) => Number.isSafeInteger(value)), allow: bool },
+    /** Asks the catalog about an id prefix, or claims it for the account (the account view's prefixCheck says what it said). */
+    "account-prefix-check": { prefix: filled(126) },
+    "account-prefix-claim": { prefix: filled(126) },
+    /** Opens the review screen for a module from a project folder, or packs it again. */
+    "publish-review": { moduleId: c.moduleId },
+    "publish-refresh": {},
+    /** Writes a version and its patch notes into the reviewed project's files, then packs again. */
+    "publish-write": { version: matching(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/), notes: list(text(500), { max: 20 }) },
+    /** Gives the reviewed module a new id in its project files (before its first publish), then packs again. */
+    "publish-set-id": { id: c.moduleId },
+    /** Uploads the zip the review screen shows to the catalog. */
+    "publish-upload": {},
+    "publish-close": {},
+    /** Copies `npm create @tavora/module`, the command that starts a module project. */
+    "developer-copy-create-command": {},
+    /** Packs a module from a project folder, signed with a kept key, and saves the zip where the developer picks. */
+    "save-module-zip": { moduleId: c.moduleId },
     /** Asks another PC of the account for its key, instead of typing the recovery key. */
     "pairing-start": {},
     "pairing-cancel": {},
