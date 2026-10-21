@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.27",
+    date: "2026-10-21",
+    title: "Clearer module warnings",
+    notes: [
+      "Modules that cannot load now have their own space in Settings, with readable paths and an Open folder button for each warning.",
+    ],
+  },
+  {
     version: "0.19.26",
     date: "2026-10-21",
     title: "Stream overlays and hotkeys",
