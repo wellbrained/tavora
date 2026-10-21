@@ -243,7 +243,9 @@ export type DialogRequest =
   | AddModuleRequest
   | GrantRequest
   /** The developer onboarding; `then` is the module whose Publish opened it, reviewed once it is done. */
-  | { kind: "developer-start"; then?: string };
+  | { kind: "developer-start"; then?: string }
+  /** Make a copy of an example that ships with Tavora (Settings > Development). */
+  | { kind: "copy-example"; moduleId: string };
 
 export const dialog = shallowRef<DialogRequest | null>(null);
 

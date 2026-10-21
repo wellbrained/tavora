@@ -2,12 +2,12 @@
 // Settings > Development: for module developers. A development folder is a
 // module's project folder, or the folder a developer keeps several projects
 // in; Tavora loads every project in it and reloads its panels when the build
-// changes. Each project says what it loads or what to do next. Below are the
-// modules loaded for development (the folders' and the examples that ship
-// with Tavora), each from a project with Publish and Save as zip, then what
+// changes. Each folder lists its modules, with Publish and Save as zip, or
+// says what to do next for a project that loaded nothing. Below are the
+// examples that ship with Tavora, to open or copy as a new project, then what
 // a module developer has with the account, and the way to the docs and to
 // GitHub. Until publishing is set up, a card offers the developer onboarding.
-import { BookOpen, Bug, CircleAlert, CircleCheck, FileArchive, FolderCode, MessageCircleQuestion, Rocket, Trash2, Upload } from "@lucide/vue";
+import { BookOpen, Bug, CircleAlert, Copy, FileArchive, FolderCode, FolderOpen, MessageCircleQuestion, Rocket, Trash2, Upload } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -29,7 +29,8 @@ const recoveryKey = computed(() => Boolean(developerKeys.value?.recoveryKey) || 
 
 const modules = computed(() => state.value!.modules);
 const folders = computed(() => state.value!.developmentFolders);
-const developmentModules = computed(() => modules.value.filter((module) => module.development).sort((a, b) => a.name.localeCompare(b.name)));
+const examples = computed(() => modules.value.filter((module) => module.origin.kind === "example").sort((a, b) => a.name.localeCompare(b.name)));
+const moduleById = (id: string) => modules.value.find((module) => module.id === id);
 
 async function addFolder() {
   const result = await act({ type: "add-development-folder" });
@@ -53,11 +54,6 @@ function advice(kind: DevelopmentProblemKind | null, message: string | null, fol
   if (kind === "no-module") return t("settings.devFolders.noModule");
   if (kind === "missing") return t("settings.devFolders.missing");
   return t("settings.devFolders.problem", { message: message ?? "" });
-}
-
-function loads(moduleId: string): string {
-  const module = modules.value.find((item) => item.id === moduleId);
-  return module ? t("settings.devFolders.loads", { name: module.name, version: module.version }) : "";
 }
 </script>
 
@@ -103,37 +99,50 @@ function loads(moduleId: string): string {
           <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" /> {{ advice(entry.kind, entry.problem, entry.folder) }}
         </p>
         <p v-else-if="!entry.projects.length" class="text-muted-foreground pl-7 text-sm" data-testid="development-folder-status">{{ t("settings.devFolders.empty") }}</p>
-        <ul v-else class="flex flex-col gap-2 pl-7">
-          <li v-for="project in entry.projects" :key="project.project" class="flex gap-2 text-sm" data-testid="development-project">
-            <CircleCheck v-if="project.moduleId" class="text-success mt-0.5 size-4 flex-none" :stroke-width="1.5" />
-            <CircleAlert v-else class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" />
-            <span class="flex min-w-0 flex-col">
-              <span v-if="project.project !== entry.folder" class="truncate font-mono text-xs" :title="project.project">{{ baseName(project.project) }}</span>
-              <span :class="cn('text-muted-foreground', !project.moduleId && 'text-foreground')" data-testid="development-project-status">{{
-                project.moduleId ? loads(project.moduleId) : advice(project.kind, project.problem, project.project)
-              }}</span>
-            </span>
-          </li>
+        <ul v-else class="flex flex-col pl-7">
+          <template v-for="project in entry.projects" :key="project.project">
+            <ModuleRow v-if="project.moduleId && moduleById(project.moduleId)" :module="moduleById(project.moduleId)!" hide-origin>
+              <template v-if="accounts">
+                <Button
+                  variant="ghost"
+                  :aria-label="t('publish.saveZip')"
+                  :title="t('publish.saveZip')"
+                  :data-testid="`save-zip-${project.moduleId}`"
+                  @click="saveModuleZip(project.moduleId)"
+                >
+                  <FileArchive :stroke-width="1.5" /> {{ t("publish.saveZip") }}
+                </Button>
+                <Button variant="secondary" :data-testid="`publish-${project.moduleId}`" @click="publishModule(project.moduleId)">
+                  <Upload :stroke-width="1.5" /> {{ t("publish.button") }}
+                </Button>
+              </template>
+            </ModuleRow>
+            <li v-else class="flex gap-2 border-b py-3 text-sm last:border-b-0" data-testid="development-project">
+              <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" />
+              <span class="flex min-w-0 flex-col">
+                <span v-if="project.project !== entry.folder" class="truncate font-mono text-xs" :title="project.project">{{ baseName(project.project) }}</span>
+                <span data-testid="development-project-status">{{ advice(project.kind, project.problem, project.project) }}</span>
+              </span>
+            </li>
+          </template>
         </ul>
       </li>
     </ul>
   </SettingGroup>
 
-  <SettingGroup :title="t('settings.development-modules.label')" :description="t('settings.development-modules.description')">
+  <SettingGroup v-if="examples.length" :title="t('settings.development-examples.label')" :description="t('settings.development-examples.description')">
     <div
-      :class="cn('-mx-5 px-5 transition-colors duration-500', highlight === 'development-modules' && 'bg-primary/10')"
-      data-setting="development-modules"
+      :class="cn('-mx-5 px-5 transition-colors duration-500', highlight === 'development-examples' && 'bg-primary/10')"
+      data-setting="development-examples"
     >
-      <ul class="flex flex-col" :aria-label="t('settings.development-modules.label')" data-testid="development-module-list">
-        <ModuleRow v-for="module in developmentModules" :key="module.id" :module="module">
-          <template v-if="module.project && accounts">
-            <Button variant="ghost" :aria-label="t('publish.saveZip')" :title="t('publish.saveZip')" :data-testid="`save-zip-${module.id}`" @click="saveModuleZip(module.id)">
-              <FileArchive :stroke-width="1.5" /> {{ t("publish.saveZip") }}
-            </Button>
-            <Button variant="secondary" :data-testid="`publish-${module.id}`" @click="publishModule(module.id)">
-              <Upload :stroke-width="1.5" /> {{ t("publish.button") }}
-            </Button>
-          </template>
+      <ul class="flex flex-col" :aria-label="t('settings.development-examples.label')" data-testid="development-examples">
+        <ModuleRow v-for="module in examples" :key="module.id" :module="module" hide-origin>
+          <Button variant="ghost" :data-testid="`open-example-${module.id}`" @click="act({ type: 'open-example-folder', moduleId: module.id })">
+            <FolderOpen :stroke-width="1.5" /> {{ t("examples.open") }}
+          </Button>
+          <Button variant="secondary" :data-testid="`copy-example-${module.id}`" @click="dialog = { kind: 'copy-example', moduleId: module.id }">
+            <Copy :stroke-width="1.5" /> {{ t("examples.copy") }}
+          </Button>
         </ModuleRow>
       </ul>
     </div>
