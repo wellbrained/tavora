@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.33",
+    date: "2026-10-22",
+    title: "Publishing stays set up",
+    notes: [
+      "\"Want to make modules?\" no longer shows up in Settings > Development after a restart once publishing is set up.",
+      "Publish and Save as zip work right after a start, without opening Settings > Account first.",
+    ],
+  },
+  {
     version: "0.19.32",
     date: "2026-10-22",
     title: "Clock & Counter works without OBS",
