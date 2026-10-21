@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.26",
+    date: "2026-10-21",
+    title: "Stream overlays and hotkeys",
+    notes: [
+      "Turn on Stream overlays in Settings > Streaming, and modules can show their overlays in OBS.",
+      "Modules can offer hotkeys. You pick the keys in Tavora, and they work while the game is open here.",
+      "Settings > Streaming lists every hotkey, so you can remove any of them.",
+    ],
+  },
+  {
     version: "0.19.25",
     date: "2026-10-21",
     title: "Patch notes in their own window",
