@@ -144,10 +144,10 @@ function removeToken(token: AccountPublishToken) {
 
       <div v-if="prefixes && view?.developer" class="mt-6" data-testid="developer-prefixes">
         <span class="text-sm font-medium">{{ t("developer.prefix") }}</span>
-        <p v-if="prefixes.held.length" class="mt-1 text-sm" data-testid="developer-prefixes-list">
-          {{ t("developer.prefixLine", { prefix: prefixes.held.map((item) => item.prefix).join(", ") }) }}
-          <Button v-if="!addingPrefix && prefixes.held.length < prefixes.max" variant="ghost" size="sm" class="ml-1" data-testid="developer-prefix-add" @click="addingPrefix = true">{{ t("developer.prefixAdd") }}</Button>
-        </p>
+        <template v-if="prefixes.held.length">
+          <p class="mt-1 text-sm" data-testid="developer-prefixes-list">{{ t("developer.prefixLine", { prefix: prefixes.held.map((item) => item.prefix).join(", ") }) }}</p>
+          <Button v-if="!addingPrefix && prefixes.held.length < prefixes.max" variant="ghost" size="sm" class="mt-1 -ml-2" data-testid="developer-prefix-add" @click="addingPrefix = true">{{ t("developer.prefixAdd") }}</Button>
+        </template>
         <p v-else class="text-muted-foreground mt-1 text-xs" data-testid="developer-prefixes-none">{{ t("developer.noPrefixes") }}</p>
         <div v-if="!prefixes.held.length || addingPrefix" class="mt-2">
           <PrefixClaim :initial="prefixes.held.length ? null : suggested" @claimed="addingPrefix = false" />

@@ -352,7 +352,7 @@ export const de: Record<keyof typeof en, string> = {
   "devStart.name.prefix": "Deine Module bekommen IDs wie {prefix}.mein-modul. Dieses Präfix bleibt für immer deins, auch wenn du deinen Namen später änderst.",
   "devStart.key.title": "Dein Herausgeberschlüssel",
   "devStart.recovery.title": "Sichere den Wiederherstellungsschlüssel deines Kontos",
-  "devStart.recovery.text": "Tavora hat deinen Herausgeberschlüssel erstellt. Er zeigt Spielern, dass deine Module wirklich von dir sind. Geschützt ist er mit dem Wiederherstellungsschlüssel deines Kontos unten. Speicher ihn: Du brauchst ihn, um von einem neuen PC zu veröffentlichen, und er entsperrt auch die Cloud-Kopie, falls du sie einschaltest.",
+  "devStart.recovery.text": "Tavora hat deinen Herausgeberschlüssel erstellt. Er zeigt Spielern, dass deine Module wirklich von dir sind. Speicher unten den Wiederherstellungsschlüssel deines Kontos: Du brauchst ihn, um von einem neuen PC zu veröffentlichen.",
   "devStart.key.text": "Dein Herausgeberschlüssel zeigt Spielern, dass deine Module wirklich von dir sind. Tavora bewahrt ihn sicher in deinem Konto auf.",
   "devStart.key.make": "Meinen Schlüssel erstellen",
   "devStart.key.linkedFile": "Dein Konto hat schon einen Herausgeberschlüssel, gespeichert als Datei auf deinem PC. Wähl diese Datei, damit Tavora damit veröffentlichen kann: Deine bisherigen Module lassen sich nur mit genau diesem Schlüssel aktualisieren.",

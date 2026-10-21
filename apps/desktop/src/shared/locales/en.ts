@@ -350,7 +350,7 @@ export const en = {
   "devStart.name.prefix": "Your modules get ids like {prefix}.my-module. This prefix stays yours for good, even if you change your name later.",
   "devStart.key.title": "Your publisher key",
   "devStart.recovery.title": "Save your account's recovery key",
-  "devStart.recovery.text": "Tavora made your publisher key, which proves to players that your modules come from you. It's protected by your account's recovery key below. Save it: you need it to publish from a new PC, and it also unlocks the cloud copy if you turn that on.",
+  "devStart.recovery.text": "Tavora made your publisher key, which proves to players that your modules come from you. Save your account's recovery key below: you need it to publish from a new PC.",
   "devStart.key.text": "Your publisher key proves to players that your modules come from you. Tavora keeps it safe in your account.",
   "devStart.key.make": "Make my key",
   "devStart.key.linkedFile": "Your account already has a publisher key, saved as a file on your PC. Pick that file so Tavora can publish with it: your existing modules can only be updated with that same key.",
