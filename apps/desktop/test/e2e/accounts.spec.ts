@@ -230,7 +230,7 @@ test("a developer chooses a public name and links a key file with tavora-pack li
     await expect(page.getByTestId("toast")).toContainText("can't be used");
     await page.getByTestId("account-developer-name").fill("example-dev");
     await page.getByTestId("account-developer-save").click();
-    await expect(page.getByTestId("account-developer-name-hint")).toContainText("can change again on");
+    await expect(page.getByTestId("account-developer-name-hint")).toContainText("can change it again on");
 
     // A one-time code, and the command that uses it.
     await page.getByTestId("account-link-code").click();
