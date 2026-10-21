@@ -8,7 +8,7 @@
 // notes open in a dialog. Module library opens the library on Tavora's catalog. Below the
 // list are the websites modules may reach, and where module files live. What module developers use (development folders, the examples) is in
 // Settings > Development instead.
-import { ArrowRightLeft, CloudDownload, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Store, Trash2 } from "@lucide/vue";
+import { ArrowRightLeft, CircleAlert, CloudDownload, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Store, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -118,6 +118,32 @@ function remove(module: ModuleView) {
 </script>
 
 <template>
+  <SettingGroup v-if="problems.length" :title="t('settings.modules.problems')">
+    <ul class="flex flex-col" :aria-label="t('settings.modules.problems')" aria-live="polite" data-testid="module-problems">
+      <li v-for="problem in problems" :key="problem.path" class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-4 border-b py-4 last:border-b-0">
+        <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+        <div class="flex min-w-0 flex-col gap-2">
+          <p class="text-sm leading-relaxed [overflow-wrap:anywhere]">
+            <span class="font-medium">{{ problem.folder }}</span>{{ " " }}
+            <span class="text-muted-foreground">{{
+              problem.kind === "not-built" ? t("settings.modules.notBuilt") : t("settings.modules.problem", { message: problem.message })
+            }}</span>
+          </p>
+          <p class="text-muted-foreground text-xs [overflow-wrap:anywhere]" data-testid="module-problem-path">{{ problem.path }}</p>
+        </div>
+        <Button
+          variant="secondary"
+          class="flex-none"
+          :aria-label="[t('common.openFolder'), problem.folder].join(': ')"
+          :data-testid="`open-module-problem-${problem.folder}`"
+          @click="act({ type: 'open-module-problem-folder', path: problem.path })"
+        >
+          <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
+        </Button>
+      </li>
+    </ul>
+  </SettingGroup>
+
   <SettingGroup :title="t('settings.installed-modules.label')">
     <SettingRow
       :label="t('settings.own-modules.label')"
@@ -125,30 +151,6 @@ function remove(module: ModuleView) {
       setting="own-modules"
       :highlighted="highlight === 'own-modules'"
     >
-      <template #below>
-        <ul v-if="problems.length" class="mt-2 flex flex-col gap-1.5" :aria-label="t('settings.modules.problems')" data-testid="module-problems">
-          <li v-for="problem in problems" :key="problem.path" class="flex flex-col gap-0.5 text-sm">
-            <span>
-              <span class="text-destructive font-medium">{{ problem.folder }}</span>{{ " " }}
-              <span class="text-muted-foreground" :title="problem.message">{{
-                problem.kind === "not-built" ? t("settings.modules.notBuilt") : t("settings.modules.problem", { message: problem.message })
-              }}</span>
-            </span>
-            <span class="flex min-w-0 items-center gap-1">
-              <span class="text-muted-foreground min-w-0 truncate font-mono text-xs" :title="problem.path" data-testid="module-problem-path">{{ problem.path }}</span>
-              <Button
-                variant="ghost"
-                size="xs"
-                class="flex-none"
-                :data-testid="`open-module-problem-${problem.folder}`"
-                @click="act({ type: 'open-module-problem-folder', path: problem.path })"
-              >
-                <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
-              </Button>
-            </span>
-          </li>
-        </ul>
-      </template>
       <span class="flex flex-none flex-wrap items-center justify-end gap-2">
         <Button variant="secondary" data-testid="open-module-library" @click="openLibrary">
           <Store :stroke-width="1.5" /> {{ t("settings.modules.library") }}
