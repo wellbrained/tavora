@@ -15,6 +15,71 @@
     "viewport",
     "permissions"
   ],
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "overlay"
+        ],
+        "properties": {
+          "overlay": {}
+        }
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "permissions": {
+            "type": "object",
+            "required": [
+              "connectors"
+            ],
+            "properties": {
+              "connectors": {
+                "type": "array",
+                "contains": {
+                  "const": "stream-overlay"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "permissions"
+        ],
+        "properties": {
+          "permissions": {
+            "type": "object",
+            "required": [
+              "connectors"
+            ],
+            "properties": {
+              "connectors": {
+                "type": "array",
+                "contains": {
+                  "const": "stream-overlay"
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "overlay"
+        ],
+        "properties": {
+          "overlay": {}
+        }
+      }
+    }
+  ],
   "properties": {
     "$schema": {
       "type": "string",
@@ -243,6 +308,55 @@
         }
       }
     },
+    "overlay": {
+      "type": "string",
+      "allOf": [
+        {
+          "$ref": "#/definitions/packagePath"
+        },
+        {
+          "pattern": "\\.html$"
+        }
+      ],
+      "description": "The page streaming software such as OBS shows as a Browser Source. Tavora serves it on this PC only, with the files next to it, and gives it live data from the module. Needs \"stream-overlay\" in permissions.connectors, and that connector needs this page.",
+      "examples": [
+        "dist/overlay.html"
+      ]
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "description": "What the module can do on a key press. The player binds the keys in Tavora; the module only hears which action fired. Ids must be unique.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,31}$",
+            "description": "Stable identity of the action, never shown. Saved hotkeys keep it, so never change it after release.",
+            "examples": [
+              "start-pause"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "^[^\\u0000-\\u001f]*\\S[^\\u0000-\\u001f]*$",
+            "description": "Short name Tavora shows next to the key.",
+            "examples": [
+              "Start/Pause"
+            ]
+          }
+        }
+      }
+    },
     "permissions": {
       "type": "object",
       "additionalProperties": false,
@@ -265,11 +379,12 @@
         "connectors": {
           "type": "array",
           "uniqueItems": true,
-          "description": "Parts of Tavora that hold a sign-in, which the module asks to use without seeing the token. ai-usage reads the usage of the player's Claude and Codex accounts; discord talks to the Discord app on this PC (voice channels, who is talking, joining and muting).",
+          "description": "Parts of Tavora that reach outside the module's panel, which the module asks to use without seeing what is behind them. ai-usage reads the usage of the player's Claude and Codex accounts; discord talks to the Discord app on this PC (voice channels, who is talking, joining and muting); stream-overlay shows the module's overlay page in streaming software on this PC.",
           "items": {
             "enum": [
               "ai-usage",
-              "discord"
+              "discord",
+              "stream-overlay"
             ]
           }
         },

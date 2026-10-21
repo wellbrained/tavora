@@ -7,7 +7,7 @@
 // asks for more (`request.update`), it shows what the update asks for that the installed version did
 // not, and the update's patch notes; allowing installs the update, and until then the installed
 // version keeps running (catalog threat model, C4).
-import { Gauge, Globe, Headphones } from "@lucide/vue";
+import { Gauge, Globe, Headphones, Radio } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, aiUsage, dialog, discord, openPanels, openSettings, state, type GrantRequest } from "../host";
@@ -125,6 +125,10 @@ async function allow() {
         {{ discordUser ? t("grant.discordAs", { name: discordUser.name }) : t("grant.discordSignIn") }}
         {{ t("grant.discordNote") }}
       </p>
+    </section>
+    <section v-if="connectors.includes('stream-overlay')" class="flex flex-col gap-2" :aria-label="t('grant.overlay')" data-testid="grant-overlay">
+      <h3 class="flex items-center gap-2 font-medium"><Radio :stroke-width="1.5" class="size-4" /> {{ t("grant.overlay") }}</h3>
+      <p class="text-muted-foreground text-sm">{{ t("grant.overlayNote") }}</p>
     </section>
     <section v-if="hosts.length" class="flex flex-col gap-2" :aria-label="t('grant.network')">
       <h3 class="flex items-center gap-2 font-medium"><Globe :stroke-width="1.5" class="size-4" /> {{ t("grant.network") }}</h3>

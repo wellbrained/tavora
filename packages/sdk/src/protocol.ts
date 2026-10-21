@@ -310,10 +310,27 @@ export interface DocumentChange {
  * Capabilities gate methods beyond the always-available core. A module has a
  * capability once the player granted one of its permissions for it (`network`:
  * a host in `permissions.network`; `aiUsage`: the `ai-usage` connector; `discord`:
- * the `discord` connector); calling a gated method without it fails with
- * PERMISSION_DENIED. The others cannot be granted yet.
+ * the `discord` connector; `overlay`: the `stream-overlay` connector); calling a gated method without it fails
+ * with PERMISSION_DENIED. The others cannot be granted yet.
  */
-export type Capability = "network" | "aiUsage" | "discord" | "files" | "clipboard" | "sharedData";
+export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "files" | "clipboard" | "sharedData";
+
+/**
+ * What overlay.copyLink did. `copied`: the link is on the clipboard, ready to paste into OBS as a Browser Source.
+ * `off`: Stream overlays are off in Tavora; Tavora opened the setting so the player can turn them on.
+ */
+export type OverlayLinkResult = "copied" | "off";
+
+/** A hotkey the player set for this module in the current game: which action, for what. Never the key itself. */
+export interface HotkeyBinding {
+  /** One of the manifest's `actions` ids. */
+  action: string;
+  /** The module's own id for what the action works on, such as an item id. */
+  target: string;
+}
+
+/** What the player did in Tavora's hotkey dialog (hotkeys.set): set a key, removed the one set, or closed it. */
+export type HotkeySetResult = "set" | "removed" | "cancelled";
 
 /** Request methods and their params/result types. */
 export interface Methods {
@@ -383,6 +400,26 @@ export interface Methods {
   "discord.unsubscribe": { params: { event: DiscordEventName; channelId?: string }; result: null };
   /** A picture from Discord's image server (someone's avatar, a server icon) as a small PNG data address, or null (capability `discord`). */
   "discord.image": { params: { url: string }; result: string | null };
+  /**
+   * What the overlay page for `key` shows now (capability `overlay`): any JSON, at most LIMITS.maxOverlayStateBytes.
+   * Tavora keeps it, so the overlay shows it while no panel runs. Tavora 0.19.25 and newer.
+   */
+  "overlay.publish": { params: { key: string; state: JsonValue }; result: null };
+  /** The overlay for `key` shows nothing until it is published again; its link stays the same (capability `overlay`). */
+  "overlay.remove": { params: { key: string }; result: null };
+  /** Puts the link of the overlay for `key` on the clipboard. Only right after a click or key press (capability `overlay`). */
+  "overlay.copyLink": { params: { key: string }; result: OverlayLinkResult };
+  /** Gives the overlay for `key` a new link; the old one stops working (capability `overlay`). */
+  "overlay.resetLink": { params: { key: string }; result: null };
+  /** The hotkeys the player set for this module in the current game. Tavora 0.19.25 and newer. */
+  "hotkeys.list": { params: undefined; result: HotkeyBinding[] };
+  /**
+   * Opens Tavora's dialog to set the key for one of the manifest's `actions` on `target`; `label` names the target
+   * there, such as an item's name. Only right after a click or key press.
+   */
+  "hotkeys.set": { params: { action: string; target: string; label: string }; result: HotkeySetResult };
+  /** Removes the hotkeys for `target`: all of them, or only the one for `action`. */
+  "hotkeys.remove": { params: { target: string; action?: string }; result: null };
 }
 
 export type MethodName = keyof Methods;
@@ -413,6 +450,8 @@ export interface Events {
   "discord.event": DiscordEvent;
   /** Another panel of this module asked this one to show other content; answer with `panel.navigated` within navigateTimeoutMs. */
   "panel.navigate": PanelNavigateRequest;
+  /** The player pressed a hotkey set for this module (hotkeys.set). Sent to every panel of the module in the game shown now. */
+  "hotkeys.pressed": HotkeyBinding;
   "lifecycle.suspend": null;
   "lifecycle.resume": null;
   "lifecycle.dispose": null;
@@ -527,7 +566,24 @@ export const LIMITS = {
   maxMenuLabel: 80,
   /** Characters of the hint on the right of a menu item, such as a shortcut. */
   maxMenuHint: 30,
+  /** What one overlay shows (overlay.publish), as JSON. */
+  maxOverlayStateBytes: 16 * 1024,
+  /** Overlays one module may have in one game; publishing more fails with QUOTA_EXCEEDED. */
+  maxOverlays: 200,
+  /** Hotkeys one module may have in one game. */
+  maxHotkeys: 100,
+  /** Characters of the label hotkeys.set shows for its target. */
+  maxHotkeyLabel: 60,
 } as const;
+
+/** Overlay keys and hotkey targets: the module's own ids, like document ids. */
+export const OVERLAY_KEY = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+/**
+ * An overlay page reads what the module published from this address next to it, as server-sent events: each
+ * message is `{ "state": <JSON or null> }`, the first one straight away (see watchOverlay).
+ */
+export const OVERLAY_STATE_PATH = "_state";
 
 /**
  * One entry of a menu drawn by Tavora (ui.showMenu). Text only; Tavora draws it in the current theme.

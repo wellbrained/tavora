@@ -44,12 +44,14 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `viewport.minWidth`, `viewport.minHeight` | yes | Smallest usable panel size in CSS pixels, 1 to 10000. Tavora refuses to open a panel it cannot give this much room. |
 | `viewport.preferredWidth`, `viewport.preferredHeight` | no | Size the module looks best at, 1 to 10000. Used by the docking layout later. |
 | `permissions.network` | yes | Hosts the module asks to reach with [`network.fetch`](./protocol.md#network), at most 32, e.g. `["api.example.com"]`; `[]` for none. Exact lowercase public names only: no scheme, port, path, wildcard, IP address, `localhost`, `.local` or `.internal`. Each one works only once the player has granted it. |
-| `permissions.connectors` | no | Connectors the module asks to use: `"ai-usage"` to read the usage of the player's Claude and Codex accounts, `"discord"` to use the Discord app on this PC with Tavora's Discord sign-in (see [Connectors](./protocol.md#connectors)). Each name once; each works only once the player has granted it. |
+| `permissions.connectors` | no | Connectors the module asks to use: `"ai-usage"` to read the usage of the player's Claude and Codex accounts, `"discord"` to use the Discord app on this PC with Tavora's Discord sign-in (see [Connectors](./protocol.md#connectors)), `"stream-overlay"` to show its [`overlay`](#overlay) page in streaming software on this PC. Each name once; each works only once the player has granted it. |
 | `permissions.webAssembly` | no | `true` lets the page compile WebAssembly (the page's security policy gets `'wasm-unsafe-eval'`). Only Tavora's own modules may ask for it; a module from your modules folder that does is not loaded, and the Modules page says why. |
 
 | `panels` | no | Named [panel types](#panel-types) the module offers, 1 to 16. Without it the module has one panel, made from `entry`, `icon` and `viewport`. |
+| `overlay` | no | The page for streaming software, see [Overlay](#overlay). Needs `"stream-overlay"` in `permissions.connectors`, and that connector needs this page. Needs Tavora 0.19.25 or newer. |
+| `actions` | no | What the module can do on a key press, 1 to 16, see [Actions](#actions). Needs Tavora 0.19.25 or newer. |
 
-Paths (`entry`, `icon`, `readme`, `screenshots`, and the same fields of a panel type) are relative to the package root and must stay inside it: no leading `/`, no `.` or `..` segments, no empty segments, no backslashes or `:`. Tavora also checks that both files exist when it discovers the module.
+Paths (`entry`, `icon`, `readme`, `screenshots`, `overlay`, and the same fields of a panel type) are relative to the package root and must stay inside it: no leading `/`, no `.` or `..` segments, no empty segments, no backslashes or `:`. Tavora also checks that both files exist when it discovers the module.
 
 ## Panel types
 
@@ -74,6 +76,33 @@ A module can offer several tools as separate panels, such as an Inventory, a Bui
 | `continues` | no | `true` on the type that panels opened before the module had panel types become, keeping their state. At most one type; without it, the first type. |
 
 When an update removes a panel type, its open panels keep their place and say the type is gone; the player can remove them or pick another type of the same module. The module's saved content is not touched. Each panel can also show content of its own, such as a different build; see [Content per panel](./protocol.md#content-per-panel). The Panel Types Example in Tavora's examples folder shows every option, and [Several panels](../guide/panels.md) walks through a module built this way.
+
+## Overlay
+
+`overlay` names an `.html` page inside the package that OBS or other streaming software shows as a Browser Source, on top of the game on stream. The player copies its link from your panel (`overlay.copyLink`); Tavora serves it with the files next to it from this PC only, and passes on what your panels publish for it. It runs outside Tavora, so it has no bridge: it reads its data with `watchOverlay` from the SDK. See [Stream overlays](./protocol.md#stream-overlays).
+
+```json
+"overlay": "dist/overlay.html",
+"permissions": { "network": [], "connectors": ["stream-overlay"] }
+```
+
+The page loads only its own files: bundle your fonts, and give it colours and texts in what you publish, since it gets neither the theme nor the language. Its background should stay transparent.
+
+## Actions
+
+`actions` lists what your module can do on a key press, such as Start/Pause or Counter +1. Players bind the keys in Tavora (`hotkeys.set`), per target and game; your panels hear `hotkeys.pressed`. See [Hotkeys](./protocol.md#hotkeys).
+
+```json
+"actions": [
+  { "id": "start-pause", "name": "Start/Pause" },
+  { "id": "reset", "name": "Reset" }
+]
+```
+
+| Field | Required | Rules |
+| --- | --- | --- |
+| `id` | yes | Stable identity: lowercase letters, digits and `-`, starting with a letter, at most 32 characters, unique in the module. Saved hotkeys keep it, so never change it after release. |
+| `name` | yes | What Tavora shows next to the key, 1 to 40 characters on one line. |
 
 ## Game ids
 

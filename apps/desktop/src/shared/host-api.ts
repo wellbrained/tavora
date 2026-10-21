@@ -546,6 +546,45 @@ export interface HostViewState {
   appearance: AppearanceView;
   /** The language setting, and the language it comes to now (the system's, when following it). */
   language: { setting: LanguageSetting; resolved: Language };
+  /** Settings > Streaming: Stream overlays and the hotkeys set for module actions. */
+  streaming: StreamingView;
+  /** Tavora's hotkey dialog, opened by a module's hotkeys.set; null while it is closed. */
+  hotkeyRequest: HotkeyRequestView | null;
+}
+
+/**
+ * Stream overlays (main/overlays.ts): whether they are on, the port, and how the server stands: off, running, or
+ * not running because the port is in use or something else failed.
+ */
+export interface StreamingView {
+  overlays: { enabled: boolean; port: number; status: "off" | "running" | "in-use" | "failed" };
+  /** Every hotkey set for a module action, in every game (main/hotkeys.ts). `taken`: another program holds the key right now. */
+  hotkeys: HotkeyView[];
+}
+
+export interface HotkeyView {
+  owner: string;
+  gameId: string;
+  gameName: string;
+  moduleId: string;
+  moduleName: string;
+  action: string;
+  actionName: string;
+  target: string;
+  label: string;
+  accelerator: string;
+  taken: boolean;
+}
+
+/** What Tavora's hotkey dialog shows: which action of which module, for what, and the key it has now. */
+export interface HotkeyRequestView {
+  id: number;
+  moduleName: string;
+  actionName: string;
+  label: string;
+  current: string | null;
+  /** Why the last key was refused, in the player's language. */
+  error: string | null;
 }
 
 /** What a module may do as far as grants decide it (main/grants.ts): hosts for network.fetch and connectors. */
@@ -556,7 +595,7 @@ export interface ModulePermissions {
 }
 
 /** The connectors Tavora has (module-schema CONNECTORS). */
-export type ModuleConnector = "ai-usage" | "discord";
+export type ModuleConnector = "ai-usage" | "discord" | "stream-overlay";
 
 /** Everything the host UI can ask the main process to do: the table in host-actions.ts. */
 export type { HostAction, HostActionType } from "./host-actions";
@@ -741,4 +780,4 @@ export interface TavoraHostApi {
 }
 
 /** `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). */
-export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}` | `address:${string}` | `panel:${string}`;
+export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}` | `address:${string}` | `panel:${string}` | `setting:${string}`;

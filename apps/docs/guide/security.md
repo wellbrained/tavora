@@ -35,7 +35,7 @@ A module lists what it needs in its [manifest](../reference/manifest.md). Nothin
 - **The player is asked when they add a module.** Tavora draws the consent dialog itself, from the manifest as the main process read it, along with who made the module (Tavora, a publisher key or an unsigned folder). A module cannot draw or hide that dialog. Preinstalled modules get no pre-approved grants.
 - **The player grants exactly what they saw.** If an update asks for more while the dialog is open, it gets nothing it did not show.
 - **Grants are kept by the host**, outside every module folder, for the module's publisher and id. Another publisher's module with the same id gets nothing.
-- **Revoking takes effect at once.** Settings > Modules > Website access lists every module allowed to reach websites, and Settings > Integrations every module allowed to use Discord or AI usage. Taking a grant back shows the games the module is used in and removes its panels there; its data is kept. Data a module already received cannot be recalled.
+- **Revoking takes effect at once.** Settings > Modules > Website access lists every module allowed to reach websites, Settings > Integrations every module allowed to use Discord or AI usage, and Settings > Streaming every module allowed to show stream overlays. Taking a grant back shows the games the module is used in and removes its panels there; its data is kept. Data a module already received cannot be recalled.
 
 ### Network
 
@@ -54,6 +54,7 @@ Connectors are capabilities built for one purpose. The host holds the connection
 
 - **Discord** shows and controls the player's own voice state through the Discord app on the same PC. A module sends only fixed commands with fixed fields, and never sees a token. Joining or leaving a channel, muting and unmuting need a real click in the module's panel. A granted module does see the player's voice channels, servers and who is in them, and the consent dialog says so.
 - **AI Usage** reads usage limits of AI subscriptions signed in on the PC. A module gets account names, plans and readings, never a login, a token or where it is stored. Each account is read at most once a minute for all modules together.
+- **Stream overlay** shows the module's overlay page in streaming software on the same PC, see [Stream overlays](#stream-overlays).
 
 ## Calls that need a click
 
@@ -63,6 +64,8 @@ Some calls change something outside the module's panel. They work only within 2 
 - **`clipboard.writeImage`** puts a checked PNG on the clipboard. There is no call to read the clipboard.
 - **`pictures.save`** writes a checked PNG as a new file into one folder, `Pictures\Tavora`. The module only suggests a name, which Tavora cleans; it cannot pick another folder or file type, replace a file, or read anything back, and it never learns where the folder is.
 - **`ui.showMenu`** shows a menu that Tavora draws above every panel, so it can lie outside the module's panel. Tavora checks the menu first and draws only plain text, separators, headings, check marks and colour dots from plain CSS colour values (nothing that loads or runs), in its own style. One menu shows at a time, it closes with Esc, a click elsewhere or a game switch, and the module learns only which of its own items the player chose, or that none was.
+- **`overlay.copyLink`** puts the link of one of the module's own overlays on the clipboard, and nothing else. There is no call to read the clipboard.
+- **`hotkeys.set`** opens Tavora's own hotkey dialog. The module names the action and the target; the player picks the key, or cancels.
 - **`panels.open`** opens, brings forward or switches a panel of the same module, in the game shown now, so it changes the workspace outside the module's panel. A module can open only its own panel types, never another module's panels, and one press opens or switches one panel. The panel asked to switch is the module's own page and may refuse; then nothing changes, and only the player can open the content in a new panel. The module learns only what Tavora did: shown, switched, opened or failed.
 
 A module can still label a button misleadingly and get the player to click it. The result is the same as a link on any web page: the player sees the new tab, and the Browser panel is sandboxed.
@@ -70,6 +73,26 @@ A module can still label a button misleadingly and get the player to click it. T
 A module can name its panel content without a click: **`panel.setContent`** names what the panel shows, and Tavora shows that name when the player hovers the panel's own tab. Tavora checks it first and shows only one line of plain text, at most 200 characters, below the panel's and the module's names, on that tab and nowhere else. The module learns nothing back.
 
 A module's **patch notes** also show outside its panel, in Settings > Modules. They come from the changelog file in its package, not from the running page. Tavora reads at most 64 KB, checks the file first and shows only plain text lines (never HTML, Markdown or links), only for versions up to the installed one, and only when the player opens them.
+
+## Stream overlays
+
+A module granted the `stream-overlay` connector can have Tavora serve its overlay page to streaming software such as OBS, which shows it as a Browser Source. This is the only way a module page is reachable from outside Tavora.
+
+- **Off until the player turns it on** in Settings > Streaming. Tavora then listens on `127.0.0.1` only, on one port the player can change, so nothing on the network can reach it.
+- **Only the links the player copies work.** Each overlay has a random link (128 bits), made by Tavora. Anything that asks without one gets nothing. The player can give every overlay a new link at once, and the old ones stop working.
+- **Web pages can't reach it**, not even ones that point their own name at `127.0.0.1` (DNS rebinding): Tavora answers only requests addressed to `127.0.0.1` or `localhost` at its port.
+- **The page is locked down like a panel.** Tavora serves only files from the module's package (the same path checks as G6), only for `GET`, with a policy that loads no code from anywhere else and lets the page talk only to Tavora. It has no bridge: it can only read what the module published for that overlay, at most 16 KB of plain JSON.
+- **A link works only for its module.** It belongs to one module, under its publisher, in one game. When the module is removed, replaced by another publisher's module with the same id, or loses the grant, the link stops working and open overlays stop getting data.
+- **What an overlay shows goes on stream.** Whatever the module publishes for it is visible to viewers. The consent dialog says what the connector does; a module still decides what it shows.
+
+## Hotkeys
+
+Modules can name actions in their manifest, and the player can bind a key to each in Tavora's own dialog. The module never learns the key, only which action fired for which of its targets.
+
+- **Only the player sets keys.** The dialog opens only right after a click in the module's panel, Tavora draws it and catches the key, and the module can't press it or choose for the player.
+- **A key needs a modifier** (Ctrl, Alt or Win) unless it is an F-key or a number-pad key, so a hotkey never takes letters the player types with.
+- **Keys work only while they're needed.** Tavora registers a game's hotkeys with the system only while that game is shown in Tavora and the module has a panel in its workspace, and lets them go otherwise. The game itself doesn't get a key that is a hotkey right then.
+- **One key, one action per game.** Tavora refuses a key that is already a hotkey in the same game, or that another program holds. Settings > Streaming lists every hotkey, in every game, and removes any of them.
 
 ## Module files
 

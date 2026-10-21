@@ -82,6 +82,13 @@ Methods without params must be sent with `params` left out.
 | `discord.command` | `{ command, args }` | `DiscordResult`; one of `DISCORD_COMMANDS` |
 | `discord.subscribe`, `discord.unsubscribe` | `{ event, channelId? }` | `null`; one of `DISCORD_EVENTS` |
 | `discord.image` | `{ url }` | a small PNG as a `data:` address, or `null` |
+| `overlay.publish` | `{ key, state }` | `null`; what the overlay for `key` shows now. Needs the `overlay` capability, see [Stream overlays](#stream-overlays) (Tavora 0.19.25 and newer) |
+| `overlay.remove` | `{ key }` | `null`; the overlay shows nothing until it is published again, and keeps its link |
+| `overlay.copyLink` | `{ key }` | `"copied"`: the link is on the clipboard; `"off"`: Stream overlays are off, and Tavora opened that setting. Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise) |
+| `overlay.resetLink` | `{ key }` | `null`; the overlay gets a new link and the old one stops working |
+| `hotkeys.list` | none | `{ action, target }[]`: the hotkeys the player set for this module in the current game, never the keys. See [Hotkeys](#hotkeys) (Tavora 0.19.25 and newer) |
+| `hotkeys.set` | `{ action, target, label }` | `"set"`, `"removed"` or `"cancelled"`: what the player did in Tavora's hotkey dialog. Only right after a real click or key press in the panel (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for an action the manifest does not list |
+| `hotkeys.remove` | `{ target, action? }` | `null`; removes the target's hotkeys, or only the one for `action` |
 
 ### Where data lives
 
@@ -175,7 +182,7 @@ limits and DNS protection are described in the [security model](../guide/securit
 
 ### Connectors
 
-A connector is a part of Tavora that holds a sign-in and lets a module use it without ever seeing the token. A module asks for one in [`permissions.connectors`](./manifest.md); the player agrees when they first add the module, and can take it back in Settings > Integrations. Until then the handshake reports no capability for it and its calls fail with `PERMISSION_DENIED`.
+A connector is a part of Tavora that reaches outside the module's panel, such as a sign-in or streaming software on this PC, and lets a module use it without ever seeing what is behind it. A module asks for one in [`permissions.connectors`](./manifest.md); the player agrees when they first add the module, and can take it back in Settings > Integrations. Until then the handshake reports no capability for it and its calls fail with `PERMISSION_DENIED`.
 
 **`ai-usage`** (capability `aiUsage`, `sdk.connectors.aiUsage`): the Claude and Codex accounts the player set up in Settings > Integrations > AI usage, by the folder of each CLI profile. Tavora reads each account with its own login and hands over only the answer.
 
@@ -191,6 +198,24 @@ A connector is a part of Tavora that holds a sign-in and lets a module use it wi
 - `discord.subscribe` sends a Discord event to this panel as the `discord.event` event (`{ event, data }`, the data as Discord sent it) until `discord.unsubscribe` or the panel goes. `VOICE_CHANNEL_SELECT` (the player joined, moved or left) takes no `channelId`; `VOICE_STATE_CREATE`, `VOICE_STATE_UPDATE`, `VOICE_STATE_DELETE`, `SPEAKING_START` and `SPEAKING_STOP` need the voice channel's id. Subscriptions are kept across reconnects and shared: Discord is asked once, whichever panels want it. At most 32 per panel.
 - `discord.image` fetches a picture from Discord's image server, an avatar (`https://cdn.discordapp.com/avatars/<user id>/<hash>.<ext>`) or a server icon (`…/icons/<server id>/<hash>.<ext>`, as `GET_GUILD` gives it), and gives it as a small PNG `data:` address; any other address, or any problem, gives `null`.
 - Names and everything else from Discord are Discord's: show them as text only.
+
+### Stream overlays
+
+A module that lists an [`overlay`](./manifest.md#overlay) page and the `stream-overlay` connector can show it in OBS or other streaming software on the player's PC, as a Browser Source. It works with keys: one overlay per key, such as an item id, each with its own link.
+
+- `overlay.publish` sets what the overlay for a key shows: any JSON, at most 16 KB. Tavora keeps it, so the overlay goes on showing it while none of the module's panels runs, and after a restart. Publish when something changes, not on every frame: a running clock publishes when it starts or stops, and its overlay counts the time itself.
+- `overlay.copyLink` puts the overlay's link on the clipboard after a click. The player turns Stream overlays on in Settings > Streaming; while they are off, the call gives `"off"` and Tavora opens that setting.
+- `overlay.remove` empties an overlay (an item was deleted) and `overlay.resetLink` gives it a new link. The player can also reset every link in Settings.
+
+The overlay page runs in the streaming software, not in Tavora, so it has no bridge. It reads what the module published from `_state` next to it as server-sent events, each message `{ "state": <JSON or null> }`, the first one right away; `watchOverlay(fn)` in the SDK does it for you and reconnects when Tavora restarts. `null` means there is nothing to show.
+
+Tavora serves the page and the files next to it from `127.0.0.1` only, under a random link per overlay, with a policy that loads nothing from anywhere else and talks only to Tavora. The link works while Stream overlays are on, the module is installed under the same publisher and the player still grants the connector; otherwise it gives `404`. Theme and language don't reach the overlay: give it what it needs in the state.
+
+### Hotkeys
+
+A module lists what it can do on a key press in the manifest's [`actions`](./manifest.md#actions), such as Start/Pause. `hotkeys.set` opens Tavora's own dialog, where the player presses the keys for one action on one target (an item id, say); `label` names the target there. The binding belongs to the current game. A module never learns which key it is.
+
+When the player presses it, every panel of the module in the game shown now gets the `hotkeys.pressed` event with `{ action, target }`. Hotkeys work system-wide, also while the game has the focus, but only while their game is shown in Tavora and the module has a panel in its workspace. The game doesn't get a key that is a hotkey. Settings > Streaming lists every hotkey, and the player can remove them there.
 
 ### Documents
 
@@ -235,6 +260,7 @@ The Panel Types Example in Tavora's examples folder does all of this.
 | `aiUsage.accountsChanged` | `null` | the player added, renamed or removed an AI account; only with the `aiUsage` capability |
 | `discord.state` | `DiscordState` | the connection to the Discord app changed; only with the `discord` capability, after `discord.state` was asked |
 | `discord.event` | `{ event, data }` | a Discord event the panel subscribed to; only with the `discord` capability |
+| `hotkeys.pressed` | `{ action, target }` | the player pressed a hotkey set for this module in the game shown now; sent to every panel of the module there |
 | `panel.navigate` | `{ requestId, content }` | another panel of this module asked this one to show `content` (`panels.open`); answer with `panel.navigated` within 5 seconds. The SDK does it for you: use `panel.onNavigate` (Tavora 0.17.18 and newer) |
 | `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden, its tab is in the background, or another group is maximized); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
 | `lifecycle.resume` | `null` | the panel is visible again |
@@ -294,6 +320,7 @@ Some methods need a capability the player grants. A module asks for it in its ma
 | `network.readPage` | `network` | the same exact-host grant; fresh isolated session |
 | `aiUsage.accounts`, `aiUsage.read` | `aiUsage` | granted for the `ai-usage` connector, see [Connectors](#connectors) |
 | `discord.*` | `discord` | granted for the `discord` connector, see [Connectors](#connectors) |
+| `overlay.*` | `overlay` | granted for the `stream-overlay` connector, see [Stream overlays](#stream-overlays) |
 | `files.open`, `files.save` | `files` | reserved |
 | `clipboard.writeText`, `clipboard.readText` | `clipboard` | reserved |
 | `sharedData.publish`, `sharedData.read`, `sharedData.subscribe` | `sharedData` | reserved |
@@ -324,6 +351,8 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | `aiUsage.read` | one reading per account and minute for all modules, 40 s, answers up to 256 KB |
 | `discord.command` | 15 s, answers and events up to 512 KB; 32 subscriptions per panel |
 | `ui.showMenu` | one menu per click or key press, 100 entries, labels 80 characters, hints 30 |
+| `overlay.publish` | 16 KB of state per overlay, 200 overlays per module and game; keys up to 64 letters, digits, `-` and `_` |
+| `hotkeys` | 100 per module and game; labels 60 characters on one line; targets like overlay keys |
 
 These limits are checked first inside your own page, by the preload Tavora gives it, before a message reaches the host. A request over a limit is answered with `BAD_REQUEST` (`INVALID_PARAMS` for data that is not plain JSON) and never sent on, so a module that sends something huge can only slow itself down. A request id cannot be reused while its answer is pending.
 

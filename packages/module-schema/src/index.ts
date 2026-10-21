@@ -28,6 +28,14 @@ export interface ModulePanelType {
   continues?: boolean;
 }
 
+/** Something a module can do on a key press (manifest `actions`). The player binds the key in Tavora; the module only hears which action fired. */
+export interface ModuleAction {
+  /** Stable identity, never shown. Saved hotkeys keep it. */
+  id: string;
+  /** Short name shown next to the key in Tavora, such as `Start/Pause`. */
+  name: string;
+}
+
 export interface ModuleManifest {
   $schema?: string;
   id: string;
@@ -59,6 +67,13 @@ export interface ModuleManifest {
   viewport: ModuleViewport;
   /** Named panel types. Without them the module has one panel, made from `entry`, `icon` and `viewport`. */
   panels?: ModulePanelType[];
+  /**
+   * The page streaming software such as OBS shows as a Browser Source (overlay.copyLink). Tavora serves it on this PC
+   * only, with the files next to it, and gives it live data from the module. Needs the `stream-overlay` connector.
+   */
+  overlay?: string;
+  /** What the module can do on a key press (hotkeys.set). Up to MAX_ACTIONS. */
+  actions?: ModuleAction[];
   permissions: {
     /** Hosts the module asks to reach through network.fetch, such as `api.example.com`. Each needs the player's grant. */
     network: string[];
@@ -79,7 +94,7 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "overlay", "actions", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
 
 /** Most screenshots a manifest may name, and the longest homepage address. */
@@ -108,6 +123,15 @@ export const MAX_PANEL_TYPES = 16;
 export const MAX_PANEL_NAME = 24;
 const PANEL_TYPE_ID = /^[a-z][a-z0-9-]{0,31}$/;
 const PANEL_FIELDS = ["id", "name", "entry", "icon", "viewport", "continues"];
+
+/** Most hotkey actions one module may declare, and the longest name Tavora shows for one. */
+export const MAX_ACTIONS = 16;
+export const MAX_ACTION_NAME = 40;
+const ACTION_ID = /^[a-z][a-z0-9-]{0,31}$/;
+
+export function isActionId(value: unknown): value is string {
+  return typeof value === "string" && ACTION_ID.test(value);
+}
 
 export function isPanelTypeId(value: unknown): value is string {
   return typeof value === "string" && PANEL_TYPE_ID.test(value);
@@ -187,6 +211,7 @@ export function validateChangelog(input: unknown): ChangelogResult {
 /** Every page and icon the manifest names, its panel types' included, each once, and its screenshots: the files a package must hold. */
 export function manifestFiles(manifest: ModuleManifest): { entries: string[]; icons: string[]; screenshots: string[] } {
   const entries = new Set([manifest.entry]);
+  if (manifest.overlay !== undefined) entries.add(manifest.overlay);
   const icons = new Set(manifest.icon === undefined ? [] : [manifest.icon]);
   for (const type of manifest.panels ?? []) {
     if (type.entry !== undefined) entries.add(type.entry);
@@ -218,11 +243,12 @@ export function isGameId(value: unknown): value is string {
 }
 
 /**
- * Connectors (glossary): parts of Tavora that hold a sign-in and let a granted module use it without
- * seeing the token. `ai-usage` reads the usage of the player's Claude and Codex accounts; `discord` talks to the
- * Discord app on this PC with Tavora's Discord sign-in (voice channels, who is talking, joining and muting).
+ * Connectors (glossary): parts of Tavora that reach outside the module's panel and let a granted module use them
+ * without seeing what is behind them. `ai-usage` reads the usage of the player's Claude and Codex accounts with their
+ * sign-ins; `discord` talks to the Discord app on this PC with Tavora's Discord sign-in (voice channels, who is
+ * talking, joining and muting); `stream-overlay` shows the module's `overlay` page in streaming software on this PC.
  */
-export const CONNECTORS = ["ai-usage", "discord"] as const;
+export const CONNECTORS = ["ai-usage", "discord", "stream-overlay"] as const;
 export type Connector = (typeof CONNECTORS)[number];
 
 export function isConnector(value: unknown): value is Connector {
@@ -334,6 +360,24 @@ function checkPanels(panels: unknown, errors: string[]): void {
   if (continuing > 1) errors.push("only one panel type may set continues");
 }
 
+function checkActions(actions: unknown, errors: string[]): void {
+  if (!Array.isArray(actions) || actions.length === 0 || actions.length > MAX_ACTIONS) {
+    errors.push(`actions must be an array of 1 to ${MAX_ACTIONS} actions`);
+    return;
+  }
+  const ids = new Set<string>();
+  actions.forEach((action: unknown, index) => {
+    const at = `actions[${index}]`;
+    if (!isRecord(action)) return void errors.push(`${at} must be an object`);
+    if (!isActionId(action.id)) errors.push(`${at}.id must be lowercase letters, digits and -, starting with a letter, at most 32 characters`);
+    else if (ids.has(action.id)) errors.push(`actions lists the id ${action.id} twice`);
+    else ids.add(action.id);
+    if (!isText(action.name, MAX_ACTION_NAME) || /[\u0000-\u001f]/.test(action.name)) errors.push(`${at}.name must be a non-empty string of at most ${MAX_ACTION_NAME} characters on one line`);
+    const unknown = Object.keys(action).filter((key) => key !== "id" && key !== "name");
+    if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
+  });
+}
+
 export function validateManifest(input: unknown): ManifestResult {
   const errors: string[] = [];
   if (!isRecord(input)) return { ok: false, errors: ["manifest must be a JSON object"] };
@@ -383,6 +427,11 @@ export function validateManifest(input: unknown): ManifestResult {
 
   checkViewport(input.viewport, "viewport", errors);
   if (input.panels !== undefined) checkPanels(input.panels, errors);
+  if (input.actions !== undefined) checkActions(input.actions, errors);
+  if (input.overlay !== undefined) {
+    if (!isPackagePath(input.overlay)) errors.push("overlay must be a relative path inside the package");
+    else if (!input.overlay.endsWith(".html")) errors.push("overlay must be an .html file");
+  }
 
   const permissions = input.permissions;
   if (!isRecord(permissions) || !Array.isArray(permissions.network)) {
@@ -406,6 +455,9 @@ export function validateManifest(input: unknown): ManifestResult {
       else if (new Set(connectors).size !== connectors.length) errors.push("permissions.connectors lists a connector twice");
     }
     if ("webAssembly" in permissions && typeof permissions.webAssembly !== "boolean") errors.push("permissions.webAssembly must be true or false");
+    const overlayConnector = Array.isArray(permissions.connectors) && permissions.connectors.includes("stream-overlay");
+    if (input.overlay !== undefined && !overlayConnector) errors.push('overlay needs "stream-overlay" in permissions.connectors');
+    if (overlayConnector && input.overlay === undefined) errors.push('the "stream-overlay" connector needs an overlay page');
   }
 
   const extra = Object.keys(input).filter((key) => !FIELDS.includes(key));

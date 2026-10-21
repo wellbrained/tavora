@@ -11,6 +11,7 @@ import {
   JSON_EXPORT_PATH,
   HELLO_MESSAGE,
   LIMITS,
+  OVERLAY_STATE_PATH,
   PORT_MESSAGE,
   PROTOCOL_VERSION,
   type AiUsageAccountInfo,
@@ -32,12 +33,15 @@ import {
   type Events,
   type HandshakeResult,
   type HostMessage,
+  type HotkeyBinding,
+  type HotkeySetResult,
   type JsonValue,
   type MenuRequest,
   type MethodName,
   type Methods,
   type NetworkRequest,
   type NetworkResponse,
+  type OverlayLinkResult,
   type PageResponse,
   type PanelContent,
   type PanelLaunch,
@@ -50,6 +54,9 @@ import {
 } from "./protocol.js";
 
 export type {
+  HotkeyBinding,
+  HotkeySetResult,
+  OverlayLinkResult,
   AiUsageAccountInfo,
   AiUsageReading,
   BlobInfo,
@@ -82,20 +89,20 @@ export type {
   TavoraViewport,
   ThemeToken,
 } from "./protocol.js";
-export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, PROTOCOL_VERSION, THEME_TOKENS } from "./protocol.js";
+export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, THEME_TOKENS } from "./protocol.js";
 
 /** How long a menu may stay open; the host closes it itself when its panel goes. */
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.10";
+export const SDK_VERSION = "0.2.11";
 
 /**
  * The oldest Tavora that has everything this SDK version offers. Put it in your manifest as
  * `minTavora`, so an older Tavora says it needs an update instead of loading a module it cannot run
  * (the starter, `npm create @tavora/module`, does). The changelog names it for every version.
  */
-export const MIN_TAVORA = "0.19.17";
+export const MIN_TAVORA = "0.19.25";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -300,6 +307,37 @@ export interface TavoraSDK {
       image(url: string): Promise<string | null>;
     };
   };
+  /**
+   * Pages for streaming software such as OBS (the manifest's `overlay`), one per key: an item, a scoreboard, whatever
+   * the module shows on stream. Needs `"stream-overlay"` in `permissions.connectors` and the player's grant
+   * (PERMISSION_DENIED otherwise). Tavora 0.19.25 and newer.
+   */
+  overlay: {
+    /** What the overlay for `key` shows now. Tavora keeps it, so the overlay goes on showing it while no panel runs. */
+    publish(key: string, state: JsonValue): Promise<void>;
+    /** The overlay for `key` shows nothing until it is published again. Its link stays the same. */
+    remove(key: string): Promise<void>;
+    /**
+     * Puts the overlay's link on the clipboard, for the player to paste into OBS as a Browser Source. Call it from
+     * the click or key press that asked for it. Resolves with `"off"` when Stream overlays are off in Tavora: Tavora
+     * then opens that setting.
+     */
+    copyLink(key: string): Promise<OverlayLinkResult>;
+    /** Gives the overlay a new link; the old one stops working. */
+    resetLink(key: string): Promise<void>;
+  };
+  /**
+   * Hotkeys for the manifest's `actions`. The player picks the keys in a Tavora dialog, for this game; the module
+   * only hears which action fired, for which target, while one of its panels is in the game shown now. Tavora 0.19.25 and newer.
+   */
+  hotkeys: {
+    list(): Promise<HotkeyBinding[]>;
+    /** Opens Tavora's dialog to set a key for `action` on `target`, named `label` there. Call it from a click or key press. */
+    set(action: string, target: string, label: string): Promise<HotkeySetResult>;
+    /** Removes the hotkeys for `target`: all of them, or the one for `action`. */
+    remove(target: string, action?: string): Promise<void>;
+    onPress(fn: (binding: HotkeyBinding) => void): Unsubscribe;
+  };
   lifecycle: {
     /** The panel is hidden; pause timers and animations. Called immediately if already suspended. */
     onSuspend(fn: () => void): Unsubscribe;
@@ -331,6 +369,29 @@ export function connect(options: ConnectOptions = {}): Promise<TavoraSDK> {
       throw error;
     });
   return connection;
+}
+
+/**
+ * For the manifest's `overlay` page, which runs in streaming software rather than in Tavora: calls `fn` with what the
+ * module published for this overlay (overlay.publish), straight away and on every change, and with null while there is
+ * nothing to show. It reconnects by itself when Tavora restarts. Returns a function that stops it.
+ */
+export function watchOverlay(fn: (state: JsonValue | null) => void): Unsubscribe {
+  const source = new EventSource(new URL(OVERLAY_STATE_PATH, window.location.href));
+  source.onmessage = (event: MessageEvent<string>) => {
+    let message: { state?: JsonValue | null };
+    try {
+      message = JSON.parse(event.data) as { state?: JsonValue | null };
+    } catch {
+      return;
+    }
+    try {
+      fn(message.state ?? null);
+    } catch (error) {
+      console.error("[tavora] watchOverlay listener failed", error);
+    }
+  };
+  return () => source.close();
 }
 
 function openPort(timeoutMs: number): Promise<MessagePort> {
@@ -620,6 +681,27 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         onEvent: (fn) => on("discord.event", fn),
         image: (url) => call("discord.image", { url }),
       },
+    },
+    overlay: {
+      publish: async (key, state) => {
+        await call("overlay.publish", { key, state });
+      },
+      remove: async (key) => {
+        await call("overlay.remove", { key });
+      },
+      copyLink: (key) => call("overlay.copyLink", { key }),
+      resetLink: async (key) => {
+        await call("overlay.resetLink", { key });
+      },
+    },
+    hotkeys: {
+      list: () => call("hotkeys.list"),
+      // The player may take their time pressing a key.
+      set: (action, target, label) => call("hotkeys.set", { action, target, label }, MENU_TIMEOUT_MS),
+      remove: async (target, action) => {
+        await call("hotkeys.remove", action === undefined ? { target } : { target, action });
+      },
+      onPress: (fn) => on("hotkeys.pressed", fn),
     },
     lifecycle: {
       onSuspend: (fn) => on("lifecycle.suspend", fn),
