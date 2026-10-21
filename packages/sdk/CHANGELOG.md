@@ -1,9 +1,9 @@
 ## 0.2.11
 
-Stream overlays and hotkeys (Tavora 0.19.26). `MIN_TAVORA` is now `0.19.31`, for `permissions.onRequest`.
+Stream overlays and hotkeys (Tavora 0.19.26). `MIN_TAVORA` is now `0.19.32`, for `permissions.onRequest`.
 
 - Stream overlays: a manifest `overlay` page that OBS or other streaming software shows as a Browser Source, with the new `stream-overlay` connector. `overlay.publish(key, state)` sets what an overlay shows (Tavora keeps it while no panel runs), `overlay.copyLink(key)` copies its link after a click, `overlay.remove` and `overlay.resetLink`. The overlay page reads its state with `watchOverlay(fn)`.
-- `permissions.onRequest`: list `"stream-overlay"` there too, and players are asked for it on the first `overlay.copyLink` instead of when they add the module; the call then gives `"denied"` if they say no (Tavora 0.19.31).
+- `permissions.onRequest`: list `"stream-overlay"` there too, and players are asked for it on the first `overlay.copyLink` instead of when they add the module; the call then gives `"denied"` if they say no (Tavora 0.19.32).
 - Hotkeys: manifest `actions`, which players bind to keys in Tavora's own dialog (`hotkeys.set(action, target, label)` after a click). Panels hear `hotkeys.onPress` while their game is shown; `hotkeys.list` and `hotkeys.remove` manage them. A module never learns the key.
 
 ## 0.2.10
