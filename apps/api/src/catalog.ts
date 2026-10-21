@@ -300,6 +300,8 @@ export class CatalogStore {
       );
       create table if not exists report_notices (owner text primary key, notified_at text not null);
     `);
+    // Installs from Browse, counted per module, never who installed it or from where.
+    this.db.exec("create table if not exists installs (module_id text primary key, count integer not null)");
     // Since when the whole catalog has had no room (C9), and when the maintainer was last told.
     this.db.exec("create table if not exists catalog_state (name text primary key, value text not null)");
     // Catalogs from before signed uploads have no account_id: those versions were added by hand.
@@ -418,6 +420,18 @@ export class CatalogStore {
       .prepare("insert into reports (sha256, module_id, owner, count, first_at, last_at) values (?, ?, ?, 1, ?, ?) on conflict (sha256) do update set count = count + 1, last_at = excluded.last_at")
       .run(input.sha256, input.id, input.owner, at, at);
     return true;
+  }
+
+  /** Counts one install of a listed module from Browse. Nothing about the player is kept. */
+  countInstall(id: string): boolean {
+    if (!this.db.prepare("select 1 from modules where id = ? and listed = 1").get(id)) return false;
+    this.db.prepare("insert into installs (module_id, count) values (?, 1) on conflict (module_id) do update set count = count + 1").run(id);
+    return true;
+  }
+
+  /** How many times a module was installed from Browse. */
+  installCount(id: string): number {
+    return (this.db.prepare("select count from installs where module_id = ?").get(id) as { count: number } | undefined)?.count ?? 0;
   }
 
   /** Whether a key's owner may be told about reports now: at most once a day. Saying yes counts as telling. */

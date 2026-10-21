@@ -1043,7 +1043,7 @@ export class Host {
     const shots = await Promise.all(details.entry.shots.map((shot) => this.catalog.picture(shot)));
     return {
       status: "ok",
-      module: catalogView(details.entry),
+      module: catalogView(details.entry, this.catalogScope() ?? undefined),
       screenshots: shots.filter((url): url is string => url !== null),
       readme: details.readme === null ? [] : parseReadme(details.readme),
       versions: details.versions,

@@ -38,6 +38,7 @@ function listing(version: string, zip: Buffer, owner: string): CatalogEntry {
     owner,
     publisher: null,
     size: zip.length,
+    installs: 0,
     publishedAt: "",
     zip: { sha256: createHash("sha256").update(zip).digest("hex"), size: zip.length },
     notes: [],
@@ -83,6 +84,7 @@ async function setup() {
         return entry;
       },
       download: async (zip) => catalog.zips.get(zip.sha256)!,
+      installed: async () => undefined,
     },
     online: () => state.online,
     firstKey: (key) => key,
