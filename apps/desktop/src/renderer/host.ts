@@ -243,9 +243,29 @@ export type DialogRequest =
   | AddModuleRequest
   | GrantRequest
   /** The developer onboarding; `then` is the module whose Publish opened it, reviewed once it is done. */
-  | { kind: "developer-start"; then?: string };
+  | { kind: "developer-start"; then?: string }
+  /** Signed in on a PC without the account's recovery key: unlock the cloud copy and publisher keys here. */
+  | { kind: "recovery-ask" };
 
 export const dialog = shallowRef<DialogRequest | null>(null);
+
+// Just signed in, on a PC without the account's recovery key while the account has one: ask for it
+// now, once (the decision log: asked at sign-in, made only when the cloud copy or publishing needs it).
+let askAfterSignIn = false;
+function askForRecoveryKey(): void {
+  const status = developerKeys.value?.status;
+  if (!askAfterSignIn || !status || status === "loading" || status === "signed-out") return;
+  askAfterSignIn = false;
+  if (status === "ask" && !dialog.value) dialog.value = { kind: "recovery-ask" };
+}
+watch(
+  () => (account.value ? Boolean(account.value.account) : null),
+  (signedIn, before) => {
+    askAfterSignIn = before === false && signedIn === true;
+    askForRecoveryKey();
+  },
+);
+watch(() => developerKeys.value?.status, askForRecoveryKey);
 
 // A panel could not switch to what another panel of its module asked for: ask whether to open it in a new one.
 watch(

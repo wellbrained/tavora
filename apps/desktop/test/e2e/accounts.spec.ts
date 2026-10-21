@@ -383,6 +383,9 @@ test("the cloud copy takes one PC's games to another, with the recovery key", as
   const b = await launch(undefined, [], { env, seed: false });
   try {
     await signIn(b.page, "copy@example.com");
+    // The account has a recovery key: signing in asks for it, and it can wait.
+    await b.page.getByTestId("recovery-ask-later").click();
+    await expect(b.page.getByTestId("recovery-ask")).toHaveCount(0);
     await b.page.getByTestId("cloud-copy-on").click();
     await b.page.getByTestId("cloud-copy-key-input").fill(key);
     await b.page.getByTestId("cloud-copy-key-submit").click();
@@ -420,18 +423,21 @@ test("a new PC gets the recovery key from another PC, once both show the same co
     const key = (await a.page.getByTestId("cloud-copy-key-text").textContent())?.trim() ?? "";
     await a.page.getByTestId("cloud-copy-key-saved").click();
 
+    // Signing in on B asks for the account's recovery key right away.
     await signIn(b.page, "pair@example.com");
-    await b.page.getByTestId("pairing-start").click();
-    await expect(b.page.getByTestId("pairing-start")).toHaveCount(0);
-    await expect(b.page.getByTestId("pairing-code")).toBeVisible({ timeout: 40_000 });
-    const code = (await b.page.getByTestId("pairing-code").textContent())?.trim() ?? "";
+    const ask = b.page.getByTestId("recovery-ask");
+    await ask.getByTestId("pairing-start").click();
+    await expect(ask.getByTestId("pairing-start")).toHaveCount(0);
+    await expect(ask.getByTestId("pairing-code")).toBeVisible({ timeout: 40_000 });
+    const code = (await ask.getByTestId("pairing-code").textContent())?.trim() ?? "";
     expect(code).toMatch(/^.{3}-.{3}$/);
     await expect(a.page.getByTestId("pairing-approve")).toContainText("Add");
     await expect(a.page.getByTestId("pairing-approve-code")).toHaveText(code, { timeout: 20_000 });
     await a.page.getByTestId("pairing-add").click();
     await expect(a.page.getByTestId("pairing-approve")).toHaveCount(0);
 
-    // B now has the account's key without anyone typing it.
+    // B now has the account's key without anyone typing it, and the question is gone.
+    await expect(ask).toHaveCount(0, { timeout: 15_000 });
     await expect(b.page.getByTestId("recovery-key-show")).toBeVisible({ timeout: 15_000 });
     await b.page.getByTestId("recovery-key-show").click();
     await expect(b.page.getByTestId("recovery-key-text")).toHaveText(key);
