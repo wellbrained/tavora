@@ -4,7 +4,7 @@
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import type { TavoraSDK } from "@tavora/sdk";
 import { onMounted, provide, ref, shallowRef } from "vue";
-import { setLanguage, t } from "../i18n";
+import { language, setLanguage, t } from "../i18n";
 import Codex from "./codex/Codex.vue";
 import Notice from "./common/Notice.vue";
 import { MODULE, type ModuleContext } from "./context";
@@ -40,7 +40,7 @@ provide(MODULE, proxy);
 onMounted(async () => {
   try {
     const sdk: TavoraSDK = await connectModule(setLanguage);
-    const services = await createServices(sdk, { worldName: () => t("planner.myWorld") });
+    const services = await createServices(sdk, { language: () => language.value });
     // A panel without a type (an older Tavora) is a Planner.
     panelType.value = sdk.panel.type === "codex" ? "codex" : "planner";
     context.value = { sdk, services, notify, tip: createTipDirective(sdk) };
