@@ -10,7 +10,7 @@ import { language, locale, t } from "../../i18n";
 import GameIcon from "../common/GameIcon.vue";
 import { useModule, useNames } from "../context";
 import { formatInput } from "../format";
-import ItemCombobox from "../local/ItemCombobox.vue";
+import ItemSearch from "./ItemSearch.vue";
 import { addRate, defaultRate, parseRate, removeRate, setRate } from "../planEdit";
 import { itemTooltip } from "../tooltip";
 
@@ -88,6 +88,6 @@ function add(item: string) {
         </Button>
       </li>
     </ul>
-    <ItemCombobox :label="addLabel" :filter="filter" @pick="add" />
+    <ItemSearch :label="addLabel" :filter="filter" @pick="add" />
   </div>
 </template>
