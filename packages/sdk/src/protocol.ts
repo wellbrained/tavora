@@ -450,7 +450,7 @@ export interface Events {
   "discord.event": DiscordEvent;
   /** Another panel of this module asked this one to show other content; answer with `panel.navigated` within navigateTimeoutMs. */
   "panel.navigate": PanelNavigateRequest;
-  /** The player pressed a hotkey set for this module (hotkeys.set). Sent to every panel of the module in the game shown now. */
+  /** The player pressed a hotkey set for this module (hotkeys.set). Sent to one panel of the module in the game shown now, the one used last. */
   "hotkeys.pressed": HotkeyBinding;
   "lifecycle.suspend": null;
   "lifecycle.resume": null;

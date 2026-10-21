@@ -35,7 +35,7 @@ async function setup({ held = [] as string[] } = {}) {
     unregister: (accelerator) => void registered.delete(accelerator),
   };
   const heard: HotkeyBinding[] = [];
-  const panel: HotkeyListener = { moduleId: MODULE.manifest.id, hotkeyPressed: (binding) => heard.push(binding) };
+  const panel: HotkeyListener = { moduleId: MODULE.manifest.id, usedAt: 1, hotkeyPressed: (binding) => heard.push(binding) };
   const world = { gameId: "poe2" as string | null, panels: [panel], clipboard: "", opened: [] as string[], settings: { streamOverlays: false, overlayPort: 47820 } };
   const streaming = await Streaming.create({
     userData: dir,
@@ -69,6 +69,19 @@ describe("the hotkey dialog", () => {
     streaming.sync();
     registered.get("Ctrl+Alt+1")!();
     expect(heard).toEqual([{ action: "start-pause", target: "item-1" }]);
+  });
+
+  it("sends a press to one panel only, the one used last", async () => {
+    const { streaming, registered, heard, world, hotkeys } = await setup();
+    const other: HotkeyBinding[] = [];
+    world.panels.push({ moduleId: MODULE.manifest.id, usedAt: 5, hotkeyPressed: (binding) => other.push(binding) });
+    const asked = hotkeys.set("reset", "item-1", "Deaths");
+    streaming.answer(streaming.request()!.id, "set", "F7");
+    await asked;
+    streaming.sync();
+    registered.get("F7")!();
+    expect(other).toEqual([{ action: "reset", target: "item-1" }]);
+    expect(heard).toEqual([]);
   });
 
   it("refuses a key used in the same game and keeps the dialog open", async () => {
@@ -130,7 +143,7 @@ describe("which hotkeys work", () => {
     world.panels = [];
     streaming.sync();
     expect(registered.has("F9")).toBe(false);
-    world.panels = [{ moduleId: MODULE.manifest.id, hotkeyPressed: () => {} }];
+    world.panels = [{ moduleId: MODULE.manifest.id, usedAt: 2, hotkeyPressed: () => {} }];
     world.gameId = "elden-ring";
     streaming.sync();
     expect(registered.has("F9")).toBe(false);

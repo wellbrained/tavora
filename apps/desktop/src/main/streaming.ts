@@ -20,6 +20,8 @@ export interface StreamingModule {
 /** A panel of the game shown now that hears a hotkey. */
 export interface HotkeyListener {
   moduleId: string;
+  /** When the player last used the panel; a press goes to the module's panel used last. */
+  usedAt: number;
   hotkeyPressed(binding: HotkeyBinding): void;
 }
 
@@ -192,9 +194,11 @@ export class Streaming {
     this.registrar.apply(wanted);
   }
 
+  /** One press is one action: it goes to one panel of the module, the one used last, so several panels don't each act on it. */
   private pressed(record: HotkeyRecord): void {
     if (this.options.gameId() !== record.gameId) return;
-    for (const panel of this.options.panels()) if (panel.moduleId === record.moduleId) panel.hotkeyPressed({ action: record.action, target: record.target });
+    const panel = this.options.panels().filter((item) => item.moduleId === record.moduleId).sort((a, b) => b.usedAt - a.usedAt)[0];
+    panel?.hotkeyPressed({ action: record.action, target: record.target });
   }
 
   private changed(): void {

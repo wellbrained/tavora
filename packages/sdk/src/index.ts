@@ -328,7 +328,7 @@ export interface TavoraSDK {
   };
   /**
    * Hotkeys for the manifest's `actions`. The player picks the keys in a Tavora dialog, for this game; the module
-   * only hears which action fired, for which target, while one of its panels is in the game shown now. Tavora 0.19.25 and newer.
+   * only hears which action fired, for which target, in its panel used last in the game shown now. Tavora 0.19.25 and newer.
    */
   hotkeys: {
     list(): Promise<HotkeyBinding[]>;

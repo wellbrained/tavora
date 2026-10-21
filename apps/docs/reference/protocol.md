@@ -215,7 +215,7 @@ Tavora serves the page and the files next to it from `127.0.0.1` only, under a r
 
 A module lists what it can do on a key press in the manifest's [`actions`](./manifest.md#actions), such as Start/Pause. `hotkeys.set` opens Tavora's own dialog, where the player presses the keys for one action on one target (an item id, say); `label` names the target there. The binding belongs to the current game. A module never learns which key it is.
 
-When the player presses it, every panel of the module in the game shown now gets the `hotkeys.pressed` event with `{ action, target }`. Hotkeys work system-wide, also while the game has the focus, but only while their game is shown in Tavora and the module has a panel in its workspace. The game doesn't get a key that is a hotkey. Settings > Streaming lists every hotkey, and the player can remove them there.
+When the player presses it, one panel of the module in the game shown now, the one used last, gets the `hotkeys.pressed` event with `{ action, target }`, so one press is one action however many panels are open. Hotkeys work system-wide, also while the game has the focus, but only while their game is shown in Tavora and the module has a panel in its workspace. The game doesn't get a key that is a hotkey. Settings > Streaming lists every hotkey, and the player can remove them there.
 
 ### Documents
 
@@ -260,7 +260,7 @@ The Panel Types Example in Tavora's examples folder does all of this.
 | `aiUsage.accountsChanged` | `null` | the player added, renamed or removed an AI account; only with the `aiUsage` capability |
 | `discord.state` | `DiscordState` | the connection to the Discord app changed; only with the `discord` capability, after `discord.state` was asked |
 | `discord.event` | `{ event, data }` | a Discord event the panel subscribed to; only with the `discord` capability |
-| `hotkeys.pressed` | `{ action, target }` | the player pressed a hotkey set for this module in the game shown now; sent to every panel of the module there |
+| `hotkeys.pressed` | `{ action, target }` | the player pressed a hotkey set for this module in the game shown now; sent to one panel of the module there, the one used last |
 | `panel.navigate` | `{ requestId, content }` | another panel of this module asked this one to show `content` (`panels.open`); answer with `panel.navigated` within 5 seconds. The SDK does it for you: use `panel.onNavigate` (Tavora 0.17.18 and newer) |
 | `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden, its tab is in the background, or another group is maximized); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
 | `lifecycle.resume` | `null` | the panel is visible again |
