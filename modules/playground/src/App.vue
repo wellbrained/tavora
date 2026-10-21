@@ -50,6 +50,7 @@ import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/ra
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Slider } from "@tavora/official-ui/components/ui/slider";
+import { StarRating } from "@tavora/official-ui/components/ui/star-rating";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
@@ -69,6 +70,7 @@ const SECTIONS = [
   { id: "buttons", title: "Buttons", keywords: "primary secondary ghost outline destructive danger remove link icon loading" },
   { id: "fields", title: "Text fields", keywords: "input textarea search label hint error" },
   { id: "choices", title: "Choices", keywords: "checkbox switch radio segmented select dropdown slider" },
+  { id: "ratings", title: "Star rating", keywords: "stars rating review score" },
   { id: "tabs", title: "Tabs", keywords: "tabs views" },
   { id: "status", title: "Badges and status", keywords: "badge chip tag status dot kbd shortcut" },
   { id: "progress", title: "Progress and loading", keywords: "progress spinner skeleton loading" },
@@ -98,6 +100,7 @@ const select = ref("poe2");
 const volume = ref([60]);
 const range = ref([20, 80]);
 const progress = ref(45);
+const stars = ref(0);
 const text = ref("");
 const search = ref("");
 const notes = ref("");
@@ -386,6 +389,24 @@ function bump(by: number) {
             <Slider v-model="range" :max="100" :step="5" class="w-full max-w-64" aria-label="Level range" :disabled="off" />
             <span class="text-muted-foreground text-xs tabular-nums">{{ range[0] }}–{{ range[1] }}</span>
           </div>
+        </Specimen>
+      </DemoSection>
+
+      <!-- Star rating -->
+      <DemoSection v-if="visible.has('ratings')" id="ratings" :title="title('ratings')" description="Five stars. Shown, a rating rounds to the nearest half star; picked, it takes whole stars.">
+        <Specimen label="Shown (4.7, 4.2 and 4.8)">
+          <StarRating :model-value="4.7" label="4.7 out of 5 stars" />
+          <StarRating :model-value="4.2" label="4.2 out of 5 stars" />
+          <StarRating :model-value="4.8" label="4.8 out of 5 stars" />
+        </Specimen>
+        <Specimen label="Sizes">
+          <StarRating :model-value="3.5" size="sm" label="3.5 out of 5 stars" />
+          <StarRating :model-value="3.5" label="3.5 out of 5 stars" />
+          <StarRating :model-value="3.5" size="lg" label="3.5 out of 5 stars" />
+        </Specimen>
+        <Specimen label="Pick a rating (arrow keys work too)">
+          <StarRating v-model="stars" editable size="lg" label="Your rating" :star-label="(n) => (n === 1 ? '1 star' : `${n} stars`)" :disabled="off" />
+          <span class="text-muted-foreground text-xs tabular-nums">{{ stars ? `${stars} of 5` : "Not rated" }}</span>
         </Specimen>
       </DemoSection>
 
