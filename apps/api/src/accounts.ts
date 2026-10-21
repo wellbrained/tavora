@@ -9,6 +9,7 @@ import { keyRequestStatus } from "./key-requests.ts";
 import { codeMail, emailChangedMail, keyRequestMail, MailLimitError, mailLanguage, type Mail, type Mailer } from "./mail.ts";
 import { inspectPng } from "./png.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import type { ReviewStore } from "./reviews.ts";
 
 /**
  * The account routes under /v1/account. Every answer that could tell whether
@@ -31,6 +32,8 @@ export interface AccountOptions {
   discord?: DiscordClient;
   /** The cloud copies (cloud-copy.ts), deleted with their account. Absent: the copy routes answer 503. */
   copies?: CopyStore;
+  /** Ratings and reviews of catalog modules (reviews.ts), deleted with their account. Absent: listings have no rating and the review routes answer 503. */
+  reviews?: ReviewStore;
   /** The signed lists as served (catalog-trust.ts), to tell when a key replacement was signed. Absent: requests stay waiting. */
   trust?: CatalogTrust;
   /** The module catalog, to tell which held prefixes have a module. Absent: none has. */
@@ -109,10 +112,11 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   const verifyLimiter = options.verifyRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 15 * 60_000 });
   const prefixLimiter = options.prefixRateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
   const app = new Hono<Env>();
-  /** Everything on the server goes at once: the account, its sign-ins and its cloud copy. */
+  /** Everything on the server goes at once: the account, its sign-ins, its cloud copy and its reviews. */
   const deleteAccount = (id: string) => {
     store.deleteAccount(id, now());
     options.copies?.remove(id, true);
+    options.reviews?.forget(id);
   };
 
   /** The day's emails are used up (for sign-ins already when only the reserved ones are left). */
