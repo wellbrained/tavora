@@ -558,6 +558,8 @@ export const en = {
   "settings.modules.reportMessage": "Is a catalog module harmful or not what it says? Someone at Tavora checks every report and can pull it from the catalog or turn it off everywhere. Only the module, its key and its file are sent, nothing about you.",
   "settings.modules.reported": "Reported {name}. Thanks!",
   "settings.modules.notes": "Patch notes",
+  "settings.modules.notesTitle": "{name} patch notes",
+  "settings.modules.library": "Module library",
   "settings.modules.notesNew": "New",
   "settings.modules.removeHint": "Its open panels close",
   "settings.modules.install": "Install zip",

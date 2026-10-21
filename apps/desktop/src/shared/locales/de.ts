@@ -560,6 +560,8 @@ export const de: Record<keyof typeof en, string> = {
   "settings.modules.reportMessage": "Ist ein Katalogmodul schädlich oder nicht, was es vorgibt? Jemand bei Tavora prüft jede Meldung und kann es aus dem Katalog nehmen oder überall abschalten. Gesendet werden nur das Modul, sein Schlüssel und seine Datei, nichts über dich.",
   "settings.modules.reported": "{name} gemeldet. Danke!",
   "settings.modules.notes": "Patch Notes",
+  "settings.modules.notesTitle": "Patch Notes: {name}",
+  "settings.modules.library": "Modulbibliothek",
   "settings.modules.notesNew": "Neu",
   "settings.modules.removeHint": "Seine offenen Panels schließen sich",
   "settings.modules.install": "ZIP installieren",

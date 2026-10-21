@@ -281,6 +281,10 @@ test("a module's patch notes show in Settings, and an update marks the new ones 
   await expect(page.getByTestId("module-notes-wellbrained.mini-1.1.0")).toContainText("<b>Filters</b> by tag.");
   await expect(page.getByTestId("module-notes-wellbrained.mini-1.0.0")).toContainText("First version.");
   await expect(page.getByTestId("module-notes-new-wellbrained.mini")).toHaveCount(0);
+  // They open in a dialog over Settings; Escape closes only the dialog.
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("module-notes-dialog-wellbrained.mini")).toHaveCount(0);
+  await expect(page.getByTestId("settings-nav-modules")).toBeVisible();
 
   // Tavora's own modules have patch notes too.
   await expect(page.getByTestId("module-notes-toggle-tavora.notes")).toBeVisible();

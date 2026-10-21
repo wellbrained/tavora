@@ -4,17 +4,18 @@
 // zip checks and unpacks a module zip into the folder; dropping a module
 // package into the folder and pressing Reload adds it too. Remove moves it
 // to the recycle bin. A module's data stays, so adding it again finds it.
-// A module installed from the catalog can be reported to Tavora. Below the
+// A module installed from the catalog can be reported to Tavora, and its patch
+// notes open in a dialog. Module library opens the library on Tavora's catalog. Below the
 // list are the websites modules may reach, and where module files live. What module developers use (development folders, the examples) is in
 // Settings > Development instead.
-import { ArrowRightLeft, CloudDownload, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Trash2 } from "@lucide/vue";
+import { ArrowRightLeft, CloudDownload, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Store, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
-import { act, confirmAction, dialog, gamesUsing, listOf, showToast, state, submitAction } from "../../host";
+import { act, confirmAction, dialog, gamesUsing, listOf, settingsOpen, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleGrantsSection from "./ModuleGrantsSection.vue";
-import ModuleNotes from "./ModuleNotes.vue";
+import ModuleNotesDialog from "./ModuleNotesDialog.vue";
 import ModuleRow from "./ModuleRow.vue";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
@@ -33,8 +34,15 @@ const sorted = computed(() => {
   return modules.value.filter((module) => !module.development).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 });
 
-/** The module whose patch notes are open under its row, if any. */
+/** The module whose patch notes dialog is open, if any. */
 const notesOpen = ref<string | null>(null);
+const notesModule = computed(() => modules.value.find((module) => module.id === notesOpen.value) ?? null);
+
+/** Leaves Settings for the module library, on Tavora's catalog. */
+function openLibrary() {
+  settingsOpen.value = false;
+  dialog.value = { kind: "add-module", view: "catalog" };
+}
 
 /** Panels of a module that are open in the current game, so Remove can say what closes. */
 function openCount(moduleId: string): number {
@@ -142,6 +150,9 @@ function remove(module: ModuleView) {
         </ul>
       </template>
       <span class="flex flex-none flex-wrap items-center justify-end gap-2">
+        <Button variant="secondary" data-testid="open-module-library" @click="openLibrary">
+          <Store :stroke-width="1.5" /> {{ t("settings.modules.library") }}
+        </Button>
         <Button variant="secondary" data-testid="install-module" @click="install">
           <FileArchive :stroke-width="1.5" /> {{ t("settings.modules.install") }}
         </Button>
@@ -170,9 +181,9 @@ function remove(module: ModuleView) {
           <Button
             v-if="module.notes.latest"
             variant="ghost"
-            :aria-expanded="notesOpen === module.id"
+            aria-haspopup="dialog"
             :data-testid="`module-notes-toggle-${module.id}`"
-            @click="notesOpen = notesOpen === module.id ? null : module.id"
+            @click="notesOpen = module.id"
           >
             <NotebookText :stroke-width="1.5" /> {{ t("settings.modules.notes") }}
             <span v-if="module.notes.unseen" class="bg-primary text-primary-foreground rounded-sm px-1.5 text-xs" :data-testid="`module-notes-new-${module.id}`">{{
@@ -206,13 +217,11 @@ function remove(module: ModuleView) {
           >
             <Trash2 :stroke-width="1.5" /> {{ t("common.remove") }}
           </Button>
-          <template v-if="notesOpen === module.id" #details>
-            <ModuleNotes :module-id="module.id" :version="module.version" :unseen="module.notes.unseen" />
-          </template>
         </ModuleRow>
       </ul>
     </div>
   </SettingGroup>
+  <ModuleNotesDialog v-if="notesModule" :key="notesModule.id" :module="notesModule" @close="notesOpen = null" />
 
   <ModuleGrantsSection :highlight="highlight" />
 

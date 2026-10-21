@@ -147,10 +147,11 @@ export interface ShareIconsRequest {
   steam?: number[];
 }
 
-/** Adding a module; `slot` is the empty slot (a dock group id) it should fill. */
+/** Adding a module; `slot` is the empty slot (a dock group id) it should fill, `view` the library view to open on. */
 export interface AddModuleRequest {
   kind: "add-module";
   slot?: string;
+  view?: "catalog";
 }
 
 /** Asking where a link from a module should open (HostViewState.pendingLink). */
