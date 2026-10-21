@@ -82,11 +82,11 @@ Methods without params must be sent with `params` left out.
 | `discord.command` | `{ command, args }` | `DiscordResult`; one of `DISCORD_COMMANDS` |
 | `discord.subscribe`, `discord.unsubscribe` | `{ event, channelId? }` | `null`; one of `DISCORD_EVENTS` |
 | `discord.image` | `{ url }` | a small PNG as a `data:` address, or `null` |
-| `overlay.publish` | `{ key, state }` | `null`; what the overlay for `key` shows now. Needs the `overlay` capability, see [Stream overlays](#stream-overlays) (Tavora 0.19.25 and newer) |
+| `overlay.publish` | `{ key, state }` | `null`; what the overlay for `key` shows now. Needs the `overlay` capability, see [Stream overlays](#stream-overlays) (Tavora 0.19.26 and newer) |
 | `overlay.remove` | `{ key }` | `null`; the overlay shows nothing until it is published again, and keeps its link |
 | `overlay.copyLink` | `{ key }` | `"copied"`: the link is on the clipboard; `"off"`: Stream overlays are off, and Tavora opened that setting. Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise) |
 | `overlay.resetLink` | `{ key }` | `null`; the overlay gets a new link and the old one stops working |
-| `hotkeys.list` | none | `{ action, target }[]`: the hotkeys the player set for this module in the current game, never the keys. See [Hotkeys](#hotkeys) (Tavora 0.19.25 and newer) |
+| `hotkeys.list` | none | `{ action, target }[]`: the hotkeys the player set for this module in the current game, never the keys. See [Hotkeys](#hotkeys) (Tavora 0.19.26 and newer) |
 | `hotkeys.set` | `{ action, target, label }` | `"set"`, `"removed"` or `"cancelled"`: what the player did in Tavora's hotkey dialog. Only right after a real click or key press in the panel (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for an action the manifest does not list |
 | `hotkeys.remove` | `{ target, action? }` | `null`; removes the target's hotkeys, or only the one for `action` |
 
