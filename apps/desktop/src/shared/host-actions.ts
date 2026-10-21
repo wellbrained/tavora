@@ -225,6 +225,8 @@ export function hostActionTable(c: HostChecks) {
       choice: oneOf("set", "remove", "cancel"),
       accelerator: optional(text(40)),
     },
+    /** The answer in the consent dialog for a connector a module asks for on request (HostViewState.pendingConnector). */
+    "connector-answer": { id: check<number>((value) => Number.isSafeInteger(value)), allow: bool },
     /** Removes one hotkey from Settings > Streaming. */
     "remove-hotkey": { owner: c.ownerId, moduleId: c.moduleId, gameId: c.gameId, action: matching(/^[a-z][a-z0-9-]{0,31}$/), target: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     "set-language": { language: check<LanguageSetting>(isLanguageSetting) },

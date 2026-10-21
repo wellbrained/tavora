@@ -139,8 +139,11 @@ async function setHotkey(action: string, item: Item): Promise<void> {
 async function copyLink(item: Item): Promise<"copied" | "off" | "denied"> {
   try {
     const result = (await sdk.value?.overlay.copyLink(item.id)) ?? "denied";
-    // The overlay shows the item from the start, before its first change.
-    store.value?.publish([item.id], list.value);
+    if (result !== "denied" && store.value) {
+      store.value.overlays.value = true;
+      // The overlay shows the item from the start, before its first change.
+      store.value.publish([item.id], list.value);
+    }
     return result;
   } catch (reason) {
     if (reason instanceof TavoraError && reason.code === "PERMISSION_DENIED") return "denied";

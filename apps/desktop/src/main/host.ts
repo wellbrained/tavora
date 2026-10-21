@@ -3,7 +3,7 @@ import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, type ResolvedPanelType } from "@tavora/module-schema";
+import { continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, type Connector, type ResolvedPanelType } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -325,6 +325,9 @@ export class Host {
   private playedAtStart: Record<string, string> = {};
   /** A game that started while the player chose to be asked; waits for the answer. */
   private pendingGameSwitch: string | null = null;
+  /** A connector a module asks for on request (permissions.onRequest), waiting for the player's answer in the consent dialog. */
+  private pendingConnector: { id: number; moduleId: string; connector: Connector; resolve(allowed: boolean): void } | null = null;
+  private nextConnectorAsk = 1;
   private readonly gameWatcher = new GameWatcher({
     entries: () => liveGames(this.library),
     findInstalled: async () => findInstalledGames({ steamDir: await findSteamDir() }),
@@ -1659,6 +1662,7 @@ export class Host {
       "reset-overlay-links": () => this.streaming.resetLinks(),
       "hotkey-answer": (action) => this.streaming.answer(action.id, action.choice, action.accelerator),
       "remove-hotkey": (action) => this.streaming.removeHotkey(action),
+      "connector-answer": (action) => this.answerConnector(action.id, action.allow),
       "set-language": saved((action) => {
         this.library.language = action.language;
         for (const view of this.views.values()) view.applyLanguage(this.language);
@@ -3253,6 +3257,7 @@ export class Host {
       runningGameId: this.running.filter((id) => id !== this.gameId && isLive(this.library, id)).at(-1) ?? null,
       pendingGameSwitch: this.pendingGameSwitch && isLive(this.library, this.pendingGameSwitch) ? this.pendingGameSwitch : null,
       streaming: this.streaming.view(),
+      pendingConnector: this.pendingConnector && { id: this.pendingConnector.id, moduleId: this.pendingConnector.moduleId, connectors: [this.pendingConnector.connector] },
       hotkeyRequest: this.streaming.request(),
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
@@ -3352,6 +3357,29 @@ export class Host {
     this.savedData.saveWindow(state);
   }
 
+  /**
+   * Shows Tavora's consent dialog for one connector a module asks for on request, after a click in its panel; resolves
+   * with whether the player allowed it. A newer request closes an older one as not allowed.
+   */
+  private askConnector(moduleId: string, connector: Connector): Promise<boolean> {
+    this.pendingConnector?.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      this.pendingConnector = { id: this.nextConnectorAsk++, moduleId, connector, resolve };
+      this.pushState();
+    });
+  }
+
+  /** The player's answer; allowing grants that connector alone, and the module's panels go on running with it. */
+  private async answerConnector(id: number, allow: boolean): Promise<void> {
+    const pending = this.pendingConnector;
+    if (!pending || pending.id !== id) return;
+    this.pendingConnector = null;
+    const module = this.modules.get(pending.moduleId);
+    const granted = allow && module !== undefined && (module.manifest.permissions.onRequest ?? []).includes(pending.connector);
+    if (granted) await this.grants.grant(module, { network: [], connectors: [pending.connector] });
+    pending.resolve(granted);
+  }
+
   /** Resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
   async flush(): Promise<void> {
     await this.streaming?.shutdown();
@@ -3370,6 +3398,7 @@ export class Host {
       },
       module: (moduleId) => host.modules.get(moduleId),
       overlayGranted: (moduleId) => host.connectorsOf(moduleId).has("stream-overlay"),
+      askConnector: (moduleId, connector) => host.askConnector(moduleId, connector),
       gameId: () => host.gameId,
       gameName: (gameId) => host.library.games[gameId]?.name ?? null,
       panels: () => [...host.views.values()].filter((view): view is ModuleView => view instanceof ModuleView),

@@ -77,7 +77,7 @@ export interface ModuleViewOptions {
   /** The discord connector, shared by every panel; this view uses it under its own instance id. */
   discord: Pick<DiscordConnector, "use" | "release" | "state" | "connectNow" | "allowControl" | "command" | "subscribe" | "unsubscribe" | "image">;
   /** Stream overlays of this module in this game, for a module granted the stream-overlay connector. */
-  overlay: { publish(key: string, state: JsonValue): void; remove(key: string): void; copyLink(key: string): OverlayLinkResult; resetLink(key: string): void };
+  overlay: { publish(key: string, state: JsonValue): void; remove(key: string): void; copyLink(key: string): Promise<OverlayLinkResult>; resetLink(key: string): void };
   /** Hotkeys of this module in this game; `set` opens Tavora's hotkey dialog. */
   hotkeys: { list(): HotkeyBinding[]; set(action: string, target: string, label: string): Promise<HotkeySetResult>; remove(target: string, action: string | null): void };
   /** Test runs only: hosts mapped to a local server (network.ts). */

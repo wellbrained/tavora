@@ -22,7 +22,9 @@ const busy = ref(false);
 
 const module = computed(() => state.value?.modules.find((item) => item.id === props.request.moduleId) ?? null);
 const update = computed(() => (props.request.update ? (module.value?.update ?? null) : null));
-const asks = computed(() => (props.request.update ? update.value?.asks : module.value?.permissions.missing));
+const asks = computed(() =>
+  props.request.onRequest ? { network: [], connectors: props.request.onRequest.connectors } : props.request.update ? update.value?.asks : module.value?.permissions.missing,
+);
 const hosts = computed(() => asks.value?.network ?? []);
 const connectors = computed(() => asks.value?.connectors ?? []);
 const aiAccounts = computed(() => aiUsage.value?.accounts ?? []);
@@ -30,6 +32,7 @@ const discordUser = computed(() => discord.value?.user ?? null);
 
 /** Cancel goes back to the module library when the request came from there and it stays open. */
 function close() {
+  if (props.request.onRequest) void act({ type: "connector-answer", id: props.request.onRequest.id, allow: false }, { quiet: true });
   dialog.value = props.request.backToLibrary ? { kind: "add-module" } : null;
 }
 
@@ -60,6 +63,13 @@ async function allow() {
   const current = module.value;
   if (!current) return;
   busy.value = true;
+  if (props.request.onRequest) {
+    // Only this connector; the module's panels go on running and get it at once.
+    await act({ type: "connector-answer", id: props.request.onRequest.id, allow: true }, { quiet: true });
+    busy.value = false;
+    dialog.value = null;
+    return;
+  }
   if (props.request.update) {
     // Exactly the version this dialog shows; the main process checks the zip again before it installs.
     const result = await act({ type: "apply-module-update", moduleId: current.id, version: update.value?.version ?? "" }, { quiet: true });

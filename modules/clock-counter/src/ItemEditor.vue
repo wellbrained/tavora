@@ -261,11 +261,11 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
       </section>
     </template>
 
-    <section v-if="panel.store.overlays" class="flex flex-col gap-2" :aria-label="t('edit.stream')">
+    <section class="flex flex-col gap-2" :aria-label="t('edit.stream')">
       <h3 class="font-medium">{{ t("edit.stream") }}</h3>
       <div class="flex flex-wrap gap-2">
         <Button size="sm" :data-testid="`copy-link-${item.id}`" @click="copyLink">{{ t("edit.copyLink") }}</Button>
-        <Button variant="ghost" size="sm" @click="resetLink">{{ t("edit.resetLink") }}</Button>
+        <Button v-if="panel.store.overlays.value" variant="ghost" size="sm" @click="resetLink">{{ t("edit.resetLink") }}</Button>
       </div>
       <p v-if="linkNote" class="text-muted-foreground text-xs" role="status">{{ linkNote }}</p>
       <Label class="justify-between font-normal">

@@ -1,7 +1,7 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import type { AccountView, ActionResult, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PublishView } from "../shared/host-api";
+import type { AccountView, ActionResult, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
 import { SETTING_SECTIONS, type SettingsSection } from "./components/settings/settings-index";
 import { numberedGames } from "./shortcuts";
@@ -229,6 +229,8 @@ export interface GrantRequest {
   review: boolean;
   /** A catalog update that asks for more (ModuleState.update): allowing it installs the update. */
   update?: boolean;
+  /** A connector the module asks for on request, now that it needs it (HostViewState.pendingConnector). */
+  onRequest?: { id: number; connectors: ModuleConnector[] };
 }
 
 export type DialogRequest =
@@ -271,6 +273,15 @@ watch(
   (gameId) => {
     if (gameId && (!dialog.value || dialog.value.kind === "game-switch")) dialog.value = { kind: "game-switch", gameId };
     else if (!gameId && dialog.value?.kind === "game-switch") dialog.value = null;
+  },
+);
+
+// A module needs a connector it asks for on request (its first Copy OBS link): Tavora's consent dialog asks.
+watch(
+  () => state.value?.pendingConnector ?? null,
+  (pending) => {
+    if (pending) dialog.value = { kind: "grant", moduleId: pending.moduleId, slot: null, review: true, onRequest: { id: pending.id, connectors: [...pending.connectors] } };
+    else if (dialog.value?.kind === "grant" && dialog.value.onRequest) dialog.value = null;
   },
 );
 

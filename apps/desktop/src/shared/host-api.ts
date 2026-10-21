@@ -614,6 +614,11 @@ export interface HostViewState {
   streaming: StreamingView;
   /** Tavora's hotkey dialog, opened by a module's hotkeys.set; null while it is closed. */
   hotkeyRequest: HotkeyRequestView | null;
+  /**
+   * A connector a module asks for on request (permissions.onRequest), such as stream overlays on its first Copy OBS link:
+   * the host UI shows the consent dialog for it and answers with connector-answer.
+   */
+  pendingConnector: { id: number; moduleId: string; connectors: ModuleConnector[] } | null;
 }
 
 /**
