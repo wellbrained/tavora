@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.24",
+    date: "2026-10-21",
+    title: "Developer links work again",
+    notes: [
+      "Docs, Ask a question and Report a bug in Settings > Development open their pages again.",
+    ],
+  },
+  {
     version: "0.19.23",
     date: "2026-10-21",
     title: "Browse shows every module",
