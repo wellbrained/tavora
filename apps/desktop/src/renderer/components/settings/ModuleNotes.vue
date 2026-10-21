@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// A module's patch notes under its row in Settings > Modules, newest first, as plain text from its changelog file.
+// A module's patch notes (ModuleNotesDialog.vue), newest first, as plain text from its changelog file.
 // Opening them tells the host they were seen, so the New mark goes away. Given `entries` (the notes
 // of a catalog update that waits for the player), it shows those instead and marks nothing seen.
 import { onMounted, ref } from "vue";

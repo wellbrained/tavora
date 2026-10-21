@@ -37,7 +37,7 @@ export interface ModuleLifecycleOptions {
   installRules(): Promise<{ userModules: string; safety?: SafetyCheck }>;
   /** What the player granted each module (grants.ts). */
   grants(): GrantStore;
-  catalog: Pick<CatalogClient, "index" | "details" | "download" | "module">;
+  catalog: Pick<CatalogClient, "index" | "details" | "download" | "module" | "installed">;
   /** Whether online features are on; the catalog is not asked otherwise. */
   online(): boolean;
   /** The first key of a key's account by its successions (safety-lists.ts). */
@@ -92,7 +92,10 @@ export class ModuleLifecycle {
     if (!this.options.online()) throw new PlayerError("error.catalogOff");
     const entry = await this.options.catalog.module(moduleId);
     const zip = await this.options.catalog.download(entry.zip);
-    return this.finishInstall(await installZipData(zip, { ...(await this.installOptions()), expect: { id: entry.id, owner: entry.owner }, catalog: true }));
+    const id = await this.finishInstall(await installZipData(zip, { ...(await this.installOptions()), expect: { id: entry.id, owner: entry.owner }, catalog: true }));
+    // Counted only here, when the player pressed Install: updates download the zip too but aren't installs.
+    void this.options.catalog.installed(id);
+    return id;
   }
 
   /**

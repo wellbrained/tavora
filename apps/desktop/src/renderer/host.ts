@@ -3,7 +3,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import type { AccountView, ActionResult, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
-import type { SettingsSection } from "./components/settings/settings-index";
+import { SETTING_SECTIONS, type SettingsSection } from "./components/settings/settings-index";
 import { numberedGames } from "./shortcuts";
 import { setLanguage } from "./i18n";
 import { applyTheme } from "./theme";
@@ -147,10 +147,11 @@ export interface ShareIconsRequest {
   steam?: number[];
 }
 
-/** Adding a module; `slot` is the empty slot (a dock group id) it should fill. */
+/** Adding a module; `slot` is the empty slot (a dock group id) it should fill, `view` the library view to open on. */
 export interface AddModuleRequest {
   kind: "add-module";
   slot?: string;
+  view?: "catalog";
 }
 
 /** Asking where a link from a module should open (HostViewState.pendingLink). */
@@ -253,6 +254,11 @@ export const panelToShow = shallowRef<{ instanceId: string } | null>(null);
 function runShortcut(shortcut: HostShortcut): void {
   if (shortcut.startsWith("address:")) addressFocus.value = { instanceId: shortcut.slice("address:".length) };
   else if (shortcut.startsWith("panel:")) panelToShow.value = { instanceId: shortcut.slice("panel:".length) };
+  else if (shortcut.startsWith("setting:")) {
+    const setting = shortcut.slice("setting:".length);
+    const section = SETTING_SECTIONS.find(([id]) => id === setting)?.[1];
+    if (section) openSettings({ section, setting });
+  }
   else if (shortcut === "search") searchOpen.value = !searchOpen.value;
   else if (shortcut === "shortcuts") openSettings({ section: "shortcuts" });
   else if (shortcut === "settings") openSettings();
@@ -374,6 +380,7 @@ export const overlayOpen = computed(
     openMenus.value > 0 ||
     dialog.value !== null ||
     copyQuestion.value !== null ||
+    state.value?.hotkeyRequest != null ||
     settingsOpen.value ||
     searchOpen.value ||
     dragging.value,

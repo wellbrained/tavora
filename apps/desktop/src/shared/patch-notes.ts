@@ -20,6 +20,52 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.27",
+    date: "2026-10-21",
+    title: "Clearer module warnings",
+    notes: [
+      "Modules that cannot load now have their own space in Settings, with readable paths and an Open folder button for each warning.",
+    ],
+  },
+  {
+    version: "0.19.26",
+    date: "2026-10-21",
+    title: "Stream overlays and hotkeys",
+    notes: [
+      "Turn on Stream overlays in Settings > Streaming, and modules can show their overlays in OBS.",
+      "Modules can offer hotkeys. You pick the keys in Tavora, and they work while the game is open here.",
+      "Settings > Streaming lists every hotkey, so you can remove any of them.",
+    ],
+  },
+  {
+    version: "0.19.25",
+    date: "2026-10-21",
+    title: "Patch notes in their own window",
+    notes: [
+      "A module's patch notes in Settings > Modules open in a window instead of under the module.",
+      "Module library in Settings > Modules opens the library on Tavora's catalog.",
+    ],
+  },
+  {
+    version: "0.19.24",
+    date: "2026-10-21",
+    title: "Developer links work again",
+    notes: [
+      "Docs, Ask a question and Report a bug in Settings > Development open their pages again.",
+    ],
+  },
+  {
+    version: "0.19.23",
+    date: "2026-10-21",
+    title: "Browse shows every module",
+    notes: [
+      "Browse lists every module in the catalog. The ones for your game come first.",
+      "Modules for another game say which one, and Install waits until you open it.",
+      "Cards show how often a module was installed. Size, access and Report moved to its page.",
+      "A module's page says plainly which sites it loads data from.",
+    ],
+  },
+  {
     version: "0.19.22",
     date: "2026-10-20",
     title: "Your rail stays put",

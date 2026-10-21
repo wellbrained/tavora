@@ -2,7 +2,7 @@ import type { Language, LanguageSetting, MessageKey } from "./i18n";
 // Contract between the trusted host UI (renderer) and the main process.
 // Types only: imported by both sides, so it must not import Electron or Node.
 import type { IconTone } from "./icon-tone";
-import type { LayoutTemplateId } from "./layout-templates";
+import type { HostAction } from "./host-actions";
 
 /**
  * loading: the page is loading. ready: loaded and running. failed: the page
@@ -535,6 +535,45 @@ export interface HostViewState {
   appearance: AppearanceView;
   /** The language setting, and the language it comes to now (the system's, when following it). */
   language: { setting: LanguageSetting; resolved: Language };
+  /** Settings > Streaming: Stream overlays and the hotkeys set for module actions. */
+  streaming: StreamingView;
+  /** Tavora's hotkey dialog, opened by a module's hotkeys.set; null while it is closed. */
+  hotkeyRequest: HotkeyRequestView | null;
+}
+
+/**
+ * Stream overlays (main/overlays.ts): whether they are on, the port, and how the server stands: off, running, or
+ * not running because the port is in use or something else failed.
+ */
+export interface StreamingView {
+  overlays: { enabled: boolean; port: number; status: "off" | "running" | "in-use" | "failed" };
+  /** Every hotkey set for a module action, in every game (main/hotkeys.ts). `taken`: another program holds the key right now. */
+  hotkeys: HotkeyView[];
+}
+
+export interface HotkeyView {
+  owner: string;
+  gameId: string;
+  gameName: string;
+  moduleId: string;
+  moduleName: string;
+  action: string;
+  actionName: string;
+  target: string;
+  label: string;
+  accelerator: string;
+  taken: boolean;
+}
+
+/** What Tavora's hotkey dialog shows: which action of which module, for what, and the key it has now. */
+export interface HotkeyRequestView {
+  id: number;
+  moduleName: string;
+  actionName: string;
+  label: string;
+  current: string | null;
+  /** Why the last key was refused, in the player's language. */
+  error: string | null;
 }
 
 /** What a module may do as far as grants decide it (main/grants.ts): hosts for network.fetch and connectors. */
@@ -545,255 +584,10 @@ export interface ModulePermissions {
 }
 
 /** The connectors Tavora has (module-schema CONNECTORS). */
-export type ModuleConnector = "ai-usage" | "discord";
+export type ModuleConnector = "ai-usage" | "discord" | "stream-overlay";
 
-/** Everything the host UI can ask the main process to do. Parsed strictly in main. */
-export type HostAction =
-  | { type: "show-welcome" }
-  /** The answer to pendingLink: a new Browser panel, the system browser, or nothing. */
-  | { type: "link-choice"; choice: "panel" | "system" | "cancel" }
-  /** The answer to pendingNavigation: open the content in a new panel, or leave it. */
-  | { type: "navigation-choice"; choice: "new-panel" | "cancel" }
-  /** The answer to pendingGameSwitch: switch to the game, or stay. */
-  | { type: "game-switch"; choice: "switch" | "cancel" }
-  /** Opens the system dialog to pick the place for the pictures of modules, then moves them there. */
-  | { type: "module-files-change" }
-  /** Moves the pictures of modules back to the default folder. */
-  | { type: "module-files-reset" }
-  | { type: "module-files-open" }
-  | { type: "restart" }
-  | { type: "open-game"; gameId: string }
-  | { type: "add-game"; catalogId: string }
-  | { type: "add-game"; name: string }
-  | { type: "add-game"; workspace: string }
-  /** A game found by the online search. */
-  | { type: "add-game"; online: OnlineGame }
-  | { type: "rename-game"; gameId: string; name: string }
-  | { type: "set-game-label"; gameId: string; label: string | null }
-  | { type: "choose-game-image"; gameId: string }
-  | { type: "use-original-icon"; gameId: string }
-  | { type: "share-icons"; gameIds: string[] }
-  /** Offers the icons of games from the last Steam import look-up that are not in the library (prepared by steamShareIcons). */
-  | { type: "share-steam-icons"; appids: number[] }
-  /** Adds the chosen games of a Steam library that the player does not have yet. */
-  | { type: "import-steam-games"; games: SteamImportGame[] }
-  | { type: "trash-game"; gameId: string }
-  | { type: "restore-game"; gameId: string }
-  | { type: "delete-game"; gameId: string }
-  /** The same for many games at once, from Settings > Games and Trash. */
-  | { type: "trash-games"; gameIds: string[] }
-  | { type: "restore-games"; gameIds: string[] }
-  | { type: "delete-games"; gameIds: string[] }
-  | { type: "favorite"; gameId: string; index?: number }
-  | { type: "unfavorite"; gameId: string }
-  | { type: "move-game"; gameId: string; folderId: string | null; index?: number }
-  | { type: "create-folder"; name: string; gameIds: string[] }
-  | { type: "rename-folder"; folderId: string; name: string }
-  | { type: "set-folder-label"; folderId: string; label: string | null }
-  | { type: "delete-folder"; folderId: string }
-  | { type: "move-folder"; folderId: string; index: number }
-  | { type: "set-sort"; sort: RootSort }
-  | { type: "set-startup"; startup: Startup }
-  | { type: "set-game-start"; gameStart: GameStart }
-  /** A personal workspace's id, or null to stay on the game. */
-  | { type: "set-game-end"; workspaceId: string | null }
-  | { type: "set-grayscale-text"; enabled: boolean }
-  | { type: "set-online-search"; enabled: boolean }
-  | { type: "set-auto-update"; enabled: boolean }
-  /** Starts the download of a version that was found while automatic download is off. */
-  | { type: "download-update" }
-  /** How long the screen took to show something the player asked for, measured where it is drawn. */
-  | { type: "record-timing"; name: "game-switch"; ms: number }
-  /** Puts the version, system, timings, update log and last errors on the clipboard, to paste to whoever is helping. */
-  | { type: "copy-diagnostics" }
-  /** Opens the folder with the daily copies of the player's data. */
-  | { type: "open-backups" }
-  /** Asks the update server now, without waiting for the next scheduled check. */
-  | { type: "check-for-updates" }
-  /** Quits, installs the downloaded version and starts Tavora again. */
-  | { type: "restart-to-update" }
-  | { type: "set-steam-icons"; enabled: boolean }
-  | { type: "set-module-icons"; enabled: boolean }
-  | { type: "set-language"; language: LanguageSetting }
-  /** Remembers the Steam profile for the import on this PC; null forgets it. */
-  | { type: "set-steam-profile"; profile: string | null }
-  /** ixed turns Follow System off; without it the pick keeps following the system. */
-  | { type: "set-theme"; themeId: string; variationId: string; fixed?: boolean }
-  /** Follow the system's light or dark setting, or stay in one mode. */
-  | { type: "set-appearance-mode"; mode: "system" | "dark" | "light" }
-  /** Back to the Tavora default theme, whatever is active. */
-  | { type: "reset-theme" }
-  /** Looks for themes again, after the player changed their themes folder. */
-  | { type: "reload-themes" }
-  /** Opens the player's themes folder in the file manager, creating it first. */
-  | { type: "open-themes-folder" }
-  /** Opens the player's modules folder in the file manager, creating it first. */
-  | { type: "open-modules-folder" }
-  /** Opens a folder Settings lists as not loading (a `moduleProblems` path) in the file manager. */
-  | { type: "open-module-problem-folder"; path: string }
-  /** Picks a module project folder to load from (answers with the folder), or forgets one. */
-  | { type: "add-development-folder" }
-  | { type: "remove-development-folder"; folder: string }
-  | { type: "open-developer-link"; link: DeveloperLink }
-  /** Looks for modules again, after the player changed their modules folder. */
-  | { type: "reload-modules" }
-  /** Moves a module from the player's modules folder to the recycle bin, after removing its panels in every game; its data stays. */
-  | { type: "remove-module"; moduleId: string }
-  /** The player's yes in the consent dialog: exactly what it showed (only what the module still asks for is granted). */
-  | { type: "grant-module"; moduleId: string; network: string[]; connectors: ModuleConnector[] }
-  /** Takes back everything granted to a module, after removing its panels in every game; its data stays. */
-  | { type: "revoke-module"; moduleId: string }
-  /** Asks for a module zip and installs it into the player's modules folder; answers with the module's id. */
-  | { type: "install-module" }
-  /** Downloads a module from the catalog, checks it and installs it like a zip. */
-  | { type: "install-catalog-module"; moduleId: string }
-  /** Looks for updates of the modules installed from the catalog now; answers with `updated` and `waiting`. */
-  | { type: "check-module-updates" }
-  /**
-   * Reports a catalog module to Tavora after the player pressed Report: the installed zip when it came
-   * from the catalog, otherwise the listed one. Sends only the module id, its key and the zip's hash.
-   */
-  | { type: "report-catalog-module"; moduleId: string }
-  /** Opens a catalog module's homepage like a module link: the address is the one the main process reads from the listing again. */
-  | { type: "open-catalog-homepage"; moduleId: string }
-  /** The player said yes to a catalog update that asks for more: installs exactly that version and grants what it asked for. */
-  | { type: "apply-module-update"; moduleId: string; version: string }
-  /** Deletes the data a module that is not installed left behind (owner as in leftoverModuleData). */
-  | { type: "delete-module-data"; owner: string; moduleId: string }
-  /** Moves a signed module's data from its unsigned local copy to it; Tavora restarts to do it. */
-  | { type: "move-local-data"; moduleId: string }
-  /** The player opened a module's patch notes: none of them are new any more. */
-  | { type: "seen-module-notes"; moduleId: string }
-  /** Copies the Tavora theme into the themes folder as a new theme to change; answers with its id. */
-  | { type: "create-starter-theme" }
-  /** Done ends the first-run welcome; false shows it again. */
-  | { type: "set-onboarded"; done: boolean }
-  | { type: "save-profile"; name: string; initials: string }
-  /** A cropped 256 px PNG, base64-encoded. */
-  | { type: "set-profile-picture"; png: string }
-  | { type: "remove-profile-picture" }
-  | { type: "set-rail"; expanded?: boolean; width?: number }
-  /** Opens a new panel; `panelType` picks one of the module's panel types (its continuing type when left out). */
-  | { type: "open-module"; moduleId: string; panelType?: string }
-  /** Gives a panel whose type an update removed another type of the same module. */
-  | { type: "choose-panel-type"; instanceId: string; panelType: string }
-  | { type: "close-panel"; instanceId: string }
-  /** Closes all of a module's panels in the current game, leaving empty slots; it stays installed. */
-  | { type: "remove-module-from-game"; moduleId: string }
-  | { type: "reload-panel"; instanceId: string }
-  | { type: "stop-panel"; instanceId: string }
-  /** An empty Browser tab beside this one. */
-  | { type: "browser-new-tab"; instanceId: string }
-  /** What the player typed in a Browser panel's address bar. */
-  | { type: "browser-navigate"; instanceId: string; address: string }
-  | { type: "browser-command"; instanceId: string; command: BrowserCommand }
-  /** Signs the page's site in for all games (true) or for each game on its own. */
-  | { type: "browser-set-shared"; instanceId: string; shared: boolean }
-  | { type: "browser-set-adblock"; instanceId: string; enabled: boolean }
-  /** Removes a site from one of the lists in Settings > Browser. */
-  | { type: "browser-forget-site"; list: "shared" | "adblock-off"; site: string }
-  /** Deletes cookies, logins and caches: the current game's, or the ones shared by all games. */
-  | { type: "clear-browser-data"; scope: "game" | "shared" }
-  /** Connects to the Discord app, asking for approval in Discord if Tavora was never approved. */
-  | { type: "discord-connect" }
-  /** Forgets Tavora's Discord sign-in on this PC. */
-  | { type: "discord-sign-out" }
-  /** Mails a sign-in code to an address. */
-  | { type: "account-send-code"; email: string }
-  /** The code typed in; for an address without an account the view then asks to create one. */
-  | { type: "account-verify"; code: string }
-  /** Yes to "Create a Tavora account", with the age tick box (an account is only made when it is ticked). */
-  | { type: "account-create"; ageConfirmed: boolean }
-  /** Leaves a waiting code (sign-in, email change or delete). */
-  | { type: "account-cancel" }
-  /** Reads the account and its devices from the service again. */
-  | { type: "account-refresh" }
-  | { type: "account-sign-out" }
-  | { type: "account-sign-out-device"; deviceId: string }
-  | { type: "account-rename-device"; deviceId: string; name: string }
-  | { type: "account-email-code"; email: string }
-  | { type: "account-change-email"; code: string }
-  | { type: "account-delete-code" }
-  | { type: "account-delete"; code: string }
-  /** Discord login in the browser: sign in (or create), connect to the signed-in account, disconnect. */
-  | { type: "account-discord-sign-in" }
-  | { type: "account-discord-connect-code" }
-  | { type: "account-discord-connect"; code: string }
-  | { type: "account-discord-disconnect-code" }
-  | { type: "account-discord-disconnect"; code: string }
-  | { type: "account-email-remove-code" }
-  | { type: "account-email-remove"; code: string }
-  /** Deletes the account by a fresh Discord sign-in (an account without an email address). */
-  | { type: "account-delete-discord" }
-  /** The answer to "Which profile?" on a first sign-in. */
-  | { type: "account-profile-choice"; keep: "account" | "pc" }
-  /** The developer side: the public name, a code to link a publisher key, and unlinking one. */
-  | { type: "account-developer-name"; name: string }
-  | { type: "account-link-code" }
-  /** Copies `tavora-pack link <code>` for the code shown now. */
-  | { type: "account-copy-link-command" }
-  | { type: "account-unlink-key"; fingerprint: string }
-  /** "I lost this key" or "It was leaked": its modules move to another key of the account once Tavora signs it. */
-  | { type: "account-replace-key"; fingerprint: string; leaked: boolean }
-  /** Publish tokens, for publishing from CI: make one (its secret shown once), copy it, close it, remove one. */
-  | { type: "account-publish-token-create"; name: string }
-  | { type: "account-publish-token-copy" }
-  | { type: "account-publish-token-saved" }
-  | { type: "account-publish-token-delete"; id: string }
-  | { type: "developer-key-create" }
-  | { type: "developer-key-add" }
-  | { type: "developer-key-export"; fingerprint: string }
-  | { type: "developer-key-link"; fingerprint: string }
-  | { type: "developer-recovery-key"; key: string }
-  | { type: "developer-recovery-key-saved" }
-  | { type: "developer-show-recovery-key" }
-  | { type: "developer-copy-recovery-key" }
-  /** Asks another PC of the account for its key, instead of typing the recovery key. */
-  | { type: "pairing-start" }
-  | { type: "pairing-cancel" }
-  /** The player's answer to "Add <PC>?". */
-  | { type: "pairing-decide"; id: string; allow: boolean }
-  /** Settings > Account > Cloud copy. Turning on makes a key, or asks for the one of a copy that exists. */
-  | { type: "cloud-copy-on" }
-  /** Turns the copy on in a folder the player picks in the system's dialog. */
-  | { type: "cloud-copy-on-folder" }
-  /** Moves the copy, keeping its key: to the service, or to a folder the player picks in the system's dialog. */
-  | { type: "cloud-copy-move"; to: "server" | "folder" }
-  | { type: "cloud-copy-key"; key: string }
-  | { type: "cloud-copy-cancel" }
-  /** Lost the recovery key: the copy is deleted and the account gets a new key. */
-  | { type: "cloud-copy-new-key" }
-  | { type: "cloud-copy-show-key" }
-  /** Puts the recovery key on screen on the clipboard. */
-  | { type: "cloud-copy-copy-key" }
-  /** The player saved the recovery key: it leaves the screen. */
-  | { type: "cloud-copy-key-saved" }
-  | { type: "cloud-copy-upload" }
-  /** Takes the copy in place of this PC's data (kept as a local backup); Tavora restarts. */
-  | { type: "cloud-copy-restore" }
-  /** Both sides changed: keep this PC's (the copy is kept as a local backup) or the copy's. */
-  | { type: "cloud-copy-keep"; side: "pc" | "cloud" }
-  | { type: "cloud-copy-restart" }
-  /** Off on this PC; the copy stays for the other PCs. */
-  | { type: "cloud-copy-off" }
-  | { type: "cloud-copy-delete" }
-  | { type: "cloud-copy-close-anyway" }
-  /** Adds an account for a CLI profile folder. */
-  | { type: "ai-usage-add"; provider: AiProvider; label: string; directory: string }
-  /** Renames an account or points it at another profile folder. */
-  | { type: "ai-usage-update"; accountId: string; label: string; directory: string }
-  | { type: "ai-usage-remove"; accountId: string }
-  /** Null when nothing is docked any more. */
-  | { type: "save-layout"; layout: SavedLayout | null }
-  /** Rearranges the workspace into empty slots of a layout template; open panels fill the first ones. */
-  | { type: "apply-layout-template"; templateId: LayoutTemplateId }
-  /** The same, for an even grid (at most GRID_LIMITS). */
-  | { type: "apply-layout-grid"; columns: number; rows: number }
-  | { type: "save-snapshot"; name: string }
-  | { type: "update-snapshot"; snapshotId: string }
-  | { type: "apply-snapshot"; snapshotId: string }
-  | { type: "rename-snapshot"; snapshotId: string; name: string }
-  | { type: "delete-snapshot"; snapshotId: string };
+/** Everything the host UI can ask the main process to do: the table in host-actions.ts. */
+export type { HostAction, HostActionType } from "./host-actions";
 
 /** `id` is set when the action created something (a game, a folder). */
 /** One entry of a module's menu, as the main process checked it (the SDK's MenuEntry). */
@@ -884,6 +678,12 @@ export interface CatalogModuleView {
   publisher: string | null;
   /** The zip's size in bytes. */
   size: number;
+  /** How many times it was installed from Browse, as the catalog counts it. */
+  installs: number;
+  /** Whether it may go where the player is (the open game or personal workspace); Browse lists the rest too. */
+  fits: boolean;
+  /** The games it is made for, by name; empty for any game. */
+  forGames: string[];
   publishedAt: string;
   /** The module's web page, http or https, shown as plain text; open-catalog-homepage opens it. */
   homepage: string | null;
@@ -969,4 +769,4 @@ export interface TavoraHostApi {
 }
 
 /** `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). */
-export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}` | `address:${string}` | `panel:${string}`;
+export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}` | `address:${string}` | `panel:${string}` | `setting:${string}`;

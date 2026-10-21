@@ -1,13 +1,13 @@
 # Publishing to the catalog
 
-Tavora's module catalog is where players find community modules: under **Browse** in the module library, for the game they have open or for a personal workspace. Publishing puts your module there, and every player who installs it from the catalog gets your updates on their own.
+Tavora's module catalog is where players find community modules: under **Browse** in the module library. Browse lists every module, those for the game they have open (or for a personal workspace) first; the others show which game they are for and can't be installed there. Publishing puts your module there, and every player who installs it from the catalog gets your updates on their own.
 
 ## Before the first upload
 
 1. **Set up once.** Under **Settings > Development**, the **Want to make modules?** card walks you through signing in (email or Discord), your developer name and your publisher key; Tavora makes the key, keeps it and links it to your account. Players see your name as "by *your name*" next to your module. Pressing Publish before that opens the same steps.
 2. **Pick an id with your own prefix.** The part of your module id before the first dot is your prefix, such as `wellbrained` in `wellbrained.timer`. Tavora suggests one from your developer name: press **Check**, then **Claim it** when it's free, during setup or on the review screen. Once it's yours, nobody else can publish under it. An account holds up to 3 prefixes. Words a developer name couldn't be are refused, such as `tavora`, `official` and `local`, so an id from the starter (`local.…`) needs a new prefix; the review screen lets you change it before the first publish. Prefixes stay taken when an account is deleted.
 3. **Say where the module belongs.** `games` lists the games it is made for, or stays empty for any game. A module for any game is offered in personal workspaces too, unless you set `workspaces` to `false`. See the [manifest reference](../reference/manifest.md).
-4. **Write a description and patch notes.** The listing shows your manifest's `name`, `description`, `version` and what it asks for (`permissions.network` and `connectors`), next to the zip's size. Each version's lines from [`changelog.json`](./getting-started.md#patch-notes) show up as its patch notes. All of it is shown as plain text, never HTML or Markdown.
+4. **Write a description and patch notes.** The listing shows your manifest's `name`, `description`, `version` and what it asks for (`permissions.network` and `connectors`) and the zip's size. Each version's lines from [`changelog.json`](./getting-started.md#patch-notes) show up as its patch notes. All of it is shown as plain text, never HTML or Markdown.
 5. **Fill your module's page** if you like. `readme` names a `README.md` (or `.txt`) introducing your module, `screenshots` up to 5 PNG or WebP pictures, and `homepage` your module's web page. Your `icon` shows on the catalog card. Players see all of it when they open your module in the catalog. Set `minTavora` to at least `0.18.19` when you use `readme`, and `0.18.17` for the others.
 6. **Set `minTavora`** if the module uses something from a newer SDK. The [SDK changelog](../reference/changelog.md) says which Tavora each feature needs.
 
@@ -30,8 +30,8 @@ The service checks the zip the way Tavora's installer does: the size and compres
 
 ## What players see
 
-- **Browse** lists your module with its name, version, "by *your name*", its description, its size and what it asks for. Before they install, players can see the network hosts and connectors it wants.
-- **Your module's page** opens from its card: your icon, readme, screenshots and homepage, this version's patch notes, when it was updated and what it can reach. The readme shows headings, paragraphs, lists and code as plain text; links show only their words. There are no download counts, because Tavora doesn't track who installs what.
+- **Browse** lists your module with its name, version, "by *your name*", its description, whether it works where the player is, and how many times it was installed from Browse. Installs are counted per module only, with nothing about who installed it; updates don't count.
+- **Your module's page** opens from its card: your icon, readme, screenshots and homepage, this version's patch notes, when it was updated and what it can reach. The readme shows headings, paragraphs, lists and code as plain text; links show only their words. The page also shows the network hosts and connectors it wants, so players see them before they install.
 - **Install** downloads the zip, checks it against the listing and your key's signature, and installs it like Install from zip. Installing grants nothing: players are asked for your network hosts and connectors when they add the module, as with any zip.
 - Their data and permissions belong to your module id and your key, as [Your publisher key](./publisher-key.md#what-the-key-decides) explains.
 
@@ -84,7 +84,7 @@ A token publishes only under id prefixes your account already holds, so publish 
 
 ## Reports and takedowns
 
-Players can report a module from Browse, or from Settings > Modules once it is installed. A report names only the module, your key and the zip, never the player, and hides nothing by itself: a person at Tavora looks at it. When your account has an email address, you get an email at most once a day saying your module was reported. Reports carry no sender, so there's nobody to answer.
+Players can report a module from its page in Browse, or from Settings > Modules once it is installed. A report names only the module, your key and the zip, never the player, and hides nothing by itself: a person at Tavora looks at it. When your account has an email address, you get an email at most once a day saying your module was reported. Reports carry no sender, so there's nobody to answer.
 
 If the module breaks the rules, Tavora can take it out of the catalog (players who installed it keep it), block a zip so it stops on every player's PC with their data kept, or revoke a key. A blocked module comes back only with a new version whose zip isn't blocked.
 

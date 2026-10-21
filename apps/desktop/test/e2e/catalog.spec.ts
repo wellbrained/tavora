@@ -112,7 +112,7 @@ test("a player browses the catalog for a game, sees who publishes a module and i
   const other = await packed("wellbrained.factory", "Factory", key);
   const { url, server, asked } = await catalogServer([
     { entry: listing("wellbrained.tracker", "Tracker", tracker, owner, { publisher: "wellbrained", description: "<b>Tracks</b> your runs" }), body: tracker },
-    // Made for another game: not listed here even when the service sends it.
+    // Made for another game: listed, but it says which game and Install stays greyed out.
     { entry: listing("wellbrained.factory", "Factory", other, owner, { games: ["satisfactory"], workspaces: false }), body: other },
   ]);
   const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
@@ -122,12 +122,14 @@ test("a player browses the catalog for a game, sees who publishes a module and i
     await page.getByTestId("module-tab-browse").click();
     const row = page.getByTestId("catalog-wellbrained.tracker");
     await expect(row).toBeVisible();
-    await expect(page.getByTestId("catalog-wellbrained.factory")).toHaveCount(0);
+    await expect(page.getByTestId("catalog-fits-wellbrained.factory")).toHaveText("For Satisfactory");
+    await expect(page.getByTestId("catalog-install-wellbrained.factory")).toBeDisabled();
+    await expect(row.getByTestId("catalog-fits-wellbrained.tracker")).toHaveText("Works here");
     await expect(row.getByTestId("catalog-publisher")).toHaveText("by wellbrained");
     // Markup in a listing is text, never HTML.
     await expect(row.getByTestId("catalog-description")).toHaveText("<b>Tracks</b> your runs");
     await expect(row.locator("b")).toHaveCount(0);
-    expect(asked).toContain("/v1/catalog?game=poe2");
+    expect(asked).toContain("/v1/catalog");
 
     await page.getByTestId("catalog-install-wellbrained.tracker").click();
     await expect(page.getByTestId("catalog-add-wellbrained.tracker")).toBeVisible();
@@ -190,7 +192,7 @@ test("a player opens a module's page with its readme, screenshots, access and ho
     await expect(readme.locator("li")).toHaveText(["Splits by act", "<img src=x onerror=alert(1)>"]);
     await expect(readme.locator("a, img")).toHaveCount(0);
     await expect(info.getByTestId("catalog-info-notes")).toContainText("First version.");
-    await expect(info.getByTestId("catalog-info-access")).toContainText("Talks to api.example.com");
+    await expect(info.getByTestId("catalog-info-access")).toContainText("Loads data from api.example.com");
     await expect(info.getByTestId("catalog-icon")).toHaveAttribute("src", /^data:image\/png;base64,/);
     expect(asked).toContain(`/v1/catalog/pictures/${hash(picture)}.png`);
     expect(await readdir(path.join(userData, "modules")).catch(() => [])).toEqual([]);
@@ -257,7 +259,7 @@ test("the catalog asks for a personal workspace's modules, and stays offline wit
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     await expect(page.getByTestId("catalog-wellbrained.notes")).toBeVisible();
-    expect(asked).toContain("/v1/catalog?workspace=1");
+    expect(asked).toContain("/v1/catalog");
   } finally {
     await app.close();
   }
@@ -368,12 +370,16 @@ test("a player reports a module from Browse and from Settings, and only its id, 
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     // Nothing is sent until the player says yes.
+    // Report is only on the module's page, not on its card.
+    await expect(page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-report-wellbrained.tracker")).toHaveCount(0);
+    await page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-name").click();
     await page.getByTestId("catalog-report-wellbrained.tracker").click();
     await expect(page.getByTestId("catalog-report-ask-wellbrained.tracker")).toContainText("nothing about you");
     expect(reports).toEqual([]);
     await page.getByTestId("catalog-report-send-wellbrained.tracker").click();
     await expect(page.getByTestId("catalog-reported-wellbrained.tracker")).toBeVisible();
     expect(reports).toEqual([sent]);
+    await page.keyboard.press("Escape");
 
     // Installed from the catalog, it can be reported from Settings > Modules too.
     await page.getByTestId("catalog-install-wellbrained.tracker").click();

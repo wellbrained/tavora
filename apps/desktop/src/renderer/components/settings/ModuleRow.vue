@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // One module in a Settings list: icon, name, version, who made it, what it
-// does and where it was found (the Official badge says it for Tavora's own). The buttons for it go in the slot, anything
-// shown under it (such as its patch notes) in the details slot.
+// does and where it was found (the Official badge says it for Tavora's own). The buttons for it go in the slot.
 import { cn } from "@/lib/utils";
 import { state } from "../../host";
 import { t } from "../../i18n";
@@ -42,6 +41,5 @@ defineProps<{ module: NonNullable<typeof state.value>["modules"][number] }>();
       <span v-if="module.origin.kind !== 'official'" class="text-muted-foreground/80 text-xs" :data-testid="`module-origin-${module.id}`">{{ t(`modules.origin.${module.origin.kind}`, { folder: module.origin.folder }) }}</span>
     </div>
     <slot />
-    <div v-if="$slots.details" class="basis-full"><slot name="details" /></div>
   </li>
 </template>

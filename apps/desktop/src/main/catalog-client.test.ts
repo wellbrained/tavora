@@ -96,21 +96,37 @@ describe("parseCatalogEntry", () => {
 });
 
 describe("CatalogClient.list", () => {
-  it("asks for the game only, with no cookies or referrer, and keeps only listings that fit", async () => {
+  it("asks for the whole index with no cookies or referrer, and lists the modules that fit first", async () => {
     const { impl, calls } = fakeFetch(() =>
-      json({ modules: [entry(), entry({ id: "wellbrained.other", name: "Another", games: ["satisfactory"] }), entry({ id: "bad id" }), entry()] }),
+      json({ modules: [entry({ id: "wellbrained.another", name: "Another", games: ["satisfactory"], installs: 12 }), entry(), entry({ id: "bad id" }), entry()] }),
     );
     const result = await new CatalogClient({ baseUrl: "https://catalog.test/", fetchImpl: impl }).list({ game: "poe2" });
-    expect(calls.map((call) => call.url)).toEqual(["https://catalog.test/v1/catalog?game=poe2"]);
+    expect(calls.map((call) => call.url)).toEqual(["https://catalog.test/v1/catalog"]);
     expect(calls[0]!.init).toMatchObject({ credentials: "omit", referrerPolicy: "no-referrer", redirect: "error" });
-    expect(result).toEqual({ status: "ok", modules: [expect.objectContaining({ id: "wellbrained.tracker" })] });
+    expect(result).toEqual({
+      status: "ok",
+      modules: [
+        expect.objectContaining({ id: "wellbrained.tracker", fits: true, installs: 0 }),
+        expect.objectContaining({ id: "wellbrained.another", fits: false, forGames: ["Satisfactory"], installs: 12 }),
+      ],
+    });
     expect(JSON.stringify(result)).not.toContain(SHA);
   });
 
-  it("asks for personal workspace modules with workspace=1", async () => {
-    const { impl, calls } = fakeFetch(() => json({ modules: [] }));
-    await new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl }).list({ workspace: true });
-    expect(calls[0]!.url).toBe("https://catalog.test/v1/catalog?workspace=1");
+  it("marks modules for a game as not fitting a personal workspace", async () => {
+    const { impl, calls } = fakeFetch(() => json({ modules: [entry({ games: ["poe2"] })] }));
+    const result = await new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl }).list({ workspace: true });
+    expect(calls[0]!.url).toBe("https://catalog.test/v1/catalog");
+    expect(result).toEqual({ status: "ok", modules: [expect.objectContaining({ fits: false, forGames: ["Path of Exile 2"] })] });
+  });
+
+  it("tells the catalog about an install with only the module id, and never throws", async () => {
+    const { impl, calls } = fakeFetch(() => new Response(null, { status: 204 }));
+    await new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl }).installed("wellbrained.tracker");
+    expect(calls[0]!.url).toBe("https://catalog.test/v1/catalog/installed");
+    expect(calls[0]!.init).toMatchObject({ method: "POST", credentials: "omit", body: JSON.stringify({ id: "wellbrained.tracker" }) });
+    const offline = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: (async () => Promise.reject(new TypeError("offline"))) as typeof fetch });
+    await expect(offline.installed("wellbrained.tracker")).resolves.toBeUndefined();
   });
 
   it("says when the catalog is off, busy or unreachable", async () => {

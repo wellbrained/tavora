@@ -6,6 +6,7 @@ import CloudCopyDialog from "./components/CloudCopyDialog.vue";
 import PairingDialog from "./components/PairingDialog.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import GrantDialog from "./components/GrantDialog.vue";
+import HotkeyDialog from "./components/HotkeyDialog.vue";
 import LinkChoiceDialog from "./components/LinkChoiceDialog.vue";
 import NavigationChoiceDialog from "./components/NavigationChoiceDialog.vue";
 import GameRail from "./components/GameRail.vue";
@@ -51,6 +52,7 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <GrantDialog v-else-if="dialog?.kind === 'grant'" :key="dialog.moduleId" :request="dialog" />
     <ModuleMenu />
     <CloudCopyDialog />
+    <HotkeyDialog />
     <PairingDialog />
 
     <!-- Over the toolbar: module panels are native views drawn above this

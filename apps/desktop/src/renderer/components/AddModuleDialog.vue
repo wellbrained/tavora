@@ -40,7 +40,7 @@ function kindOf(module: ModuleView): Kind {
   return module.development ? "development" : module.provenance;
 }
 
-const view = ref<View>("all");
+const view = ref<View>((dialog.value as AddModuleRequest).view ?? "all");
 const query = ref("");
 /** How many modules the catalog lists for the search, once it has loaded. */
 const catalogCount = ref<number | null>(null);

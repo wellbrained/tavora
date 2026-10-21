@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
-import type { Capability, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
+import type { Capability, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./gamedata";
 import { moduleThemeCss } from "./module-style";
@@ -76,6 +76,10 @@ export interface ModuleViewOptions {
   aiUsage: BridgeContext["aiUsage"];
   /** The discord connector, shared by every panel; this view uses it under its own instance id. */
   discord: Pick<DiscordConnector, "use" | "release" | "state" | "connectNow" | "allowControl" | "command" | "subscribe" | "unsubscribe" | "image">;
+  /** Stream overlays of this module in this game, for a module granted the stream-overlay connector. */
+  overlay: { publish(key: string, state: JsonValue): void; remove(key: string): void; copyLink(key: string): OverlayLinkResult; resetLink(key: string): void };
+  /** Hotkeys of this module in this game; `set` opens Tavora's hotkey dialog. */
+  hotkeys: { list(): HotkeyBinding[]; set(action: string, target: string, label: string): Promise<HotkeySetResult>; remove(target: string, action: string | null): void };
   /** Test runs only: hosts mapped to a local server (network.ts). */
   testHosts?: TestHosts;
 }
@@ -492,6 +496,26 @@ export class ModuleView {
           await this.takeGesture("ui.showMenu");
           return this.options.showMenu(menu);
         },
+        overlay: {
+          publish: (key, state) => this.options.overlay.publish(key, state),
+          remove: (key) => this.options.overlay.remove(key),
+          copyLink: async (key) => {
+            // One click copies one link, so a page cannot keep the clipboard to itself.
+            await this.takeGesture("overlay.copyLink");
+            return this.options.overlay.copyLink(key);
+          },
+          resetLink: (key) => this.options.overlay.resetLink(key),
+        },
+        hotkeys: {
+          list: () => this.options.hotkeys.list(),
+          set: async (action, target, label) => {
+            if (!(module.manifest.actions ?? []).some((item) => item.id === action)) throw new HostError("INVALID_PARAMS", `this module has no action "${action}" in its manifest`);
+            // Tavora's dialog takes the key; one click opens it once.
+            await this.takeGesture("hotkeys.set");
+            return this.options.hotkeys.set(action, target, label);
+          },
+          remove: (target, action) => this.options.hotkeys.remove(target, action),
+        },
       },
       () => {
         pageImports.abort();
@@ -505,12 +529,13 @@ export class ModuleView {
     this.view.webContents.postMessage("tavora:port", null, [port2]);
   }
 
-  /** What the player has granted now (grants.ts): `network` with any granted host, `aiUsage` and `discord` with their connectors. */
+  /** What the player has granted now (grants.ts): `network` with any granted host, `aiUsage`, `discord` and `overlay` with their connectors. */
   private capabilities(): ReadonlySet<Capability> {
     const granted = new Set<Capability>();
     if (this.options.networkHosts().size > 0) granted.add("network");
     if (this.options.connectors().has("ai-usage")) granted.add("aiUsage");
     if (this.options.connectors().has("discord")) granted.add("discord");
+    if (this.options.connectors().has("stream-overlay")) granted.add("overlay");
     return granted;
   }
 
@@ -559,6 +584,11 @@ export class ModuleView {
       unsubscribe: (event, channelId) => connector.unsubscribe(instanceId, event, channelId),
       image: (url) => connector.image(url),
     };
+  }
+
+  /** The player pressed a hotkey set for this module in this game. */
+  hotkeyPressed(binding: HotkeyBinding): void {
+    this.bridge?.emit("hotkeys.pressed", { ...binding });
   }
 
   /** The player changed the AI accounts; a module granted the connector hears it. */

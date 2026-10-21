@@ -300,6 +300,8 @@ export class CatalogStore {
       );
       create table if not exists report_notices (owner text primary key, notified_at text not null);
     `);
+    // Installs from Browse, counted per module, never who installed it or from where.
+    this.db.exec("create table if not exists installs (module_id text primary key, count integer not null)");
     // Since when the whole catalog has had no room (C9), and when the maintainer was last told.
     this.db.exec("create table if not exists catalog_state (name text primary key, value text not null)");
     // Catalogs from before signed uploads have no account_id: those versions were added by hand.
@@ -420,6 +422,18 @@ export class CatalogStore {
     return true;
   }
 
+  /** Counts one install of a listed module from Browse. Nothing about the player is kept. */
+  countInstall(id: string): boolean {
+    if (!this.db.prepare("select 1 from modules where id = ? and listed = 1").get(id)) return false;
+    this.db.prepare("insert into installs (module_id, count) values (?, 1) on conflict (module_id) do update set count = count + 1").run(id);
+    return true;
+  }
+
+  /** How many times a module was installed from Browse. */
+  installCount(id: string): number {
+    return (this.db.prepare("select count from installs where module_id = ?").get(id) as { count: number } | undefined)?.count ?? 0;
+  }
+
   /** Whether a key's owner may be told about reports now: at most once a day. Saying yes counts as telling. */
   takeReportNotice(owner: string, now: Date = new Date()): boolean {
     const last = this.db.prepare("select notified_at from report_notices where owner = ?").get(owner) as { notified_at: string } | undefined;
@@ -477,6 +491,11 @@ export class CatalogStore {
   /** Closes a report once a person has looked at it. */
   dismissReport(sha256: string): boolean {
     return Number(this.db.prepare("delete from reports where sha256 = ?").run(sha256).changes) > 0;
+  }
+
+  /** Whether any module, listed or not, has an id under this prefix. */
+  hasModuleUnder(prefix: string): boolean {
+    return this.db.prepare("select 1 from modules where substr(id, 1, ?) = ? limit 1").get(prefix.length + 1, `${prefix}.`) !== undefined;
   }
 
   /** Every module, listed or not, for the maintainer. */

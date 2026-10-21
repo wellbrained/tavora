@@ -13,8 +13,10 @@ import { formatDate, t } from "../i18n";
 import { ExternalLink, X } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
 
-const props = defineProps<{ module: CatalogModuleView; installed: boolean; installing: boolean; size: string; error?: string }>();
-const emit = defineEmits<{ close: []; install: []; add: [] }>();
+const props = defineProps<{ module: CatalogModuleView; installed: boolean; installing: boolean; size: string; error?: string; reporting: boolean; reported: boolean }>();
+const emit = defineEmits<{ close: []; install: []; add: []; report: [] }>();
+/** Report asks once more before anything is sent. */
+const reportAsk = ref(false);
 
 const page = ref<CatalogPageResult | null>(null);
 const shown = ref(0);
@@ -38,6 +40,11 @@ const access = computed(() => [
   ...module.value.permissions.network.map((host) => t("catalog.accessHost", { host })),
   ...module.value.permissions.connectors.map((id) => t(`catalog.accessConnector.${id}`)),
 ]);
+/** Why Install and Add are greyed out: the module is for another game, or not for workspaces. */
+const notHere = computed(() => {
+  if (module.value.fits) return null;
+  return module.value.forGames.length ? t("catalog.onlyFor", { games: module.value.forGames.join(", ") }) : t("catalog.notInWorkspaces");
+});
 
 async function openHomepage() {
   opening.value = true;
@@ -66,8 +73,11 @@ async function openHomepage() {
           <DialogDescription v-if="module.description" class="text-muted-foreground mt-1 line-clamp-2 text-sm">{{ module.description }}</DialogDescription>
         </div>
         <div class="flex flex-none items-center gap-2">
-          <Button v-if="installed" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary" data-testid="catalog-info-add" @click="emit('add')">{{ t("common.add") }}</Button>
-          <Button v-else :disabled="installing" data-testid="catalog-info-install" @click="emit('install')">{{ installing ? t("catalog.installing") : t("catalog.install") }}</Button>
+          <!-- A disabled button gets no hover, so the reason sits on a wrapper. -->
+          <span :title="notHere ?? undefined">
+            <Button v-if="installed" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary" :disabled="!!notHere" data-testid="catalog-info-add" @click="emit('add')">{{ t("common.add") }}</Button>
+            <Button v-else :disabled="installing || !!notHere" data-testid="catalog-info-install" @click="emit('install')">{{ installing ? t("catalog.installing") : t("catalog.install") }}</Button>
+          </span>
           <Button variant="ghost" size="icon" :aria-label="t('common.close')" @click="emit('close')"><X class="size-4" /></Button>
         </div>
       </header>
@@ -151,7 +161,20 @@ async function openHomepage() {
                 <li v-for="(line, index) in access" :key="index" class="break-words">{{ line }}</li>
               </ul>
               <p v-else>{{ t("catalog.accessNone") }}</p>
-              <p v-if="access.length" class="text-muted-foreground mt-2 text-xs">{{ t("catalog.accessHint") }}</p>
+            </section>
+
+            <section data-testid="catalog-info-report">
+              <p v-if="reported" class="text-muted-foreground" role="status" :data-testid="`catalog-reported-${module.id}`">{{ t("catalog.reported") }}</p>
+              <div v-else-if="reportAsk" class="bg-muted/40 flex flex-wrap items-center gap-2 rounded-md p-3" :data-testid="`catalog-report-ask-${module.id}`">
+                <p class="w-full">{{ t("catalog.reportAsk", { name: module.name }) }}</p>
+                <Button size="sm" variant="secondary" :disabled="reporting" :data-testid="`catalog-report-send-${module.id}`" @click="emit('report')">
+                  {{ reporting ? t("catalog.reporting") : t("catalog.reportSend") }}
+                </Button>
+                <Button size="sm" variant="ghost" :disabled="reporting" @click="reportAsk = false">{{ t("common.cancel") }}</Button>
+              </div>
+              <Button v-else size="sm" variant="ghost" class="text-muted-foreground -ml-2" :data-testid="`catalog-report-${module.id}`"
+                :aria-label="t('catalog.reportLabel', { name: module.name })" @click="reportAsk = true"
+              >{{ t("catalog.report") }}</Button>
             </section>
           </aside>
         </div>

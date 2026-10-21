@@ -9,6 +9,7 @@ import {
   BrowserWindow,
   clipboard,
   dialog,
+  globalShortcut,
   ipcMain,
   nativeImage,
   nativeTheme,
@@ -24,14 +25,14 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, DeveloperLink, GameView, HostAction, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, DeveloperLink, GameView, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS } from "./layout";
 import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
-import { parseAction } from "./actions";
+import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
 import { applyOwners, readOwnerRecords } from "./installer";
@@ -100,6 +101,7 @@ import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus,
 import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, steamShareGames, submitIcon } from "./share-icons";
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
 import { GameWatcher } from "./game-watch";
+import { Streaming } from "./streaming";
 import { findInstalledGames } from "./launcher-games";
 import { findSteamDir, isSteamAppId, loadAppInfo, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
@@ -301,6 +303,8 @@ export class Host {
   private grants!: GrantStore;
   /** The catalog's signed safety lists (revoked keys, blocked zips, successions). */
   private safetyLists!: SafetyLists;
+  /** Stream overlays and hotkeys for module actions (streaming.ts); made before any module panel opens. */
+  private streaming!: Streaming;
   /** Modules in the player's folder whose zip Tavora blocked: not loaded, data kept. */
   private blockedModules = new Map<string, InstalledModule>();
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
@@ -535,6 +539,7 @@ export class Host {
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
     host.moduleData = await listModuleData(userData, host.files.root());
     host.grants = await GrantStore.load(userData);
+    host.streaming = await Host.streamingService(host);
     host.safetyLists = safetyLists;
     host.blockedModules = blockedModules;
     await host.moveAiUsagePanelData();
@@ -856,6 +861,7 @@ export class Host {
   private async deleteLeftoverData(owner: string, moduleId: string): Promise<void> {
     if (this.modules.get(moduleId)?.owner === owner) throw new LibraryError("error.dataInUse");
     this.data.forgetModule(owner, moduleId);
+    this.streaming.forgetModule(owner, moduleId);
     for (const partition of await deleteModuleDataOf(this.options.userData, owner, moduleId, this.files.root())) {
       const ses = session.fromPartition(partition);
       await ses.clearStorageData();
@@ -1039,7 +1045,7 @@ export class Host {
     const shots = await Promise.all(details.entry.shots.map((shot) => this.catalog.picture(shot)));
     return {
       status: "ok",
-      module: catalogView(details.entry),
+      module: catalogView(details.entry, this.catalogScope() ?? undefined),
       screenshots: shots.filter((url): url is string => url !== null),
       readme: details.readme === null ? [] : parseReadme(details.readme),
       versions: details.versions,
@@ -1219,20 +1225,13 @@ export class Host {
       event.sender.id === this.window.webContents.id && event.senderFrame?.parent === null;
 
     ipcMain.handle("host:get-state", (event) => (fromHost(event) ? this.viewState() : null));
+    const handlers = this.actionHandlers();
     ipcMain.handle("host:action", async (event, raw: unknown): Promise<ActionResult> => {
       if (!fromHost(event)) return { ok: false, error: translate(this.language, "error.notAllowed") };
       const action = parseAction(raw);
       if (!action) return { ok: false, error: translate(this.language, "error.notUnderstood") };
       try {
-        if (action.type === "share-icons") return await this.shareIcons(action.gameIds);
-        if (action.type === "share-steam-icons") return await this.shareSteamIcons(action.appids);
-        if (action.type === "import-steam-games") return this.importSteam(action.games);
-        if (action.type === "check-module-updates") {
-          if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
-          return { ok: true, ...(await this.checkCatalogUpdates()) };
-        }
-        const id = await this.perform(action);
-        return id === undefined ? { ok: true } : { ok: true, id };
+        return await runAction(handlers, action);
       } catch (error) {
         if (error instanceof PlayerError) {
           return { ok: false, error: translate(this.language, error.key, error.params) };
@@ -1343,489 +1342,396 @@ export class Host {
 
   // ── Actions ──────────────────────────────────────────────────────────
 
-  private async perform(action: HostAction): Promise<string | void> {
-    const library = this.library;
-    switch (action.type) {
-      case "link-choice":
-        return this.chooseLink(action.choice);
-      case "game-switch":
-        return this.chooseGameSwitch(action.choice);
-      case "navigation-choice":
-        return this.chooseNavigation(action.choice);
-      case "module-files-change":
-        return this.files.change();
-      case "module-files-reset":
-        return this.files.reset();
-      case "module-files-open":
-        return this.files.open();
-      case "show-welcome":
-        return this.showScreen("welcome");
-      case "restart":
-        return this.options.restart();
-      case "open-game":
-        return this.openGame(action.gameId);
-      case "add-game": {
-        const id = addGame(library, action, new Date());
+  /** What each action does; actions that change the library save it after. */
+  private actionHandlers(): ActionHandlers {
+    const saved =
+      <A>(change: (action: A) => unknown) =>
+      async (action: A): Promise<void> => {
+        await change(action);
+        this.saveLibrary();
+      };
+    const pageSite = (instanceId: string) => {
+      const site = siteOfUrl(this.browser(instanceId).state.url);
+      if (!site) throw new LibraryError("error.openPageFirst");
+      return site;
+    };
+    return {
+      // Answers to questions on screen
+      "show-welcome": () => this.showScreen("welcome"),
+      "link-choice": (action) => this.chooseLink(action.choice),
+      "navigation-choice": (action) => this.chooseNavigation(action.choice),
+      "game-switch": (action) => this.chooseGameSwitch(action.choice),
+
+      // App
+      "module-files-change": () => this.files.change(),
+      "module-files-reset": () => this.files.reset(),
+      "module-files-open": () => this.files.open(),
+      restart: () => this.options.restart(),
+      "download-update": () => this.updates?.download(),
+      "check-for-updates": () => {
+        if (!this.updates) throw new LibraryError("error.updatesDev");
+        return this.updates.check();
+      },
+      "restart-to-update": () => this.updates?.restartNow(),
+      "record-timing": (action) => {
+        timings.record(action.name, action.ms);
+      },
+      "copy-diagnostics": async () => {
+        clipboard.writeText(await this.diagnosticReport());
+      },
+      "open-backups": async () => {
+        const dir = backupsDir(this.options.userData);
+        await mkdir(dir, { recursive: true });
+        const problem = await shell.openPath(dir);
+        if (problem) throw new LibraryError("error.openFolder", { problem });
+      },
+
+      // Library
+      "open-game": (action) => this.openGame(action.gameId),
+      "add-game": (action) => {
+        const id = addGame(this.library, action, new Date());
         this.workspaces.addGames([id]);
         this.saveLibrary();
         this.fetchIconsSoon();
         // A game added just now may have been installed since the last look.
         if (this.gameWatcher.active) void this.gameWatcher.refreshInstalled();
         return id;
-      }
-      case "rename-game":
-        renameGame(library, action.gameId, action.name);
-        break;
-      case "set-game-label": {
-        const previous = setGameLabel(library, action.gameId, action.label);
+      },
+      "rename-game": saved((action) => renameGame(this.library, action.gameId, action.name)),
+      "set-game-label": saved(async (action) => {
+        const previous = setGameLabel(this.library, action.gameId, action.label);
         await this.dropIconFile(previous);
-        break;
-      }
-      case "choose-game-image":
-        await this.chooseGameImage(action.gameId);
-        break;
-      case "use-original-icon": {
-        const previous = useOriginalGameIcon(library, action.gameId);
+      }),
+      "choose-game-image": saved((action) => this.chooseGameImage(action.gameId)),
+      "use-original-icon": saved(async (action) => {
+        const previous = useOriginalGameIcon(this.library, action.gameId);
         await this.dropIconFile(previous);
-        break;
-      }
-      case "share-icons":
-      case "share-steam-icons":
-        // Answered with a count, so the IPC handler runs it itself.
-        throw new Error(`${action.type} is not run through perform`);
-      case "trash-game": {
+      }),
+      "share-icons": (action) => this.shareIcons(action.gameIds),
+      "share-steam-icons": (action) => this.shareSteamIcons(action.appids),
+      "import-steam-games": (action) => this.importSteam(action.games),
+      "trash-game": saved((action) => {
         const wasOpen = this.gameId === action.gameId;
-        trashGame(library, action.gameId, new Date());
+        trashGame(this.library, action.gameId, new Date());
         if (wasOpen) this.showScreen("welcome");
-        break;
-      }
-      case "restore-game":
-        restoreGame(library, action.gameId);
-        break;
-      case "delete-game": {
-        const game = deleteTrashedGame(library, action.gameId);
+      }),
+      "restore-game": saved((action) => restoreGame(this.library, action.gameId)),
+      "delete-game": saved(async (action) => {
+        const game = deleteTrashedGame(this.library, action.gameId);
         this.saveLibrary();
         await this.deleteGameData(game);
-        break;
-      }
+      }),
       // Many at once: games already gone are skipped, so a list the screen showed a moment ago still works.
-      case "trash-games": {
-        const live = action.gameIds.filter((id) => isLive(library, id));
-        for (const id of live) trashGame(library, id, new Date());
+      "trash-games": saved((action) => {
+        const live = action.gameIds.filter((id) => isLive(this.library, id));
+        for (const id of live) trashGame(this.library, id, new Date());
         if (this.gameId !== null && live.includes(this.gameId)) this.showScreen("welcome");
-        break;
-      }
-      case "restore-games":
-        for (const id of action.gameIds) if (library.games[id]?.trashedAt) restoreGame(library, id);
-        break;
-      case "delete-games": {
-        const games = action.gameIds.filter((id) => library.games[id]?.trashedAt).map((id) => deleteTrashedGame(library, id));
+      }),
+      "restore-games": saved((action) => {
+        for (const id of action.gameIds) if (this.library.games[id]?.trashedAt) restoreGame(this.library, id);
+      }),
+      "delete-games": saved(async (action) => {
+        const games = action.gameIds.filter((id) => this.library.games[id]?.trashedAt).map((id) => deleteTrashedGame(this.library, id));
         this.saveLibrary();
         for (const game of games) await this.forgetGameData(game);
         await this.clearOrphanedSessions();
-        break;
-      }
-      case "favorite":
-        placeFavorite(library, action.gameId, action.index);
-        break;
-      case "unfavorite":
-        removeFavorite(library, action.gameId);
-        break;
-      case "move-game":
-        moveGame(library, action.gameId, action);
-        break;
-      case "create-folder": {
-        const id = createFolder(library, action.name, action.gameIds.filter((game) => isLive(library, game)));
+      }),
+      favorite: saved((action) => placeFavorite(this.library, action.gameId, action.index)),
+      unfavorite: saved((action) => removeFavorite(this.library, action.gameId)),
+      "move-game": saved((action) => moveGame(this.library, action.gameId, action)),
+      "create-folder": (action) => {
+        const id = createFolder(this.library, action.name, action.gameIds.filter((game) => isLive(this.library, game)));
         this.saveLibrary();
         return id;
-      }
-      case "rename-folder":
-        renameFolder(library, action.folderId, action.name);
-        break;
-      case "set-folder-label":
-        setFolderLabel(library, action.folderId, action.label);
-        break;
-      case "delete-folder":
-        deleteFolder(library, action.folderId);
-        break;
-      case "move-folder":
-        moveFolder(library, action.folderId, action.index);
-        break;
-      case "set-sort":
-        library.sort = action.sort;
-        break;
-      case "set-startup":
-        library.startup = action.startup;
-        break;
-      case "set-game-start":
-        library.gameStart = action.gameStart;
+      },
+      "rename-folder": saved((action) => renameFolder(this.library, action.folderId, action.name)),
+      "set-folder-label": saved((action) => setFolderLabel(this.library, action.folderId, action.label)),
+      "delete-folder": saved((action) => deleteFolder(this.library, action.folderId)),
+      "move-folder": saved((action) => moveFolder(this.library, action.folderId, action.index)),
+
+      // Settings
+      "set-sort": saved((action) => {
+        this.library.sort = action.sort;
+      }),
+      "set-startup": saved((action) => {
+        this.library.startup = action.startup;
+      }),
+      "set-game-start": saved((action) => {
+        this.library.gameStart = action.gameStart;
         if (action.gameStart !== "ask") this.pendingGameSwitch = null;
         if (action.gameStart === "off") this.gameWatcher.stop();
         else this.gameWatcher.start();
-        break;
-      case "set-game-end":
-        if (action.workspaceId !== null && !(isLive(library, action.workspaceId) && library.games[action.workspaceId]!.kind === "workspace")) {
+      }),
+      "set-game-end": saved((action) => {
+        if (action.workspaceId !== null && !(isLive(this.library, action.workspaceId) && this.library.games[action.workspaceId]!.kind === "workspace")) {
           throw new LibraryError("error.gameGone");
         }
-        library.gameEndWorkspace = action.workspaceId;
-        break;
-      case "set-grayscale-text":
-        library.grayscaleText = action.enabled;
-        break;
-      case "set-auto-update":
-        library.autoUpdate = action.enabled;
-        this.updates?.setAutoDownload(action.enabled);
-        break;
-      case "record-timing":
-        timings.record(action.name, action.ms);
-        return;
-      case "copy-diagnostics":
-        clipboard.writeText(await this.diagnosticReport());
-        return;
-      case "open-backups": {
-        const dir = backupsDir(this.options.userData);
-        await mkdir(dir, { recursive: true });
-        const problem = await shell.openPath(dir);
-        if (problem) throw new LibraryError("error.openFolder", { problem });
-        return;
-      }
-      case "download-update":
-        return this.updates?.download();
-      case "check-for-updates":
-        if (!this.updates) throw new LibraryError("error.updatesDev");
-        return this.updates.check();
-      case "restart-to-update":
-        return this.updates?.restartNow();
-      case "set-online-search":
-        library.onlineSearch = action.enabled;
+        this.library.gameEndWorkspace = action.workspaceId;
+      }),
+      "set-grayscale-text": saved((action) => {
+        this.library.grayscaleText = action.enabled;
+      }),
+      "set-online-search": saved((action) => {
+        this.library.onlineSearch = action.enabled;
         // Turned on: games without an icon may find one on the service, and the share list can be built.
         if (action.enabled) this.fetchIconsSoon();
         if (action.enabled) void this.refreshSafetyLists();
-        break;
-      case "set-language":
-        library.language = action.language;
-        for (const view of this.views.values()) view.applyLanguage(this.language);
-        break;
-      case "set-steam-profile":
-        library.steamProfile = action.profile;
-        break;
-      case "set-module-icons":
-        library.moduleIcons = action.enabled;
-        break;
-      case "set-steam-icons":
-        library.steamIcons = action.enabled;
+      }),
+      "set-auto-update": saved((action) => {
+        this.library.autoUpdate = action.enabled;
+        this.updates?.setAutoDownload(action.enabled);
+      }),
+      "set-steam-icons": saved((action) => {
+        this.library.steamIcons = action.enabled;
         if (action.enabled) this.fetchIconsSoon();
-        break;
-      case "set-theme":
+      }),
+      "set-module-icons": saved((action) => {
+        this.library.moduleIcons = action.enabled;
+      }),
+      "set-stream-overlays": (action) => this.streaming.setOverlays(action.enabled),
+      "set-overlay-port": (action) => this.streaming.setPort(action.port),
+      "reset-overlay-links": () => this.streaming.resetLinks(),
+      "hotkey-answer": (action) => this.streaming.answer(action.id, action.choice, action.accelerator),
+      "remove-hotkey": (action) => this.streaming.removeHotkey(action),
+      "set-language": saved((action) => {
+        this.library.language = action.language;
+        for (const view of this.views.values()) view.applyLanguage(this.language);
+      }),
+      "set-steam-profile": saved((action) => {
+        this.library.steamProfile = action.profile;
+      }),
+      "set-onboarded": saved((action) => {
+        this.library.onboarded = action.done;
+      }),
+      "set-rail": saved((action) => setRail(this.library, action)),
+
+      // Appearance
+      "set-theme": saved((action) => {
         if (!this.themes.get(action.themeId)?.theme.variations.some((variation) => variation.id === action.variationId)) {
           throw new LibraryError("error.themeGone");
         }
-        library.theme = { id: action.themeId, variation: action.variationId };
-        if (action.fixed) library.followSystem = false;
+        this.library.theme = { id: action.themeId, variation: action.variationId };
+        if (action.fixed) this.library.followSystem = false;
         this.applyTheme();
-        break;
-      case "set-appearance-mode": {
+      }),
+      "set-appearance-mode": saved((action) => {
         if (action.mode === "system") {
-          library.followSystem = true;
+          this.library.followSystem = true;
         } else {
-          const { theme } = resolveTheme(this.themes, library.theme);
-          const variation = variationForMode(theme, library.theme.variation, action.mode);
+          const { theme } = resolveTheme(this.themes, this.library.theme);
+          const variation = variationForMode(theme, this.library.theme.variation, action.mode);
           if (variation.mode !== action.mode) throw new LibraryError("error.themeNoMode", { mode: translate("en", action.mode === "dark" ? "common.dark" : "common.light") });
-          library.theme = { id: theme.id, variation: variation.id };
-          library.followSystem = false;
+          this.library.theme = { id: theme.id, variation: variation.id };
+          this.library.followSystem = false;
         }
         this.applyTheme();
-        break;
-      }
-      case "reset-theme":
-        library.theme = { ...DEFAULT_THEME };
-        library.followSystem = true;
+      }),
+      "reset-theme": saved(() => {
+        this.library.theme = { ...DEFAULT_THEME };
+        this.library.followSystem = true;
         this.applyTheme();
-        break;
-      case "reload-modules":
-        return this.reloadModules();
-      case "add-development-folder":
-        return this.addDevelopmentFolder();
-      case "remove-development-folder":
-        return this.removeDevelopmentFolder(action.folder);
-      case "open-developer-link":
-        return this.openDeveloperLink(action.link);
-      case "open-modules-folder":
-        return this.openModulesFolder();
-      case "open-module-problem-folder":
-        return this.openModuleProblemFolder(action.path);
-      case "remove-module":
-        return this.lifecycle.remove(action.moduleId);
-      case "grant-module":
-        return this.lifecycle.grant(action.moduleId, action.network, action.connectors);
-      case "revoke-module":
-        return this.lifecycle.revoke(action.moduleId);
-      case "install-module":
-        return this.installModule();
-      case "install-catalog-module":
-        return this.lifecycle.installFromCatalog(action.moduleId);
-      case "report-catalog-module":
-        return this.reportCatalogModule(action.moduleId);
-      case "open-catalog-homepage":
-        return this.openCatalogHomepage(action.moduleId);
-      case "apply-module-update":
-        return this.lifecycle.applyUpdate(action.moduleId, action.version);
-      case "delete-module-data":
-        return this.deleteLeftoverData(action.owner, action.moduleId);
-      case "seen-module-notes": {
-        const module = this.modules.get(action.moduleId);
-        if (!module || module.builtIn) return;
-        this.library.moduleNotesSeen[Host.notesKey(module)] = module.manifest.version;
-        this.saveLibrary();
-        return;
-      }
-      case "move-local-data":
-        return this.moveLocalData(action.moduleId);
-      case "reload-themes":
-        return this.reloadThemes();
-      case "open-themes-folder":
-        return this.openThemesFolder();
-      case "create-starter-theme":
-        return this.createStarterTheme();
-      case "set-onboarded":
-        library.onboarded = action.done;
-        break;
-      case "save-profile":
+      }),
+      "reload-themes": () => this.reloadThemes(),
+      "open-themes-folder": () => this.openThemesFolder(),
+      "create-starter-theme": () => this.createStarterTheme(),
+
+      // Profile
+      "save-profile": async (action) => {
         this.profile.name = clipName(action.name);
         this.profile.initials = clipInitials(action.initials);
         this.profile.updatedAt = new Date().toISOString();
         // Resolves once it is on disk, so the host UI can say "Saved"; the account gets it after.
         await this.saveProfile();
         void this.account.profileChanged();
-        return;
-      case "set-profile-picture":
-        return this.setProfilePicture(await savePicture(this.profileDir, action.png));
-      case "remove-profile-picture":
-        return this.setProfilePicture(null);
-      case "set-rail":
-        setRail(library, action);
-        break;
-      case "open-module":
-        return this.openModule(action.moduleId, { ...(action.panelType ? { panelType: action.panelType } : {}) });
-      case "choose-panel-type":
-        return this.choosePanelType(action.instanceId, action.panelType);
-      case "close-panel":
-        return this.closePanel(action.instanceId);
-      case "remove-module-from-game":
-        return this.removeModuleFromGame(action.moduleId);
-      case "reload-panel":
-        return this.views.get(action.instanceId)?.reload();
-      case "stop-panel":
-        return this.views.get(action.instanceId)?.stop();
-      case "browser-new-tab":
-        return this.openBrowserTab(action.instanceId, null, false);
-      case "browser-navigate":
-        return this.browser(action.instanceId).navigate(action.address);
-      case "browser-command":
-        return this.browserCommand(this.browser(action.instanceId), action.command);
-      case "browser-set-shared":
-      case "browser-set-adblock": {
-        const site = siteOfUrl(this.browser(action.instanceId).state.url);
-        if (!site) throw new LibraryError("error.openPageFirst");
-        if (action.type === "browser-set-shared") setSiteListed(library, "sharedSites", site, action.shared);
-        else setSiteListed(library, "adblockOff", site, !action.enabled);
+      },
+      "set-profile-picture": async (action) => this.setProfilePicture(await savePicture(this.profileDir, action.png)),
+      "remove-profile-picture": () => this.setProfilePicture(null),
+
+      // Modules
+      "open-modules-folder": () => this.openModulesFolder(),
+      "open-module-problem-folder": (action) => this.openModuleProblemFolder(action.path),
+      "add-development-folder": () => this.addDevelopmentFolder(),
+      "remove-development-folder": (action) => this.removeDevelopmentFolder(action.folder),
+      "open-developer-link": (action) => this.openDeveloperLink(action.link),
+      "reload-modules": () => this.reloadModules(),
+      "remove-module": (action) => this.lifecycle.remove(action.moduleId),
+      "grant-module": (action) => this.lifecycle.grant(action.moduleId, action.network, action.connectors),
+      "revoke-module": (action) => this.lifecycle.revoke(action.moduleId),
+      "install-module": () => this.installModule(),
+      "install-catalog-module": (action) => this.lifecycle.installFromCatalog(action.moduleId),
+      "check-module-updates": async () => {
+        if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+        return { ok: true, ...(await this.checkCatalogUpdates()) };
+      },
+      "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId),
+      "open-catalog-homepage": (action) => this.openCatalogHomepage(action.moduleId),
+      "apply-module-update": (action) => this.lifecycle.applyUpdate(action.moduleId, action.version),
+      "delete-module-data": (action) => this.deleteLeftoverData(action.owner, action.moduleId),
+      "move-local-data": (action) => this.moveLocalData(action.moduleId),
+      "seen-module-notes": (action) => {
+        const module = this.modules.get(action.moduleId);
+        if (!module || module.builtIn) return;
+        this.library.moduleNotesSeen[Host.notesKey(module)] = module.manifest.version;
+        this.saveLibrary();
+      },
+
+      // Panels and workspace
+      "open-module": (action) => this.openModule(action.moduleId, { ...(action.panelType ? { panelType: action.panelType } : {}) }),
+      "choose-panel-type": (action) => this.choosePanelType(action.instanceId, action.panelType),
+      "close-panel": (action) => this.closePanel(action.instanceId),
+      "remove-module-from-game": (action) => this.removeModuleFromGame(action.moduleId),
+      "reload-panel": (action) => this.views.get(action.instanceId)?.reload(),
+      "stop-panel": (action) => this.views.get(action.instanceId)?.stop(),
+      "save-layout": (action) => this.workspaces.saveLayout(this.currentGameId(), action.layout),
+      "apply-layout-template": (action) => this.workspaces.applyTemplate(this.currentGameId(), layoutTemplate(action.templateId)),
+      "apply-layout-grid": (action) => this.workspaces.applyTemplate(this.currentGameId(), gridTemplate(action.columns, action.rows)),
+      "save-snapshot": (action) => this.workspaces.saveSnapshot(this.currentGameId(), action.name),
+      "update-snapshot": (action) => this.workspaces.updateSnapshot(this.currentGameId(), action.snapshotId),
+      "apply-snapshot": (action) => this.applySnapshot(action.snapshotId),
+      "rename-snapshot": (action) => this.workspaces.renameSnapshot(this.currentGameId(), action.snapshotId, action.name),
+      "delete-snapshot": (action) => this.workspaces.deleteSnapshot(this.currentGameId(), action.snapshotId),
+
+      // Browser panels
+      "browser-new-tab": (action) => this.openBrowserTab(action.instanceId, null, false),
+      "browser-navigate": (action) => this.browser(action.instanceId).navigate(action.address),
+      "browser-command": (action) => this.browserCommand(this.browser(action.instanceId), action.command),
+      "browser-set-shared": saved((action) => {
+        setSiteListed(this.library, "sharedSites", pageSite(action.instanceId), action.shared);
         this.browserSitesChanged();
-        break;
-      }
-      case "browser-forget-site":
-        setSiteListed(library, action.list === "shared" ? "sharedSites" : "adblockOff", action.site, false);
+      }),
+      "browser-set-adblock": saved((action) => {
+        setSiteListed(this.library, "adblockOff", pageSite(action.instanceId), !action.enabled);
         this.browserSitesChanged();
-        break;
-      case "clear-browser-data":
-        return this.clearBrowserData(action.scope);
-      case "account-send-code":
-        return this.account.sendCode(action.email);
-      case "account-verify":
-        return this.account.verify(action.code);
-      case "account-create":
-        return this.account.create(action.ageConfirmed);
-      case "account-cancel":
-        return this.account.cancel();
-      case "account-refresh":
-        return this.account.refresh();
-      case "account-sign-out":
+      }),
+      "browser-forget-site": saved((action) => {
+        setSiteListed(this.library, action.list === "shared" ? "sharedSites" : "adblockOff", action.site, false);
+        this.browserSitesChanged();
+      }),
+      "clear-browser-data": (action) => this.clearBrowserData(action.scope),
+
+      // Discord and AI usage
+      "discord-connect": () => this.discord.connectNow(),
+      "discord-sign-out": () => this.discord.signOut(),
+      "ai-usage-add": (action) => this.aiUsage.add(action.provider, action.label, action.directory),
+      "ai-usage-update": (action) => this.aiUsage.update(action.accountId, action.label, action.directory),
+      "ai-usage-remove": (action) => this.aiUsage.remove(action.accountId),
+
+      // Account
+      "account-send-code": (action) => this.account.sendCode(action.email),
+      "account-verify": (action) => this.account.verify(action.code),
+      "account-create": (action) => this.account.create(action.ageConfirmed),
+      "account-cancel": () => this.account.cancel(),
+      "account-refresh": () => this.account.refresh(),
+      "account-sign-out": async () => {
         await this.account.signOut();
         return this.copySync.signedOut();
-      case "account-sign-out-device":
-        return this.account.signOutDevice(action.deviceId);
-      case "account-rename-device":
-        return this.account.renameDevice(action.deviceId, action.name);
-      case "account-email-code":
-        return this.account.sendEmailCode(action.email);
-      case "account-change-email":
-        return this.account.changeEmail(action.code);
-      case "account-delete-code":
-        return this.account.sendDeleteCode();
-      case "account-delete":
+      },
+      "account-sign-out-device": (action) => this.account.signOutDevice(action.deviceId),
+      "account-rename-device": (action) => this.account.renameDevice(action.deviceId, action.name),
+      "account-email-code": (action) => this.account.sendEmailCode(action.email),
+      "account-change-email": (action) => this.account.changeEmail(action.code),
+      "account-delete-code": () => this.account.sendDeleteCode(),
+      "account-delete": async (action) => {
         await this.account.deleteAccount(action.code);
         return this.copySync.signedOut();
-      case "account-discord-sign-in":
-        return this.account.discordSignIn();
-      case "account-discord-connect-code":
-        return this.account.sendConnectDiscordCode();
-      case "account-discord-connect":
-        return this.account.connectDiscord(action.code);
-      case "account-discord-disconnect-code":
-        return this.account.sendDisconnectDiscordCode();
-      case "account-discord-disconnect":
-        return this.account.disconnectDiscord(action.code);
-      case "account-email-remove-code":
-        return this.account.sendRemoveEmailCode();
-      case "account-email-remove":
-        return this.account.removeEmail(action.code);
-      case "account-delete-discord":
+      },
+      "account-discord-sign-in": () => this.account.discordSignIn(),
+      "account-discord-connect-code": () => this.account.sendConnectDiscordCode(),
+      "account-discord-connect": (action) => this.account.connectDiscord(action.code),
+      "account-discord-disconnect-code": () => this.account.sendDisconnectDiscordCode(),
+      "account-discord-disconnect": (action) => this.account.disconnectDiscord(action.code),
+      "account-email-remove-code": () => this.account.sendRemoveEmailCode(),
+      "account-email-remove": (action) => this.account.removeEmail(action.code),
+      "account-delete-discord": async () => {
         await this.account.deleteWithDiscord();
         if (!this.account.view().account) await this.copySync.signedOut();
-        return;
-      case "account-profile-choice":
-        return this.account.chooseProfile(action.keep);
-      case "account-developer-name":
-        return this.account.setDeveloperName(action.name);
-      case "account-link-code":
-        return this.account.newLinkCode();
-      case "account-copy-link-command": {
+      },
+      "account-profile-choice": (action) => this.account.chooseProfile(action.keep),
+
+      // Developer side of the account
+      "account-developer-name": (action) => this.account.setDeveloperName(action.name),
+      "account-link-code": () => this.account.newLinkCode(),
+      "account-copy-link-command": () => {
         const code = this.account.view().linkCode?.code;
         if (!code) throw new PlayerError("account.error.noCode");
         clipboard.writeText(linkCommand(code));
-        return;
-      }
-      case "account-unlink-key":
-        return this.account.unlinkKey(action.fingerprint);
-      case "account-replace-key": {
+      },
+      "account-unlink-key": (action) => this.account.unlinkKey(action.fingerprint),
+      "account-replace-key": async (action) => {
         const linked = (this.account.view().publisherKeys ?? []).map((key) => key.fingerprint);
         if (!linked.includes(action.fingerprint)) throw new PlayerError("account.error.keyGone");
         const next = await this.developerKeys.replacementFor(action.fingerprint, linked);
         return this.account.replaceKey(action.fingerprint, next, action.leaked);
-      }
-      case "account-publish-token-create":
-        return this.account.createPublishToken(action.name);
-      case "account-publish-token-copy": {
+      },
+      "account-publish-token-create": (action) => this.account.createPublishToken(action.name),
+      "account-publish-token-copy": () => {
         const token = this.account.newPublishTokenText();
         if (!token) throw new PlayerError("error.generic");
         clipboard.writeText(token);
-        return;
-      }
-      case "account-publish-token-saved":
-        return this.account.publishTokenSaved();
-      case "account-publish-token-delete":
-        return this.account.deletePublishToken(action.id);
-      case "developer-key-create":
+      },
+      "account-publish-token-saved": () => this.account.publishTokenSaved(),
+      "account-publish-token-delete": (action) => this.account.deletePublishToken(action.id),
+      "developer-key-create": async () => {
         await this.developerKeys.create();
-        return;
-      case "developer-key-add": {
+      },
+      "developer-key-add": async () => {
         const picked = await dialog.showOpenDialog(this.window, { properties: ["openFile"], filters: [{ name: "PEM", extensions: ["pem", "key"] }, { name: "*", extensions: ["*"] }] });
         const file = picked.filePaths[0];
         if (picked.canceled || !file) return;
         const text = await readFile(file, "utf8").catch(() => null);
         if (text === null || text.length > 10_000) throw new PlayerError("developerKeys.error.notKey");
         await this.developerKeys.add(text);
-        return;
-      }
-      case "developer-key-export": {
+      },
+      "developer-key-export": async (action) => {
         const pem = this.developerKeys.exportKey(action.fingerprint);
         const picked = await dialog.showSaveDialog(this.window, { defaultPath: `publisher-key-${action.fingerprint.slice(0, 8)}.pem` });
         if (picked.canceled || !picked.filePath) return;
         await writeFile(picked.filePath, pem, { mode: 0o600 });
-        return;
-      }
-      case "developer-key-link":
-        return this.developerKeys.link(action.fingerprint);
-      case "developer-recovery-key":
-        return this.developerKeys.enterKey(action.key);
-      case "developer-recovery-key-saved":
-        return this.developerKeys.keySaved();
-      case "developer-show-recovery-key":
-        return this.developerKeys.showKey();
-      case "developer-copy-recovery-key": {
+      },
+      "developer-key-link": (action) => this.developerKeys.link(action.fingerprint),
+      "developer-recovery-key": (action) => this.developerKeys.enterKey(action.key),
+      "developer-recovery-key-saved": () => this.developerKeys.keySaved(),
+      "developer-show-recovery-key": () => this.developerKeys.showKey(),
+      "developer-copy-recovery-key": () => {
         const key = this.developerKeys.view().recoveryKey;
         if (key) clipboard.writeText(key);
-        return;
-      }
-      case "pairing-start":
-        return this.pairing.start();
-      case "pairing-cancel":
-        return this.pairing.cancel();
-      case "pairing-decide":
-        return this.pairing.decide(action.id, action.allow);
-      case "cloud-copy-on":
-        return this.copySync.turnOn();
-      case "cloud-copy-on-folder": {
+      },
+      "pairing-start": () => this.pairing.start(),
+      "pairing-cancel": () => this.pairing.cancel(),
+      "pairing-decide": (action) => this.pairing.decide(action.id, action.allow),
+
+      // Cloud copy
+      "cloud-copy-on": () => this.copySync.turnOn(),
+      "cloud-copy-on-folder": async () => {
         const folder = await this.pickPath("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
         if (!folder) return;
         await this.copySync.turnOn(folder);
         this.rememberPicked("cloud-copy", folder);
-        return;
-      }
-      case "cloud-copy-move": {
+      },
+      "cloud-copy-move": async (action) => {
         if (action.to === "server") return this.copySync.move(null);
         const folder = await this.pickPath("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
         if (!folder) return;
         await this.copySync.move(folder);
         this.rememberPicked("cloud-copy", folder);
-        return;
-      }
-      case "cloud-copy-key":
-        return this.copySync.enterKey(action.key);
-      case "cloud-copy-cancel":
-        return this.copySync.cancelKey();
-      case "cloud-copy-new-key":
-        return this.copySync.startOver();
-      case "cloud-copy-show-key":
-        return this.copySync.showKey();
-      case "cloud-copy-copy-key": {
+      },
+      "cloud-copy-key": (action) => this.copySync.enterKey(action.key),
+      "cloud-copy-cancel": () => this.copySync.cancelKey(),
+      "cloud-copy-new-key": () => this.copySync.startOver(),
+      "cloud-copy-show-key": () => this.copySync.showKey(),
+      "cloud-copy-copy-key": () => {
         const key = this.copySync.view().recoveryKey;
         if (key) clipboard.writeText(key);
-        return;
-      }
-      case "cloud-copy-key-saved":
-        return this.copySync.keySaved();
-      case "cloud-copy-upload":
-        return this.copySync.sync(true);
-      case "cloud-copy-restore":
-        return this.copySync.restore();
-      case "cloud-copy-keep":
-        return this.copySync.keep(action.side);
-      case "cloud-copy-restart":
-        return this.copySync.restart();
-      case "cloud-copy-off":
-        return this.copySync.turnOff();
-      case "cloud-copy-delete":
-        return this.copySync.remove();
-      case "cloud-copy-close-anyway":
-        return this.copySync.closeAnyway(() => this.window.close());
-      case "ai-usage-add":
-        return this.aiUsage.add(action.provider, action.label, action.directory);
-      case "ai-usage-update":
-        return this.aiUsage.update(action.accountId, action.label, action.directory);
-      case "ai-usage-remove":
-        return this.aiUsage.remove(action.accountId);
-      case "discord-connect":
-        return this.discord.connectNow();
-      case "discord-sign-out":
-        return this.discord.signOut();
-      case "save-layout":
-        return this.workspaces.saveLayout(this.currentGameId(), action.layout);
-      case "apply-layout-template":
-        return this.workspaces.applyTemplate(this.currentGameId(), layoutTemplate(action.templateId));
-      case "apply-layout-grid":
-        return this.workspaces.applyTemplate(this.currentGameId(), gridTemplate(action.columns, action.rows));
-      case "save-snapshot":
-        return this.workspaces.saveSnapshot(this.currentGameId(), action.name);
-      case "update-snapshot":
-        return this.workspaces.updateSnapshot(this.currentGameId(), action.snapshotId);
-      case "apply-snapshot":
-        return this.applySnapshot(action.snapshotId);
-      case "rename-snapshot":
-        return this.workspaces.renameSnapshot(this.currentGameId(), action.snapshotId, action.name);
-      case "delete-snapshot":
-        return this.workspaces.deleteSnapshot(this.currentGameId(), action.snapshotId);
-    }
-    this.saveLibrary();
+      },
+      "cloud-copy-key-saved": () => this.copySync.keySaved(),
+      "cloud-copy-upload": () => this.copySync.sync(true),
+      "cloud-copy-restore": () => this.copySync.restore(),
+      "cloud-copy-keep": (action) => this.copySync.keep(action.side),
+      "cloud-copy-restart": () => this.copySync.restart(),
+      "cloud-copy-off": () => this.copySync.turnOff(),
+      "cloud-copy-delete": () => this.copySync.remove(),
+      "cloud-copy-close-anyway": () => this.copySync.closeAnyway(() => this.window.close()),
+    };
   }
 
   private showScreen(next: Screen): void {
@@ -2147,6 +2053,7 @@ export class Host {
     const records = this.workspaces.forgetGame(game.id);
     await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
     this.data.forgetGame(game.id);
+    this.streaming.forgetGame(game.id);
     // A folder the player chose can be gone (an unplugged drive): the game still goes, and they are told where its pictures may remain.
     await this.files.noteGameDeleted(game.name, (root) => deleteModuleData(this.options.userData, game.id, root));
     await this.dropIconFile(game.icon);
@@ -2644,6 +2551,8 @@ export class Host {
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
       aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
       discord: this.discord,
+      overlay: this.streaming.overlayFor(module, game.id),
+      hotkeys: this.streaming.hotkeysFor(module, game.id),
       ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
       onStatus: (status) => {
         if (!measured && status === "ready") {
@@ -3156,6 +3065,8 @@ export class Host {
       pendingLink: this.pendingLink,
       runningGameId: this.running.filter((id) => id !== this.gameId && isLive(this.library, id)).at(-1) ?? null,
       pendingGameSwitch: this.pendingGameSwitch && isLive(this.library, this.pendingGameSwitch) ? this.pendingGameSwitch : null,
+      streaming: this.streaming.view(),
+      hotkeyRequest: this.streaming.request(),
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
@@ -3203,6 +3114,8 @@ export class Host {
   private pushState(): void {
     clearImmediate(this.statePush);
     this.statePush = undefined;
+    // Hotkeys follow the game shown now and its panels, which most changes that push the state can move.
+    this.streaming?.sync();
     if (!this.window.isDestroyed()) this.window.webContents.send("host:state", this.viewState());
   }
 
@@ -3252,9 +3165,40 @@ export class Host {
     this.savedData.saveWindow(state);
   }
 
-  /** Resolves once pending writes are on disk. */
-  flush(): Promise<void> {
+  /** Resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
+  async flush(): Promise<void> {
+    await this.streaming?.shutdown();
     return this.savedData.flush();
+  }
+
+  /** Stream overlays and hotkeys, lent what they need of the host. */
+  private static streamingService(host: Host): Promise<Streaming> {
+    return Streaming.create({
+      userData: host.options.userData,
+      settings: () => host.library,
+      saveSettings: (next) => {
+        if (next.streamOverlays !== undefined) host.library.streamOverlays = next.streamOverlays;
+        if (next.overlayPort !== undefined) host.library.overlayPort = next.overlayPort;
+        host.saveLibrary();
+      },
+      module: (moduleId) => host.modules.get(moduleId),
+      overlayGranted: (moduleId) => host.connectorsOf(moduleId).has("stream-overlay"),
+      gameId: () => host.gameId,
+      gameName: (gameId) => host.library.games[gameId]?.name ?? null,
+      panels: () => [...host.views.values()].filter((view): view is ModuleView => view instanceof ModuleView),
+      shortcuts: globalShortcut,
+      writeClipboard: (text) => clipboard.writeText(text),
+      openSetting: (setting) => {
+        host.bringToFront();
+        host.window.webContents.send("host:shortcut", `setting:${setting}`);
+      },
+      focus: () => {
+        host.bringToFront();
+        host.window.webContents.focus();
+      },
+      language: () => host.language,
+      changed: () => host.pushStateSoon(),
+    });
   }
 }
 

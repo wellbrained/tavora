@@ -1,15 +1,17 @@
 <script setup lang="ts">
-// The Catalog view of the module library: modules from Tavora's catalog for this game or personal
-// workspace, as cards like the installed ones. The main process fetches and checks the list and does the install (catalog-client.ts);
+// The Catalog view of the module library: every module in Tavora's catalog, those for this game or personal
+// workspace first, the rest with the game they are for and Install greyed out. Cards like the installed
+// ones; the main process fetches and checks the list and does the install (catalog-client.ts);
 // every text here is shown as plain text, and "by <name>" is only the developer name the service gave.
-// Report asks once more on the card, then sends only the module id, its key and its zip's hash (C12).
+// Report is on the module's page: it asks once more, then sends only the module id, its key and its zip's hash (C12).
 // A card's icon or name opens the module's page with its readme, screenshots and homepage (CatalogModuleDialog.vue).
 import { computed, onMounted, ref, watch } from "vue";
 import type { CatalogListResult, CatalogModuleView } from "../../shared/host-api";
 import { act, addModule, api, dialog, openSettings, state, type AddModuleRequest } from "../host";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { t } from "../i18n";
-import { ShieldCheck } from "@lucide/vue";
+import { cn } from "@/lib/utils";
+import { CircleCheck, Gamepad2, ShieldCheck } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
 import CatalogModuleDialog from "./CatalogModuleDialog.vue";
 
@@ -20,8 +22,7 @@ const emit = defineEmits<{ count: [number | null] }>();
 const result = ref<CatalogListResult | null>(null);
 const installing = ref<string | null>(null);
 const errors = ref<Record<string, string>>({});
-/** The module whose Report is waiting for the player's yes, the one being sent, and those sent. */
-const reportAsk = ref<string | null>(null);
+/** The module whose report is being sent from its page, and those sent. */
 const reporting = ref<string | null>(null);
 const reported = ref<Set<string>>(new Set());
 /** The module whose info is open. */
@@ -46,10 +47,19 @@ watch(
   { immediate: true },
 );
 
-/** What the module asks to reach, in a few words, so the player sees it before installing. */
-function asks(module: CatalogModuleView): string | null {
-  const parts = [...module.permissions.network, ...module.permissions.connectors.map((id) => t(`catalog.connector.${id}`))];
-  return parts.length ? t("catalog.asks", { list: parts.join(", ") }) : null;
+/** Why a module that doesn't fit here can't be installed or added, or null when it fits. */
+function whereFits(module: CatalogModuleView): string | null {
+  if (module.fits) return null;
+  return module.forGames.length ? t("catalog.onlyFor", { games: module.forGames.join(", ") }) : t("catalog.notInWorkspaces");
+}
+
+function fitLabel(module: CatalogModuleView): string {
+  if (module.fits) return t("catalog.fits");
+  return module.forGames.length ? t("catalog.forGames", { games: module.forGames.join(", ") }) : t("catalog.notForWorkspaces");
+}
+
+function installs(count: number): string {
+  return count ? t("catalog.installs", { count }) : t("catalog.noInstalls");
 }
 
 function size(bytes: number): string {
@@ -69,7 +79,6 @@ async function report(module: CatalogModuleView) {
   reporting.value = module.id;
   const outcome = await act({ type: "report-catalog-module", moduleId: module.id }, { quiet: true });
   reporting.value = null;
-  reportAsk.value = null;
   if (outcome.ok) reported.value = new Set([...reported.value, module.id]);
   else errors.value = { ...errors.value, [module.id]: outcome.error };
 }
@@ -112,25 +121,24 @@ function settings() {
             </div>
           </div>
           <p v-if="errors[module.id]" class="text-destructive text-sm" role="alert" :data-testid="`catalog-error-${module.id}`">{{ errors[module.id] }}</p>
-          <p v-if="reported.has(module.id)" class="text-muted-foreground text-sm" role="status" :data-testid="`catalog-reported-${module.id}`">{{ t("catalog.reported") }}</p>
-          <div v-else-if="reportAsk === module.id" class="bg-muted/40 flex flex-wrap items-center gap-2 rounded-md p-3" :data-testid="`catalog-report-ask-${module.id}`">
-            <p class="w-full text-sm">{{ t("catalog.reportAsk", { name: module.name }) }}</p>
-            <Button size="sm" variant="secondary" :disabled="reporting !== null" :data-testid="`catalog-report-send-${module.id}`" @click="report(module)">
-              {{ reporting === module.id ? t("catalog.reporting") : t("catalog.reportSend") }}
-            </Button>
-            <Button size="sm" variant="ghost" :disabled="reporting !== null" @click="reportAsk = null">{{ t("common.cancel") }}</Button>
-          </div>
           <div class="mt-auto flex items-center gap-2">
-            <span class="text-muted-foreground min-w-0 flex-1 truncate text-xs" :title="asks(module) ?? undefined">{{ size(module.size) }}<template v-if="asks(module)"> · {{ asks(module) }}</template></span>
-            <Button v-if="!reported.has(module.id) && reportAsk !== module.id" size="sm" variant="ghost" class="text-muted-foreground shrink-0"
-              :data-testid="`catalog-report-${module.id}`" :aria-label="t('catalog.reportLabel', { name: module.name })" @click="reportAsk = module.id"
-            >{{ t("catalog.report") }}</Button>
-            <Button v-if="installed.has(module.id)" size="sm" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary shrink-0"
-              :data-testid="`catalog-add-${module.id}`" :aria-label="t('addModule.addLabel', { name: module.name })" @click="add(module.id)"
-            >{{ t("common.add") }}</Button>
-            <Button v-else size="sm" class="shrink-0" :disabled="installing !== null"
-              :data-testid="`catalog-install-${module.id}`" :aria-label="t('catalog.installLabel', { name: module.name })" @click="install(module)"
-            >{{ installing === module.id ? t("catalog.installing") : t("catalog.install") }}</Button>
+            <span class="text-muted-foreground flex min-w-0 flex-1 items-center gap-1.5 text-xs">
+              <span :class="cn('flex min-w-0 items-center gap-1', module.fits && 'text-primary')" :title="whereFits(module) ?? undefined" :data-testid="`catalog-fits-${module.id}`">
+                <component :is="module.fits ? CircleCheck : Gamepad2" class="size-3.5 flex-none" :stroke-width="1.75" />
+                <span class="truncate">{{ fitLabel(module) }}</span>
+              </span>
+              <span aria-hidden="true">·</span>
+              <span class="shrink-0 tabular-nums" :data-testid="`catalog-installs-${module.id}`">{{ installs(module.installs) }}</span>
+            </span>
+            <!-- A disabled button gets no hover, so the reason sits on a wrapper. -->
+            <span class="shrink-0" :title="whereFits(module) ?? undefined">
+              <Button v-if="installed.has(module.id)" size="sm" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary" :disabled="!module.fits"
+                :data-testid="`catalog-add-${module.id}`" :aria-label="t('addModule.addLabel', { name: module.name })" @click="add(module.id)"
+              >{{ t("common.add") }}</Button>
+              <Button v-else size="sm" :disabled="installing !== null || !module.fits"
+                :data-testid="`catalog-install-${module.id}`" :aria-label="t('catalog.installLabel', { name: module.name })" @click="install(module)"
+              >{{ installing === module.id ? t("catalog.installing") : t("catalog.install") }}</Button>
+            </span>
           </div>
         </li>
       </ul>
@@ -139,7 +147,8 @@ function settings() {
       </p>
     </template>
     <CatalogModuleDialog v-if="info" :module="info" :installed="installed.has(info.id)" :installing="installing === info.id" :size="size(info.size)"
-      :error="errors[info.id]" @close="info = null" @install="install(info)" @add="add(info.id)"
+      :error="errors[info.id]" :reporting="reporting === info.id" :reported="reported.has(info.id)"
+      @close="info = null" @install="install(info)" @add="add(info.id)" @report="report(info)"
     />
   </div>
 </template>

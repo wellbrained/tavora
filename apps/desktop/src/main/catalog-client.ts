@@ -9,6 +9,7 @@ import { isConnector, isGameId, isHomepage, isModuleId, isNetworkHost, MAX_NETWO
 import { ZIP_LIMITS } from "@tavora/pack";
 import type { CatalogListResult, CatalogModuleView } from "../shared/host-api";
 import { isWebUrl } from "./browser-url";
+import { catalogGame } from "./catalog";
 import { PlayerError } from "./messages";
 import { MAX_MODULE_ICON, pictureDataUrl } from "./module-icon";
 import { DEFAULT_API_URL } from "./online";
@@ -33,7 +34,7 @@ export interface CatalogScreenshot {
 }
 
 /** A listed module with the zip it comes as; only the main process sees the hash. */
-export interface CatalogEntry extends Omit<CatalogModuleView, "screenshots" | "icon"> {
+export interface CatalogEntry extends Omit<CatalogModuleView, "screenshots" | "icon" | "fits" | "forGames"> {
   games: string[];
   workspaces: boolean;
   zip: { sha256: string; size: number };
@@ -138,6 +139,7 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
     // Only the name the service gives for the key's account, never a name the listing claims elsewhere.
     publisher: isPublisherName(publisher) ? publisher : null,
     size: file.size,
+    installs: typeof entry.installs === "number" && Number.isSafeInteger(entry.installs) && entry.installs >= 0 ? entry.installs : 0,
     publishedAt: typeof publishedAt === "string" && publishedAt.length <= 40 ? publishedAt : "",
     zip: { sha256: file.sha256, size: file.size },
     notes: plainNotes(entry.notes),
@@ -154,9 +156,10 @@ export function fitsScope(entry: Pick<CatalogEntry, "games" | "workspaces">, sco
   return entry.games.length === 0 || entry.games.includes(scope.game);
 }
 
-/** The view the host UI gets: no hash, no games list, and only whether there are pictures. */
-export function catalogView({ games: _games, workspaces: _workspaces, zip: _zip, notes: _notes, shots, icon, ...view }: CatalogEntry): CatalogModuleView {
-  return { ...view, screenshots: shots.length, icon: icon !== null };
+/** The view the host UI gets: no hash, the games by name, whether it fits where the player is, and only whether there are pictures. */
+export function catalogView({ games, workspaces, zip: _zip, notes: _notes, shots, icon, ...view }: CatalogEntry, scope?: CatalogScope): CatalogModuleView {
+  const fits = scope ? fitsScope({ games, workspaces }, scope) : true;
+  return { ...view, fits, forGames: games.map((id) => catalogGame(id)?.name ?? id), screenshots: shots.length, icon: icon !== null };
 }
 
 export interface CatalogClientOptions {
@@ -185,11 +188,13 @@ export class CatalogClient {
     this.downloadTimeoutMs = options.downloadTimeoutMs ?? DOWNLOAD_TIMEOUT_MS;
   }
 
-  /** The modules for a game or a personal workspace, by name. Never throws. */
+  /**
+   * Every listed module: those that fit the game or personal workspace first, then the rest, each by
+   * name. The whole index is asked for, so the service doesn't learn which game is open. Never throws.
+   */
   async list(scope: CatalogScope): Promise<CatalogListResult> {
-    const query = "workspace" in scope ? "workspace=1" : `game=${encodeURIComponent(scope.game)}`;
     try {
-      const response = await this.get(`/v1/catalog?${query}`, this.listTimeoutMs, "application/json");
+      const response = await this.get("/v1/catalog", this.listTimeoutMs, "application/json");
       const failed = failure(response.status);
       if (failed) return { status: failed };
       const body = (await response.json()) as { modules?: unknown } | null;
@@ -197,10 +202,12 @@ export class CatalogClient {
       const seen = new Set<string>();
       const entries = raw
         .map(parseCatalogEntry)
-        .filter((entry): entry is CatalogEntry => entry !== null && fitsScope(entry, scope) && !seen.has(entry.id) && Boolean(seen.add(entry.id)))
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .filter((entry): entry is CatalogEntry => entry !== null && !seen.has(entry.id) && Boolean(seen.add(entry.id)))
+        .map((entry) => ({ entry, fits: fitsScope(entry, scope) }))
+        .sort((a, b) => Number(b.fits) - Number(a.fits) || a.entry.name.localeCompare(b.entry.name))
+        .map(({ entry }) => entry);
       this.listed = new Map(entries.map((entry) => [entry.id, entry]));
-      return { status: "ok", modules: entries.map(catalogView) };
+      return { status: "ok", modules: entries.map((entry) => catalogView(entry, scope)) };
     } catch {
       return { status: "unreachable" };
     }
@@ -341,6 +348,18 @@ export class CatalogClient {
     }
     if (response.status === 404) throw new CatalogError("error.catalogNotListed");
     throwFailure(response.status);
+  }
+
+  /** Tells the catalog a module was installed from Browse: only its id, so the listing can show a count. Never throws. */
+  async installed(id: string): Promise<void> {
+    if (!isModuleId(id)) return;
+    await this.fetchImpl(`${this.baseUrl}/v1/catalog/installed`, {
+      ...REQUEST,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+      signal: AbortSignal.timeout(this.listTimeoutMs),
+    }).catch(() => undefined);
   }
 
   private get(pathname: string, timeoutMs: number, accept: string): Promise<Response> {
