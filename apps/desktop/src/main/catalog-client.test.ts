@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fingerprint, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
-import { CatalogClient, fitsScope, parseCatalogEntry } from "./catalog-client";
+import { CatalogClient, fitsScope, parseCatalogEntry, parseCatalogReview, parseRating } from "./catalog-client";
 import { installZipData } from "./installer";
 
 const OWNER = "0123456789abcdef0123456789abcdef";
@@ -225,6 +225,66 @@ describe("CatalogClient.report", () => {
     await expect(client.report({ ...report, owner: "me@example.com" })).rejects.toMatchObject({ key: "error.catalogNotListed" });
     await expect(client.report({ ...report, sha256: "x" })).rejects.toMatchObject({ key: "error.catalogNotListed" });
     expect(calls).toEqual([]);
+  });
+});
+
+describe("ratings and reviews", () => {
+  const review = (fields: Record<string, unknown> = {}) => ({
+    id: "AbCdEfGhIjKlMnOp",
+    stars: 4,
+    text: "Handy.\n\n\n\nWorks well.",
+    version: "1.2.0",
+    updatedAt: "2026-10-21T12:00:00.000Z",
+    author: { name: "Mara", initials: "MA", picture: { sha256: SHA, size: 900 } },
+    reply: { text: "Thanks!", updatedAt: "2026-10-21T13:00:00.000Z" },
+    ...fields,
+  });
+
+  it("keeps a rating only when its counts add up and its average fits", () => {
+    expect(parseRating({ average: 4.33, count: 3, stars: [0, 0, 1, 0, 2] })).toEqual({ average: 4.3, count: 3, stars: [0, 0, 1, 0, 2] });
+    expect(parseCatalogEntry(entry({ rating: { average: 5, count: 1, stars: [0, 0, 0, 0, 1] } }))?.rating).toEqual({ average: 5, count: 1, stars: [0, 0, 0, 0, 1] });
+    for (const bad of [null, { average: 4, count: 2, stars: [0, 0, 1, 0, 2] }, { average: 6, count: 1, stars: [0, 0, 0, 0, 1] }, { average: 4, count: 1, stars: [0, 0, 0, 1] }, { average: 4, count: 1, stars: [0, 0, 0, -1, 2] }]) {
+      expect(parseRating(bad), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it("keeps a review as plain text with at most one blank line, and drops what doesn't fit", () => {
+    expect(parseCatalogReview(review())).toEqual({
+      id: "AbCdEfGhIjKlMnOp",
+      stars: 4,
+      text: "Handy.\n\nWorks well.",
+      version: "1.2.0",
+      date: "2026-10-21T12:00:00.000Z",
+      author: { name: "Mara", initials: "MA", picture: { sha256: SHA, size: 900 } },
+      reply: { text: "Thanks!", date: "2026-10-21T13:00:00.000Z" },
+    });
+    expect(parseCatalogReview(review({ text: "Tr\u202eap" }))?.text).toBe("Trap");
+    expect(parseCatalogReview(review({ author: { name: null, initials: "XX", picture: null } }))?.author).toEqual({ name: null, initials: null, picture: null });
+    for (const bad of [{ id: "short" }, { stars: 0 }, { stars: 6 }, { text: "" }, { text: null }, { version: "latest" }]) {
+      expect(parseCatalogReview(review(bad)), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it("rates with the sign-in and turns the service's reasons into messages", async () => {
+    const { impl, calls } = fakeFetch(() => json({ review: {} }));
+    const client = new CatalogClient({ baseUrl: "https://api.test", fetchImpl: impl });
+    await client.rate("wellbrained.tracker", "t".repeat(30), { stars: 5, text: null, version: "1.2.0" });
+    expect(calls[0]!.url).toBe("https://api.test/v1/catalog/modules/wellbrained.tracker/review");
+    expect(calls[0]!.init?.method).toBe("PUT");
+    expect((calls[0]!.init?.headers as Record<string, string>).Authorization).toBe(`Bearer ${"t".repeat(30)}`);
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ stars: 5, text: null, version: "1.2.0" });
+    for (const [reason, key] of [["own-module", "error.reviewOwn"], ["review-words", "error.reviewWords"], ["review-link", "error.reviewLink"], ["signed-out", "account.error.signedOut"]] as const) {
+      const failing = new CatalogClient({ baseUrl: "https://api.test", fetchImpl: fakeFetch(() => json({ reason }, 400)).impl });
+      await expect(failing.rate("wellbrained.tracker", "t".repeat(30), { stars: 1, text: "x", version: "1.2.0" })).rejects.toMatchObject({ key });
+    }
+  });
+
+  it("reports a review by its id alone", async () => {
+    const { impl, calls } = fakeFetch(() => json({ status: "received" }, 202));
+    await new CatalogClient({ baseUrl: "https://api.test", fetchImpl: impl }).reportReview("AbCdEfGhIjKlMnOp");
+    expect(calls[0]!.url).toBe("https://api.test/v1/catalog/reviews/AbCdEfGhIjKlMnOp/report");
+    expect(calls[0]!.init?.body).toBeUndefined();
+    expect((calls[0]!.init?.headers as Record<string, string>).Authorization).toBeUndefined();
   });
 });
 

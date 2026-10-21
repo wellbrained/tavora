@@ -702,7 +702,60 @@ export interface CatalogModuleView {
   screenshots: number;
   /** Whether the listing has an icon; catalogIcon fetches it. */
   icon: boolean;
+  /** Every version's ratings together, or null without any. Below MIN_RATINGS_SHOWN the app says "New". */
+  rating: CatalogRating | null;
 }
+
+/** Ratings a module needs before its average shows; below that it says "New". */
+export const MIN_RATINGS_SHOWN = 3;
+
+/** A catalog module's ratings: the average to one decimal, how many, and how many gave 1, 2, 3, 4 and 5 stars. */
+export interface CatalogRating {
+  average: number;
+  count: number;
+  stars: [number, number, number, number, number];
+}
+
+/** A review on a catalog module's page. Every text is plain text; the account behind it is never known here. */
+export interface CatalogReviewView {
+  id: string;
+  stars: number;
+  text: string;
+  /** The version it was given on. */
+  version: string;
+  /** When it was written or last changed. */
+  date: string;
+  /** The author's profile name and picture (a checked PNG data address); null when they have none. */
+  author: { name: string | null; initials: string | null; picture: string | null };
+  /** The publisher's one reply. */
+  reply: { text: string; date: string } | null;
+}
+
+/** The player's own rating of a module. `hidden`: Tavora hid its text after a report; its stars still count. */
+export interface CatalogOwnReview {
+  stars: number;
+  text: string | null;
+  version: string;
+  hidden: boolean;
+}
+
+/** A catalog module's ratings and reviews, and what the player can do there. */
+export interface CatalogReviews {
+  rating: CatalogRating | null;
+  /** The newest reviews with text, newest first. */
+  reviews: CatalogReviewView[];
+  /** The player's own rating; null without one, or signed out. */
+  mine: CatalogOwnReview | null;
+  /**
+   * `rate`: signed in, with the module installed. `sign-in`: signed out. `install`: not installed.
+   * `own`: the player's own module, which they can't rate but can reply under its reviews.
+   */
+  can: "rate" | "sign-in" | "install" | "own";
+  /** The installed version a new rating is given on; null when it isn't installed. */
+  installedVersion: string | null;
+}
+
+export type CatalogReviewsResult = ({ status: "ok" } & CatalogReviews) | { status: "off" | "unavailable" | "busy" | "unreachable" | "gone" };
 
 /** One block of a catalog module's readme, as plain text (catalog-readme.ts). */
 export type ReadmeBlock =
@@ -749,6 +802,8 @@ export interface TavoraHostApi {
   catalogPage(moduleId: string): Promise<CatalogPageResult>;
   /** The icon of a module from the last catalog list, as a checked data address, or null. Never rejects. */
   catalogIcon(moduleId: string): Promise<string | null>;
+  /** A catalog module's ratings and reviews, and the player's own rating. Never rejects. */
+  catalogReviews(moduleId: string): Promise<CatalogReviewsResult>;
   /** Where the visible panels are. Panels not listed are hidden. */
   setPanelBounds(bounds: PanelBounds[]): void;
   /**

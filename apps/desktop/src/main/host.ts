@@ -25,7 +25,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, DeveloperLink, GameView, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, GameView, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -1057,6 +1057,57 @@ export class Host {
   }
 
   /**
+   * A catalog module's ratings and reviews (decided 2026-10-21), with the player's own rating and what
+   * they can do. Rating needs a sign-in and the module installed; the service can't check the second,
+   * so it is checked here. Each reviewer's picture is fetched by its hash and checked like a listed picture.
+   */
+  private async catalogReviews(moduleId: string): Promise<CatalogReviewsResult> {
+    if (!this.library.onlineSearch) return { status: "off" };
+    const token = this.account.token();
+    let listed;
+    let own: { mine: CatalogReviews["mine"]; own: boolean } = { mine: null, own: false };
+    try {
+      listed = await this.catalog.reviews(moduleId);
+      if (token) own = await this.catalog.ownReview(moduleId, token).catch(() => own);
+    } catch (error) {
+      const key = error instanceof PlayerError ? error.key : "";
+      if (key === "error.catalogNotListed") return { status: "gone" };
+      if (key === "error.catalogUnavailable" || key === "error.reviewsUnavailable") return { status: "unavailable" };
+      if (key === "error.catalogBusy") return { status: "busy" };
+      return { status: "unreachable" };
+    }
+    const pictures = await Promise.all(listed.reviews.map((review) => (review.author.picture ? this.catalog.reviewerPicture(review.id, review.author.picture) : null)));
+    const installedVersion = this.modules.get(moduleId)?.manifest.version ?? null;
+    return {
+      status: "ok",
+      rating: listed.rating,
+      reviews: listed.reviews.map((review, index) => ({ ...review, author: { ...review.author, picture: pictures[index] ?? null } })),
+      mine: own.mine,
+      can: own.own ? "own" : !token ? "sign-in" : installedVersion === null ? "install" : "rate",
+      installedVersion,
+    };
+  }
+
+  /** Rates an installed catalog module on its installed version, which must be one the catalog published. */
+  private async rateCatalogModule(moduleId: string, stars: number, text: string | null): Promise<void> {
+    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    const token = this.account.token();
+    if (!token) throw new PlayerError("account.error.signedOut");
+    const version = this.modules.get(moduleId)?.manifest.version;
+    if (!version) throw new PlayerError("error.reviewInstall");
+    const { versions } = await this.catalog.details(moduleId);
+    if (!versions.some((published) => published.version === version)) throw new PlayerError("error.reviewVersion");
+    await this.catalog.rate(moduleId, token, { stars, text: text?.trim() || null, version });
+  }
+
+  private async catalogReviewAction(run: (token: string) => Promise<void>): Promise<void> {
+    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    const token = this.account.token();
+    if (!token) throw new PlayerError("account.error.signedOut");
+    await run(token);
+  }
+
+  /**
    * Looks for updates of modules installed from the catalog a little after start and then every few
    * hours, only while online features are on. Test runs check only when asked.
    */
@@ -1276,6 +1327,9 @@ export class Host {
     });
     ipcMain.handle("host:catalog-page", async (event, moduleId: unknown): Promise<CatalogPageResult> =>
       fromHost(event) && isModuleId(moduleId) ? this.catalogPage(moduleId) : { status: "gone" },
+    );
+    ipcMain.handle("host:catalog-reviews", async (event, moduleId: unknown): Promise<CatalogReviewsResult> =>
+      fromHost(event) && isModuleId(moduleId) ? this.catalogReviews(moduleId) : { status: "gone" },
     );
     ipcMain.handle("host:catalog-icon", async (event, moduleId: unknown): Promise<string | null> =>
       fromHost(event) && isModuleId(moduleId) && this.library.onlineSearch ? this.catalog.icon(moduleId) : null,
@@ -1570,6 +1624,13 @@ export class Host {
       },
       "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId),
       "open-catalog-homepage": (action) => this.openCatalogHomepage(action.moduleId),
+      "rate-catalog-module": (action) => this.rateCatalogModule(action.moduleId, action.stars, action.text),
+      "unrate-catalog-module": (action) => this.catalogReviewAction((token) => this.catalog.unrate(action.moduleId, token)),
+      "reply-catalog-review": (action) => this.catalogReviewAction((token) => this.catalog.reply(action.reviewId, token, action.text?.trim() || null)),
+      "report-catalog-review": (action) => {
+        if (!this.library.onlineSearch) throw new PlayerError("error.reportOff");
+        return this.catalog.reportReview(action.reviewId);
+      },
       "apply-module-update": (action) => this.lifecycle.applyUpdate(action.moduleId, action.version),
       "delete-module-data": (action) => this.deleteLeftoverData(action.owner, action.moduleId),
       "move-local-data": (action) => this.moveLocalData(action.moduleId),

@@ -44,6 +44,7 @@ function listing(version: string, zip: Buffer, owner: string): CatalogEntry {
     notes: [],
     homepage: null,
     shots: [],
+    rating: null,
     icon: null,
   };
 }

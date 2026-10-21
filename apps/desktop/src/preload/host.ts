@@ -14,6 +14,7 @@ const api: TavoraHostApi = {
   browseCatalog: () => ipcRenderer.invoke("host:browse-catalog"),
   catalogPage: (moduleId) => ipcRenderer.invoke("host:catalog-page", moduleId),
   catalogIcon: (moduleId) => ipcRenderer.invoke("host:catalog-icon", moduleId),
+  catalogReviews: (moduleId) => ipcRenderer.invoke("host:catalog-reviews", moduleId),
   setPanelBounds: (bounds) => ipcRenderer.send("host:panel-bounds", bounds),
   setOverlay: (open) => ipcRenderer.send("host:overlay", open),
   onState: (listener) => {

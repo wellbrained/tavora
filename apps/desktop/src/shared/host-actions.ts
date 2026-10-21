@@ -102,6 +102,9 @@ const label = nullable(text(16));
 const code = matching(/^\d{6}$/);
 const fingerprint = matching(/^[0-9a-f]{32}$/);
 const deviceId = matching(/^[A-Za-z0-9_-]{1,40}$/);
+/** A review or reply: at most 500 characters, which the service counts; here only a cap on its length. Null for none. */
+const reviewText = nullable(text(2000));
+const reviewId = matching(/^[A-Za-z0-9_-]{16}$/);
 
 /** Most icons offered in one action; the dialog sends more in turns. */
 export const MAX_SHARE_BATCH = 50;
@@ -281,6 +284,14 @@ export function hostActionTable(c: HostChecks) {
     "report-catalog-module": { moduleId: c.moduleId },
     /** Opens a catalog module's homepage like a module link: the address is the one the main process reads from the listing again. */
     "open-catalog-homepage": { moduleId: c.moduleId },
+    /** Rates an installed catalog module with the account, on the installed version; `text` is the review, null for stars only. */
+    "rate-catalog-module": { moduleId: c.moduleId, stars: count(5), text: reviewText },
+    /** Deletes the account's rating of a catalog module. */
+    "unrate-catalog-module": { moduleId: c.moduleId },
+    /** The publisher's one reply under a review of their module; null takes it back. */
+    "reply-catalog-review": { moduleId: c.moduleId, reviewId, text: reviewText },
+    /** Reports a review to Tavora after the player pressed Report. Sends only the review's id. */
+    "report-catalog-review": { reviewId },
     /** The player said yes to a catalog update that asks for more: installs exactly that version and grants what it asked for. */
     "apply-module-update": { moduleId: c.moduleId, version: filled(64) },
     /** Deletes the data a module that is not installed left behind (owner as in leftoverModuleData). */
