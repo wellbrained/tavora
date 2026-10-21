@@ -1,11 +1,12 @@
 import type { DatabaseSync } from "node:sqlite";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { accountRoutes, type AccountOptions } from "./accounts.ts";
 import { publishHandlers, type PublishLimits } from "./catalog-publish.ts";
 import { reportHandlers } from "./catalog-report.ts";
 import { copyRoutes } from "./cloud-copy.ts";
 import { pairingRoutes } from "./pairing.ts";
+import { reviewRoutes, type ReviewStore } from "./reviews.ts";
 import { vaultRoutes } from "./vault.ts";
 import { catalogFilter, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
 import { catalogTrust } from "./catalog-trust.ts";
@@ -50,9 +51,11 @@ export interface AppOptions {
   reportRateLimiter?: RateLimiter;
   /** Who is told by email when the catalog is full (needs accounts' mailer). */
   maintainerEmail?: string;
+  /** Ratings, replies and review reports written per client. */
+  reviewRateLimiter?: RateLimiter;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, catalogueKey, reportRateLimiter, maintainerEmail }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, catalogueKey, reportRateLimiter, maintainerEmail, reviewRateLimiter }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 100, windowMs: 3_600_000 });
@@ -202,7 +205,14 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   // all of it) and decides on the PC what to update, so it never sends what a player has installed (C11).
   // "by <name>" comes from the account the key is linked to, never from the listing (C13).
   // `installs` counts installs from Browse (POST /installed), never who installed.
-  const listed = (entry: CatalogEntry) => ({ ...entry, publisher: accounts?.store.publisherName(entry.owner) ?? null, installs: catalog?.installCount(entry.id) ?? 0 });
+  // Its rating is every version's ratings together; the app shows "New" below MIN_RATINGS_SHOWN.
+  const ratings = accounts?.reviews;
+  const listed = (entry: CatalogEntry, summaries?: ReturnType<ReviewStore["summaries"]>) => ({
+    ...entry,
+    publisher: accounts?.store.publisherName(entry.owner) ?? null,
+    installs: catalog?.installCount(entry.id) ?? 0,
+    rating: (summaries ? summaries.get(entry.id) : ratings?.summary(entry.id)) ?? null,
+  });
   const catalogApp = new Hono();
   // Publishing has its own limits per client and per account, so it comes before the read limiter.
   const publish = publishHandlers({
@@ -240,7 +250,8 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const filter = catalogFilter(context.req.query("game"), context.req.query("workspace"));
     if (!filter) return context.json({ error: "Ask for ?game=<game id>, ?workspace=1 or neither." }, 400);
     context.header("Cache-Control", "public, max-age=300");
-    return context.json({ modules: catalog!.index(filter).map(listed) });
+    const summaries = ratings?.summaries();
+    return context.json({ modules: catalog!.index(filter).map((entry) => listed(entry, summaries ?? new Map())) });
   });
   catalogApp.get("/modules/:id", (context) => {
     const found = catalog!.module(context.req.param("id"));
@@ -286,6 +297,23 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     if (!bytes) return context.json({ error: "Not found." }, 404);
     return new Response(new Uint8Array(bytes), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" } });
   });
+  // Ratings and reviews (reviews.ts): reading is open, rating and replying need a sign-in.
+  if (ratings && catalog && accounts) {
+    catalogApp.route(
+      "/",
+      reviewRoutes({
+        reviews: ratings,
+        catalog,
+        accounts: accounts.store,
+        clientKey: (request) => (clientKey ? clientKey(request) : "local"),
+        ...(reviewRateLimiter ? { writeRateLimiter: reviewRateLimiter } : {}),
+        ...(accounts.now ? { now: accounts.now } : {}),
+      }),
+    );
+  } else {
+    const off = (context: Context) => context.json({ error: "Ratings are not available right now.", reason: "unavailable" }, 503);
+    catalogApp.all("/modules/:id/review", off).all("/modules/:id/reviews", off).all("/reviews/*", off);
+  }
   app.route("/v1/catalog", catalogApp);
 
   // Accounts: the only player data the service keeps, and only once it can send email.

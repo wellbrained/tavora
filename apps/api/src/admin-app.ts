@@ -8,13 +8,14 @@ import { INTER_WOFF2 } from "./inter-font.ts";
 import { keyRequestStatus, revocationEntries, successionEntries } from "./key-requests.ts";
 import type { IconState } from "./icon-state.ts";
 import { isIconId, type IconStore } from "./icons.ts";
+import type { ReviewStore } from "./reviews.ts";
 import type { Submissions } from "./submissions.ts";
 
 /**
  * The private review page: the icons players have offered, shown the way the
  * app will show them, with Approve, Deny and Deny and block; and the hosted
  * icons, with Take down for a publisher's request; and the modules players
- * reported from the catalog, with Delist and Dismiss; and the developers' requests to replace a lost
+ * reported from the catalog, with Delist and Dismiss; and the reviews players reported, with Hide and Dismiss; and the developers' requests to replace a lost
  * or leaked publisher key, exported as entries to sign offline. It is served on its own
  * port of 127.0.0.1 that the web server never forwards, and every call needs
  * the admin token, so reaching it takes the server and the token.
@@ -30,11 +31,13 @@ export interface AdminOptions {
   accounts?: AccountStore;
   /** The catalogue public key the served lists are checked against; CATALOGUE_PUBLIC_KEY by default. */
   catalogueKey?: string;
+  /** Ratings and reviews, for the reported reviews. Absent: the list is empty. */
+  reviews?: ReviewStore;
 }
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey }: AdminOptions) {
+export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews }: AdminOptions) {
   const app = new Hono();
   const expected = digest(token);
 
@@ -129,6 +132,40 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     const { id, listed } = await json(context.req.raw);
     if (typeof id !== "string" || typeof listed !== "boolean") return context.json({ error: "Send { id, listed }." }, 400);
     return catalog?.setListed(id, listed) ? context.json({ ok: true }) : context.json({ error: "No such module." }, 404);
+  });
+
+  // Reported reviews, with what helps judge them: the module, the stars, the text and its reply.
+  app.get("/api/reviews", (context) =>
+    context.json({
+      reports: (reviews?.reports() ?? []).map(({ review, count, firstAt, lastAt }) => ({
+        count,
+        firstAt: new Date(firstAt).toISOString(),
+        lastAt: new Date(lastAt).toISOString(),
+        review: {
+          id: review.id,
+          moduleId: review.moduleId,
+          moduleName: catalog?.module(review.moduleId)?.module.name ?? review.moduleId,
+          stars: review.stars,
+          text: review.text,
+          version: review.version,
+          hidden: review.hidden,
+          author: accounts?.profile(review.accountId)?.name ?? null,
+          reply: review.reply?.text ?? null,
+        },
+      })),
+    }),
+  );
+
+  app.post("/api/reviews/hidden", async (context) => {
+    const { id, hidden } = await json(context.req.raw);
+    if (typeof id !== "string" || typeof hidden !== "boolean") return context.json({ error: "Send { id, hidden }." }, 400);
+    return reviews?.setHidden(id, hidden) ? context.json({ ok: true }) : context.json({ error: "No such review." }, 404);
+  });
+
+  app.post("/api/reviews/dismiss", async (context) => {
+    const { id } = await json(context.req.raw);
+    if (typeof id !== "string") return context.json({ error: "Send { id }." }, 400);
+    return reviews?.dismissReport(id) ? context.json({ ok: true }) : context.json({ error: "No such report." }, 404);
   });
 
   // Key replacements: each request with what helps judge it, and the entries to sign next.

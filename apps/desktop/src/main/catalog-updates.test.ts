@@ -43,6 +43,7 @@ function listing(version: string, zip: Buffer, owner: string, fields: Partial<Ca
     notes: [],
     homepage: null,
     shots: [],
+    rating: null,
     icon: null,
     ...fields,
   };

@@ -14,6 +14,7 @@ import { normalize } from "./ids.ts";
 import { loadIconStore } from "./icons.ts";
 import { createBrevoMailer, createTestInbox, createTestInboxApp, type Mailer } from "./mail.ts";
 import { clientOf, createRateLimiter } from "./rate-limit.ts";
+import { ReviewStore } from "./reviews.ts";
 import { createSteamClient } from "./steam.ts";
 import { createSubmissions } from "./submissions.ts";
 
@@ -87,6 +88,8 @@ const accountStore = mailer ? new AccountStore(path.join(stateDir, "accounts.sql
 const copies = accountStore ? new CopyStore(path.join(stateDir, "copies.sqlite")) : undefined;
 // The module catalog, read-only here: modules are added by hand with catalog.mjs (scripts/catalog.ts).
 const catalog = new CatalogStore(path.join(stateDir, "catalog"));
+// Ratings and reviews of catalog modules, keyed by account: their own file, in the daily backup.
+const reviews = accountStore ? new ReviewStore(path.join(stateDir, "reviews.sqlite")) : undefined;
 console.log(`[tavora-api] ${catalog.index().length} modules in the catalog.`);
 
 const app = createApp({
@@ -100,6 +103,7 @@ const app = createApp({
           store: accountStore,
           mailer,
           ...(copies ? { copies } : {}),
+          ...(reviews ? { reviews } : {}),
           ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
           // With the local test inbox, the app tests sign in many PCs within an hour from one address.
           ...(testInbox ? { codeRateLimiter: createRateLimiter({ limit: 100, windowMs: 3_600_000 }) } : {}),
@@ -123,7 +127,7 @@ serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
 const adminToken = process.env.ADMIN_TOKEN?.trim();
 if (adminToken && adminToken.length >= 24) {
   const adminPort = Number(process.env.ADMIN_PORT ?? 4011);
-  serve({ fetch: createAdminApp({ token: adminToken, submissions, state, store: icons, catalog, ...(accountStore ? { accounts: accountStore } : {}) }).fetch, port: adminPort, hostname: "127.0.0.1" }, (info) => {
+  serve({ fetch: createAdminApp({ token: adminToken, submissions, state, store: icons, catalog, ...(accountStore ? { accounts: accountStore } : {}), ...(reviews ? { reviews } : {}) }).fetch, port: adminPort, hostname: "127.0.0.1" }, (info) => {
     console.log(`[tavora-api] review page on http://127.0.0.1:${info.port} (local only)`);
   });
 } else {

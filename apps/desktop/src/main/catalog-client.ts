@@ -7,9 +7,10 @@
 import { createHash } from "node:crypto";
 import { isConnector, isGameId, isHomepage, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, type Connector } from "@tavora/module-schema";
 import { ZIP_LIMITS } from "@tavora/pack";
-import type { CatalogListResult, CatalogModuleView } from "../shared/host-api";
+import type { CatalogListResult, CatalogModuleView, CatalogOwnReview, CatalogRating } from "../shared/host-api";
 import { isWebUrl } from "./browser-url";
 import { catalogGame } from "./catalog";
+import type { MessageKey } from "../shared/i18n";
 import { PlayerError } from "./messages";
 import { MAX_MODULE_ICON, pictureDataUrl } from "./module-icon";
 import { DEFAULT_API_URL } from "./online";
@@ -99,6 +100,91 @@ function parseScreenshots(value: unknown): CatalogScreenshot[] {
   return shots;
 }
 
+/** A listing's ratings, or null unless it has the shape the app relies on: whole counts that add up, an average from 1 to 5. */
+export function parseRating(raw: unknown): CatalogRating | null {
+  const { average, count, stars } = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+  if (!Array.isArray(stars) || stars.length !== 5 || !stars.every((n) => Number.isSafeInteger(n) && (n as number) >= 0)) return null;
+  const counts = stars as CatalogRating["stars"];
+  const total = counts.reduce((sum, n) => sum + n, 0);
+  if (!Number.isSafeInteger(count) || count !== total || total === 0) return null;
+  if (typeof average !== "number" || !Number.isFinite(average) || average < 1 || average > 5) return null;
+  return { average: Math.round(average * 10) / 10, count: total, stars: [...counts] };
+}
+
+/** A review as the service lists it, with the author's picture still to fetch. */
+export interface CatalogReview {
+  id: string;
+  stars: number;
+  text: string;
+  version: string;
+  date: string;
+  author: { name: string | null; initials: string | null; picture: { sha256: string; size: number } | null };
+  reply: { text: string; date: string } | null;
+}
+
+/** Most a reviewer's picture may be: the account profile's limit. */
+export const MAX_REVIEWER_PICTURE = 512 * 1024;
+const REVIEW_ID = /^[A-Za-z0-9_-]{16}$/;
+
+/** A review's text as plain text: line breaks kept (at most one blank line), hidden marks taken out. */
+function reviewText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.replace(/\r\n?/g, "\n").replace(/[^\S\n]+/g, " ").replace(HIDDEN, (char) => (char === "\n" ? "\n" : "")).replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return text && text.length <= 2000 ? text : null;
+}
+
+/** Keeps a review only if it has the shape the app relies on. */
+export function parseCatalogReview(raw: unknown): CatalogReview | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const review = raw as Record<string, unknown>;
+  const text = reviewText(review.text);
+  if (typeof review.id !== "string" || !REVIEW_ID.test(review.id) || !text) return null;
+  if (!Number.isInteger(review.stars) || (review.stars as number) < 1 || (review.stars as number) > 5) return null;
+  if (typeof review.version !== "string" || !SEMVER.test(review.version) || review.version.length > 64) return null;
+  const author = (typeof review.author === "object" && review.author !== null ? review.author : {}) as Record<string, unknown>;
+  const picture = (typeof author.picture === "object" && author.picture !== null ? author.picture : {}) as Record<string, unknown>;
+  const reply = (typeof review.reply === "object" && review.reply !== null ? review.reply : null) as Record<string, unknown> | null;
+  const replyText = reply ? reviewText(reply.text) : null;
+  const date = (value: unknown) => (typeof value === "string" && value.length <= 40 && !Number.isNaN(Date.parse(value)) ? value : "");
+  const name = plain(author.name, 32);
+  return {
+    id: review.id,
+    stars: review.stars as number,
+    text,
+    version: review.version,
+    date: date(review.updatedAt),
+    author: {
+      name,
+      initials: name ? plain(author.initials, 3) : null,
+      picture:
+        typeof picture.sha256 === "string" && SHA256.test(picture.sha256) && Number.isSafeInteger(picture.size) && (picture.size as number) > 0 && (picture.size as number) <= MAX_REVIEWER_PICTURE
+          ? { sha256: picture.sha256, size: picture.size as number }
+          : null,
+    },
+    reply: replyText ? { text: replyText, date: date(reply!.updatedAt) } : null,
+  };
+}
+
+/** The player's own rating as the service answers it, or null. */
+function parseOwnReview(raw: unknown): CatalogOwnReview | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const review = raw as Record<string, unknown>;
+  if (!Number.isInteger(review.stars) || (review.stars as number) < 1 || (review.stars as number) > 5) return null;
+  if (typeof review.version !== "string" || !SEMVER.test(review.version) || review.version.length > 64) return null;
+  return { stars: review.stars as number, text: reviewText(review.text), version: review.version, hidden: review.hidden === true };
+}
+
+/** What the service said went wrong with a rating or reply, as a message for the player. */
+const REVIEW_REASONS: Record<string, MessageKey> = {
+  "own-module": "error.reviewOwn",
+  "review-words": "error.reviewWords",
+  "review-link": "error.reviewLink",
+  "not-publisher": "error.reviewNotPublisher",
+  "signed-out": "account.error.signedOut",
+  "not-found": "error.catalogNotListed",
+  unavailable: "error.reviewsUnavailable",
+};
+
 /** Keeps a version only if it has the shape the app relies on. */
 export function parseCatalogVersion(raw: unknown): CatalogVersion | null {
   if (typeof raw !== "object" || raw === null) return null;
@@ -147,6 +233,7 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
     homepage: isHomepage(entry.homepage) && isWebUrl(entry.homepage) ? entry.homepage : null,
     shots: parseScreenshots(entry.screenshots),
     icon: parsePicture(entry.icon, MAX_MODULE_ICON),
+    rating: parseRating(entry.rating),
   };
 }
 
@@ -360,6 +447,85 @@ export class CatalogClient {
       body: JSON.stringify({ id }),
       signal: AbortSignal.timeout(this.listTimeoutMs),
     }).catch(() => undefined);
+  }
+
+  /** A module's ratings and newest reviews, each checked; a review that isn't is left out. Throws a CatalogError the player can read. */
+  async reviews(id: string): Promise<{ rating: CatalogRating | null; reviews: CatalogReview[] }> {
+    const body = await this.send("GET", `/v1/catalog/modules/${encodeURIComponent(id)}/reviews`);
+    const seen = new Set<string>();
+    const reviews = (Array.isArray(body.reviews) ? body.reviews.slice(0, 200) : [])
+      .map(parseCatalogReview)
+      .filter((review): review is CatalogReview => review !== null && !seen.has(review.id) && Boolean(seen.add(review.id)));
+    return { rating: parseRating(body.summary), reviews };
+  }
+
+  /** A reviewer's picture as a checked PNG data address, or null. Never throws. */
+  async reviewerPicture(reviewId: string, picture: { sha256: string; size: number }): Promise<string | null> {
+    try {
+      const data = await this.read(`/v1/catalog/reviews/${reviewId}/picture/${picture.sha256}.png`, picture.size, this.listTimeoutMs, "image/png");
+      if (createHash("sha256").update(data).digest("hex") !== picture.sha256) return null;
+      const url = pictureDataUrl(data, MAX_REVIEWER_PICTURE);
+      return url?.startsWith("data:image/png;") ? url : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The signed-in account's own rating of a module, and whether the module is its own. Throws a CatalogError. */
+  async ownReview(id: string, token: string): Promise<{ mine: CatalogOwnReview | null; own: boolean }> {
+    const body = await this.send("GET", `/v1/catalog/modules/${encodeURIComponent(id)}/review`, token);
+    return { mine: parseOwnReview(body.review), own: body.own === true };
+  }
+
+  /** Rates a module with the account, on a version the catalog published. Throws a CatalogError the player can read. */
+  async rate(id: string, token: string, rating: { stars: number; text: string | null; version: string }): Promise<void> {
+    await this.send("PUT", `/v1/catalog/modules/${encodeURIComponent(id)}/review`, token, { stars: rating.stars, text: rating.text, version: rating.version });
+  }
+
+  async unrate(id: string, token: string): Promise<void> {
+    await this.send("DELETE", `/v1/catalog/modules/${encodeURIComponent(id)}/review`, token);
+  }
+
+  /** The publisher's reply under a review; null takes it back. Throws a CatalogError the player can read. */
+  async reply(reviewId: string, token: string, text: string | null): Promise<void> {
+    if (!REVIEW_ID.test(reviewId)) throw new CatalogError("error.catalogNotListed");
+    await this.send(text === null ? "DELETE" : "PUT", `/v1/catalog/reviews/${reviewId}/reply`, token, text === null ? undefined : { text });
+  }
+
+  /** Reports a review, only after the player pressed Report: its id and nothing else. */
+  async reportReview(reviewId: string): Promise<void> {
+    if (!REVIEW_ID.test(reviewId)) throw new CatalogError("error.reviewGone");
+    try {
+      await this.send("POST", `/v1/catalog/reviews/${reviewId}/report`);
+    } catch (error) {
+      if (error instanceof CatalogError && error.key === "error.catalogNotListed") throw new CatalogError("error.reviewGone");
+      throw error;
+    }
+  }
+
+  /** One JSON request for ratings and reviews, signed in when a token is given. Throws a CatalogError the player can read. */
+  private async send(method: string, pathname: string, token?: string, body?: unknown): Promise<Record<string, unknown>> {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.baseUrl}${pathname}`, {
+        ...REQUEST,
+        method,
+        headers: { Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        signal: AbortSignal.timeout(this.listTimeoutMs),
+      });
+    } catch {
+      throw new CatalogError("error.catalogUnreachable");
+    }
+    if (response.status === 204) return {};
+    const json = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    if (response.ok) return json && typeof json === "object" && !Array.isArray(json) ? json : {};
+    const key = typeof json?.reason === "string" ? REVIEW_REASONS[json.reason] : undefined;
+    if (key) throw new CatalogError(key);
+    if (response.status === 404) throw new CatalogError("error.catalogNotListed");
+    if (response.status === 401) throw new CatalogError("account.error.signedOut");
+    throwFailure(response.status);
+    throw new CatalogError("error.generic");
   }
 
   private get(pathname: string, timeoutMs: number, accept: string): Promise<Response> {

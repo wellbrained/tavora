@@ -3,8 +3,8 @@
 // name and Install, screenshots, the readme, what's new, details and what it can reach. Every text is
 // plain text (C10): the main process asks for the listing again, turns the readme into plain text
 // blocks, fetches each screenshot by its hash and checks it is a PNG or WebP before it gets here, and
-// opens the homepage like a module link.
-import { computed, onMounted, ref } from "vue";
+// opens the homepage like a module link. Ratings and reviews have their own section (CatalogReviews.vue).
+import { computed, nextTick, onMounted, ref } from "vue";
 import type { CatalogModuleView, CatalogPageResult } from "../../shared/host-api";
 import { act, api, dialog } from "../host";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -12,8 +12,9 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/o
 import { formatDate, t } from "../i18n";
 import { ExternalLink, X } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
+import CatalogReviews from "./CatalogReviews.vue";
 
-const props = defineProps<{ module: CatalogModuleView; installed: boolean; installing: boolean; size: string; error?: string; reporting: boolean; reported: boolean }>();
+const props = defineProps<{ module: CatalogModuleView; installed: boolean; installing: boolean; size: string; error?: string; reporting: boolean; reported: boolean; atReviews?: boolean }>();
 const emit = defineEmits<{ close: []; install: []; add: []; report: [] }>();
 /** Report asks once more before anything is sent. */
 const reportAsk = ref(false);
@@ -23,7 +24,11 @@ const shown = ref(0);
 const opening = ref(false);
 const homepageError = ref<string | null>(null);
 
+const reviews = ref<HTMLElement | null>(null);
+
 onMounted(async () => {
+  // Opened from the card's rating: start at the reviews.
+  if (props.atReviews) void nextTick(() => reviews.value?.scrollIntoView({ block: "start" }));
   page.value = await api.catalogPage(props.module.id);
 });
 
@@ -131,6 +136,10 @@ async function openHomepage() {
                 <li v-for="(note, index) in latest.notes" :key="index">{{ note }}</li>
               </ul>
             </section>
+
+            <div ref="reviews" class="scroll-mt-6">
+              <CatalogReviews :module-id="module.id" :module-name="module.name" :publisher="module.publisher" />
+            </div>
           </div>
 
           <aside class="space-y-6 text-sm">
