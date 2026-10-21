@@ -77,7 +77,11 @@
         "filter": [
           "*/tavora.module.json",
           "*/changelog.json",
-          "*/dist/**"
+          "*/dist/**",
+          "*/src/**",
+          "*/package.json",
+          "*/tsconfig.json",
+          "*/vite.config.ts"
         ]
       },
       {

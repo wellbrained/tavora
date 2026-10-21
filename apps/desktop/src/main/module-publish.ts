@@ -191,8 +191,8 @@ export class ModulePublisher {
     return { view: { ...view, status: "ready" }, zip, key: signer.key };
   }
 
-  /** A prefix the account holds, else one made from the developer name. */
-  private ownPrefix(): string | null {
+  /** A prefix the account holds, else one made from the developer name; null without either. */
+  ownPrefix(): string | null {
     const held = [...(this.options.account.prefixes()?.held ?? [])].sort((a, b) => a.claimedAt - b.claimedAt);
     return held[0]?.prefix ?? suggestPrefix(this.options.account.developerName() ?? "");
   }

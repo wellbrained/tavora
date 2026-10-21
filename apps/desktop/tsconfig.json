@@ -3,6 +3,8 @@
   "compilerOptions": {
     // @tavora/pack imports its own files with .ts, so pnpm pack-module runs straight in Node.
     "allowImportingTsExtensions": true,
+    // main/example-copy.ts reads the SDK's version from its package.json.
+    "resolveJsonModule": true,
     "noEmit": true,
     "types": [
       "node"
