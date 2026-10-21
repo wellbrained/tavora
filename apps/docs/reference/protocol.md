@@ -84,7 +84,7 @@ Methods without params must be sent with `params` left out.
 | `discord.image` | `{ url }` | a small PNG as a `data:` address, or `null` |
 | `overlay.publish` | `{ key, state }` | `null`; what the overlay for `key` shows now. Needs the `overlay` capability, see [Stream overlays](#stream-overlays) (Tavora 0.19.26 and newer) |
 | `overlay.remove` | `{ key }` | `null`; the overlay shows nothing until it is published again, and keeps its link |
-| `overlay.copyLink` | `{ key }` | `"copied"`: the link is on the clipboard; `"off"`: Stream overlays are off, and Tavora opened that setting. Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise) |
+| `overlay.copyLink` | `{ key }` | `"copied"`: the link is on the clipboard; `"off"`: Stream overlays are off, and Tavora opened that setting. `"denied"`: the module asks for the connector on request and the player said no in Tavora's dialog (Tavora 0.19.31 and newer). Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise) |
 | `overlay.resetLink` | `{ key }` | `null`; the overlay gets a new link and the old one stops working |
 | `hotkeys.list` | none | `{ action, target }[]`: the hotkeys the player set for this module in the current game, never the keys. See [Hotkeys](#hotkeys) (Tavora 0.19.26 and newer) |
 | `hotkeys.set` | `{ action, target, label }` | `"set"`, `"removed"` or `"cancelled"`: what the player did in Tavora's hotkey dialog. Only right after a real click or key press in the panel (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for an action the manifest does not list |
@@ -204,7 +204,7 @@ A connector is a part of Tavora that reaches outside the module's panel, such as
 A module that lists an [`overlay`](./manifest.md#overlay) page and the `stream-overlay` connector can show it in OBS or other streaming software on the player's PC, as a Browser Source. It works with keys: one overlay per key, such as an item id, each with its own link.
 
 - `overlay.publish` sets what the overlay for a key shows: any JSON, at most 16 KB. Tavora keeps it, so the overlay goes on showing it while none of the module's panels runs, and after a restart. Publish when something changes, not on every frame: a running clock publishes when it starts or stops, and its overlay counts the time itself.
-- `overlay.copyLink` puts the overlay's link on the clipboard after a click. The player turns Stream overlays on in Settings > Streaming; while they are off, the call gives `"off"` and Tavora opens that setting.
+- `overlay.copyLink` puts the overlay's link on the clipboard after a click. A module that lists the connector in [`permissions.onRequest`](./manifest.md) is not asked for it when it is added; Tavora shows its consent dialog on the first `copyLink` instead, and the call gives `"denied"` if the player says no. The player turns Stream overlays on in Settings > Streaming; while they are off, the call gives `"off"` and Tavora opens that setting.
 - `overlay.remove` empties an overlay (an item was deleted) and `overlay.resetLink` gives it a new link. The player can also reset every link in Settings.
 
 The overlay page runs in the streaming software, not in Tavora, so it has no bridge. It reads what the module published from `_state` next to it as server-sent events, each message `{ "state": <JSON or null> }`, the first one right away; `watchOverlay(fn)` in the SDK does it for you and reconnects when Tavora restarts. `null` means there is nothing to show.

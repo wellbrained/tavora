@@ -36,6 +36,7 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "set-stream-overlays", enabled: true }],
   [{ type: "set-overlay-port", port: 47820 }],
   [{ type: "reset-overlay-links" }],
+  [{ type: "connector-answer", id: 2, allow: true }],
   [{ type: "hotkey-answer", id: 3, choice: "set", accelerator: "Ctrl+Alt+K" }],
   [{ type: "hotkey-answer", id: 3, choice: "cancel" }],
   [{ type: "remove-hotkey", owner: "official", moduleId: "tavora.clock-counter", gameId: "poe2", action: "start-pause", target: "item-1" }],

@@ -102,7 +102,7 @@ export const SDK_VERSION = "0.2.11";
  * `minTavora`, so an older Tavora says it needs an update instead of loading a module it cannot run
  * (the starter, `npm create @tavora/module`, does). The changelog names it for every version.
  */
-export const MIN_TAVORA = "0.19.26";
+export const MIN_TAVORA = "0.19.31";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;

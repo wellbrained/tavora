@@ -15,7 +15,8 @@ export function createItemStore(sdk: TavoraSDK) {
   let stored: Versioned<ItemList> = { data: list.value, revision: 0 };
   let saving = 0;
   const queue = serial();
-  const overlays = sdk.host.capabilities.includes("overlay");
+  /** Whether the player allowed stream overlays; asked for on the first Copy OBS link, so it can turn true later. */
+  const overlays = ref(sdk.host.capabilities.includes("overlay"));
 
   async function load(): Promise<void> {
     stored = await readDocument(sdk, LIST_ID, parseList);
@@ -24,7 +25,7 @@ export function createItemStore(sdk: TavoraSDK) {
 
   /** Tells the overlays of these items what they show now; an item that is gone shows nothing. */
   function publish(ids: string[], data: ItemList): void {
-    if (!overlays) return;
+    if (!overlays.value) return;
     for (const id of ids) {
       const item = find(data, id);
       const sent = item ? sdk.overlay.publish(id, overlayState(item)) : sdk.overlay.remove(id);

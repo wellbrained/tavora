@@ -325,7 +325,8 @@ const handlers = new Map<string, Handler>([
     },
   ],
   ["overlay.remove", (s, params) => (needs(s, "overlay", "overlay.remove"), s.context.overlay.remove(moduleKey(object(params), "key")), null)],
-  ["overlay.copyLink", (s, params) => (needs(s, "overlay", "overlay.copyLink"), s.context.overlay.copyLink(moduleKey(object(params), "key")))],
+  // A module that asks for the connector on request may call it without the grant: Tavora asks the player then.
+  ["overlay.copyLink", (s, params) => s.context.overlay.copyLink(moduleKey(object(params), "key"))],
   ["overlay.resetLink", (s, params) => (needs(s, "overlay", "overlay.resetLink"), s.context.overlay.resetLink(moduleKey(object(params), "key")), null)],
 
   ["hotkeys.list", (s, params) => (noParams(params), s.context.hotkeys.list())],

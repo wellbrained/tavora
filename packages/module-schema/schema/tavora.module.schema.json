@@ -388,6 +388,16 @@
             ]
           }
         },
+        "onRequest": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "Connectors from connectors that Tavora asks for only when the module first needs one, such as copying an overlay link, not when the module is added; the module works without them. Only stream-overlay so far.",
+          "items": {
+            "enum": [
+              "stream-overlay"
+            ]
+          }
+        },
         "webAssembly": {
           "type": "boolean",
           "description": "Lets the page compile WebAssembly. Only Tavora's own modules may ask for it; any other module that does is not loaded."

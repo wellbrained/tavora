@@ -79,6 +79,11 @@ export interface ModuleManifest {
     network: string[];
     /** Parts of Tavora that hold a sign-in, which the module asks to use (see CONNECTORS). Each needs the player's grant. */
     connectors?: Connector[];
+    /**
+     * Connectors of `connectors` that Tavora asks for only when the module first needs one (such as copying an overlay
+     * link), not when it is added, so the module works without them. Only ON_REQUEST_CONNECTORS can be asked for this way.
+     */
+    onRequest?: Connector[];
     /** Lets the page compile WebAssembly (Excalidraw's picture resizing needs it). Only Tavora's own modules may ask for it. */
     webAssembly?: boolean;
   };
@@ -250,6 +255,15 @@ export function isGameId(value: unknown): value is string {
  */
 export const CONNECTORS = ["ai-usage", "discord", "stream-overlay"] as const;
 export type Connector = (typeof CONNECTORS)[number];
+
+/** Connectors a module may have Tavora ask for on first use (permissions.onRequest) instead of when it is added. */
+export const ON_REQUEST_CONNECTORS: readonly Connector[] = ["stream-overlay"];
+
+/** The connectors Tavora asks for when the module is added or updated: all it lists, but those it asks for on request. */
+export function connectorsAtAdd(permissions: ModuleManifest["permissions"]): Connector[] {
+  const later = new Set(permissions.onRequest ?? []);
+  return (permissions.connectors ?? []).filter((name) => !later.has(name));
+}
 
 export function isConnector(value: unknown): value is Connector {
   return (CONNECTORS as readonly unknown[]).includes(value);
@@ -447,7 +461,7 @@ export function validateManifest(input: unknown): ManifestResult {
     }
   }
   if (isRecord(permissions)) {
-    const unsupported = Object.keys(permissions).filter((key) => key !== "network" && key !== "connectors" && key !== "webAssembly");
+    const unsupported = Object.keys(permissions).filter((key) => key !== "network" && key !== "connectors" && key !== "onRequest" && key !== "webAssembly");
     if (unsupported.length > 0) errors.push(`unsupported permissions: ${unsupported.join(", ")}`);
     if ("connectors" in permissions) {
       const connectors = permissions.connectors;
@@ -455,6 +469,14 @@ export function validateManifest(input: unknown): ManifestResult {
       else if (new Set(connectors).size !== connectors.length) errors.push("permissions.connectors lists a connector twice");
     }
     if ("webAssembly" in permissions && typeof permissions.webAssembly !== "boolean") errors.push("permissions.webAssembly must be true or false");
+    if ("onRequest" in permissions) {
+      const later = permissions.onRequest;
+      const listed: unknown[] = Array.isArray(permissions.connectors) ? permissions.connectors : [];
+      if (!Array.isArray(later) || !later.every((name) => ON_REQUEST_CONNECTORS.includes(name as Connector))) {
+        errors.push(`permissions.onRequest may only list ${ON_REQUEST_CONNECTORS.join(", ")}`);
+      } else if (new Set(later).size !== later.length) errors.push("permissions.onRequest lists a connector twice");
+      else if (!later.every((name) => listed.includes(name))) errors.push("permissions.onRequest may only list connectors that permissions.connectors lists");
+    }
     const overlayConnector = Array.isArray(permissions.connectors) && permissions.connectors.includes("stream-overlay");
     if (input.overlay !== undefined && !overlayConnector) errors.push('overlay needs "stream-overlay" in permissions.connectors');
     if (overlayConnector && input.overlay === undefined) errors.push('the "stream-overlay" connector needs an overlay page');

@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { CHANGELOG_LIMITS, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, needsNewerTavora, panelTypes, validateManifest, type ModuleManifest } from "./index";
+import { CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, needsNewerTavora, panelTypes, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -199,7 +199,10 @@ const cases: [string, unknown, boolean][] = [
   ["17 panel types", { ...valid, panels: Array.from({ length: 17 }, (_, i) => ({ id: `p${i}`, name: `Panel ${i}` })) }, false],
   ["no panel types", { ...valid, panels: [] }, false],
   ["overlay with its connector", { ...valid, overlay: "dist/overlay.html", permissions: { network: [], connectors: ["stream-overlay"] } }, true],
-  ["overlay without its connector", { ...valid, overlay: "dist/overlay.html" }, false],
+  ["overlay asked for on request", { ...valid, overlay: "dist/overlay.html", permissions: { network: [], connectors: ["stream-overlay"], onRequest: ["stream-overlay"] } }, true],
+  ["on request: a connector that can't be", { ...valid, permissions: { network: [], connectors: ["discord"], onRequest: ["discord"] } }, false],
+  ["on request: not a list", { ...valid, overlay: "dist/overlay.html", permissions: { network: [], connectors: ["stream-overlay"], onRequest: "stream-overlay" } }, false],
+  ["overlay without its connector",{ ...valid, overlay: "dist/overlay.html" }, false],
   ["overlay connector without a page", { ...valid, permissions: { network: [], connectors: ["stream-overlay"] } }, false],
   ["overlay not html", { ...valid, overlay: "dist/overlay.js", permissions: { network: [], connectors: ["stream-overlay"] } }, false],
   ["overlay outside the package", { ...valid, overlay: "../overlay.html", permissions: { network: [], connectors: ["stream-overlay"] } }, false],
@@ -255,6 +258,19 @@ describe("panel types", () => {
     expect(continuingPanelType(two({ continues: true }) as ModuleManifest)).toBe("planner");
     expect(continuingPanelType(two() as ModuleManifest)).toBe("inventory");
     expect(continuingPanelType(valid as ModuleManifest)).toBeNull();
+  });
+});
+
+describe("permissions.onRequest", () => {
+  it("only lists connectors the module also lists", () => {
+    const result = validateManifest({ ...valid, permissions: { network: [], onRequest: ["stream-overlay"] } });
+    expect(result).toEqual({ ok: false, errors: ["permissions.onRequest may only list connectors that permissions.connectors lists"] });
+  });
+
+  it("leaves connectors asked for on request out of what is asked when the module is added", () => {
+    expect(connectorsAtAdd({ network: [], connectors: ["discord", "stream-overlay"], onRequest: ["stream-overlay"] })).toEqual(["discord"]);
+    expect(connectorsAtAdd({ network: [], connectors: ["stream-overlay"] })).toEqual(["stream-overlay"]);
+    expect(connectorsAtAdd({ network: [] })).toEqual([]);
   });
 });
 

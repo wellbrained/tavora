@@ -4,7 +4,7 @@
 // A grant only covers what the module's current manifest still asks for, and every gated call
 // checks it again, so revoking takes effect at once.
 import path from "node:path";
-import { isConnector, isModuleId, isNetworkHost, isOwnerId, type Connector, type ModuleManifest } from "@tavora/module-schema";
+import { connectorsAtAdd, isConnector, isModuleId, isNetworkHost, isOwnerId, type Connector, type ModuleManifest } from "@tavora/module-schema";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
 
@@ -66,9 +66,12 @@ export function sanitizeGrants(raw: unknown): Map<string, Map<string, Grant>> {
   return owners;
 }
 
-/** What the manifest asks for that the grant does not cover yet. */
+/**
+ * What the manifest asks for that the grant does not cover yet, as the consent dialog asks it when the module is added:
+ * connectors it asks for on request (permissions.onRequest) wait until the module first needs them.
+ */
 export function missingPermissions(manifest: GrantSubject["manifest"], grant: Grant | undefined): Permissions {
-  const ask = asked(manifest);
+  const ask = { network: manifest.permissions.network, connectors: connectorsAtAdd(manifest.permissions) };
   const hosts = new Set(grant?.network ?? []);
   const connectors = new Set(grant?.connectors ?? []);
   return { network: ask.network.filter((host) => !hosts.has(host)), connectors: ask.connectors.filter((name) => !connectors.has(name)) };

@@ -107,6 +107,15 @@ describe("connector grants", () => {
     expect(grants.get("official", "tavora.ai-usage")).toBeUndefined();
   });
 
+  it("leaves a connector asked for on request out of what is missing, and covers it once granted", async () => {
+    const { grants } = await store();
+    const clock: GrantSubject = { owner: "official", manifest: { id: "tavora.clock-counter", version: "0.1.0", permissions: { network: [], connectors: ["stream-overlay"], onRequest: ["stream-overlay"] } } };
+    expect(grants.missing(clock)).toEqual({ network: [], connectors: [] });
+    expect(grants.allowed(clock)).toEqual({ network: [], connectors: [] });
+    await grants.grant(clock, { network: [], connectors: ["stream-overlay"] });
+    expect(grants.allowed(clock)).toEqual({ network: [], connectors: ["stream-overlay"] });
+  });
+
   it("does not cover a connector the manifest no longer asks for", async () => {
     const { grants } = await store();
     await grants.grant(usage(["ai-usage"]));

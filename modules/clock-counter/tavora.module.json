@@ -17,5 +17,5 @@
     { "id": "up", "name": "Count up" },
     { "id": "down", "name": "Count down" }
   ],
-  "permissions": { "network": [], "connectors": ["stream-overlay"] }
+  "permissions": { "network": [], "connectors": ["stream-overlay"], "onRequest": ["stream-overlay"] }
 }

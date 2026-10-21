@@ -14,7 +14,7 @@ import { OverlayServer, OverlayStore, overlayUrl, type OverlayLink, type Overlay
 export interface StreamingModule {
   owner: string;
   root: string;
-  manifest: Pick<ModuleManifest, "id" | "name" | "overlay" | "actions">;
+  manifest: Pick<ModuleManifest, "id" | "name" | "overlay" | "actions" | "permissions">;
 }
 
 /** A panel of the game shown now that hears a hotkey. */
@@ -32,6 +32,8 @@ export interface StreamingOptions {
   module(moduleId: string): StreamingModule | undefined;
   /** Whether the player granted the module the stream-overlay connector, as it is installed now. */
   overlayGranted(moduleId: string): boolean;
+  /** Asks the player in Tavora's consent dialog for a connector the module asks for on request; whether they allowed it. */
+  askConnector(moduleId: string, connector: "stream-overlay"): Promise<boolean>;
   /** The game shown now, or null. */
   gameId(): string | null;
   gameName(gameId: string): string | null;
@@ -85,13 +87,24 @@ export class Streaming {
 
   // ── What a module panel gets ─────────────────────────────────────────
 
-  /** overlay.* for a panel of `module` in `gameId`; the bridge checked the capability and the keys. */
+  /**
+   * overlay.* for a panel of `module` in `gameId`; the bridge checked the keys, and the capability for all but copyLink:
+   * a module that asks for the connector on request gets Tavora's consent dialog there the first time.
+   */
   overlayFor(module: StreamingModule, gameId: string) {
     const subject = (key: string): OverlaySubject => ({ owner: module.owner, moduleId: module.manifest.id, gameId, key });
+    const granted = async (): Promise<boolean> => {
+      if (this.options.overlayGranted(module.manifest.id)) return true;
+      if (!(module.manifest.permissions.onRequest ?? []).includes("stream-overlay")) {
+        throw new HostError("PERMISSION_DENIED", 'overlay.copyLink needs the "overlay" permission', { capability: "overlay" });
+      }
+      return this.options.askConnector(module.manifest.id, "stream-overlay");
+    };
     return {
       publish: (key: string, state: JsonValue) => this.overlays.publish(subject(key), state),
       remove: (key: string) => this.overlays.remove(subject(key)),
-      copyLink: (key: string): OverlayLinkResult => {
+      copyLink: async (key: string): Promise<OverlayLinkResult> => {
+        if (!(await granted())) return "denied";
         const link = this.overlays.link(subject(key));
         const port = this.server.port;
         if (!this.options.settings().streamOverlays || port === null) {
