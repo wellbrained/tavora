@@ -26,7 +26,7 @@ export interface Plan {
   name: string;
   /** The document id of the world whose recipes the plan may use. */
   worldId: string;
-  /** What the plan should produce. At least one, each above 0. */
+  /** What the plan should produce, each above 0. Empty for a new plan; the UI does not solve it until there is one. */
   targets: Rate[];
   /** What the player already supplies from elsewhere; used before producing the item. */
   fixedInputs: Rate[];
@@ -47,8 +47,18 @@ export type SolveResult =
   | { ok: false; error: SolveError };
 
 export type SolveError =
-  /** The plan refers to an unknown item or recipe, or a rate is not a positive finite number. */
-  | { code: "INVALID_PLAN"; message: string }
+  /**
+   * The plan refers to an item or recipe the game data does not have (for example after a game update),
+   * or a rate is not a positive finite number, or it has no targets. `message` is English, for logs; the UI
+   * shows its own text for `reason`.
+   */
+  | {
+      code: "INVALID_PLAN";
+      reason: "UNKNOWN_ITEM" | "UNKNOWN_RECIPE" | "BAD_RATE" | "NO_TARGETS";
+      item?: ItemId;
+      recipe?: RecipeId;
+      message: string;
+    }
   /** A chosen recipe is an alternate the world has not unlocked (and showAllAlternates is off). */
   | { code: "LOCKED_RECIPE"; recipe: RecipeId; item: ItemId }
   /** A chosen recipe does not produce the item it was chosen for. */
