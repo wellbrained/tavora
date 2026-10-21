@@ -479,6 +479,11 @@ export class CatalogStore {
     return Number(this.db.prepare("delete from reports where sha256 = ?").run(sha256).changes) > 0;
   }
 
+  /** Whether any module, listed or not, has an id under this prefix. */
+  hasModuleUnder(prefix: string): boolean {
+    return this.db.prepare("select 1 from modules where substr(id, 1, ?) = ? limit 1").get(prefix.length + 1, `${prefix}.`) !== undefined;
+  }
+
   /** Every module, listed or not, for the maintainer. */
   modules(): CatalogModuleRow[] {
     return (

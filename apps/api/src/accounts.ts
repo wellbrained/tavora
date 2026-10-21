@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { cleanDeveloperName, DEVICE_OS, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
+import { cleanDeveloperName, DEVICE_OS, MAX_PREFIXES, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
+import type { CatalogStore } from "./catalog.ts";
 import type { CatalogTrust } from "./catalog-trust.ts";
 import type { CopyStore } from "./cloud-copy.ts";
 import { DiscordError, isDiscordCode, isPkceVerifier, type DiscordClient, type DiscordIdentity } from "./discord.ts";
@@ -32,6 +33,10 @@ export interface AccountOptions {
   copies?: CopyStore;
   /** The signed lists as served (catalog-trust.ts), to tell when a key replacement was signed. Absent: requests stay waiting. */
   trust?: CatalogTrust;
+  /** The module catalog, to tell which held prefixes have a module. Absent: none has. */
+  catalog?: CatalogStore;
+  /** Prefix claims per client: 30 an hour by default, like uploads. */
+  prefixRateLimiter?: RateLimiter;
 }
 
 /** Of the day's emails, the last ones are kept for changing the address and deleting the account. */
@@ -45,6 +50,8 @@ const nextUtcDay = (at: number) => {
 type Env = { Variables: { session: Session; account: Account } };
 
 const CODE = /^\d{6}$/;
+/** A module id prefix: the first part of a module id (module-schema's MODULE_ID), which is at most 128 characters with a dot and a second part. */
+const PREFIX = /^[a-z][a-z0-9]{0,125}$/;
 /** The profile's limits, the same as the app's: a name of 32 characters, 3 initials, a 256 px PNG of at most 512 KB. */
 const MAX_NAME = 32;
 const MAX_INITIALS = 3;
@@ -100,6 +107,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   const now = options.now ?? Date.now;
   const codeLimiter = options.codeRateLimiter ?? createRateLimiter({ limit: 10, windowMs: 3_600_000 });
   const verifyLimiter = options.verifyRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 15 * 60_000 });
+  const prefixLimiter = options.prefixRateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
   const app = new Hono<Env>();
   /** Everything on the server goes at once: the account, its sign-ins and its cloud copy. */
   const deleteAccount = (id: string) => {
@@ -286,6 +294,38 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (!store.developer(account.id)) return context.json({ error: "Choose a developer name first.", reason: "no-developer-name" }, 409);
     const { code, expiresAt } = store.linkCode(account.id, now());
     return context.json({ code, expiresAt: new Date(expiresAt).toISOString() });
+  });
+
+  // Module id prefixes: checked and claimed before the first publish, so the app can show whether an id
+  // is free and CI can publish a first version under a claimed one. Publishing still reserves a free one.
+  signedIn.get("/prefixes", (context) => {
+    const held = store.heldPrefixes(context.get("account").id);
+    return context.json({
+      prefixes: held.map(({ prefix, reservedAt }) => ({ prefix, claimedAt: reservedAt, published: options.catalog?.hasModuleUnder(prefix) ?? false })),
+      max: MAX_PREFIXES,
+    });
+  });
+
+  /** What a prefix is to this account: held, free, taken, reserved, too-many or invalid. */
+  const prefixState = (accountId: string, prefix: string) => (PREFIX.test(prefix) ? store.prefixCheck(accountId, prefix) : "invalid");
+
+  signedIn.get("/prefixes/:prefix", (context) => {
+    const prefix = context.req.param("prefix") ?? "";
+    return context.json({ prefix, state: prefixState(context.get("account").id, prefix) });
+  });
+
+  signedIn.post("/prefixes/:prefix", (context) => {
+    const wait = prefixLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const account = context.get("account");
+    const prefix = context.req.param("prefix") ?? "";
+    const state = prefixState(account.id, prefix);
+    if (state === "invalid") return context.json({ error: "A prefix is lowercase letters and digits, starting with a letter.", reason: "invalid" }, 400);
+    if (state === "taken") return context.json({ error: `The id prefix "${prefix}" belongs to another developer.`, reason: "prefix-taken" }, 403);
+    if (state === "reserved") return context.json({ error: `The id prefix "${prefix}" is reserved.`, reason: "prefix-reserved" }, 403);
+    if (state === "too-many") return context.json({ error: `Your account holds ${MAX_PREFIXES} id prefixes, as many as it can.`, reason: "too-many-prefixes" }, 403);
+    if (state === "free") store.reservePrefix(account.id, prefix, now());
+    return context.json({ prefix, state: "held" });
   });
 
   // "I lost this key" (or "it was leaked"): asks to move what the old key owns to another key of the
