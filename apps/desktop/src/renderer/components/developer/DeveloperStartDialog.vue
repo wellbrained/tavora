@@ -29,6 +29,10 @@ const TITLES = {
   project: "devStart.project.title",
   done: "devStart.done.title",
 } as const;
+// Saving the name makes the key and claims the prefix, so those two count as part of it: the key step
+// only shows the recovery key (or what got in the way), the prefix step only a taken prefix.
+const NUMBERS: Record<Step, number> = { "sign-in": 1, name: 2, key: 2, prefix: 2, project: 3 };
+const COUNT = 3;
 /** The steps that can wait. */
 const OPTIONAL: ReadonlySet<Step> = new Set(["prefix", "project"]);
 
@@ -49,7 +53,7 @@ const done = computed<Record<Step, boolean>>(() => ({
   project: (state.value?.developmentFolders.length ?? 0) > 0,
 }));
 const step = computed<Step | null>(() => STEPS.find((item) => !done.value[item] && !later.value.has(item)) ?? null);
-const number = computed(() => (step.value ? STEPS.indexOf(step.value) + 1 : STEPS.length));
+const number = computed(() => (step.value ? NUMBERS[step.value] : COUNT));
 
 async function run(action: HostAction): Promise<boolean> {
   if (busy.value) return false;
@@ -81,7 +85,9 @@ async function addKey() {
   if ((await run({ type: "developer-key-add" })) && (keys.value?.keys.length ?? 0) > before) keyReminder.value = true;
 }
 
-const suggested = computed(() => suggestPrefix(view.value?.developer?.name ?? ""));
+const suggested = computed(() => view.value?.prefixCheck?.prefix ?? suggestPrefix(view.value?.developer?.name ?? ""));
+/** The prefix saving the typed name would claim; none once the account holds one. */
+const namePrefix = computed(() => (view.value?.prefixes?.held.length === 0 ? suggestPrefix(developerName.value) : null));
 
 async function copyCommand() {
   if ((await act({ type: "developer-copy-create-command" })).ok) showToast(t("devStart.project.copied"));
@@ -118,8 +124,8 @@ watch(
 </script>
 
 <template>
-  <ModalDialog :title="t(TITLES[step ?? 'done'])" class="sm:max-w-[480px]" testid="developer-start" @close="close">
-    <p v-if="step" class="text-muted-foreground -mt-2 text-xs" data-testid="developer-start-step">{{ t("devStart.step", { step: number, count: STEPS.length }) }}</p>
+  <ModalDialog :title="step === 'key' && keys?.recoveryKey ? t('devStart.recovery.title') : t(TITLES[step ?? 'done'])" class="sm:max-w-[480px]" testid="developer-start" @close="close">
+    <p v-if="step" class="text-muted-foreground -mt-2 text-xs" data-testid="developer-start-step">{{ t("devStart.step", { step: number, count: COUNT }) }}</p>
 
     <template v-if="step === 'sign-in'">
       <p class="text-muted-foreground text-sm">{{ t("devStart.signIn.text") }}</p>
@@ -132,19 +138,17 @@ watch(
         <Input v-model="developerName" class="max-w-60" maxlength="32" autocomplete="off" spellcheck="false" :aria-label="t('account.developer.name')" data-testid="developer-start-name" autofocus />
         <Button type="submit" :disabled="busy || !developerName.trim()" data-testid="developer-start-name-save">{{ t("common.next") }}</Button>
       </div>
+      <p v-if="namePrefix" class="text-muted-foreground text-xs" data-testid="developer-start-name-prefix">{{ t("devStart.name.prefix", { prefix: namePrefix }) }}</p>
     </form>
 
     <template v-else-if="step === 'key'">
-      <p class="text-muted-foreground text-sm">{{ t("devStart.key.text") }}</p>
-      <!-- Another PC made the account's key: its recovery key opens the vault here first. And a new one is shown once. -->
-      <template v-if="keys?.status === 'ask' || keys?.recoveryKey">
-        <p v-if="keys.recoveryKey" class="text-sm">{{ t("devStart.key.safe") }}</p>
-        <RecoveryKeySettings />
-      </template>
+      <!-- Saving the name made the key: its recovery key is shown once. Or another PC made the account's
+           key, and its recovery key opens the vault here first. -->
+      <p class="text-muted-foreground text-sm">{{ keys?.recoveryKey ? t("devStart.recovery.text") : t("devStart.key.text") }}</p>
+      <RecoveryKeySettings v-if="keys?.recoveryKey || keys?.status === 'ask'" />
       <p v-else-if="keys?.status === 'offline'" class="text-muted-foreground text-sm">{{ t("account.developer.offline") }}</p>
       <div v-else-if="developerReady" class="flex flex-col gap-3" data-testid="developer-start-key-ready">
         <p class="flex items-center gap-2 text-sm"><CircleCheck class="text-success size-4 flex-none" :stroke-width="1.5" /> {{ t("devStart.key.ready") }}</p>
-        <p class="text-muted-foreground text-sm">{{ t("devStart.key.safe") }}</p>
         <div class="flex justify-end">
           <Button data-testid="developer-start-next" @click="keyReminder = false">{{ t("common.next") }}</Button>
         </div>
@@ -163,14 +167,14 @@ watch(
           <Button variant="ghost" :disabled="busy || keys?.status === 'loading'" data-testid="developer-start-make-key" @click="makeKey">{{ t("devStart.key.makeNew") }}</Button>
         </div>
       </div>
-      <div v-else class="flex flex-wrap gap-2">
+      <!-- The name was saved before keys came with it, or making the key failed then. -->
+      <div v-else>
         <Button :disabled="busy || keys?.status === 'loading'" data-testid="developer-start-make-key" @click="makeKey">{{ t("devStart.key.make") }}</Button>
-        <Button variant="ghost" :disabled="busy || keys?.status === 'loading'" data-testid="developer-start-add-key" @click="addKey">{{ t("devStart.key.have") }}</Button>
       </div>
     </template>
 
     <template v-else-if="step === 'prefix'">
-      <p class="text-muted-foreground text-sm">{{ t("devStart.prefix.text", { prefix: suggested ?? "you" }) }}</p>
+      <p class="text-muted-foreground text-sm">{{ t("devStart.prefix.text") }}</p>
       <PrefixClaim :initial="suggested" />
       <div class="flex justify-end">
         <Button variant="ghost" data-testid="developer-start-later" @click="skip">{{ t("devStart.later") }}</Button>

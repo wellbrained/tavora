@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Settings > Development > Module developer, once signed in: the public developer name, the publisher
-// keys Tavora keeps in the account's vault and those linked to the account, and the id prefixes the
-// account holds. What only publishing from CI needs (key files, link codes, publish tokens) is folded
-// away under Publish from CI, so a newcomer never meets it.
+// Settings > Development > Module developer, once signed in: the public developer name and the id
+// prefixes the account holds. Saving the name the first time also claims its prefix and makes the
+// publisher key (host.ts), so publishing from Tavora needs nothing more here; the keys (Export, Lost
+// it?, Unlink), key files, link codes and publish tokens are folded away under Publisher keys and CI.
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
@@ -97,6 +97,9 @@ async function replaceKey(fingerprint: string, leaked: boolean) {
 // The id prefixes the account holds; a new one is suggested from the developer name.
 const prefixes = computed(() => view.value?.prefixes ?? null);
 const suggested = computed(() => suggestPrefix(view.value?.developer?.name ?? ""));
+const addingPrefix = ref(false);
+/** The prefix saving the typed name claims with it; none once the account holds one. */
+const namePrefix = computed(() => (prefixes.value?.held.length === 0 && developerName.value.trim() !== (view.value?.developer?.name ?? "") ? suggestPrefix(developerName.value) : null));
 
 // Publish from CI: folded away until opened.
 const ciOpen = ref(false);
@@ -136,9 +139,31 @@ function removeToken(token: AccountPublishToken) {
           <Button type="submit" :disabled="busy || !developerName.trim() || developerName.trim() === view?.developer?.name" data-testid="account-developer-save">{{ t("account.developer.save") }}</Button>
         </div>
         <span class="text-muted-foreground text-xs" data-testid="account-developer-name-hint">{{ nameHint }}</span>
+        <span v-if="namePrefix" class="text-muted-foreground text-xs" data-testid="account-developer-name-prefix">{{ t("devStart.name.prefix", { prefix: namePrefix }) }}</span>
       </form>
 
-      <div class="mt-6" data-testid="developer-keys">
+      <div v-if="prefixes && view?.developer" class="mt-6" data-testid="developer-prefixes">
+        <span class="text-sm font-medium">{{ t("developer.prefix") }}</span>
+        <p v-if="prefixes.held.length" class="mt-1 text-sm" data-testid="developer-prefixes-list">
+          {{ t("developer.prefixLine", { prefix: prefixes.held.map((item) => item.prefix).join(", ") }) }}
+          <Button v-if="!addingPrefix && prefixes.held.length < prefixes.max" variant="ghost" size="sm" class="ml-1" data-testid="developer-prefix-add" @click="addingPrefix = true">{{ t("developer.prefixAdd") }}</Button>
+        </p>
+        <p v-else class="text-muted-foreground mt-1 text-xs" data-testid="developer-prefixes-none">{{ t("developer.noPrefixes") }}</p>
+        <div v-if="!prefixes.held.length || addingPrefix" class="mt-2">
+          <PrefixClaim :initial="prefixes.held.length ? null : suggested" @claimed="addingPrefix = false" />
+        </div>
+      </div>
+    </div>
+  </SettingGroup>
+
+  <SettingGroup>
+    <SettingRow :label="t('settings.publish-ci.label')" :description="t('settings.publish-ci.description')" setting="publish-ci" :highlighted="highlight === 'publish-ci'">
+      <Button variant="ghost" :aria-expanded="ciOpen" data-testid="developer-ci-toggle" @click="ciOpen = !ciOpen">
+        {{ ciOpen ? t("developer.ciHide") : t("developer.ciShow") }}
+      </Button>
+    </SettingRow>
+    <div v-if="ciOpen" class="py-4" data-testid="developer-ci">
+      <div data-testid="developer-keys">
         <span class="text-sm font-medium">{{ t("account.developer.kept") }}</span>
         <p class="text-muted-foreground mt-1 text-xs">{{ t("account.developer.keptHint") }}</p>
         <p v-if="keys?.status === 'ask'" class="text-muted-foreground mt-2 text-sm" data-testid="developer-keys-ask">{{ t("account.developer.askKey") }}</p>
@@ -181,47 +206,15 @@ function removeToken(token: AccountPublishToken) {
             </div>
           </li>
         </ul>
-        <div v-if="keys?.status === 'ready'" class="mt-3 flex items-center gap-2">
-          <Button :variant="rows.length ? 'secondary' : 'default'" :disabled="busy || !view?.developer" data-testid="developer-key-create" @click="makeKey">{{ t("account.developer.create") }}</Button>
-          <span v-if="!view?.developer" class="text-muted-foreground text-sm">{{ t("account.developer.linkNeedsName") }}</span>
-        </div>
-      </div>
-
-      <div v-if="prefixes" class="mt-6" data-testid="developer-prefixes">
-        <span class="text-sm font-medium">{{ t("developer.prefixes") }}</span>
-        <p class="text-muted-foreground mt-1 text-xs">{{ t("developer.prefixesHint", { max: prefixes.max }) }}</p>
-        <p v-if="!prefixes.held.length" class="text-muted-foreground mt-2 text-sm" data-testid="developer-prefixes-none">{{ t("developer.noPrefixes") }}</p>
-        <ul v-else class="mt-2" data-testid="developer-prefixes-list">
-          <li v-for="item in prefixes.held" :key="item.prefix" class="flex min-h-10 items-center gap-3" :data-testid="`developer-prefix-${item.prefix}`">
-            <span class="flex-1 font-mono text-sm">{{ item.prefix }}</span>
-            <span class="text-muted-foreground text-sm">{{ item.published ? t("developer.prefixUsed") : t("developer.prefixClaimed", { date: formatDate(new Date(item.claimedAt)) }) }}</span>
-          </li>
-        </ul>
-        <div v-if="prefixes.held.length < prefixes.max" class="mt-3">
-          <PrefixClaim :initial="prefixes.held.length ? null : suggested" />
-        </div>
-      </div>
-    </div>
-  </SettingGroup>
-
-  <SettingGroup>
-    <SettingRow :label="t('settings.publish-ci.label')" :description="t('settings.publish-ci.description')" setting="publish-ci" :highlighted="highlight === 'publish-ci'">
-      <Button variant="ghost" :aria-expanded="ciOpen" data-testid="developer-ci-toggle" @click="ciOpen = !ciOpen">
-        {{ ciOpen ? t("developer.ciHide") : t("developer.ciShow") }}
-      </Button>
-    </SettingRow>
-    <div v-if="ciOpen" class="py-4" data-testid="developer-ci">
-      <div class="flex flex-col gap-3" data-testid="developer-key-files">
-        <div>
-          <span class="text-sm font-medium">{{ t("account.developer.keyFiles") }}</span>
-          <p class="text-muted-foreground mt-1 text-xs">{{ t("account.developer.keyFilesHint") }}</p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <!-- Saving the name makes the first key; this is for an account left without one. -->
+          <Button v-if="keys?.status === 'ready' && !rows.length" variant="secondary" :disabled="busy || !view?.developer" data-testid="developer-key-create" @click="makeKey">{{ t("account.developer.create") }}</Button>
           <Button v-if="exportable" variant="secondary" :disabled="busy" :data-testid="`developer-key-export-${exportable}`" @click="exportKey(exportable)">{{ t("account.developer.exportMine") }}</Button>
           <Button v-if="keys?.status === 'ready'" variant="secondary" :disabled="busy || !view?.developer" data-testid="developer-key-add" @click="addKey">{{ t("account.developer.add") }}</Button>
           <Button variant="ghost" :disabled="busy || !view?.developer" data-testid="account-link-code" @click="run({ type: 'account-link-code' })">{{ t("account.developer.link") }}</Button>
+          <span v-if="!view?.developer" class="text-muted-foreground text-sm">{{ t("account.developer.linkNeedsName") }}</span>
         </div>
-        <div v-if="view?.linkCode" class="flex flex-col gap-2 rounded-md border p-3" data-testid="account-link">
+        <div v-if="view?.linkCode" class="mt-3 flex flex-col gap-2 rounded-md border p-3" data-testid="account-link">
           <span class="text-sm">{{ t("account.developer.linkHint", { time: formatDate(view.linkCode.expiresAt, { timeStyle: "short" }) }) }}</span>
           <div class="flex flex-wrap items-center gap-2">
             <code class="bg-muted rounded px-2 py-1 font-mono text-sm select-all" data-testid="account-link-command">{{ linkCommandText }}</code>

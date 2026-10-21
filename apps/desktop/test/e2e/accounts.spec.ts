@@ -285,11 +285,14 @@ test("Tavora keeps a developer's publisher key, and signs and publishes for tavo
   try {
     await signIn(page, "keeper@example.com", true);
     await page.getByTestId("settings-nav-development").click();
-    await expect(page.getByTestId("developer-key-create")).toBeDisabled();
-    await page.getByTestId("account-developer-name").fill("key-keeper");
-    await page.getByTestId("account-developer-save").click();
+    await page.getByTestId("developer-ci-toggle").click();
     await expect(page.getByTestId("developer-keys-none")).toBeVisible();
-    await page.getByTestId("developer-key-create").click();
+    await expect(page.getByTestId("developer-key-create")).toBeDisabled();
+    // Saving the name makes the key and claims the name's prefix.
+    await page.getByTestId("account-developer-name").fill("key-keeper");
+    await expect(page.getByTestId("account-developer-name-prefix")).toContainText("keykeeper");
+    await page.getByTestId("account-developer-save").click();
+    await expect(page.getByTestId("developer-prefixes-list")).toContainText("keykeeper");
     // The account had no key yet: its recovery key is shown once, in its own group, and can be shown again.
     const recovery = page.getByTestId("recovery-key-text");
     await expect(recovery).toHaveText(/^[0-9A-Z-]{40,}$/);
@@ -300,6 +303,7 @@ test("Tavora keeps a developer's publisher key, and signs and publishes for tavo
     await expect(recovery).toHaveText(recoveryKey!);
     await page.getByTestId("recovery-key-saved").click();
     await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("developer-ci-toggle").click();
     const kept = page.getByTestId("developer-keys-list").locator("li");
     await expect(kept).toHaveCount(1);
     const fingerprint = ((await kept.getAttribute("data-testid")) ?? "").replace("developer-key-", "");
