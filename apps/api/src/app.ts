@@ -201,7 +201,8 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   // The module catalog, read-only and without sign-in. The app takes the whole index (for a game, or
   // all of it) and decides on the PC what to update, so it never sends what a player has installed (C11).
   // "by <name>" comes from the account the key is linked to, never from the listing (C13).
-  const listed = (entry: CatalogEntry) => ({ ...entry, publisher: accounts?.store.publisherName(entry.owner) ?? null });
+  // `installs` counts installs from Browse (POST /installed), never who installed.
+  const listed = (entry: CatalogEntry) => ({ ...entry, publisher: accounts?.store.publisherName(entry.owner) ?? null, installs: catalog?.installCount(entry.id) ?? 0 });
   const catalogApp = new Hono();
   // Publishing has its own limits per client and per account, so it comes before the read limiter.
   const publish = publishHandlers({
@@ -246,6 +247,13 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     if (!found) return context.json({ error: "Not found." }, 404);
     context.header("Cache-Control", "public, max-age=300");
     return context.json({ module: listed(found.module), versions: found.versions, readme: found.readme });
+  });
+  // Sent once by the app after a player installed a module from Browse: only the module id.
+  catalogApp.post("/installed", async (context) => {
+    const body = (await context.req.json().catch(() => null)) as { id?: unknown } | null;
+    const id = typeof body?.id === "string" && body.id.length <= 200 ? body.id : null;
+    if (!id || !catalog!.countInstall(id)) return context.json({ error: "Not found." }, 404);
+    return context.body(null, 204);
   });
   catalogApp.get("/zips/:file", (context) => {
     const match = /^([0-9a-f]{64})\.zip$/.exec(context.req.param("file"));

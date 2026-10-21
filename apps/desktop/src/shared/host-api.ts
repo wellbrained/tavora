@@ -896,6 +896,12 @@ export interface CatalogModuleView {
   publisher: string | null;
   /** The zip's size in bytes. */
   size: number;
+  /** How many times it was installed from Browse, as the catalog counts it. */
+  installs: number;
+  /** Whether it may go where the player is (the open game or personal workspace); Browse lists the rest too. */
+  fits: boolean;
+  /** The games it is made for, by name; empty for any game. */
+  forGames: string[];
   publishedAt: string;
   /** The module's web page, http or https, shown as plain text; open-catalog-homepage opens it. */
   homepage: string | null;

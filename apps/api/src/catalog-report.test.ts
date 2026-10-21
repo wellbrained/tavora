@@ -118,3 +118,19 @@ describe("reporting a catalog module", () => {
     expect((await none.request("http://tavora.test/v1/catalog/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(of) })).status).toBe(503);
   });
 });
+
+describe("counting installs from Browse", () => {
+  it("counts installs of a listed module and shows the count in the listing, keeping nothing else", async () => {
+    const { catalog, added } = setup();
+    const app = createApp({ db, catalog, rateLimiter: roomy() });
+    const installed = (body: unknown) => app.request("http://tavora.test/v1/catalog/installed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    expect((await installed({ id: added.manifest.id })).status).toBe(204);
+    expect((await installed({ id: added.manifest.id })).status).toBe(204);
+    expect((await installed({ id: "wellbrained.unknown" })).status).toBe(404);
+    expect((await installed({})).status).toBe(404);
+    const index = (await (await app.request("http://tavora.test/v1/catalog")).json()) as { modules: { installs: number }[] };
+    expect(index.modules[0]!.installs).toBe(2);
+    catalog.setListed(added.manifest.id, false);
+    expect((await installed({ id: added.manifest.id })).status).toBe(404);
+  });
+});
