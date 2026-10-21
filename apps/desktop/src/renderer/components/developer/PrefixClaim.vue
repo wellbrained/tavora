@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // Claiming a module id prefix: Check asks the catalog, and turns into Claim it when the prefix is free;
-// for one that isn't, it stays Check again. Claimed, the prefix is the account's right away.
+// for one that isn't, it stays Check again. Claimed, the prefix is the account's right away, and the
+// button turns into a green Claimed in its place.
+import { CircleCheck } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
@@ -56,10 +58,13 @@ async function press() {
         :aria-label="t('prefix.label')"
         data-testid="prefix-input"
       />
-      <Button v-if="state !== 'held'" type="submit" :variant="state === 'free' ? 'default' : 'secondary'" :disabled="busy || !typed" data-testid="prefix-button">
+      <span v-if="state === 'held'" class="text-success flex items-center gap-1.5 px-1 text-sm font-medium" role="status" data-testid="prefix-held">
+        <CircleCheck class="size-4 flex-none" :stroke-width="2" /> {{ t("prefix.held") }}
+      </span>
+      <Button v-else type="submit" :variant="state === 'free' ? 'default' : 'secondary'" :disabled="busy || !typed" data-testid="prefix-button">
         {{ state === "free" ? t("prefix.claim") : state === null ? t("prefix.check") : t("prefix.checkAgain") }}
       </Button>
     </div>
-    <span v-if="state" class="text-muted-foreground text-sm" role="status" data-testid="prefix-state">{{ t(`prefix.state.${state}`, { prefix: typed }) }}</span>
+    <span v-if="state && state !== 'held'" class="text-muted-foreground text-sm" role="status" data-testid="prefix-state">{{ t(`prefix.state.${state}`, { prefix: typed }) }}</span>
   </form>
 </template>

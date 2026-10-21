@@ -71,6 +71,8 @@ const unlinked = computed(() => {
   const linked = new Set((view.value?.publisherKeys ?? []).map((key) => key.fingerprint));
   return keys.value?.keys.find((key) => !linked.has(key.fingerprint)) ?? null;
 });
+/** The account has a linked key Tavora doesn't keep: a key file linked with `tavora-pack link`. */
+const linkedElsewhere = computed(() => !keys.value?.keys.length && (view.value?.publisherKeys?.length ?? 0) > 0);
 async function makeKey() {
   if (await run({ type: "developer-key-create" })) keyReminder.value = true;
 }
@@ -151,6 +153,14 @@ watch(
         <p class="text-sm">{{ t("devStart.key.notLinked") }}</p>
         <div>
           <Button :disabled="busy" data-testid="developer-start-link" @click="run({ type: 'developer-key-link', fingerprint: unlinked.fingerprint })">{{ t("devStart.key.link") }}</Button>
+        </div>
+      </div>
+      <!-- Set up before with `tavora-pack link`: the key file is the one the catalog knows, so it comes first. -->
+      <div v-else-if="linkedElsewhere" class="flex flex-col gap-3" data-testid="developer-start-key-file">
+        <p class="text-sm">{{ t("devStart.key.linkedFile") }}</p>
+        <div class="flex flex-wrap gap-2">
+          <Button :disabled="busy || keys?.status === 'loading'" data-testid="developer-start-add-key" @click="addKey">{{ t("devStart.key.pickFile") }}</Button>
+          <Button variant="ghost" :disabled="busy || keys?.status === 'loading'" data-testid="developer-start-make-key" @click="makeKey">{{ t("devStart.key.makeNew") }}</Button>
         </div>
       </div>
       <div v-else class="flex flex-wrap gap-2">

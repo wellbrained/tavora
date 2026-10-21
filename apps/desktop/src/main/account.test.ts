@@ -657,6 +657,10 @@ describe("the developer side", () => {
     // Refused: what the catalog says now is shown as checked.
     await expect(account.claimPrefix("wellbrained")).rejects.toMatchObject({ key: "publish.error.prefixTaken" });
     expect(account.view().prefixCheck).toEqual({ prefix: "wellbrained", state: "taken" });
+    // Held, but missing from the list read before (it held it already then): the list is read again.
+    states.wellbrained = "held";
+    expect(await account.checkPrefix("wellbrained")).toBe("held");
+    expect(account.view().prefixes?.held.map((item) => item.prefix)).toEqual(["nik", "wellbrained"]);
     // Not a prefix at all: the service isn't asked.
     const before = calls.length;
     expect(await account.checkPrefix("Not.One")).toBe("invalid");
