@@ -28,6 +28,7 @@ export const solve: Solve = ({ data, plan, world }) => {
   if (invalid) return fail({ code: "INVALID_PLAN", message: invalid });
   const usable = usableIn(world);
   const resources = new Set(data.resources);
+  const choices = plan.recipeChoices ?? {};
 
   // Walk from the targets to the resources, fixing one recipe (or none) per needed item.
   const order: ItemId[] = [];
@@ -45,7 +46,7 @@ export const solve: Solve = ({ data, plan, world }) => {
     if (recipeOf.has(item)) continue;
     let recipe: Recipe | null = null;
     if (!resources.has(item)) {
-      const choice = Object.hasOwn(plan.recipeChoices, item) ? plan.recipeChoices[item] : undefined;
+      const choice = Object.hasOwn(choices, item) ? choices[item] : undefined;
       if (choice !== undefined) {
         recipe = data.recipes[choice]!;
         if (!makes(recipe, item)) return fail({ code: "WRONG_RECIPE", recipe: choice, item });
@@ -70,7 +71,7 @@ export const solve: Solve = ({ data, plan, world }) => {
 
   const recipes = [...chosenFor.keys()].map((id) => data.recipes[id]!);
   const demand = sumRates(plan.targets);
-  const supply = sumRates(plan.fixedInputs);
+  const supply = sumRates(plan.fixedInputs ?? []);
 
   // Variables: machines per recipe, then per item its leftover, its source (resources and items
   // without a recipe) and the fixed input it takes, plus a slack that caps the fixed input.
