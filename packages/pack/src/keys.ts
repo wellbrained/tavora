@@ -1,15 +1,8 @@
 import { createPrivateKey, type KeyObject } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import path from "node:path";
 
-// Publisher keys in files: for publishing from CI, and from before Tavora kept them (decided 2026-10-20).
-// The pack command never makes a key; Tavora does (Settings > Account > Module developer).
-
-/** Where older versions of the pack command made a publisher's key; still used when it is there. */
-export function defaultKeyFile(): string {
-  return path.join(homedir(), ".tavora", "publisher-key.pem");
-}
+// Publisher keys in files, for publishing from CI. The pack command never makes a key; Tavora does, and
+// exports it for CI (Settings > Development > Publish from CI).
 
 /** A publisher's private key from a file, which must exist. */
 export async function loadExistingKey(file: string): Promise<{ key: KeyObject }> {

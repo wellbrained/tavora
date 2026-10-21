@@ -2,6 +2,14 @@
 
 What changed in `@tavora/pack`, newest first.
 
+## 0.3.0
+
+- Publish from Tavora now: **Settings > Development**, then **Publish** on your module. It packs, signs and uploads with one button. `tavora-pack` is for CI.
+- `tavora-pack` signs only with a key file: `--key <file>` is required. Export your key in Tavora under **Settings > Development > Publish from CI**. Without `--key` it tells you where to publish instead.
+- Tavora doesn't sign for `tavora-pack` any more, so there's no **Allow** prompt. `--publisher`, `tavoraSigner`, `askTavora`, `signerAddress` and the signer request types are gone.
+- `~/.tavora/publisher-key.pem` isn't picked up by itself any more; pass it with `--key`. `defaultKeyFile` is gone.
+- `Signer` has no `publish` any more, and `signPublish` is required.
+
 ## 0.2.0
 
 - Tavora keeps your publisher key now (Tavora 0.19.11, Settings > Account > Module developer). `tavora-pack` asks Tavora on this PC to sign, and Tavora asks you first. The secret key never reaches `tavora-pack`.

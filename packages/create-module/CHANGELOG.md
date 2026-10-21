@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.8
+
+- New projects have no `zip` script any more: publish from Tavora with **Settings > Development > Publish**, or save a zip there. They start on `@tavora/pack` 0.3.0, for publishing from CI.
+
 ## 0.1.7
 
 - New projects start on `@tavora/pack` 0.2.0: Tavora keeps the publisher key and signs `npm run zip` after you allow it.

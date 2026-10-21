@@ -3,14 +3,13 @@
 // runs against a pretend Discord: its sign-in page sends the app straight back.
 import { spawn, type ChildProcess } from "node:child_process";
 import { generateKeyPairSync } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer, type Server } from "node:http";
 import { createServer } from "node:net";
 import os, { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { readZip, verifyFiles } from "@tavora/pack";
-import { desktopDir, launch, signerAddressFor } from "./harness";
+import { desktopDir, launch } from "./harness";
 
 const apiDir = path.resolve(desktopDir, "../api");
 let service: ChildProcess | undefined;
@@ -269,15 +268,12 @@ test("a developer chooses a public name and links a key file with tavora-pack li
   }
 });
 
-test("Tavora keeps a developer's publisher key, and signs and publishes for tavora-pack after a click", async () => {
+test("Tavora keeps a developer's publisher key, and tavora-pack without a key file points to Tavora", async () => {
   // A pretend Discord app turns on the test key store on Linux, which has no keyring here; the account's key needs one.
-  const { app, page, userData } = await launch(undefined, [], {
+  const { app, page } = await launch(undefined, [], {
     env: { TAVORA_API_URL: apiUrl, TAVORA_DISCORD_IPC: path.join(tmpdir(), "tavora-no-discord"), TAVORA_DISCORD_TOKEN_URL: `${discordUrl}/api/oauth2/token` },
   });
   const project = await moduleProject("exampledev.tracker");
-  // No key file in this home: tavora-pack must ask Tavora.
-  const home = await mkdtemp(path.join(tmpdir(), "tavora-home-"));
-  const env = { TAVORA_SIGNER_ADDRESS: signerAddressFor(userData), HOME: home, USERPROFILE: home };
   try {
     await signIn(page, "keeper@example.com", true);
     await expect(page.getByTestId("developer-key-create")).toBeDisabled();
@@ -298,38 +294,15 @@ test("Tavora keeps a developer's publisher key, and signs and publishes for tavo
     const fingerprint = ((await kept.getAttribute("data-testid")) ?? "").replace("developer-key-", "");
     await expect(page.getByTestId(`account-key-${fingerprint}`)).toBeVisible();
 
-    // Turned down: nothing is signed.
-    const out = path.join(project, "out.zip");
-    let packing = tavoraPack([project, "--out", out], env);
-    await page.getByTestId("sign-refuse").click();
-    expect((await packing).out).toContain("turned down");
-
-    packing = tavoraPack([project, "--out", out], env);
-    await expect(page.getByTestId("sign-request")).toContainText("Sign Tracker 1.0.0?");
-    await expect(page.getByTestId("sign-request")).toContainText("exampledev.tracker");
-    await page.getByTestId("sign-allow").click();
-    const packed = await packing;
-    expect(packed.status, packed.out).toBe(0);
-    expect(verifyFiles(readZip(await readFile(out)))).toEqual({ ok: true, owner: fingerprint, signed: true });
-    await expect(page.getByTestId("sign-request")).toHaveCount(0);
-
-    // Publishing: Tavora asks, then uploads with its own sign-in, and the account hears about it by email.
-    const publishing = tavoraPack(["publish", out], env);
-    await expect(page.getByTestId("sign-request")).toContainText("Publish Tracker 1.0.0?");
-    await page.getByTestId("sign-allow").click();
-    const published = await publishing;
-    expect(published.status, published.out).toBe(0);
-    expect(published.out).toContain("Published exampledev.tracker 1.0.0");
-    await expect
-      .poll(async () => {
-        const { mails } = (await (await fetch(`${inboxUrl}/mails`)).json()) as { mails: { to: string; text: string }[] };
-        return mails.some((mail) => mail.to === "keeper@example.com" && mail.text.includes("(exampledev.tracker) is now in Tavora's module catalog"));
-      })
-      .toBe(true);
+    // Tavora signs only for its own Publish button: the pack command needs a key file.
+    for (const args of [[project], ["publish", path.join(project, "out.zip")]]) {
+      const run = await tavoraPack(args);
+      expect(run.status).toBe(2);
+      expect(run.out).toContain("Publish from Tavora: Settings > Development");
+    }
   } finally {
     await app.close();
     await rm(project, { recursive: true, force: true }).catch(() => undefined);
-    await rm(home, { recursive: true, force: true }).catch(() => undefined);
   }
 });
 

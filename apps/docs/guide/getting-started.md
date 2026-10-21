@@ -102,24 +102,15 @@ Players can also make personal workspaces, which belong to no game, for modules 
 
 ## Share the module
 
-Pack the built module into a zip signed with your publisher key:
+Publish from Tavora: open **Settings > Development** and press **Publish** on your module. The first time, Tavora walks you through signing in, your developer name and your [publisher key](./publisher-key.md); it makes and keeps the key for you, and your recovery key is its backup. Read [Your publisher key](./publisher-key.md) before your first publish: updates and your players' data depend on that key.
 
-```sh
-npm run build
-npm run zip     # the same as npx tavora-pack .
-```
+Tavora packs what's already built, so keep `npm run dev` running or run `npm run build` first. The review screen shows what will go out: the name, version, patch notes, what the module asks for, and how old the build is. It also offers to raise `version` and write the patch notes for you. Press **Publish** there to sign and upload; players find your module under **Browse** in the module library.
 
-The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`), the icon and the changelog, plus `tavora.signature.json`. Your sources and `node_modules` stay out. Use `--out` to choose the file name.
+The part of your module id before the first dot is your prefix. Tavora suggests one and you claim it with **Check**, then **Claim it**; nobody else can publish under it then (an account holds up to 3). A module stays with the key that published its first version, and each new version must be newer. An account can publish 10 versions a day. [Publishing to the catalog](./publishing.md) covers the listing, updates, limits and reports.
 
-Tavora signs the zip with your publisher key: make one under **Settings > Account > Module developer** first, keep Tavora open, and press **Allow** when it asks. Updates and your players' data depend on that key, and your recovery key is its backup. Read [Your publisher key](./publisher-key.md) before you send the first zip.
+To share by hand instead, press **Save as zip** next to Publish. The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`), the icon and the changelog, plus `tavora.signature.json`; your sources and `node_modules` stay out. Players install it with **Settings > Modules > Install zip**.
 
-Players install the zip with **Settings > Modules > Install zip**. To list it in Tavora's module catalog, where players find it under **Catalog** in the module library, publish it with the same key:
-
-```sh
-npx tavora-pack publish <id>-<version>.zip
-```
-
-The part of your module id before the first dot is your prefix: the first time you publish under it, it becomes yours, and nobody else can publish under it (an account holds up to 3). A module stays with the key that published its first version, and each new version must be newer. An account can publish 10 versions a day. [Publishing to the catalog](./publishing.md) covers the listing, updates, limits and reports.
+To publish from a build server, see [Publish from CI](./publishing.md#publish-from-ci).
 
 While you build, keep loading the module from its development folder: it needs no key, and its data is kept apart from the signed version's.
 
@@ -134,6 +125,6 @@ Tell players what changed in `changelog.json`, which the starter makes and the m
 ]
 ```
 
-Players read them under the module in **Settings > Modules > Patch notes**. After an update, the notes newer than the version they had are marked New until they open them. Each line is plain text of at most 500 characters, at most 20 lines per version and 100 versions; `tavora-pack` refuses a changelog Tavora could not show. Needs Tavora 0.18.2 or newer, so set `minTavora` to at least `0.18.2`.
+Players read them under the module in **Settings > Modules > Patch notes**. After an update, the notes newer than the version they had are marked New until they open them. Each line is plain text of at most 500 characters, at most 20 lines per version and 100 versions; Publishing refuses a changelog Tavora could not show. Needs Tavora 0.18.2 or newer, so set `minTavora` to at least `0.18.2`.
 
 Something not working? See [Troubleshooting](./troubleshooting.md).

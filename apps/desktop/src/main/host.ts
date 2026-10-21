@@ -122,7 +122,6 @@ import { RpcClient } from "./discord-rpc";
 import { AccountKey } from "./account-key";
 import { DeveloperKeys } from "./developer-keys";
 import { FolderPairing, Pairing, ServicePairing } from "./pairing";
-import { startSignerServer, type SignerServer } from "./signer-server";
 import { ServiceStorage } from "./cloud-copy";
 import { CopySync } from "./cloud-copy-sync";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
@@ -289,10 +288,9 @@ export class Host {
   private readonly account: AccountClient;
   /** The cloud copy: made before the data is read, since a newer copy is taken before anything reads it. */
   private copySync!: CopySync;
-  /** The publisher keys the account's vault keeps, and the signer the pack command asks (developer-keys.ts). */
+  /** The publisher keys the account's vault keeps (developer-keys.ts). */
   private developerKeys!: DeveloperKeys;
   private pairing!: Pairing;
-  private signer: SignerServer | null = null;
   /** The developer names players see for publisher keys (publisher-names.ts). */
   private readonly publisherNames: PublisherNames;
   private screen: Screen = "welcome";
@@ -531,7 +529,6 @@ export class Host {
       onChange: (view) => {
         if (!host.window.isDestroyed()) host.window.webContents.send("host:developer-keys", view);
       },
-      focus: () => host.bringToFront(),
     });
     host.pairing = Host.pairing(options, host);
     // Before any module opens, so none sees the pictures half moved.
@@ -584,7 +581,6 @@ export class Host {
     if (options.accounts === true) {
       void host.developerKeys.refresh();
       host.pairing.watch();
-      host.signer = await startSignerServer({ handle: (request) => host.developerKeys.handle(request), log: (line) => console.log(`[tavora] ${line}`) });
     }
     await host.startUpdates();
     return host;
@@ -1333,7 +1329,6 @@ export class Host {
       this.gameWatcher.stop();
       this.copySync.dispose();
       this.pairing.dispose();
-      void this.signer?.close();
       clearInterval(this.catalogTimer);
     });
   }
@@ -1751,8 +1746,6 @@ export class Host {
         if (key) clipboard.writeText(key);
         return;
       }
-      case "developer-sign-answer":
-        return this.developerKeys.answer(action.id, action.allow);
       case "pairing-start":
         return this.pairing.start();
       case "pairing-cancel":

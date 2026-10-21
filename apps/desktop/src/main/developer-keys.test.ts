@@ -1,18 +1,12 @@
-import { createHash, createPublicKey, generateKeyPairSync, verify } from "node:crypto";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { generateKeyPairSync } from "node:crypto";
 import path from "node:path";
-import { fingerprint, packModule, PUBLISH_STATEMENT, PublishError, publishSignature, publishZip, readZip, tavoraSigner, verifyFiles } from "@tavora/pack";
+import { fingerprint } from "@tavora/pack";
 import { afterEach, describe, expect, it } from "vitest";
-import type { DeveloperKeysView } from "../shared/host-api";
 import { AccountKey } from "./account-key";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { DeveloperKeys } from "./developer-keys";
-import { startSignerServer, type SignerServer } from "./signer-server";
 
-const servers: SignerServer[] = [];
 afterEach(async () => {
-  for (const server of servers.splice(0)) await server.close();
   await cleanUp();
 });
 
@@ -20,8 +14,8 @@ const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.f
 
 type Service = Awaited<ReturnType<typeof service>>;
 
-/** Tavora on one PC of the test account, with its signer listening. `answer` clicks on each sign request. */
-async function tavora(cloud: Service, answer: ((view: DeveloperKeysView) => boolean | null) | null = () => true, options: { offline?: () => boolean; refusePublish?: boolean } = {}) {
+/** Tavora on one PC of the test account. */
+async function tavora(cloud: Service, options: { offline?: () => boolean } = {}) {
   const { userData } = await pc({ "library.json": "{}" });
   const fetchImpl = (async (url: string, init?: RequestInit) => {
     if (options.offline?.()) throw new TypeError("fetch failed");
@@ -36,42 +30,18 @@ async function tavora(cloud: Service, answer: ((view: DeveloperKeysView) => bool
     token: () => cloud.token,
   });
   const linked: string[] = [];
-  const uploads: { signature: string; sha256: string }[] = [];
-  let focused = 0;
-  const keys: DeveloperKeys = new DeveloperKeys({
+  const keys = new DeveloperKeys({
     accountKey,
     account: {
       signedIn: () => true,
       link: async (key) => void linked.push(fingerprint(key)),
-      publish: async (key, zip) => {
-        if (options.refusePublish) throw new PublishError("The service refused it.");
-        const sha256 = createHash("sha256").update(zip).digest("hex");
-        uploads.push({ signature: publishSignature(key, zip), sha256 });
-        return { id: "wellbrained.tracker", version: "1.2.0", sha256 };
+      publish: async () => {
+        throw new Error("not in these tests");
       },
     },
-    onChange: (view) => {
-      const request = view.request;
-      if (!request || !answer) return;
-      const allowed = answer(view);
-      if (allowed !== null) queueMicrotask(() => keys.answer(request.id, allowed));
-    },
-    focus: () => void focused++,
-    signWaitMs: 300,
+    onChange: () => undefined,
   });
-  const address = process.platform === "win32" ? `\\\\.\\pipe\\tavora-signer-test-${path.basename(userData)}-${Math.random()}` : path.join(userData, "signer", "signer.sock");
-  const server = (await startSignerServer({ handle: (request) => keys.handle(request), address }))!;
-  servers.push(server);
-  return { keys, accountKey, linked, uploads, address, focused: () => focused };
-}
-
-async function moduleFolder(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "tavora-module-"));
-  await mkdir(path.join(dir, "dist"));
-  await writeFile(path.join(dir, "dist", "index.html"), "<p>hi</p>");
-  const manifest = { id: "wellbrained.tracker", name: "Tracker", version: "1.2.0", apiVersion: "1", entry: "dist/index.html", games: [], viewport: { minWidth: 100, minHeight: 100 }, permissions: { network: [] } };
-  await writeFile(path.join(dir, "tavora.module.json"), JSON.stringify(manifest));
-  return dir;
+  return { keys, accountKey, linked };
 }
 
 describe("the publisher keys Tavora keeps", () => {
@@ -125,91 +95,15 @@ describe("the publisher keys Tavora keeps", () => {
     expect(await a.keys.replacementFor(lost, [lost, made])).toBe(made);
   });
 
-  it("signs for tavora-pack after the click, and never without it", async () => {
-    const cloud = await service();
-    let allow = true;
-    const a = await tavora(cloud, (view) => {
-      expect(view.request).toMatchObject({ kind: "package", module: { id: "wellbrained.tracker", name: "Tracker", version: "1.2.0" } });
-      return allow;
-    });
-    await a.keys.create();
-    const kept = a.keys.view().keys[0]!.fingerprint;
-
-    const signer = (await tavoraSigner({ address: a.address }))!;
-    expect(signer.fingerprint).toBe(kept);
-    const { zip } = await packModule(await moduleFolder(), signer);
-    expect(verifyFiles(readZip(zip))).toEqual({ ok: true, owner: kept, signed: true });
-    expect(a.focused()).toBe(1);
-
-    allow = false;
-    await expect(packModule(await moduleFolder(), signer)).rejects.toThrow(/turned down/);
-  });
-
-  it("turns down a request nobody answers, and one at a time", async () => {
-    const cloud = await service();
-    const a = await tavora(cloud, null);
-    await a.keys.create();
-    const signer = (await tavoraSigner({ address: a.address }))!;
-    const first = packModule(await moduleFolder(), signer);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    await expect(packModule(await moduleFolder(), signer)).rejects.toThrow(/already asking/);
-    await expect(first).rejects.toThrow(/turned down/);
-    expect(a.keys.view().request).toBeNull();
-  });
-
-  it("refuses a manifest the file hashes don't name, and a key it doesn't keep", async () => {
-    const cloud = await service();
-    const a = await tavora(cloud);
-    await a.keys.create();
-    const publicKey = (await tavoraSigner({ address: a.address }))!.publicKey;
-    const manifest = Buffer.from(JSON.stringify({ id: "x.y", name: "Y", version: "1.0.0" }));
-    const hashes = { "tavora.module.json": createHash("sha256").update("something else").digest("hex") };
-    expect(await a.keys.handle({ v: 1, op: "sign-package", publicKey, files: hashes, manifest: manifest.toString("base64") })).toEqual({ ok: false, reason: "bad-request" });
-    const right = { "tavora.module.json": createHash("sha256").update(manifest).digest("hex") };
-    const other = generateKeyPairSync("ed25519").publicKey.export({ format: "der", type: "spki" }).subarray(12).toString("base64");
-    expect(await a.keys.handle({ v: 1, op: "sign-package", publicKey: other, files: right, manifest: manifest.toString("base64") })).toEqual({ ok: false, reason: "unknown-key" });
-  });
-
-  it("publishes a zip its key packed after the click, uploading it signed in", async () => {
-    const cloud = await service();
-    const kinds: string[] = [];
-    const a = await tavora(cloud, (view) => {
-      kinds.push(view.request!.kind);
-      return true;
-    });
-    await a.keys.create();
-    const fp = a.keys.view().keys[0]!.fingerprint;
-    const { privateKey } = generateKeyPairSync("ed25519");
-    const { zip: foreign } = await packModule(await moduleFolder(), privateKey);
-    expect(await a.keys.handle({ v: 1, op: "publish", zip: foreign.toString("base64") })).toEqual({ ok: false, reason: "unknown-key" });
-
-    const signer = (await tavoraSigner({ address: a.address }))!;
-    const { zip } = await packModule(await moduleFolder(), signer);
-    const sha256 = createHash("sha256").update(zip).digest("hex");
-    expect(await publishZip({ key: signer, zip })).toEqual({ id: "wellbrained.tracker", version: "1.2.0", sha256 });
-    expect(kinds).toEqual(["package", "publish"]);
-    const key = createPublicKey(a.keys.exportKey(fp));
-    expect(verify(null, Buffer.from(`${PUBLISH_STATEMENT}\n${sha256}`), key, Buffer.from(a.uploads[0]!.signature, "base64"))).toBe(true);
-  });
-
-  it("passes on why the catalog refused a publish", async () => {
-    const cloud = await service();
-    const a = await tavora(cloud, () => true, { refusePublish: true });
-    await a.keys.create();
-    const signer = (await tavoraSigner({ address: a.address }))!;
-    const { zip } = await packModule(await moduleFolder(), signer);
-    await expect(publishZip({ key: signer, zip })).rejects.toThrow(new PublishError("The service refused it."));
-  });
-
-  it("still signs offline with the keys read last", async () => {
+  it("keeps the keys read last while offline", async () => {
     const cloud = await service();
     let offline = false;
-    const a = await tavora(cloud, () => true, { offline: () => offline });
+    const a = await tavora(cloud, { offline: () => offline });
     await a.keys.create();
+    const before = a.keys.view().keys;
     offline = true;
-    const signer = (await tavoraSigner({ address: a.address }))!;
-    const { zip } = await packModule(await moduleFolder(), signer);
-    expect(verifyFiles(readZip(zip))).toMatchObject({ ok: true, signed: true });
+    await a.keys.refresh();
+    expect(a.keys.view()).toMatchObject({ status: "ready", keys: before });
   });
 
   it("moves the publisher keys over when this PC starts over with a new recovery key", async () => {

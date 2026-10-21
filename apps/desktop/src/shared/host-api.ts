@@ -208,19 +208,9 @@ export interface KeyRequestView {
   status: "waiting" | "done" | "declined";
 }
 
-/** A signature the pack command asked Tavora for, waiting for the developer's click. */
-export interface SignRequestView {
-  id: number;
-  /** "package": signing a module zip as it is packed; "publish": listing a packed zip in the catalog. */
-  kind: "package" | "publish";
-  fingerprint: string;
-  /** From the module's manifest. */
-  module: { id: string; name: string; version: string } | null;
-}
-
 /**
- * Settings > Account > Module developer: the publisher keys Tavora keeps in the account's key vault, and
- * the pack command's sign request. Sent on its own channel; the keys themselves stay in the main process.
+ * Settings > Account > Module developer: the publisher keys Tavora keeps in the account's key vault. Sent
+ * on its own channel; the keys themselves stay in the main process.
  */
 export interface DeveloperKeysView {
   /**
@@ -233,7 +223,6 @@ export interface DeveloperKeysView {
   hasKey: boolean;
   /** The account's recovery key, while the player looks at it (made just now, or asked to see). */
   recoveryKey: string | null;
-  request: SignRequestView | null;
 }
 
 /**
@@ -759,7 +748,6 @@ export type HostAction =
   | { type: "developer-recovery-key-saved" }
   | { type: "developer-show-recovery-key" }
   | { type: "developer-copy-recovery-key" }
-  | { type: "developer-sign-answer"; id: number; allow: boolean }
   /** Asks another PC of the account for its key, instead of typing the recovery key. */
   | { type: "pairing-start" }
   | { type: "pairing-cancel" }

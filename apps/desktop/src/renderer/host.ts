@@ -374,7 +374,6 @@ export const overlayOpen = computed(
     openMenus.value > 0 ||
     dialog.value !== null ||
     copyQuestion.value !== null ||
-    developerKeys.value?.request != null ||
     settingsOpen.value ||
     searchOpen.value ||
     dragging.value,

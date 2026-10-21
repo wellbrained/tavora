@@ -123,25 +123,24 @@ Tavora accounts are optional. Modules learn nothing about them: no SDK call, bri
 
 A developer can link a publisher key to their account, so players see a developer name instead of the key's fingerprint:
 
-- **Only whoever holds the key can link it.** The signed-in app gets a one-time code (10 minutes, used once); the key signs it (Tavora itself for a key it keeps, `tavora-pack link` for a key file), and the service checks that signature against the public half it was sent. The secret key never leaves the developer's PC, and the service keeps only public halves.
+- **Only whoever holds the key can link it.** The signed-in app gets a one-time code (10 minutes, used once); the key signs it (Tavora itself for a key it keeps, `tavora-pack link` for a key file in CI), and the service checks that signature against the public half it was sent. The secret key never leaves the developer's PC, and the service keeps only public halves.
 - **A name cannot pose as another.** Developer names are plain letters, digits, spaces, dots, dashes and underscores, unique when case and those separators are ignored, never Tavora's, changeable once every 30 days, and a name given up stays blocked for others for 30 days.
 - **Players learn a name, nothing else.** Tavora asks the service which name a key has (only while online features are on, at most once a day per key) and gets the name alone, never an account or an address. The name shown is a label: what a player installs is still decided by the key's signature, as before.
 
 ### Publisher keys Tavora keeps
 
-Tavora can keep a developer's publisher keys (Settings > Account > Module developer), so the recovery key is the only thing they have to keep safe.
+Tavora keeps a developer's publisher keys (Settings > Development), so the recovery key is the only thing they have to keep safe.
 
 - **They are sealed with your recovery key.** The keys sit in your account's vault, sealed on your PC with a key derived from the recovery key, so the service only ever sees sealed bytes. Each PC keeps the vault as it last read it, sealed the same way, so signing works offline.
-- **Nothing is signed without your click.** `tavora-pack` asks Tavora over a named pipe on Windows, which only your Windows user may write to, or a socket in `~/.tavora` that only you may open. Neither can be reached from the network, a web page or a module. Tavora brings its window to the front and shows the module's id, name and version and whether it packs or publishes, and signs only after Allow. A request nobody answers is turned down after 2 minutes, and only one is asked at a time.
-- **What you see is what gets signed.** For packing, Tavora checks that the manifest it shows is the one the signed file hashes name. For publishing, it reads the module from the zip itself, and signs only for a zip that one of its keys already signed.
-- **A key leaves Tavora only when you export it**, to a file you pick, to publish from CI. Packing works with that file alone; publishing also needs a publish token.
+- **Only Tavora's own buttons sign.** Tavora signs when you press Publish on the review screen or Save as zip, in Settings > Development or the module library, and at no other time. It opens no pipe, socket or port for signing, so no other program, web page or module can ask it to sign.
+- **What you see is what gets signed.** Tavora packs the zip itself from your module's folder and shows the review screen from that zip: its id, name, version, patch notes and what it asks for. Pressing Publish there signs and uploads that zip and nothing else; the press is your yes.
+- **A key leaves Tavora only when you export it**, to a file you pick, to publish from CI (Settings > Development > Publish from CI). Packing works with that file alone; publishing also needs a publish token.
 
 ### Publishing to the catalog
 
-- **The key alone publishes nothing.** Every upload carries the key's signature over the zip's SHA-256 and a sign-in of the account the key is linked to: Tavora's own, when Tavora uploads for `tavora-pack` after your Allow, or a publish token, from CI. An upload with only a key, or with the sign-in of another account, is refused.
-- **Publish tokens are narrow.** A token is shown once and the service keeps only its hash. It works for a year, is removed in Settings > Account > Module developer, and publishes only under id prefixes the account already has, so it can't claim a new one. It can't sign in, read the account or change anything else.
+- **The key alone publishes nothing.** Every upload carries the key's signature over the zip's SHA-256 and a sign-in of the account the key is linked to: Tavora's own, when you press Publish, or a publish token, from CI. An upload with only a key, or with the sign-in of another account, is refused.
+- **Publish tokens are narrow.** A token is shown once and the service keeps only its hash. It works for a year, is removed in Settings > Development > Publish from CI, and publishes only under id prefixes the account already holds, so it can't claim a new one. It can't sign in, read the account or change anything else.
 - **Every upload is told.** The account's email address gets a mail for each published version, naming the module, the key and whether it came from Tavora or which token.
-- **Tavora uploads only what you allowed.** It reads the module from the zip it was handed, signs only for a zip one of its keys already signed, and sends nothing until you press Allow.
 
 ## The cloud copy
 

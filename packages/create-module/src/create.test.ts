@@ -32,7 +32,8 @@ describe("createModule", () => {
     const pkg = await json(path.join(dir, "package.json"));
     expect(pkg.name).toBe("my-cool-module");
     expect((pkg.dependencies as Record<string, string>)["@tavora/sdk"]).toBe(`^${SDK_VERSION}`);
-    expect(pkg.scripts).toMatchObject({ dev: "vite build --watch", build: "vite build", zip: "tavora-pack ." });
+    expect(pkg.scripts).toMatchObject({ dev: "vite build --watch", build: "vite build" });
+    expect(pkg.scripts).not.toHaveProperty("zip");
 
     expect(await readFile(path.join(dir, "src/index.html"), "utf8")).toContain("<title>Cool &quot;Module&quot; &lt;1&gt;</title>");
     const readme = await readFile(path.join(dir, "README.md"), "utf8");
