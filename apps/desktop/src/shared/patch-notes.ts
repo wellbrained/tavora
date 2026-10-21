@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.25",
+    date: "2026-10-21",
+    title: "Patch notes in their own window",
+    notes: [
+      "A module's patch notes in Settings > Modules open in a window instead of under the module.",
+      "Module library in Settings > Modules opens the library on Tavora's catalog.",
+    ],
+  },
+  {
     version: "0.19.24",
     date: "2026-10-21",
     title: "Developer links work again",
