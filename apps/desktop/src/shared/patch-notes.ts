@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.32",
+    date: "2026-10-22",
+    title: "Clock & Counter works without OBS",
+    notes: [
+      "Adding Clock & Counter no longer asks about stream overlays.",
+      "You're asked the first time you copy an OBS link, and the module works either way.",
+    ],
+  },
+  {
     version: "0.19.31",
     date: "2026-10-22",
     title: "Clock & Counter",
