@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // A catalog module's rating on its card, the way stores show it: the average, five stars rounded to the
 // nearest half, an arrow that opens how many gave 1 to 5 stars, and how many rated. Below MIN_RATINGS_SHOWN
-// it shows only how many rated, or that nobody has yet. Ratings are every version's together, as the service counts them (reviews.ts).
+// it shows only how many rated, or nothing when nobody has yet; the card's "New" badge covers that (CatalogBrowse.vue). Ratings are every version's together, as the service counts them (reviews.ts).
 import { ChevronDown } from "@lucide/vue";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
@@ -26,10 +26,10 @@ const rows = computed(() =>
 </script>
 
 <template>
-  <span v-if="!shown" class="text-muted-foreground text-xs" :title="t('catalog.rating.newHint')" data-testid="catalog-rating-new">
-    {{ rating ? t("catalog.rating.count", { count: rating.count }) : t("catalog.rating.none") }}
+  <span v-if="!shown && rating?.count" class="text-muted-foreground text-xs" :title="t('catalog.rating.newHint')" data-testid="catalog-rating-new">
+    {{ t("catalog.rating.count", { count: rating.count }) }}
   </span>
-  <DropdownMenu v-else @update:open="track">
+  <DropdownMenu v-else-if="shown" @update:open="track">
     <DropdownMenuTrigger as-child>
       <button
         type="button"

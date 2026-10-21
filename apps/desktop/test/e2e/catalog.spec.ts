@@ -263,6 +263,8 @@ test("a player sees a module's rating on its card, how many gave each star, and 
     await expect(card.locator("[data-slot=star-rating] [data-fill]")).toHaveCount(5);
     await expect(card.locator("[data-slot=star-rating] [data-fill=half]")).toHaveCount(1);
     await expect(page.getByTestId("catalog-wellbrained.factory").getByTestId("catalog-rating-new")).toHaveText("2 ratings");
+    await expect(page.getByTestId("catalog-new-wellbrained.factory")).toHaveText("New");
+    await expect(page.getByTestId("catalog-new-wellbrained.tracker")).toHaveCount(0);
 
     // Sorted by rating, the rated module comes first.
     await page.getByTestId("catalog-sort").click();

@@ -9,6 +9,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import type { CatalogListResult, CatalogModuleView } from "../../shared/host-api";
 import { act, addModule, api, dialog, openSettings, state, type AddModuleRequest } from "../host";
+import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
 import { t } from "../i18n";
@@ -81,9 +82,8 @@ function fitLabel(module: CatalogModuleView): string {
   return module.forGames.length ? t("catalog.forGames", { games: module.forGames.join(", ") }) : t("catalog.notForWorkspaces");
 }
 
-function installs(count: number): string {
-  return count ? t("catalog.installs", { count }) : t("catalog.noInstalls");
-}
+/** New until enough players rated it to show its stars. */
+const isNew = (module: CatalogModuleView) => !module.rating || module.rating.count < MIN_RATINGS_SHOWN;
 
 function size(bytes: number): string {
   return bytes < 1024 * 1024 ? t("catalog.sizeKb", { size: Math.max(1, Math.round(bytes / 1024)) }) : t("catalog.sizeMb", { size: (bytes / 1024 / 1024).toFixed(1) });
@@ -150,6 +150,7 @@ function settings() {
                   :aria-label="t('catalog.infoLabel', { name: module.name })" data-testid="catalog-name" :data-module="module.id" @click="open(module)"
                 >{{ module.name }}</button>
                 <span class="text-muted-foreground shrink-0 text-xs tabular-nums">{{ module.version }}</span>
+                <Badge v-if="isNew(module)" variant="info" class="self-center" :title="t('catalog.rating.newHint')" :data-testid="`catalog-new-${module.id}`">{{ t("catalog.rating.new") }}</Badge>
               </div>
               <p class="text-muted-foreground truncate text-xs" :title="module.owner" data-testid="catalog-publisher">{{ module.publisher ? t("catalog.by", { name: module.publisher }) : t("catalog.byKey", { key: module.owner.slice(0, 8) }) }}</p>
               <p v-if="module.description" class="text-muted-foreground mt-1.5 line-clamp-2 text-sm" :title="module.description" data-testid="catalog-description">{{ module.description }}</p>
@@ -165,7 +166,7 @@ function settings() {
                   <span class="truncate">{{ fitLabel(module) }}</span>
                 </span>
                 <span aria-hidden="true">·</span>
-                <span class="shrink-0 tabular-nums" :data-testid="`catalog-installs-${module.id}`">{{ installs(module.installs) }}</span>
+                <span class="shrink-0 tabular-nums" :data-testid="`catalog-installs-${module.id}`">{{ t("catalog.installs", { count: module.installs }) }}</span>
               </span>
               <!-- A disabled button gets no hover, so the reason sits on a wrapper. -->
               <span class="shrink-0" :title="whereFits(module) ?? undefined">
