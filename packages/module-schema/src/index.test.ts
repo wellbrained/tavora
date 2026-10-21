@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { CHANGELOG_LIMITS, continuingPanelType, validateChangelog, isGameId, isModuleId, isOwnerId, needsNewerTavora, panelTypes, validateManifest, type ModuleManifest } from "./index";
+import { CHANGELOG_LIMITS, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, needsNewerTavora, panelTypes, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -198,6 +198,20 @@ const cases: [string, unknown, boolean][] = [
   ["16 panel types", { ...valid, panels: Array.from({ length: 16 }, (_, i) => ({ id: `p${i}`, name: `Panel ${i}` })) }, true],
   ["17 panel types", { ...valid, panels: Array.from({ length: 17 }, (_, i) => ({ id: `p${i}`, name: `Panel ${i}` })) }, false],
   ["no panel types", { ...valid, panels: [] }, false],
+  ["overlay with its connector", { ...valid, overlay: "dist/overlay.html", permissions: { network: [], connectors: ["stream-overlay"] } }, true],
+  ["overlay without its connector", { ...valid, overlay: "dist/overlay.html" }, false],
+  ["overlay connector without a page", { ...valid, permissions: { network: [], connectors: ["stream-overlay"] } }, false],
+  ["overlay not html", { ...valid, overlay: "dist/overlay.js", permissions: { network: [], connectors: ["stream-overlay"] } }, false],
+  ["overlay outside the package", { ...valid, overlay: "../overlay.html", permissions: { network: [], connectors: ["stream-overlay"] } }, false],
+  ["actions", { ...valid, actions: [{ id: "start-pause", name: "Start/Pause" }, { id: "reset", name: "Reset" }] }, true],
+  ["16 actions", { ...valid, actions: Array.from({ length: 16 }, (_, i) => ({ id: `a${i}`, name: `Action ${i}` })) }, true],
+  ["17 actions", { ...valid, actions: Array.from({ length: 17 }, (_, i) => ({ id: `a${i}`, name: `Action ${i}` })) }, false],
+  ["no actions", { ...valid, actions: [] }, false],
+  ["action id uppercase", { ...valid, actions: [{ id: "Reset", name: "Reset" }] }, false],
+  ["action name empty", { ...valid, actions: [{ id: "reset", name: " " }] }, false],
+  ["action name too long", { ...valid, actions: [{ id: "reset", name: "x".repeat(41) }] }, false],
+  ["action name with a line break", { ...valid, actions: [{ id: "reset", name: "Re\nset" }] }, false],
+  ["unknown action field", { ...valid, actions: [{ id: "reset", name: "Reset", key: "F1" }] }, false],
   ["panels not a list", { ...valid, panels: { id: "planner", name: "Planner" } }, false],
   ["panel type without a name", { ...valid, panels: [{ id: "planner" }] }, false],
   ["panel name of 24 characters", { ...valid, panels: [{ id: "planner", name: "n".repeat(24) }] }, true],
@@ -241,6 +255,18 @@ describe("panel types", () => {
     expect(continuingPanelType(two({ continues: true }) as ModuleManifest)).toBe("planner");
     expect(continuingPanelType(two() as ModuleManifest)).toBe("inventory");
     expect(continuingPanelType(valid as ModuleManifest)).toBeNull();
+  });
+});
+
+describe("actions", () => {
+  it("refuses an id given twice", () => {
+    const result = validateManifest({ ...valid, actions: [{ id: "reset", name: "Reset" }, { id: "reset", name: "Again" }] });
+    expect(result).toEqual({ ok: false, errors: ["actions lists the id reset twice"] });
+  });
+
+  it("counts the overlay page among the files a package must hold", () => {
+    const manifest = { ...valid, overlay: "dist/overlay.html", permissions: { network: [], connectors: ["stream-overlay"] } } as ModuleManifest;
+    expect(manifestFiles(manifest).entries).toEqual([valid.entry, "dist/overlay.html"]);
   });
 });
 

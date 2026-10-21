@@ -1,5 +1,6 @@
 import {
   LIMITS,
+  OVERLAY_KEY,
   PROTOCOL_VERSION,
   RESERVED_METHODS,
   type Capability,
@@ -13,7 +14,11 @@ import {
   type DiscordResult,
   type DiscordState,
   type HandshakeResult,
+  type HotkeyBinding,
+  type HotkeySetResult,
+  type JsonValue,
   type NetworkResponse,
+  type OverlayLinkResult,
   type PageResponse,
   type PanelContent,
   type PanelLaunch,
@@ -22,8 +27,9 @@ import {
   type TavoraTheme,
   type TavoraViewport,
 } from "@tavora/sdk/protocol";
-import { isPanelTypeId } from "@tavora/module-schema";
+import { isActionId, isPanelTypeId } from "@tavora/module-schema";
 import { HostError } from "./errors";
+import { serializeJson } from "./json";
 import { discordCommand, discordSubscription } from "./discord-commands";
 import { checkMenu, type CheckedMenu } from "./module-menu";
 import {checkTooltip,checkTooltipAnchor,tooltipId} from "./tooltip-content";
@@ -100,6 +106,21 @@ export interface BridgeContext {
     move(anchor:TooltipAnchor):void;
     close(id:string,hoverOnly:boolean):void;
   };
+  /** Stream overlays of this module in this game (overlays.ts); only reached with the `overlay` capability, keys already checked. */
+  overlay: {
+    publish(key: string, state: JsonValue): void;
+    remove(key: string): void;
+    /** Throws PERMISSION_DENIED unless the panel just got a click or key press. */
+    copyLink(key: string): Promise<OverlayLinkResult>;
+    resetLink(key: string): void;
+  };
+  /** Hotkeys of this module in this game (hotkeys.ts); actions and targets already checked. */
+  hotkeys: {
+    list(): HotkeyBinding[];
+    /** Opens Tavora's hotkey dialog. Throws PERMISSION_DENIED unless the panel just got a click or key press. */
+    set(action: string, target: string, label: string): Promise<HotkeySetResult>;
+    remove(target: string, action: string | null): void;
+  };
   /** network.fetch: checks the grant on every hop and makes the request (network.ts). Throws HostErrors. */
   fetch(params: unknown): Promise<NetworkResponse>;
   readPage(params: unknown): Promise<PageResponse>;
@@ -135,6 +156,18 @@ function needs(s: BridgeSession, capability: Capability, method: string): void {
 
 /** Longest address links.open accepts. */
 const LINK_MAX = 2048;
+
+/** An overlay key or hotkey target: the module's own id, like a document id. */
+function moduleKey(params: Record<string, unknown>, name: "key" | "target"): string {
+  const value = required(params, name);
+  if (typeof value !== "string" || !OVERLAY_KEY.test(value)) throw new HostError("INVALID_PARAMS", `params.${name} must be 1 to 64 letters, digits, - and _`);
+  return value;
+}
+
+function actionId(value: unknown): string {
+  if (!isActionId(value)) throw new HostError("INVALID_PARAMS", "params.action must be one of the manifest's actions ids");
+  return value;
+}
 
 const handlers = new Map<string, Handler>([
   ["game.getCurrent", (s, params) => (noParams(params), { ...s.context.game })],
@@ -276,6 +309,46 @@ const handlers = new Map<string, Handler>([
       const url = required(object(params), "url");
       if (typeof url !== "string" || url.length === 0 || url.length > 300) throw new HostError("INVALID_PARAMS", "params.url must be an address on cdn.discordapp.com");
       return s.context.discord.image(url);
+    },
+  ],
+
+  [
+    "overlay.publish",
+    (s, params) => {
+      needs(s, "overlay", "overlay.publish");
+      const p = object(params);
+      const key = moduleKey(p, "key");
+      const state = required(p, "state");
+      if (serializeJson(state, "params.state").length > LIMITS.maxOverlayStateBytes) throw new HostError("QUOTA_EXCEEDED", `an overlay's state may be at most ${LIMITS.maxOverlayStateBytes} bytes`);
+      s.context.overlay.publish(key, state as JsonValue);
+      return null;
+    },
+  ],
+  ["overlay.remove", (s, params) => (needs(s, "overlay", "overlay.remove"), s.context.overlay.remove(moduleKey(object(params), "key")), null)],
+  ["overlay.copyLink", (s, params) => (needs(s, "overlay", "overlay.copyLink"), s.context.overlay.copyLink(moduleKey(object(params), "key")))],
+  ["overlay.resetLink", (s, params) => (needs(s, "overlay", "overlay.resetLink"), s.context.overlay.resetLink(moduleKey(object(params), "key")), null)],
+
+  ["hotkeys.list", (s, params) => (noParams(params), s.context.hotkeys.list())],
+  [
+    "hotkeys.set",
+    (s, params) => {
+      const p = object(params);
+      const action = actionId(required(p, "action"));
+      const target = moduleKey(p, "target");
+      const label = required(p, "label");
+      if (typeof label !== "string" || label.trim() === "" || label.length > LIMITS.maxHotkeyLabel || /[\u0000-\u001f]/.test(label)) {
+        throw new HostError("INVALID_PARAMS", `params.label must be 1 to ${LIMITS.maxHotkeyLabel} characters on one line`);
+      }
+      return s.context.hotkeys.set(action, target, label.trim());
+    },
+  ],
+  [
+    "hotkeys.remove",
+    (s, params) => {
+      const p = object(params);
+      const target = moduleKey(p, "target");
+      s.context.hotkeys.remove(target, p.action === undefined ? null : actionId(p.action));
+      return null;
     },
   ],
 

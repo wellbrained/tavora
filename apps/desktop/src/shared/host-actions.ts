@@ -209,6 +209,21 @@ export function hostActionTable(c: HostChecks) {
     "set-auto-update": { enabled: bool },
     "set-steam-icons": { enabled: bool },
     "set-module-icons": { enabled: bool },
+
+    // Streaming
+    "set-stream-overlays": { enabled: bool },
+    /** The port Stream overlays listen on, on this PC only. */
+    "set-overlay-port": { port: check<number>((value) => Number.isInteger(value) && (value as number) >= 1024 && (value as number) <= 65535) },
+    /** Every overlay link gets a new address; the ones in OBS stop working. */
+    "reset-overlay-links": {},
+    /** The answer in Tavora's hotkey dialog (HostViewState.hotkeyRequest): a key, removing the one set, or closing it. */
+    "hotkey-answer": {
+      id: check<number>((value) => Number.isSafeInteger(value)),
+      choice: oneOf("set", "remove", "cancel"),
+      accelerator: optional(text(40)),
+    },
+    /** Removes one hotkey from Settings > Streaming. */
+    "remove-hotkey": { owner: c.ownerId, moduleId: c.moduleId, gameId: c.gameId, action: matching(/^[a-z][a-z0-9-]{0,31}$/), target: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     "set-language": { language: check<LanguageSetting>(isLanguageSetting) },
     /** Remembers the Steam profile for the import on this PC; null forgets it. */
     "set-steam-profile": { profile: nullable((value) => (typeof value === "string" && value.length <= 200 && value.trim() !== "" ? value.trim() : BAD)) },

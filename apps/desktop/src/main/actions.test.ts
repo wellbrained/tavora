@@ -33,6 +33,12 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "add-game", online: { id: "elden-ring", name: "Elden Ring", steamAppId: 1245620 } }],
   [{ type: "set-steam-icons", enabled: true }],
   [{ type: "set-module-icons", enabled: false }],
+  [{ type: "set-stream-overlays", enabled: true }],
+  [{ type: "set-overlay-port", port: 47820 }],
+  [{ type: "reset-overlay-links" }],
+  [{ type: "hotkey-answer", id: 3, choice: "set", accelerator: "Ctrl+Alt+K" }],
+  [{ type: "hotkey-answer", id: 3, choice: "cancel" }],
+  [{ type: "remove-hotkey", owner: "official", moduleId: "tavora.clock-counter", gameId: "poe2", action: "start-pause", target: "item-1" }],
   [{ type: "set-theme", themeId: "tavora.nightfall", variationId: "light" }],
   [{ type: "reset-theme" }],
   [{ type: "reload-themes" }],
@@ -405,6 +411,11 @@ describe("parseAction", () => {
     [{ type: "account-discord-connect" }],
     [{ type: "account-discord-disconnect" }],
     [{ type: "account-discord-connect-code", code: "123456" }],
+    [{ type: "set-overlay-port", port: 80 }],
+    [{ type: "set-overlay-port", port: 70000 }],
+    [{ type: "set-overlay-port", port: "47820" }],
+    [{ type: "hotkey-answer", id: 3, choice: "press" }],
+    [{ type: "remove-hotkey", owner: "official", moduleId: "tavora.clock-counter", gameId: "poe2", action: "Start", target: "item-1" }],
   ])("rejects %j", (action) => {
     expect(parseAction(action)).toBeNull();
   });
