@@ -20,6 +20,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.29",
+    date: "2026-10-21",
+    title: "Publish modules from Tavora",
+    notes: [
+      "New to making modules? Want to make modules? in Settings > Development walks you from sign-in to your first project.",
+      "Check and claim your prefix right in Tavora.",
+      "Publish next to your module shows what goes out, sets the version and notes for you, and uploads it with one click.",
+      "Save as zip packs a module to share by hand.",
+      "Your developer name, keys and publish tokens moved to Settings > Development.",
+    ],
+  },
+  {
     version: "0.19.28",
     date: "2026-10-21",
     title: "Rate modules",
