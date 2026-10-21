@@ -402,7 +402,7 @@ export interface Methods {
   "discord.image": { params: { url: string }; result: string | null };
   /**
    * What the overlay page for `key` shows now (capability `overlay`): any JSON, at most LIMITS.maxOverlayStateBytes.
-   * Tavora keeps it, so the overlay shows it while no panel runs. Tavora 0.19.25 and newer.
+   * Tavora keeps it, so the overlay shows it while no panel runs. Tavora 0.19.26 and newer.
    */
   "overlay.publish": { params: { key: string; state: JsonValue }; result: null };
   /** The overlay for `key` shows nothing until it is published again; its link stays the same (capability `overlay`). */
@@ -411,7 +411,7 @@ export interface Methods {
   "overlay.copyLink": { params: { key: string }; result: OverlayLinkResult };
   /** Gives the overlay for `key` a new link; the old one stops working (capability `overlay`). */
   "overlay.resetLink": { params: { key: string }; result: null };
-  /** The hotkeys the player set for this module in the current game. Tavora 0.19.25 and newer. */
+  /** The hotkeys the player set for this module in the current game. Tavora 0.19.26 and newer. */
   "hotkeys.list": { params: undefined; result: HotkeyBinding[] };
   /**
    * Opens Tavora's dialog to set the key for one of the manifest's `actions` on `target`; `label` names the target
