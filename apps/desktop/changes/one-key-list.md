@@ -5,3 +5,4 @@
 - Each publisher key shows once, with Export, Lost it? and Unlink.
 - Make modules no longer asks for a prefix you already have.
 - Signing in on a new PC asks for your account's recovery key right away, if your account has one.
+- The texts for your developer name, prefix, publisher key and recovery key now explain what each is for.

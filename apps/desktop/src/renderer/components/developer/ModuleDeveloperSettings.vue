@@ -145,7 +145,7 @@ function removeToken(token: AccountPublishToken) {
       <div v-if="prefixes && view?.developer" class="mt-6" data-testid="developer-prefixes">
         <span class="text-sm font-medium">{{ t("developer.prefix") }}</span>
         <template v-if="prefixes.held.length">
-          <p class="mt-1 text-sm" data-testid="developer-prefixes-list">{{ t("developer.prefixLine", { prefix: prefixes.held.map((item) => item.prefix).join(", ") }) }}</p>
+          <p class="mt-1 text-sm" data-testid="developer-prefixes-list">{{ prefixes.held.length === 1 ? t("developer.prefixLine", { prefix: prefixes.held[0]!.prefix }) : t("developer.prefixLines", { prefixes: prefixes.held.map((item) => item.prefix).join(", ") }) }}</p>
           <Button v-if="!addingPrefix && prefixes.held.length < prefixes.max" variant="ghost" size="sm" class="mt-1 -ml-2" data-testid="developer-prefix-add" @click="addingPrefix = true">{{ t("developer.prefixAdd") }}</Button>
         </template>
         <p v-else class="text-muted-foreground mt-1 text-xs" data-testid="developer-prefixes-none">{{ t("developer.noPrefixes") }}</p>
