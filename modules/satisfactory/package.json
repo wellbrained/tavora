@@ -6,7 +6,8 @@
   "description": "Satisfactory production planner and codex for Tavora.",
   "scripts": {
     "build": "vite build",
-    "typecheck": "vue-tsc --noEmit -p ."
+    "typecheck": "vue-tsc --noEmit -p .",
+    "extract-data": "node --experimental-strip-types --disable-warning=ExperimentalWarning tools/extract-data.ts"
   },
   "dependencies": {
     "@lucide/vue": "1.57.0",
