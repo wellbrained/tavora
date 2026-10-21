@@ -1,0 +1,34 @@
+{
+  "id": "wellbrained.satisfactory",
+  "name": "Satisfactory Planner",
+  "description": "Plan production lines and look up items, recipes and buildings.",
+  "version": "0.1.0-alpha.1",
+  "apiVersion": "1",
+  "minTavora": "0.19.17",
+  "entry": "dist/index.html",
+  "icon": "dist/icons/Build_ConstructorMk1_C.webp",
+  "games": [
+    "satisfactory"
+  ],
+  "panels": [
+    {
+      "id": "planner",
+      "name": "Planner"
+    },
+    {
+      "id": "codex",
+      "name": "Codex"
+    }
+  ],
+  "viewport": {
+    "minWidth": 400,
+    "minHeight": 480,
+    "preferredWidth": 900,
+    "preferredHeight": 700
+  },
+  "permissions": {
+    "network": []
+  },
+  "changelog": "changelog.json",
+  "readme": "README.md"
+}
