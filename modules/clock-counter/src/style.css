@@ -1,0 +1,18 @@
+@import "@tavora/official-ui/theme.css";
+
+/* A countdown at 0 without a text of its own flashes, as on stream. */
+.clock-done {
+  animation: clock-flash 1s steps(2, jump-none) infinite;
+}
+
+@keyframes clock-flash {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clock-done {
+    animation: none;
+  }
+}
