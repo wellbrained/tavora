@@ -20,6 +20,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.31",
+    date: "2026-10-22",
+    title: "Clock & Counter",
+    notes: [
+      "New module: countdowns, stopwatches and counters for each game.",
+      "Pick how a clock shows its time, with or without hours.",
+      "Counters can add to each other, like 5 sit-ups per death.",
+      "Show any of them in OBS with its own link, and control them with hotkeys.",
+    ],
+  },
+  {
     version: "0.19.30",
     date: "2026-10-21",
     title: "Examples and project folders",
