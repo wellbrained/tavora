@@ -8,7 +8,7 @@
 // a module developer has with the account, and the way to the docs and to
 // GitHub. Until publishing is set up, a card offers the developer onboarding.
 import { BookOpen, Bug, CircleAlert, Copy, FileArchive, FolderCode, FolderOpen, MessageCircleQuestion, Rocket, Trash2, Upload } from "@lucide/vue";
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DevelopmentProblemKind } from "../../../shared/host-api";
@@ -36,6 +36,11 @@ async function addFolder() {
   const result = await act({ type: "add-development-folder" });
   if (result.ok && result.id) showToast(t("settings.devFolders.added", { folder: result.id }));
 }
+
+onMounted(() => {
+  // The developer side as the service has it now, so the card goes once publishing is set up; quietly, offline is fine.
+  if (account.value?.account) void act({ type: "account-refresh" }, { quiet: true });
+});
 
 const parts = (folder: string) => folder.split(/[\\/]/).filter(Boolean);
 const baseName = (folder: string) => parts(folder).at(-1) ?? folder;
