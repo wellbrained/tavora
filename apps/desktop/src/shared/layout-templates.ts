@@ -35,11 +35,6 @@ export type LayoutTemplateId = (typeof LAYOUT_TEMPLATES)[number]["id"];
  */
 export const GRID_LIMITS = { columns: 5, rows: 4 } as const;
 
-export function isGridSize(columns: unknown, rows: unknown): boolean {
-  const within = (value: unknown, max: number) => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= max;
-  return within(columns, GRID_LIMITS.columns) && within(rows, GRID_LIMITS.rows);
-}
-
 /** "3 × 2 grid", or "3 columns" and "2 rows" when there is only one of the other. */
 export function gridName(columns: number, rows: number): string {
   if (rows === 1) return columns === 1 ? "1 slot" : `${columns} columns`;
