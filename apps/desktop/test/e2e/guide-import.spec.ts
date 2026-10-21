@@ -10,7 +10,7 @@ test('Mobalytics guide imports through granted SDK, previews variants and surviv
  const running=await launch(undefined,[modules]);let app=running.app;
  try{
   const page=running.page;
-  await page.getByTestId('add-module').click();await page.getByTestId('open-'+ID+'-guide').click();await page.getByTestId('grant-allow').click();await expect(page.getByTestId('grant-dialog')).toHaveCount(0);await page.getByTestId('add-module-dialog').getByRole('button',{name:'Close',exact:true}).click();await waitForShown(app,ID);
+  await page.getByTestId('add-module').click();await page.getByTestId('panel-menu-toggle-'+ID).click();await page.getByTestId('open-'+ID+'-guide').click();await page.getByTestId('grant-allow').click();await expect(page.getByTestId('grant-dialog')).toHaveCount(0);await page.getByTestId('add-module-dialog').getByRole('button',{name:'Close',exact:true}).click();await waitForShown(app,ID);
   const windowsBefore=await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().length);
   await app.evaluate(({app})=>{(globalThis as any).__importWindowShows=0;app.on('browser-window-created',(_e,win)=>win.on('show',()=>{(globalThis as any).__importWindowShows++;}));});
   await inModule(app,ID,"document.querySelector('.add-build').click();document.querySelector('#import-build').click()");
@@ -49,7 +49,7 @@ test('Mobalytics guide imports through granted SDK, previews variants and surviv
 test('planner ZIP attachment previews and saves through the same build import dialog',async()=>{
  test.skip(!process.env.POE2_GUIDE_SMOKE_ZIP,'Set a local original planner ZIP');
  const {app,page}=await launch(undefined,[modules]);try{
-  await page.getByTestId('add-module').click();await page.getByTestId('open-'+ID+'-gear').click();await page.getByTestId('grant-allow').click();await expect(page.getByTestId('grant-dialog')).toHaveCount(0);await page.getByTestId('add-module-dialog').getByRole('button',{name:'Close',exact:true}).click();await waitForShown(app,ID);
+  await page.getByTestId('add-module').click();await page.getByTestId('panel-menu-toggle-'+ID).click();await page.getByTestId('open-'+ID+'-gear').click();await page.getByTestId('grant-allow').click();await expect(page.getByTestId('grant-dialog')).toHaveCount(0);await page.getByTestId('add-module-dialog').getByRole('button',{name:'Close',exact:true}).click();await waitForShown(app,ID);
   await inModule(app,ID,"document.querySelector('.add-build').click();document.querySelector('#import-build').click()");
   const bytes=(await readFile(process.env.POE2_GUIDE_SMOKE_ZIP!)).toString('base64');
   await inModule(app,ID,`const dt=new DataTransfer();dt.items.add(new File([Uint8Array.from(atob(${JSON.stringify(bytes)}),c=>c.charCodeAt(0))],'planner.zip',{type:'application/zip'}));document.querySelector('#guide-attachment').files=dt.files;document.querySelector('#guide-read').click()`);

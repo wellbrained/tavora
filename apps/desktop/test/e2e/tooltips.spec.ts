@@ -56,7 +56,7 @@ test('PoE2 Gear imports a portable build and sends artwork and stats to the shar
  test.skip(!process.env.POE2_SMOKE_FILE,'Set POE2_SMOKE_FILE to an exported build');
  const id='wellbrained.poe2-builds',modules=path.resolve(import.meta.dirname,'../../../../modules');
  const {app,page}=await launch(undefined,[modules]);try{
-  await page.getByTestId('add-module').click();await page.getByTestId('open-'+id+'-gear').click();await page.keyboard.press('Escape');await waitForShown(app,id);
+  await page.getByTestId('add-module').click();await page.getByTestId('panel-menu-toggle-'+id).click();await page.getByTestId('open-'+id+'-gear').click();await page.keyboard.press('Escape');await waitForShown(app,id);
   const file=await readFile(process.env.POE2_SMOKE_FILE!,'utf8');
   await inModule(app,id,`(()=>{const input=document.querySelector('#file'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(file)}],'fixture.tavora-build.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   await expect.poll(()=>inModule<number>(app,id,"document.querySelectorAll('.equip-slot').length")).toBe(15);
