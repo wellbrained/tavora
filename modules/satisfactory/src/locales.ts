@@ -51,6 +51,7 @@ export const en = {
   "results.showInCodex": "Show {item} in the Codex",
   "results.showAs": "Show as",
   "results.chain": "Chain",
+  "results.graph": "Graph",
   "results.list": "List",
 
   "chain.raw": "raw",
@@ -62,6 +63,15 @@ export const en = {
   "chain.fold": "Fold {item}",
   "chain.unfold": "Open {item}",
   "chain.machinesTotal": "{building}: {exact} in total for {item}, {rounded} to build",
+
+  "graph.label": "Production as a graph",
+  "graph.raw": "Raw",
+  "graph.import": "Bring in",
+  "graph.supplied": "From your supplies",
+  "graph.target": "Target",
+  "graph.byproduct": "Byproduct",
+  "graph.surplus": "Left over",
+  "graph.machines": "{count} × {building}",
 
   "error.unknownItem": "{item} is no longer in the game.",
   "error.unknownRecipe": "A recipe you picked ({recipe}) is no longer in the game.",
@@ -224,6 +234,7 @@ export const de: Record<keyof typeof en, string> = {
   "results.showInCodex": "{item} im Kodex zeigen",
   "results.showAs": "Zeigen als",
   "results.chain": "Kette",
+  "results.graph": "Graph",
   "results.list": "Liste",
 
   "chain.raw": "Rohstoff",
@@ -235,6 +246,15 @@ export const de: Record<keyof typeof en, string> = {
   "chain.fold": "{item} zuklappen",
   "chain.unfold": "{item} aufklappen",
   "chain.machinesTotal": "{building}: insgesamt {exact} für {item}, {rounded} zu bauen",
+
+  "graph.label": "Fertigung als Graph",
+  "graph.raw": "Rohstoff",
+  "graph.import": "Herbringen",
+  "graph.supplied": "Aus deinen Lieferungen",
+  "graph.target": "Ziel",
+  "graph.byproduct": "Nebenprodukt",
+  "graph.surplus": "Übrig",
+  "graph.machines": "{count} × {building}",
 
   "error.unknownItem": "{item} gibt es im Spiel nicht mehr.",
   "error.unknownRecipe": "Ein gewähltes Rezept ({recipe}) gibt es im Spiel nicht mehr.",

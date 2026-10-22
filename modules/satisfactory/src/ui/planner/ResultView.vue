@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// The solved plan: the production as a chain or a list, then power, what goes in and comes out, and build cost.
+// The solved plan: the production as a chain, a graph or a list, then power, what goes in and comes out, and build cost.
 import { Zap } from "@lucide/vue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import { computed, onMounted, ref } from "vue";
@@ -12,6 +12,7 @@ import { formatClock, formatNumber, formatPower } from "../format";
 import { itemTooltip } from "../tooltip";
 import ChainView from "./ChainView.vue";
 import { showInCodex } from "./codexLink";
+import FlowView from "./FlowView.vue";
 import ItemList from "./ItemList.vue";
 import RecipeLine from "./RecipeLine.vue";
 
@@ -24,20 +25,22 @@ const { data } = context.services;
 const vTip = context.tip;
 const names = useNames(context);
 
-type ProductionView = "chain" | "list";
+const VIEWS = ["chain", "graph", "list"] as const;
+type ProductionView = (typeof VIEWS)[number];
+const isView = (value: unknown): value is ProductionView => VIEWS.includes(value as ProductionView);
 /** What a Planner panel keeps in its panel state. */
 interface PanelState {
   productionView?: ProductionView;
 }
 
-/** Chain or List; each Planner panel remembers its own. */
+/** Chain, Graph or List; each Planner panel remembers its own. */
 const view = ref<ProductionView>("chain");
 onMounted(async () => {
   const state = await sdk.panel.getState<PanelState>().catch(() => null);
-  if (state?.productionView === "list") view.value = "list";
+  if (isView(state?.productionView)) view.value = state.productionView;
 });
 function setView(next: string | number) {
-  if (next !== "chain" && next !== "list") return;
+  if (!isView(next)) return;
   view.value = next;
   void sdk.panel.setState({ productionView: next } satisfies PanelState).catch(() => undefined);
 }
@@ -70,11 +73,15 @@ const madeRate = (row: RecipeRow) => row.outputs.find((output) => output.item ==
           <h3 class="min-w-0 flex-1 truncate text-sm font-semibold">{{ t("results.production") }}</h3>
           <TabsList :aria-label="t('results.showAs')">
             <TabsTrigger value="chain" data-testid="view-chain">{{ t("results.chain") }}</TabsTrigger>
+            <TabsTrigger value="graph" data-testid="view-graph">{{ t("results.graph") }}</TabsTrigger>
             <TabsTrigger value="list" data-testid="view-list">{{ t("results.list") }}</TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="chain">
           <ChainView :result="result" :targets="targets" @choose-recipe="(item, recipe) => emit('chooseRecipe', item, recipe)" />
+        </TabsContent>
+        <TabsContent value="graph" class="mt-2 border-t">
+          <FlowView :result="result" :targets="targets" @choose-recipe="(item, recipe) => emit('chooseRecipe', item, recipe)" />
         </TabsContent>
         <TabsContent value="list">
           <table class="w-full table-fixed border-collapse text-sm" data-testid="result-rows">

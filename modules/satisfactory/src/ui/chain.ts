@@ -37,7 +37,7 @@ export interface ChainNode {
 export const MAX_NODES = 3000;
 
 /** Rates below this are rounding noise. */
-const NOISE = 1e-9;
+export const NOISE = 1e-9;
 
 interface Sources {
   row: RecipeRow | null;
@@ -97,11 +97,11 @@ export function productionChain(result: PlanResult, targets: Rate[]): ChainNode[
   return targets.map((target, index) => node(target.item, target.perMinute, String(index), []));
 }
 
-function outputOf(row: RecipeRow, item: ItemId): number {
+export function outputOf(row: RecipeRow, item: ItemId): number {
   return row.outputs.filter((rate) => rate.item === item).reduce((sum, rate) => sum + rate.perMinute, 0);
 }
 
 /** Drops floating-point noise, as the solver does. */
-function clean(value: number): number {
+export function clean(value: number): number {
   return Math.abs(value) < NOISE ? 0 : Number(value.toPrecision(12));
 }
