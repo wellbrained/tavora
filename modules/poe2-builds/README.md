@@ -51,6 +51,17 @@ ZIP imports never extract files; compressed size, expansion, entry count and CRC
 are checked. Original text, variant association, Quest Rewards and a public-only
 planner snapshot are saved for offline use. Unresolved affix tiers, socketed
 augment effects and tree jewels remain in source data and are not guessed.
+Updating matches variants by the guide's own variant ID, then by exact name, never
+by position. The preview lists new, changed and removed variants; removing needs
+**Save and remove**. The variant you had open stays open when the guide still has it.
+The preview names the adapter version and the game patch it supports (Mobalytics
+adapter 2, patch 0.5), and counts what the guide keeps but Tavora doesn't show yet,
+such as attribute picks, jewels and soul cores, or what the guide leaves open.
+
+Tests run against eight public Mobalytics guides in `test/fixtures/mobalytics`,
+made with `tools/mobalytics-fixture.mjs`: real structure and game data, but the
+authors' prose is swapped for placeholder words because this repository is public.
+
 Website access now includes mobalytics.gg and cdn.mobalytics.gg, alongside poe.ninja.
 An update asks for these new domains before using them.
 

@@ -13,6 +13,8 @@ const str = (v:unknown):string => typeof v==='string' ? v : '';
 const items = (v:unknown) => arr(v).map(obj);
 const text = (v:unknown) => cleanGameText(str(v));
 export interface GuideImport { build:Build; warnings:string[]; method:'direct'|'browser'|'file' }
+/** Raise version when the mapping changes; patches lists the game versions the bundled tree supports. */
+export const MOBALYTICS_ADAPTER={source:'Mobalytics',version:'2',patches:['0.5']} as const;
 
 export function mobalyticsAddress(input:string):{url:string;canonical:string;variant:string} {
  let u:URL;try{u=new URL(input.trim());}catch{throw Error('Paste a Mobalytics PoE 2 build URL.');}
@@ -100,7 +102,7 @@ export function parseMobalytics(document:Obj,input:string):Build {
  const byId=new Map(content.map(c=>[str(c.id),c]));
  const title=text(data.name);
  const sourceVersion=/\b(0\.\d+(?:\.\d+)?)\b/.exec(title)?.[1]||'';
- if(sourceVersion&&!/^0\.5(?:\.|$)/.test(sourceVersion))throw Error('This guide uses a game version not supported by the bundled 0.5 tree. Your saved build was not changed.');
+ if(sourceVersion&&!MOBALYTICS_ADAPTER.patches.some(p=>sourceVersion===p||sourceVersion.startsWith(p+'.')))throw Error('This guide uses a game version not supported by the bundled 0.5 tree. Your saved build was not changed.');
  const knownNodes=new Set(nodes.map(n=>n.id));
  const stages:Stage[]=variants.map((variant,index)=>{
   const label=text(labels.find(v=>v.id===variant.id)?.title)||`Variant ${index+1}`;
@@ -150,9 +152,24 @@ export function parseMobalytics(document:Obj,input:string):Build {
  const b:Build={id:'imported',fileId:crypto.randomUUID(),title:title+' · Mobalytics',shortTitle:title,source:'Mobalytics',version:sourceVersion,treeVersion:'0.5',ascendancy:stages[0]!.ascendancy||'',guideUrl:address.canonical,guideText:guide,stages,defaultStage:Math.max(0,variants.findIndex(v=>v.id===address.variant)),questSelections,
   guideImport:{source:'Mobalytics',url:address.url,documentId:str(document.id),revision:String(document.version??''),importedAt:new Date().toISOString(),variantIds:variants.map(v=>str(v.id))},
   guideExport:JSON.stringify({id:document.id,version:document.version,data,content:content.filter(c=>!['NgfDocumentCmWidgetDiscoveryPreviewCompactV2','NgfDocumentCmWidgetCommentsV1','NgfDocumentCmWidgetPromoBannerHorizontalV1'].includes(str(c.__typename)))}),
-  importNotes:['Planner recommendations may omit rarity, exact item rolls and gem levels. Missing values remain empty.','Uniques without exact rolls use labelled PoB reference ranges. Some affix tiers, socketed effects and tree jewels are not displayed yet; their source data is kept with the build.']};
+  importerVersion:`${MOBALYTICS_ADAPTER.source} adapter ${MOBALYTICS_ADAPTER.version} · patch ${MOBALYTICS_ADAPTER.patches.join(', ')}`,
+  importNotes:['Planner recommendations may omit rarity, exact item rolls and gem levels. Missing values remain empty.','Uniques without exact rolls use labelled PoB reference ranges. Affix tiers the guide doesn\'t give are left out, never guessed.',...keptNotes(variants)]};
  const video=content.find(c=>str(obj(c.data).videoUrl));if(video)b.video=str(obj(video.data).videoUrl);
  return validate(portable(b));
+}
+
+/** Names what the guide holds but Tavora doesn't show yet, and what the guide leaves open. The source data stays in guideExport. */
+function keptNotes(variants:Obj[]):string[] {
+ const tree=variants.map(v=>obj(v.passiveTree)),gear=variants.map(v=>obj(v.equipment));
+ const unique=(list:Obj[],key:string)=>new Set(list.map(e=>str(e[key])).filter(Boolean)).size;
+ const attributes=tree.flatMap(t=>items(t.attributeNodes)),open=unique(attributes.filter(a=>a.attribute==='any'),'nodeSlug');
+ const jewels=unique(tree.flatMap(t=>items(t.jewels)),'nodeSlug'),cores=unique(gear.flatMap(g=>items(g.chakras)),'slug');
+ return [
+  ...(attributes.length?[`Attribute picks on ${unique(attributes,'nodeSlug')} passive nodes are saved but not shown yet.`]:[]),
+  ...(open?[`The guide doesn't say which attribute to take on ${open} of them.`]:[]),
+  ...(jewels?[`Jewels in ${jewels} tree sockets are saved but not shown yet.`]:[]),
+  ...(cores?[`${cores} soul cores and runes are saved but not shown yet.`]:[]),
+ ];
 }
 
 export async function importMobalytics(input:string,network:TavoraSDK['network']):Promise<GuideImport>{

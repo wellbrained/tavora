@@ -195,7 +195,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,#d
 .character-import textarea{resize:vertical;min-height:82px;max-height:180px}
 .character-import p,.character-import li{font-size:13px;line-height:1.5}
 .character-import-help,.character-import li{color:var(--host-text-muted,#b4a995)}
-#character-summary,#guide-summary{white-space:pre-line}
+#character-summary,#guide-summary,#guide-changes{white-space:pre-line}
 #character-error{min-height:20px}
 #character-preview{border-top:1px solid #63563c;margin-top:12px}
 .character-import [hidden]{display:none!important}

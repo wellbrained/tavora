@@ -33,6 +33,8 @@ test('Mobalytics guide imports through granted SDK, previews variants and surviv
   await inModule(app,ID,"document.querySelector('#guide-read').click()");
   await expect.poll(()=>inModule(app,ID,"document.querySelector('#guide-preview').hidden"),{timeout:50000}).toBe(false);
   expect(await inModule(app,ID,"document.querySelector('#guide-target').value")).toBe(before.id);
+  await expect.poll(()=>inModule(app,ID,"document.querySelector('#guide-changes').textContent")).toContain('6 unchanged');
+  expect(await inModule(app,ID,"({variant:document.querySelector('#guide-variant').value,save:document.querySelector('#guide-save').textContent})")).toEqual({variant:'4',save:'Save build'});
   await inModule(app,ID,"document.querySelector('#guide-save').click()");
   await expect.poll(()=>inModule(app,ID,"document.querySelectorAll('.guide-import').length")).toBe(0);
   expect(await inModule(app,ID,"document.querySelectorAll('#build optgroup[label=\"Guide builds\"] option').length")).toBe(1);

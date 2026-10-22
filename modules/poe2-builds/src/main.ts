@@ -44,7 +44,7 @@ async function refreshLibrary() { library = (await repository.list()).map(d => (
 function importGuide(refresh=false){
     if(importing)return;
     importing=true;inventory?.destroy();inventory=null;
-    openGuideImport({network:sdk.network,guides:library.filter(b=>!b.character),initial:refresh&&build&&view.build?{id:view.build,build}:undefined,load:id=>repository.get(id),save:async loaded=>{
+    openGuideImport({network:sdk.network,guides:library.filter(b=>!b.character),initial:refresh&&build&&view.build?{id:view.build,build,stage:view.stage}:undefined,load:id=>repository.get(id),save:async loaded=>{
         const id=await repository.put(loaded);await refreshLibrary();await show(id);await sdk.storage.set('lastBuild',id);report(loaded.guideText?'Build saved with guide text. All four panels can select it.':'Build saved. All four panels can select it.');
     },onClose:()=>{importing=false;render();}});
 }
