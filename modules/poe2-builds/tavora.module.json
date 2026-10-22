@@ -3,7 +3,7 @@
   "id": "wellbrained.poe2-builds",
   "name": "PoE 2 Builds",
   "description": "Import Mobalytics guides and poe.ninja or PoB characters. View saved builds in passive tree, skills, gear and guide panels.",
-  "version": "0.1.0-alpha.21",
+  "version": "0.1.0-alpha.22",
   "apiVersion": "1",
   "minTavora": "0.19.3",
   "entry": "dist/index.html",

@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.0-alpha.22",
+    "date": "2026-10-22",
+    "notes": [
+      "Flask and charm details from poe.ninja show real numbers instead of {0} placeholders.",
+      "The character preview says \"1 selectable setup\" for a single setup."
+    ]
+  },
+  {
     "version": "0.1.0-alpha.21",
     "date": "2026-10-22",
     "notes": [

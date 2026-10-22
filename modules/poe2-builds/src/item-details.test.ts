@@ -52,3 +52,10 @@ it('preserves item details in the checked host-overlay document',()=>{
  expect(lines[0]).toMatchObject({badges:['[P1]'],status:'Crafted',connected:true});expect(lines[2]!.badges).toEqual(['[S2]']);
  expect(content.sections!.at(-1)!.title).toBe('Notes');expect(JSON.stringify(content)).not.toContain('<li');
 });
+
+it('fills poe.ninja property templates in Gear and in the overlay',()=>{
+ const flask={...item,properties:[{name:'Recovers {0} Life over {1} Seconds',values:[['552',0],['3',0]] as [string,number][],displayMode:3},{name:'Lasts {0} Seconds',values:[['3',0]] as [string,number][],displayMode:3}]};
+ expect(itemTooltipContent(flask).properties).toEqual([{label:'Recovers',value:'552 Life over 3 Seconds'},{label:'Lasts',value:'3 Seconds'}]);
+ expect(itemTooltipContent({...item,properties:[{name:'{0} Charges',values:[['75',0]] as [string,number][]}]}).properties).toEqual([{label:'75',value:'Charges'}]);
+ const markup=itemDetails(flask);expect(markup).toContain('Recovers 552 Life over 3 Seconds');expect(markup).not.toContain('{0}');
+});

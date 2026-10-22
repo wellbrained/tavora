@@ -47,7 +47,7 @@ export function openCharacterImport(options:Options):void {
    candidate=loaded;const b=loaded.build,c=b.character!;
    name.value=options.initial?.build.character?.name||c.name;
    const active=b.stages[0]!;
-   get('#character-summary').textContent=`${c.class} · ${b.ascendancy} · Level ${c.level}\n${active.items.length} equipped items · ${active.skills.length} skill groups · ${new Set(active.passives.map(n=>n.id)).size} passive nodes\n${b.stages.length} selectable setups · Imported ${new Date(c.importedAt).toLocaleString()}`;
+   get('#character-summary').textContent=`${c.class} · ${b.ascendancy} · Level ${c.level}\n${active.items.length} equipped items · ${active.skills.length} skill groups · ${new Set(active.passives.map(n=>n.id)).size} passive nodes\n${b.stages.length} selectable setup${b.stages.length===1?'':'s'} · Imported ${new Date(c.importedAt).toLocaleString()}`;
    get('#character-warnings').innerHTML=loaded.warnings.map(w=>`<li>${esc(w)}</li>`).join('');
    target.value=options.initial?.id||options.characters.find(entry=>c.url&&entry.character?.url===c.url)?.id||'';
    get('#character-preview').hidden=false;error.textContent='Check the character, then save.';

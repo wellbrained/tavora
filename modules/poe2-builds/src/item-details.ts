@@ -8,9 +8,14 @@ export const cleanStat=(s:string)=>s.replace(/\[([^\]|]+)\|([^\]]+)\]/g,'$2').re
 const ordinary=['explicitMods','fracturedMods','craftedMods','desecratedMods'];
 const socketed=['runeMods','enchantMods','bondedMods'];
 function values(p:ItemProperty){return p.values.map(v=>`<span class="item-property-value">${esc(cleanStat(v[0]))}</span>`).join(', ');}
-function property(p:ItemProperty){
+/** Fills poe.ninja templates such as "Recovers {0} Life over {1} Seconds"; undefined for plain "Name: value" properties. */
+function filled(p:ItemProperty){
  const name=cleanStat(p.name).replace(/:$/,'');
- return /\{\d+\}/.test(name)?esc(name).replace(/\{(\d+)\}/g,(_,n)=>esc(cleanStat(p.values[Number(n)]?.[0]||''))):`${esc(name)}: ${values(p)}`;
+ return /\{\d+\}/.test(name)?name.replace(/\{(\d+)\}/g,(_,n)=>cleanStat(p.values[Number(n)]?.[0]||'')):undefined;
+}
+function property(p:ItemProperty){
+ const text=filled(p);
+ return text!==undefined?esc(text):`${esc(cleanStat(p.name).replace(/:$/,''))}: ${values(p)}`;
 }
 function label(a:AffixRow){return `${a.type==='P'?'Prefix':'Suffix'}${a.tier?' · Tier '+a.tier:' · Tier cannot be uniquely determined'}${a.name?' · '+a.name:''}${a.hybrid?' · One hybrid affix spanning connected lines':''}`;}
 function affixInfo(item:Item,text:string,kind:string){
@@ -56,7 +61,12 @@ export function itemTooltipContent(item:Item,notes?:string):TooltipContent{
  const rank=(r:typeof rows[number])=>{const a=affixInfo(item,r.text,r.kind);return a?.type==='P'?0:a?.type==='S'?1:2;};
  rows.sort((a,b)=>rank(a)-rank(b)||(first.get(affixInfo(item,a.text,a.kind)?.instanceId||affixInfo(item,a.text,a.kind)?.id||'')??positions.get(a)!)-(first.get(affixInfo(item,b.text,b.kind)?.instanceId||affixInfo(item,b.text,b.kind)?.id||'')??positions.get(b)!));
  const row=(text:string,kind:string)=>{const a=affixInfo(item,text,kind),status=a?.status||({craftedMods:'Crafted',fracturedMods:'Fractured',desecratedMods:'Desecrated'}[kind]||'');return{text:cleanStat(text),...(a?{badges:(a.contributors?.length?a.contributors:[a]).map(b=>`[${b.type}${b.tier||''}]`)}:{}),...(status?{status}:{}),...(a?.hybrid?{connected:true}:{})};};
- const property=(p:ItemProperty)=>({label:cleanStat(p.name).replace(/:$/,''),value:p.values.map(v=>cleanStat(v[0])).join(', ')});
+ // The host needs a non-empty label and value, so a template splits at its first placeholder: "Recovers: 552 Life over 3 Seconds".
+ const property=(p:ItemProperty)=>{
+  const text=filled(p);if(text===undefined)return{label:cleanStat(p.name).replace(/:$/,''),value:p.values.map(v=>cleanStat(v[0])).join(', ')};
+  const lead=cleanStat(p.name).split(/\{\d+\}/)[0]!.trim(),at=lead?lead.length:text.indexOf(' ');
+  return at>0?{label:text.slice(0,at).trim(),value:text.slice(at).trim()}:{label:text,value:'-'};
+ };
  const quality=(item.properties||[]).filter(p=>/^Quality/.test(cleanStat(p.name)));
  const content:TooltipContent={title:item.name,...(item.base&&item.base!==item.name?{subtitle:item.base}:{}),...(item.rarity&&['normal','magic','rare','unique'].includes(item.rarity)?{tone:item.rarity as NonNullable<TooltipContent['tone']>}:{}),
   ...(/\.(png|webp|jpe?g|gif)$/i.test(image.src)?{image:'dist/'+image.src.replace(/^\.\//,'')}:{}),
