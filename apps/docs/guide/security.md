@@ -60,6 +60,8 @@ Connectors are capabilities built for one purpose. The host holds the connection
 
 A module can ask you to pick a file in Tavora's native file dialog after a real click. It receives a random reference and the file name, never the path. That choice lets the same publisher's module reread that exact file in that game, including after restarting Tavora. There is no write or folder-browsing call. Each read is limited to 32 MiB, with two reads at a time per module and game and four across Tavora.
 
+Tavora remembers the last selected folder separately for each publisher, module and game. If that folder is unavailable, it may check the game's known save locations to start the native dialog there. These local hints are never given to modules and grant no access: you still choose each file yourself.
+
 File access stays on this PC, outside backups and cloud copies. Restoring map data on another PC requires choosing the files again. A moved file or redirected link requires a new selection. Modules can forget a reference; clearing a game's or module's data also revokes its file access without deleting the selected files. Moving local module data to another publisher does not transfer file access.
 
 ## Calls that need a click

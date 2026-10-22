@@ -1,3 +1,5 @@
+import { ReadOnlyFiles } from './read-only-files';
+import { saveDialogDirectory } from './save-dialog-folder';
 import { randomUUID } from "node:crypto";
 import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
@@ -2764,7 +2766,8 @@ export class Host {
       onOpenLink: (url) => this.openLinkFromModule(url),
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
       pickReadOnlyFile: async extensions => {
-        const picked = await dialog.showOpenDialog(this.window, {title:this.language.startsWith('de')?'Datei mit '+module.manifest.name+' verknüpfen':'Link a file to '+module.manifest.name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
+        const defaultPath=await saveDialogDirectory(new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,game.id),this.library.games[game.id]?.catalogId ?? game.id);
+        const picked = await dialog.showOpenDialog(this.window, {...(defaultPath?{defaultPath}:{}),title:this.language.startsWith('de')?'Datei mit '+module.manifest.name+' verknüpfen':'Link a file to '+module.manifest.name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
         return picked.canceled ? null : picked.filePaths[0] ?? null;
       },
       tooltip:{show:request=>this.tooltips.show(record.instanceId,request),move:anchor=>this.tooltips.move(record.instanceId,anchor.id,anchor.at),close:(id,hoverOnly)=>this.tooltips.close(record.instanceId,id,hoverOnly)},
