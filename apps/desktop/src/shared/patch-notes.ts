@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.6",
+    date: "2026-10-22",
+    title: "Fewer antivirus alarms",
+    notes: [
+      "Tavora now spots your running games by itself, without starting PowerShell in the background. Some antivirus apps, like Norton, flagged that.",
+    ],
+  },
+  {
     version: "0.20.5",
     date: "2026-10-22",
     title: "Calculator sizes",
