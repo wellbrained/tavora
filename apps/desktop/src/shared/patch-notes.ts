@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.38",
+    date: "2026-10-22",
+    title: "One loader when Tavora starts",
+    notes: [
+      "When Tavora opens your last game, one loader covers all its panels until they're ready, instead of a loader in every panel.",
+      "Your panels start loading together with Tavora, so they show up sooner.",
+      "Enshrouded Builds shows your skill tree faster.",
+    ],
+  },
+  {
     version: "0.19.37",
     date: "2026-10-22",
     title: "No setup card while Tavora checks",
