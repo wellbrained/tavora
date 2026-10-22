@@ -510,7 +510,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       <ProfileMenu :expanded="expanded" />
       <button
         type="button"
-        :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors', expanded && 'hover:bg-accent')"
+        :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
         data-rail-item
         data-testid="rail-settings"
         :aria-label="t('rail.settings')"
