@@ -58,6 +58,8 @@ const rows = computed(() => {
   ];
 });
 /** The key a build server gets as a file: the newest linked key Tavora keeps, the one it signs with. */
+/** Tavora can make or add a key here: it keeps keys for this account on this PC, or makes the account's recovery key first. */
+const canKeep = computed(() => keys.value?.status === "ready" || keys.value?.status === "none");
 const exportable = computed(() => rows.value.filter((row) => row.kept && row.linkedAt).at(-1)?.fingerprint ?? null);
 async function makeKey() {
   if (await run({ type: "developer-key-create" })) showToast(t("account.developer.created"));
@@ -208,9 +210,9 @@ function removeToken(token: AccountPublishToken) {
         </ul>
         <div class="mt-3 flex flex-wrap items-center gap-2">
           <!-- Saving the name makes the first key; this is for an account left without one. -->
-          <Button v-if="keys?.status === 'ready' && !rows.length" variant="secondary" :disabled="busy || !view?.developer" data-testid="developer-key-create" @click="makeKey">{{ t("account.developer.create") }}</Button>
+          <Button v-if="canKeep && !rows.length" variant="secondary" :disabled="busy || !view?.developer" data-testid="developer-key-create" @click="makeKey">{{ t("account.developer.create") }}</Button>
           <Button v-if="exportable" variant="secondary" :disabled="busy" :data-testid="`developer-key-export-${exportable}`" @click="exportKey(exportable)">{{ t("account.developer.exportMine") }}</Button>
-          <Button v-if="keys?.status === 'ready'" variant="secondary" :disabled="busy || !view?.developer" data-testid="developer-key-add" @click="addKey">{{ t("account.developer.add") }}</Button>
+          <Button v-if="canKeep" variant="secondary" :disabled="busy || !view?.developer" data-testid="developer-key-add" @click="addKey">{{ t("account.developer.add") }}</Button>
           <Button variant="ghost" :disabled="busy || !view?.developer" data-testid="account-link-code" @click="run({ type: 'account-link-code' })">{{ t("account.developer.link") }}</Button>
           <span v-if="!view?.developer" class="text-muted-foreground text-sm">{{ t("account.developer.linkNeedsName") }}</span>
         </div>
