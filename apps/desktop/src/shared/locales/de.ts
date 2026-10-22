@@ -702,7 +702,6 @@ export const de: Record<keyof typeof en, string> = {
   "modules.origin.example": "Beispiel, das mit Tavora geliefert wird",
   "modules.origin.own": "Dein Modulordner, in {folder}",
   "modules.origin.dev": "Ein Entwicklungsordner, {folder}",
-  "examples.open": "Ordner öffnen",
   "examples.copy": "Kopie anlegen",
   "examples.copyTitle": "{name} kopieren",
   "examples.copyText": "Starte dein eigenes Modul mit diesem Beispiel.",

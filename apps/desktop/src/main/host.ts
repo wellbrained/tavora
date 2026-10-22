@@ -896,6 +896,16 @@ export class Host {
     return project;
   }
 
+  /** Opens a module project of a development folder in the file manager; only those, so the host UI cannot open any path. */
+  private async openDevelopmentProject(project: string): Promise<void> {
+    const known =
+      [...this.modules.values()].some((module) => module.developmentProject === project) ||
+      this.moduleProblems.some((problem) => problem.developmentProject === project);
+    if (!known || this.options.hidden) return;
+    const error = await shell.openPath(project);
+    if (error) throw new LibraryError("error.openFolder", { problem: error });
+  }
+
   /** Opens the folder of an example that ships with Tavora, to look at its sources; only an example's. */
   private async openExampleFolder(moduleId: string): Promise<void> {
     const example = this.modules.get(moduleId);
@@ -1724,6 +1734,7 @@ export class Host {
       "remove-development-folder": (action) => this.removeDevelopmentFolder(action.folder),
       "copy-example": (action) => this.copyExampleModule(action.moduleId, action.name, action.folder),
       "open-example-folder": (action) => this.openExampleFolder(action.moduleId),
+      "open-development-project": (action) => this.openDevelopmentProject(action.project),
       "open-developer-link": (action) => this.openDeveloperLink(action.link),
       "reload-modules": () => this.reloadModules(),
       "remove-module": (action) => this.lifecycle.remove(action.moduleId),
@@ -3211,15 +3222,22 @@ export class Host {
       moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder).map(({ folder, path: full, message, kind }) => ({ folder, path: full, message, ...(kind ? { kind } : {}) })),
       developmentFolders: this.library.developmentFolders.map((folder) => {
         const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
-        const projects = new Map<string, { project: string; moduleId: string | null; problem: string | null; kind: NonNullable<ModuleProblem["kind"]> | null }>();
+        const projects = new Map<string, HostViewState["developmentFolders"][number]["projects"][number]>();
         for (const module of this.modules.values()) {
           if (module.developmentFolder === folder && module.developmentProject) {
-            projects.set(module.developmentProject, { project: module.developmentProject, moduleId: module.manifest.id, problem: null, kind: null });
+            projects.set(module.developmentProject, { project: module.developmentProject, moduleId: module.manifest.id, problem: null, kind: null, name: null, version: null });
           }
         }
         for (const item of this.moduleProblems) {
           if (item.developmentFolder !== folder || !item.developmentProject || projects.has(item.developmentProject)) continue;
-          projects.set(item.developmentProject, { project: item.developmentProject, moduleId: null, problem: item.message, kind: item.kind ?? null });
+          projects.set(item.developmentProject, {
+            project: item.developmentProject,
+            moduleId: null,
+            problem: item.message,
+            kind: item.kind ?? null,
+            name: item.about?.name ?? null,
+            version: item.about?.version ?? null,
+          });
         }
         return {
           folder,

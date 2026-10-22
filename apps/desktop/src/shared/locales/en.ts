@@ -700,7 +700,6 @@ export const en = {
   "modules.origin.example": "Example that ships with Tavora",
   "modules.origin.own": "Your modules folder, in {folder}",
   "modules.origin.dev": "A development folder, {folder}",
-  "examples.open": "Open folder",
   "examples.copy": "Make a copy",
   "examples.copyTitle": "Copy {name}",
   "examples.copyText": "Start your own module from this example.",

@@ -569,7 +569,8 @@ export interface HostViewState {
     folder: string;
     problem: string | null;
     kind: DevelopmentProblemKind | null;
-    projects: { project: string; moduleId: string | null; problem: string | null; kind: DevelopmentProblemKind | null }[];
+    /** `name` and `version` are what the manifest of a project that didn't load gives, when it has them. */
+    projects: { project: string; moduleId: string | null; problem: string | null; kind: DevelopmentProblemKind | null; name: string | null; version: string | null }[];
   }[];
   /** Saved data of modules that are not installed (or of another publisher than the installed one), kept until deleted. */
   leftoverModuleData: { owner: string; moduleId: string; publisher: string | null }[];
