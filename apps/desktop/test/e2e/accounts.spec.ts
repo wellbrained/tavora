@@ -278,7 +278,8 @@ test("Tavora keeps a developer's publisher key, and signs and publishes for tavo
   const { app, page, userData } = await launch(undefined, [], {
     env: { TAVORA_API_URL: apiUrl, TAVORA_DISCORD_IPC: path.join(tmpdir(), "tavora-no-discord"), TAVORA_DISCORD_TOKEN_URL: `${discordUrl}/api/oauth2/token` },
   });
-  const project = await moduleProject("exampledev.tracker");
+  // Under the prefix that saving the name claims; the test before took exampledev for its own account.
+  const project = await moduleProject("keykeeper.tracker");
   // No key file in this home: tavora-pack must ask Tavora.
   const home = await mkdtemp(path.join(tmpdir(), "tavora-home-"));
   const env = { TAVORA_SIGNER_ADDRESS: signerAddressFor(userData), HOME: home, USERPROFILE: home };
@@ -317,7 +318,7 @@ test("Tavora keeps a developer's publisher key, and signs and publishes for tavo
 
     packing = tavoraPack([project, "--out", out], env);
     await expect(page.getByTestId("sign-request")).toContainText("Sign Tracker 1.0.0?");
-    await expect(page.getByTestId("sign-request")).toContainText("exampledev.tracker");
+    await expect(page.getByTestId("sign-request")).toContainText("keykeeper.tracker");
     await page.getByTestId("sign-allow").click();
     const packed = await packing;
     expect(packed.status, packed.out).toBe(0);
@@ -330,11 +331,11 @@ test("Tavora keeps a developer's publisher key, and signs and publishes for tavo
     await page.getByTestId("sign-allow").click();
     const published = await publishing;
     expect(published.status, published.out).toBe(0);
-    expect(published.out).toContain("Published exampledev.tracker 1.0.0");
+    expect(published.out).toContain("Published keykeeper.tracker 1.0.0");
     await expect
       .poll(async () => {
         const { mails } = (await (await fetch(`${inboxUrl}/mails`)).json()) as { mails: { to: string; text: string }[] };
-        return mails.some((mail) => mail.to === "keeper@example.com" && mail.text.includes("(exampledev.tracker) is now in Tavora's module catalog"));
+        return mails.some((mail) => mail.to === "keeper@example.com" && mail.text.includes("(keykeeper.tracker) is now in Tavora's module catalog"));
       })
       .toBe(true);
   } finally {
