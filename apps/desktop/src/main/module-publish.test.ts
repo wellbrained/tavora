@@ -68,7 +68,7 @@ describe("ModulePublisher", () => {
     const { publisher: reviewer, uploads, views, owner } = publisher({ prefix: "free" });
     await reviewer.open(dir);
     const view = reviewer.view()!;
-    expect(views[0]?.status).toBe("checking");
+    expect(views[0]).toMatchObject({ status: "checking", module: { id: "me.tracker", name: "Tracker", version: "1.2.3" } });
     expect(view).toMatchObject({
       status: "ready",
       module: { id: "me.tracker", name: "Tracker", version: "1.2.3" },

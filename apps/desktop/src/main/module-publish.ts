@@ -63,7 +63,11 @@ export class ModulePublisher {
   /** Opens the review screen for a project folder and packs it. */
   async open(project: string): Promise<void> {
     if (!this.options.key()) throw new PlayerError("publish.error.setup");
-    this.review = { view: emptyView(project), zip: null, key: null };
+    const view = emptyView(project);
+    // Name the module right away, so packing doesn't show an empty title.
+    const manifest = await readManifest(project);
+    if (!("problem" in manifest)) view.module = { id: manifest.id, name: manifest.name, version: manifest.version, icon: this.options.icon(manifest.id) };
+    this.review = { view, zip: null, key: null };
     await this.refresh();
   }
 
