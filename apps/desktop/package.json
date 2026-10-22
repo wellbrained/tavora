@@ -92,7 +92,8 @@
           "*/changelog.json",
           "*/dist/**",
           "!poe2-builds/**",
-          "!enshrouded/**"
+          "!enshrouded/**",
+          "!satisfactory/**"
         ]
       },
       {
