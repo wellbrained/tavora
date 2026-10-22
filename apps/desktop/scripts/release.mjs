@@ -28,6 +28,10 @@ function readInstalledVersion() {
   }
 }
 
+// Some shells (an agent's in T3 Code) set this, and every Electron started below would then run as
+// plain Node: the e2e suite and the packaged start check would fail. The child processes inherit it.
+delete process.env.ELECTRON_RUN_AS_NODE;
+
 const desktop = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repo = path.dirname(path.dirname(desktop));
 const releaseDir = path.join(desktop, "release");

@@ -36,7 +36,8 @@ function start() {
     // The extra channel lets this script ask Tavora to quit cleanly, which
     // signals cannot do on Windows.
     stdio: ["inherit", "inherit", "inherit", "ipc"],
-    env: { ...process.env, TAVORA_DEV_SERVER: url, TAVORA_DEVTOOLS: process.env.TAVORA_DEVTOOLS ?? "1" },
+    // Without ELECTRON_RUN_AS_NODE, which some shells (an agent's in T3 Code) set: Electron would start as plain Node.
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, TAVORA_DEV_SERVER: url, TAVORA_DEVTOOLS: process.env.TAVORA_DEVTOOLS ?? "1" },
   });
   const current = app;
   // Closing Tavora ends the dev session; a restart replaces the process.

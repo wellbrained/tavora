@@ -190,7 +190,8 @@ describe("DiscordConnector", () => {
     await connector.unsubscribe("p1", "SPEAKING_START", "10");
     expect(fake.commands.some((c) => c.cmd === "UNSUBSCRIBE")).toBe(false);
     connector.release("p2");
-    await until(() => fake.commands.some((c) => c.cmd === "UNSUBSCRIBE"));
+    // Both go out at once without waiting for each other: wait for the two, not just the first.
+    await until(() => fake.commands.filter((c) => c.cmd === "UNSUBSCRIBE").length === 2);
     expect(fake.commands.filter((c) => c.cmd === "UNSUBSCRIBE")).toEqual(
       expect.arrayContaining([
         { cmd: "UNSUBSCRIBE", args: { channel_id: "10" }, evt: "SPEAKING_START" },

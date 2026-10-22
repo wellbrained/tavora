@@ -553,6 +553,8 @@ test("clipboard: a module copies a PNG only right after a key press, once, and o
       })()`,
     );
   const clipboardTypes = () => app.evaluate(async ({ clipboard }) => (await clipboard.read()).flatMap((item) => item.types));
+  // It is the PC's own clipboard: a picture copied before the run must not count as the module's.
+  await app.evaluate(({ clipboard }) => clipboard.clear());
 
   // Without a key press the module is refused, and the clipboard is untouched.
   expect(await copy("png")).toBe(403);
