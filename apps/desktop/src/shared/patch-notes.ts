@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.9",
+    date: "2026-10-22",
+    title: "Find your saves faster",
+    notes: [
+      "File pickers remember your last folder for each module and game.",
+      "Enshrouded starts in a detected save folder when you haven't chosen one yet.",
+    ],
+  },
+  {
     version: "0.20.8",
     date: "2026-10-22",
     title: "Fewer antivirus alarms and a better calculator",
