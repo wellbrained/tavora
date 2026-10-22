@@ -2763,6 +2763,10 @@ export class Host {
       },
       onOpenLink: (url) => this.openLinkFromModule(url),
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
+      pickReadOnlyFile: async extensions => {
+        const picked = await dialog.showOpenDialog(this.window, {title:this.language.startsWith('de')?'Datei mit '+module.manifest.name+' verknüpfen':'Link a file to '+module.manifest.name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
+        return picked.canceled ? null : picked.filePaths[0] ?? null;
+      },
       tooltip:{show:request=>this.tooltips.show(record.instanceId,request),move:anchor=>this.tooltips.move(record.instanceId,anchor.id,anchor.at),close:(id,hoverOnly)=>this.tooltips.close(record.instanceId,id,hoverOnly)},
       launch: () => this.launchOf(record),
       setContent: (content) => this.setPanelContent(record, content),

@@ -51,6 +51,7 @@ export interface BridgePort {
  * view that owns the port, never from anything the module sends.
  */
 export interface BridgeContext {
+  readOnlyFiles?: { pick(extensions: string[]): Promise<import('@tavora/sdk/protocol').ReadOnlyFile | null>; forget(id:string):Promise<void> };
   hostVersion: string;
   moduleId: string;
   moduleVersion: string;
@@ -170,6 +171,18 @@ function actionId(value: unknown): string {
 }
 
 const handlers = new Map<string, Handler>([
+  ['files.pickReadOnly', async (s,params) => {
+    const extensions = object(params).extensions;
+    if (!Array.isArray(extensions) || !extensions.length || extensions.length>10 || extensions.some(e=>typeof e!=='string'|| !/^[a-z0-9]{1,12}$/.test(e))) throw new HostError('INVALID_PARAMS','Choose up to ten file extensions.');
+    if (!s.context.readOnlyFiles) throw new HostError('UNKNOWN_METHOD','Update Tavora to remember files.');
+    return s.context.readOnlyFiles.pick(extensions);
+  }],
+  ['files.forget', async (s,params) => {
+    const id = object(params).id;
+    if (typeof id!=='string'|| !/^[a-f0-9]{32}$/.test(id)) throw new HostError('INVALID_PARAMS','Invalid file reference.');
+    if (!s.context.readOnlyFiles) throw new HostError('UNKNOWN_METHOD','Update Tavora to remember files.');
+    await s.context.readOnlyFiles.forget(id); return null;
+  }],
   ["game.getCurrent", (s, params) => (noParams(params), { ...s.context.game })],
 
   ["storage.get", (s, params) => s.context.data.settings.get(object(params).key)],

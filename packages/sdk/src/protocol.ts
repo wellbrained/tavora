@@ -334,7 +334,11 @@ export interface HotkeyBinding {
 export type HotkeySetResult = "set" | "removed" | "cancelled";
 
 /** Request methods and their params/result types. */
+export interface ReadOnlyFile { id: string; name: string; size: number }
+export const READ_ONLY_FILE_PATH = '/_read-only-files/';
 export interface Methods {
+  "files.pickReadOnly": { params: { extensions: string[] }; result: ReadOnlyFile | null };
+  "files.forget": { params: { id: string }; result: null };
   "bridge.handshake": { params: { protocol: number; sdkVersion: string }; result: HandshakeResult };
   "game.getCurrent": { params: undefined; result: TavoraGame };
   "storage.get": { params: { key: string }; result: JsonValue | null };
