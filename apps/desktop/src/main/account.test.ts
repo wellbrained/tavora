@@ -493,6 +493,14 @@ describe("the developer side", () => {
     expect(calls.at(-1)).toMatchObject({ method: "DELETE", auth: `Bearer ${TOKEN}` });
   });
 
+  it("reads the name and keys at a start, before the Account page opens", async () => {
+    const { fetchImpl } = service({ "GET /developer": () => developer([{ fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z" }]) });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await expect.poll(() => account.view().developer?.name).toBe("example-dev");
+    expect(account.view().publisherKeys).toEqual([{ fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z" }]);
+  });
+
   it("says when the name can change again, in the player's own words", async () => {
     const { fetchImpl } = service({ "PUT /developer": () => json({ reason: "name-too-soon", nextChangeAt: "2026-11-16T12:00:00.000Z" }, 409) });
     const { account } = client(fetchImpl, { saved: SAVED });

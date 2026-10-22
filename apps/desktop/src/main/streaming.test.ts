@@ -21,7 +21,13 @@ afterEach(async () => {
 const MODULE: StreamingModule = {
   owner: "official",
   root: "/nowhere",
-  manifest: { id: "tavora.clock-counter", name: "Clock & Counter", overlay: "dist/overlay.html", actions: [{ id: "start-pause", name: "Start/Pause" }, { id: "reset", name: "Reset" }] },
+  manifest: {
+    id: "tavora.clock-counter",
+    name: "Clock & Counter",
+    overlay: "dist/overlay.html",
+    actions: [{ id: "start-pause", name: "Start/Pause" }, { id: "reset", name: "Reset" }],
+    permissions: { network: [], connectors: ["stream-overlay"], onRequest: ["stream-overlay"] },
+  },
 };
 
 async function setup({ held = [] as string[] } = {}) {
@@ -36,13 +42,18 @@ async function setup({ held = [] as string[] } = {}) {
   };
   const heard: HotkeyBinding[] = [];
   const panel: HotkeyListener = { moduleId: MODULE.manifest.id, usedAt: 1, hotkeyPressed: (binding) => heard.push(binding) };
-  const world = { gameId: "poe2" as string | null, panels: [panel], clipboard: "", opened: [] as string[], settings: { streamOverlays: false, overlayPort: 47820 } };
+  const world = { gameId: "poe2" as string | null, panels: [panel], clipboard: "", opened: [] as string[], settings: { streamOverlays: false, overlayPort: 47820 }, granted: true, asked: 0, answer: true };
   const streaming = await Streaming.create({
     userData: dir,
     settings: () => world.settings,
     saveSettings: (next) => Object.assign(world.settings, next),
     module: (id) => (id === MODULE.manifest.id ? MODULE : undefined),
-    overlayGranted: () => true,
+    overlayGranted: () => world.granted,
+    askConnector: async () => {
+      world.asked++;
+      world.granted = world.answer;
+      return world.answer;
+    },
     gameId: () => world.gameId,
     gameName: (id) => (id === "poe2" ? "Path of Exile 2" : null),
     panels: () => world.panels,
@@ -160,14 +171,34 @@ describe("which hotkeys work", () => {
 });
 
 describe("overlay links", () => {
+  it("ask for stream overlays on the first copy when the module asks for them on request", async () => {
+    const { overlay, world } = await setup();
+    world.granted = false;
+    world.answer = false;
+    expect(await overlay.copyLink("item-1")).toBe("denied");
+    expect(world.asked).toBe(1);
+    world.answer = true;
+    expect(await overlay.copyLink("item-1")).toBe("off");
+    expect(await overlay.copyLink("item-1")).toBe("off");
+    expect(world.asked).toBe(2);
+  });
+
+  it("refuse a module that asks for them up front and wasn't granted them", async () => {
+    const { streaming, world } = await setup();
+    world.granted = false;
+    const upFront = { ...MODULE, manifest: { ...MODULE.manifest, permissions: { network: [], connectors: ["stream-overlay" as const] } } };
+    await expect(streaming.overlayFor(upFront, "poe2").copyLink("item-1")).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(world.asked).toBe(0);
+  });
+
   it("open the setting while Stream overlays are off, and copy the link once they are on", async () => {
     const { streaming, overlay, world } = await setup();
-    expect(overlay.copyLink("item-1")).toBe("off");
+    expect(await overlay.copyLink("item-1")).toBe("off");
     expect(world.opened).toEqual(["stream-overlays"]);
     let port = 48100 + Math.floor(Math.random() * 500);
     for (world.settings.overlayPort = port; (await streaming.setOverlays(true), streaming.view().overlays.status) !== "running"; ) await streaming.setPort(++port);
     try {
-      expect(overlay.copyLink("item-1")).toBe("copied");
+      expect(await overlay.copyLink("item-1")).toBe("copied");
       expect(world.clipboard).toMatch(new RegExp(`^http://127\\.0\\.0\\.1:${port}/overlay/[0-9a-f]{32}/$`));
     } finally {
       await streaming.shutdown();

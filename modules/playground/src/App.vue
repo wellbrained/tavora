@@ -43,6 +43,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { Combobox, ComboboxAnchor, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@tavora/official-ui/components/ui/combobox";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
@@ -69,7 +70,7 @@ const SECTIONS = [
   { id: "type", title: "Typography", keywords: "text fonts headings caption mono numbers link" },
   { id: "buttons", title: "Buttons", keywords: "primary secondary ghost outline destructive danger remove link icon loading" },
   { id: "fields", title: "Text fields", keywords: "input textarea search label hint error" },
-  { id: "choices", title: "Choices", keywords: "checkbox switch radio segmented select dropdown slider" },
+  { id: "choices", title: "Choices", keywords: "checkbox switch radio segmented select dropdown combobox autocomplete search slider" },
   { id: "ratings", title: "Star rating", keywords: "stars rating review score" },
   { id: "tabs", title: "Tabs", keywords: "tabs views" },
   { id: "status", title: "Badges and status", keywords: "badge chip tag status dot kbd shortcut" },
@@ -97,6 +98,8 @@ const radio = ref("normal");
 const segment = ref<"day" | "week" | "month">("week");
 const density = ref<"tight" | "normal">("normal");
 const select = ref("poe2");
+const picked = ref<string>();
+const GAMES = ["Path of Exile 2", "Diablo IV", "Final Fantasy XIV", "Guild Wars 2", "Satisfactory", "Stardew Valley", "Enshrouded"];
 const volume = ref([60]);
 const range = ref([20, 80]);
 const progress = ref(45);
@@ -379,6 +382,18 @@ function bump(by: number) {
               <SelectItem value="name">Name</SelectItem>
             </SelectContent>
           </Select>
+        </Specimen>
+        <Specimen label="Combobox (type to search)">
+          <Combobox v-model="picked" :disabled="off">
+            <ComboboxAnchor class="w-56">
+              <ComboboxInput placeholder="Search games" aria-label="Game" />
+            </ComboboxAnchor>
+            <ComboboxList>
+              <ComboboxEmpty>No game found</ComboboxEmpty>
+              <ComboboxItem v-for="game in GAMES" :key="game" :value="game">{{ game }}</ComboboxItem>
+            </ComboboxList>
+          </Combobox>
+          <span class="text-muted-foreground text-sm">{{ picked ?? "Nothing picked" }}</span>
         </Specimen>
         <Specimen label="Slider" column>
           <div class="flex items-center gap-3">

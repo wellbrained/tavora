@@ -317,9 +317,10 @@ export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "files"
 
 /**
  * What overlay.copyLink did. `copied`: the link is on the clipboard, ready to paste into OBS as a Browser Source.
- * `off`: Stream overlays are off in Tavora; Tavora opened the setting so the player can turn them on.
+ * `off`: Stream overlays are off in Tavora; Tavora opened the setting so the player can turn them on. `denied`: the
+ * module asks for the connector on request (permissions.onRequest) and the player said no in Tavora's dialog.
  */
-export type OverlayLinkResult = "copied" | "off";
+export type OverlayLinkResult = "copied" | "off" | "denied";
 
 /** A hotkey the player set for this module in the current game: which action, for what. Never the key itself. */
 export interface HotkeyBinding {
@@ -402,16 +403,19 @@ export interface Methods {
   "discord.image": { params: { url: string }; result: string | null };
   /**
    * What the overlay page for `key` shows now (capability `overlay`): any JSON, at most LIMITS.maxOverlayStateBytes.
-   * Tavora keeps it, so the overlay shows it while no panel runs. Tavora 0.19.25 and newer.
+   * Tavora keeps it, so the overlay shows it while no panel runs. Tavora 0.19.26 and newer.
    */
   "overlay.publish": { params: { key: string; state: JsonValue }; result: null };
   /** The overlay for `key` shows nothing until it is published again; its link stays the same (capability `overlay`). */
   "overlay.remove": { params: { key: string }; result: null };
-  /** Puts the link of the overlay for `key` on the clipboard. Only right after a click or key press (capability `overlay`). */
+  /**
+   * Puts the link of the overlay for `key` on the clipboard. Only right after a click or key press (capability `overlay`;
+   * a module that asks for it on request gets Tavora's consent dialog first).
+   */
   "overlay.copyLink": { params: { key: string }; result: OverlayLinkResult };
   /** Gives the overlay for `key` a new link; the old one stops working (capability `overlay`). */
   "overlay.resetLink": { params: { key: string }; result: null };
-  /** The hotkeys the player set for this module in the current game. Tavora 0.19.25 and newer. */
+  /** The hotkeys the player set for this module in the current game. Tavora 0.19.26 and newer. */
   "hotkeys.list": { params: undefined; result: HotkeyBinding[] };
   /**
    * Opens Tavora's dialog to set the key for one of the manifest's `actions` on `target`; `label` names the target

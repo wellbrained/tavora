@@ -1,0 +1,21 @@
+{
+  "$schema": "../../packages/module-schema/schema/tavora.module.schema.json",
+  "id": "tavora.clock-counter",
+  "name": "Clock & Counter",
+  "description": "Countdowns, stopwatches and counters for this game, with hotkeys and overlays for your stream.",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "entry": "dist/index.html",
+  "overlay": "dist/overlay.html",
+  "changelog": "changelog.json",
+  "games": [],
+  "viewport": { "minWidth": 280, "minHeight": 200, "preferredWidth": 360, "preferredHeight": 480 },
+  "actions": [
+    { "id": "start-pause", "name": "Start/Pause" },
+    { "id": "reset", "name": "Reset" },
+    { "id": "lap", "name": "Lap" },
+    { "id": "up", "name": "Count up" },
+    { "id": "down", "name": "Count down" }
+  ],
+  "permissions": { "network": [], "connectors": ["stream-overlay"], "onRequest": ["stream-overlay"] }
+}

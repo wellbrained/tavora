@@ -20,6 +20,45 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.33",
+    date: "2026-10-22",
+    title: "Publishing stays set up",
+    notes: [
+      "\"Want to make modules?\" no longer shows up in Settings > Development after a restart once publishing is set up.",
+      "Publish and Save as zip work right after a start, without opening Settings > Account first.",
+    ],
+  },
+  {
+    version: "0.19.32",
+    date: "2026-10-22",
+    title: "Clock & Counter works without OBS",
+    notes: [
+      "Adding Clock & Counter no longer asks about stream overlays.",
+      "You're asked the first time you copy an OBS link, and the module works either way.",
+    ],
+  },
+  {
+    version: "0.19.31",
+    date: "2026-10-22",
+    title: "Clock & Counter",
+    notes: [
+      "New module: countdowns, stopwatches and counters for each game.",
+      "Pick how a clock shows its time, with or without hours.",
+      "Counters can add to each other, like 5 sit-ups per death.",
+      "Show any of them in OBS with its own link, and control them with hotkeys.",
+    ],
+  },
+  {
+    version: "0.19.30",
+    date: "2026-10-21",
+    title: "Examples and project folders",
+    notes: [
+      "Settings > Development lists each project folder with its modules under it, so a module shows up only once.",
+      "The examples that ship with Tavora have their own list. Open one's folder to read the code, or make a copy to start your own module.",
+      "The UI Playground is listed with the other official modules now.",
+    ],
+  },
+  {
     version: "0.19.29",
     date: "2026-10-21",
     title: "Publish modules from Tavora",

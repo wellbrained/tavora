@@ -1,6 +1,6 @@
 {
   "name": "@tavora/desktop",
-  "version": "0.19.29",
+  "version": "0.19.33",
   "private": true,
   "type": "module",
   "scripts": {
@@ -77,7 +77,11 @@
         "filter": [
           "*/tavora.module.json",
           "*/changelog.json",
-          "*/dist/**"
+          "*/dist/**",
+          "*/src/**",
+          "*/package.json",
+          "*/tsconfig.json",
+          "*/vite.config.ts"
         ]
       },
       {

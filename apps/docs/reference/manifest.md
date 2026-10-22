@@ -45,11 +45,12 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `viewport.preferredWidth`, `viewport.preferredHeight` | no | Size the module looks best at, 1 to 10000. Used by the docking layout later. |
 | `permissions.network` | yes | Hosts the module asks to reach with [`network.fetch`](./protocol.md#network), at most 32, e.g. `["api.example.com"]`; `[]` for none. Exact lowercase public names only: no scheme, port, path, wildcard, IP address, `localhost`, `.local` or `.internal`. Each one works only once the player has granted it. |
 | `permissions.connectors` | no | Connectors the module asks to use: `"ai-usage"` to read the usage of the player's Claude and Codex accounts, `"discord"` to use the Discord app on this PC with Tavora's Discord sign-in (see [Connectors](./protocol.md#connectors)), `"stream-overlay"` to show its [`overlay`](#overlay) page in streaming software on this PC. Each name once; each works only once the player has granted it. |
+| `permissions.onRequest` | no | Connectors from `permissions.connectors` that Tavora asks for only when your module first needs one, not when it is added, so it works without them. Only `"stream-overlay"` so far: Tavora asks on the first `overlay.copyLink`. Needs Tavora 0.19.32 or newer. |
 | `permissions.webAssembly` | no | `true` lets the page compile WebAssembly (the page's security policy gets `'wasm-unsafe-eval'`). Only Tavora's own modules may ask for it; a module from your modules folder that does is not loaded, and the Modules page says why. |
 
 | `panels` | no | Named [panel types](#panel-types) the module offers, 1 to 16. Without it the module has one panel, made from `entry`, `icon` and `viewport`. |
-| `overlay` | no | The page for streaming software, see [Overlay](#overlay). Needs `"stream-overlay"` in `permissions.connectors`, and that connector needs this page. Needs Tavora 0.19.25 or newer. |
-| `actions` | no | What the module can do on a key press, 1 to 16, see [Actions](#actions). Needs Tavora 0.19.25 or newer. |
+| `overlay` | no | The page for streaming software, see [Overlay](#overlay). Needs `"stream-overlay"` in `permissions.connectors`, and that connector needs this page. Needs Tavora 0.19.26 or newer. |
+| `actions` | no | What the module can do on a key press, 1 to 16, see [Actions](#actions). Needs Tavora 0.19.26 or newer. |
 
 Paths (`entry`, `icon`, `readme`, `screenshots`, `overlay`, and the same fields of a panel type) are relative to the package root and must stay inside it: no leading `/`, no `.` or `..` segments, no empty segments, no backslashes or `:`. Tavora also checks that both files exist when it discovers the module.
 

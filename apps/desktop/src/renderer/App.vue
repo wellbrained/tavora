@@ -5,6 +5,7 @@ import AddModuleDialog from "./components/AddModuleDialog.vue";
 import CloudCopyDialog from "./components/CloudCopyDialog.vue";
 import PairingDialog from "./components/PairingDialog.vue";
 import SignRequestDialog from "./components/SignRequestDialog.vue";
+import CopyExampleDialog from "./components/developer/CopyExampleDialog.vue";
 import DeveloperStartDialog from "./components/developer/DeveloperStartDialog.vue";
 import RecoveryAskDialog from "./components/settings/RecoveryAskDialog.vue";
 import PublishDialog from "./components/developer/PublishDialog.vue";
@@ -56,6 +57,7 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <GrantDialog v-else-if="dialog?.kind === 'grant'" :key="dialog.moduleId" :request="dialog" />
     <DeveloperStartDialog v-else-if="dialog?.kind === 'developer-start'" :then="dialog.then" />
     <RecoveryAskDialog v-else-if="dialog?.kind === 'recovery-ask'" />
+    <CopyExampleDialog v-else-if="dialog?.kind === 'copy-example'" :key="dialog.moduleId" :module-id="dialog.moduleId" />
     <ModuleMenu />
     <CloudCopyDialog />
     <SignRequestDialog />

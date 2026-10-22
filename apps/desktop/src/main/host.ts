@@ -3,7 +3,7 @@ import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, type ResolvedPanelType } from "@tavora/module-schema";
+import { continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, type Connector, type ResolvedPanelType } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -113,7 +113,7 @@ import { isWebUrl, siteOfUrl } from "./browser-url";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, developmentProjects, discoverModules, isDevelopmentModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, developmentProjects, discoverModules, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
@@ -145,6 +145,7 @@ import {
   type InstalledTheme,
   type ThemeProblem,
 } from "./themes";
+import { copyExample, slugOf } from "./example-copy";
 import { writeFileAtomic } from "./fsutil";
 import {
   emptyGameWorkspace,
@@ -325,6 +326,9 @@ export class Host {
   private playedAtStart: Record<string, string> = {};
   /** A game that started while the player chose to be asked; waits for the answer. */
   private pendingGameSwitch: string | null = null;
+  /** A connector a module asks for on request (permissions.onRequest), waiting for the player's answer in the consent dialog. */
+  private pendingConnector: { id: number; moduleId: string; connector: Connector; resolve(allowed: boolean): void } | null = null;
+  private nextConnectorAsk = 1;
   private readonly gameWatcher = new GameWatcher({
     entries: () => liveGames(this.library),
     findInstalled: async () => findInstalledGames({ steamDir: await findSteamDir() }),
@@ -850,6 +854,56 @@ export class Host {
     this.rememberPicked("development-folder", folder);
     await this.reloadModules();
     return path.resolve(folder);
+  }
+
+  /** The development folder the player added that is `folder`, as it is kept in the library. */
+  private developmentFolder(folder: string): string | undefined {
+    const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
+    return this.library.developmentFolders.find((item) => key(item) === key(folder));
+  }
+
+  /**
+   * Copies an example that ships with Tavora into a new project, named after the module, in a development
+   * folder that holds projects or in a folder the player picks (`folder` null). A picked folder outside the
+   * development folders gets the new project added as one. Answers with the new project, or nothing when cancelled.
+   */
+  private async copyExampleModule(moduleId: string, name: string, folder: string | null): Promise<string | void> {
+    const example = this.modules.get(moduleId);
+    if (!example || !isExampleModule(moduleId)) throw new LibraryError("error.copyNoExample");
+    let parent: string | undefined;
+    if (folder !== null) {
+      parent = this.developmentFolder(folder);
+      if (!parent) throw new LibraryError("error.copyNoFolder");
+    } else {
+      parent = await this.pickPath("development-folder", { title: translate(this.language, "dialog.copyExample"), properties: ["openDirectory", "createDirectory"] });
+      if (!parent) return;
+      this.rememberPicked("development-folder", parent);
+    }
+    if (!existsSync(parent)) throw new LibraryError("error.copyNoFolder");
+    // A project can't hold another one: Tavora only looks for projects directly inside a folder without a manifest.
+    if (existsSync(path.join(parent, MANIFEST))) throw new LibraryError("error.copyIntoProject", { folder: path.basename(parent) });
+    const known = this.developmentFolder(parent) !== undefined;
+    if (!known && this.library.developmentFolders.length >= MAX_DEVELOPMENT_FOLDERS) throw new LibraryError("error.tooManyDevelopmentFolders");
+    const slug = slugOf(name);
+    const id = `${this.publisher.ownPrefix() ?? "local"}.${slug}`;
+    if (this.modules.has(id)) throw new LibraryError("error.copyIdTaken", { id });
+    const project = path.join(path.resolve(parent), slug);
+    await copyExample(example.root, project, { id, name: name.trim() });
+    if (!known) {
+      this.library.developmentFolders = cleanDevelopmentFolders([...this.library.developmentFolders, project]);
+      this.saveLibrary();
+    }
+    await this.reloadModules();
+    return project;
+  }
+
+  /** Opens the folder of an example that ships with Tavora, to look at its sources; only an example's. */
+  private async openExampleFolder(moduleId: string): Promise<void> {
+    const example = this.modules.get(moduleId);
+    if (!example || !isExampleModule(moduleId)) return;
+    if (this.options.hidden) return;
+    const error = await shell.openPath(example.root);
+    if (error) throw new LibraryError("error.openFolder", { problem: error });
   }
 
   /** Opens one of Tavora's pages for module developers in the player's browser. The renderer names the page, never an address. */
@@ -1609,6 +1663,7 @@ export class Host {
       "reset-overlay-links": () => this.streaming.resetLinks(),
       "hotkey-answer": (action) => this.streaming.answer(action.id, action.choice, action.accelerator),
       "remove-hotkey": (action) => this.streaming.removeHotkey(action),
+      "connector-answer": (action) => this.answerConnector(action.id, action.allow),
       "set-language": saved((action) => {
         this.library.language = action.language;
         for (const view of this.views.values()) view.applyLanguage(this.language);
@@ -1668,6 +1723,8 @@ export class Host {
       "open-module-problem-folder": (action) => this.openModuleProblemFolder(action.path),
       "add-development-folder": () => this.addDevelopmentFolder(),
       "remove-development-folder": (action) => this.removeDevelopmentFolder(action.folder),
+      "copy-example": (action) => this.copyExampleModule(action.moduleId, action.name, action.folder),
+      "open-example-folder": (action) => this.openExampleFolder(action.moduleId),
       "open-developer-link": (action) => this.openDeveloperLink(action.link),
       "reload-modules": () => this.reloadModules(),
       "remove-module": (action) => this.lifecycle.remove(action.moduleId),
@@ -3146,7 +3203,7 @@ export class Host {
           minHeight: type.viewport.minHeight,
         })),
         provenance: module.provenance,
-        development: isDevelopmentModule(module.manifest.id) || module.developmentFolder !== undefined,
+        development: isExampleModule(module.manifest.id) || module.developmentFolder !== undefined,
         project: module.developmentProject !== undefined,
         version: module.manifest.version,
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
@@ -3216,6 +3273,7 @@ export class Host {
       runningGameId: this.running.filter((id) => id !== this.gameId && isLive(this.library, id)).at(-1) ?? null,
       pendingGameSwitch: this.pendingGameSwitch && isLive(this.library, this.pendingGameSwitch) ? this.pendingGameSwitch : null,
       streaming: this.streaming.view(),
+      pendingConnector: this.pendingConnector && { id: this.pendingConnector.id, moduleId: this.pendingConnector.moduleId, connectors: [this.pendingConnector.connector] },
       hotkeyRequest: this.streaming.request(),
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
@@ -3315,6 +3373,29 @@ export class Host {
     this.savedData.saveWindow(state);
   }
 
+  /**
+   * Shows Tavora's consent dialog for one connector a module asks for on request, after a click in its panel; resolves
+   * with whether the player allowed it. A newer request closes an older one as not allowed.
+   */
+  private askConnector(moduleId: string, connector: Connector): Promise<boolean> {
+    this.pendingConnector?.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      this.pendingConnector = { id: this.nextConnectorAsk++, moduleId, connector, resolve };
+      this.pushState();
+    });
+  }
+
+  /** The player's answer; allowing grants that connector alone, and the module's panels go on running with it. */
+  private async answerConnector(id: number, allow: boolean): Promise<void> {
+    const pending = this.pendingConnector;
+    if (!pending || pending.id !== id) return;
+    this.pendingConnector = null;
+    const module = this.modules.get(pending.moduleId);
+    const granted = allow && module !== undefined && (module.manifest.permissions.onRequest ?? []).includes(pending.connector);
+    if (granted) await this.grants.grant(module, { network: [], connectors: [pending.connector] });
+    pending.resolve(granted);
+  }
+
   /** Resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
   async flush(): Promise<void> {
     await this.streaming?.shutdown();
@@ -3333,6 +3414,7 @@ export class Host {
       },
       module: (moduleId) => host.modules.get(moduleId),
       overlayGranted: (moduleId) => host.connectorsOf(moduleId).has("stream-overlay"),
+      askConnector: (moduleId, connector) => host.askConnector(moduleId, connector),
       gameId: () => host.gameId,
       gameName: (gameId) => host.library.games[gameId]?.name ?? null,
       panels: () => [...host.views.values()].filter((view): view is ModuleView => view instanceof ModuleView),

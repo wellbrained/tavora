@@ -87,12 +87,10 @@ test("a module's own icon is shown, and a module without one gets a puzzle piece
   await openModule(page, OWN);
   await expect(panels(page, OWN).getByTestId("module-icon")).toHaveAttribute("src", /^data:image\/png;base64,/);
 
-  // Settings > Modules too, and an official module keeps its logo instead of the puzzle piece
-  // (the Playground is a development module, so it is listed in Settings > Development).
+  // Settings > Modules too, and an official module keeps its logo instead of the puzzle piece.
   await page.getByTestId("rail-settings").click();
   await page.getByTestId("settings-nav-modules").click();
   await expect(page.getByTestId(`module-${OWN}`).getByTestId("module-icon")).toHaveAttribute("src", /^data:image\/png;base64,/);
-  await page.getByTestId("settings-nav-development").click();
   await expect(page.getByTestId(`module-${PLAYGROUND}`).getByTestId("module-icon")).toHaveJSProperty("tagName", "svg");
   await app.close();
 });

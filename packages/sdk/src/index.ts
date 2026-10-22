@@ -102,7 +102,7 @@ export const SDK_VERSION = "0.2.11";
  * `minTavora`, so an older Tavora says it needs an update instead of loading a module it cannot run
  * (the starter, `npm create @tavora/module`, does). The changelog names it for every version.
  */
-export const MIN_TAVORA = "0.19.25";
+export const MIN_TAVORA = "0.19.32";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -310,7 +310,7 @@ export interface TavoraSDK {
   /**
    * Pages for streaming software such as OBS (the manifest's `overlay`), one per key: an item, a scoreboard, whatever
    * the module shows on stream. Needs `"stream-overlay"` in `permissions.connectors` and the player's grant
-   * (PERMISSION_DENIED otherwise). Tavora 0.19.25 and newer.
+   * (PERMISSION_DENIED otherwise). Tavora 0.19.26 and newer.
    */
   overlay: {
     /** What the overlay for `key` shows now. Tavora keeps it, so the overlay goes on showing it while no panel runs. */
@@ -328,7 +328,7 @@ export interface TavoraSDK {
   };
   /**
    * Hotkeys for the manifest's `actions`. The player picks the keys in a Tavora dialog, for this game; the module
-   * only hears which action fired, for which target, in its panel used last in the game shown now. Tavora 0.19.25 and newer.
+   * only hears which action fired, for which target, in its panel used last in the game shown now. Tavora 0.19.26 and newer.
    */
   hotkeys: {
     list(): Promise<HotkeyBinding[]>;

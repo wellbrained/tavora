@@ -32,7 +32,7 @@ To report a problem, see [Security policy](https://github.com/wellbrained/tavora
 
 A module lists what it needs in its [manifest](../reference/manifest.md). Nothing is granted by the manifest alone:
 
-- **The player is asked when they add a module.** Tavora draws the consent dialog itself, from the manifest as the main process read it, along with who made the module (Tavora, a publisher key or an unsigned folder). A module cannot draw or hide that dialog. Preinstalled modules get no pre-approved grants.
+- **The player is asked when they add a module.** Tavora draws the consent dialog itself, from the manifest as the main process read it, along with who made the module (Tavora, a publisher key or an unsigned folder). A module cannot draw or hide that dialog. Preinstalled modules get no pre-approved grants. A connector the module lists in `permissions.onRequest` (only stream overlays) is asked for in the same dialog, but only right after a click in the module's panel that needs it, such as Copy OBS link; until then the module runs without it.
 - **The player grants exactly what they saw.** If an update asks for more while the dialog is open, it gets nothing it did not show.
 - **Grants are kept by the host**, outside every module folder, for the module's publisher and id. Another publisher's module with the same id gets nothing.
 - **Revoking takes effect at once.** Settings > Modules > Website access lists every module allowed to reach websites, Settings > Integrations every module allowed to use Discord or AI usage, and Settings > Streaming every module allowed to show stream overlays. Taking a grant back shows the games the module is used in and removes its panels there; its data is kept. Data a module already received cannot be recalled.

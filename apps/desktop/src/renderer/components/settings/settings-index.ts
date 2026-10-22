@@ -93,7 +93,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["browser-clear-game", "browser"],
   ["browser-clear-shared", "browser"],
   ["development-folders", "development"],
-  ["development-modules", "development"],
+  ["development-examples", "development"],
   ["module-developer", "development"],
   ["publish-ci", "development"],
   ["developer-docs", "development"],

@@ -241,6 +241,8 @@ export class AccountClient {
     this.changed();
     // Once at each start: the profile comes down or goes up, whichever is newer. Quietly; offline is fine.
     if (this.saved) void this.syncProfile(false).catch(() => undefined);
+    // The developer name and linked keys too, so Settings > Development knows publishing is set up.
+    if (this.saved) void this.readDeveloper();
   }
 
   /** The sign-in token, for another call to the service that needs a signed-in player (sharing icons); null when signed out. */
@@ -428,12 +430,16 @@ export class AccountClient {
     }
     // The email or Discord may have changed on another PC.
     await this.updated(answer);
-    // The developer side too; a service without it yet leaves it unknown.
-    this.takeDeveloper(await this.call("GET", "/developer", undefined, true).catch(() => ({})));
-    await this.readPrefixes();
+    await this.readDeveloper();
   }
 
   // ── Developer side ─────────────────────────────────────────────────────
+
+  /** The developer side and its prefixes. Quietly: offline, or a service without them yet, leaves them unknown. */
+  private async readDeveloper(): Promise<void> {
+    this.takeDeveloper(await this.call("GET", "/developer", undefined, true).catch(() => ({})));
+    await this.readPrefixes();
+  }
 
   /** Sets the public name players see on the modules of the account's linked keys. */
   async setDeveloperName(name: string): Promise<void> {

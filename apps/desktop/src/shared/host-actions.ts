@@ -225,6 +225,8 @@ export function hostActionTable(c: HostChecks) {
       choice: oneOf("set", "remove", "cancel"),
       accelerator: optional(text(40)),
     },
+    /** The answer in the consent dialog for a connector a module asks for on request (HostViewState.pendingConnector). */
+    "connector-answer": { id: check<number>((value) => Number.isSafeInteger(value)), allow: bool },
     /** Removes one hotkey from Settings > Streaming. */
     "remove-hotkey": { owner: c.ownerId, moduleId: c.moduleId, gameId: c.gameId, action: matching(/^[a-z][a-z0-9-]{0,31}$/), target: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     "set-language": { language: check<LanguageSetting>(isLanguageSetting) },
@@ -262,6 +264,10 @@ export function hostActionTable(c: HostChecks) {
     /** Picks a module project folder to load from (answers with the folder), or forgets one. */
     "add-development-folder": {},
     "remove-development-folder": { folder: filled(500) },
+    /** Copies an example into a new project in a development folder, or in a folder the player picks (null); answers with the new project. */
+    "copy-example": { moduleId: c.moduleId, name: named(80), folder: nullable(filled(500)) },
+    /** Opens an example's folder in the file manager, to look at its sources. */
+    "open-example-folder": { moduleId: c.moduleId },
     "open-developer-link": { link: oneOf(...DEVELOPER_LINKS) },
     /** Looks for modules again, after the player changed their modules folder. */
     "reload-modules": {},
