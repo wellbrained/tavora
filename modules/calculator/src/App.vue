@@ -1,14 +1,15 @@
 <script setup lang="ts">
-// Calculator: the sum and its result as you type, a keypad (the keyboard works too), and the game's last results.
+// Calculator: the sum and its result as you type, a keypad laid out like the Windows one (the keyboard works too, with
+// its shortcuts @ for √, q for x² and F9 for ±), Copy, and the game's last results.
 // The keypad keeps a calculator size; the history sits below it in a tall panel and beside it in a wide one.
 // The history lives in the game's module storage, so every panel of the game shares it; a panel reads it again
 // when it shows or gets focus, since storage has no change events.
-import { Delete, Trash2 } from "@lucide/vue";
+import { Check, Copy, Delete, Trash2 } from "@lucide/vue";
 import { connectModule, errorMessage, serial } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
-import { EMPTY, evaluate, format, insert, press, pretty, type Entry } from "./calc";
+import { copyText, EMPTY, evaluate, format, insert, press, pretty, type Entry } from "./calc";
 import { HISTORY_KEY, parseHistory, remember, type Calculation } from "./history";
 import { language, setLanguage, t } from "./i18n";
 import type { en } from "./locales";
@@ -20,13 +21,17 @@ const KEYS: Key[] = [
   { key: "(", label: "(", name: "calc.open", kind: "op" },
   { key: ")", label: ")", name: "calc.close", kind: "op" },
   { key: "/", label: "÷", name: "calc.divide", kind: "op" },
-  ...["7", "8", "9"].map((key) => ({ key, label: key, kind: "digit" as const })),
-  { key: "*", label: "×", name: "calc.times", kind: "op" },
-  ...["4", "5", "6"].map((key) => ({ key, label: key, kind: "digit" as const })),
-  { key: "-", label: "−", name: "calc.minus", kind: "op" },
-  ...["1", "2", "3"].map((key) => ({ key, label: key, kind: "digit" as const })),
-  { key: "+", label: "+", name: "calc.plus", kind: "op" },
+  { key: "sqrt", label: "√", name: "calc.sqrt", kind: "op" },
+  { key: "square", label: "x²", name: "calc.square", kind: "op" },
   { key: "%", label: "%", name: "calc.percent", kind: "op" },
+  { key: "*", label: "×", name: "calc.times", kind: "op" },
+  ...["7", "8", "9"].map((key) => ({ key, label: key, kind: "digit" as const })),
+  { key: "-", label: "−", name: "calc.minus", kind: "op" },
+  ...["4", "5", "6"].map((key) => ({ key, label: key, kind: "digit" as const })),
+  { key: "+", label: "+", name: "calc.plus", kind: "op" },
+  ...["1", "2", "3"].map((key) => ({ key, label: key, kind: "digit" as const })),
+  { key: "negate", label: "±", name: "calc.negate", kind: "op" },
+  { key: "ans", label: "ans", name: "calc.ans", kind: "op" },
   { key: "0", label: "0", kind: "digit" },
   { key: ".", label: ".", name: "calc.point", kind: "digit" },
   { key: "=", label: "=", name: "calc.equals", kind: "equals" },
@@ -41,6 +46,9 @@ const entry = ref<Entry>(EMPTY);
 /** Why the last Equals did not work, until the next key. */
 const problem = ref<string | null>(null);
 const history = ref<Calculation[]>([]);
+/** Copy just worked: its button shows a tick for a moment. */
+const copied = ref(false);
+let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 const queue = serial();
 
 const comma = computed(() => language.value.toLowerCase().startsWith("de"));
@@ -59,7 +67,24 @@ const preview = computed(() => {
 function key(name: string): void {
   problem.value = null;
   if (name === "=") return equals();
+  if (name === "ans") return void (history.value[0] && use(history.value[0]));
   entry.value = press(entry.value, name);
+}
+
+/** The result as Copy writes it, or null while there is none. */
+const copyable = computed(() => copyText(entry.value, comma.value));
+
+async function copy(): Promise<void> {
+  const text = copyable.value;
+  if (text === null) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    copied.value = true;
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => (copied.value = false), 1500);
+  } catch {
+    problem.value = t("copyError");
+  }
 }
 
 function equals(): void {
@@ -118,9 +143,18 @@ const KEYBOARD: Record<string, string> = {
   x: "*",
   X: "*",
   ":": "/",
+  // The Windows calculator's own shortcuts.
+  "@": "sqrt",
+  q: "square",
+  Q: "square",
+  F9: "negate",
 };
 
 function onKeydown(event: KeyboardEvent): void {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c" && !window.getSelection()?.toString()) {
+    event.preventDefault();
+    return void copy();
+  }
   if (event.ctrlKey || event.metaKey || event.altKey) return;
   const name = KEYBOARD[event.key] ?? (/^[\d.+\-*/%()]$/.test(event.key) ? event.key : null);
   if (!name) return;
@@ -159,7 +193,10 @@ onMounted(async () => {
   }
 });
 
-onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
+onBeforeUnmount(() => {
+  cleanup.forEach((fn) => fn());
+  clearTimeout(copiedTimer);
+});
 </script>
 
 <template>
@@ -176,11 +213,25 @@ onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
               {{ problem ?? (preview ? `= ${show(preview)}` : "") }}
             </p>
           </div>
-          <Button variant="ghost" size="icon-sm" :aria-label="t('calc.back')" :title="t('calc.back')" :disabled="!entry.text" @click="key('back')">
-            <Delete :stroke-width="1.5" />
-          </Button>
+          <div class="flex flex-none flex-col">
+            <Button variant="ghost" size="icon-sm" :aria-label="t('calc.back')" :title="t('calc.back')" :disabled="!entry.text" @click="key('back')">
+              <Delete :stroke-width="1.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              :aria-label="t(copied ? 'calc.copied' : 'calc.copy')"
+              :title="t(copied ? 'calc.copied' : 'calc.copy')"
+              :disabled="copyable === null"
+              data-testid="copy"
+              @click="copy"
+            >
+              <Check v-if="copied" :stroke-width="1.5" />
+              <Copy v-else :stroke-width="1.5" />
+            </Button>
+          </div>
         </div>
-        <div class="grid min-h-0 flex-1 grid-cols-4 grid-rows-5 gap-1.5" role="group" :aria-label="t('calc.keypad')">
+        <div class="grid min-h-0 flex-1 grid-cols-4 grid-rows-6 gap-1.5" role="group" :aria-label="t('calc.keypad')">
           <Button
             v-for="item in KEYS"
             :key="item.key"
@@ -190,6 +241,7 @@ onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
             :aria-label="item.name ? t(item.name) : undefined"
             :title="item.name ? t(item.name) : undefined"
             :data-testid="`key-${item.key}`"
+            :disabled="item.key === 'ans' && !history.length"
             @click="key(item.key)"
           >
             {{ keyLabel(item) }}
