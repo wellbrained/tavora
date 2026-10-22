@@ -22,14 +22,6 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.20.7",
     date: "2026-10-22",
-    title: "Publishing",
-    notes: [
-      "The publish screen shows your module's name while it packs.",
-    ],
-  },
-  {
-    version: "0.20.6",
-    date: "2026-10-22",
     title: "Fewer antivirus alarms and a better calculator",
     notes: [
       "Tavora now spots your running games by itself, without starting PowerShell in the background. Some antivirus apps, like Norton, flagged that.",
@@ -38,6 +30,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "Calculator: a toolbar on top switches between the Basic keypad and Plus, and shows or hides your history. The keys keep a size you can press, in small panels too.",
       "Modules can remember files you choose and reread them without asking you to find them again. File access stays read-only, belongs to that module and game, and stays on this PC.",
       "In a small window, Settings > Modules wraps its buttons instead of running off the side.",
+      "The publish screen shows your module's name while it packs.",
     ],
   },
   {
