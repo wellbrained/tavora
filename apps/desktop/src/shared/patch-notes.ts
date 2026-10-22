@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.1",
+    date: "2026-10-22",
+    title: "Modules settings fit small windows",
+    notes: [
+      "In a small window, the buttons in Settings > Modules wrap instead of running off the side.",
+      "Module names show again next to their Patch notes button.",
+      "Open folder on a module that can't load moves under its message when space is tight.",
+    ],
+  },
+  {
     version: "0.20.0",
     date: "2026-10-22",
     title: "Module catalog, cloud copy and more",
