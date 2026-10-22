@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.2",
+    date: "2026-10-22",
+    title: "Refresh imported saves",
+    notes: [
+      "Modules can remember files you choose and reread them without asking you to find them again.",
+      "File access stays read-only, belongs to that module and game, and stays on this PC.",
+    ],
+  },
+  {
     version: "0.20.1",
     date: "2026-10-22",
     title: "Modules settings fit small windows",
