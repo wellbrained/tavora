@@ -144,6 +144,9 @@ if (!app.requestSingleInstanceLock()) {
         devServer,
         // A packaged app only ever talks to api.mytavora.app.
         apiUrl: !app.isPackaged ? process.env.TAVORA_API_URL : undefined,
+        // A development run in its own desktop-dev folder: turning the cloud copy on there asks first, so the
+        // installed app's copy isn't mixed with dev data by accident. Test runs (TAVORA_USER_DATA) don't ask.
+        devData: !app.isPackaged && !process.env.TAVORA_USER_DATA,
         // Accounts are on for everyone since 0.16.4 (2026-10-16: testers try them in the installed app).
         accounts: true,
         // Development only: another account service, such as a local apps/api with TAVORA_TEST_INBOX_PORT (its codes show on that inbox page).

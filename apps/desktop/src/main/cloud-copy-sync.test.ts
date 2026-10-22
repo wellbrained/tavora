@@ -17,12 +17,13 @@ type Service = Awaited<ReturnType<typeof service>>;
 type Pc = Awaited<ReturnType<typeof pc>>;
 
 /** Tavora on a PC: the cloud copy as the host runs it, with what it showed and whether it restarted. */
-function tavora(cloud: Service, at: Pc, { signedIn = true } = {}) {
+function tavora(cloud: Service, at: Pc, { signedIn = true, devData = false } = {}) {
   const views: CloudCopyView[] = [];
   const events = { restarts: 0, closed: 0 };
   const sync = new CopySync({
     userData: at.userData,
     enabled: true,
+    devData,
     moduleFiles: () => at.moduleFiles,
     service: new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => (signedIn ? cloud.token : null) }),
     accountKey: new AccountKey({
@@ -59,6 +60,13 @@ async function startCopy(cloud: Service, a: Pc) {
 }
 
 describe("the cloud copy, as Tavora runs it", () => {
+  it("tells Settings when it runs in the dev build's own data, so turning on asks first", async () => {
+    const cloud = await service();
+    const at = await pc({});
+    expect(tavora(cloud, at, { devData: true }).sync.view().devData).toBe(true);
+    expect(tavora(cloud, at).sync.view().devData).toBe(false);
+  });
+
   it("brings PC A's data to PC B once B has the recovery key, keeping B's own settings and data", async () => {
     const cloud = await service();
     const a = await pc({ "library.json": JSON.stringify({ version: 1, games: { "elden-ring": {} }, moduleFilesFolder: "C:\\A pictures" }), "modules/dice/manifest.json": "dice" });

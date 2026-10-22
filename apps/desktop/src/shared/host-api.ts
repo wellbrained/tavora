@@ -316,6 +316,8 @@ export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" |
 export interface CloudCopyView {
   /** False where this PC can't keep the key encrypted: the copy can't be turned on here. */
   canKeepKey: boolean;
+  /** A development run in its own desktop-dev folder: turning on asks first, as the copy belongs in the installed app. */
+  devData: boolean;
   on: boolean;
   /** What it is doing right now. */
   busy: "checking" | "uploading" | "downloading" | null;

@@ -58,6 +58,8 @@ export interface CopySyncOptions {
   userData: string;
   /** False in release builds until accounts go live: the copy never runs. */
   enabled: boolean;
+  /** A development run in its own desktop-dev folder: the UI asks before turning the copy on. */
+  devData?: boolean;
   /** The folder modules keep pictures in, which may be anywhere. */
   moduleFiles: () => string;
   /** The copy on Tavora's service. */
@@ -162,6 +164,7 @@ export class CopySync {
   view(): CloudCopyView {
     return {
       canKeepKey: this.options.accountKey.canKeep,
+      devData: this.options.devData === true,
       on: this.on,
       busy: this.busy,
       progress: this.progress,
