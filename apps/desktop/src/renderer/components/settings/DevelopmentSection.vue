@@ -16,6 +16,7 @@ import { account, act, developerKeys, developerReady, dialog, publishModule, sav
 import { t } from "../../i18n";
 import ModuleDeveloperSettings from "../developer/ModuleDeveloperSettings.vue";
 import ModuleRow from "./ModuleRow.vue";
+import ProjectRow from "./ProjectRow.vue";
 import RecoveryKeySettings from "./RecoveryKeySettings.vue";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
@@ -52,6 +53,8 @@ function shortPath(folder: string): string {
   const sep = folder.includes("\\") ? "\\" : "/";
   return `…${sep}${all.slice(-2).join(sep)}`;
 }
+
+const openProject = (project: string) => act({ type: "open-development-project", project });
 
 /** What to do about a folder or project that loaded nothing, in words. */
 function advice(kind: DevelopmentProblemKind | null, message: string | null, folder: string): string {
@@ -107,28 +110,37 @@ function advice(kind: DevelopmentProblemKind | null, message: string | null, fol
         <ul v-else class="flex flex-col pl-7">
           <template v-for="project in entry.projects" :key="project.project">
             <ModuleRow v-if="project.moduleId && moduleById(project.moduleId)" :module="moduleById(project.moduleId)!" hide-origin>
+              <Button
+                variant="ghost"
+                size="icon"
+                :aria-label="t('common.openFolder')"
+                :title="t('common.openFolder')"
+                :data-testid="`open-project-${project.moduleId}`"
+                @click="openProject(project.project)"
+              >
+                <FolderOpen :stroke-width="1.5" />
+              </Button>
               <template v-if="accounts">
                 <Button
                   variant="ghost"
+                  size="icon"
                   :aria-label="t('publish.saveZip')"
                   :title="t('publish.saveZip')"
                   :data-testid="`save-zip-${project.moduleId}`"
                   @click="saveModuleZip(project.moduleId)"
                 >
-                  <FileArchive :stroke-width="1.5" /> {{ t("publish.saveZip") }}
+                  <FileArchive :stroke-width="1.5" />
                 </Button>
                 <Button variant="secondary" :data-testid="`publish-${project.moduleId}`" @click="publishModule(project.moduleId)">
                   <Upload :stroke-width="1.5" /> {{ t("publish.button") }}
                 </Button>
               </template>
             </ModuleRow>
-            <li v-else class="flex gap-2 border-b py-3 text-sm last:border-b-0" data-testid="development-project">
-              <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" />
-              <span class="flex min-w-0 flex-col">
-                <span v-if="project.project !== entry.folder" class="truncate font-mono text-xs" :title="project.project">{{ baseName(project.project) }}</span>
-                <span data-testid="development-project-status">{{ advice(project.kind, project.problem, project.project) }}</span>
-              </span>
-            </li>
+            <ProjectRow v-else :name="project.name ?? baseName(project.project)" :version="project.version" :status="advice(project.kind, project.problem, project.project)">
+              <Button variant="ghost" size="icon" :aria-label="t('common.openFolder')" :title="t('common.openFolder')" data-testid="open-project" @click="openProject(project.project)">
+                <FolderOpen :stroke-width="1.5" />
+              </Button>
+            </ProjectRow>
           </template>
         </ul>
       </li>
@@ -143,7 +155,7 @@ function advice(kind: DevelopmentProblemKind | null, message: string | null, fol
       <ul class="flex flex-col" :aria-label="t('settings.development-examples.label')" data-testid="development-examples">
         <ModuleRow v-for="module in examples" :key="module.id" :module="module" hide-origin>
           <Button variant="ghost" :data-testid="`open-example-${module.id}`" @click="act({ type: 'open-example-folder', moduleId: module.id })">
-            <FolderOpen :stroke-width="1.5" /> {{ t("examples.open") }}
+            <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
           </Button>
           <Button variant="secondary" :data-testid="`copy-example-${module.id}`" @click="dialog = { kind: 'copy-example', moduleId: module.id }">
             <Copy :stroke-width="1.5" /> {{ t("examples.copy") }}

@@ -71,6 +71,7 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "copy-example", moduleId: "local.example.vue-module", name: "My Vue Module", folder: "D:\Code" }],
   [{ type: "copy-example", moduleId: "local.example.vue-module", name: "My Vue Module", folder: null }],
   [{ type: "open-example-folder", moduleId: "local.example.vue-module" }],
+  [{ type: "open-development-project", project: "D:\Code\my-tracker" }],
   [{ type: "remove-module", moduleId: "local.me.mine" }],
   [{ type: "revoke-module", moduleId: "local.me.mine" }],
   [{ type: "report-catalog-module", moduleId: "wellbrained.tracker" }],

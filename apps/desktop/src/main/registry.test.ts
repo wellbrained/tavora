@@ -180,8 +180,16 @@ describe("development folders", () => {
     expect(modules.size).toBe(0);
     expect(problems).toEqual([
       { folder: "workspace", path: empty, message: "there is no tavora.module.json in this folder or in the folders directly inside it", developmentFolder: empty, kind: "no-module" },
-      { folder: "unbuilt", path: unbuilt, message: "the entry file index.html is missing (is it built?)", developmentFolder: unbuilt, developmentProject: unbuilt, kind: "not-built" },
-      { folder: "fake", path: reserved, message: "its id is reserved for Tavora's own modules", developmentFolder: reserved, developmentProject: reserved },
+      {
+        folder: "unbuilt",
+        path: unbuilt,
+        message: "the entry file index.html is missing (is it built?)",
+        developmentFolder: unbuilt,
+        developmentProject: unbuilt,
+        kind: "not-built",
+        about: { name: "example.unbuilt", version: "1.0.0" },
+      },
+      { folder: "fake", path: reserved, message: "its id is reserved for Tavora's own modules", developmentFolder: reserved, developmentProject: reserved, about: { name: "tavora.notes", version: "1.0.0" } },
       { folder: "gone", path: path.join(projects, "gone"), message: "this folder can't be found", developmentFolder: path.join(projects, "gone"), kind: "missing" },
     ]);
   });

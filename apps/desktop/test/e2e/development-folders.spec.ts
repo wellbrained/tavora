@@ -84,6 +84,10 @@ test("a folder of projects loads every project in it, says which still needs a b
     await expect(folder.getByTestId("module-devtest.planner")).toBeVisible();
     await expect(waiting).toHaveCount(1);
     await expect(waiting.getByTestId("development-project-status")).toHaveText("Not built yet. Run npm run dev in tracker and leave it running.");
+    // It still looks like a module, named from its manifest, and its folder can be opened.
+    await expect(waiting.getByTestId("development-project-name")).toHaveText("Tracker");
+    await expect(waiting.getByTestId("open-project")).toBeVisible();
+    await expect(folder.getByTestId("open-project-devtest.planner")).toBeVisible();
 
     // Building it loads it, and a project made in the folder later shows up by itself.
     await build(path.join(workspace, "tracker"), "Tracker");

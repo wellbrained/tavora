@@ -266,6 +266,8 @@ export function hostActionTable(c: HostChecks) {
     "remove-development-folder": { folder: filled(500) },
     /** Copies an example into a new project in a development folder, or in a folder the player picks (null); answers with the new project. */
     "copy-example": { moduleId: c.moduleId, name: named(80), folder: nullable(filled(500)) },
+    /** Opens a module project of a development folder (a `developmentFolders` project) in the file manager. */
+    "open-development-project": { project: filled(500) },
     /** Opens an example's folder in the file manager, to look at its sources. */
     "open-example-folder": { moduleId: c.moduleId },
     "open-developer-link": { link: oneOf(...DEVELOPER_LINKS) },
