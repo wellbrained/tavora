@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.39",
+    date: "2026-10-22",
+    title: "Calculator",
+    notes: [
+      "A new official module: a quick calculator for each game, with your keyboard too.",
+      "Your last 10 results stay, so you can use them again.",
+    ],
+  },
+  {
     version: "0.19.38",
     date: "2026-10-22",
     title: "One loader when Tavora starts",
