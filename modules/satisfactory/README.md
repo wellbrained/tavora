@@ -6,6 +6,7 @@ A Tavora module for Satisfactory: plan production lines and look up items, recip
 
 **Planner.** Say what you want to make and how much per minute, and what you already bring from elsewhere. The Planner shows one row per recipe with its building, how many machines it takes (exactly and rounded up), their clock speed and power, and lets you pick another recipe for any item. Below that: the raw resources, what you have to bring in, which of your supplies are used, byproducts, what is left over, total power and build cost. Every change is worked out at once and saved.
 
+- See the production as a **Chain** (each target down to its raw resources), a **Graph** (a box per recipe, arrows with the rates between them; drag to move, Ctrl + scroll to zoom) or a **List**.
 - Keep as many named plans as you like, and export or import them as files.
 - A world holds the alternate recipes you've unlocked in one playthrough. **Alternates…** lets you tick them, or show all of them to theory-craft. "My world" is there from the start.
 - Each Planner panel remembers its plan. Plans and worlds are shared by all panels of the game.
