@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.3",
+    date: "2026-10-22",
+    title: "Calculator keys like on Windows",
+    notes: [
+      "New keys: √, x², ± and ans for your last result, with the Windows shortcuts @, q and F9.",
+      "Copy puts the result on your clipboard as a plain number, also with Ctrl+C.",
+      "Big numbers show their thousands, like 1,234,567.",
+    ],
+  },
+  {
     version: "0.20.2",
     date: "2026-10-22",
     title: "Refresh imported saves",
