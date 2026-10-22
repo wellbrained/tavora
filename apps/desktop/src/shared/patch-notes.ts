@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.7",
+    date: "2026-10-22",
+    title: "Publishing",
+    notes: [
+      "The publish screen shows your module's name while it packs.",
+    ],
+  },
+  {
     version: "0.20.6",
     date: "2026-10-22",
     title: "Fewer antivirus alarms",
