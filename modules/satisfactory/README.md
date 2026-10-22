@@ -40,4 +40,4 @@ A link (junction) inside a development folder isn't picked up; add the linked fo
 
 ---
 
-Not affiliated with Coffee Stain Studios. Satisfactory and its icons are © Coffee Stain Studios.
+Not affiliated with Coffee Stain Studios. Satisfactory and its icons are © Coffee Stain Studios and belong to them. If Coffee Stain asks us to, we take the icons out right away.
