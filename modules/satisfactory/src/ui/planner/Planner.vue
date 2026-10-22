@@ -474,7 +474,7 @@ const canTarget = (item: string) => canPlan(data, item);
                 <Button size="sm" variant="secondary" data-testid="error-drop-recipe" @click="dropGone(solved.error.recipe)">{{ t("error.useDefault") }}</Button>
               </div>
             </div>
-            <ResultView v-else-if="solved && solved.ok" :result="solved.result" @choose-recipe="(item, recipe) => edit((current) => chooseRecipe(current, data, item, recipe))" />
+            <ResultView v-else-if="solved && solved.ok" :result="solved.result" :targets="plan!.targets" @choose-recipe="(item, recipe) => edit((current) => chooseRecipe(current, data, item, recipe))" />
           </div>
         </div>
       </div>
