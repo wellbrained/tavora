@@ -198,12 +198,12 @@ onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
       </section>
 
       <section class="flex min-h-24 w-full max-w-sm flex-1 flex-col gap-1 landscape:h-full landscape:max-h-[26rem] landscape:min-h-0" data-testid="history">
-        <header class="flex h-7 flex-none items-center gap-1">
-          <h2 class="text-muted-foreground min-w-0 flex-1 truncate text-xs font-medium">{{ t("history.title") }}</h2>
+        <header class="flex h-8 flex-none items-center gap-1">
+          <h2 class="text-muted-foreground min-w-0 flex-1 truncate text-sm font-medium">{{ t("history.title") }}</h2>
           <Button
             v-if="history.length"
             variant="ghost"
-            size="icon-xs"
+            size="icon-sm"
             :aria-label="t('history.clear')"
             :title="t('history.clear')"
             data-testid="clear-history"
@@ -223,8 +223,8 @@ onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
               data-testid="history-item"
               @click="use(item)"
             >
-              <span class="text-muted-foreground block truncate font-mono text-xs">{{ show(item.expression) }} =</span>
-              <span class="block truncate font-mono text-sm tabular-nums">{{ show(item.result) }}</span>
+              <span class="text-muted-foreground block truncate font-mono text-sm">{{ show(item.expression) }} =</span>
+              <span class="block truncate font-mono text-lg tabular-nums">{{ show(item.result) }}</span>
             </Button>
           </li>
         </ol>
