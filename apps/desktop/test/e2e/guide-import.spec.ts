@@ -1,6 +1,7 @@
 import { test,expect } from '@playwright/test';
 import path from 'node:path';
-import { readFile,writeFile } from 'node:fs/promises';
+import { mkdtemp,readFile,readdir,writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { launch,inModule,waitForShown } from './harness';
 const ID='wellbrained.poe2-builds',modules=path.resolve(import.meta.dirname,'../../../../modules');
 
@@ -78,6 +79,37 @@ test('PoE Vault guide imports trees and gem setups with plain requests, updates 
   await inModule(app,ID,"document.querySelector('.guide-import').close()");
   await app.close();const second=await launch(running.userData,[modules]);app=second.app;await waitForShown(app,ID);
   expect(await inModule(app,ID,"[...document.querySelectorAll('.original-text')].map(n=>n.textContent)")).toEqual(before.chapters);
+ }finally{await app.close();}
+});
+
+test('Export build saves a guide build over 1 MiB that Load build file reads back',async()=>{
+ test.skip(!process.env.POE2_EXPORT_SMOKE_FILE,'Set a saved guide build file over 1 MiB, such as an exported Mobalytics guide');
+ test.setTimeout(120000);
+ const file=await readFile(process.env.POE2_EXPORT_SMOKE_FILE!,'utf8');
+ const exports=await mkdtemp(path.join(tmpdir(),'tavora-exports-'));
+ const running=await launch(undefined,[modules],{env:{TAVORA_EXPORTS_DIR:exports}});let app=running.app;
+ try{
+  const page=running.page;
+  await page.getByTestId('add-module').click();await page.getByTestId('panel-menu-toggle-'+ID).click();await page.getByTestId('open-'+ID+'-guide').click();await page.getByTestId('grant-allow').click();await expect(page.getByTestId('grant-dialog')).toHaveCount(0);await page.getByTestId('add-module-dialog').getByRole('button',{name:'Close',exact:true}).click();await waitForShown(app,ID);
+  await inModule(app,ID,`const dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(file)}],'ice-shot.tavora-build.json',{type:'application/json'}));const input=document.querySelector('#file');input.files=dt.files;input.dispatchEvent(new Event('change'))`);
+  await expect.poll(()=>inModule(app,ID,"document.querySelector('#status').textContent"),{timeout:30000}).toContain('Build saved');
+  const before=await inModule<string[]>(app,ID,"[...document.querySelectorAll('.original-text')].map(n=>n.textContent)");
+  await inModule(app,ID,"document.querySelector('#build-actions').showPopover()");
+  // The export endpoint needs a trusted native click.
+  await app.evaluate(async({webContents})=>{
+   const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://wellbrained.poe2-builds/'))!;
+   const point=await wc.executeJavaScript("(()=>{const b=document.querySelector('#export-build').getBoundingClientRect();return {x:Math.round(b.x+b.width/2),y:Math.round(b.y+b.height/2)}})()");
+   wc.sendInputEvent({type:'mouseMove',...point});wc.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...point});wc.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,...point});
+  });
+  await expect.poll(()=>inModule(app,ID,"document.querySelector('#status').textContent"),{timeout:30000}).toContain('Saved in Downloads/Tavora: ');
+  const [saved]=await readdir(exports);expect(saved).toMatch(/.tavora-build.json$/);
+  const text=await readFile(path.join(exports,saved!),'utf8');expect(Buffer.byteLength(text)).toBeGreaterThan(1024*1024);
+  // A fresh profile loads the exported file and shows the same guide text.
+  await app.close();const second=await launch(undefined,[modules]);app=second.app;
+  await second.page.getByTestId('add-module').click();await second.page.getByTestId('panel-menu-toggle-'+ID).click();await second.page.getByTestId('open-'+ID+'-guide').click();await second.page.getByTestId('grant-allow').click();await second.page.getByTestId('add-module-dialog').getByRole('button',{name:'Close',exact:true}).click();await waitForShown(app,ID);
+  await inModule(app,ID,`const dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(text)}],${JSON.stringify(saved)},{type:'application/json'}));const input=document.querySelector('#file');input.files=dt.files;input.dispatchEvent(new Event('change'))`);
+  await expect.poll(()=>inModule(app,ID,"document.querySelector('#status').textContent"),{timeout:30000}).toContain('Build saved');
+  expect(await inModule(app,ID,"[...document.querySelectorAll('.original-text')].map(n=>n.textContent)")).toEqual(before);
  }finally{await app.close();}
 });
 

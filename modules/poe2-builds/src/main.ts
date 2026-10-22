@@ -2,9 +2,9 @@ import {addMenuActions,panelMenuActions} from './panel-menus';
 import {equipmentOrder} from './item-details';
 import {buildDisplayTitle} from './item-data.js';
 import {visibilitySwitch,collapseIcon} from './controls';
-import { connect, type TavoraSDK, type TavoraTheme } from '@tavora/sdk';
+import { connect, type JsonValue, type TavoraSDK, type TavoraTheme } from '@tavora/sdk';
 import { validate } from './validate.js';
-import { guideSections, guideSectionIndex, guideNote, MAX_FILE_BYTES, type Build, type Stage } from './model';
+import { guideSections, guideSectionIndex, guideNote, MAX_FILE_BYTES, portable, type Build, type Stage } from './model';
 import { restoreView } from './view-state';
 import { Inventory, inventoryMarkup } from './inventory';
 import { GuideLinks } from './guide-links';
@@ -163,6 +163,7 @@ function render() {
     $('#import-build').onclick=()=>{closeActions();importGuide();};
     document.querySelector<HTMLButtonElement>('#empty-build')?.addEventListener('click',()=>importGuide());
     document.querySelector<HTMLButtonElement>('#refresh-guide')?.addEventListener('click',()=>{closeActions();importGuide(true);});
+    document.querySelector<HTMLButtonElement>('#export-build')?.addEventListener('click',()=>{closeActions();exportBuild();});
     document.querySelector<HTMLButtonElement>('#refresh-character')?.addEventListener('click',()=>{closeActions();importCharacter(true);});
     document.querySelector<HTMLButtonElement>('#empty-character')?.addEventListener('click',()=>importCharacter());
     $('#load').onclick = () => { closeActions(); $('#file').click(); };
@@ -182,6 +183,14 @@ function render() {
         mountTree();
     if (build && type === 'gear') inventory = new Inventory($('.gear-content'), stage().items, {tooltip:sdk.ui.tooltip, shown:view.inventory, listShown:view.equipmentList, notesFor:item => build!.guideText?.items?.[item.inventory_id], weapon:view.gearWeapon, onChange:change => { Object.assign(view,change); void remember().catch(report); }});
     if (build && type === 'guide') mountGuide();
+}
+/** Saves the open build as a portable file that Load build file reads back. Runs inside the click, which the host requires. */
+function exportBuild() {
+    if (!build) return; const b = build;
+    report('Saving file…');
+    void sdk.files.exportJson(portable(b) as unknown as JsonValue, (b.shortTitle || b.title) + '.tavora-build')
+        .then(({ fileName }) => report(`Saved in Downloads/Tavora: ${fileName}`))
+        .catch(e => report((e as { code?: string }).code === 'QUOTA_EXCEEDED' ? 'This build is too big to export. Update Tavora, then try again.' : e));
 }
 async function loadFile(file: File) { if (importing)
     throw Error('Wait for the current import to finish.'); importing = true; try {

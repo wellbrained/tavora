@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.1.0-alpha.24",
+    "date": "2026-10-22",
+    "notes": [
+      "Export build under ⋯ saves the open build as a file in Downloads/Tavora, guide text included.",
+      "Load build file reads it back, here or on another PC.",
+      "Update guide now names the right site for PoE Vault guides."
+    ]
+  },
+  {
     "version": "0.1.0-alpha.23",
     "date": "2026-10-22",
     "notes": [

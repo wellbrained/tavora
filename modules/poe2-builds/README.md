@@ -30,10 +30,12 @@ module. Builds auto-save through Tavora documents, scoped to this module/game.
 A signed ZIP and a development folder have separate data by host design: load
 the file again when changing between them.
 
-The host blocks browser downloads, so build-file export is not offered in this
-alpha. Keep original files as your portable copies. Guide URL adapters and a
-host-supported export path are follow-up work. Guide text already in a loaded
-file is retained completely; unimported prose is not reconstructed.
+**⋯ > Export build** (alpha 24) saves the open build or character as
+`<name>.tavora-build.json` in Downloads/Tavora through the host's JSON export, which
+**Load build file** reads back. It keeps the guide text and the original source
+document. Tavora 0.20.7 and older accept at most 1 MiB, which large Mobalytics
+guides exceed; newer hosts accept 8 MiB. Guide text already in a loaded file is
+retained completely; unimported prose is not reconstructed.
 
 ### Guide import (alpha 20)
 

@@ -2,6 +2,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { restoreView } from './view-state';
 import { guideSections, guideSectionIndex } from './model';
 import { GuideLinks } from './guide-links';
+import { panelMenuActions } from './panel-menus';
+import type { Build } from './model';
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -56,4 +58,12 @@ it('contextual links select the current variant instead of the first chapter of 
  expect(guideSectionIndex(sections,'gear','Shared notes','Uber Endgame')).toBe(1);
  expect(guideSectionIndex(sections,'gear','Unmatched excerpt','Uber Endgame')).toBe(1);
  expect(guideSectionIndex(sections,'gear','Shared notes')).toBe(0);
+});
+
+it('offers Export build for any open build and names the guide source in Update guide', () => {
+    const guide = { title: 'X', guideImport: { source: 'PoE Vault' } } as unknown as Build;
+    expect(panelMenuActions(guide, 'tree', false)).toContain('id="export-build"');
+    expect(panelMenuActions(guide, 'tree', false)).toContain('Preview the latest PoE Vault guide');
+    expect(panelMenuActions({ ...guide, character: { name: 'C' } } as unknown as Build, 'gear', false)).toContain('Export character');
+    expect(panelMenuActions(null, 'tree', false)).not.toContain('export-build');
 });

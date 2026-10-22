@@ -77,6 +77,11 @@ describe('updating a saved guide',()=>{
   const flipped={...noIds(saved),stages:[...saved.stages].reverse()};
   expect(keptVariant(noIds(saved),flipped,0)).toBe(5);
  });
+ it('reads an exported file back as the same build',()=>{
+  // Export writes portable(build) as indented JSON; Load build file validates it again.
+  const file=JSON.stringify(portable(saved),null,2);
+  expect(validate(JSON.parse(file))).toEqual(saved);
+ });
  it('keeps the saved file identity',()=>{
   expect(prepareGuideSave(candidate,'Ice Shot',{...saved,fileId:'saved-file'}).fileId).toBe('saved-file');
  });
