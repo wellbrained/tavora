@@ -62,7 +62,7 @@ async function startCopy(cloud: Service, a: Pc) {
 describe("the cloud copy, as Tavora runs it", () => {
   it("tells Settings when it runs in the dev build's own data, so turning on asks first", async () => {
     const cloud = await service();
-    const at = await pc("Dev");
+    const at = await pc({});
     expect(tavora(cloud, at, { devData: true }).sync.view().devData).toBe(true);
     expect(tavora(cloud, at).sync.view().devData).toBe(false);
   });
