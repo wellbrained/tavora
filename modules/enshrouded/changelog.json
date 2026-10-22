@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.0-alpha.5",
+    "date": "2026-10-22",
+    "notes": [
+      "Your skill tree shows up faster when Tavora starts."
+    ]
+  },
+  {
     "version": "0.1.0-alpha.4",
     "date": "2026-10-20",
     "notes": [

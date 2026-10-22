@@ -165,8 +165,12 @@ interface Rect {
   height: number;
 }
 
-/** How long a game's panels may keep each other waiting when it opens; past it, every panel shows (each one gives up after REVEAL_CAP_MS). */
-const OPENING_CAP_MS = REVEAL_CAP_MS + 250;
+/**
+ * How long a game's panels may keep each other waiting when it opens; past it, every panel shows. Each page gives up on
+ * its own REVEAL_CAP_MS after it starts loading, which ends the wait; this only catches a page that never starts. When
+ * Tavora starts, pages start late, so a cap close to REVEAL_CAP_MS took the cover away while they still waited.
+ */
+const OPENING_CAP_MS = REVEAL_CAP_MS * 4;
 /** How long to wait for a still image of a panel before hiding it anyway. */
 const FREEZE_TIMEOUT_MS = 250;
 /** How long a development folder's build must be quiet before its panels reload. */
@@ -587,8 +591,9 @@ export class Host {
     await host.watchDevelopmentFolders();
     host.registerWindowEvents();
     host.window.once("ready-to-show", () => timings.record("startup", process.uptime() * 1000));
-    await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
+    // The last game's pages start loading with the window, and its first look already has the one loading cover.
     if (host.screen === "game") host.openCurrentGame();
+    await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
     if (library.gameStart !== "off") host.gameWatcher.start();
     void host.files.check();
     // Icons of games that have none yet are looked for quietly in the background.
@@ -2699,6 +2704,8 @@ export class Host {
     if ([...this.views.values()].some((view) => view instanceof ModuleView)) {
       this.endOpening();
       this.opening = { startedAt: performance.now(), timer: setTimeout(() => this.endOpening(true), OPENING_CAP_MS) };
+      // The host UI covers the panels from now on, not each panel with its own loader.
+      this.pushStateSoon();
     }
   }
 

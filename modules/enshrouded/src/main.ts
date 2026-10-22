@@ -82,7 +82,9 @@ async function job(run: () => Promise<void>) {
   }
 }
 async function library() {
-  const entries = await repo.list();
+  fillLibrary(await repo.list());
+}
+function fillLibrary(entries: Awaited<ReturnType<BuildRepository["list"]>>) {
   $("#build").innerHTML =
     '<option value="">' +
     esc(copy.build) +
@@ -98,15 +100,21 @@ async function library() {
 }
 async function show(next: string | null) {
   const ticket = ++loadRevision;
-  const loaded = next ? await repo.get(next) : null;
+  // Asked together: each answer takes a round trip, and they add up while Tavora starts.
+  const [loaded, entries] = await Promise.all([
+    next ? repo.get(next) : null,
+    repo.list(),
+  ]);
   if (ticket !== loadRevision) return;
   build = loaded?.build ?? null;
   documentRevision = loaded?.revision ?? 0;
   id = next;
-  await library();
+  fillLibrary(entries);
   draw();
-  await remember();
-  await sdk.panel.setContent(build && id ? { id, title: build.name } : null);
+  await Promise.all([
+    remember(),
+    sdk.panel.setContent(build && id ? { id, title: build.name } : null),
+  ]);
 }
 function remember() {
   return sdk.panel.setState({build: id, bonuses: bonusesVisible});
@@ -410,14 +418,17 @@ function setup() {
 async function start() {
   sdk = await connect();
   repo = new BuildRepository(sdk);
-  const language = await sdk.ui.getLanguage();
+  const [language, currentTheme, launch, state] = await Promise.all([
+    sdk.ui.getLanguage(),
+    sdk.ui.getTheme(),
+    sdk.panel.getLaunch(),
+    sdk.panel.getState<{ build?: string; bonuses?: boolean }>(),
+  ]);
   copy = language.startsWith("de") ? german : english;
   document.documentElement.lang = copy === german ? "de" : "en";
-  theme(await sdk.ui.getTheme());
+  theme(currentTheme);
   sdk.ui.onThemeChange(theme);
   setup();
-  const launch = await sdk.panel.getLaunch();
-  const state = await sdk.panel.getState<{ build?: string; bonuses?: boolean }>();
   bonusesVisible = state?.bonuses !== false;
   sidebar();
   const first =
