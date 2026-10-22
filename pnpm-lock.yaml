@@ -361,22 +361,6 @@ importers:
         specifier: 3.3.11
         version: 3.3.11(typescript@5.9.3)
 
-  modules/enshrouded:
-    dependencies:
-      '@tavora/official-ui':
-        specifier: workspace:*
-        version: link:../shared
-      '@tavora/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
-      i18next:
-        specifier: 26.4.3
-        version: 26.4.3(typescript@5.9.3)
-    devDependencies:
-      vite:
-        specifier: 8.3.4
-        version: 8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
-
   modules/notes:
     dependencies:
       '@fontsource-variable/jetbrains-mono':
@@ -3429,14 +3413,6 @@ packages:
   https-proxy-agent@7.0.6:
     resolution: {integrity: sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw==}
     engines: {node: '>= 14'}
-
-  i18next@26.4.3:
-    resolution: {integrity: sha512-QIIueUYS2giFVIY3hu/X5Dz7/qTzwcXE06H29m1DKVhUGVPCyT0wnsh14wEn/cTy9nZ/B6VhbDItdXotOKSO8A==}
-    peerDependencies:
-      typescript: ^5 || ^6 || ^7
-    peerDependenciesMeta:
-      typescript:
-        optional: true
 
   iconv-lite@0.6.3:
     resolution: {integrity: sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw==}
@@ -7714,10 +7690,6 @@ snapshots:
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
-
-  i18next@26.4.3(typescript@5.9.3):
-    optionalDependencies:
-      typescript: 5.9.3
 
   iconv-lite@0.6.3:
     dependencies:
