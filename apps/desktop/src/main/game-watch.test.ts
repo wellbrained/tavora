@@ -1,10 +1,8 @@
-import { EventEmitter } from "node:events";
-import type { ChildProcess } from "node:child_process";
-import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
-import { applyProbeLine, gameFolderKey, GameWatcher, probeScript, runningGames, type ProbeState } from "./game-watch";
+import { gameFolderKey, GameWatcher, POLL_SECONDS, runningGames } from "./game-watch";
 import type { InstalledGame } from "./launcher-games";
 import { addGame, emptyLibrary, liveGames, markPlayed, trashGame } from "./library";
+import type { ProgramLook } from "./program-list";
 
 const day = (n: number) => new Date(Date.UTC(2026, 9, n));
 
@@ -79,73 +77,69 @@ describe("runningGames", () => {
   });
 });
 
-describe("applyProbeLine", () => {
-  it("keeps the running programs and Steam's game, and marks the end of a look", () => {
-    const state: ProbeState = { programs: new Map(), steamAppId: null };
-    expect(applyProbeLine(state, "+42\tC:\\Games\\a.exe")).toBe(false);
-    applyProbeLine(state, "+43\tC:\\Games\\b.exe");
-    applyProbeLine(state, "+44\tnot a path");
-    applyProbeLine(state, "-42");
-    applyProbeLine(state, "s570");
-    expect(applyProbeLine(state, ".")).toBe(true);
-    expect([...state.programs]).toEqual([[43, "C:\\Games\\b.exe"]]);
-    expect(state.steamAppId).toBe(570);
-    applyProbeLine(state, "s0");
-    expect(state.steamAppId).toBeNull();
-  });
-});
-
-describe("probeScript", () => {
-  it("watches Tavora's own process and waits between looks", () => {
-    const script = probeScript(1234);
-    expect(script).toContain("GetProcessById(1234)");
-    expect(script).toContain("Start-Sleep -Seconds 3");
-    expect(script).toContain("RunningAppID");
-  });
-});
-
 describe("GameWatcher", () => {
-  const fakeChild = () => {
-    const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), kill: vi.fn() });
-    return child as unknown as ChildProcess & { stdout: PassThrough };
-  };
-  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  const FORTNITE_EXE = FORTNITE.file;
+  const look = (programs: [number, string][], steamAppId: number | null = null): ProgramLook => ({ programs: new Map(programs), steamAppId });
 
   it("reports games already running as initial, and later changes as starts and closes", async () => {
-    const library = emptyLibrary();
-    addGame(library, { name: "Fortnite" }, day(1));
-    addGame(library, { name: "Some Game", steamAppId: 570 }, day(1));
-    const child = fakeChild();
-    const changes: [string[], boolean][] = [];
-    const watcher = new GameWatcher({
-      entries: () => liveGames(library),
-      findInstalled: async () => [FORTNITE],
-      onChange: (running, initial) => changes.push([[...running], initial]),
-      spawnProbe: () => child,
-      platform: "win32",
-    });
-    watcher.start();
-    child.stdout.write("+1\tD:\\Epic\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient.exe\ns0\n.\n");
-    await flush();
-    expect(changes).toEqual([[["local-fortnite"], true]]);
-    child.stdout.write("s570\n.\n");
-    await flush();
-    child.stdout.write("-1\n.\n");
-    await flush();
-    expect(changes.slice(1)).toEqual([
-      [["local-some-game", "local-fortnite"], false],
-      [["local-some-game"], false],
-    ]);
-    watcher.stop();
-    expect(child.kill).toHaveBeenCalled();
-    expect(changes.at(-1)).toEqual([[], false]);
+    vi.useFakeTimers();
+    try {
+      const library = emptyLibrary();
+      addGame(library, { name: "Fortnite" }, day(1));
+      addGame(library, { name: "Some Game", steamAppId: 570 }, day(1));
+      let now = look([[1, FORTNITE_EXE]]);
+      const probe = vi.fn(() => now);
+      const changes: [string[], boolean][] = [];
+      const watcher = new GameWatcher({
+        entries: () => liveGames(library),
+        findInstalled: async () => [FORTNITE],
+        onChange: (running, initial) => changes.push([[...running], initial]),
+        probe,
+        platform: "win32",
+      });
+      watcher.start();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(changes).toEqual([[["local-fortnite"], true]]);
+      now = look([[1, FORTNITE_EXE]], 570);
+      await vi.advanceTimersByTimeAsync(POLL_SECONDS * 1000);
+      now = look([], 570);
+      await vi.advanceTimersByTimeAsync(POLL_SECONDS * 1000);
+      expect(changes.slice(1)).toEqual([
+        [["local-some-game", "local-fortnite"], false],
+        [["local-some-game"], false],
+      ]);
+      watcher.stop();
+      expect(changes.at(-1)).toEqual([[], false]);
+      const looks = probe.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(POLL_SECONDS * 1000 * 3);
+      expect(probe).toHaveBeenCalledTimes(looks);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops looking when Windows can't be asked", async () => {
+    vi.useFakeTimers();
+    try {
+      const probe = vi.fn((): ProgramLook => {
+        throw new Error("no koffi");
+      });
+      const log = vi.fn();
+      const watcher = new GameWatcher({ entries: () => [], findInstalled: async () => [], onChange: () => undefined, probe, platform: "win32", log });
+      watcher.start();
+      await vi.advanceTimersByTimeAsync(POLL_SECONDS * 1000 * 3);
+      expect(probe).toHaveBeenCalledTimes(1);
+      expect(log).toHaveBeenCalledWith("the game watcher stopped: no koffi");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does nothing away from Windows", () => {
-    const spawnProbe = vi.fn();
-    const watcher = new GameWatcher({ entries: () => [], findInstalled: async () => [], onChange: () => undefined, spawnProbe, platform: "linux" });
+    const probe = vi.fn();
+    const watcher = new GameWatcher({ entries: () => [], findInstalled: async () => [], onChange: () => undefined, probe, platform: "linux" });
     watcher.start();
     expect(watcher.active).toBe(false);
-    expect(spawnProbe).not.toHaveBeenCalled();
+    expect(probe).not.toHaveBeenCalled();
   });
 });

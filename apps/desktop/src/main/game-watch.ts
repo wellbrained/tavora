@@ -1,7 +1,7 @@
-import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import type { GameEntry } from "./library";
 import { NOT_THE_GAME, normalizeName, type InstalledGame } from "./launcher-games";
+import { windowsProgramProbe, type ProgramLook, type ProgramProbe } from "./program-list";
 
 /**
  * Notices which games of the library are running, so Tavora can switch to one
@@ -9,8 +9,7 @@ import { NOT_THE_GAME, normalizeName, type InstalledGame } from "./launcher-game
  * read on this PC only and never sent anywhere:
  *  - Steam's own note of the game it runs (`RunningAppID` in the registry), matched by Steam id;
  *  - a running program inside the install folder of a game a launcher installed (launcher-games.ts).
- * A small PowerShell helper lists the programs every few seconds. It asks Windows only for each
- * program's path (the same limited access Task Manager uses) and reads nothing else. Windows only.
+ * Tavora looks at the running programs every few seconds (program-list.ts). Windows only.
  */
 
 /** Folder names that hold many games or a launcher, never one game's own folder. */
@@ -83,85 +82,8 @@ export function runningGames(entries: readonly GameEntry[], installed: readonly 
   return running;
 }
 
-// ── The helper ───────────────────────────────────────────────────────────
-
 /** Seconds between two looks at the running programs. */
 export const POLL_SECONDS = 3;
-
-/**
- * The PowerShell helper. It prints what changed since its last look: `+<pid>\t<path>` for a new
- * program, `-<pid>` for one that ended, `s<id>` for the game Steam runs (0 for none), and `.` after
- * each look. It ends by itself when Tavora (`parent`) is gone.
- */
-export function probeScript(parent: number): string {
-  return String.raw`
-$ErrorActionPreference = 'SilentlyContinue'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-Add-Type -TypeDefinition @'
-using System;
-using System.Text;
-using System.Runtime.InteropServices;
-public static class TavoraProgramPath {
-  [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
-  [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder name, ref uint size);
-  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
-  public static string Of(int pid) {
-    IntPtr process = OpenProcess(0x1000, false, pid);
-    if (process == IntPtr.Zero) return null;
-    try {
-      var name = new StringBuilder(1024);
-      uint size = 1024;
-      return QueryFullProcessImageName(process, 0, name, ref size) ? name.ToString() : null;
-    } finally { CloseHandle(process); }
-  }
-}
-'@
-$known = @{}
-$steam = -1
-while ($true) {
-  try { [void][System.Diagnostics.Process]::GetProcessById(${parent}) } catch { exit }
-  $now = @{}
-  foreach ($process in [System.Diagnostics.Process]::GetProcesses()) {
-    $id = $process.Id
-    $process.Dispose()
-    if ($known.ContainsKey($id)) { $now[$id] = $known[$id]; continue }
-    $file = [TavoraProgramPath]::Of($id)
-    if ($file) { $now[$id] = $file; [Console]::Out.WriteLine("+$id" + [char]9 + $file) }
-  }
-  foreach ($id in $known.Keys) { if (-not $now.ContainsKey($id)) { [Console]::Out.WriteLine("-$id") } }
-  $known = $now
-  $running = [Microsoft.Win32.Registry]::GetValue('HKEY_CURRENT_USER\Software\Valve\Steam', 'RunningAppID', 0)
-  if ($null -eq $running) { $running = 0 }
-  if ($running -ne $steam) { $steam = $running; [Console]::Out.WriteLine("s$steam") }
-  [Console]::Out.WriteLine('.')
-  [Console]::Out.Flush()
-  Start-Sleep -Seconds ${POLL_SECONDS}
-}
-`;
-}
-
-/** What the helper reported so far. */
-export interface ProbeState {
-  programs: Map<number, string>;
-  steamAppId: number | null;
-}
-
-/** Applies one line of the helper. Returns true at the end of a look, when the state is whole. */
-export function applyProbeLine(state: ProbeState, line: string): boolean {
-  if (line === ".") return true;
-  if (line.startsWith("+")) {
-    const tab = line.indexOf("\t");
-    const pid = Number(line.slice(1, tab));
-    const file = line.slice(tab + 1);
-    if (tab > 1 && Number.isInteger(pid) && path.win32.isAbsolute(file)) state.programs.set(pid, file);
-  } else if (line.startsWith("-")) {
-    state.programs.delete(Number(line.slice(1)));
-  } else if (line.startsWith("s")) {
-    const id = Number(line.slice(1));
-    state.steamAppId = Number.isInteger(id) && id > 0 ? id : null;
-  }
-  return false;
-}
 
 export interface GameWatcherOptions {
   /** The library's entries now; read at every look, so renames and new games count straight away. */
@@ -173,33 +95,24 @@ export interface GameWatcherOptions {
    * programs are known, is `initial`: games already running then were not just started.
    */
   onChange: (running: ReadonlySet<string>, initial: boolean) => void;
-  /** Starts the helper; a test stands in for PowerShell. */
-  spawnProbe?: (script: string) => ChildProcess;
+  /** Looks at the running programs; a test stands in for Windows. */
+  probe?: ProgramProbe;
   platform?: NodeJS.Platform;
   log?: (line: string) => void;
 }
 
 /** Looks for the installed games again this often, for games installed while Tavora runs. */
 const INSTALLED_REFRESH_MS = 30 * 60 * 1000;
-/** A helper that ended by itself is started again at most this many times. */
-const MAX_RESTARTS = 3;
-
-function spawnPowerShell(script: string): ChildProcess {
-  return spawn("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], {
-    stdio: ["ignore", "pipe", "ignore"],
-    windowsHide: true,
-  });
-}
 
 export class GameWatcher {
-  private child: ChildProcess | null = null;
-  private state: ProbeState = { programs: new Map(), steamAppId: null };
+  private probe: ProgramProbe | null = null;
+  private state: ProgramLook = { programs: new Map(), steamAppId: null };
   private installed: InstalledGame[] = [];
   private running = new Set<string>();
   private refreshTimer: ReturnType<typeof setInterval> | undefined;
-  private restarts = 0;
+  private lookTimer: ReturnType<typeof setInterval> | undefined;
   private stopped = true;
-  /** The installed games were looked for, and the helper finished a first look. */
+  /** The installed games were looked for, and the programs were looked at once. */
   private installedKnown = false;
   private looked = false;
   private reported = false;
@@ -213,23 +126,24 @@ export class GameWatcher {
   start(): void {
     if (!this.stopped || (this.options.platform ?? process.platform) !== "win32") return;
     this.stopped = false;
-    this.restarts = 0;
     this.installedKnown = false;
     this.looked = false;
     this.reported = false;
     void this.refreshInstalled();
     this.refreshTimer = setInterval(() => void this.refreshInstalled(), INSTALLED_REFRESH_MS);
     this.refreshTimer.unref?.();
-    this.startProbe();
+    this.probe = this.options.probe ?? windowsProgramProbe();
+    this.lookTimer = setInterval(() => this.look(), POLL_SECONDS * 1000);
+    this.lookTimer.unref?.();
+    this.look();
   }
 
   stop(): void {
     if (this.stopped) return;
     this.stopped = true;
     clearInterval(this.refreshTimer);
-    const child = this.child;
-    this.child = null;
-    child?.kill();
+    clearInterval(this.lookTimer);
+    this.probe = null;
     this.state = { programs: new Map(), steamAppId: null };
     if (this.running.size) {
       this.running = new Set();
@@ -248,31 +162,19 @@ export class GameWatcher {
     this.update();
   }
 
-  private startProbe(): void {
-    const child = (this.options.spawnProbe ?? spawnPowerShell)(probeScript(process.pid));
-    this.child = child;
-    let rest = "";
-    child.stdout?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk: string) => {
-      const lines = (rest + chunk).split(/\r?\n/);
-      rest = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!applyProbeLine(this.state, line)) continue;
-        this.looked = true;
-        this.update();
-      }
-    });
-    child.on("error", (error) => this.options.log?.(`the game watcher could not start: ${error.message}`));
-    child.on("exit", () => {
-      if (this.child !== child || this.stopped) return;
-      this.child = null;
-      // The next helper's first look starts over, so nothing counts as started or closed in between.
-      this.state = { programs: new Map(), steamAppId: null };
-      this.looked = false;
-      this.reported = false;
-      if (this.restarts++ < MAX_RESTARTS) setTimeout(() => !this.stopped && !this.child && this.startProbe(), 5000).unref?.();
-      else this.options.log?.("the game watcher stopped");
-    });
+  private look(): void {
+    if (this.stopped || !this.probe) return;
+    try {
+      this.state = this.probe();
+    } catch (error) {
+      // Windows' functions could not be loaded; looking again won't help.
+      clearInterval(this.lookTimer);
+      this.probe = null;
+      this.options.log?.(`the game watcher stopped: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    this.looked = true;
+    this.update();
   }
 
   private update(): void {
