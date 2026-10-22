@@ -54,8 +54,9 @@ async function pickRecipe(event: MouseEvent, row: RecipeRow) {
   if (choice && choice !== row.recipe) emit("chooseRecipe", row.item, choice);
 }
 
-function showInCodex(item: string) {
-  void sdk.panels.open("codex", { content: { id: `item:${item}`, title: names.item(item) } }).catch(() => context.notify(t("notice.openFailed")));
+/** `id` is a Codex content id: `item:<id>` or `recipe:<id>`. */
+function showInCodex(id: string, title: string) {
+  void sdk.panels.open("codex", { content: { id, title } }).catch(() => context.notify(t("notice.openFailed")));
 }
 </script>
 
@@ -84,7 +85,7 @@ function showInCodex(item: string) {
                     type="button"
                     class="hover:text-primary focus-visible:outline-ring block max-w-full truncate text-left font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
                     :aria-label="t('results.showInCodex', { item: names.item(row.item) })"
-                    @click="showInCodex(row.item)"
+                    @click="showInCodex(`item:${row.item}`, names.item(row.item))"
                   >
                     {{ names.item(row.item) }}
                     <span v-if="madeRate(row)" class="text-muted-foreground font-normal tabular-nums">· {{ rateText(data, row.item, madeRate(row)!.perMinute, locale(), t) }}</span>
@@ -103,9 +104,16 @@ function showInCodex(item: string) {
                       <span class="truncate">{{ names.recipe(row.recipe) }}</span>
                       <ChevronDown :stroke-width="1.5" />
                     </Button>
-                    <span v-else v-tip="() => recipeTooltip(data, row.recipe, language, locale(), t)" class="text-muted-foreground min-w-0 truncate text-xs leading-6">
+                    <button
+                      v-else
+                      v-tip="() => recipeTooltip(data, row.recipe, language, locale(), t)"
+                      type="button"
+                      class="text-muted-foreground hover:text-primary focus-visible:outline-ring min-w-0 truncate text-left text-xs leading-6 focus-visible:outline-2 focus-visible:outline-offset-2"
+                      :aria-label="t('results.showInCodex', { item: names.recipe(row.recipe) })"
+                      @click="showInCodex(`recipe:${row.recipe}`, names.recipe(row.recipe))"
+                    >
                       {{ names.recipe(row.recipe) }}
-                    </span>
+                    </button>
                   </div>
                   <!-- Narrow panels: what the hidden columns hold, on one line. -->
                   <p class="text-muted-foreground mt-0.5 truncate text-xs tabular-nums @lg:hidden">
