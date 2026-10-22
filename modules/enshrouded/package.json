@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@tavora/sdk": "workspace:*",
-    "i18next": "26.4.3"
+    "i18next": "26.4.3",
+    "@tavora/official-ui": "workspace:*"
   },
   "devDependencies": {
     "vite": "8.3.4"

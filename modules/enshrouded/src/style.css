@@ -504,3 +504,9 @@ dialog input {
   border-color: #78632c66;
   font: inherit;
 }
+
+/* Shared readable tooltip type; retain each game card’s artwork and content. */
+.skill-tooltip{font-size:var(--tavora-tooltip-text-size,14px)}
+.skill-card-header h2{font-size:var(--tavora-tooltip-title-size,18px)}
+.skill-card-header p,.skill-card-body{font-size:var(--tavora-tooltip-text-size,14px)}
+.skill-tooltip footer{font-size:var(--tavora-tooltip-meta-size,14px)}

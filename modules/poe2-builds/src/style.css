@@ -200,3 +200,12 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,#d
 #character-preview{border-top:1px solid #63563c;margin-top:12px}
 .character-import [hidden]{display:none!important}
 .character-summary{flex:0 0 auto;padding:6px 10px;color:var(--host-text-muted,#b4a995);font-size:12px;line-height:1.5;border-bottom:1px solid #63563c;overflow-wrap:anywhere}
+
+/* Shared readable tooltip type; retain each game card’s artwork and content. */
+.node-tooltip{font-size:var(--tavora-tooltip-text-size,14px);max-width:min(360px,calc(100vw - 24px))}
+.node-tooltip strong{font-size:var(--tavora-tooltip-title-size,18px)}
+.inventory-tooltip{font-size:var(--tavora-tooltip-text-size,14px)}
+.inventory-tooltip-heading h3{font-size:var(--tavora-tooltip-title-size,18px)}
+.inventory-tooltip-heading p,.inventory-tooltip-hint{font-size:var(--tavora-tooltip-meta-size,14px)}
+.inventory-tooltip .mods,.inventory-tooltip .stat-list,.inventory-tooltip .item-corrupted,.inventory-tooltip .item-dps{font-size:var(--tavora-tooltip-text-size,14px)}
+.inventory-tooltip.compact .mods,.inventory-tooltip.compact .stat-list{font-size:var(--tavora-tooltip-meta-size,14px)}

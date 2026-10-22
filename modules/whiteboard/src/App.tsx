@@ -1,3 +1,4 @@
+import { installTitleTooltips } from "@tavora/official-ui/title-tooltips";
 import { connect, TavoraError, THEME_TOKENS, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cleanName, formatMegabytes, MAX_BOARD_BYTES, nextBoardName, sizeLevel, type BoardData, type BoardSummary } from "./boards";
@@ -44,6 +45,7 @@ const UNDO_MS = 10_000;
 
 /** Sets the host's colours as CSS variables, like the other official modules. */
 function applyTheme(theme: TavoraTheme): void {
+  installTitleTooltips();
   const root = document.documentElement;
   for (const name of THEME_TOKENS) {
     const value = theme.tokens?.[name];

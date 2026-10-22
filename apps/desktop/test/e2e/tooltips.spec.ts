@@ -31,6 +31,11 @@ test('hover crosses panel bounds without freezing; pin survives unrelated input,
         await expect.poll(async () => (await tooltip(app))?.visible).toBe(true);
         const state = await app.evaluate(({ BrowserWindow }) => { const host = BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().startsWith('data:text/html'))!, float = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('data:text/html'))!; const view = host.contentView.children.find(v => (v as any).webContents?.getURL().startsWith('tavora-module://local.test.tooltips/'))!; return { area: host.getContentBounds(), panel: view.getBounds(), visible: (view as any).getVisible(), tooltip: float.getBounds() }; });
         expect(state.visible).toBe(true);
+        const type = await app.evaluate(async ({ BrowserWindow }) => {
+            const tooltip = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('data:text/html'))!;
+            return tooltip.webContents.executeJavaScript('({body:getComputedStyle(document.querySelector("ul")).fontSize,heading:getComputedStyle(document.querySelector("h2")).fontSize,requirement:document.querySelector(".requirement span").getBoundingClientRect().height})');
+        });
+        expect(type.body).toBe('14px');expect(type.heading).toBe('18px');expect(type.requirement).toBeLessThan(22);
         expect(state.tooltip.x + state.tooltip.width).toBeGreaterThan(state.area.x + state.panel.x + state.panel.width);
         expect(state.tooltip.x + state.tooltip.width).toBeLessThanOrEqual(state.area.x + state.area.width);
         await input(app, 'mouseDown');

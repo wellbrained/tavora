@@ -10,7 +10,8 @@
   "dependencies": {
     "@tavora/sdk": "workspace:*",
     "@xmldom/xmldom": "0.8.15",
-    "brotli": "2.1.0"
+    "brotli": "2.1.0",
+    "@tavora/official-ui": "workspace:*"
   },
   "devDependencies": {
     "vite": "8.3.4"

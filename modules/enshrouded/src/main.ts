@@ -1,3 +1,4 @@
+import { installTitleTooltips } from "@tavora/official-ui/title-tooltips";
 import {
   TavoraError,
   connect,
@@ -295,6 +296,7 @@ async function nameBuild(rename = false) {
   });
 }
 function setup() {
+  installTitleTooltips();
   root.innerHTML =
     '<header class="toolbar"><button id="new" class="primary">' +
     esc(copy.new) +

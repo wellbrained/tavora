@@ -22,7 +22,7 @@ import {
   X,
   XCircle,
 } from "@lucide/vue";
-import { ConfirmDialog, connectModule, SegmentedControl } from "@tavora/official-ui";
+import { ConfirmDialog, connectModule, SegmentedControl, Tooltip } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
@@ -68,6 +68,7 @@ interface PanelState {
 }
 
 const SECTIONS = [
+  {id:"tooltips",title:"Tooltips",keywords:"tooltip hover help readable keyboard"},
   { id: "colours", title: "Colours", keywords: "tokens theme palette swatches radius" },
   { id: "type", title: "Typography", keywords: "text fonts headings caption mono numbers link" },
   { id: "buttons", title: "Buttons", keywords: "primary secondary ghost outline destructive danger remove link icon loading" },
@@ -93,6 +94,8 @@ const tokens = ref<Record<string, string>>({});
 const cleanup: (() => void)[] = [];
 
 // Specimen state, so every control can be played with.
+const tooltipDemo=ref({open:false,at:{x:0,y:0}});
+function showTooltipDemo(e:PointerEvent|FocusEvent){const b=(e.currentTarget as HTMLElement).getBoundingClientRect();tooltipDemo.value={open:true,at:e instanceof PointerEvent?{x:e.clientX,y:e.clientY}:{x:b.right,y:b.top}};}
 const checked = ref(true);
 const unchecked = ref(false);
 const mixed = ref<boolean | "indeterminate">("indeterminate");
@@ -272,7 +275,7 @@ function bump(by: number) {
           <Button variant="ghost" size="sm" :disabled="off">More <ChevronRight :stroke-width="1.5" /></Button>
           <Button variant="secondary" disabled><Loader2 class="animate-spin" :stroke-width="1.5" /> Saving…</Button>
         </Specimen>
-        <Specimen label="Icon only (each has a label and a native tooltip)">
+        <Specimen label="Icon only (each has a label and a shared tooltip)">
           <Button size="icon-xs" variant="ghost" aria-label="Pin" title="Pin" :disabled="off"><Pin :stroke-width="1.5" /></Button>
           <Button size="icon-sm" variant="ghost" aria-label="Edit" title="Edit" :disabled="off"><Pencil :stroke-width="1.5" /></Button>
           <Button size="icon" variant="secondary" aria-label="Settings" title="Settings" :disabled="off"><Settings :stroke-width="1.5" /></Button>
@@ -287,6 +290,7 @@ function bump(by: number) {
       </DemoSection>
 
       <!-- Text fields -->
+      <DemoSection v-if="visible.has('tooltips')" id="tooltips" :title="title('tooltips')" description="Shared readable hover help: 18 px titles, 14 px text. Works with a mouse and keyboard."><Specimen label="Hover help"><Button title="Readable help from the shared kit." :disabled="off">Hover or focus me</Button><Button @pointerenter="showTooltipDemo" @pointerleave="tooltipDemo.open=false" @focus="showTooltipDemo" @blur="tooltipDemo.open=false">Rich tooltip</Button><Tooltip :open="tooltipDemo.open" :at="tooltipDemo.at" title="A place worth exploring" description="Readable text stays beside your pointer and wraps in narrow panels." @dismiss="tooltipDemo.open=false"/></Specimen></DemoSection>
       <DemoSection v-if="visible.has('fields')" id="fields" :title="title('fields')" description="Errors show red text under the field, not only a red border.">
         <div class="flex flex-col gap-1.5">
           <Label for="pg-name">Name</Label>
