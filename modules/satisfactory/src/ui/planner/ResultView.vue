@@ -104,8 +104,9 @@ function showInCodex(id: string, title: string) {
                       <span class="truncate">{{ names.recipe(row.recipe) }}</span>
                       <ChevronDown :stroke-width="1.5" />
                     </Button>
+                    <!-- The only recipe, named like its item: the line would just repeat the name. -->
                     <button
-                      v-else
+                      v-else-if="names.recipe(row.recipe) !== names.item(row.item)"
                       v-tip="() => recipeTooltip(data, row.recipe, language, locale(), t)"
                       type="button"
                       class="text-muted-foreground hover:text-primary focus-visible:outline-ring min-w-0 truncate text-left text-xs leading-6 focus-visible:outline-2 focus-visible:outline-offset-2"
