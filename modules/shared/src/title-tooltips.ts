@@ -3,8 +3,13 @@ import Tooltip from "./components/tooltip/Tooltip";
 
 const installed = new WeakMap<Document, () => void>();
 
-/** One readable hover layer for existing official-module title hints. */
-export function installTitleTooltips(doc: Document = document): () => void {
+export interface TitleTooltipOptions {
+  /** Called when a hint appears or goes away, so a host can draw it above views that would cover it. */
+  onOpenChange?: (open: boolean) => void;
+}
+
+/** One readable hover layer for title hints, in official modules and in the host. */
+export function installTitleTooltips(doc: Document = document, options: TitleTooltipOptions = {}): () => void {
   const existing = installed.get(doc);
   if (existing) return existing;
   const container = doc.createElement("div");
@@ -19,6 +24,7 @@ export function installTitleTooltips(doc: Document = document): () => void {
 
   function hide() {
     clearTimeout(timer);
+    if (state.open) options.onOpenChange?.(false);
     state.open = false;
     if (current) {
       const ids = (current.getAttribute("aria-describedby") ?? "").split(" ").filter(value => value && value !== id);
@@ -56,6 +62,7 @@ export function installTitleTooltips(doc: Document = document): () => void {
     timer = setTimeout(() => {
       if (current !== element || !element.isConnected) return;
       state.open = true;
+      options.onOpenChange?.(true);
       const old = element.getAttribute("aria-describedby");
       element.setAttribute("aria-describedby", old ? old + " " + id : id);
     }, 180);
