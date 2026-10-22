@@ -69,6 +69,9 @@ async function show(next: Entry | null, options: { remember?: boolean } = {}) {
   detail.value?.scrollTo({ top: 0 });
 }
 
+/** Back goes to the entry before, or in a narrow panel from an entry to the list. */
+const canGoBack = computed(() => history.value.length > 0 || (narrow.value && !showList.value));
+
 function back() {
   const previous = history.value[history.value.length - 1];
   if (previous) {
@@ -118,15 +121,15 @@ onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
 
 <template>
   <div class="relative flex h-full min-h-0 flex-col" data-testid="codex">
-    <header class="border-primary/25 bg-primary/5 flex flex-none flex-col gap-2 border-b p-2" data-testid="codex-toolbar">
-      <div class="flex items-center gap-1">
+    <header class="border-primary/25 bg-primary/5 flex flex-none flex-wrap items-center gap-2 border-b p-2" data-testid="codex-toolbar">
+      <div class="flex min-w-48 flex-1 items-center gap-1">
         <Button
-          v-if="narrow && !showList"
           variant="ghost"
           size="icon-sm"
           class="flex-none"
           :aria-label="t('codex.back')"
           :title="t('codex.back')"
+          :disabled="!canGoBack"
           data-testid="codex-back"
           @click="back"
         >
@@ -159,7 +162,7 @@ onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
           </Button>
         </div>
       </div>
-      <SegmentedControl v-if="!narrow || showList" v-model="filter" :options="filters" :label="t('codex.filter')" class="self-start" />
+      <SegmentedControl v-if="!narrow || showList" v-model="filter" :options="filters" :label="t('codex.filter')" class="ml-auto flex-none" />
     </header>
 
     <div class="flex min-h-0 flex-1">
@@ -191,9 +194,6 @@ onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
       </nav>
 
       <section v-if="!narrow || !showList" ref="detail" class="min-h-0 min-w-0 flex-1 overflow-y-auto p-4" data-testid="codex-detail">
-        <div v-if="!narrow && history.length" class="mb-2">
-          <Button variant="ghost" size="sm" class="-ml-2" data-testid="codex-back" @click="back"><ArrowLeft :stroke-width="1.5" />{{ t("codex.back") }}</Button>
-        </div>
         <EntryView v-if="entry" :key="entryContentId(entry)" :entry="entry" @go="show" @plan-this="planThis" @wiki="openWiki" />
         <p v-else class="text-muted-foreground py-12 text-center text-sm">{{ t("codex.pick") }}</p>
       </section>
