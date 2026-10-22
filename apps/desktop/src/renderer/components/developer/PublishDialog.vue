@@ -36,7 +36,7 @@ const prefixProblem = computed(() => problem("prefix"));
 const notBuilt = computed(() => problem("not-built"));
 const invalid = computed(() => problem("invalid"));
 
-const title = computed(() => (view.value?.status === "published" ? t("publish.done", { version: view.value.published?.version ?? "" }) : t("publish.title", { name: module.value?.name ?? "" })));
+const title = computed(() => (view.value?.status === "published" ? t("publish.done", { version: view.value.published?.version ?? "" }) : module.value ? t("publish.title", { name: module.value.name }) : t("publish.publish")));
 const catalogLine = computed(() => {
   const catalog = view.value?.catalog;
   if (!catalog) return "";
