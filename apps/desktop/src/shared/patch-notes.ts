@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.11",
+    date: "2026-10-22",
+    title: "Tidier rail footer",
+    notes: [
+      "The focus ring on your profile and Settings no longer crowds the buttons next to it.",
+    ],
+  },
+  {
     version: "0.20.10",
     date: "2026-10-22",
     title: "Easier-to-read tooltips",
