@@ -30,6 +30,14 @@ pnpm --filter @tavora/satisfactory typecheck
 pnpm vitest run modules/satisfactory
 ```
 
+To try changes in Tavora as you make them, add this folder as a development folder and keep a build running; Tavora reloads the panels after each build:
+
+```sh
+pnpm --filter @tavora/satisfactory exec vite build --watch
+```
+
+A link (junction) inside a development folder isn't picked up; add the linked folder itself.
+
 ---
 
 Not affiliated with Coffee Stain Studios. Satisfactory and its icons are © Coffee Stain Studios.
