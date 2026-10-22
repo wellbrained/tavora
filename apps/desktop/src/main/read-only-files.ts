@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { open, readFile, realpath, mkdir } from 'node:fs/promises';
+import { open, readFile, realpath, mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { isGameId, isModuleId, isOwnerId } from '@tavora/module-schema';
 import { HostError } from './errors';
@@ -19,6 +19,19 @@ export class ReadOnlyFiles {
   constructor(userData: string, owner: string, moduleId: string, gameId: string) {
     if (!isOwnerId(owner) || !isModuleId(moduleId) || !isGameId(gameId)) throw Error('Invalid file scope');
     this.file = path.join(userData, READ_ONLY_FILES_DIR, owner, moduleId, gameId, 'sources.json');
+  }
+  /** A local picker hint, never file authority and never returned to a module. */
+  async lastPickedDirectory(): Promise<string | undefined> {
+    try {
+      const value = JSON.parse(await readFile(path.join(path.dirname(this.file), 'picker.json'), 'utf8'));
+      if (typeof value.directory === 'string' && path.isAbsolute(value.directory) && (await stat(value.directory)).isDirectory()) return value.directory;
+    } catch { /* Missing or stale hints fall back to the game folder. */ }
+    const entries = await this.entries().catch(() => ({} as Record<string, Entry>));
+    for (const entry of Object.values(entries).reverse()) {
+      const directory = path.dirname(entry.path);
+      if ((await stat(directory).catch(() => null))?.isDirectory()) return directory;
+    }
+    return undefined;
   }
   private async entries(): Promise<Record<string, Entry>> {
     try {
@@ -50,6 +63,8 @@ export class ReadOnlyFiles {
       if (!allowed()) throw new HostError('PERMISSION_DENIED','The file picker is no longer active.');
       if (Object.keys(entries).length >= 200) throw new HostError('QUOTA_EXCEEDED','Too many remembered files. Forget an unused file first.');
       const id = randomBytes(16).toString('hex'); entries[id] = entry;
+      await mkdir(path.dirname(this.file), {recursive:true});
+      await writeFileAtomic(path.join(path.dirname(this.file), 'picker.json'), JSON.stringify({directory:path.dirname(absolute)}));
       return {id,name:entry.name,size:bytes.byteLength};
     },true);
   }

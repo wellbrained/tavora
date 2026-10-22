@@ -25,3 +25,20 @@ it('bounds metadata lookup and file reads before I/O, per scope and across the h
  const stores=Array.from({length:5},(_,i)=>new ReadOnlyFiles(root,'local','local.test.map','game-'+i));const refs=await Promise.all(stores.map(store=>store.remember(file)));const all=await Promise.allSettled(stores.map((store,i)=>store.read(refs[i]!.id)));expect(all.filter(x=>x.status==='fulfilled')).toHaveLength(4);expect(all.filter(x=>x.status==='rejected')).toHaveLength(1);
  const invalid=await Promise.allSettled([files.read('f'.repeat(32)),files.read('e'.repeat(32)),files.read('d'.repeat(32))]);expect(invalid.some(x=>x.status==='rejected'&&x.reason.code==='QUOTA_EXCEEDED')).toBe(true);
 });
+
+it('remembers the picker directory across restart and forgetting a reference, scoped to its game and module',async()=>{
+ const {root,file,files}=await setup();
+ expect(await files.lastPickedDirectory()).toBeUndefined();
+ const ref=await files.remember(file);await files.forget(ref.id);
+ expect(await new ReadOnlyFiles(root,'local','local.test.map','enshrouded').lastPickedDirectory()).toBe(root);
+ expect(await new ReadOnlyFiles(root,'local','local.test.map','other-game').lastPickedDirectory()).toBeUndefined();
+ expect(await new ReadOnlyFiles(root,'local','local.other.map','enshrouded').lastPickedDirectory()).toBeUndefined();
+ const sub=path.join(root,'another');await mkdir(sub);await writeFile(path.join(sub,'character0.ksd'),'new');
+ await files.remember(path.join(sub,'character0.ksd'));expect(await files.lastPickedDirectory()).toBe(sub);
+ await rm(sub,{recursive:true});expect(await files.lastPickedDirectory()).toBeUndefined();
+});
+it('ignores corrupt picker hints and retains old reference-directory compatibility',async()=>{
+ const {root,file,files}=await setup();await files.remember(file);
+ await writeFile(path.join(root,'read-only-files','local','local.test.map','enshrouded','picker.json'),'broken');
+ expect(await files.lastPickedDirectory()).toBe(root);
+});
