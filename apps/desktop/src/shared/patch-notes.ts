@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.40",
+    date: "2026-10-22",
+    title: "Calculator fits its panel",
+    notes: [
+      "The keypad keeps a handy size, even in a tall panel.",
+      "In a tall panel, your history sits below the keys.",
+    ],
+  },
+  {
     version: "0.19.39",
     date: "2026-10-22",
     title: "Calculator",
