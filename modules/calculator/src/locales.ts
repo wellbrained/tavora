@@ -4,6 +4,11 @@ export const en = {
   connectError: "Could not connect: {error}",
   saveError: "Could not save your history: {error}",
   copyError: "Can't copy right now",
+  settingsError: "Could not save your choice: {error}",
+
+  "mode.label": "Keypad",
+  "mode.basic": "Basic",
+  "mode.plus": "Plus",
 
   "calc.display": "Sum",
   "calc.keypad": "Keypad",
@@ -34,6 +39,7 @@ export const en = {
   "history.title": "History",
   "history.empty": "Your last results show up here.",
   "history.clear": "Clear history",
+  "history.show": "Show history",
   "history.use": "Use {result}",
 };
 
@@ -42,6 +48,11 @@ export const de: Record<keyof typeof en, string> = {
   connectError: "Keine Verbindung: {error}",
   saveError: "Verlauf nicht gespeichert: {error}",
   copyError: "Kopieren klappt gerade nicht",
+  settingsError: "Auswahl nicht gespeichert: {error}",
+
+  "mode.label": "Tasten",
+  "mode.basic": "Einfach",
+  "mode.plus": "Plus",
 
   "calc.display": "Rechnung",
   "calc.keypad": "Tasten",
@@ -72,5 +83,6 @@ export const de: Record<keyof typeof en, string> = {
   "history.title": "Verlauf",
   "history.empty": "Hier siehst du deine letzten Ergebnisse.",
   "history.clear": "Verlauf löschen",
+  "history.show": "Verlauf zeigen",
   "history.use": "{result} nehmen",
 };

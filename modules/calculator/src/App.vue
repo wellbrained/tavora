@@ -1,22 +1,46 @@
 <script setup lang="ts">
-// Calculator: the sum and its result as you type, a keypad laid out like the Windows one (the keyboard works too, with
-// its shortcuts @ for √, q for x² and F9 for ±), Copy, and the game's last results.
-// The keypad keeps a calculator size; the history sits below it in a tall panel and beside it in a wide one.
+// Calculator: the sum and its result as you type, a keypad (the keyboard works too, with the Windows shortcuts @ for √,
+// q for x² and F9 for ±), Copy, and the game's last results. The toolbar switches between the Basic keypad and Plus,
+// which is laid out like the Windows one, and shows or hides the history; both choices hold in every game.
+// The keypad keeps a calculator size; the history sits beside it once the panel is wide enough for both, else below.
 // The history lives in the game's module storage, so every panel of the game shares it; a panel reads it again
 // when it shows or gets focus, since storage has no change events.
-import { Check, Copy, Delete, Trash2 } from "@lucide/vue";
+import { Check, Copy, Delete, History, Trash2 } from "@lucide/vue";
 import { connectModule, errorMessage, serial } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { copyText, EMPTY, evaluate, format, insert, press, pretty, type Entry } from "./calc";
 import { HISTORY_KEY, parseHistory, remember, type Calculation } from "./history";
 import { language, setLanguage, t } from "./i18n";
 import type { en } from "./locales";
+import { DEFAULT_SETTINGS, parseSettings, SETTINGS_KEY, type Mode, type Settings } from "./settings";
 
 type Key = { key: string; label: string; name?: keyof typeof en; kind: "digit" | "op" | "clear" | "equals" };
 
-const KEYS: Key[] = [
+const digits = (keys: string[]) => keys.map((key) => ({ key, label: key, kind: "digit" as const }));
+
+/** The classic pocket calculator. */
+const BASIC: Key[] = [
+  { key: "clear", label: "C", name: "calc.clear", kind: "clear" },
+  { key: "(", label: "(", name: "calc.open", kind: "op" },
+  { key: ")", label: ")", name: "calc.close", kind: "op" },
+  { key: "/", label: "÷", name: "calc.divide", kind: "op" },
+  ...digits(["7", "8", "9"]),
+  { key: "*", label: "×", name: "calc.times", kind: "op" },
+  ...digits(["4", "5", "6"]),
+  { key: "-", label: "−", name: "calc.minus", kind: "op" },
+  ...digits(["1", "2", "3"]),
+  { key: "+", label: "+", name: "calc.plus", kind: "op" },
+  { key: "%", label: "%", name: "calc.percent", kind: "op" },
+  { key: "0", label: "0", kind: "digit" },
+  { key: ".", label: ".", name: "calc.point", kind: "digit" },
+  { key: "=", label: "=", name: "calc.equals", kind: "equals" },
+];
+
+/** Laid out like the Windows calculator, with √, x², ± and ans. */
+const PLUS: Key[] = [
   { key: "clear", label: "C", name: "calc.clear", kind: "clear" },
   { key: "(", label: "(", name: "calc.open", kind: "op" },
   { key: ")", label: ")", name: "calc.close", kind: "op" },
@@ -25,11 +49,11 @@ const KEYS: Key[] = [
   { key: "square", label: "x²", name: "calc.square", kind: "op" },
   { key: "%", label: "%", name: "calc.percent", kind: "op" },
   { key: "*", label: "×", name: "calc.times", kind: "op" },
-  ...["7", "8", "9"].map((key) => ({ key, label: key, kind: "digit" as const })),
+  ...digits(["7", "8", "9"]),
   { key: "-", label: "−", name: "calc.minus", kind: "op" },
-  ...["4", "5", "6"].map((key) => ({ key, label: key, kind: "digit" as const })),
+  ...digits(["4", "5", "6"]),
   { key: "+", label: "+", name: "calc.plus", kind: "op" },
-  ...["1", "2", "3"].map((key) => ({ key, label: key, kind: "digit" as const })),
+  ...digits(["1", "2", "3"]),
   { key: "negate", label: "±", name: "calc.negate", kind: "op" },
   { key: "ans", label: "ans", name: "calc.ans", kind: "op" },
   { key: "0", label: "0", kind: "digit" },
@@ -49,7 +73,18 @@ const history = ref<Calculation[]>([]);
 /** Copy just worked: its button shows a tick for a moment. */
 const copied = ref(false);
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+const settings = ref<Settings>(DEFAULT_SETTINGS);
 const queue = serial();
+
+const keys = computed(() => (settings.value.mode === "basic" ? BASIC : PLUS));
+
+/** Changes a toolbar choice and keeps it for every game. */
+function choose(change: Partial<Settings>): void {
+  settings.value = { ...settings.value, ...change };
+  void sdk.value?.storage.app.set(SETTINGS_KEY, { ...settings.value }).catch((reason: unknown) => {
+    saveError.value = t("settingsError", { error: errorMessage(reason) });
+  });
+}
 
 const comma = computed(() => language.value.toLowerCase().startsWith("de"));
 const show = (text: string) => pretty(text, comma.value);
@@ -186,6 +221,7 @@ onMounted(async () => {
   try {
     const connected = await connectModule(setLanguage);
     history.value = parseHistory(await connected.storage.get(HISTORY_KEY));
+    settings.value = parseSettings(await connected.storage.app.get(SETTINGS_KEY));
     cleanup.push(connected.lifecycle.onResume(reload));
     sdk.value = connected;
   } catch (reason) {
@@ -203,9 +239,31 @@ onBeforeUnmount(() => {
   <p v-if="!sdk" class="text-muted-foreground p-4 text-sm" data-testid="status">
     {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
-  <div v-else class="@container h-full min-h-0" data-testid="calculator-app">
-    <div class="flex h-full min-h-0 flex-col items-center gap-3 p-3 landscape:flex-row landscape:items-start landscape:justify-center">
-      <section class="flex min-h-0 w-full max-w-sm flex-[0_1_26rem] flex-col gap-2 landscape:h-full landscape:max-h-[26rem] landscape:w-80 landscape:flex-none">
+  <div v-else class="@container flex h-full min-h-0 flex-col" data-testid="calculator-app">
+    <div class="flex flex-none items-center gap-2 px-3 pt-2">
+      <Tabs :model-value="settings.mode" @update:model-value="choose({ mode: $event as Mode })">
+        <TabsList :aria-label="t('mode.label')">
+          <TabsTrigger value="basic" data-testid="mode-basic">{{ t("mode.basic") }}</TabsTrigger>
+          <TabsTrigger value="plus" data-testid="mode-plus">{{ t("mode.plus") }}</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      <span class="flex-1" />
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        :class="settings.history && 'bg-accent text-accent-foreground'"
+        :aria-pressed="settings.history"
+        :aria-label="t('history.show')"
+        :title="t('history.show')"
+        data-testid="toggle-history"
+        @click="choose({ history: !settings.history })"
+      >
+        <History :stroke-width="1.5" />
+      </Button>
+    </div>
+    <p v-if="saveError" class="text-destructive flex-none px-3 pt-1 text-xs">{{ saveError }}</p>
+    <div class="flex min-h-0 flex-1 flex-col items-center gap-3 p-3 @min-[36rem]:flex-row @min-[36rem]:items-start @min-[36rem]:justify-center">
+      <section class="flex min-h-0 w-full max-w-sm flex-[0_1_26rem] flex-col gap-2 @min-[36rem]:h-full @min-[36rem]:max-h-[26rem] @min-[36rem]:w-80 @min-[36rem]:flex-none">
         <div class="bg-muted/40 flex flex-none items-start gap-1 rounded-lg border px-3 py-2">
           <div class="min-w-0 flex-1 text-right" role="status" aria-live="polite" :aria-label="t('calc.display')">
             <p class="truncate font-mono text-3xl tabular-nums" data-testid="display">{{ show(entry.text) || "0" }}</p>
@@ -231,9 +289,14 @@ onBeforeUnmount(() => {
             </Button>
           </div>
         </div>
-        <div class="grid min-h-0 flex-1 grid-cols-4 grid-rows-6 gap-1.5" role="group" :aria-label="t('calc.keypad')">
+        <div
+          class="grid min-h-0 flex-1 grid-cols-4 gap-1.5"
+          :class="keys.length > 20 ? 'grid-rows-6' : 'grid-rows-5'"
+          role="group"
+          :aria-label="t('calc.keypad')"
+        >
           <Button
-            v-for="item in KEYS"
+            v-for="item in keys"
             :key="item.key"
             :variant="VARIANT[item.kind]"
             class="h-auto min-h-8 text-lg"
@@ -249,7 +312,11 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <section class="flex min-h-24 w-full max-w-sm flex-1 flex-col gap-1 landscape:h-full landscape:max-h-[26rem] landscape:min-h-0" data-testid="history">
+      <section
+        v-if="settings.history"
+        class="flex min-h-24 w-full max-w-sm flex-1 flex-col gap-1 @min-[36rem]:h-full @min-[36rem]:max-h-[26rem] @min-[36rem]:min-h-0"
+        data-testid="history"
+      >
         <header class="flex h-8 flex-none items-center gap-1">
           <h2 class="text-muted-foreground min-w-0 flex-1 truncate text-sm font-medium">{{ t("history.title") }}</h2>
           <Button
@@ -264,7 +331,6 @@ onBeforeUnmount(() => {
             <Trash2 :stroke-width="1.5" />
           </Button>
         </header>
-        <p v-if="saveError" class="text-destructive text-xs">{{ saveError }}</p>
         <p v-if="!history.length" class="text-muted-foreground py-2 text-sm">{{ t("history.empty") }}</p>
         <ol v-else class="min-h-0 flex-1 overflow-y-auto">
           <li v-for="(item, index) in history" :key="`${index}:${item.expression}`">
