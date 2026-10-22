@@ -65,12 +65,37 @@ authors' prose is swapped for placeholder words because this repository is publi
 Website access now includes mobalytics.gg and cdn.mobalytics.gg, alongside poe.ninja.
 An update asks for these new domains before using them.
 
+### PoE Vault guides (alpha 23)
+
+**Import build** also reads PoE Vault guide URLs (`www.poe-vault.com/poe2/<class>/<ascendancy>/<guide>`)
+with plain requests, no hidden browser. The page gives the article and its planner links. Saved
+passive trees load through the public planner's own read action (`loadPassiveTreeBuild`); its ID
+changes with each site release, so the adapter reads it from the planner's scripts and retries once
+when it goes stale. Gem planner links are Brotli-compressed JSON, decoded with the bundled `brotli`
+decoder (`dist/BROTLI-LICENSE.txt`), because Chromium's DecompressionStream has no Brotli.
+
+Gems are Icy Veins index numbers whose meaning changes between planner versions.
+`tools/poevault-gems.mjs` builds `src/poevault-gems.json` from the planner's own version list,
+sharing one table between versions that number gems alike. A planner version without a table is
+left out with a note; rerun the tool when PoE Vault adds one. Gems resolve by game ID, then by exact
+name and kind. Unknown numbers are counted, never guessed.
+
+PoE Vault doesn't link trees to gem setups. Setups with the same name become one variant; the rest
+stay separate and list only in Tree or Skills (the same mechanism as PoB character profiles). Variant
+names are the only identity the site gives, so updates match by name; repeated names get a number.
+There is no gear planner: gear stays empty and the preview says so. Old hash-only tree links (patch
+0.4) and attribute picks are counted in the import notes. The adapter is "PoE Vault adapter 1 · patch 0.5".
+
+Tests use nine public guides in `test/fixtures/poevault`, made with `tools/poevault-fixture.mjs`:
+real planner data, headings and inline game names, placeholder prose. Live check:
+`POE2_POEVAULT_SMOKE_URL` in `apps/desktop/test/e2e/guide-import.spec.ts`.
+
 ### Character import (alpha 18)
 
 Choose **Add > Import character** from any panel. The labelled Add button stays
 visible before the build selector. Add and panel actions use icon-led rows with
 short descriptions; an empty library shows the add actions directly. **Import
-build** reads Mobalytics guide URLs and offers an optional file fallback.
+build** reads Mobalytics and PoE Vault guide URLs and offers an optional file fallback.
 Preview the character, edit its
 name if needed, then choose **Import as new** or an existing character to update.
 Characters appear under **My characters**, separate from **Guide builds**, with

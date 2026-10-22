@@ -1,7 +1,8 @@
 import type { TavoraSDK } from '@tavora/sdk';
 import type { Build } from './model';
 import { esc } from './html';
-import { importMobalytics, mobalyticsAddress, prepareGuideSave, type GuideImport } from './mobalytics-import';
+import { prepareGuideSave, type GuideImport } from './mobalytics-import';
+import { guideAddress } from './guide-sources';
 import { readBuildAttachment } from './build-attachment';
 import { keptVariant, variantChanges } from './guide-update';
 
@@ -19,7 +20,7 @@ export function openGuideImport(options:Options):void {
  dialog.setAttribute('aria-labelledby','guide-import-title');
  dialog.innerHTML=`<form method="dialog"><div class="character-import-heading"><h2 id="guide-import-title">Import build</h2><button value="cancel" aria-label="Close import">×</button></div></form>
  <details id="guide-entry" open><summary>Guide source</summary><label>Guide URL<input id="guide-url" type="url" placeholder="https://mobalytics.gg/poe-2/builds/ice-shot-deadeye" spellcheck="false"></label>
- <p class="character-import-help">Supported: Mobalytics PoE 2 build guides. Imports all available variants and guide text. No AI or account sign-in.</p>
+ <p class="character-import-help">Works with Mobalytics and PoE Vault build guides. Imports all variants and the guide text. No AI or sign-in.</p>
  <label>Build file (optional)<input id="guide-attachment" type="file" accept=".zip,.build,.xml,.json"></label><p class="character-import-help">If the page cannot be read, attach its planner ZIP, .build, PoB XML or saved Tavora build. The preview shows what is available.</p>
  <button id="guide-read" type="button">Preview import</button></details><p id="guide-error" role="status" aria-live="polite"></p>
  <section id="guide-preview" hidden><h3>Build preview</h3><label>Name<input id="guide-name" maxlength="200"></label><p id="guide-summary"></p>
@@ -51,9 +52,9 @@ export function openGuideImport(options:Options):void {
   const request=++serial;candidate=null;get('#guide-preview').hidden=true;read.disabled=true;status.textContent='Importing guide…';
   try {
    // Validate before making any request, including when a file is attached.
-   const address=input.value.trim()?mobalyticsAddress(input.value):null;
+   const address=input.value.trim()?guideAddress(input.value):null;
    let loaded:GuideImport;
-   try{if(!address)throw Error('Paste a guide URL or attach a build file.');loaded=await importMobalytics(address.url,options.network);}
+   try{if(!address)throw Error('Paste a guide URL or attach a build file.');loaded=await address.load(options.network);}
    catch(error){
     const file=attachment.files?.[0];if(!file)throw error;
     const build=await readBuildAttachment(file);if(build.character)throw Error('Use Import character for character files.');
@@ -64,7 +65,7 @@ export function openGuideImport(options:Options):void {
    candidate=loaded;const b=loaded.build;
    name.value=b.shortTitle;variant.innerHTML=b.stages.map((s,i)=>`<option value="${i}">${esc(s.label)}</option>`).join('');variant.value=String(b.defaultStage);
    const chapters=b.guideText?.sections||[];
-   get('#guide-summary').textContent=`${b.ascendancy||'Build'} · ${b.stages.length} variants\n${chapters.length} guide chapters · ${chapters.reduce((sum,s)=>sum+s.text.length,0).toLocaleString()} text characters\nSource: ${loaded.method==='file'?'attached build file':'Mobalytics guide'+(b.version?` for patch ${b.version}`:'')}${b.importerVersion?`\n${b.importerVersion}`:''}`;
+   get('#guide-summary').textContent=`${b.ascendancy||'Build'} · ${b.stages.length} variants\n${chapters.length} guide chapters · ${chapters.reduce((sum,s)=>sum+s.text.length,0).toLocaleString()} text characters\nSource: ${loaded.method==='file'?'attached build file':b.source+' guide'+(b.version?` for patch ${b.version}`:'')}${b.importerVersion?`\n${b.importerVersion}`:''}`;
    get('#guide-warnings').innerHTML=loaded.warnings.map(w=>`<li>${esc(w)}</li>`).join('');
    target.value=options.initial?.id||options.guides.find(g=>g.guideImport?.documentId===b.guideImport?.documentId&&b.guideImport)?.id||'';
    get('#guide-preview').hidden=false;get<HTMLDetailsElement>('#guide-entry').open=false;status.textContent='Check the build, then save.';

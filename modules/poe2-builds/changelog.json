@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.1.0-alpha.23",
+    "date": "2026-10-22",
+    "notes": [
+      "Import build now reads PoE Vault guides: passive trees, gem setups and the guide text.",
+      "A tree and a gem setup with the same name become one variant. Others show only in Tree or Skills.",
+      "PoE Vault has no gear planner, so gear stays empty and the preview says so.",
+      "The module now asks to reach www.poe-vault.com."
+    ]
+  },
+  {
     "version": "0.1.0-alpha.22",
     "date": "2026-10-22",
     "notes": [

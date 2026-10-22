@@ -5,6 +5,8 @@ import { resolveItemIdentity } from './item-identity.js';
 const FORMAT = 'tavora.build', VERSION = 1, MAX_BYTES = 24 * 1024 * 1024;
 const text = (v, max = 200000) => typeof v === 'string' && v.length <= max ? v : '';
 const plain = v => v && typeof v === 'object' && !Array.isArray(v);
+/** Guide sites the URL importer reads, with the guide addresses each accepts. */
+const GUIDE_SOURCES = { Mobalytics: { host: 'mobalytics.gg', path: /^\/poe-2\/builds\/[a-z0-9-]+\/?$/ }, 'PoE Vault': { host: 'www.poe-vault.com', path: /^\/poe2\/[a-z0-9-]+\/[a-z0-9-]+\/[a-z0-9-]+\/?$/ } };
 const url = v => { if (!v)
     return ''; try {
     const p = new URL(v);
@@ -76,10 +78,11 @@ export function validate(document) {
     const out = { id: 'saved-' + document.buildId, fileId: document.buildId, title: buildDisplayTitle(text(b.title, 2000)), shortTitle: text(b.shortTitle, 2000) || text(b.title, 2000), source: text(b.source, 2000) || 'Saved Tavora build', kind: b.kind === 'leveling' ? 'leveling' : 'endgame', version: text(b.version, 2000), treeVersion: ['0.4', '0.5'].includes(b.treeVersion) ? b.treeVersion : '0.5', ascendancy: text(b.ascendancy, 2000) || 'Ascendancy', guideUrl: url(b.guideUrl), requestedUrl: url(b.requestedUrl), video: url(b.video), importerVersion: text(b.importerVersion, 100), importNotes: stringList(b.importNotes, 200), downloads: [], stages: [], guideText: guideText(document.guideText || b.guideText) };
     out.questSelections=questChoices(b.questSelections);
     if(typeof b.guideExport==='string'&&b.guideExport.length<=5*1024*1024)out.guideExport=b.guideExport;
-    if(plain(b.guideImport)&&b.guideImport.source==='Mobalytics'&&text(b.guideImport.documentId,200)&&Number.isFinite(Date.parse(b.guideImport.importedAt))){
+    const source=plain(b.guideImport)&&Object.hasOwn(GUIDE_SOURCES,b.guideImport.source)&&GUIDE_SOURCES[b.guideImport.source];
+    if(source&&text(b.guideImport.documentId,200)&&Number.isFinite(Date.parse(b.guideImport.importedAt))){
         const u=new URL(b.guideImport.url);
-        if(u.protocol!=='https:'||u.hostname!=='mobalytics.gg'||u.port||u.username||u.password||!/^\/poe-2\/builds\/[a-z0-9-]+\/?$/.test(u.pathname))throw Error('The guide source URL is invalid.');
-        out.guideImport={source:'Mobalytics',url:u.href,documentId:b.guideImport.documentId,revision:text(b.guideImport.revision,200),importedAt:new Date(b.guideImport.importedAt).toISOString(),variantIds:stringList(b.guideImport.variantIds,100)};
+        if(u.protocol!=='https:'||u.hostname!==source.host||u.port||u.username||u.password||!source.path.test(u.pathname))throw Error('The guide source URL is invalid.');
+        out.guideImport={source:b.guideImport.source,url:u.href,documentId:b.guideImport.documentId,revision:text(b.guideImport.revision,200),importedAt:new Date(b.guideImport.importedAt).toISOString(),variantIds:stringList(b.guideImport.variantIds,100)};
     }
     out.questStats=stringList(b.questStats,100);
     if (b.character !== undefined) {
@@ -123,6 +126,7 @@ export function validate(document) {
             if(text(s.ascendancy,200))stage.ascendancy=s.ascendancy;
             if([1,2].includes(s.weaponSet))stage.weaponSet=s.weaponSet;
         }
+        else if(['skills','tree'].includes(s.characterProfile))stage.characterProfile=s.characterProfile;
         if(text(s.ascendancy,200))stage.ascendancy=s.ascendancy;
         out.stages.push(stage);
     }

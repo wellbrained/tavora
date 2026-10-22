@@ -72,4 +72,8 @@ export function prepareCharacterSave(candidate:Build, name:string, target:Build|
  return validate(portable(output));
 }
 
-export function characterProfileIndices(build:Build,type:string):number[]{return build.stages.flatMap((s,i)=>!build.character||!s.characterProfile||s.characterProfile==='active'||s.characterProfile===type?[i]:[]);}
+/** The variants a panel lists. A panel no variant is meant for (Gear for a guide without gear) lists them all. */
+export function characterProfileIndices(build:Build,type:string):number[]{
+ const fit=build.stages.flatMap((s,i)=>!s.characterProfile||s.characterProfile==='active'||s.characterProfile===type?[i]:[]);
+ return fit.length?fit:build.stages.map((_,i)=>i);
+}

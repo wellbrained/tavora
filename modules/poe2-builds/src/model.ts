@@ -42,6 +42,7 @@ export interface Item {
     sourceStats?: Record<string, number | string | boolean>;
 }
 export interface Stage {
+    /** Which panel lists this variant; unset or active means all. Guides use tree and skills when they don't pair a tree with a gem setup. */
     characterProfile?: 'active' | 'gear' | 'skills' | 'tree';
     ascendancy?: string;
     treeVersion?: string;
@@ -82,7 +83,7 @@ export interface Guide {
 export interface Build {
     /** Public source document only, retained for portable reprocessing without re-fetching. */
     guideExport?: string;
-    guideImport?: {source:'Mobalytics';url:string;documentId:string;revision:string;importedAt:string;variantIds:string[]};
+    guideImport?: {source:'Mobalytics'|'PoE Vault';url:string;documentId:string;revision:string;importedAt:string;variantIds:string[]};
     character?: Character;
     characterExport?: string;
     questSelections?:QuestChoice[];
