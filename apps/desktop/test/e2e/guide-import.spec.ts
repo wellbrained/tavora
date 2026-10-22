@@ -40,9 +40,42 @@ test('Mobalytics guide imports through granted SDK, previews variants and surviv
   expect(await inModule(app,ID,"document.querySelectorAll('#build optgroup[label=\"Guide builds\"] option').length")).toBe(1);
   await inModule(app,ID,"document.querySelector('#build-actions').showPopover();document.querySelector('#refresh-guide').click()");
   await inModule(app,ID,"document.querySelector('#guide-url').value='https://example.test/invalid';document.querySelector('#guide-url').dispatchEvent(new Event('input'));document.querySelector('#guide-read').click()");
-  await expect.poll(()=>inModule(app,ID,"document.querySelector('#guide-error').textContent")).toContain('Choose a guide');
+  await expect.poll(()=>inModule(app,ID,"document.querySelector('#guide-error').textContent")).toContain('Paste a guide from Mobalytics or PoE Vault');
   await inModule(app,ID,"document.querySelector('.guide-import').close()");
   expect(await inModule(app,ID,"document.querySelector('#build').value")).toBe(before.id);
+  await app.close();const second=await launch(running.userData,[modules]);app=second.app;await waitForShown(app,ID);
+  expect(await inModule(app,ID,"[...document.querySelectorAll('.original-text')].map(n=>n.textContent)")).toEqual(before.chapters);
+ }finally{await app.close();}
+});
+
+test('PoE Vault guide imports trees and gem setups with plain requests, updates and survives restart',async({},info)=>{
+ test.skip(!process.env.POE2_POEVAULT_SMOKE_URL,'Set a public PoE Vault guide URL to run live source verification');
+ test.setTimeout(120000);
+ const running=await launch(undefined,[modules]);let app=running.app;
+ try{
+  const page=running.page;
+  await page.getByTestId('add-module').click();await page.getByTestId('panel-menu-toggle-'+ID).click();await page.getByTestId('open-'+ID+'-guide').click();await page.getByTestId('grant-allow').click();await expect(page.getByTestId('grant-dialog')).toHaveCount(0);await page.getByTestId('add-module-dialog').getByRole('button',{name:'Close',exact:true}).click();await waitForShown(app,ID);
+  await app.evaluate(({app})=>{(globalThis as any).__importWindows=0;app.on('browser-window-created',()=>{(globalThis as any).__importWindows++;});});
+  await inModule(app,ID,"document.querySelector('.add-build').click();document.querySelector('#import-build').click()");
+  await inModule(app,ID,`document.querySelector('#guide-url').value=${JSON.stringify(process.env.POE2_POEVAULT_SMOKE_URL)};document.querySelector('#guide-read').click()`);
+  await expect.poll(()=>inModule(app,ID,"({hidden:document.querySelector('#guide-preview').hidden,message:document.querySelector('#guide-error').textContent})"),{timeout:60000}).toMatchObject({hidden:false});
+  const preview=await inModule<{variants:number;summary:string;notes:string}>(app,ID,"({variants:document.querySelectorAll('#guide-variant option').length,summary:document.querySelector('#guide-summary').textContent,notes:document.querySelector('#guide-warnings').textContent})");
+  expect(preview.variants).toBeGreaterThan(0);
+  expect(preview.summary).toContain('PoE Vault adapter');expect(preview.notes).toContain('no gear planner');
+  const image=await app.evaluate(async({webContents})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://wellbrained.poe2-builds/'))!;return(await wc.capturePage()).toPNG().toString('base64');});
+  await writeFile(info.outputPath('poevault-preview.png'),Buffer.from(image,'base64'));
+  // Plain requests only: no hidden page is opened.
+  expect(await app.evaluate(()=>(globalThis as any).__importWindows)).toBe(0);
+  await inModule(app,ID,"document.querySelector('#guide-save').click()");
+  await expect.poll(()=>inModule(app,ID,"document.querySelector('#status').textContent")).toContain('Build saved with guide text');
+  const before=await inModule<{id:string;chapters:string[]}>(app,ID,"({id:document.querySelector('#build').value,chapters:[...document.querySelectorAll('.original-text')].map(n=>n.textContent)})");
+  expect(before.chapters.length).toBeGreaterThan(5);
+  await inModule(app,ID,"document.querySelector('#build-actions').showPopover();document.querySelector('#refresh-guide').click()");
+  await inModule(app,ID,"document.querySelector('#guide-read').click()");
+  await expect.poll(()=>inModule(app,ID,"document.querySelector('#guide-preview').hidden"),{timeout:60000}).toBe(false);
+  expect(await inModule(app,ID,"document.querySelector('#guide-target').value")).toBe(before.id);
+  await expect.poll(()=>inModule(app,ID,"document.querySelector('#guide-changes').textContent")).toContain(`${preview.variants} unchanged`);
+  await inModule(app,ID,"document.querySelector('.guide-import').close()");
   await app.close();const second=await launch(running.userData,[modules]);app=second.app;await waitForShown(app,ID);
   expect(await inModule(app,ID,"[...document.querySelectorAll('.original-text')].map(n=>n.textContent)")).toEqual(before.chapters);
  }finally{await app.close();}

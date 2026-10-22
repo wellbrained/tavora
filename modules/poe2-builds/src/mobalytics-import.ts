@@ -18,7 +18,7 @@ export const MOBALYTICS_ADAPTER={source:'Mobalytics',version:'2',patches:['0.5']
 
 export function mobalyticsAddress(input:string):{url:string;canonical:string;variant:string} {
  let u:URL;try{u=new URL(input.trim());}catch{throw Error('Paste a Mobalytics PoE 2 build URL.');}
- if(u.protocol!=='https:'||u.hostname!=='mobalytics.gg'||u.port||u.username||u.password||!/^\/poe-2\/builds\/[a-z0-9-]+\/?$/.test(u.pathname))throw Error('Choose a guide at mobalytics.gg/poe-2/builds. Other sources will be added later.');
+ if(u.protocol!=='https:'||u.hostname!=='mobalytics.gg'||u.port||u.username||u.password||!/^\/poe-2\/builds\/[a-z0-9-]+\/?$/.test(u.pathname))throw Error('Choose a build guide at mobalytics.gg/poe-2/builds.');
  const canonical=u.origin+u.pathname.replace(/\/$/,'');
  let variant='';for(const [key,value] of u.searchParams)if(/^ws-/.test(key)&&value.startsWith('activeVariantId,'))variant=value.slice('activeVariantId,'.length);
  return {url:u.href,canonical,variant};
