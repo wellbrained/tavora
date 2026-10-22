@@ -13,7 +13,7 @@ import { IconState } from "./icon-state.ts";
 import { normalize } from "./ids.ts";
 import { loadIconStore } from "./icons.ts";
 import { createBrevoMailer, createTestInbox, createTestInboxApp, type Mailer } from "./mail.ts";
-import { clientOf, createRateLimiter } from "./rate-limit.ts";
+import { clientOf } from "./rate-limit.ts";
 import { ReviewStore } from "./reviews.ts";
 import { createSteamClient } from "./steam.ts";
 import { createSubmissions } from "./submissions.ts";
@@ -92,6 +92,7 @@ const catalog = new CatalogStore(path.join(stateDir, "catalog"));
 const reviews = accountStore ? new ReviewStore(path.join(stateDir, "reviews.sqlite")) : undefined;
 console.log(`[tavora-api] ${catalog.index().length} modules in the catalog.`);
 
+let testRequests = 0;
 const app = createApp({
   db,
   icons,
@@ -105,8 +106,6 @@ const app = createApp({
           ...(copies ? { copies } : {}),
           ...(reviews ? { reviews } : {}),
           ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
-          // With the local test inbox, the app tests sign in many PCs within an hour from one address.
-          ...(testInbox ? { codeRateLimiter: createRateLimiter({ limit: 100, windowMs: 3_600_000 }) } : {}),
           // Discord login: Tavora's public Discord app, no secret; DISCORD_API only for a pretend Discord in tests.
           discord: createDiscordClient(process.env.DISCORD_API ? { api: process.env.DISCORD_API } : {}),
         },
@@ -116,7 +115,9 @@ const app = createApp({
   ...(maintainerEmail ? { maintainerEmail } : {}),
   ...(steamKey ? { steam: createSteamClient({ key: steamKey }) } : {}),
   // An IPv6 client counts by its /64 (clientOf), so new addresses from one connection share one limit.
-  clientKey: (request) => (behindProxy ? clientOf(request.headers.get("x-forwarded-for")?.split(",")[0]) : null) ?? "shared",
+  // With the local test inbox every request counts as its own client: the e2e suite runs many PCs from one
+  // address for minutes, and the per-client limits would cut it off part way. Unit tests cover the limits.
+  clientKey: testInbox ? () => `test-${testRequests++}` : (request) => (behindProxy ? clientOf(request.headers.get("x-forwarded-for")?.split(",")[0]) : null) ?? "shared",
 });
 
 serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
