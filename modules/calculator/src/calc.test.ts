@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EMPTY, evaluate, format, insert, press, pretty, type Entry } from "./calc";
+import { copyText, EMPTY, evaluate, format, insert, press, pretty, type Entry } from "./calc";
 
 const value = (text: string) => {
   const outcome = evaluate(text);
@@ -92,5 +92,61 @@ describe("pretty", () => {
   it("shows the signs a player knows", () => {
     expect(pretty("-2*3/4")).toBe("−2×3÷4");
     expect(pretty("1.5+2", true)).toBe("1,5+2");
+  });
+
+  it("groups thousands, not decimals", () => {
+    expect(pretty("1234567.12345+999")).toBe("1,234,567.12345+999");
+    expect(pretty("1234567.5", true)).toBe("1.234.567,5");
+    expect(pretty("1000.")).toBe("1,000.");
+  });
+});
+
+describe("square, root and sign", () => {
+  it("work on the number just typed", () => {
+    expect(type(["2", "+", "9", "sqrt"])).toBe("2+√(9)");
+    expect(type(["2", "+", "3", "square"])).toBe("2+3²");
+    expect(type(["2", "*", "3", "negate"])).toBe("2*-3");
+    expect(type(["2", "*", "3", "negate", "negate"])).toBe("2*3");
+  });
+
+  it("turn a plus into a minus and back", () => {
+    expect(type(["5", "+", "3", "negate"])).toBe("5-3");
+    expect(type(["5", "-", "3", "negate"])).toBe("5+3");
+  });
+
+  it("work on the bracket just closed", () => {
+    expect(type(["(", "2", "+", "3", ")", "square"])).toBe("(2+3)²");
+    expect(type(["(", "2", "+", "3", ")", "sqrt"])).toBe("√(2+3)");
+    expect(type(["2", "*", "(", "1", ")", "+", "(", "4", ")", "negate"])).toBe("2*(1)-(4)");
+  });
+
+  it("work on the result after =", () => {
+    const done: Entry = { text: "-3", fresh: true };
+    expect(type(["square"], done)).toBe("(-3)²");
+    expect(type(["sqrt"], { text: "16", fresh: true })).toBe("√(16)");
+    expect(type(["negate"], done)).toBe("3");
+  });
+
+  it("do nothing after an operator; ± on nothing starts a minus", () => {
+    expect(type(["5", "+", "sqrt", "square"])).toBe("5+");
+    expect(type(["negate", "4"])).toBe("-4");
+  });
+
+  it("add up", () => {
+    expect(value("√(9)+3²")).toBe("12");
+    expect(value("(-3)²")).toBe("9");
+    expect(value("-3²")).toBe("-9");
+    expect(value("2√(16)")).toBe("8");
+    expect(value("√(2+2)²")).toBe("4");
+    expect(value("√(-4)")).toBe("negativeRoot");
+    expect(type(["3", "square", "2"])).toBe("3²*2");
+  });
+});
+
+describe("copyText", () => {
+  it("is the plain result, no grouping", () => {
+    expect(copyText({ text: "1000*1.5", fresh: false })).toBe("1500");
+    expect(copyText({ text: "1234.5", fresh: true }, true)).toBe("1234,5");
+    expect(copyText({ text: "2+", fresh: false })).toBeNull();
   });
 });

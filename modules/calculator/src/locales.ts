@@ -3,6 +3,7 @@ export const en = {
   loading: "Loading…",
   connectError: "Could not connect: {error}",
   saveError: "Could not save your history: {error}",
+  copyError: "Can't copy right now",
 
   "calc.display": "Sum",
   "calc.keypad": "Keypad",
@@ -17,11 +18,18 @@ export const en = {
   "calc.open": "Open bracket",
   "calc.close": "Close bracket",
   "calc.point": "Point",
+  "calc.sqrt": "Square root",
+  "calc.square": "Squared",
+  "calc.negate": "Plus or minus",
+  "calc.ans": "Last result",
+  "calc.copy": "Copy result",
+  "calc.copied": "Copied!",
 
   "error.divide": "Can't divide by 0",
   "error.invalid": "That doesn't add up",
   "error.tooBig": "Too big to show",
   "error.incomplete": "Not finished yet",
+  "error.negativeRoot": "No root of a minus number",
 
   "history.title": "History",
   "history.empty": "Your last results show up here.",
@@ -33,6 +41,7 @@ export const de: Record<keyof typeof en, string> = {
   loading: "Lädt…",
   connectError: "Keine Verbindung: {error}",
   saveError: "Verlauf nicht gespeichert: {error}",
+  copyError: "Kopieren klappt gerade nicht",
 
   "calc.display": "Rechnung",
   "calc.keypad": "Tasten",
@@ -47,11 +56,18 @@ export const de: Record<keyof typeof en, string> = {
   "calc.open": "Klammer auf",
   "calc.close": "Klammer zu",
   "calc.point": "Komma",
+  "calc.sqrt": "Wurzel",
+  "calc.square": "Hoch 2",
+  "calc.negate": "Plus oder minus",
+  "calc.ans": "Letztes Ergebnis",
+  "calc.copy": "Ergebnis kopieren",
+  "calc.copied": "Kopiert!",
 
   "error.divide": "Durch 0 geht nicht",
   "error.invalid": "Das geht nicht auf",
   "error.tooBig": "Zu groß zum Anzeigen",
   "error.incomplete": "Noch nicht fertig",
+  "error.negativeRoot": "Keine Wurzel aus Minuszahlen",
 
   "history.title": "Verlauf",
   "history.empty": "Hier siehst du deine letzten Ergebnisse.",

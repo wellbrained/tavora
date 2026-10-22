@@ -588,17 +588,24 @@ test("calculator: works out sums from keys and the keyboard, and keeps the last 
   await expect.poll(() => text("display")).toBe("84");
   await expect.poll(() => results()).toEqual(["84"]);
 
+  // x² works on the result, and big numbers show their thousands.
+  await click(app, CALCULATOR, `[data-testid="key-square"]`);
+  await expect.poll(() => text("display")).toBe("84²");
+  await expect.poll(() => text("preview")).toBe("= 7,056");
+  await click(app, CALCULATOR, `[data-testid="key-="]`);
+  await expect.poll(() => results()).toEqual(["7,056", "84"]);
+
   // The keyboard works too, and a sum that can't be worked out says why.
   for (const key of ["/", "0", "Enter"]) await inModule(app, CALCULATOR, `window.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(key)} }))`);
   await expect.poll(() => text("preview")).toBe("Can't divide by 0");
-  await expect.poll(() => results()).toEqual(["84"]);
+  await expect.poll(() => results()).toEqual(["7,056", "84"]);
 
   await app.close();
   const again = await launch(userData);
   await openGame(again.page, "poe2");
   await expect(panels(again.page, CALCULATOR)).toHaveCount(1);
   await ready(again.app, CALCULATOR, "history-item");
-  await expect.poll(() => results(again.app)).toEqual(["84"]);
+  await expect.poll(() => results(again.app)).toEqual(["7,056", "84"]);
   await click(again.app, CALCULATOR, `[data-testid="clear-history"]`);
   await expect.poll(() => results(again.app)).toEqual([]);
   await again.app.close();
