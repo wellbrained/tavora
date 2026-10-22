@@ -55,6 +55,7 @@ import { StarRating } from "@tavora/official-ui/components/ui/star-rating";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
+import { ZoomPane } from "@tavora/official-ui/components/ui/zoom-pane";
 import { THEME_TOKENS, type TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import DemoSection from "./DemoSection.vue";
@@ -73,6 +74,7 @@ const SECTIONS = [
   { id: "choices", title: "Choices", keywords: "checkbox switch radio segmented select dropdown combobox autocomplete search slider" },
   { id: "ratings", title: "Star rating", keywords: "stars rating review score" },
   { id: "tabs", title: "Tabs", keywords: "tabs views" },
+  { id: "zoom", title: "Pan and zoom", keywords: "zoom pan drag pinch fit graph map canvas viewport" },
   { id: "status", title: "Badges and status", keywords: "badge chip tag status dot kbd shortcut" },
   { id: "progress", title: "Progress and loading", keywords: "progress spinner skeleton loading" },
   { id: "menus", title: "Menus", keywords: "dropdown menu context right-click submenu actions" },
@@ -113,6 +115,9 @@ const sort = ref("recent");
 const selectedRow = ref("b");
 const confirming = ref(false);
 const renaming = ref(false);
+// Steps of a made-up production line for the pan and zoom specimen.
+const STEPS = ["Iron Ore", "Iron Ingot", "Iron Rod", "Screw", "Reinforced Plate", "Modular Frame"];
+const pressed = ref<string>();
 
 const query = computed(() => panel.value.filter.trim().toLowerCase());
 const visible = computed(() => {
@@ -438,6 +443,22 @@ function bump(by: number) {
           <TabsContent value="skills" class="text-muted-foreground text-sm">Skill gems and supports.</TabsContent>
           <TabsContent value="gear" class="text-muted-foreground text-sm">What to wear, slot by slot.</TabsContent>
         </Tabs>
+      </DemoSection>
+
+      <!-- Pan and zoom -->
+      <DemoSection v-if="visible.has('zoom')" id="zoom" :title="title('zoom')" description="Drag to move, Ctrl + scroll or pinch to zoom. A plain scroll keeps scrolling the page.">
+        <Specimen label="Wide content, starting at its right end when it doesn't fit at 60 %" column>
+          <ZoomPane class="h-64" align="end" :fit-floor="0.6" label="Production line">
+            <div class="flex items-center gap-10 p-4">
+              <div v-for="step in STEPS" :key="step" class="bg-card flex w-44 flex-none flex-col gap-2 rounded-lg border p-3">
+                <span class="font-medium">{{ step }}</span>
+                <span class="text-muted-foreground text-xs">60 / min</span>
+                <Button size="xs" variant="secondary" :disabled="off" @click="pressed = step">Pick</Button>
+              </div>
+            </div>
+          </ZoomPane>
+          <p class="text-muted-foreground text-xs">{{ pressed ? `Picked ${pressed}.` : "Buttons inside still work." }}</p>
+        </Specimen>
       </DemoSection>
 
       <!-- Badges and status -->
