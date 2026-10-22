@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.41",
+    date: "2026-10-22",
+    title: "Bigger calculator history",
+    notes: [
+      "The History heading, the clear button and your saved results are bigger and easier to read.",
+    ],
+  },
+  {
     version: "0.19.40",
     date: "2026-10-22",
     title: "Calculator fits its panel",
