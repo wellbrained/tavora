@@ -68,10 +68,10 @@ interface PanelState {
 }
 
 const SECTIONS = [
-  {id:"tooltips",title:"Tooltips",keywords:"tooltip hover help readable keyboard"},
   { id: "colours", title: "Colours", keywords: "tokens theme palette swatches radius" },
   { id: "type", title: "Typography", keywords: "text fonts headings caption mono numbers link" },
   { id: "buttons", title: "Buttons", keywords: "primary secondary ghost outline destructive danger remove link icon loading" },
+  { id: "tooltips", title: "Tooltips", keywords: "tooltip hover help readable keyboard" },
   { id: "fields", title: "Text fields", keywords: "input textarea search label hint error" },
   { id: "choices", title: "Choices", keywords: "checkbox switch radio segmented select dropdown combobox autocomplete search slider" },
   { id: "ratings", title: "Star rating", keywords: "stars rating review score" },
@@ -289,8 +289,9 @@ function bump(by: number) {
         </Specimen>
       </DemoSection>
 
-      <!-- Text fields -->
+      <!-- Tooltips -->
       <DemoSection v-if="visible.has('tooltips')" id="tooltips" :title="title('tooltips')" description="Shared readable hover help: 18 px titles, 14 px text. Works with a mouse and keyboard."><Specimen label="Hover help"><Button title="Readable help from the shared kit." :disabled="off">Hover or focus me</Button><Button @pointerenter="showTooltipDemo" @pointerleave="tooltipDemo.open=false" @focus="showTooltipDemo" @blur="tooltipDemo.open=false">Rich tooltip</Button><Tooltip :open="tooltipDemo.open" :at="tooltipDemo.at" title="A place worth exploring" description="Readable text stays beside your pointer and wraps in narrow panels." @dismiss="tooltipDemo.open=false"/></Specimen></DemoSection>
+      <!-- Text fields -->
       <DemoSection v-if="visible.has('fields')" id="fields" :title="title('fields')" description="Errors show red text under the field, not only a red border.">
         <div class="flex flex-col gap-1.5">
           <Label for="pg-name">Name</Label>

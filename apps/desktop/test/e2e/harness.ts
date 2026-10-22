@@ -252,3 +252,8 @@ export async function waitForShown(app: ElectronApplication, moduleId: string): 
     )
     .toBe(true);
 }
+
+/** A hover hint's text. The shared tooltip layer moves a `title` into `data-tavora-tooltip` once it shows or changes. */
+export function hintOf(locator: import("@playwright/test").Locator): Promise<string | null> {
+  return locator.evaluate((element) => element.getAttribute("data-tavora-tooltip") || element.getAttribute("title"));
+}

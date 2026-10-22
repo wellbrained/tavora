@@ -7,7 +7,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { expectModuleText, inModule, launch, newUserData, panels, typeInModule } from "./harness";
+import { expectModuleText, hintOf, inModule, launch, newUserData, panels, typeInModule } from "./harness";
 
 const PANELS = "local.example.panels-module";
 
@@ -33,7 +33,7 @@ test("each panel type opens its own page, named on its tab", async () => {
   await addPanel(page, "planner");
   await expect(panels(page, PANELS)).toHaveCount(1);
   await expect(page.locator(`[data-panel-tab][data-panel-type="planner"]`)).toContainText("Build planner");
-  await expect(page.locator(`[data-panel-tab][data-panel-type="planner"]`)).toHaveAttribute("title", "Build planner · Panel Types Example");
+  await expect.poll(() => hintOf(page.locator(`[data-panel-tab][data-panel-type="planner"]`))).toBe("Build planner · Panel Types Example");
   await expectModuleText(app, PANELS, "panel-type", "Build planner");
   await expectModuleText(app, PANELS, "page", "Page: planner.html");
 
@@ -104,7 +104,7 @@ test("each panel keeps the content it shows, and its tab names it on hover", asy
   await addPanel(page, "planner");
   await expectModuleText(app, PANELS, "launch", "add: the player just added this panel, so it picked the build used last");
   await expect(tabs.nth(0)).toHaveAttribute("data-content", ICE_SHOT);
-  await expect(tabs.nth(0)).toHaveAttribute("title", `Build planner · Panel Types Example\n${ICE_SHOT}`);
+  await expect.poll(() => hintOf(tabs.nth(0))).toBe(`Build planner · Panel Types Example\n${ICE_SHOT}`);
   await pickBuild(app, "lightning-arrow", 0);
   await expect(tabs.nth(0)).toHaveAttribute("data-content", "Lightning Arrow Invoker");
 

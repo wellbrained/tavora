@@ -1,19 +1,17 @@
 <script setup lang="ts">
-// The name of a game or folder beside its icon in the compact rail. It replaces the system's small tooltip,
-// which is tiny and blurry: this one is large, high-contrast and appears at once.
+// The name of a game or folder beside its icon in the compact rail, shown with the shared kit tooltip.
 //
 // Module panels are views drawn above the host page, so a label over the workspace would be hidden behind them.
 // While a tooltip is open it counts as an open menu: the host freezes and hides the panels, as it does for menus.
-import { Folder } from "@lucide/vue";
-import { onBeforeUnmount } from "vue";
+import { Tooltip } from "@tavora/official-ui/components/tooltip";
+import { onBeforeUnmount, ref, watch } from "vue";
 import { t } from "../i18n";
 import { useFloating } from "../host";
-import { TooltipArrow, TooltipContent, TooltipPortal, TooltipRoot, TooltipTrigger } from "reka-ui";
 
-defineProps<{
+const props = defineProps<{
   text: string;
   disabled?: boolean;
-  /** A folder: marked with a folder glyph, and `lines` are the games inside it. */
+  /** A folder: `lines` are the games inside it. */
   folder?: boolean;
   lines?: string[];
   /** How many more games the folder holds than `lines` lists. */
@@ -22,45 +20,70 @@ defineProps<{
   hint?: string;
 }>();
 
+const open = ref(false);
+const at = ref({ x: 0, y: 0 });
 const setFloating = useFloating();
+let delay: ReturnType<typeof setTimeout> | undefined;
 let release: ReturnType<typeof setTimeout> | undefined;
-/** Closing waits a moment, so moving from one icon to the next does not show and hide the panels each time. */
-function onOpenChange(open: boolean) {
-  clearTimeout(release);
-  if (open) setFloating(true);
-  else release = setTimeout(() => setFloating(false), 400);
+
+function show(trigger: Element | null) {
+  if (props.disabled || !trigger || open.value) return;
+  clearTimeout(delay);
+  delay = setTimeout(() => {
+    // Beside the icon, its top in line with the icon's top (the tooltip sits 12px below the point).
+    const bounds = trigger.getBoundingClientRect();
+    at.value = { x: bounds.right - 6, y: bounds.top - 12 };
+    clearTimeout(release);
+    setFloating(true);
+    open.value = true;
+  }, 150);
 }
-onBeforeUnmount(() => clearTimeout(release));
+/** Closing waits a moment, so moving from one icon to the next does not show and hide the panels each time. */
+function hide() {
+  clearTimeout(delay);
+  if (!open.value) return;
+  open.value = false;
+  release = setTimeout(() => setFloating(false), 400);
+}
+function leave(event: PointerEvent | FocusEvent) {
+  const wrapper = event.currentTarget as HTMLElement;
+  if (!(event.relatedTarget instanceof Node && wrapper.contains(event.relatedTarget))) hide();
+}
+function focus(event: FocusEvent) {
+  if ((event.target as Element).matches(":focus-visible")) show((event.currentTarget as HTMLElement).firstElementChild);
+}
+watch(() => props.disabled, (disabled) => disabled && hide());
+onBeforeUnmount(() => {
+  clearTimeout(delay);
+  clearTimeout(release);
+});
 </script>
 
 <template>
-  <TooltipRoot :disabled="disabled" @update:open="onOpenChange">
-    <TooltipTrigger as-child><slot /></TooltipTrigger>
-    <TooltipPortal>
-      <TooltipContent
-        side="right"
-        :side-offset="9"
-        class="bg-popover text-popover-foreground data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 z-50 max-w-80 rounded-lg border px-3.5 py-2 text-base leading-snug font-semibold tracking-normal break-words antialiased shadow-xl shadow-black/50 duration-100"
-        data-testid="rail-tooltip"
-      >
-        <span class="flex items-center gap-2">
-          <Folder v-if="folder" class="text-muted-foreground size-4 flex-none" :stroke-width="1.75" aria-hidden="true" />
-          {{ text }}
-        </span>
-        <p v-if="hint" class="text-muted-foreground mt-0.5 text-sm font-normal">{{ hint }}</p>
-        <ul v-if="folder" class="text-muted-foreground mt-1.5 flex flex-col gap-0.5 text-sm font-normal" data-testid="rail-tooltip-games">
-          <li v-for="line in lines" :key="line" class="truncate">{{ line }}</li>
-          <li v-if="more" class="text-xs">{{ t("rail.folderMore", { count: more }) }}</li>
-          <li v-if="!lines?.length" class="text-xs">{{ t("rail.emptyFolder") }}</li>
-        </ul>
-        <!-- A pointer from the label to its icon; its two slanted sides carry the label's border. -->
-        <TooltipArrow as-child>
-          <svg width="20" height="10" viewBox="0 0 20 10" aria-hidden="true" style="margin-top: -1px">
-            <path d="M0 0H20L10 10Z" class="fill-popover" />
-            <path d="M0 0L10 10L20 0" class="stroke-border fill-none" stroke-width="1.5" />
-          </svg>
-        </TooltipArrow>
-      </TooltipContent>
-    </TooltipPortal>
-  </TooltipRoot>
+  <span
+    class="contents"
+    @pointerover="show(($event.currentTarget as HTMLElement).firstElementChild)"
+    @pointerout="leave"
+    @pointerdown="hide"
+    @focusin="focus"
+    @focusout="leave"
+  >
+    <slot />
+    <Tooltip :open="open" :at="at" :title="text" :description="hint" @dismiss="hide">
+      <ul v-if="folder" class="rail-tooltip-games" data-testid="rail-tooltip-games">
+        <li v-for="line in lines" :key="line" class="truncate">{{ line }}</li>
+        <li v-if="more">{{ t("rail.folderMore", { count: more }) }}</li>
+        <li v-if="!lines?.length">{{ t("rail.emptyFolder") }}</li>
+      </ul>
+    </Tooltip>
+  </span>
 </template>
+
+<style scoped>
+.rail-tooltip-games {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted-foreground);
+}
+</style>

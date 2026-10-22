@@ -28,7 +28,8 @@ export default defineComponent({
       position.value = first;
       await nextTick();
       if (version !== generation || !card.value) return;
-      position.value = tooltipPosition(props.at, first.width, card.value.getBoundingClientRect().height, { width: innerWidth, height: innerHeight });
+      const measured = card.value.getBoundingClientRect();
+      position.value = tooltipPosition(props.at, measured.width, measured.height, { width: innerWidth, height: innerHeight });
       ready.value = true;
     }
     watch(() => [props.open, props.at.x, props.at.y, props.title, props.description], place, { immediate: true });
@@ -49,7 +50,7 @@ export default defineComponent({
     });
     return () => h(Teleport, { to: 'body' }, props.open ? [h('section', {
       id: props.id, ref: card, role: 'tooltip', 'data-slot': 'tooltip', class: 'tavora-tooltip',
-      style: [TOOLTIP_TOKENS, { left: position.value.left + 'px', top: position.value.top + 'px', width: position.value.width + 'px', visibility: ready.value ? 'visible' : 'hidden' }],
+      style: [TOOLTIP_TOKENS, { left: position.value.left + 'px', top: position.value.top + 'px', maxWidth: position.value.width + 'px', visibility: ready.value ? 'visible' : 'hidden' }],
     }, [props.title ? h('h2', props.title) : null, props.description ? h('p', props.description) : null, slots.default?.()])] : []);
   },
 });

@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { expectModuleText, launch, newUserData, openGame, openModule, PLAYGROUND, seedLibrary, VUE } from "./harness";
+import { expectModuleText, hintOf, launch, newUserData, openGame, openModule, PLAYGROUND, seedLibrary, VUE } from "./harness";
 
 const ID = "devtest.tracker";
 
@@ -194,7 +194,7 @@ test("an example copied into another folder adds its project as a project folder
 
     const folders = page.getByTestId("development-folder");
     await expect(folders).toHaveCount(1);
-    await expect(folders.getByTestId("development-folder-path")).toHaveAttribute("title", path.join(elsewhere, "my-vue-module"));
+    await expect.poll(() => hintOf(folders.getByTestId("development-folder-path"))).toBe(path.join(elsewhere, "my-vue-module"));
     await expect(folders.getByTestId("development-project-status")).toHaveText("Not built yet. Run npm run dev in my-vue-module and leave it running.");
   } finally {
     await app.close();

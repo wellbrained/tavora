@@ -450,6 +450,20 @@ export function useFloating(): (open: boolean) => void {
   return set;
 }
 
+let hintOpen = false;
+let hintRelease: ReturnType<typeof setTimeout> | undefined;
+/** For the page's hover hints, which float like a menu. Closing waits a moment, so moving from one hint to the next does not show and hide the panels each time. */
+export function setHintFloating(open: boolean): void {
+  clearTimeout(hintRelease);
+  const set = (value: boolean) => {
+    if (value === hintOpen) return;
+    hintOpen = value;
+    openMenus.value += value ? 1 : -1;
+  };
+  if (open) set(true);
+  else hintRelease = setTimeout(() => set(false), 400);
+}
+
 export const overlayOpen = computed(
   () =>
     openMenus.value > 0 ||

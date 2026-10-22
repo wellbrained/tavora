@@ -50,3 +50,29 @@ test('shared module hints support pointer, keyboard, dynamic labels and narrow p
     await writeFile(info.outputPath('shared-tooltip-narrow.png'),Buffer.from(png,'base64'));
   } finally { await app.close(); }
 });
+
+test('the host shows its own hints and rail labels with the shared tooltip', async () => {
+  const { app, page } = await launch();
+  const tooltip = page.locator('[role=tooltip]');
+  try {
+    // A title hint: the system tooltip is replaced, and the card fits a short label.
+    await page.getByTestId('rail-settings').hover();
+    await expect(tooltip.locator('p')).toHaveText('Settings');
+    await expect(page.getByTestId('rail-settings')).toHaveAttribute('title', '');
+    expect(await tooltip.evaluate(e => getComputedStyle(e.querySelector('p')!).fontSize)).toBe('14px');
+    expect((await tooltip.boundingBox())!.width).toBeLessThan(200);
+    await page.mouse.move(600, 400);
+    await expect(tooltip).toHaveCount(0);
+
+    // A rail label: the game's name as the heading, beside its icon.
+    await page.getByTestId('rail-game-poe2').hover();
+    await expect(tooltip.locator('h2')).toHaveText('Path of Exile 2');
+    expect(await tooltip.evaluate(e => getComputedStyle(e.querySelector('h2')!).fontSize)).toBe('18px');
+    const icon = (await page.getByTestId('rail-game-poe2').boundingBox())!, card = (await tooltip.boundingBox())!;
+    expect(card.x).toBeGreaterThan(icon.x + icon.width - 8);
+    await page.keyboard.press('Escape');
+    await expect(tooltip).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});
