@@ -12,7 +12,7 @@ TAVORA_PUBLISH_TOKEN=tvp_… npx @tavora/pack publish <id>-<version>.zip --key p
 ## Set up CI
 
 1. In Tavora, publish the module once, or claim your id prefix there. A publish token only publishes under prefixes your account already holds.
-2. Under **Settings > Development > Publish from CI**, export your publisher key to a file and make a publish token.
+2. Under **Settings > Development > Publisher keys and CI**, export your publisher key to a file and make a publish token.
 3. Store both as secrets in your CI: the key file's text, and the token as `TAVORA_PUBLISH_TOKEN`.
 
 Keep the key file secret: whoever has it can sign updates in your name. A token works for a year; remove it in Tavora when you don't need it any more.
@@ -34,7 +34,7 @@ The upload carries the signature over the zip's SHA-256 by the key that packed i
 
 ## Link a key file
 
-`tavora-pack link <code> --key <key file>` links a key that Tavora didn't make, so players see your developer name. In Tavora, press **Get a link code** under **Settings > Development > Publish from CI**. The code works once for 10 minutes. The command signs it with your key and sends the key's public half; the private key never leaves your PC.
+`tavora-pack link <code> --key <key file>` links a key that Tavora didn't make, so players see your developer name. In Tavora, press **Get a link code** under **Settings > Development > Publisher keys and CI**. The code works once for 10 minutes. The command signs it with your key and sends the key's public half; the private key never leaves your PC.
 
 ## From code
 

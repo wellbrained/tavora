@@ -4,7 +4,7 @@
 // from the module's owner and newer than what is installed. One that asks for nothing new installs
 // at once and its panels reload; one that asks for new network hosts or connectors waits, fully
 // checked, until the player says yes, and the installed version keeps running until then.
-import type { Connector, ModuleManifest } from "@tavora/module-schema";
+import { connectorsAtAdd, type Connector, type ModuleManifest } from "@tavora/module-schema";
 import type { ModuleNote } from "../shared/host-api";
 import type { CatalogClient, CatalogEntry, CatalogVersion } from "./catalog-client";
 import type { Permissions } from "./grants";
@@ -70,13 +70,13 @@ export function findUpdates(
   return updates;
 }
 
-/** What `after` asks for that `before` did not. */
+/** What `after` asks for that `before` did not; connectors it asks for on request wait until the module needs them. */
 export function newAsks(before: Permissions, after: Pick<ModuleManifest, "permissions">["permissions"]): Permissions {
   const hosts = new Set(before.network);
   const connectors = new Set(before.connectors);
   return {
     network: after.network.filter((host) => !hosts.has(host)),
-    connectors: (after.connectors ?? []).filter((name: Connector) => !connectors.has(name)),
+    connectors: connectorsAtAdd(after).filter((name: Connector) => !connectors.has(name)),
   };
 }
 

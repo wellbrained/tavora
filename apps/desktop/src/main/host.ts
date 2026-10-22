@@ -3,7 +3,7 @@ import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, type ResolvedPanelType } from "@tavora/module-schema";
+import { continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, type Connector, type ResolvedPanelType } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -25,8 +25,9 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, DeveloperLink, GameView, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, GameView, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
+import { suggestPrefix } from "../shared/id-prefix";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
@@ -35,7 +36,7 @@ import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/lay
 import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
-import { applyOwners, readOwnerRecords } from "./installer";
+import { applyOwners, checkZipData, readOwnerRecords } from "./installer";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
 import { ModuleLifecycle } from "./module-lifecycle";
@@ -112,7 +113,7 @@ import { isWebUrl, siteOfUrl } from "./browser-url";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, developmentProjects, discoverModules, isDevelopmentModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, developmentProjects, discoverModules, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
@@ -123,6 +124,7 @@ import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
 import { AccountKey } from "./account-key";
 import { DeveloperKeys } from "./developer-keys";
+import { ModulePublisher } from "./module-publish";
 import { FolderPairing, Pairing, ServicePairing } from "./pairing";
 import { ServiceStorage } from "./cloud-copy";
 import { CopySync } from "./cloud-copy-sync";
@@ -142,6 +144,7 @@ import {
   type InstalledTheme,
   type ThemeProblem,
 } from "./themes";
+import { copyExample, slugOf } from "./example-copy";
 import { writeFileAtomic } from "./fsutil";
 import {
   emptyGameWorkspace,
@@ -174,6 +177,10 @@ const DEVELOPER_LINKS: Record<DeveloperLink, string> = {
   discussions: "https://github.com/wellbrained/tavora/discussions",
   issue: "https://github.com/wellbrained/tavora/issues/new?template=module-developer.yml",
 };
+
+/** The command that starts a module project, which the developer onboarding copies. */
+const CREATE_MODULE_COMMAND = "npm create @tavora/module";
+
 /** Folders watched in one development folder for a new project, at most. */
 const MAX_DEVELOPMENT_SUBFOLDERS = 100;
 
@@ -292,6 +299,8 @@ export class Host {
   private copySync!: CopySync;
   /** The publisher keys the account's vault keeps (developer-keys.ts). */
   private developerKeys!: DeveloperKeys;
+  /** The review screen and Publish for dev modules from project folders (module-publish.ts). */
+  private publisher!: ModulePublisher;
   private pairing!: Pairing;
   /** The developer names players see for publisher keys (publisher-names.ts). */
   private readonly publisherNames: PublisherNames;
@@ -315,6 +324,9 @@ export class Host {
   private playedAtStart: Record<string, string> = {};
   /** A game that started while the player chose to be asked; waits for the answer. */
   private pendingGameSwitch: string | null = null;
+  /** A connector a module asks for on request (permissions.onRequest), waiting for the player's answer in the consent dialog. */
+  private pendingConnector: { id: number; moduleId: string; connector: Connector; resolve(allowed: boolean): void } | null = null;
+  private nextConnectorAsk = 1;
   private readonly gameWatcher = new GameWatcher({
     entries: () => liveGames(this.library),
     findInstalled: async () => findInstalledGames({ steamDir: await findSteamDir() }),
@@ -534,6 +546,7 @@ export class Host {
         if (!host.window.isDestroyed()) host.window.webContents.send("host:developer-keys", view);
       },
     });
+    host.publisher = host.modulePublisher();
     host.pairing = Host.pairing(options, host);
     // Before any module opens, so none sees the pictures half moved.
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
@@ -839,6 +852,66 @@ export class Host {
     return path.resolve(folder);
   }
 
+  /** The development folder the player added that is `folder`, as it is kept in the library. */
+  private developmentFolder(folder: string): string | undefined {
+    const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
+    return this.library.developmentFolders.find((item) => key(item) === key(folder));
+  }
+
+  /**
+   * Copies an example that ships with Tavora into a new project, named after the module, in a development
+   * folder that holds projects or in a folder the player picks (`folder` null). A picked folder outside the
+   * development folders gets the new project added as one. Answers with the new project, or nothing when cancelled.
+   */
+  private async copyExampleModule(moduleId: string, name: string, folder: string | null): Promise<string | void> {
+    const example = this.modules.get(moduleId);
+    if (!example || !isExampleModule(moduleId)) throw new LibraryError("error.copyNoExample");
+    let parent: string | undefined;
+    if (folder !== null) {
+      parent = this.developmentFolder(folder);
+      if (!parent) throw new LibraryError("error.copyNoFolder");
+    } else {
+      parent = await this.pickPath("development-folder", { title: translate(this.language, "dialog.copyExample"), properties: ["openDirectory", "createDirectory"] });
+      if (!parent) return;
+      this.rememberPicked("development-folder", parent);
+    }
+    if (!existsSync(parent)) throw new LibraryError("error.copyNoFolder");
+    // A project can't hold another one: Tavora only looks for projects directly inside a folder without a manifest.
+    if (existsSync(path.join(parent, MANIFEST))) throw new LibraryError("error.copyIntoProject", { folder: path.basename(parent) });
+    const known = this.developmentFolder(parent) !== undefined;
+    if (!known && this.library.developmentFolders.length >= MAX_DEVELOPMENT_FOLDERS) throw new LibraryError("error.tooManyDevelopmentFolders");
+    const slug = slugOf(name);
+    const id = `${this.publisher.ownPrefix() ?? "local"}.${slug}`;
+    if (this.modules.has(id)) throw new LibraryError("error.copyIdTaken", { id });
+    const project = path.join(path.resolve(parent), slug);
+    await copyExample(example.root, project, { id, name: name.trim() });
+    if (!known) {
+      this.library.developmentFolders = cleanDevelopmentFolders([...this.library.developmentFolders, project]);
+      this.saveLibrary();
+    }
+    await this.reloadModules();
+    return project;
+  }
+
+  /** Opens a module project of a development folder in the file manager; only those, so the host UI cannot open any path. */
+  private async openDevelopmentProject(project: string): Promise<void> {
+    const known =
+      [...this.modules.values()].some((module) => module.developmentProject === project) ||
+      this.moduleProblems.some((problem) => problem.developmentProject === project);
+    if (!known || this.options.hidden) return;
+    const error = await shell.openPath(project);
+    if (error) throw new LibraryError("error.openFolder", { problem: error });
+  }
+
+  /** Opens the folder of an example that ships with Tavora, to look at its sources; only an example's. */
+  private async openExampleFolder(moduleId: string): Promise<void> {
+    const example = this.modules.get(moduleId);
+    if (!example || !isExampleModule(moduleId)) return;
+    if (this.options.hidden) return;
+    const error = await shell.openPath(example.root);
+    if (error) throw new LibraryError("error.openFolder", { problem: error });
+  }
+
   /** Opens one of Tavora's pages for module developers in the player's browser. The renderer names the page, never an address. */
   private openDeveloperLink(link: DeveloperLink): void {
     const url = Object.hasOwn(DEVELOPER_LINKS, link) ? DEVELOPER_LINKS[link] : undefined;
@@ -1053,6 +1126,57 @@ export class Host {
   }
 
   /**
+   * A catalog module's ratings and reviews (decided 2026-10-21), with the player's own rating and what
+   * they can do. Rating needs a sign-in and the module installed; the service can't check the second,
+   * so it is checked here. Each reviewer's picture is fetched by its hash and checked like a listed picture.
+   */
+  private async catalogReviews(moduleId: string): Promise<CatalogReviewsResult> {
+    if (!this.library.onlineSearch) return { status: "off" };
+    const token = this.account.token();
+    let listed;
+    let own: { mine: CatalogReviews["mine"]; own: boolean } = { mine: null, own: false };
+    try {
+      listed = await this.catalog.reviews(moduleId);
+      if (token) own = await this.catalog.ownReview(moduleId, token).catch(() => own);
+    } catch (error) {
+      const key = error instanceof PlayerError ? error.key : "";
+      if (key === "error.catalogNotListed") return { status: "gone" };
+      if (key === "error.catalogUnavailable" || key === "error.reviewsUnavailable") return { status: "unavailable" };
+      if (key === "error.catalogBusy") return { status: "busy" };
+      return { status: "unreachable" };
+    }
+    const pictures = await Promise.all(listed.reviews.map((review) => (review.author.picture ? this.catalog.reviewerPicture(review.id, review.author.picture) : null)));
+    const installedVersion = this.modules.get(moduleId)?.manifest.version ?? null;
+    return {
+      status: "ok",
+      rating: listed.rating,
+      reviews: listed.reviews.map((review, index) => ({ ...review, author: { ...review.author, picture: pictures[index] ?? null } })),
+      mine: own.mine,
+      can: own.own ? "own" : !token ? "sign-in" : installedVersion === null ? "install" : "rate",
+      installedVersion,
+    };
+  }
+
+  /** Rates an installed catalog module on its installed version, which must be one the catalog published. */
+  private async rateCatalogModule(moduleId: string, stars: number, text: string | null): Promise<void> {
+    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    const token = this.account.token();
+    if (!token) throw new PlayerError("account.error.signedOut");
+    const version = this.modules.get(moduleId)?.manifest.version;
+    if (!version) throw new PlayerError("error.reviewInstall");
+    const { versions } = await this.catalog.details(moduleId);
+    if (!versions.some((published) => published.version === version)) throw new PlayerError("error.reviewVersion");
+    await this.catalog.rate(moduleId, token, { stars, text: text?.trim() || null, version });
+  }
+
+  private async catalogReviewAction(run: (token: string) => Promise<void>): Promise<void> {
+    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    const token = this.account.token();
+    if (!token) throw new PlayerError("account.error.signedOut");
+    await run(token);
+  }
+
+  /**
    * Looks for updates of modules installed from the catalog a little after start and then every few
    * hours, only while online features are on. Test runs check only when asked.
    */
@@ -1247,6 +1371,7 @@ export class Host {
     ipcMain.handle("host:get-account", (event) => (fromHost(event) ? this.account.view() : null));
     ipcMain.handle("host:get-cloud-copy", (event) => (fromHost(event) ? this.copySync.view() : null));
     ipcMain.handle("host:get-developer-keys", (event) => (fromHost(event) ? this.developerKeys.view() : null));
+    ipcMain.handle("host:get-publish", (event) => (fromHost(event) ? this.publisher.view() : null));
     ipcMain.handle("host:get-pairing", (event) => (fromHost(event) ? this.pairing.view() : null));
     ipcMain.handle("host:module-notes", (event, moduleId: unknown) => {
       const module = fromHost(event) && typeof moduleId === "string" ? this.modules.get(moduleId) : undefined;
@@ -1272,6 +1397,9 @@ export class Host {
     });
     ipcMain.handle("host:catalog-page", async (event, moduleId: unknown): Promise<CatalogPageResult> =>
       fromHost(event) && isModuleId(moduleId) ? this.catalogPage(moduleId) : { status: "gone" },
+    );
+    ipcMain.handle("host:catalog-reviews", async (event, moduleId: unknown): Promise<CatalogReviewsResult> =>
+      fromHost(event) && isModuleId(moduleId) ? this.catalogReviews(moduleId) : { status: "gone" },
     );
     ipcMain.handle("host:catalog-icon", async (event, moduleId: unknown): Promise<string | null> =>
       fromHost(event) && isModuleId(moduleId) && this.library.onlineSearch ? this.catalog.icon(moduleId) : null,
@@ -1330,6 +1458,53 @@ export class Host {
       this.pairing.dispose();
       clearInterval(this.catalogTimer);
     });
+  }
+
+  private modulePublisher(): ModulePublisher {
+    const linked = () => (this.account.view().publisherKeys ?? []).map((key) => key.fingerprint);
+    return new ModulePublisher({
+      key: (prefer) => this.developerKeys.keyFor(linked(), prefer),
+      account: {
+        prefixes: () => this.account.view().prefixes,
+        developerName: () => this.account.view().developer?.name ?? null,
+        checkPrefix: (prefix) => this.account.checkPrefix(prefix),
+        upload: (key, zip) => this.account.uploadModule(key, zip),
+      },
+      listed: async (id) => {
+        try {
+          const { entry } = await this.catalog.details(id);
+          return { version: entry.version, owner: entry.owner };
+        } catch (error) {
+          if (error instanceof PlayerError && error.key === "error.catalogNotListed") return null;
+          throw error;
+        }
+      },
+      // The installer's checks as if nothing were installed: the module itself is loaded from its project.
+      check: async (zip) => {
+        await checkZipData(zip, { userData: this.options.userData, userModules: path.join(this.options.userData, "publish-check"), modules: new Map(), tavoraVersion: app.getVersion(), safety: this.safetyLists });
+      },
+      icon: (id) => this.moduleInfo.get(id)?.icon ?? null,
+      translate: (error) => translate(this.language, error.key, error.params),
+      onChange: (view) => {
+        if (!this.window.isDestroyed()) this.window.webContents.send("host:publish", view);
+      },
+    });
+  }
+
+  /** The project folder a dev module was loaded from, for Publish and Save as zip. */
+  private projectOf(moduleId: string): string {
+    const project = this.modules.get(moduleId)?.developmentProject;
+    if (!project) throw new PlayerError("publish.error.noProject");
+    return project;
+  }
+
+  /** Packs a dev module signed with a kept key and saves the zip where the developer picks. */
+  private async saveModuleZip(moduleId: string): Promise<string | undefined> {
+    const { manifest, zip } = await this.publisher.pack(this.projectOf(moduleId));
+    const picked = await dialog.showSaveDialog(this.window, { defaultPath: `${manifest.id}-${manifest.version}.zip`, filters: [{ name: "Zip", extensions: ["zip"] }] });
+    if (picked.canceled || !picked.filePath) return undefined;
+    await writeFile(picked.filePath, zip);
+    return path.basename(picked.filePath);
   }
 
   /** Shows the window in front, for a question that came from outside it (the pack command's sign request). */
@@ -1493,6 +1668,7 @@ export class Host {
       "reset-overlay-links": () => this.streaming.resetLinks(),
       "hotkey-answer": (action) => this.streaming.answer(action.id, action.choice, action.accelerator),
       "remove-hotkey": (action) => this.streaming.removeHotkey(action),
+      "connector-answer": (action) => this.answerConnector(action.id, action.allow),
       "set-language": saved((action) => {
         this.library.language = action.language;
         for (const view of this.views.values()) view.applyLanguage(this.language);
@@ -1552,6 +1728,9 @@ export class Host {
       "open-module-problem-folder": (action) => this.openModuleProblemFolder(action.path),
       "add-development-folder": () => this.addDevelopmentFolder(),
       "remove-development-folder": (action) => this.removeDevelopmentFolder(action.folder),
+      "copy-example": (action) => this.copyExampleModule(action.moduleId, action.name, action.folder),
+      "open-example-folder": (action) => this.openExampleFolder(action.moduleId),
+      "open-development-project": (action) => this.openDevelopmentProject(action.project),
       "open-developer-link": (action) => this.openDeveloperLink(action.link),
       "reload-modules": () => this.reloadModules(),
       "remove-module": (action) => this.lifecycle.remove(action.moduleId),
@@ -1565,6 +1744,13 @@ export class Host {
       },
       "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId),
       "open-catalog-homepage": (action) => this.openCatalogHomepage(action.moduleId),
+      "rate-catalog-module": (action) => this.rateCatalogModule(action.moduleId, action.stars, action.text),
+      "unrate-catalog-module": (action) => this.catalogReviewAction((token) => this.catalog.unrate(action.moduleId, token)),
+      "reply-catalog-review": (action) => this.catalogReviewAction((token) => this.catalog.reply(action.reviewId, token, action.text?.trim() || null)),
+      "report-catalog-review": (action) => {
+        if (!this.library.onlineSearch) throw new PlayerError("error.reportOff");
+        return this.catalog.reportReview(action.reviewId);
+      },
       "apply-module-update": (action) => this.lifecycle.applyUpdate(action.moduleId, action.version),
       "delete-module-data": (action) => this.deleteLeftoverData(action.owner, action.moduleId),
       "move-local-data": (action) => this.moveLocalData(action.moduleId),
@@ -1649,7 +1835,22 @@ export class Host {
       "account-profile-choice": (action) => this.account.chooseProfile(action.keep),
 
       // Developer side of the account
-      "account-developer-name": (action) => this.account.setDeveloperName(action.name),
+      "account-developer-name": async (action) => {
+        await this.account.setDeveloperName(action.name);
+        // A first-time developer gets the prefix of the name with it (WellBrained: wellbrained) when it
+        // is free; when it isn't, the check stays on screen to pick another.
+        const prefix = suggestPrefix(action.name);
+        if (prefix && this.account.view().prefixes?.held.length === 0) {
+          if ((await this.account.checkPrefix(prefix).catch(() => null)) === "free") await this.account.claimPrefix(prefix).catch(() => undefined);
+        }
+        // And a publisher key: Tavora makes, keeps and links it, and the recovery key is shown. One with
+        // a key already (kept, or a linked key file) gets none.
+        const keys = this.developerKeys.view();
+        if ((keys.status === "ready" || keys.status === "none") && !keys.keys.length && !this.account.view().publisherKeys?.length) {
+          // Another PC keeps the account's key: its recovery key is asked for on screen, then a key is made there.
+          await this.developerKeys.create().catch(() => undefined);
+        }
+      },
       "account-link-code": () => this.account.newLinkCode(),
       "account-copy-link-command": () => {
         const code = this.account.view().linkCode?.code;
@@ -1696,6 +1897,16 @@ export class Host {
         const key = this.developerKeys.view().recoveryKey;
         if (key) clipboard.writeText(key);
       },
+      "account-prefix-check": async (action) => void (await this.account.checkPrefix(action.prefix)),
+      "account-prefix-claim": (action) => this.account.claimPrefix(action.prefix),
+      "publish-review": (action) => this.publisher.open(this.projectOf(action.moduleId)),
+      "publish-refresh": () => this.publisher.refresh(),
+      "publish-write": (action) => this.publisher.writeVersion(action.version, action.notes),
+      "publish-set-id": (action) => this.publisher.setId(action.id),
+      "publish-upload": () => this.publisher.publish(),
+      "publish-close": () => this.publisher.close(),
+      "save-module-zip": (action) => this.saveModuleZip(action.moduleId),
+      "developer-copy-create-command": () => clipboard.writeText(CREATE_MODULE_COMMAND),
       "pairing-start": () => this.pairing.start(),
       "pairing-cancel": () => this.pairing.cancel(),
       "pairing-decide": (action) => this.pairing.decide(action.id, action.allow),
@@ -2997,7 +3208,8 @@ export class Host {
           minHeight: type.viewport.minHeight,
         })),
         provenance: module.provenance,
-        development: isDevelopmentModule(module.manifest.id) || module.developmentFolder !== undefined,
+        development: isExampleModule(module.manifest.id) || module.developmentFolder !== undefined,
+        project: module.developmentProject !== undefined,
         version: module.manifest.version,
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
@@ -3020,15 +3232,22 @@ export class Host {
       moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder).map(({ folder, path: full, message, kind }) => ({ folder, path: full, message, ...(kind ? { kind } : {}) })),
       developmentFolders: this.library.developmentFolders.map((folder) => {
         const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
-        const projects = new Map<string, { project: string; moduleId: string | null; problem: string | null; kind: NonNullable<ModuleProblem["kind"]> | null }>();
+        const projects = new Map<string, HostViewState["developmentFolders"][number]["projects"][number]>();
         for (const module of this.modules.values()) {
           if (module.developmentFolder === folder && module.developmentProject) {
-            projects.set(module.developmentProject, { project: module.developmentProject, moduleId: module.manifest.id, problem: null, kind: null });
+            projects.set(module.developmentProject, { project: module.developmentProject, moduleId: module.manifest.id, problem: null, kind: null, name: null, version: null });
           }
         }
         for (const item of this.moduleProblems) {
           if (item.developmentFolder !== folder || !item.developmentProject || projects.has(item.developmentProject)) continue;
-          projects.set(item.developmentProject, { project: item.developmentProject, moduleId: null, problem: item.message, kind: item.kind ?? null });
+          projects.set(item.developmentProject, {
+            project: item.developmentProject,
+            moduleId: null,
+            problem: item.message,
+            kind: item.kind ?? null,
+            name: item.about?.name ?? null,
+            version: item.about?.version ?? null,
+          });
         }
         return {
           folder,
@@ -3066,6 +3285,7 @@ export class Host {
       runningGameId: this.running.filter((id) => id !== this.gameId && isLive(this.library, id)).at(-1) ?? null,
       pendingGameSwitch: this.pendingGameSwitch && isLive(this.library, this.pendingGameSwitch) ? this.pendingGameSwitch : null,
       streaming: this.streaming.view(),
+      pendingConnector: this.pendingConnector && { id: this.pendingConnector.id, moduleId: this.pendingConnector.moduleId, connectors: [this.pendingConnector.connector] },
       hotkeyRequest: this.streaming.request(),
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
@@ -3165,6 +3385,29 @@ export class Host {
     this.savedData.saveWindow(state);
   }
 
+  /**
+   * Shows Tavora's consent dialog for one connector a module asks for on request, after a click in its panel; resolves
+   * with whether the player allowed it. A newer request closes an older one as not allowed.
+   */
+  private askConnector(moduleId: string, connector: Connector): Promise<boolean> {
+    this.pendingConnector?.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      this.pendingConnector = { id: this.nextConnectorAsk++, moduleId, connector, resolve };
+      this.pushState();
+    });
+  }
+
+  /** The player's answer; allowing grants that connector alone, and the module's panels go on running with it. */
+  private async answerConnector(id: number, allow: boolean): Promise<void> {
+    const pending = this.pendingConnector;
+    if (!pending || pending.id !== id) return;
+    this.pendingConnector = null;
+    const module = this.modules.get(pending.moduleId);
+    const granted = allow && module !== undefined && (module.manifest.permissions.onRequest ?? []).includes(pending.connector);
+    if (granted) await this.grants.grant(module, { network: [], connectors: [pending.connector] });
+    pending.resolve(granted);
+  }
+
   /** Resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
   async flush(): Promise<void> {
     await this.streaming?.shutdown();
@@ -3183,6 +3426,7 @@ export class Host {
       },
       module: (moduleId) => host.modules.get(moduleId),
       overlayGranted: (moduleId) => host.connectorsOf(moduleId).has("stream-overlay"),
+      askConnector: (moduleId, connector) => host.askConnector(moduleId, connector),
       gameId: () => host.gameId,
       gameName: (gameId) => host.library.games[gameId]?.name ?? null,
       panels: () => [...host.views.values()].filter((view): view is ModuleView => view instanceof ModuleView),

@@ -214,24 +214,28 @@ test("a developer chooses a public name and links a key file with tavora-pack li
     await page.getByTestId("account-verify").click();
     await page.getByTestId("account-age").check();
     await page.getByTestId("account-create").click();
+    await expect(page.getByTestId("account-sign-out")).toBeVisible();
 
-    // Linking needs a name first.
+    // The developer settings are under Development; linking a key file is part of publishing from CI.
+    await page.getByTestId("settings-nav-development").click();
     const developer = page.getByTestId("account-developer");
     await expect(developer).toBeVisible();
+    await page.getByTestId("developer-ci-toggle").click();
+    // Linking needs a name first.
     await expect(page.getByTestId("account-link-code")).toBeDisabled();
-    await expect(page.getByTestId("account-keys-none")).toBeVisible();
+    await expect(page.getByTestId("developer-keys-none")).toBeVisible();
     await page.getByTestId("account-developer-name").fill("Tavora Team");
     await page.getByTestId("account-developer-save").click();
     await expect(page.getByTestId("toast")).toContainText("can't be used");
     await page.getByTestId("account-developer-name").fill("example-dev");
     await page.getByTestId("account-developer-save").click();
-    await expect(page.getByTestId("account-developer-name-hint")).toContainText("can change again on");
+    await expect(page.getByTestId("account-developer-name-hint")).toContainText("can change it again on");
 
     // A one-time code, and the command that uses it.
     await page.getByTestId("account-link-code").click();
     const command = (await page.getByTestId("account-link-command").textContent()) ?? "";
-    expect(command).toMatch(/^npx @tavora\/pack link [A-Z2-9]{4}-[A-Z2-9]{4}$/);
-    const code = command.split(" ").at(-1)!;
+    expect(command).toMatch(/^npx @tavora\/pack link [A-Z2-9]{4}-[A-Z2-9]{4} --key <key file>$/);
+    const code = command.split(" ")[3]!;
 
     // The real pack command signs the code with a key on this PC and sends only its public half.
     const linked = await tavoraPack(["link", code, "--key", keyFile, "--api", apiUrl]);
@@ -273,22 +277,30 @@ test("Tavora keeps a developer's publisher key, and tavora-pack without a key fi
   const { app, page } = await launch(undefined, [], {
     env: { TAVORA_API_URL: apiUrl, TAVORA_DISCORD_IPC: path.join(tmpdir(), "tavora-no-discord"), TAVORA_DISCORD_TOKEN_URL: `${discordUrl}/api/oauth2/token` },
   });
-  const project = await moduleProject("exampledev.tracker");
+  // Under the prefix that saving the name claims; the test before took exampledev for its own account.
+  const project = await moduleProject("keykeeper.tracker");
   try {
     await signIn(page, "keeper@example.com", true);
-    await expect(page.getByTestId("developer-key-create")).toBeDisabled();
-    await page.getByTestId("account-developer-name").fill("key-keeper");
-    await page.getByTestId("account-developer-save").click();
+    await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("developer-ci-toggle").click();
     await expect(page.getByTestId("developer-keys-none")).toBeVisible();
-    await page.getByTestId("developer-key-create").click();
+    await expect(page.getByTestId("developer-key-create")).toBeDisabled();
+    // Saving the name makes the key and claims the name's prefix.
+    await page.getByTestId("account-developer-name").fill("key-keeper");
+    await expect(page.getByTestId("account-developer-name-prefix")).toContainText("keykeeper");
+    await page.getByTestId("account-developer-save").click();
+    await expect(page.getByTestId("developer-prefixes-list")).toContainText("keykeeper");
     // The account had no key yet: its recovery key is shown once, in its own group, and can be shown again.
     const recovery = page.getByTestId("recovery-key-text");
     await expect(recovery).toHaveText(/^[0-9A-Z-]{40,}$/);
     const recoveryKey = await recovery.textContent();
     await page.getByTestId("recovery-key-saved").click();
+    await page.getByTestId("settings-nav-account").click();
     await page.getByTestId("recovery-key-show").click();
     await expect(recovery).toHaveText(recoveryKey!);
     await page.getByTestId("recovery-key-saved").click();
+    await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("developer-ci-toggle").click();
     const kept = page.getByTestId("developer-keys-list").locator("li");
     await expect(kept).toHaveCount(1);
     const fingerprint = ((await kept.getAttribute("data-testid")) ?? "").replace("developer-key-", "");
@@ -345,6 +357,9 @@ test("the cloud copy takes one PC's games to another, with the recovery key", as
   const b = await launch(undefined, [], { env, seed: false });
   try {
     await signIn(b.page, "copy@example.com");
+    // The account has a recovery key: signing in asks for it, and it can wait.
+    await b.page.getByTestId("recovery-ask-later").click();
+    await expect(b.page.getByTestId("recovery-ask")).toHaveCount(0);
     await b.page.getByTestId("cloud-copy-on").click();
     await b.page.getByTestId("cloud-copy-key-input").fill(key);
     await b.page.getByTestId("cloud-copy-key-submit").click();
@@ -382,18 +397,21 @@ test("a new PC gets the recovery key from another PC, once both show the same co
     const key = (await a.page.getByTestId("cloud-copy-key-text").textContent())?.trim() ?? "";
     await a.page.getByTestId("cloud-copy-key-saved").click();
 
+    // Signing in on B asks for the account's recovery key right away.
     await signIn(b.page, "pair@example.com");
-    await b.page.getByTestId("pairing-start").click();
-    await expect(b.page.getByTestId("pairing-start")).toHaveCount(0);
-    await expect(b.page.getByTestId("pairing-code")).toBeVisible({ timeout: 40_000 });
-    const code = (await b.page.getByTestId("pairing-code").textContent())?.trim() ?? "";
+    const ask = b.page.getByTestId("recovery-ask");
+    await ask.getByTestId("pairing-start").click();
+    await expect(ask.getByTestId("pairing-start")).toHaveCount(0);
+    await expect(ask.getByTestId("pairing-code")).toBeVisible({ timeout: 40_000 });
+    const code = (await ask.getByTestId("pairing-code").textContent())?.trim() ?? "";
     expect(code).toMatch(/^.{3}-.{3}$/);
     await expect(a.page.getByTestId("pairing-approve")).toContainText("Add");
     await expect(a.page.getByTestId("pairing-approve-code")).toHaveText(code, { timeout: 20_000 });
     await a.page.getByTestId("pairing-add").click();
     await expect(a.page.getByTestId("pairing-approve")).toHaveCount(0);
 
-    // B now has the account's key without anyone typing it.
+    // B now has the account's key without anyone typing it, and the question is gone.
+    await expect(ask).toHaveCount(0, { timeout: 15_000 });
     await expect(b.page.getByTestId("recovery-key-show")).toBeVisible({ timeout: 15_000 });
     await b.page.getByTestId("recovery-key-show").click();
     await expect(b.page.getByTestId("recovery-key-text")).toHaveText(key);

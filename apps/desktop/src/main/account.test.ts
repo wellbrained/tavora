@@ -39,6 +39,8 @@ function service(answers: Record<string, (body: Record<string, unknown> | undefi
     if (key === "GET /profile" && !answers[key]) return json({ profile: null });
     // The developer side, read with the account: none, and not recorded.
     if (key === "GET /developer" && !answers[key]) return json({ developer: null, keys: [] });
+    // The id prefixes, read with the account: none, and not recorded.
+    if (key === "GET /prefixes" && !answers[key]) return json({ prefixes: [], max: 3 });
     calls.push({ method, url, body, auth: new Headers(init?.headers).get("authorization") });
     const answer = answers[key];
     return answer ? answer(body) : json({ error: "Not found." }, 404);
@@ -108,7 +110,7 @@ describe("signing in", () => {
     // The token never reaches the host UI; a malformed device is dropped.
     const view = account.view();
     expect(JSON.stringify(view)).not.toContain(TOKEN);
-    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", discord: null, createdAt: SAVED.createdAt }, discordLogin: false, devices: [DEVICE], pending: null, profileChoice: null, developer: null, publisherKeys: [], keyRequests: [], linkCode: null, publishTokens: [], newPublishToken: null });
+    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", discord: null, createdAt: SAVED.createdAt }, discordLogin: false, devices: [DEVICE], pending: null, profileChoice: null, developer: null, publisherKeys: [], keyRequests: [], linkCode: null, publishTokens: [], newPublishToken: null, prefixes: { held: [], max: 3 }, prefixCheck: null });
   });
 
   it("asks before creating an account for a new address, then creates it with the same code", async () => {
@@ -491,6 +493,14 @@ describe("the developer side", () => {
     expect(calls.at(-1)).toMatchObject({ method: "DELETE", auth: `Bearer ${TOKEN}` });
   });
 
+  it("reads the name and keys at a start, before the Account page opens", async () => {
+    const { fetchImpl } = service({ "GET /developer": () => developer([{ fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z" }]) });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await expect.poll(() => account.view().developer?.name).toBe("example-dev");
+    expect(account.view().publisherKeys).toEqual([{ fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z" }]);
+  });
+
   it("says when the name can change again, in the player's own words", async () => {
     const { fetchImpl } = service({ "PUT /developer": () => json({ reason: "name-too-soon", nextChangeAt: "2026-11-16T12:00:00.000Z" }, 409) });
     const { account } = client(fetchImpl, { saved: SAVED });
@@ -597,6 +607,72 @@ describe("the developer side", () => {
     expect(sent!.get("authorization")).toBe(`Bearer ${TOKEN}`);
     expect(sent!.get("accept-language")).toBe("de");
     expect(verify(null, Buffer.from(`${PUBLISH_STATEMENT}\n${sha256}`), createPublicKey(privateKey), Buffer.from(sent!.get("x-tavora-signature")!, "base64"))).toBe(true);
+  });
+
+  it("uploads a zip Tavora packed, with the sign-in and its key's signature, and words the catalog's refusals", async () => {
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const zip = Buffer.from("PK pretend zip");
+    const sha256 = createHash("sha256").update(zip).digest("hex");
+    let sent: { headers: Headers; body: unknown } | null = null;
+    let answer = () => json({ status: "published", id: "me.tracker", version: "1.0.1", sha256 }, 201);
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "https://api.test/v1/account/prefixes") return json({ prefixes: [{ prefix: "me", claimedAt: 1729500000000, published: true }], max: 3 });
+      if (url !== "https://api.test/v1/catalog/publish") return json({ developer: null, keys: [] });
+      sent = { headers: new Headers(init?.headers), body: init?.body };
+      return answer();
+    }) as typeof fetch;
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    expect(await account.uploadModule(privateKey, zip)).toEqual({ id: "me.tracker", version: "1.0.1", sha256 });
+    expect(sent!.headers.get("content-type")).toBe("application/zip");
+    expect(sent!.headers.get("authorization")).toBe(`Bearer ${TOKEN}`);
+    expect(sent!.headers.get("accept-language")).toBe("de");
+    expect(Buffer.from(sent!.body as Uint8Array)).toEqual(zip);
+    expect(verify(null, Buffer.from(`${PUBLISH_STATEMENT}\n${sha256}`), createPublicKey(privateKey), Buffer.from(sent!.headers.get("x-tavora-signature")!, "base64"))).toBe(true);
+    // The upload reserved the prefix: the account's prefixes are read again.
+    expect(account.view().prefixes).toEqual({ held: [{ prefix: "me", claimedAt: 1729500000000, published: true }], max: 3 });
+
+    answer = () => json({ reason: "daily-limit", error: "An account can publish 10 versions a day." }, 429);
+    await expect(account.uploadModule(privateKey, zip)).rejects.toMatchObject({ key: "publish.error.dailyLimit" });
+    answer = () => json({ reason: "prefix-taken", error: "x" }, 403);
+    await expect(account.uploadModule(privateKey, zip)).rejects.toMatchObject({ key: "publish.error.prefixTaken" });
+    answer = () => json({ reason: "conflict", error: "Version 1.0.1 of me.tracker is\nalready listed." }, 409);
+    await expect(account.uploadModule(privateKey, zip)).rejects.toMatchObject({ key: "publish.error.refused", params: { message: "Version 1.0.1 of me.tracker is already listed." } });
+  });
+
+  it("checks and claims an id prefix, and reads the prefixes the account holds", async () => {
+    const states: Record<string, string> = { nik: "free", wellbrained: "taken" };
+    const { calls, fetchImpl } = service({
+      "GET /": () => json({ account: { email: "me@example.com", createdAt: SAVED.createdAt }, devices: [] }),
+      "GET /prefixes": () => json({ prefixes: Object.entries(states).filter(([, state]) => state === "held").map(([prefix]) => ({ prefix, claimedAt: 1, published: false })), max: 3 }),
+      "GET /prefixes/nik": () => json({ prefix: "nik", state: states.nik }),
+      "GET /prefixes/wellbrained": () => json({ prefix: "wellbrained", state: states.wellbrained }),
+      "POST /prefixes/nik": () => ((states.nik = "held"), json({ prefix: "nik", state: "held" })),
+      "POST /prefixes/wellbrained": () => json({ reason: "prefix-taken", error: "Taken." }, 403),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.refresh();
+    expect(account.view().prefixes).toEqual({ held: [], max: 3 });
+
+    expect(await account.checkPrefix("nik")).toBe("free");
+    expect(account.view().prefixCheck).toEqual({ prefix: "nik", state: "free" });
+    await account.claimPrefix("nik");
+    expect(calls.find((call) => call.method === "POST")).toMatchObject({ url: "https://api.test/v1/account/prefixes/nik", body: {}, auth: `Bearer ${TOKEN}` });
+    expect(account.view()).toMatchObject({ prefixCheck: { prefix: "nik", state: "held" }, prefixes: { held: [{ prefix: "nik", claimedAt: 1, published: false }] } });
+
+    // Refused: what the catalog says now is shown as checked.
+    await expect(account.claimPrefix("wellbrained")).rejects.toMatchObject({ key: "publish.error.prefixTaken" });
+    expect(account.view().prefixCheck).toEqual({ prefix: "wellbrained", state: "taken" });
+    // Held, but missing from the list read before (it held it already then): the list is read again.
+    states.wellbrained = "held";
+    expect(await account.checkPrefix("wellbrained")).toBe("held");
+    expect(account.view().prefixes?.held.map((item) => item.prefix)).toEqual(["nik", "wellbrained"]);
+    // Not a prefix at all: the service isn't asked.
+    const before = calls.length;
+    expect(await account.checkPrefix("Not.One")).toBe("invalid");
+    expect(calls.length).toBe(before);
   });
 
   it("keeps only well-formed keys and names from the service", async () => {

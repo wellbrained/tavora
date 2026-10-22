@@ -46,20 +46,20 @@ export const DISCORD_MODULE_ID = "tavora.discord";
 export const AI_USAGE_MODULE_ID = "tavora.ai-usage";
 
 /**
- * Modules that ship with Tavora as starting points for module authors: the
- * UI Playground and the example modules. The module library lists them under
- * Development instead of next to the modules players use.
+ * The example modules that ship with Tavora as starting points for module
+ * authors. Settings > Development lists them under Examples, to open or copy,
+ * and the module library lists them under Development instead of next to the
+ * modules players use.
  */
-const DEVELOPMENT_MODULES = new Set([
-  "tavora.playground",
+const EXAMPLE_MODULES = new Set([
   "local.example.vanilla-module",
   "local.example.react-module",
   "local.example.vue-module",
   "local.example.panels-module",
 ]);
 
-export function isDevelopmentModule(id: string): boolean {
-  return DEVELOPMENT_MODULES.has(id);
+export function isExampleModule(id: string): boolean {
+  return EXAMPLE_MODULES.has(id);
 }
 
 /** A folder that looks like a module but could not be loaded, and why, in words a player can read. */
@@ -74,6 +74,8 @@ export interface ModuleProblem {
   developmentProject?: string;
   /** What Settings can suggest: build it first, add another folder, or the folder is gone. */
   kind?: "not-built" | "no-module" | "missing";
+  /** The name and version its manifest gives, when it has them, so Settings can name the module. */
+  about?: { name: string; version: string | null };
 }
 
 export interface ModuleSources {
@@ -115,10 +117,17 @@ export async function discoverModules(
     }
     const found = project === undefined ? await candidates(dir) : project === "missing" ? [] : project;
     for (const candidate of found) {
-      const report = (message: string, kind?: ModuleProblem["kind"]) =>
-        problems.push({ folder: path.basename(candidate), path: candidate, message, ...(fromProject ? { developmentFolder: dir, developmentProject: candidate } : {}), ...(kind ? { kind } : {}) });
-      const installed = await loadModule(candidate, provenance, tavoraVersion, (message, kind) => {
-        if (provenance === "local") report(message, kind);
+      const report = (message: string, kind?: ModuleProblem["kind"], about?: ModuleProblem["about"]) =>
+        problems.push({
+          folder: path.basename(candidate),
+          path: candidate,
+          message,
+          ...(fromProject ? { developmentFolder: dir, developmentProject: candidate } : {}),
+          ...(kind ? { kind } : {}),
+          ...(about ? { about } : {}),
+        });
+      const installed = await loadModule(candidate, provenance, tavoraVersion, (message, kind, about) => {
+        if (provenance === "local") report(message, kind, about);
       });
       if (!installed) continue;
       if (fromProject) {
@@ -126,19 +135,20 @@ export async function discoverModules(
         installed.developmentProject = candidate;
       }
       const { id } = installed.manifest;
+      const about = { name: installed.manifest.name, version: installed.manifest.version };
       if (provenance !== "official" && id.startsWith(OFFICIAL_PREFIX)) {
         console.warn(`[tavora] module id ${id} in ${candidate} is reserved for official Tavora modules; skipping it`);
-        report("its id is reserved for Tavora's own modules");
+        report("its id is reserved for Tavora's own modules", undefined, about);
         continue;
       }
       if (provenance !== "official" && installed.manifest.permissions.webAssembly === true) {
         console.warn(`[tavora] module ${id} in ${candidate} asks to run WebAssembly, which only Tavora's own modules may; skipping it`);
-        report("permissions.webAssembly is only for Tavora's own modules");
+        report("permissions.webAssembly is only for Tavora's own modules", undefined, about);
         continue;
       }
       if (modules.has(id)) {
         console.warn(`[tavora] duplicate module id ${id} in ${candidate}; keeping the first one`);
-        if (provenance === "local") report("another module with the same id is already loaded");
+        if (provenance === "local") report("another module with the same id is already loaded", undefined, about);
         continue;
       }
       modules.set(id, installed);
@@ -214,7 +224,7 @@ async function loadModule(
   dir: string,
   provenance: Provenance,
   tavoraVersion: string | undefined,
-  problem: (message: string, kind?: ModuleProblem["kind"]) => void,
+  report: (message: string, kind?: ModuleProblem["kind"], about?: ModuleProblem["about"]) => void,
 ): Promise<InstalledModule | undefined> {
   let raw: unknown;
   try {
@@ -222,10 +232,12 @@ async function loadModule(
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       console.warn(`[tavora] unreadable manifest in ${dir}`);
-      problem("its tavora.module.json cannot be read");
+      report("its tavora.module.json cannot be read");
     }
     return undefined;
   }
+  const about = aboutOf(raw);
+  const problem = (message: string, kind?: ModuleProblem["kind"]) => report(message, kind, about);
   const result = validateManifest(raw);
   if (!result.ok) {
     console.warn(`[tavora] invalid module in ${dir}: ${result.errors.join("; ")}`);
@@ -254,6 +266,14 @@ async function loadModule(
   return { manifest: result.manifest, root, provenance, owner: provenance === "official" ? OFFICIAL_OWNER : LOCAL_OWNER };
 }
 
+/** The name and version a manifest gives, even one that doesn't validate yet. */
+function aboutOf(raw: unknown): ModuleProblem["about"] {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const { name, version } = raw as { name?: unknown; version?: unknown };
+  if (typeof name !== "string" || !name.trim()) return undefined;
+  return { name: name.trim().slice(0, 80), version: typeof version === "string" ? version.slice(0, 40) : null };
+}
+
 export interface ModuleInfo {
   /** Where the module was found, without a full path; the host UI words it. */
   origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
@@ -273,7 +293,7 @@ export async function describeModules(userModules: string, modules: Map<string, 
   const info = new Map<string, ModuleInfo>();
   for (const [id, module] of modules) {
     const own = module.provenance === "local" && path.dirname(module.root) === userRoot;
-    const kind = module.provenance === "official" ? "official" : isDevelopmentModule(id) ? "example" : own ? "own" : "dev";
+    const kind = module.provenance === "official" ? "official" : isExampleModule(id) ? "example" : own ? "own" : "dev";
     // A development folder is shown by its full path, so the developer can tell projects apart.
     const origin = { kind, folder: module.developmentFolder ?? path.basename(module.root) } as const;
     const icon = await moduleIconUrl(module.root, module.manifest.icon);

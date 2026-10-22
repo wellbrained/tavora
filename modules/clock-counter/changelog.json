@@ -1,0 +1,10 @@
+[
+  {
+    "version": "0.1.0",
+    "date": "2026-10-21",
+    "notes": [
+      "Countdowns, stopwatches and counters for each game.",
+      "Show any of them in OBS, and control them with hotkeys."
+    ]
+  }
+]

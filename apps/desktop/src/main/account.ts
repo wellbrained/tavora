@@ -1,8 +1,9 @@
 import type { KeyObject } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
-import { linkRequest, publishZip, type Published } from "@tavora/pack";
-import type { AccountDevice, AccountPending, AccountPublishToken, AccountView, DeviceOs, KeyRequestView } from "../shared/host-api";
+import { linkRequest, publishSignature, publishZip, type Published } from "@tavora/pack";
+import type { AccountDevice, AccountPending, AccountPrefix, AccountPublishToken, AccountView, DeviceOs, KeyRequestView, PrefixState } from "../shared/host-api";
 import type { Language, MessageKey } from "../shared/i18n";
+import { isIdPrefix } from "../shared/id-prefix";
 import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
 import type { DiscordLoginResult } from "./discord-login";
@@ -16,9 +17,13 @@ import { PlayerError } from "./messages";
 // part of backups or diagnostic info. Modules learn nothing about the account.
 
 export const ACCOUNT_TIMEOUT_MS = 10_000;
+/** An upload to the catalog may take longer: a zip is up to a few MB. */
+export const UPLOAD_TIMEOUT_MS = 120_000;
+
+const PREFIX_STATES: readonly PrefixState[] = ["held", "free", "taken", "reserved", "too-many", "invalid"];
 
 /** The command a developer runs with a link code, as the app shows and copies it ("ABCD-EFGH"). */
-export const linkCommand = (code: string) => `npx @tavora/pack link ${code.slice(0, 4)}-${code.slice(4)}`;
+export const linkCommand = (code: string) => `npx @tavora/pack link ${code.slice(0, 4)}-${code.slice(4)} --key <key file>`;
 
 export interface SavedAccount {
   token: string;
@@ -134,7 +139,31 @@ const REASONS: Record<string, MessageKey> = {
   "too-many-keys": "account.error.tooManyKeys",
   "key-in-request": "account.error.keyInRequest",
   "too-many-tokens": "account.error.tooManyTokens",
+  // Publishing from Tavora, and claiming an id prefix.
+  "prefix-taken": "publish.error.prefixTaken",
+  "prefix-reserved": "publish.error.prefixReserved",
+  "too-many-prefixes": "publish.error.tooManyPrefixes",
+  "key-not-linked": "publish.error.keyNotLinked",
+  "wrong-account": "publish.error.wrongAccount",
+  "key-revoked": "publish.error.keyRevoked",
+  "key-leaked": "publish.error.keyLeaked",
+  "bad-signature": "publish.error.badSignature",
+  "account-full": "publish.error.accountFull",
+  "catalog-full": "publish.error.catalogFull",
+  "too-big": "publish.error.tooBig",
 };
+
+/** The prefixes the account holds as the service answers them; null for anything off. */
+function heldPrefixes(value: unknown): { held: AccountPrefix[]; max: number } | null {
+  const raw = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
+  if (!Array.isArray(raw.prefixes) || !Number.isSafeInteger(raw.max) || (raw.max as number) < 0) return null;
+  const held = raw.prefixes
+    .slice(0, 100)
+    .map((item) => (typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {}))
+    .filter((item) => isIdPrefix(item.prefix) && Number.isSafeInteger(item.claimedAt) && typeof item.published === "boolean")
+    .map((item) => ({ prefix: item.prefix as string, claimedAt: item.claimedAt as number, published: item.published as boolean }));
+  return { held, max: raw.max as number };
+}
 
 /** The account's developer side as the service answers it; null for anything off. */
 function developerSide(value: unknown): { developer: { name: string; nextChangeAt: string } | null; keys: { fingerprint: string; linkedAt: string }[]; tokens: AccountPublishToken[]; requests: KeyRequestView[] } | null {
@@ -198,6 +227,8 @@ export class AccountClient {
   private publishTokens: AccountView["publishTokens"] = null;
   /** A publish token just made, shown once until the developer closes it. */
   private newPublishToken: AccountView["newPublishToken"] = null;
+  private prefixes: AccountView["prefixes"] = null;
+  private prefixCheck: AccountView["prefixCheck"] = null;
   private readonly baseUrl: string;
 
   constructor(private readonly options: AccountClientOptions) {
@@ -210,6 +241,8 @@ export class AccountClient {
     this.changed();
     // Once at each start: the profile comes down or goes up, whichever is newer. Quietly; offline is fine.
     if (this.saved) void this.syncProfile(false).catch(() => undefined);
+    // The developer name and linked keys too, so Settings > Development knows publishing is set up.
+    if (this.saved) void this.readDeveloper();
   }
 
   /** The sign-in token, for another call to the service that needs a signed-in player (sharing icons); null when signed out. */
@@ -232,6 +265,8 @@ export class AccountClient {
       linkCode: this.saved && this.linkCode && Date.parse(this.linkCode.expiresAt) > Date.now() ? this.linkCode : null,
       publishTokens: this.saved ? this.publishTokens : null,
       newPublishToken: this.saved ? this.newPublishToken : null,
+      prefixes: this.saved ? this.prefixes : null,
+      prefixCheck: this.saved ? this.prefixCheck : null,
     };
   }
 
@@ -395,11 +430,16 @@ export class AccountClient {
     }
     // The email or Discord may have changed on another PC.
     await this.updated(answer);
-    // The developer side too; a service without it yet leaves it unknown.
-    this.takeDeveloper(await this.call("GET", "/developer", undefined, true).catch(() => ({})));
+    await this.readDeveloper();
   }
 
   // ── Developer side ─────────────────────────────────────────────────────
+
+  /** The developer side and its prefixes. Quietly: offline, or a service without them yet, leaves them unknown. */
+  private async readDeveloper(): Promise<void> {
+    this.takeDeveloper(await this.call("GET", "/developer", undefined, true).catch(() => ({})));
+    await this.readPrefixes();
+  }
 
   /** Sets the public name players see on the modules of the account's linked keys. */
   async setDeveloperName(name: string): Promise<void> {
@@ -457,6 +497,65 @@ export class AccountClient {
   async publishModule(key: KeyObject, zip: Buffer): Promise<Published> {
     if (!this.saved) throw new PlayerError("account.error.signedOut");
     return publishZip({ key, zip, token: this.saved.token, language: this.options.language(), apiUrl: this.baseUrl, fetch: this.options.fetch });
+  }
+
+  /**
+   * Uploads a module zip Tavora packed, after the developer's click on the review screen: signed with
+   * the key that signed the zip, and sent with this sign-in. The catalog checks the account owns both
+   * the key and the id prefix. Its refusals are messages for the player.
+   */
+  async uploadModule(key: KeyObject, zip: Buffer): Promise<Published> {
+    this.ensure(true);
+    const answer = await this.call("POST", "/publish", zip, true, "/v1/catalog", {
+      headers: { "X-Tavora-Signature": publishSignature(key, zip), "Accept-Language": this.options.language() },
+      timeoutMs: UPLOAD_TIMEOUT_MS,
+    });
+    if (typeof answer.id !== "string" || typeof answer.version !== "string" || typeof answer.sha256 !== "string") throw new PlayerError("error.generic");
+    // The upload reserved the prefix when it was new.
+    await this.readPrefixes();
+    return { id: answer.id, version: answer.version, sha256: answer.sha256 };
+  }
+
+  // ── Id prefixes ────────────────────────────────────────────────────────
+
+  /** What the catalog says about an id prefix for this account; kept as prefixCheck for the screen. */
+  async checkPrefix(prefix: string): Promise<PrefixState> {
+    this.ensure(true);
+    let state: PrefixState = "invalid";
+    if (isIdPrefix(prefix)) {
+      const answer = await this.call("GET", `/prefixes/${prefix}`, undefined, true);
+      state = PREFIX_STATES.find((item) => item === answer.state) ?? "invalid";
+    }
+    this.prefixCheck = { prefix, state };
+    // Held but not in the list read before (the service didn't list prefixes then): read it again.
+    if (state === "held" && !this.prefixes?.held.some((item) => item.prefix === prefix)) await this.readPrefixes();
+    this.changed();
+    return state;
+  }
+
+  /** Claims a free id prefix for the account right away, before anything is published under it. */
+  async claimPrefix(prefix: string): Promise<void> {
+    this.ensure(true);
+    if (!isIdPrefix(prefix)) throw new PlayerError("publish.error.prefixInvalid");
+    try {
+      await this.call("POST", `/prefixes/${prefix}`, {}, true);
+    } catch (error) {
+      // Taken meanwhile, or the account holds as many as it may: the screen shows it as checked.
+      await this.checkPrefix(prefix).catch(() => undefined);
+      throw error;
+    }
+    this.prefixCheck = { prefix, state: "held" };
+    await this.readPrefixes();
+    this.changed();
+  }
+
+  /** The prefixes the account holds. Quietly: a service without them yet leaves them unknown. */
+  private async readPrefixes(): Promise<void> {
+    const answer = await this.call("GET", "/prefixes", undefined, true).catch(() => null);
+    const prefixes = heldPrefixes(answer);
+    if (!prefixes) return;
+    this.prefixes = prefixes;
+    this.changed();
   }
 
   async unlinkKey(fingerprint: string): Promise<void> {
@@ -627,6 +726,8 @@ export class AccountClient {
     this.linkCode = null;
     this.publishTokens = null;
     this.newPublishToken = null;
+    this.prefixes = null;
+    this.prefixCheck = null;
     await this.options.save(null);
     this.changed();
   }
@@ -638,11 +739,19 @@ export class AccountClient {
   /**
    * One request to the service. Its own errors become messages for the player;
    * a sign-in the service no longer knows (signed out from another device,
-   * unused for a year, account deleted) is forgotten here too.
+   * unused for a year, account deleted) is forgotten here too. A Buffer body goes as a zip.
    */
-  private async call(method: string, path: string, body?: unknown, auth = false, root = "/v1/account"): Promise<Record<string, unknown>> {
+  private async call(
+    method: string,
+    path: string,
+    body?: unknown,
+    auth = false,
+    root = "/v1/account",
+    extra: { headers?: Record<string, string>; timeoutMs?: number } = {},
+  ): Promise<Record<string, unknown>> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.options.timeoutMs ?? ACCOUNT_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), extra.timeoutMs ?? this.options.timeoutMs ?? ACCOUNT_TIMEOUT_MS);
+    const zip = Buffer.isBuffer(body);
     let response: Response;
     try {
       response = await this.options.fetch(`${this.baseUrl}${root}${path === "/" ? "" : path}`, {
@@ -652,10 +761,12 @@ export class AccountClient {
         referrerPolicy: "no-referrer",
         headers: {
           Accept: "application/json",
-          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+          ...(body === undefined ? {} : { "Content-Type": zip ? "application/zip" : "application/json" }),
           ...(auth && this.saved ? { Authorization: `Bearer ${this.saved.token}` } : {}),
+          ...extra.headers,
         },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        ...(body === undefined ? {} : { body: zip ? new Uint8Array(body) : JSON.stringify(body) }),
+        ...(zip ? { redirect: "error" as const } : {}),
       });
     } catch {
       throw new PlayerError("account.error.unreachable");
@@ -669,6 +780,8 @@ export class AccountClient {
       await this.forget();
       throw new PlayerError("account.error.signedOut");
     }
+    // The catalog's uploads for today are used up; it says nothing about when, so: tomorrow.
+    if (json.reason === "daily-limit" && root === "/v1/catalog") throw new PlayerError("publish.error.dailyLimit");
     if (response.status === 429) {
       const seconds = Number(response.headers.get("retry-after"));
       throw new PlayerError("account.error.tooMany", { minutes: Math.max(1, Math.ceil((Number.isFinite(seconds) ? seconds : 60) / 60)) });
@@ -685,6 +798,10 @@ export class AccountClient {
     }
     const key = typeof json.reason === "string" ? REASONS[json.reason] : undefined;
     if (key) throw new PlayerError(key);
+    // A zip the catalog refused comes with the catalog's own sentence about it.
+    if ((json.reason === "invalid" || json.reason === "conflict") && typeof json.error === "string" && json.error.trim()) {
+      throw new PlayerError("publish.error.refused", { message: json.error.replace(/\s+/g, " ").trim().slice(0, 300) });
+    }
     // 503: switched off on the service; 404: a service that has no accounts at all yet.
     if (response.status === 503 || response.status === 404) throw new PlayerError("account.error.unavailable");
     throw new PlayerError("error.generic");

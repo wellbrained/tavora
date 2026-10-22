@@ -22,6 +22,8 @@ interface Listed {
   pictures?: Record<string, Buffer>;
   /** The readme GET /v1/catalog/modules/<id> sends. */
   readme?: string;
+  /** What GET /v1/catalog/modules/<id>/reviews sends. */
+  reviews?: unknown;
 }
 
 async function packed(id: string, name: string, key: KeyObject, version = "1.0.0", network: string[] = []): Promise<Buffer> {
@@ -79,6 +81,11 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
         return workspace ? games.length === 0 && entry.workspaces !== false : !game || games.length === 0 || games.includes(game);
       };
       return send(200, { modules: modules.map((item) => item.entry).filter(fits) });
+    }
+    const reviews = /^\/v1\/catalog\/modules\/([^/]+)\/reviews$/.exec(url.pathname);
+    if (reviews) {
+      const item = modules.find((candidate) => candidate.entry.id === decodeURIComponent(reviews[1]!));
+      return item ? send(200, item.reviews ?? { summary: null, reviews: [] }) : send(404, { error: "not found" });
     }
     const detail = /^\/v1\/catalog\/modules\/([^/]+)$/.exec(url.pathname);
     if (detail) {
@@ -209,6 +216,84 @@ test("a player opens a module's page with its readme, screenshots, access and ho
     await page.getByTestId("catalog-info-install").click();
     await expect(page.getByTestId("catalog-info-add")).toBeVisible();
     expect(await readdir(path.join(userData, "modules"))).toEqual(["wellbrained.tracker"]);
+  } finally {
+    await app.close();
+    server.close();
+  }
+});
+
+test("a player sees a module's rating on its card, how many gave each star, and its reviews on its page", async () => {
+  const key = generateKeyPairSync("ed25519").privateKey;
+  const owner = fingerprint(key);
+  const tracker = await packed("wellbrained.tracker", "Tracker", key);
+  const factory = await packed("wellbrained.factory", "Factory", key);
+  const rating = { average: 4.7, count: 23, stars: [0, 1, 1, 3, 18] };
+  const { url, server } = await catalogServer([
+    {
+      entry: listing("wellbrained.tracker", "Tracker", tracker, owner, { publisher: "wellbrained", description: "Tracks your runs.", rating }),
+      body: tracker,
+      reviews: {
+        summary: rating,
+        reviews: [
+          {
+            id: "AbCdEfGhIjKlMnOp",
+            stars: 2,
+            text: "Crashed on act 3.\n<b>Please fix</b>",
+            version: "1.0.0",
+            createdAt: "2026-10-20T10:00:00.000Z",
+            updatedAt: "2026-10-20T10:00:00.000Z",
+            author: { name: "Mara", initials: "MA", picture: null },
+            reply: { text: "Fixed in 1.0.1, thanks!", updatedAt: "2026-10-21T10:00:00.000Z" },
+          },
+          { id: "bad", stars: 9, text: "dropped", version: "1.0.0", author: {} },
+        ],
+      },
+    },
+    // Two ratings are too few for an average.
+    { entry: listing("wellbrained.factory", "Factory", factory, owner, { rating: { average: 5, count: 2, stars: [0, 0, 0, 0, 2] } }), body: factory },
+  ]);
+  const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
+  try {
+    await openGame(page, "poe2");
+    await page.getByTestId("add-module").click();
+    await page.getByTestId("module-tab-browse").click();
+    const card = page.getByTestId("catalog-wellbrained.tracker");
+    await expect(card.getByTestId("catalog-rating")).toContainText("4.7");
+    await expect(card.getByTestId("catalog-rating")).toContainText("(23)");
+    await expect(card.locator("[data-slot=star-rating] [data-fill]")).toHaveCount(5);
+    await expect(card.locator("[data-slot=star-rating] [data-fill=half]")).toHaveCount(1);
+    await expect(page.getByTestId("catalog-wellbrained.factory").getByTestId("catalog-rating-new")).toHaveText("2 ratings");
+    await expect(page.getByTestId("catalog-new-wellbrained.factory")).toHaveText("New");
+    await expect(page.getByTestId("catalog-new-wellbrained.tracker")).toHaveCount(0);
+
+    // Sorted by rating, the rated module comes first.
+    await page.getByTestId("catalog-sort").click();
+    await page.getByRole("option", { name: "Rating" }).click();
+    await expect(page.getByTestId("catalog-name")).toHaveText(["Tracker", "Factory"]);
+    await page.screenshot({ path: path.join(process.env.TAVORA_SHOTS ?? tmpdir(), "catalog-ratings.png") });
+
+    await card.getByTestId("catalog-rating").click();
+    const breakdown = page.getByTestId("catalog-rating-breakdown");
+    await expect(breakdown).toContainText("4.7 out of 5 stars");
+    await expect(breakdown.locator("li")).toHaveText([/5 stars\s*78%/, /4 stars\s*13%/, /3 stars\s*4%/, /2 stars\s*4%/, /1 star\s*0%/]);
+    await page.screenshot({ path: path.join(process.env.TAVORA_SHOTS ?? tmpdir(), "catalog-rating-breakdown.png") });
+    await page.getByTestId("catalog-rating-reviews").click();
+
+    const info = page.getByTestId("catalog-info-wellbrained.tracker");
+    const reviews = info.getByTestId("catalog-reviews");
+    await expect(reviews.getByTestId("catalog-reviews-summary")).toContainText("23 ratings");
+    // Signed out: no stars to pick, a way to sign in instead.
+    await expect(reviews.getByTestId("catalog-reviews-sign-in")).toBeVisible();
+    await expect(reviews.getByTestId("catalog-reviews-stars")).toHaveCount(0);
+    // Only the well-formed review shows, as plain text, with the publisher's reply.
+    const review = reviews.getByTestId("catalog-review-AbCdEfGhIjKlMnOp");
+    await expect(reviews.locator("[data-testid^=catalog-review-]").filter({ has: page.getByTestId("catalog-review-reply") })).toHaveCount(1);
+    await expect(review).toContainText("Mara");
+    await expect(review).toContainText("<b>Please fix</b>");
+    await expect(review.locator("b")).toHaveCount(0);
+    await expect(review.getByTestId("catalog-review-reply")).toContainText("Reply from wellbrained");
+    await reviews.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(process.env.TAVORA_SHOTS ?? tmpdir(), "catalog-reviews.png") });
   } finally {
     await app.close();
     server.close();

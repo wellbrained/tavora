@@ -43,6 +43,7 @@ function listing(version: string, zip: Buffer, owner: string, fields: Partial<Ca
     notes: [],
     homepage: null,
     shots: [],
+    rating: null,
     icon: null,
     ...fields,
   };
@@ -114,6 +115,8 @@ describe("newAsks", () => {
       connectors: ["discord"],
     });
     expect(newAsks({ network: ["a.example.com"], connectors: ["discord"] }, { network: [] })).toEqual({ network: [], connectors: [] });
+    // A connector asked for on request waits until the module needs it.
+    expect(newAsks({ network: [], connectors: [] }, { network: [], connectors: ["stream-overlay"], onRequest: ["stream-overlay"] })).toEqual({ network: [], connectors: [] });
   });
 });
 

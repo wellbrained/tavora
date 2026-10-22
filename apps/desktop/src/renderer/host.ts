@@ -1,11 +1,11 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import type { AccountView, ActionResult, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu } from "../shared/host-api";
+import type { AccountView, ActionResult, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
 import { SETTING_SECTIONS, type SettingsSection } from "./components/settings/settings-index";
 import { numberedGames } from "./shortcuts";
-import { setLanguage } from "./i18n";
+import { setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
 
 export const api = window.tavoraHost;
@@ -54,6 +54,44 @@ api.onDeveloperKeys((next) => (developerKeys.value = next));
 void api.getDeveloperKeys().then((initial) => {
   if (initial && !developerKeys.value) developerKeys.value = initial;
 });
+
+/** The review screen before a dev module goes to the catalog; null while none is open. */
+export const publish = shallowRef<PublishView | null>(null);
+api.onPublish((next) => (publish.value = next));
+void api.getPublish().then((initial) => {
+  if (initial && !publish.value) publish.value = initial;
+});
+
+/**
+ * Publishing is set up: signed in, with a developer name and a publisher key Tavora keeps that is linked
+ * to the account. Until then Publish and Save as zip open the developer onboarding instead.
+ */
+export const developerReady = computed(() => {
+  const view = account.value;
+  const keys = developerKeys.value;
+  if (!view?.account || !view.developer || keys?.status !== "ready") return false;
+  const linked = new Set((view.publisherKeys ?? []).map((key) => key.fingerprint));
+  return keys.keys.some((key) => linked.has(key.fingerprint));
+});
+
+/** Publish on a dev module: the review screen, or the onboarding first while publishing isn't set up. */
+export function publishModule(moduleId: string): void {
+  if (!developerReady.value) {
+    dialog.value = { kind: "developer-start", then: moduleId };
+    return;
+  }
+  void act({ type: "publish-review", moduleId });
+}
+
+/** Save as zip on a dev module: signed with the kept key, so it needs the same setup as Publish. */
+export async function saveModuleZip(moduleId: string): Promise<void> {
+  if (!developerReady.value) {
+    dialog.value = { kind: "developer-start" };
+    return;
+  }
+  const result = await act({ type: "save-module-zip", moduleId });
+  if (result.ok && result.id) showToast(t("publish.zipSaved", { file: result.id }));
+}
 
 /** Approving a new PC from an old one: this PC asking, or another PC asking this one. */
 export const pairing = shallowRef<PairingView | null>(null);
@@ -152,6 +190,8 @@ export interface AddModuleRequest {
   kind: "add-module";
   slot?: string;
   view?: "catalog";
+  /** Opens the catalog with this module's page, such as one just published. */
+  browse?: string;
 }
 
 /** Asking where a link from a module should open (HostViewState.pendingLink). */
@@ -189,6 +229,8 @@ export interface GrantRequest {
   review: boolean;
   /** A catalog update that asks for more (ModuleState.update): allowing it installs the update. */
   update?: boolean;
+  /** A connector the module asks for on request, now that it needs it (HostViewState.pendingConnector). */
+  onRequest?: { id: number; connectors: ModuleConnector[] };
 }
 
 export type DialogRequest =
@@ -201,9 +243,33 @@ export type DialogRequest =
   | { kind: "add-game" }
   | { kind: "steam-import" }
   | AddModuleRequest
-  | GrantRequest;
+  | GrantRequest
+  /** The developer onboarding; `then` is the module whose Publish opened it, reviewed once it is done. */
+  | { kind: "developer-start"; then?: string }
+  /** Signed in on a PC without the account's recovery key: unlock the cloud copy and publisher keys here. */
+  | { kind: "recovery-ask" }
+  /** Make a copy of an example that ships with Tavora (Settings > Development). */
+  | { kind: "copy-example"; moduleId: string };
 
 export const dialog = shallowRef<DialogRequest | null>(null);
+
+// Just signed in, on a PC without the account's recovery key while the account has one: ask for it
+// now, once (the decision log: asked at sign-in, made only when the cloud copy or publishing needs it).
+let askAfterSignIn = false;
+function askForRecoveryKey(): void {
+  const status = developerKeys.value?.status;
+  if (!askAfterSignIn || !status || status === "loading" || status === "signed-out") return;
+  askAfterSignIn = false;
+  if (status === "ask" && !dialog.value) dialog.value = { kind: "recovery-ask" };
+}
+watch(
+  () => (account.value ? Boolean(account.value.account) : null),
+  (signedIn, before) => {
+    askAfterSignIn = before === false && signedIn === true;
+    askForRecoveryKey();
+  },
+);
+watch(() => developerKeys.value?.status, askForRecoveryKey);
 
 // A panel could not switch to what another panel of its module asked for: ask whether to open it in a new one.
 watch(
@@ -227,6 +293,15 @@ watch(
   (gameId) => {
     if (gameId && (!dialog.value || dialog.value.kind === "game-switch")) dialog.value = { kind: "game-switch", gameId };
     else if (!gameId && dialog.value?.kind === "game-switch") dialog.value = null;
+  },
+);
+
+// A module needs a connector it asks for on request (its first Copy OBS link): Tavora's consent dialog asks.
+watch(
+  () => state.value?.pendingConnector ?? null,
+  (pending) => {
+    if (pending) dialog.value = { kind: "grant", moduleId: pending.moduleId, slot: null, review: true, onRequest: { id: pending.id, connectors: [...pending.connectors] } };
+    else if (dialog.value?.kind === "grant" && dialog.value.onRequest) dialog.value = null;
   },
 );
 
@@ -381,6 +456,7 @@ export const overlayOpen = computed(
     dialog.value !== null ||
     copyQuestion.value !== null ||
     state.value?.hotkeyRequest != null ||
+    publish.value !== null ||
     settingsOpen.value ||
     searchOpen.value ||
     dragging.value,

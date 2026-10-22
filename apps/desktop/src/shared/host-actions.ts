@@ -102,6 +102,9 @@ const label = nullable(text(16));
 const code = matching(/^\d{6}$/);
 const fingerprint = matching(/^[0-9a-f]{32}$/);
 const deviceId = matching(/^[A-Za-z0-9_-]{1,40}$/);
+/** A review or reply: at most 500 characters, which the service counts; here only a cap on its length. Null for none. */
+const reviewText = nullable(text(2000));
+const reviewId = matching(/^[A-Za-z0-9_-]{16}$/);
 
 /** Most icons offered in one action; the dialog sends more in turns. */
 export const MAX_SHARE_BATCH = 50;
@@ -222,6 +225,8 @@ export function hostActionTable(c: HostChecks) {
       choice: oneOf("set", "remove", "cancel"),
       accelerator: optional(text(40)),
     },
+    /** The answer in the consent dialog for a connector a module asks for on request (HostViewState.pendingConnector). */
+    "connector-answer": { id: check<number>((value) => Number.isSafeInteger(value)), allow: bool },
     /** Removes one hotkey from Settings > Streaming. */
     "remove-hotkey": { owner: c.ownerId, moduleId: c.moduleId, gameId: c.gameId, action: matching(/^[a-z][a-z0-9-]{0,31}$/), target: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     "set-language": { language: check<LanguageSetting>(isLanguageSetting) },
@@ -259,6 +264,12 @@ export function hostActionTable(c: HostChecks) {
     /** Picks a module project folder to load from (answers with the folder), or forgets one. */
     "add-development-folder": {},
     "remove-development-folder": { folder: filled(500) },
+    /** Copies an example into a new project in a development folder, or in a folder the player picks (null); answers with the new project. */
+    "copy-example": { moduleId: c.moduleId, name: named(80), folder: nullable(filled(500)) },
+    /** Opens a module project of a development folder (a `developmentFolders` project) in the file manager. */
+    "open-development-project": { project: filled(500) },
+    /** Opens an example's folder in the file manager, to look at its sources. */
+    "open-example-folder": { moduleId: c.moduleId },
     "open-developer-link": { link: oneOf(...DEVELOPER_LINKS) },
     /** Looks for modules again, after the player changed their modules folder. */
     "reload-modules": {},
@@ -281,6 +292,14 @@ export function hostActionTable(c: HostChecks) {
     "report-catalog-module": { moduleId: c.moduleId },
     /** Opens a catalog module's homepage like a module link: the address is the one the main process reads from the listing again. */
     "open-catalog-homepage": { moduleId: c.moduleId },
+    /** Rates an installed catalog module with the account, on the installed version; `text` is the review, null for stars only. */
+    "rate-catalog-module": { moduleId: c.moduleId, stars: count(5), text: reviewText },
+    /** Deletes the account's rating of a catalog module. */
+    "unrate-catalog-module": { moduleId: c.moduleId },
+    /** The publisher's one reply under a review of their module; null takes it back. */
+    "reply-catalog-review": { moduleId: c.moduleId, reviewId, text: reviewText },
+    /** Reports a review to Tavora after the player pressed Report. Sends only the review's id. */
+    "report-catalog-review": { reviewId },
     /** The player said yes to a catalog update that asks for more: installs exactly that version and grants what it asked for. */
     "apply-module-update": { moduleId: c.moduleId, version: filled(64) },
     /** Deletes the data a module that is not installed left behind (owner as in leftoverModuleData). */
@@ -390,6 +409,23 @@ export function hostActionTable(c: HostChecks) {
     "developer-recovery-key-saved": {},
     "developer-show-recovery-key": {},
     "developer-copy-recovery-key": {},
+    /** Asks the catalog about an id prefix, or claims it for the account (the account view's prefixCheck says what it said). */
+    "account-prefix-check": { prefix: filled(126) },
+    "account-prefix-claim": { prefix: filled(126) },
+    /** Opens the review screen for a module from a project folder, or packs it again. */
+    "publish-review": { moduleId: c.moduleId },
+    "publish-refresh": {},
+    /** Writes a version and its patch notes into the reviewed project's files, then packs again. */
+    "publish-write": { version: matching(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/), notes: list(text(500), { max: 20 }) },
+    /** Gives the reviewed module a new id in its project files (before its first publish), then packs again. */
+    "publish-set-id": { id: c.moduleId },
+    /** Uploads the zip the review screen shows to the catalog. */
+    "publish-upload": {},
+    "publish-close": {},
+    /** Copies `npm create @tavora/module`, the command that starts a module project. */
+    "developer-copy-create-command": {},
+    /** Packs a module from a project folder, signed with a kept key, and saves the zip where the developer picks. */
+    "save-module-zip": { moduleId: c.moduleId },
     /** Asks another PC of the account for its key, instead of typing the recovery key. */
     "pairing-start": {},
     "pairing-cancel": {},

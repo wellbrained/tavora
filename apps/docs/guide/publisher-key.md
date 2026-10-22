@@ -10,11 +10,11 @@ Every version you publish, and every zip you share, is signed with your publishe
 
 ## Where it is
 
-Tavora makes and keeps your publisher key for you. The setup under **Settings > Development** (the **Want to make modules?** card, or Publish before you've set up) signs you in, asks for a **developer name** and then offers **Make my key**. Tavora seals the key in your account's vault with your recovery key and links it to your account, so players see your name. If your account has no recovery key yet, Tavora shows you one now: keep it somewhere safe.
+Tavora makes and keeps your publisher key for you. The setup under **Settings > Development** (the **Want to make modules?** card, or Publish before you've set up) signs you in and asks for a **developer name**; saving it makes your key. Tavora seals the key in your account's vault with your recovery key and links it to your account, so players see your name. If your account has no recovery key yet, Tavora shows you one now: keep it somewhere safe.
 
 The key is used only inside Tavora, when you press Publish or Save as zip. Nothing outside Tavora can ask it to sign.
 
-- **Already have a key?** Choose **I already have one** during setup and pick the key file, such as `~/.tavora/publisher-key.pem` from an older `tavora-pack`. Once Tavora keeps it, delete the file.
+- **Linked a key file before?** The setup asks for it: press **Pick my key file…** (such as `~/.tavora/publisher-key.pem` from an older `tavora-pack`), since modules you already published update only with that key. Once Tavora keeps it, delete the file. Under **Publisher keys and CI** (press **Show**), **Add from a file** does the same later.
 - **On another PC**, sign in to Tavora, press **Get it from my other PC** under Settings > Account > Recovery key, and click **Add** on a PC that has your keys once both show the same code. Without another PC, type in your recovery key there. Your keys are there.
 
 ## Back it up
@@ -29,7 +29,7 @@ A lost or leaked key can be replaced by a new one only if it was linked to your 
 
 ## Publishing from CI
 
-A build server signs with your key as a file: press **Export** next to the key under **Settings > Development > Publish from CI**, and pass the file to `@tavora/pack` with `--key <file>`. Publishing from CI also needs a publish token; [Publish from CI](./publishing.md#publish-from-ci) has the steps.
+A build server signs with your key as a file: press **Show** under **Settings > Development > Publisher keys and CI**, then **Export** next to the key, and pass the file to `@tavora/pack` with `--key <file>`. Publishing from CI also needs a publish token; [Publish from CI](./publishing.md#publish-from-ci) has the steps.
 
 **With the file and a token, anyone can publish as you**: keep both as CI secrets, never commit them, and export the key only where you need it.
 
@@ -41,7 +41,7 @@ Keys Tavora keeps are linked when you make or add them; if that failed, press **
 
 To link a key file Tavora doesn't keep (one you sign with `--key` in CI):
 
-1. Press **Get a link code** under Settings > Development > Publish from CI. Tavora shows a one-time code, valid for 10 minutes.
+1. Press **Get a link code** under Settings > Development > Publisher keys and CI. Tavora shows a one-time code, valid for 10 minutes.
 2. Copy the command it shows and run it in a terminal, in any folder:
 
    ```sh

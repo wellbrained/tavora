@@ -28,11 +28,11 @@ export function publishSignature(key: KeyObject, zip: Buffer): string {
 }
 
 const MESSAGES: Record<string, string> = {
-  "sign-in-needed": "Publishing needs your Tavora account. Publish from Tavora (Settings > Development), or from CI with a publish token in TAVORA_PUBLISH_TOKEN (Settings > Development > Publish from CI).",
-  "token-not-working": "This publish token doesn't work any more: it was removed or ran out. Make a new one in Tavora (Settings > Development > Publish from CI).",
+  "sign-in-needed": "Publishing needs your Tavora account. Publish from Tavora (Settings > Development), or from CI with a publish token in TAVORA_PUBLISH_TOKEN (Settings > Development > Publisher keys and CI).",
+  "token-not-working": "This publish token doesn't work any more: it was removed or ran out. Make a new one in Tavora (Settings > Development > Publisher keys and CI).",
   "wrong-account": "This publisher key is linked to another Tavora account than the one publishing.",
   "token-new-prefix": "A publish token publishes only under id prefixes your account has. Publish this module's first version from Tavora.",
-  "key-not-linked": "Your publisher key is not linked to a Tavora account yet. Get a link code in Tavora (Settings > Development > Publish from CI) and run tavora-pack link <code> --key <file>",
+  "key-not-linked": "Your publisher key is not linked to a Tavora account yet. Get a link code in Tavora (Settings > Development > Publisher keys and CI) and run tavora-pack link <code> --key <file>",
   "prefix-taken": "Another developer publishes under this id prefix. Give your module an id with a prefix of your own, such as <your name>.<module>.",
   "prefix-reserved": "This id prefix is reserved. Give your module an id with a prefix of your own, such as <your name>.<module>.",
   "too-many-prefixes": "Your account already publishes under 3 id prefixes. Use one of them for this module.",

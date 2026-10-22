@@ -17,7 +17,7 @@ A [Tavora](https://mytavora.app) module, made with `@tavora/create-module`. Tavo
 
 ## Publish
 
-In Tavora, open **Settings > Development** and press **Publish** on this module. The first time, Tavora walks you through signing in, your developer name and your publisher key. Tavora shows what it will publish, can raise `version` and write the patch notes for you, then signs and uploads it. Players find it under **Browse** in the module library.
+In Tavora, open **Settings > Development** and press **Publish** next to this module. The first time, Tavora walks you through signing in and choosing a developer name, which sets up your publisher key. Tavora shows what it will publish, can raise `version` and write the patch notes for you, then signs and uploads it. Players find it under **Browse** in the module library.
 
 Tavora publishes what's in `dist/`, so keep `dev` running or run `{{run}} build` first. **Save as zip** next to Publish makes a signed zip to share by hand; players install it with **Settings > Modules > Install from zip**.
 
@@ -25,7 +25,7 @@ Your publisher key signs every version, and the data your module saves for playe
 
 ## Publish from CI
 
-To publish from a build server, export your key and make a publish token under **Settings > Development > Publish from CI**. Keep both as secrets there and run:
+To publish from a build server, export your key and make a publish token under **Settings > Development > Publisher keys and CI**. Keep both as secrets there and run:
 
 ```sh
 {{run}} build

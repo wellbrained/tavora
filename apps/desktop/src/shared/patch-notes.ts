@@ -20,6 +20,90 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.35",
+    date: "2026-10-22",
+    title: "Project rows",
+    notes: [
+      "A project that isn't built yet looks like the others in Settings > Development, with its name and version.",
+      "Every project there has an Open folder button.",
+    ],
+  },
+  {
+    version: "0.19.34",
+    date: "2026-10-22",
+    title: "Simpler developer settings",
+    notes: [
+      "Saving your developer name now sets up publishing: Tavora makes your publisher key and claims your prefix.",
+      "Settings > Development shows just your name and prefix. Keys, key files and tokens sit under Publisher keys and CI.",
+      "Each publisher key shows once, with Export, Lost it? and Unlink.",
+      "Make modules no longer asks for a prefix you already have.",
+      "Signing in on a new PC asks for your account's recovery key right away, if your account has one.",
+      "The texts for your developer name, prefix, publisher key and recovery key now explain what each is for.",
+    ],
+  },
+  {
+    version: "0.19.33",
+    date: "2026-10-22",
+    title: "Publishing stays set up",
+    notes: [
+      "\"Want to make modules?\" no longer shows up in Settings > Development after a restart once publishing is set up.",
+      "Publish and Save as zip work right after a start, without opening Settings > Account first.",
+    ],
+  },
+  {
+    version: "0.19.32",
+    date: "2026-10-22",
+    title: "Clock & Counter works without OBS",
+    notes: [
+      "Adding Clock & Counter no longer asks about stream overlays.",
+      "You're asked the first time you copy an OBS link, and the module works either way.",
+    ],
+  },
+  {
+    version: "0.19.31",
+    date: "2026-10-22",
+    title: "Clock & Counter",
+    notes: [
+      "New module: countdowns, stopwatches and counters for each game.",
+      "Pick how a clock shows its time, with or without hours.",
+      "Counters can add to each other, like 5 sit-ups per death.",
+      "Show any of them in OBS with its own link, and control them with hotkeys.",
+    ],
+  },
+  {
+    version: "0.19.30",
+    date: "2026-10-21",
+    title: "Examples and project folders",
+    notes: [
+      "Settings > Development lists each project folder with its modules under it, so a module shows up only once.",
+      "The examples that ship with Tavora have their own list. Open one's folder to read the code, or make a copy to start your own module.",
+      "The UI Playground is listed with the other official modules now.",
+    ],
+  },
+  {
+    version: "0.19.29",
+    date: "2026-10-21",
+    title: "Publish modules from Tavora",
+    notes: [
+      "New to making modules? Want to make modules? in Settings > Development walks you from sign-in to your first project.",
+      "Check and claim your prefix right in Tavora.",
+      "Publish next to your module shows what goes out, sets the version and notes for you, and uploads it with one click.",
+      "Save as zip packs a module to share by hand.",
+      "Your developer name, keys and publish tokens moved to Settings > Development.",
+    ],
+  },
+  {
+    version: "0.19.28",
+    date: "2026-10-21",
+    title: "Rate modules",
+    notes: [
+      "Catalog cards show a module's rating and how many rated it. Click the arrow to see how many gave each star.",
+      "Rate a module you installed with 1 to 5 stars and an optional review, on its page. You need to be signed in.",
+      "Developers can reply once under each review of their module.",
+      "Sort the catalog by name, rating or newest.",
+    ],
+  },
+  {
     version: "0.19.27",
     date: "2026-10-21",
     title: "Clearer module warnings",
