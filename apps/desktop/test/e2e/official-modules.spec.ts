@@ -430,7 +430,7 @@ test("ui playground: shows every section, filters them and disables the controls
   await openModule(page, PLAYGROUND);
   await ready(app, PLAYGROUND, "section-empty");
   const sections = () => inModule<string[]>(app, PLAYGROUND, `[...document.querySelectorAll('[data-testid^="section-"]')].map((el) => el.id)`);
-  await expect.poll(sections).toEqual(["colours", "type", "buttons", "fields", "choices", "ratings", "tabs", "zoom", "status", "progress", "menus", "dialogs", "lists", "notices", "empty"]);
+  await expect.poll(sections).toEqual(["colours", "type", "buttons", "fields", "choices", "ratings", "expandable", "tabs", "zoom", "status", "progress", "menus", "dialogs", "lists", "notices", "empty"]);
 
   // The swatches show the host's theme, not only the built-in default.
   await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
