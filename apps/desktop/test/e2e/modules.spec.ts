@@ -90,6 +90,20 @@ test("the modules page lists where modules came from, reloads, and removes one w
     }
   }
   await page.screenshot({ path: "test-results/module-warnings-narrow.png" });
+  // At the smallest window, buttons go under the text instead of running off to the side or squeezing it.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(640, 900));
+  await expect
+    .poll(() =>
+      page.getByRole("dialog", { name: "Settings", exact: true }).evaluate((dialog) =>
+        Array.from(dialog.querySelectorAll("*")).every((element) => !/auto|scroll/.test(getComputedStyle(element).overflowX) || element.scrollWidth <= element.clientWidth),
+      ),
+    )
+    .toBe(true);
+  const unbuilt = warnings.getByRole("listitem").filter({ hasText: "unbuilt can't load" });
+  await expect
+    .poll(async () => (await unbuilt.getByRole("button").boundingBox())!.y > (await unbuilt.getByTestId("module-problem-path").boundingBox())!.y)
+    .toBe(true);
+  expect((await page.getByTestId("module-tavora.notes").getByText("Notes", { exact: true }).boundingBox())!.width).toBeGreaterThan(20);
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1400, 900));
   await rm(path.join(userData, "modules", "broken"), { recursive: true });
   await rm(path.join(userData, "modules", "unbuilt"), { recursive: true });
