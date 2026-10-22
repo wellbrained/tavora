@@ -89,10 +89,12 @@ function machinesTip(node: ChainNode): string {
         v-for="{ node, depth } in visible"
         :key="node.key"
         class="relative flex items-start text-sm"
-        :class="depth === 0 ? ['bg-muted/50', node.key !== '0' && 'border-background border-t-8'] : undefined"
+        :class="depth === 0 ? ['bg-primary/10', node.key !== '0' && 'border-background border-t-12'] : undefined"
         :style="{ paddingLeft: `${PAD + depth * INDENT}px` }"
         data-testid="chain-node"
       >
+        <!-- A target starts its own tree: an accent bar on the left. -->
+        <span v-if="depth === 0" aria-hidden="true" class="bg-primary absolute inset-y-0 left-0 w-1" />
         <span
           v-for="level in depth"
           :key="level"
