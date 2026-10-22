@@ -237,6 +237,8 @@ export interface HostOptions {
   discord?: { ipcPath: string; tokenUrl: string } | undefined;
   /** Settings > Account and the account service (on since 0.16.4; off only in tests that leave it out). */
   accounts?: boolean;
+  /** A development run in its own desktop-dev folder: turning the cloud copy on asks first. */
+  devData?: boolean;
   /** Development only: where accounts are, when not the same service as the rest. */
   accountUrl?: string | undefined;
   /**
@@ -2578,6 +2580,7 @@ export class Host {
     const sync = new CopySync({
       userData: options.userData,
       enabled: options.accounts === true,
+      devData: options.devData === true,
       moduleFiles: () => host()?.files.root() ?? savedFolder ?? options.picturesFolder ?? defaultFilesRoot(options.userData),
       service: new ServiceStorage(service),
       accountKey: new AccountKey({

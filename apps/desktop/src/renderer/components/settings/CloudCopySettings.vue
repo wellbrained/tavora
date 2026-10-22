@@ -93,6 +93,17 @@ function move(to: "server" | "folder") {
   });
 }
 
+/** Turns the copy on. In the dev build's own data it asks first: the copy belongs in the installed app. */
+function turnOn(action: HostAction) {
+  if (!view.value?.devData) return void run(action);
+  confirmAction({
+    title: t("cloudCopy.dev.title"),
+    message: t("cloudCopy.dev.message"),
+    confirm: t("cloudCopy.dev.confirm"),
+    run: () => submitAction(action),
+  });
+}
+
 function turnOff() {
   confirmAction({
     title: t("cloudCopy.turnOff.title"),
@@ -163,12 +174,13 @@ function startOver() {
     <template v-else-if="!view.on">
       <p class="text-muted-foreground border-b py-4 text-sm" data-testid="cloud-copy-off">
         {{ view.canKeepKey ? (view.problem ? t(`cloudCopy.error.${view.problem}`) : t("cloudCopy.off.description")) : t("cloudCopy.cantKeep") }}
+        <template v-if="view.devData"><br />{{ t("cloudCopy.dev.notice") }}</template>
       </p>
       <SettingRow :label="t('cloudCopy.server.label')" :description="t(signedIn ? 'cloudCopy.server.description' : 'cloudCopy.server.signIn')">
-        <Button v-if="signedIn" :disabled="busy || !view.canKeepKey || view.busy !== null" data-testid="cloud-copy-on" @click="run({ type: 'cloud-copy-on' })">{{ t("cloudCopy.turnOn") }}</Button>
+        <Button v-if="signedIn" :disabled="busy || !view.canKeepKey || view.busy !== null" data-testid="cloud-copy-on" @click="turnOn({ type: 'cloud-copy-on' })">{{ t("cloudCopy.turnOn") }}</Button>
       </SettingRow>
       <SettingRow :label="t('cloudCopy.folder.label')" :description="t('cloudCopy.folder.description')">
-        <Button variant="secondary" :disabled="busy || !view.canKeepKey || view.busy !== null" data-testid="cloud-copy-on-folder" @click="run({ type: 'cloud-copy-on-folder' })">{{ t("cloudCopy.folder.pick") }}</Button>
+        <Button variant="secondary" :disabled="busy || !view.canKeepKey || view.busy !== null" data-testid="cloud-copy-on-folder" @click="turnOn({ type: 'cloud-copy-on-folder' })">{{ t("cloudCopy.folder.pick") }}</Button>
       </SettingRow>
     </template>
 
