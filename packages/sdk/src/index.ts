@@ -251,7 +251,7 @@ export interface TavoraSDK {
     read(id: string): Promise<Uint8Array>;
     /** Revokes a remembered file reference; never deletes the player's file. */
     forget(id: string): Promise<void>;
-    /** Saves JSON (up to 1 MiB) in Downloads/Tavora after a click or key press. Never replaces a file. Tavora 0.19.17+. */
+    /** Saves JSON (up to 8 MiB; 1 MiB on Tavora 0.20.7 and older) in Downloads/Tavora after a click or key press. Never replaces a file. Tavora 0.19.17+. */
     exportJson(value: JsonValue, name?: string): Promise<{ fileName: string }>;
   };
   pictures: {
@@ -640,7 +640,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         const address = new URL(JSON_EXPORT_PATH, window.location.href);
         address.searchParams.set('name', name);
         const body = JSON.stringify(value);
-        if (new TextEncoder().encode(body).byteLength > 1024 * 1024) throw new TavoraError({code:'QUOTA_EXCEEDED',message:'JSON exports may be at most 1 MiB'});
+        if (new TextEncoder().encode(body).byteLength > 8 * 1024 * 1024) throw new TavoraError({code:'QUOTA_EXCEEDED',message:'JSON exports may be at most 8 MiB'});
         let response: Response;
         try { response = await fetch(address, {method:'POST',headers:{'Content-Type':'application/json'},body}); }
         catch { throw new TavoraError({code:'INTERNAL',message:'could not export the JSON file'}); }
