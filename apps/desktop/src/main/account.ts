@@ -527,6 +527,8 @@ export class AccountClient {
       state = PREFIX_STATES.find((item) => item === answer.state) ?? "invalid";
     }
     this.prefixCheck = { prefix, state };
+    // Held but not in the list read before (the service didn't list prefixes then): read it again.
+    if (state === "held" && !this.prefixes?.held.some((item) => item.prefix === prefix)) await this.readPrefixes();
     this.changed();
     return state;
   }

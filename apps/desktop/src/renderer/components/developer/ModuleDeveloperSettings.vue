@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Settings > Development > Module developer, once signed in: the public developer name, the publisher
-// keys Tavora keeps in the account's vault and those linked to the account, and the id prefixes the
-// account holds. What only publishing from CI needs (key files, link codes, publish tokens) is folded
-// away under Publish from CI, so a newcomer never meets it.
+// Settings > Development > Module developer, once signed in: the public developer name and the id
+// prefixes the account holds. Saving the name the first time also claims its prefix and makes the
+// publisher key (host.ts), so publishing from Tavora needs nothing more here; the keys (Export, Lost
+// it?, Unlink), key files, link codes and publish tokens are folded away under Publisher keys and CI.
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
@@ -44,9 +44,23 @@ async function saveDeveloperName() {
   if (await run({ type: "account-developer-name", name })) showToast(t("account.developer.saved", { name }));
 }
 
-// The publisher keys Tavora keeps in the account's vault; it signs modules with them.
+// One list of publisher keys: the ones linked to the account (oldest first), then the ones Tavora keeps
+// in the account's vault but couldn't link yet. Tavora signs modules with a key it keeps; a linked key
+// it doesn't keep is a key file, linked with `tavora-pack link`.
 const keys = computed(() => developerKeys.value);
-const linked = computed(() => new Set((view.value?.publisherKeys ?? []).map((key) => key.fingerprint)));
+const rows = computed(() => {
+  const kept = new Set((keys.value?.keys ?? []).map((key) => key.fingerprint));
+  const linked = view.value?.publisherKeys ?? [];
+  const linkedSet = new Set(linked.map((key) => key.fingerprint));
+  return [
+    ...linked.map((key) => ({ fingerprint: key.fingerprint, linkedAt: key.linkedAt, kept: kept.has(key.fingerprint) })),
+    ...[...kept].filter((fingerprint) => !linkedSet.has(fingerprint)).map((fingerprint) => ({ fingerprint, linkedAt: null, kept: true })),
+  ];
+});
+/** The key a build server gets as a file: the newest linked key Tavora keeps, the one it signs with. */
+/** Tavora can make or add a key here: it keeps keys for this account on this PC, or makes the account's recovery key first. */
+const canKeep = computed(() => keys.value?.status === "ready" || keys.value?.status === "none");
+const exportable = computed(() => rows.value.filter((row) => row.kept && row.linkedAt).at(-1)?.fingerprint ?? null);
 async function makeKey() {
   if (await run({ type: "developer-key-create" })) showToast(t("account.developer.created"));
 }
@@ -85,6 +99,9 @@ async function replaceKey(fingerprint: string, leaked: boolean) {
 // The id prefixes the account holds; a new one is suggested from the developer name.
 const prefixes = computed(() => view.value?.prefixes ?? null);
 const suggested = computed(() => suggestPrefix(view.value?.developer?.name ?? ""));
+const addingPrefix = ref(false);
+/** The prefix saving the typed name claims with it; none once the account holds one. */
+const namePrefix = computed(() => (prefixes.value?.held.length === 0 && developerName.value.trim() !== (view.value?.developer?.name ?? "") ? suggestPrefix(developerName.value) : null));
 
 // Publish from CI: folded away until opened.
 const ciOpen = ref(false);
@@ -124,75 +141,18 @@ function removeToken(token: AccountPublishToken) {
           <Button type="submit" :disabled="busy || !developerName.trim() || developerName.trim() === view?.developer?.name" data-testid="account-developer-save">{{ t("account.developer.save") }}</Button>
         </div>
         <span class="text-muted-foreground text-xs" data-testid="account-developer-name-hint">{{ nameHint }}</span>
+        <span v-if="namePrefix" class="text-muted-foreground text-xs" data-testid="account-developer-name-prefix">{{ t("devStart.name.prefix", { prefix: namePrefix }) }}</span>
       </form>
 
-      <div class="mt-6" data-testid="developer-keys">
-        <span class="text-sm font-medium">{{ t("account.developer.kept") }}</span>
-        <p class="text-muted-foreground mt-1 text-xs">{{ t("account.developer.keptHint") }}</p>
-        <p v-if="keys?.status === 'ask'" class="text-muted-foreground mt-2 text-sm" data-testid="developer-keys-ask">{{ t("account.developer.askKey") }}</p>
-        <p v-else-if="keys?.status === 'offline'" class="text-muted-foreground mt-2 text-sm">{{ t("account.developer.offline") }}</p>
-        <template v-else>
-          <p v-if="!keys?.keys.length" class="text-muted-foreground mt-2 text-sm" data-testid="developer-keys-none">{{ t("account.developer.noKept") }}</p>
-          <ul v-else class="mt-2" data-testid="developer-keys-list">
-            <li v-for="key in keys.keys" :key="key.fingerprint" class="flex min-h-10 items-center gap-3" :data-testid="`developer-key-${key.fingerprint}`">
-              <span class="flex-1 font-mono text-sm" :title="key.fingerprint">{{ key.fingerprint.slice(0, 16) }}…</span>
-              <span v-if="!linked.has(key.fingerprint)" class="text-muted-foreground text-sm">{{ t("account.developer.notLinked") }}</span>
-              <Button v-if="!linked.has(key.fingerprint)" variant="secondary" size="sm" :disabled="busy || !view?.developer" @click="run({ type: 'developer-key-link', fingerprint: key.fingerprint })">
-                {{ t("account.developer.linkKept") }}
-              </Button>
-            </li>
-          </ul>
-          <div class="mt-3 flex items-center gap-2">
-            <Button :disabled="busy || !view?.developer" data-testid="developer-key-create" @click="makeKey">{{ t("account.developer.create") }}</Button>
-            <span v-if="!view?.developer" class="text-muted-foreground text-sm">{{ t("account.developer.linkNeedsName") }}</span>
-          </div>
+      <div v-if="prefixes && view?.developer" class="mt-6" data-testid="developer-prefixes">
+        <span class="text-sm font-medium">{{ t("developer.prefix") }}</span>
+        <template v-if="prefixes.held.length">
+          <p class="mt-1 text-sm" data-testid="developer-prefixes-list">{{ prefixes.held.length === 1 ? t("developer.prefixLine", { prefix: prefixes.held[0]!.prefix }) : t("developer.prefixLines", { prefixes: prefixes.held.map((item) => item.prefix).join(", ") }) }}</p>
+          <Button v-if="!addingPrefix && prefixes.held.length < prefixes.max" variant="ghost" size="sm" class="mt-1 -ml-2" data-testid="developer-prefix-add" @click="addingPrefix = true">{{ t("developer.prefixAdd") }}</Button>
         </template>
-      </div>
-
-      <div class="mt-6">
-        <span class="text-sm font-medium">{{ t("account.developer.keys") }}</span>
-        <p v-if="!view?.publisherKeys?.length" class="text-muted-foreground mt-1 text-sm" data-testid="account-keys-none">{{ t("account.developer.noKeys") }}</p>
-        <ul v-else class="mt-1" data-testid="account-keys">
-          <li v-for="key in view.publisherKeys" :key="key.fingerprint" :data-testid="`account-key-${key.fingerprint}`">
-            <div class="flex min-h-10 items-center gap-3">
-              <span class="flex-1 font-mono text-sm" :title="key.fingerprint">{{ key.fingerprint.slice(0, 16) }}…</span>
-              <span class="text-muted-foreground text-sm">{{ t("account.developer.keyLinked", { date: formatDate(key.linkedAt) }) }}</span>
-              <span v-if="requests.get(key.fingerprint)?.status === 'waiting'" class="text-sm" data-testid="account-key-waiting">{{ t("account.developer.replaceWaiting") }}</span>
-              <span v-else-if="requests.get(key.fingerprint)?.status === 'done'" class="text-sm" data-testid="account-key-replaced">{{ t("account.developer.replaceDone") }}</span>
-              <template v-else>
-                <span v-if="requests.get(key.fingerprint)?.status === 'declined'" class="text-muted-foreground text-sm">{{ t("account.developer.replaceDeclined") }}</span>
-                <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.replaceLabel', { key: key.fingerprint.slice(0, 16) })" data-testid="account-key-replace" @click="replacing = replacing === key.fingerprint ? null : key.fingerprint">
-                  {{ t("account.developer.replace") }}
-                </Button>
-              </template>
-              <Button v-if="!waiting.has(key.fingerprint)" variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.unlinkLabel', { key: key.fingerprint.slice(0, 16) })" @click="unlinkKey(key.fingerprint)">
-                {{ t("account.developer.unlink") }}
-              </Button>
-            </div>
-            <div v-if="replacing === key.fingerprint" class="mb-2 flex flex-col gap-2 rounded-md border p-3" data-testid="account-key-replace-choice">
-              <span class="text-sm">{{ t("account.developer.replaceHint") }}</span>
-              <div class="flex flex-wrap items-center gap-2">
-                <Button variant="secondary" size="sm" :disabled="busy" data-testid="account-key-lost" @click="replaceKey(key.fingerprint, false)">{{ t("account.developer.replaceLost") }}</Button>
-                <Button variant="destructive" size="sm" :disabled="busy" data-testid="account-key-leaked" @click="replaceKey(key.fingerprint, true)">{{ t("account.developer.replaceLeaked") }}</Button>
-                <Button variant="ghost" size="sm" @click="replacing = null">{{ t("common.cancel") }}</Button>
-              </div>
-            </div>
-          </li>
-        </ul>
-      </div>
-
-      <div v-if="prefixes" class="mt-6" data-testid="developer-prefixes">
-        <span class="text-sm font-medium">{{ t("developer.prefixes") }}</span>
-        <p class="text-muted-foreground mt-1 text-xs">{{ t("developer.prefixesHint", { max: prefixes.max }) }}</p>
-        <p v-if="!prefixes.held.length" class="text-muted-foreground mt-2 text-sm" data-testid="developer-prefixes-none">{{ t("developer.noPrefixes") }}</p>
-        <ul v-else class="mt-2" data-testid="developer-prefixes-list">
-          <li v-for="item in prefixes.held" :key="item.prefix" class="flex min-h-10 items-center gap-3" :data-testid="`developer-prefix-${item.prefix}`">
-            <span class="flex-1 font-mono text-sm">{{ item.prefix }}</span>
-            <span class="text-muted-foreground text-sm">{{ item.published ? t("developer.prefixUsed") : t("developer.prefixClaimed", { date: formatDate(new Date(item.claimedAt)) }) }}</span>
-          </li>
-        </ul>
-        <div v-if="prefixes.held.length < prefixes.max" class="mt-3">
-          <PrefixClaim :initial="prefixes.held.length ? null : suggested" />
+        <p v-else class="text-muted-foreground mt-1 text-xs" data-testid="developer-prefixes-none">{{ t("developer.noPrefixes") }}</p>
+        <div v-if="!prefixes.held.length || addingPrefix" class="mt-2">
+          <PrefixClaim :initial="prefixes.held.length ? null : suggested" @claimed="addingPrefix = false" />
         </div>
       </div>
     </div>
@@ -205,25 +165,58 @@ function removeToken(token: AccountPublishToken) {
       </Button>
     </SettingRow>
     <div v-if="ciOpen" class="py-4" data-testid="developer-ci">
-      <div v-if="keys?.status === 'ready'">
+      <div data-testid="developer-keys">
         <span class="text-sm font-medium">{{ t("account.developer.kept") }}</span>
-        <ul v-if="keys.keys.length" class="mt-1">
-          <li v-for="key in keys.keys" :key="key.fingerprint" class="flex min-h-10 items-center gap-3">
-            <span class="flex-1 font-mono text-sm" :title="key.fingerprint">{{ key.fingerprint.slice(0, 16) }}…</span>
-            <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.exportLabel', { key: key.fingerprint.slice(0, 16) })" :data-testid="`developer-key-export-${key.fingerprint}`" @click="exportKey(key.fingerprint)">
-              {{ t("account.developer.export") }}
-            </Button>
+        <p class="text-muted-foreground mt-1 text-xs">{{ t("account.developer.keptHint") }}</p>
+        <p v-if="keys?.status === 'ask'" class="text-muted-foreground mt-2 text-sm" data-testid="developer-keys-ask">{{ t("account.developer.askKey") }}</p>
+        <p v-else-if="keys?.status === 'offline'" class="text-muted-foreground mt-2 text-sm">{{ t("account.developer.offline") }}</p>
+        <p v-if="!rows.length" class="text-muted-foreground mt-2 text-sm" data-testid="developer-keys-none">{{ t("account.developer.noKept") }}</p>
+        <ul v-else class="mt-2" data-testid="developer-keys-list">
+          <li v-for="row in rows" :key="row.fingerprint" :data-testid="`developer-key-${row.fingerprint}`">
+            <div class="flex min-h-10 items-center gap-3">
+              <span class="flex-1 font-mono text-sm" :title="row.fingerprint">{{ row.fingerprint.slice(0, 16) }}…</span>
+              <template v-if="row.linkedAt">
+                <span class="text-muted-foreground text-sm" :data-testid="`account-key-${row.fingerprint}`">
+                  {{ t("account.developer.keyLinked", { date: formatDate(row.linkedAt) }) }}<template v-if="!row.kept && keys?.status === 'ready'"> · {{ t("account.developer.fileOnly") }}</template>
+                </span>
+                <span v-if="requests.get(row.fingerprint)?.status === 'waiting'" class="text-sm" data-testid="account-key-waiting">{{ t("account.developer.replaceWaiting") }}</span>
+                <span v-else-if="requests.get(row.fingerprint)?.status === 'done'" class="text-sm" data-testid="account-key-replaced">{{ t("account.developer.replaceDone") }}</span>
+                <template v-else>
+                  <span v-if="requests.get(row.fingerprint)?.status === 'declined'" class="text-muted-foreground text-sm">{{ t("account.developer.replaceDeclined") }}</span>
+                  <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.replaceLabel', { key: row.fingerprint.slice(0, 16) })" data-testid="account-key-replace" @click="replacing = replacing === row.fingerprint ? null : row.fingerprint">
+                    {{ t("account.developer.replace") }}
+                  </Button>
+                </template>
+                <Button v-if="!waiting.has(row.fingerprint)" variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.unlinkLabel', { key: row.fingerprint.slice(0, 16) })" @click="unlinkKey(row.fingerprint)">
+                  {{ t("account.developer.unlink") }}
+                </Button>
+              </template>
+              <template v-else>
+                <span class="text-muted-foreground text-sm">{{ t("account.developer.notLinked") }}</span>
+                <Button variant="secondary" size="sm" :disabled="busy || !view?.developer" @click="run({ type: 'developer-key-link', fingerprint: row.fingerprint })">
+                  {{ t("account.developer.linkKept") }}
+                </Button>
+              </template>
+            </div>
+            <div v-if="replacing === row.fingerprint" class="mb-2 flex flex-col gap-2 rounded-md border p-3" data-testid="account-key-replace-choice">
+              <span class="text-sm">{{ t("account.developer.replaceHint") }}</span>
+              <div class="flex flex-wrap items-center gap-2">
+                <Button variant="secondary" size="sm" :disabled="busy" data-testid="account-key-lost" @click="replaceKey(row.fingerprint, false)">{{ t("account.developer.replaceLost") }}</Button>
+                <Button variant="destructive" size="sm" :disabled="busy" data-testid="account-key-leaked" @click="replaceKey(row.fingerprint, true)">{{ t("account.developer.replaceLeaked") }}</Button>
+                <Button variant="ghost" size="sm" @click="replacing = null">{{ t("common.cancel") }}</Button>
+              </div>
+            </div>
           </li>
         </ul>
-        <Button variant="secondary" class="mt-2" :disabled="busy || !view?.developer" data-testid="developer-key-add" @click="addKey">{{ t("account.developer.add") }}</Button>
-      </div>
-
-      <div class="mt-6 flex flex-col gap-3">
-        <div class="flex items-center gap-3">
-          <span class="text-muted-foreground text-sm">{{ t("account.developer.keyFile") }}</span>
-          <Button variant="ghost" size="sm" :disabled="busy || !view?.developer" data-testid="account-link-code" @click="run({ type: 'account-link-code' })">{{ t("account.developer.link") }}</Button>
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <!-- Saving the name makes the first key; this is for an account left without one. -->
+          <Button v-if="canKeep && !rows.length" variant="secondary" :disabled="busy || !view?.developer" data-testid="developer-key-create" @click="makeKey">{{ t("account.developer.create") }}</Button>
+          <Button v-if="exportable" variant="secondary" :disabled="busy" :data-testid="`developer-key-export-${exportable}`" @click="exportKey(exportable)">{{ t("account.developer.exportMine") }}</Button>
+          <Button v-if="canKeep" variant="secondary" :disabled="busy || !view?.developer" data-testid="developer-key-add" @click="addKey">{{ t("account.developer.add") }}</Button>
+          <Button variant="ghost" :disabled="busy || !view?.developer" data-testid="account-link-code" @click="run({ type: 'account-link-code' })">{{ t("account.developer.link") }}</Button>
+          <span v-if="!view?.developer" class="text-muted-foreground text-sm">{{ t("account.developer.linkNeedsName") }}</span>
         </div>
-        <div v-if="view?.linkCode" class="flex flex-col gap-2 rounded-md border p-3" data-testid="account-link">
+        <div v-if="view?.linkCode" class="mt-3 flex flex-col gap-2 rounded-md border p-3" data-testid="account-link">
           <span class="text-sm">{{ t("account.developer.linkHint", { time: formatDate(view.linkCode.expiresAt, { timeStyle: "short" }) }) }}</span>
           <div class="flex flex-wrap items-center gap-2">
             <code class="bg-muted rounded px-2 py-1 font-mono text-sm select-all" data-testid="account-link-command">{{ linkCommandText }}</code>

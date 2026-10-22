@@ -27,6 +27,7 @@ import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
 import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, GameView, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
+import { suggestPrefix } from "../shared/id-prefix";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
@@ -1828,7 +1829,22 @@ export class Host {
       "account-profile-choice": (action) => this.account.chooseProfile(action.keep),
 
       // Developer side of the account
-      "account-developer-name": (action) => this.account.setDeveloperName(action.name),
+      "account-developer-name": async (action) => {
+        await this.account.setDeveloperName(action.name);
+        // A first-time developer gets the prefix of the name with it (WellBrained: wellbrained) when it
+        // is free; when it isn't, the check stays on screen to pick another.
+        const prefix = suggestPrefix(action.name);
+        if (prefix && this.account.view().prefixes?.held.length === 0) {
+          if ((await this.account.checkPrefix(prefix).catch(() => null)) === "free") await this.account.claimPrefix(prefix).catch(() => undefined);
+        }
+        // And a publisher key: Tavora makes, keeps and links it, and the recovery key is shown. One with
+        // a key already (kept, or a linked key file) gets none.
+        const keys = this.developerKeys.view();
+        if ((keys.status === "ready" || keys.status === "none") && !keys.keys.length && !this.account.view().publisherKeys?.length) {
+          // Another PC keeps the account's key: its recovery key is asked for on screen, then a key is made there.
+          await this.developerKeys.create().catch(() => undefined);
+        }
+      },
       "account-link-code": () => this.account.newLinkCode(),
       "account-copy-link-command": () => {
         const code = this.account.view().linkCode?.code;
