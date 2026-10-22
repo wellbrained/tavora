@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.10",
+    date: "2026-10-22",
+    title: "Easier-to-read tooltips",
+    notes: [
+      "Hover hints use readable text and also appear when you reach a control with Tab.",
+      "Tooltips use 14 px text and 18 px headings while keeping each game’s card styling.",
+    ],
+  },
+  {
     version: "0.20.9",
     date: "2026-10-22",
     title: "Find your saves faster",
