@@ -1,9 +1,8 @@
 // Publishes a packed module to Tavora's module catalog. The zip must be signed with this key (the
 // pack command does that), and the key must be linked to your Tavora account (Tavora links the keys it
 // keeps; a key file is linked with `tavora-pack link`). Besides the zip, a signature over its SHA-256 is
-// sent, and the account's sign-in or a publish token: the key alone publishes nothing (decided
-// 2026-10-20). With a key Tavora keeps, Tavora itself signs and uploads, signed in. The secret key never
-// leaves this PC.
+// sent, and the account's sign-in (Tavora's Publish button) or a publish token (CI): the key alone
+// publishes nothing (decided 2026-10-20). The secret key never leaves this PC.
 import { createHash, sign, type KeyObject } from "node:crypto";
 import { DEFAULT_API_URL } from "./link.ts";
 import { verifyFiles } from "./signature.ts";
@@ -29,11 +28,11 @@ export function publishSignature(key: KeyObject, zip: Buffer): string {
 }
 
 const MESSAGES: Record<string, string> = {
-  "sign-in-needed": "Publishing needs your Tavora account now. Publish with Tavora open, or from CI with a key file and a publish token (Settings > Account > Module developer > Publish tokens) in TAVORA_PUBLISH_TOKEN.",
-  "token-not-working": "This publish token doesn't work any more: it was removed or ran out. Make a new one in Tavora (Settings > Account > Module developer > Publish tokens), or sign in to Tavora again.",
+  "sign-in-needed": "Publishing needs your Tavora account. Publish from Tavora (Settings > Development), or from CI with a publish token in TAVORA_PUBLISH_TOKEN (Settings > Development > Publisher keys and CI).",
+  "token-not-working": "This publish token doesn't work any more: it was removed or ran out. Make a new one in Tavora (Settings > Development > Publisher keys and CI).",
   "wrong-account": "This publisher key is linked to another Tavora account than the one publishing.",
   "token-new-prefix": "A publish token publishes only under id prefixes your account has. Publish this module's first version from Tavora.",
-  "key-not-linked": "Your publisher key is not linked to a Tavora account yet. Link it in Tavora (Settings > Account > Module developer). A key file: get a link code there and run tavora-pack link <code> --key <file>",
+  "key-not-linked": "Your publisher key is not linked to a Tavora account yet. Get a link code in Tavora (Settings > Development > Publisher keys and CI) and run tavora-pack link <code> --key <file>",
   "prefix-taken": "Another developer publishes under this id prefix. Give your module an id with a prefix of your own, such as <your name>.<module>.",
   "prefix-reserved": "This id prefix is reserved. Give your module an id with a prefix of your own, such as <your name>.<module>.",
   "too-many-prefixes": "Your account already publishes under 3 id prefixes. Use one of them for this module.",
@@ -49,7 +48,7 @@ const MESSAGES: Record<string, string> = {
 export async function publishZip(options: {
   key: KeyObject | Signer;
   zip: Buffer;
-  /** A publish token, or the account's sign-in when Tavora uploads. Not needed when Tavora signs (it uploads itself). */
+  /** A publish token, or the account's sign-in when Tavora uploads. */
   token?: string | undefined;
   /** The language of the email the account gets about it ("en" or "de"). */
   language?: string;
@@ -67,10 +66,7 @@ export async function publishZip(options: {
   if (!verified.ok) throw new PublishError(`The zip was refused: ${verified.reason}.`);
   if (!verified.signed) throw new PublishError("The zip is not signed. Pack it with tavora-pack, which signs it with your publisher key.");
   const signer = asSigner(options.key);
-  if (verified.owner !== signer.fingerprint) throw new PublishError("The zip was signed with another publisher key. Publish it with the key that packed it (--key or --publisher).");
-  // Tavora signs and uploads with its own sign-in.
-  if (signer.publish) return signer.publish(options.zip);
-  if (!signer.signPublish) throw new PublishError("This signer can't publish.");
+  if (verified.owner !== signer.fingerprint) throw new PublishError("The zip was signed with another publisher key. Publish it with the key that packed it.");
   if (!options.token) throw new PublishError(MESSAGES["sign-in-needed"]!);
   const sha256 = createHash("sha256").update(options.zip).digest("hex");
   const signature = (await signer.signPublish(options.zip, sha256)).toString("base64");

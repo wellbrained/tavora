@@ -107,7 +107,7 @@ const namePrefix = computed(() => (prefixes.value?.held.length === 0 && develope
 const ciOpen = ref(false);
 const linkCommandText = computed(() => {
   const code = view.value?.linkCode?.code ?? "";
-  return `npx @tavora/pack link ${code.slice(0, 4)}-${code.slice(4)}`;
+  return `npx @tavora/pack link ${code.slice(0, 4)}-${code.slice(4)} --key <key file>`;
 });
 async function copyLinkCommand() {
   if ((await act({ type: "account-copy-link-command" })).ok) showToast(t("account.developer.copied"));

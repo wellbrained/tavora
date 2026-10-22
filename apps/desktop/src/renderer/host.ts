@@ -455,7 +455,6 @@ export const overlayOpen = computed(
     openMenus.value > 0 ||
     dialog.value !== null ||
     copyQuestion.value !== null ||
-    developerKeys.value?.request != null ||
     state.value?.hotkeyRequest != null ||
     publish.value !== null ||
     settingsOpen.value ||

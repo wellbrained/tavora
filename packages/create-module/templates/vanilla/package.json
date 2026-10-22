@@ -7,9 +7,7 @@
     "predev": "node scripts/check-install.cjs",
     "dev": "vite build --watch",
     "prebuild": "node scripts/check-install.cjs",
-    "build": "vite build",
-    "prezip": "node scripts/check-install.cjs",
-    "zip": "tavora-pack ."
+    "build": "vite build"
   },
   "dependencies": {
     "@tavora/sdk": "^{{sdkVersion}}"

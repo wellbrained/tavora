@@ -126,7 +126,6 @@ import { AccountKey } from "./account-key";
 import { DeveloperKeys } from "./developer-keys";
 import { ModulePublisher } from "./module-publish";
 import { FolderPairing, Pairing, ServicePairing } from "./pairing";
-import { startSignerServer, type SignerServer } from "./signer-server";
 import { ServiceStorage } from "./cloud-copy";
 import { CopySync } from "./cloud-copy-sync";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
@@ -298,12 +297,11 @@ export class Host {
   private readonly account: AccountClient;
   /** The cloud copy: made before the data is read, since a newer copy is taken before anything reads it. */
   private copySync!: CopySync;
-  /** The publisher keys the account's vault keeps, and the signer the pack command asks (developer-keys.ts). */
+  /** The publisher keys the account's vault keeps (developer-keys.ts). */
   private developerKeys!: DeveloperKeys;
   /** The review screen and Publish for dev modules from project folders (module-publish.ts). */
   private publisher!: ModulePublisher;
   private pairing!: Pairing;
-  private signer: SignerServer | null = null;
   /** The developer names players see for publisher keys (publisher-names.ts). */
   private readonly publisherNames: PublisherNames;
   private screen: Screen = "welcome";
@@ -547,7 +545,6 @@ export class Host {
       onChange: (view) => {
         if (!host.window.isDestroyed()) host.window.webContents.send("host:developer-keys", view);
       },
-      focus: () => host.bringToFront(),
     });
     host.publisher = host.modulePublisher();
     host.pairing = Host.pairing(options, host);
@@ -602,7 +599,6 @@ export class Host {
     if (options.accounts === true) {
       void host.developerKeys.refresh();
       host.pairing.watch();
-      host.signer = await startSignerServer({ handle: (request) => host.developerKeys.handle(request), log: (line) => console.log(`[tavora] ${line}`) });
     }
     await host.startUpdates();
     return host;
@@ -1460,7 +1456,6 @@ export class Host {
       this.gameWatcher.stop();
       this.copySync.dispose();
       this.pairing.dispose();
-      void this.signer?.close();
       clearInterval(this.catalogTimer);
     });
   }
@@ -1902,7 +1897,6 @@ export class Host {
         const key = this.developerKeys.view().recoveryKey;
         if (key) clipboard.writeText(key);
       },
-      "developer-sign-answer": (action) => this.developerKeys.answer(action.id, action.allow),
       "account-prefix-check": async (action) => void (await this.account.checkPrefix(action.prefix)),
       "account-prefix-claim": (action) => this.account.claimPrefix(action.prefix),
       "publish-review": (action) => this.publisher.open(this.projectOf(action.moduleId)),

@@ -409,7 +409,6 @@ export function hostActionTable(c: HostChecks) {
     "developer-recovery-key-saved": {},
     "developer-show-recovery-key": {},
     "developer-copy-recovery-key": {},
-    "developer-sign-answer": { id: check<number>((value) => Number.isSafeInteger(value)), allow: bool },
     /** Asks the catalog about an id prefix, or claims it for the account (the account view's prefixCheck says what it said). */
     "account-prefix-check": { prefix: filled(126) },
     "account-prefix-claim": { prefix: filled(126) },

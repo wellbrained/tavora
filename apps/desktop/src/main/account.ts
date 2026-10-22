@@ -23,7 +23,7 @@ export const UPLOAD_TIMEOUT_MS = 120_000;
 const PREFIX_STATES: readonly PrefixState[] = ["held", "free", "taken", "reserved", "too-many", "invalid"];
 
 /** The command a developer runs with a link code, as the app shows and copies it ("ABCD-EFGH"). */
-export const linkCommand = (code: string) => `npx @tavora/pack link ${code.slice(0, 4)}-${code.slice(4)}`;
+export const linkCommand = (code: string) => `npx @tavora/pack link ${code.slice(0, 4)}-${code.slice(4)} --key <key file>`;
 
 export interface SavedAccount {
   token: string;
