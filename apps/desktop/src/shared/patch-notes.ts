@@ -20,6 +20,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.34",
+    date: "2026-10-22",
+    title: "Simpler developer settings",
+    notes: [
+      "Saving your developer name now sets up publishing: Tavora makes your publisher key and claims your prefix.",
+      "Settings > Development shows just your name and prefix. Keys, key files and tokens sit under Publisher keys and CI.",
+      "Each publisher key shows once, with Export, Lost it? and Unlink.",
+      "Make modules no longer asks for a prefix you already have.",
+      "Signing in on a new PC asks for your account's recovery key right away, if your account has one.",
+      "The texts for your developer name, prefix, publisher key and recovery key now explain what each is for.",
+    ],
+  },
+  {
     version: "0.19.33",
     date: "2026-10-22",
     title: "Publishing stays set up",
