@@ -2,7 +2,8 @@
 // Calculator: the sum and its result as you type, a keypad (the keyboard works too, with the Windows shortcuts @ for √,
 // q for x² and F9 for ±), Copy, and the game's last results. The toolbar switches between the Basic keypad and Plus,
 // which is laid out like the Windows one, and shows or hides the history; both choices hold in every game.
-// The keypad keeps a calculator size; the history sits beside it once the panel is wide enough for both, else below.
+// The keypad keeps a calculator size: its keys never shrink below a button nor grow past a big one. The history sits
+// beside it once the panel is wide enough for both, else below; a panel too short for both scrolls.
 // The history lives in the game's module storage, so every panel of the game shares it; a panel reads it again
 // when it shows or gets focus, since storage has no change events.
 import { Check, Copy, Delete, History, Trash2 } from "@lucide/vue";
@@ -262,8 +263,11 @@ onBeforeUnmount(() => {
       </Button>
     </div>
     <p v-if="saveError" class="text-destructive flex-none px-3 pt-1 text-xs">{{ saveError }}</p>
-    <div class="flex min-h-0 flex-1 flex-col items-center gap-3 p-3 @min-[36rem]:flex-row @min-[36rem]:items-start @min-[36rem]:justify-center">
-      <section class="flex min-h-0 w-full max-w-sm flex-[0_1_26rem] flex-col gap-2 @min-[36rem]:h-full @min-[36rem]:max-h-[26rem] @min-[36rem]:w-80 @min-[36rem]:flex-none">
+    <div
+      class="flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto p-3 @min-[36rem]:flex-row @min-[36rem]:items-start @min-[36rem]:justify-center"
+      data-testid="calculator-body"
+    >
+      <section class="flex w-full max-w-sm flex-[0_1_26rem] flex-col gap-2 @min-[36rem]:h-full @min-[36rem]:max-h-[26rem] @min-[36rem]:min-h-min @min-[36rem]:w-80 @min-[36rem]:flex-none">
         <div class="bg-muted/40 flex flex-none items-start gap-1 rounded-lg border px-3 py-2">
           <div class="min-w-0 flex-1 text-right" role="status" aria-live="polite" :aria-label="t('calc.display')">
             <p class="truncate font-mono text-3xl tabular-nums" data-testid="display">{{ show(entry.text) || "0" }}</p>
@@ -290,8 +294,9 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div
-          class="grid min-h-0 flex-1 grid-cols-4 gap-1.5"
-          :class="keys.length > 20 ? 'grid-rows-6' : 'grid-rows-5'"
+          class="grid flex-1 grid-cols-4 gap-1.5"
+          :class="keys.length > 20 ? 'grid-rows-[repeat(6,minmax(2rem,1fr))]' : 'grid-rows-[repeat(5,minmax(2rem,1fr))]'"
+          data-testid="keypad"
           role="group"
           :aria-label="t('calc.keypad')"
         >
@@ -299,7 +304,7 @@ onBeforeUnmount(() => {
             v-for="item in keys"
             :key="item.key"
             :variant="VARIANT[item.kind]"
-            class="h-auto min-h-8 text-lg"
+            class="h-auto py-0 text-lg"
             :class="item.kind === 'clear' && 'text-destructive hover:text-destructive'"
             :aria-label="item.name ? t(item.name) : undefined"
             :title="item.name ? t(item.name) : undefined"
@@ -314,7 +319,7 @@ onBeforeUnmount(() => {
 
       <section
         v-if="settings.history"
-        class="flex min-h-24 w-full max-w-sm flex-1 flex-col gap-1 @min-[36rem]:h-full @min-[36rem]:max-h-[26rem] @min-[36rem]:min-h-0"
+        class="flex min-h-40 w-full max-w-sm flex-1 flex-col gap-1 @min-[36rem]:h-full @min-[36rem]:max-h-[26rem]"
         data-testid="history"
       >
         <header class="flex h-8 flex-none items-center gap-1">

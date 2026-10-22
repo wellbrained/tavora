@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { expectModuleText, inModule, launch, NOTES, openGame, openModule, panels, PLAYGROUND, TODOS, typeInModule, VUE, waitForShown } from "./harness";
+import { expectModuleText, inModule, launch, NOTES, openGame, openModule, panels, PLAYGROUND, RAIL_WIDTH, setContentSize, TODOS, typeInModule, VUE, waitForShown } from "./harness";
 
 // The official Notes, To-Dos and UI Playground modules, driven through their own pages.
 
@@ -617,4 +617,49 @@ test("calculator: works out sums from keys and the keyboard, and keeps the last 
   await click(again.app, CALCULATOR, `[data-testid="toggle-history"]`);
   await expect.poll(() => shown("history")).toBe(false);
   await again.app.close();
+});
+
+test("calculator: keys keep a usable size and the history keeps room, whatever the panel's size", async () => {
+  const CALCULATOR = "tavora.calculator";
+  const { app, page } = await launch();
+  await openModule(page, CALCULATOR);
+  await ready(app, CALCULATOR, "key-=");
+  // The height of the smallest and biggest key, whether any two keys overlap, and how tall the history is and
+  // whether it stays clear of the keypad (it may sit below the fold, where the panel scrolls to it).
+  const layout = () =>
+    inModule<{ smallest: number; biggest: number; overlap: boolean; history: number; clear: boolean }>(
+      app,
+      CALCULATOR,
+      `(() => {
+        const keypad = ${q("keypad")}.getBoundingClientRect();
+        const keys = [...${q("keypad")}.children].map((key) => key.getBoundingClientRect());
+        const history = ${q("history")}.getBoundingClientRect();
+        return {
+          smallest: Math.round(Math.min(...keys.map((key) => key.height))),
+          biggest: Math.round(Math.max(...keys.map((key) => key.height))),
+          overlap: keys.some((a, i) => keys.some((b, j) => i < j && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1)),
+          history: Math.round(history.height),
+          clear: history.top >= keypad.bottom || history.left >= keypad.right,
+        };
+      })()`,
+    );
+  const fits = (history: number, biggest = Infinity) => async () => {
+    const now = await layout();
+    return now.smallest >= 32 && now.biggest <= biggest && !now.overlap && now.clear && now.history >= history;
+  };
+
+  // The smallest window: the panel is too narrow for the history beside the keypad and too short for both.
+  await setContentSize(app, 640, 480);
+  await expect.poll(fits(160)).toBe(true);
+  // Wide but short: the history sits beside the keypad.
+  await setContentSize(app, RAIL_WIDTH + 1000, 480);
+  await expect.poll(fits(160)).toBe(true);
+  // Narrow and tall: the keys stop growing and the history gets the rest.
+  await setContentSize(app, 640, 1000);
+  await expect.poll(fits(400, 56)).toBe(true);
+  // Without the history, the Plus keypad fits the smallest window whole.
+  await click(app, CALCULATOR, `[data-testid="toggle-history"]`);
+  await setContentSize(app, 640, 480);
+  await expect.poll(() => inModule<boolean>(app, CALCULATOR, `${q("calculator-body")}.scrollHeight <= ${q("calculator-body")}.clientHeight`)).toBe(true);
+  await app.close();
 });
