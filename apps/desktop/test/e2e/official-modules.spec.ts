@@ -569,3 +569,35 @@ test("clipboard: a module copies a PNG only right after a key press, once, and o
   await expect.poll(() => copy("text")).toBe(415);
   await app.close();
 });
+
+test("calculator: works out sums from keys and the keyboard, and keeps the last results after a restart", async () => {
+  const CALCULATOR = "tavora.calculator";
+  const { app, page, userData } = await launch();
+  await openModule(page, CALCULATOR);
+  await ready(app, CALCULATOR, "key-=");
+  const text = (testId: string) => inModule<string>(app, CALCULATOR, `${q(testId)}.textContent.trim()`);
+  const results = (running = app) =>
+    inModule<string[]>(running, CALCULATOR, `[...document.querySelectorAll('[data-testid="history-item"] span:last-child')].map((el) => el.textContent)`);
+
+  for (const key of ["1", "2", "*", "(", "3", "+", "4"]) await click(app, CALCULATOR, `[data-testid="key-${key}"]`);
+  await expect.poll(() => text("display")).toBe("12×(3+4");
+  await expect.poll(() => text("preview")).toBe("= 84");
+  await click(app, CALCULATOR, `[data-testid="key-="]`);
+  await expect.poll(() => text("display")).toBe("84");
+  await expect.poll(() => results()).toEqual(["84"]);
+
+  // The keyboard works too, and a sum that can't be worked out says why.
+  for (const key of ["/", "0", "Enter"]) await inModule(app, CALCULATOR, `window.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(key)} }))`);
+  await expect.poll(() => text("preview")).toBe("Can't divide by 0");
+  await expect.poll(() => results()).toEqual(["84"]);
+
+  await app.close();
+  const again = await launch(userData);
+  await openGame(again.page, "poe2");
+  await expect(panels(again.page, CALCULATOR)).toHaveCount(1);
+  await ready(again.app, CALCULATOR, "history-item");
+  await expect.poll(() => results(again.app)).toEqual(["84"]);
+  await click(again.app, CALCULATOR, `[data-testid="clear-history"]`);
+  await expect.poll(() => results(again.app)).toEqual([]);
+  await again.app.close();
+});

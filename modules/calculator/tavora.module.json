@@ -1,0 +1,13 @@
+{
+  "$schema": "../../packages/module-schema/schema/tavora.module.schema.json",
+  "id": "tavora.calculator",
+  "name": "Calculator",
+  "description": "A quick calculator that keeps your last results for this game.",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "entry": "dist/index.html",
+  "changelog": "changelog.json",
+  "games": [],
+  "viewport": { "minWidth": 240, "minHeight": 320, "preferredWidth": 320, "preferredHeight": 480 },
+  "permissions": { "network": [], "connectors": [] }
+}
