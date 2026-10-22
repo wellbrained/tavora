@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // Calculator: the sum and its result as you type, a keypad (the keyboard works too), and the game's last results.
+// The keypad keeps a calculator size; the history sits below it in a tall panel and beside it in a wide one.
 // The history lives in the game's module storage, so every panel of the game shares it; a panel reads it again
 // when it shows or gets focus, since storage has no change events.
 import { Delete, Trash2 } from "@lucide/vue";
@@ -31,7 +32,7 @@ const KEYS: Key[] = [
   { key: "=", label: "=", name: "calc.equals", kind: "equals" },
 ];
 
-const VARIANT = { digit: "secondary", op: "outline", clear: "danger", equals: "default" } as const;
+const VARIANT = { digit: "secondary", op: "outline", clear: "outline", equals: "default" } as const;
 
 const sdk = shallowRef<TavoraSDK | null>(null);
 const error = ref<string | null>(null);
@@ -166,11 +167,11 @@ onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
     {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
   <div v-else class="@container h-full min-h-0" data-testid="calculator-app">
-    <div class="flex h-full min-h-0 flex-col gap-3 p-3 @[34rem]:flex-row">
-      <section class="flex min-h-0 flex-[3] flex-col gap-2 @[34rem]:max-w-md">
+    <div class="flex h-full min-h-0 flex-col items-center gap-3 p-3 landscape:flex-row landscape:items-start landscape:justify-center">
+      <section class="flex min-h-0 w-full max-w-sm flex-[0_1_26rem] flex-col gap-2 landscape:h-full landscape:max-h-[26rem] landscape:w-80 landscape:flex-none">
         <div class="bg-muted/40 flex flex-none items-start gap-1 rounded-lg border px-3 py-2">
           <div class="min-w-0 flex-1 text-right" role="status" aria-live="polite" :aria-label="t('calc.display')">
-            <p class="truncate font-mono text-2xl tabular-nums" data-testid="display">{{ show(entry.text) || "0" }}</p>
+            <p class="truncate font-mono text-3xl tabular-nums" data-testid="display">{{ show(entry.text) || "0" }}</p>
             <p class="h-5 truncate text-sm" :class="problem ? 'text-destructive' : 'text-muted-foreground'" data-testid="preview">
               {{ problem ?? (preview ? `= ${show(preview)}` : "") }}
             </p>
@@ -184,7 +185,8 @@ onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
             v-for="item in KEYS"
             :key="item.key"
             :variant="VARIANT[item.kind]"
-            class="h-auto min-h-8 text-base"
+            class="h-auto min-h-8 text-lg"
+            :class="item.kind === 'clear' && 'text-destructive hover:text-destructive'"
             :aria-label="item.name ? t(item.name) : undefined"
             :title="item.name ? t(item.name) : undefined"
             :data-testid="`key-${item.key}`"
@@ -195,7 +197,7 @@ onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
         </div>
       </section>
 
-      <section class="flex max-h-[40%] min-h-0 flex-[2] flex-col gap-1 @[34rem]:max-h-none" data-testid="history">
+      <section class="flex min-h-24 w-full max-w-sm flex-1 flex-col gap-1 landscape:h-full landscape:max-h-[26rem] landscape:min-h-0" data-testid="history">
         <header class="flex h-7 flex-none items-center gap-1">
           <h2 class="text-muted-foreground min-w-0 flex-1 truncate text-xs font-medium">{{ t("history.title") }}</h2>
           <Button
