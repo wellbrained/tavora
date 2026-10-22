@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.8",
+    date: "2026-10-22",
+    title: "Shorter module pages",
+    notes: [
+      "A module's page in the catalog is shorter and no longer fills the window.",
+      "Long About texts and patch notes fold away. Press Show more to read the rest.",
+    ],
+  },
+  {
     version: "0.20.7",
     date: "2026-10-22",
     title: "Fewer antivirus alarms and a better calculator",
