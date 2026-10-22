@@ -608,5 +608,13 @@ test("calculator: works out sums from keys and the keyboard, and keeps the last 
   await expect.poll(() => results(again.app)).toEqual(["7,056", "84"]);
   await click(again.app, CALCULATOR, `[data-testid="clear-history"]`);
   await expect.poll(() => results(again.app)).toEqual([]);
+
+  // The toolbar switches to the Basic keypad and hides the history.
+  const shown = (testId: string) => inModule<boolean>(again.app, CALCULATOR, `!!${q(testId)}`);
+  // A tab switches on mouse down, not on click.
+  await inModule(again.app, CALCULATOR, `${q("mode-basic")}.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }))`);
+  await expect.poll(() => shown("key-square")).toBe(false);
+  await click(again.app, CALCULATOR, `[data-testid="toggle-history"]`);
+  await expect.poll(() => shown("history")).toBe(false);
   await again.app.close();
 });
