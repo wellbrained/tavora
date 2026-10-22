@@ -9,6 +9,7 @@ import type { CatalogModuleView, CatalogPageResult } from "../../shared/host-api
 import { act, api, dialog } from "../host";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
+import { Expandable } from "@tavora/official-ui/components/ui/expandable";
 import { formatDate, t } from "../i18n";
 import { ExternalLink, X } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
@@ -66,7 +67,7 @@ async function openHomepage() {
 <template>
   <Dialog :open="true" @update:open="(open: boolean) => !open && emit('close')">
     <DialogContent
-      class="bg-card flex max-h-[calc(100vh-48px)] w-[min(960px,calc(100vw-48px))] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
+      class="bg-card flex h-[min(640px,calc(100vh-96px))] w-[min(960px,calc(100vw-48px))] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
       :data-testid="`catalog-info-${module.id}`"
       :show-close-button="false"
     >
@@ -114,16 +115,18 @@ async function openHomepage() {
           <div class="min-w-0 space-y-6">
             <section data-testid="catalog-info-about">
               <h3 class="mb-2 font-medium">{{ t("catalog.about") }}</h3>
-              <div v-if="loaded?.readme.length" class="space-y-3 text-sm leading-relaxed" data-testid="catalog-info-readme">
-                <template v-for="(block, index) in loaded.readme" :key="index">
-                  <h4 v-if="block.kind === 'heading'" :class="block.level === 2 ? 'pt-2 text-base font-semibold' : 'pt-1 font-medium'">{{ block.text }}</h4>
-                  <p v-else-if="block.kind === 'paragraph'">{{ block.text }}</p>
-                  <component :is="block.ordered ? 'ol' : 'ul'" v-else-if="block.kind === 'list'" :class="block.ordered ? 'list-decimal' : 'list-disc'" class="space-y-1 pl-5">
-                    <li v-for="(item, at) in block.items" :key="at">{{ item }}</li>
-                  </component>
-                  <pre v-else class="bg-muted/50 overflow-x-auto rounded-md p-3 text-xs">{{ block.text }}</pre>
-                </template>
-              </div>
+              <Expandable v-if="loaded?.readme.length" :max-height="240">
+                <div class="space-y-3 text-sm leading-relaxed" data-testid="catalog-info-readme">
+                  <template v-for="(block, index) in loaded.readme" :key="index">
+                    <h4 v-if="block.kind === 'heading'" :class="block.level === 2 ? 'pt-2 text-base font-semibold' : 'pt-1 font-medium'">{{ block.text }}</h4>
+                    <p v-else-if="block.kind === 'paragraph'">{{ block.text }}</p>
+                    <component :is="block.ordered ? 'ol' : 'ul'" v-else-if="block.kind === 'list'" :class="block.ordered ? 'list-decimal' : 'list-disc'" class="space-y-1 pl-5">
+                      <li v-for="(item, at) in block.items" :key="at">{{ item }}</li>
+                    </component>
+                    <pre v-else class="bg-muted/50 overflow-x-auto rounded-md p-3 text-xs">{{ block.text }}</pre>
+                  </template>
+                </div>
+              </Expandable>
               <p v-else-if="module.description" class="text-sm">{{ module.description }}</p>
               <p v-if="page && page.status !== 'ok'" class="text-muted-foreground mt-2 text-sm" role="status" data-testid="catalog-info-missing">
                 {{ page.status === "gone" ? t("catalog.pageGone") : t("catalog.pageMissing") }}
@@ -132,9 +135,11 @@ async function openHomepage() {
 
             <section v-if="latest?.notes.length" data-testid="catalog-info-notes">
               <h3 class="mb-2 font-medium">{{ t("catalog.whatsNew") }}</h3>
-              <ul class="list-disc space-y-1 pl-5 text-sm">
-                <li v-for="(note, index) in latest.notes" :key="index">{{ note }}</li>
-              </ul>
+              <Expandable :max-height="96">
+                <ul class="list-disc space-y-1 pl-5 text-sm">
+                  <li v-for="(note, index) in latest.notes" :key="index">{{ note }}</li>
+                </ul>
+              </Expandable>
             </section>
 
             <div ref="reviews" class="scroll-mt-6">

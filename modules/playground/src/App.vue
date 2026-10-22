@@ -43,6 +43,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { Expandable } from "@tavora/official-ui/components/ui/expandable";
 import { Combobox, ComboboxAnchor, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@tavora/official-ui/components/ui/combobox";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
@@ -73,6 +74,7 @@ const SECTIONS = [
   { id: "fields", title: "Text fields", keywords: "input textarea search label hint error" },
   { id: "choices", title: "Choices", keywords: "checkbox switch radio segmented select dropdown combobox autocomplete search slider" },
   { id: "ratings", title: "Star rating", keywords: "stars rating review score" },
+  { id: "expandable", title: "Show more", keywords: "expand collapse more less long text read clamp" },
   { id: "tabs", title: "Tabs", keywords: "tabs views" },
   { id: "zoom", title: "Pan and zoom", keywords: "zoom pan drag pinch fit graph map canvas viewport" },
   { id: "status", title: "Badges and status", keywords: "badge chip tag status dot kbd shortcut" },
@@ -427,6 +429,24 @@ function bump(by: number) {
         <Specimen label="Pick a rating (arrow keys work too)">
           <StarRating v-model="stars" editable size="lg" label="Your rating" :star-label="(n) => (n === 1 ? '1 star' : `${n} stars`)" :disabled="off" />
           <span class="text-muted-foreground text-xs tabular-nums">{{ stars ? `${stars} of 5` : "Not rated" }}</span>
+        </Specimen>
+      </DemoSection>
+
+      <!-- Show more -->
+      <DemoSection v-if="visible.has('expandable')" id="expandable" :title="title('expandable')" description="Long text cut to a set height, with Show more below. Short text shows in full.">
+        <Specimen label="Long text" column>
+          <Expandable :max-height="72" class="max-w-md">
+            <div class="space-y-2 text-sm leading-relaxed">
+              <p>Plan your skill tree, save as many builds as you like and share them as files.</p>
+              <p>Track the bosses you've beaten in each of your worlds, with spoilers hidden until you want them.</p>
+              <p>Everything stays on your PC and works offline.</p>
+            </div>
+          </Expandable>
+        </Specimen>
+        <Specimen label="Short text" column>
+          <Expandable :max-height="72" class="max-w-md">
+            <p class="text-sm">A quick calculator that keeps your last results.</p>
+          </Expandable>
         </Specimen>
       </DemoSection>
 

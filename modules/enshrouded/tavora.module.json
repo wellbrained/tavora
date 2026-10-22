@@ -25,6 +25,6 @@
     "network": []
   },
   "changelog": "changelog.json",
-  "readme": "README.md",
+  "readme": "ABOUT.md",
   "icon": "dist/skill-tree/skills/DOUBLE_JUMP.png"
 }

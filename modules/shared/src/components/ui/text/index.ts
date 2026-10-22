@@ -4,8 +4,8 @@
 import { computed, ref } from "vue"
 
 const texts = {
-  en: { close: "Close", zoomIn: "Zoom in", zoomOut: "Zoom out", zoomFit: "Fit to view", zoomHint: "Ctrl + scroll to zoom" },
-  de: { close: "Schließen", zoomIn: "Vergrößern", zoomOut: "Verkleinern", zoomFit: "Alles zeigen", zoomHint: "Strg + Mausrad zum Zoomen" },
+  en: { close: "Close", zoomIn: "Zoom in", zoomOut: "Zoom out", zoomFit: "Fit to view", zoomHint: "Ctrl + scroll to zoom", showMore: "Show more", showLess: "Show less" },
+  de: { close: "Schließen", zoomIn: "Vergrößern", zoomOut: "Verkleinern", zoomFit: "Alles zeigen", zoomHint: "Strg + Mausrad zum Zoomen", showMore: "Mehr anzeigen", showLess: "Weniger anzeigen" },
 }
 
 const language = ref<keyof typeof texts>("en")
