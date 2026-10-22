@@ -22,56 +22,14 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.20.6",
     date: "2026-10-22",
-    title: "Fewer antivirus alarms",
+    title: "Fewer antivirus alarms and a better calculator",
     notes: [
       "Tavora now spots your running games by itself, without starting PowerShell in the background. Some antivirus apps, like Norton, flagged that.",
-    ],
-  },
-  {
-    version: "0.20.5",
-    date: "2026-10-22",
-    title: "Calculator sizes",
-    notes: [
-      "The keys keep a size you can press, in small panels too; a short panel scrolls instead.",
-      "The history keeps room for your results below or beside the keypad.",
-    ],
-  },
-  {
-    version: "0.20.4",
-    date: "2026-10-22",
-    title: "Calculator toolbar",
-    notes: [
-      "A toolbar on top: switch between the Basic keypad and Plus, and show or hide your history.",
-      "The keypad no longer gets cut off when the panel is wide but not wide enough for the history beside it.",
-    ],
-  },
-  {
-    version: "0.20.3",
-    date: "2026-10-22",
-    title: "Calculator keys like on Windows",
-    notes: [
-      "New keys: √, x², ± and ans for your last result, with the Windows shortcuts @, q and F9.",
-      "Copy puts the result on your clipboard as a plain number, also with Ctrl+C.",
-      "Big numbers show their thousands, like 1,234,567.",
-    ],
-  },
-  {
-    version: "0.20.2",
-    date: "2026-10-22",
-    title: "Refresh imported saves",
-    notes: [
-      "Modules can remember files you choose and reread them without asking you to find them again.",
-      "File access stays read-only, belongs to that module and game, and stays on this PC.",
-    ],
-  },
-  {
-    version: "0.20.1",
-    date: "2026-10-22",
-    title: "Modules settings fit small windows",
-    notes: [
-      "In a small window, the buttons in Settings > Modules wrap instead of running off the side.",
-      "Module names show again next to their Patch notes button.",
-      "Open folder on a module that can't load moves under its message when space is tight.",
+      "Calculator: new keys √, x², ± and ans for your last result, with the Windows shortcuts @, q and F9. Big numbers show their thousands, like 1,234,567.",
+      "Calculator: copy puts the result on your clipboard as a plain number, also with Ctrl+C.",
+      "Calculator: a toolbar on top switches between the Basic keypad and Plus, and shows or hides your history. The keys keep a size you can press, in small panels too.",
+      "Modules can remember files you choose and reread them without asking you to find them again. File access stays read-only, belongs to that module and game, and stays on this PC.",
+      "In a small window, Settings > Modules wraps its buttons instead of running off the side.",
     ],
   },
   {
