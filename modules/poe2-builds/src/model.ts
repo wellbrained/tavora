@@ -98,6 +98,8 @@ export interface Build {
     guideUrl: string;
     video?: string;
     importNotes?: string[];
+    /** Which source adapter produced the build, with the game patches it supports. */
+    importerVersion?: string;
     guideText: Guide | null;
     stages: Stage[];
     defaultStage: number;

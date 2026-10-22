@@ -1,5 +1,16 @@
 [
   {
+    "version": "0.1.0-alpha.21",
+    "date": "2026-10-22",
+    "notes": [
+      "Guide updates match variants by the guide's own ID, so reordered or renamed variants stay put.",
+      "The update preview lists new, changed and removed variants. Removing needs Save and remove.",
+      "The variant you had open stays open after an update.",
+      "The preview shows the importer version and the game patch it supports.",
+      "Import notes count what the guide keeps but isn't shown yet, like attribute picks, jewels and soul cores."
+    ]
+  },
+  {
     "version": "0.1.0-alpha.20",
     "date": "2026-10-19",
     "notes": [
