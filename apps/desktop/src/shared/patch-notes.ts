@@ -20,6 +20,24 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.37",
+    date: "2026-10-22",
+    title: "No setup card while Tavora checks",
+    notes: [
+      "Settings > Modules > Development shows \"Want to make modules?\" only once Tavora knows publishing isn't set up. No more flash after a start, and it stays away while you're offline.",
+      "Publish and Save as zip check your setup first when Tavora doesn't know it yet.",
+    ],
+  },
+  {
+    version: "0.19.36",
+    date: "2026-10-22",
+    title: "Publishing lives in Tavora",
+    notes: [
+      "Tavora no longer signs for tavora-pack, so there's no Allow prompt any more. Press Publish in Settings > Development instead.",
+      "To publish from CI, export your key under Publisher keys and CI and pass it to tavora-pack with --key.",
+    ],
+  },
+  {
     version: "0.19.35",
     date: "2026-10-22",
     title: "Project rows",
