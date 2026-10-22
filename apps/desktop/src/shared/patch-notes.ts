@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.19.35",
+    date: "2026-10-22",
+    title: "Project rows",
+    notes: [
+      "A project that isn't built yet looks like the others in Settings > Development, with its name and version.",
+      "Every project there has an Open folder button.",
+    ],
+  },
+  {
     version: "0.19.34",
     date: "2026-10-22",
     title: "Simpler developer settings",
