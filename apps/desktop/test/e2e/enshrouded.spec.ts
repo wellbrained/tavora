@@ -8,7 +8,7 @@ import {
   inModule,
   waitForShown,
 } from "./harness";
-const ID = "local.enshrouded";
+const ID = "wellbrained.enshrouded";
 const moduleDir = path.resolve("..", "..", "modules", "enshrouded");
 const officialDirs=["notes","todos","whiteboard","discord","playground","ai-usage"].map(name=>path.join(path.dirname(moduleDir),name)).join(path.delimiter);
 test("Enshrouded 1.0 builds allocate, export, import and survive restart in the real host", async ({}, info) => {
@@ -37,7 +37,7 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
   const capture = async (name: string) => {
     await inModule(app, ID, 'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     const png = await app.evaluate(async ({webContents}) => {
-      const wc = webContents.getAllWebContents().find(w => w.getURL().startsWith('tavora-module://local.enshrouded/'))!;
+      const wc = webContents.getAllWebContents().find(w => w.getURL().startsWith('tavora-module://wellbrained.enshrouded/'))!;
       return (await wc.capturePage()).toPNG().toString('base64');
     });
     await writeFile(info.outputPath(name), Buffer.from(png, 'base64'));
@@ -160,7 +160,7 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
       const wc = webContents
         .getAllWebContents()
         .find((w) =>
-          w.getURL().startsWith("tavora-module://local.enshrouded/"),
+          w.getURL().startsWith("tavora-module://wellbrained.enshrouded/"),
         )!;
       const point = await wc.executeJavaScript(
         '(()=>{const b=document.querySelector("#export").getBoundingClientRect();return {x:Math.round(b.x+b.width/2),y:Math.round(b.y+b.height/2)}})()',
@@ -236,7 +236,7 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
       const wc = webContents
         .getAllWebContents()
         .find((w) =>
-          w.getURL().startsWith("tavora-module://local.enshrouded/"),
+          w.getURL().startsWith("tavora-module://wellbrained.enshrouded/"),
         )!;
       return (await wc.capturePage()).toPNG().toString("base64");
     });
@@ -244,10 +244,10 @@ test("Enshrouded 1.0 builds allocate, export, import and survive restart in the 
       info.outputPath("enshrouded-wide.png"),
       Buffer.from(image, "base64"),
     );
-    await app.evaluate(({BrowserWindow,webContents})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://local.enshrouded/'))!;const view=BrowserWindow.getAllWindows()[0]!.contentView.children.find(v=>(v as any).webContents?.id===wc.id)!;view.setBounds({x:80,y:80,width:400,height:600});});
+    await app.evaluate(({BrowserWindow,webContents})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://wellbrained.enshrouded/'))!;const view=BrowserWindow.getAllWindows()[0]!.contentView.children.find(v=>(v as any).webContents?.id===wc.id)!;view.setBounds({x:80,y:80,width:400,height:600});});
     await expect.poll(()=>inModule(app,ID,'innerWidth')).toBe(400);
     expect(await inModule(app,ID,'({overflow:document.documentElement.scrollWidth>innerWidth,treeHeight:document.querySelector("#tree").getBoundingClientRect().height})')).toMatchObject({overflow:false,treeHeight:expect.any(Number)});
-    const narrow=await app.evaluate(async({webContents})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://local.enshrouded/'))!;return(await wc.capturePage()).toPNG().toString('base64');});await writeFile(info.outputPath('enshrouded-narrow.png'),Buffer.from(narrow,'base64'));
+    const narrow=await app.evaluate(async({webContents})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://wellbrained.enshrouded/'))!;return(await wc.capturePage()).toPNG().toString('base64');});await writeFile(info.outputPath('enshrouded-narrow.png'),Buffer.from(narrow,'base64'));
     await inModule(app, ID, 'document.querySelector("#new").click()');
     expect(await inModule(app, ID, 'document.querySelector("#dialog").getBoundingClientRect().width')).toBe(368);
     await capture('enshrouded-dialog-narrow.png');
