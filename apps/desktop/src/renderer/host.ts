@@ -7,6 +7,7 @@ import { SETTING_SECTIONS, type SettingsSection } from "./components/settings/se
 import { numberedGames } from "./shortcuts";
 import { setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
+import { developerSetup } from "./developer-setup";
 
 export const api = window.tavoraHost;
 export const state = shallowRef<HostViewState | null>(null);
@@ -62,33 +63,32 @@ void api.getPublish().then((initial) => {
   if (initial && !publish.value) publish.value = initial;
 });
 
+/** Publishing is set up, isn't, or isn't known yet (see `developerSetup`). */
+export const developerState = computed(() => developerSetup(account.value, developerKeys.value));
+/** Publishing is set up. Until then Publish and Save as zip open the developer onboarding instead. */
+export const developerReady = computed(() => developerState.value === "ready");
+
 /**
- * Publishing is set up: signed in, with a developer name and a publisher key Tavora keeps that is linked
- * to the account. Until then Publish and Save as zip open the developer onboarding instead.
+ * Whether Publish or Save as zip may go on; otherwise it opens the onboarding. While the developer side is
+ * unknown it is read first: offline that fails with its message and nothing opens.
  */
-export const developerReady = computed(() => {
-  const view = account.value;
-  const keys = developerKeys.value;
-  if (!view?.account || !view.developer || keys?.status !== "ready") return false;
-  const linked = new Set((view.publisherKeys ?? []).map((key) => key.fingerprint));
-  return keys.keys.some((key) => linked.has(key.fingerprint));
-});
+async function readyToPublish(then?: string): Promise<boolean> {
+  if (developerState.value === "unknown" && account.value?.account && !(await act({ type: "account-refresh" })).ok) return false;
+  if (developerReady.value) return true;
+  dialog.value = then ? { kind: "developer-start", then } : { kind: "developer-start" };
+  return false;
+}
 
 /** Publish on a dev module: the review screen, or the onboarding first while publishing isn't set up. */
 export function publishModule(moduleId: string): void {
-  if (!developerReady.value) {
-    dialog.value = { kind: "developer-start", then: moduleId };
-    return;
-  }
-  void act({ type: "publish-review", moduleId });
+  void readyToPublish(moduleId).then((ready) => {
+    if (ready) void act({ type: "publish-review", moduleId });
+  });
 }
 
 /** Save as zip on a dev module: signed with the kept key, so it needs the same setup as Publish. */
 export async function saveModuleZip(moduleId: string): Promise<void> {
-  if (!developerReady.value) {
-    dialog.value = { kind: "developer-start" };
-    return;
-  }
+  if (!(await readyToPublish())) return;
   const result = await act({ type: "save-module-zip", moduleId });
   if (result.ok && result.id) showToast(t("publish.zipSaved", { file: result.id }));
 }

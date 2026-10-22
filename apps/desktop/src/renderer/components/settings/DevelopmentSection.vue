@@ -6,13 +6,13 @@
 // says what to do next for a project that loaded nothing. Below are the
 // examples that ship with Tavora, to open or copy as a new project, then what
 // a module developer has with the account, and the way to the docs and to
-// GitHub. Until publishing is set up, a card offers the developer onboarding.
+// GitHub. Once we know publishing isn't set up, a card offers the developer onboarding.
 import { BookOpen, Bug, CircleAlert, Copy, FileArchive, FolderCode, FolderOpen, MessageCircleQuestion, Rocket, Trash2, Upload } from "@lucide/vue";
 import { computed, onMounted } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DevelopmentProblemKind } from "../../../shared/host-api";
-import { account, act, developerKeys, developerReady, dialog, publishModule, saveModuleZip, showToast, state } from "../../host";
+import { account, act, developerKeys, developerState, dialog, publishModule, saveModuleZip, showToast, state } from "../../host";
 import { t } from "../../i18n";
 import ModuleDeveloperSettings from "../developer/ModuleDeveloperSettings.vue";
 import ModuleRow from "./ModuleRow.vue";
@@ -66,7 +66,7 @@ function advice(kind: DevelopmentProblemKind | null, message: string | null, fol
 </script>
 
 <template>
-  <SettingGroup v-if="accounts && !developerReady">
+  <SettingGroup v-if="accounts && developerState === 'missing'">
     <div class="flex flex-wrap items-center gap-x-6 gap-y-3 py-4" data-testid="developer-start-card">
       <Rocket class="text-primary size-6 flex-none" :stroke-width="1.5" aria-hidden="true" />
       <div class="flex min-w-0 flex-1 basis-56 flex-col gap-0.5">
