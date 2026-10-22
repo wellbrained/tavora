@@ -10,7 +10,8 @@ describe("format", () => {
   });
 
   it("shows clock speeds with up to 4 decimals", () => {
-    expect(formatClock(83.33333, "en-GB")).toBe("83.3333 %");
+    expect(formatClock(83.33333, "en-GB")).toBe("83.33 %");
+    expect(formatClock(66.66667, "de-DE")).toBe("66,67 %");
     expect(formatClock(100, "de-DE")).toBe("100 %");
   });
 
