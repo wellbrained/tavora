@@ -21,7 +21,7 @@ To report a problem, see [Security policy](https://github.com/wellbrained/tavora
 | G3 | Choose or fake which module it is or which game it runs for. The host binds both when it creates the port; message fields never carry identity. |
 | G4 | Use the network on its own. Everything but its own origin is blocked; hosts the player granted are reached only through host-controlled `network.fetch` and `network.readPage`. |
 | G5 | Take down Tavora or other panels. A crash, hang or failed load is shown in that panel only, with Reload and Stop, and saved data is written atomically. |
-| G6 | Read files outside its own bundle. Paths are resolved inside the module's folder; `..`, encoded `..`, links out and null bytes are refused. |
+| G6 | Read arbitrary files outside its own bundle. Only files the player explicitly picked can be reread through scoped, read-only references; asset paths are resolved inside the module's folder; `..`, encoded `..`, links out and null bytes are refused. |
 | G7 | Open windows, navigate away, download files or ask for devices (camera, microphone, location). |
 | G8 | Exhaust the host through the bridge. Messages are plain JSON only, at most 8 MiB each, with at most 64 requests and 16 MiB in flight; an oversized message is refused inside the module's own renderer before the main process sees it. Settings, documents and panel state have quotas. |
 | G9 | Use a capability the player did not grant. Gated calls check the player's grant first, on every call, and answer `PERMISSION_DENIED` otherwise. |
@@ -56,10 +56,17 @@ Connectors are capabilities built for one purpose. The host holds the connection
 - **AI Usage** reads usage limits of AI subscriptions signed in on the PC. A module gets account names, plans and readings, never a login, a token or where it is stored. Each account is read at most once a minute for all modules together.
 - **Stream overlay** shows the module's overlay page in streaming software on the same PC, see [Stream overlays](#stream-overlays).
 
+## Remembered read-only files
+
+A module can ask you to pick a file in Tavora's native file dialog after a real click. It receives a random reference and the file name, never the path. That choice lets the same publisher's module reread that exact file in that game, including after restarting Tavora. There is no write or folder-browsing call. Each read is limited to 32 MiB, with two reads at a time per module and game and four across Tavora.
+
+File access stays on this PC, outside backups and cloud copies. Restoring map data on another PC requires choosing the files again. A moved file or redirected link requires a new selection. Modules can forget a reference; clearing a game's or module's data also revokes its file access without deleting the selected files. Moving local module data to another publisher does not transfer file access.
+
 ## Calls that need a click
 
 Some calls change something outside the module's panel. They work only within 2 seconds of a real click or key press in that panel; a script cannot fake one, and each press allows one call.
 
+- **`files.pickReadOnly`** opens a native file picker; one press opens it once. Only the file you select can be remembered and reread through `files.read`. `files.forget` revokes that reference.
 - **`links.open`** opens an `http` or `https` address in Tavora's Browser panel, or, after the player confirms, in the system browser. The module learns nothing back.
 - **`clipboard.writeImage`** puts a checked PNG on the clipboard. There is no call to read the clipboard.
 - **`pictures.save`** writes a checked PNG as a new file into one folder, `Pictures\Tavora`. The module only suggests a name, which Tavora cleans; it cannot pick another folder or file type, replace a file, or read anything back, and it never learns where the folder is.

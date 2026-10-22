@@ -9,6 +9,8 @@ import {
   CLIPBOARD_PATH,
   PICTURES_PATH,
   JSON_EXPORT_PATH,
+  READ_ONLY_FILE_PATH,
+  type ReadOnlyFile,
   HELLO_MESSAGE,
   LIMITS,
   OVERLAY_STATE_PATH,
@@ -54,6 +56,7 @@ import {
 } from "./protocol.js";
 
 export type {
+  ReadOnlyFile,
   HotkeyBinding,
   HotkeySetResult,
   OverlayLinkResult,
@@ -242,6 +245,12 @@ export interface TavoraSDK {
     writeImage(png: Blob): Promise<void>;
   };
   files: {
+    /** Opens Tavora's native picker after a real click and remembers read-only access on this PC. */
+    pickReadOnly(options: { extensions: string[] }): Promise<ReadOnlyFile | null>;
+    /** Rereads only a file previously picked by this module in this game. At most 32 MiB. */
+    read(id: string): Promise<Uint8Array>;
+    /** Revokes a remembered file reference; never deletes the player's file. */
+    forget(id: string): Promise<void>;
     /** Saves JSON (up to 1 MiB) in Downloads/Tavora after a click or key press. Never replaces a file. Tavora 0.19.17+. */
     exportJson(value: JsonValue, name?: string): Promise<{ fileName: string }>;
   };
@@ -617,6 +626,16 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       },
     },
     files: {
+      pickReadOnly: options => call('files.pickReadOnly',options,MENU_TIMEOUT_MS),
+      forget: async id => { await call('files.forget',{id}); },
+      read: async id => {
+        if (!/^[a-f0-9]{32}$/.test(id)) throw new TavoraError({code:'INVALID_PARAMS',message:'Invalid file reference.'});
+        const response = await fetch(new URL(READ_ONLY_FILE_PATH+id,window.location.href),{method:'POST'});
+        if (!response.ok) { const body = await response.json() as {error:ErrorPayload}; throw new TavoraError(body.error); }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if(bytes.byteLength>32*1024*1024) throw new TavoraError({code:'QUOTA_EXCEEDED',message:'File is too large.'});
+        return bytes;
+      },
       exportJson: async (value, name = 'Build') => {
         const address = new URL(JSON_EXPORT_PATH, window.location.href);
         address.searchParams.set('name', name);

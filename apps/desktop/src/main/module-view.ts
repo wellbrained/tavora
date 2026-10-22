@@ -1,3 +1,6 @@
+import { ReadOnlyFiles } from './read-only-files';
+import { serveReadOnlyFile } from './read-only-files-http';
+import { READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
@@ -55,6 +58,7 @@ export interface ModuleViewOptions {
   onOpenLink(url: string): void;
   /** Shows a module's menu in the host UI, over this panel (host.ts); resolves with the chosen id, or null. */
   showMenu(menu: CheckedMenu): Promise<string | null>;
+  pickReadOnlyFile?(extensions:string[]):Promise<string|null>;
   tooltip?: {
     show(request:TooltipRequest):Promise<boolean>;
     move(anchor:TooltipAnchor):void;
@@ -135,6 +139,7 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
     // URL.origin is "null" for custom schemes in Node, so compare the host.
     const url = new URL(request.url);
     if (url.host !== module.manifest.id) return new Response("Not found", { status: 404 });
+    if (url.pathname.startsWith(READ_ONLY_FILE_PATH)) return serveReadOnlyFile(request,url.pathname.slice(READ_ONLY_FILE_PATH.length),new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,game.id));
     if (url.pathname.startsWith(BLOB_PATH)) return serveBlobs(blobs, request, url);
     if (url.pathname === CLIPBOARD_PATH) {
       const gesture = gestureOf(ses);
@@ -490,6 +495,15 @@ export class ModuleView {
           },
           move:anchor=>{if(this.tooltipAnchorAllowed(anchor.at)&&this.tooltipPointerMatches(anchor.at))this.options.tooltip?.move(anchor);},
           close:(id,hoverOnly)=>this.options.tooltip?.close(id,hoverOnly),
+        },
+        readOnlyFiles: {
+          pick: async extensions => {
+            await this.takeGesture('files.pickReadOnly');
+            const selected = await this.options.pickReadOnlyFile?.(extensions);
+            if (!selected || this.bridge !== bridge) return null;
+            return new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,game.id).remember(selected,()=>this.bridge===bridge);
+          },
+          forget: id => new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,game.id).forget(id),
         },
         showMenu: async (menu) => {
           // One click opens one menu, so a page cannot keep menus coming on its own.

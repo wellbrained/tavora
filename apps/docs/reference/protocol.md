@@ -392,3 +392,12 @@ source data or destroying the triggering UI. Underlying panels remain live.
 ## JSON exports (Tavora 0.19.17+)
 
 `files.exportJson(value, name?)` in SDK 0.2.10 POSTs JSON to `/_exports/json/?name=...` in the module origin. Maximum 1 MiB before and after host formatting. A trusted click/key press is consumed once, shared with picture operations. Saves a new sanitized `.json` in Downloads/Tavora; no arbitrary paths or overwrite. Returns `{ fileName }`. No extra permission grant.
+
+
+### Remembered read-only files
+
+The native picker is opened with `files.pickReadOnly({ extensions: ["ksd"] })` after a real click/key press. Cancellation returns null; selection returns `{ id, name, size }`. File names are basenames; references are opaque 128-bit values scoped by publisher, module and game. No path or folder is accepted from module code. The SDK allows time for the player to use the dialog.
+
+`files.read(id)` POSTs to `/_read-only-files/<id>` in the module origin and returns a Uint8Array, up to 32 MiB. The selected file can be reread after restart without another picker. Two concurrent reads are allowed per scope, four across the host, including reference lookups; errors use the protocol error envelope. `files.forget(id)` revokes access without deleting the selected file. These calls do not enable the reserved `files.open` or `files.save` methods.
+
+References stay on the current PC outside backups/cloud copies and are cleared with module/game data. Data copied to another PC may contain an inert reference and must relink files. The page receives no arbitrary filesystem or write access. See [Security](../guide/security.md#remembered-read-only-files).
