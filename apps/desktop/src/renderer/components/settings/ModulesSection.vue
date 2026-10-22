@@ -120,16 +120,18 @@ function remove(module: ModuleView) {
 <template>
   <SettingGroup v-if="problems.length" :title="t('settings.modules.problems')">
     <ul class="flex flex-col" :aria-label="t('settings.modules.problems')" aria-live="polite" data-testid="module-problems">
-      <li v-for="problem in problems" :key="problem.path" class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-4 border-b py-4 last:border-b-0">
-        <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
-        <div class="flex min-w-0 flex-col gap-2">
-          <p class="text-sm leading-relaxed [overflow-wrap:anywhere]">
-            <span class="font-medium">{{ problem.folder }}</span>{{ " " }}
-            <span class="text-muted-foreground">{{
-              problem.kind === "not-built" ? t("settings.modules.notBuilt") : t("settings.modules.problem", { message: problem.message })
-            }}</span>
-          </p>
-          <p class="text-muted-foreground text-xs [overflow-wrap:anywhere]" data-testid="module-problem-path">{{ problem.path }}</p>
+      <li v-for="problem in problems" :key="problem.path" class="flex flex-wrap items-start gap-x-4 gap-y-3 border-b py-4 last:border-b-0">
+        <div class="flex min-w-0 flex-1 basis-56 items-start gap-4">
+          <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+          <div class="flex min-w-0 flex-1 flex-col gap-2">
+            <p class="text-sm leading-relaxed [overflow-wrap:anywhere]">
+              <span class="font-medium">{{ problem.folder }}</span>{{ " " }}
+              <span class="text-muted-foreground">{{
+                problem.kind === "not-built" ? t("settings.modules.notBuilt") : t("settings.modules.problem", { message: problem.message })
+              }}</span>
+            </p>
+            <p class="text-muted-foreground text-xs [overflow-wrap:anywhere]" data-testid="module-problem-path">{{ problem.path }}</p>
+          </div>
         </div>
         <Button
           variant="secondary"
@@ -151,7 +153,7 @@ function remove(module: ModuleView) {
       setting="own-modules"
       :highlighted="highlight === 'own-modules'"
     >
-      <span class="flex flex-none flex-wrap items-center justify-end gap-2">
+      <span class="flex max-w-full flex-none flex-wrap items-center justify-end gap-2">
         <Button variant="secondary" data-testid="open-module-library" @click="openLibrary">
           <Store :stroke-width="1.5" /> {{ t("settings.modules.library") }}
         </Button>
@@ -239,7 +241,7 @@ function remove(module: ModuleView) {
           {{ files.folder }}<template v-if="!files.available"> — {{ t("settings.module-files.missing") }}</template>
         </p>
       </template>
-      <span class="flex flex-none flex-wrap items-center justify-end gap-2">
+      <span class="flex max-w-full flex-none flex-wrap items-center justify-end gap-2">
         <Button variant="secondary" data-testid="change-module-files" :disabled="files.moving" @click="act({ type: 'module-files-change' })">
           <FolderInput :stroke-width="1.5" /> {{ files.moving ? t("settings.module-files.moving") : t("settings.module-files.change") }}
         </Button>

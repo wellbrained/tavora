@@ -15,7 +15,7 @@ defineProps<{ module: NonNullable<typeof state.value>["modules"][number]; hideOr
     <span class="bg-primary/10 border-primary/20 text-primary flex size-10 flex-none items-center justify-center rounded-lg border" aria-hidden="true">
       <ModuleIcon :module-id="module.id" size="size-5" />
     </span>
-    <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+    <div class="flex min-w-0 flex-1 basis-48 flex-col gap-0.5">
       <span class="flex min-w-0 items-center gap-2">
         <span class="truncate font-medium">{{ module.name }}</span>
         <span class="text-muted-foreground flex-none text-xs tabular-nums">{{ module.version }}</span>
