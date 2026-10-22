@@ -23,8 +23,8 @@ export function formatInput(value: number, locale: string): string {
 /** A rate per minute: 2 decimals. */
 export const formatRate = (value: number, locale: string) => formatNumber(value, locale, 2);
 
-/** A clock speed: up to 4 decimals, as in the game. */
-export const formatClock = (value: number, locale: string) => `${formatNumber(value, locale, 4)} %`;
+/** A clock speed: up to 2 decimals. */
+export const formatClock = (value: number, locale: string) => `${formatNumber(value, locale, 2)} %`;
 
 /** Power in MW, or GW from 1000 MW. */
 export function formatPower(megawatts: number, locale: string): string {
