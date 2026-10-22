@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.12",
+    date: "2026-10-22",
+    title: "Same tooltips everywhere",
+    notes: [
+      "Hints on Tavora's own buttons, tabs and lists now look like the ones in modules.",
+      "Game and folder names in the rail use the same tooltip too.",
+      "Short hints get a small card instead of a wide one.",
+    ],
+  },
+  {
     version: "0.20.11",
     date: "2026-10-22",
     title: "Tidier rail footer",
