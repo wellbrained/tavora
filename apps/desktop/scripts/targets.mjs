@@ -17,7 +17,8 @@ export const targets = [
     platform: "node",
     format: "cjs",
     target: "node22",
-    external: ["electron"],
+    // koffi loads its native file from node_modules (src/main/program-list.ts).
+    external: ["electron", "koffi"],
     // The module font is embedded in main (src/main/module-fonts.ts).
     loader: { ".woff2": "base64" },
   },
