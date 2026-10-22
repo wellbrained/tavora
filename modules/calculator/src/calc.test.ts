@@ -1,0 +1,96 @@
+import { describe, expect, it } from "vitest";
+import { EMPTY, evaluate, format, insert, press, pretty, type Entry } from "./calc";
+
+const value = (text: string) => {
+  const outcome = evaluate(text);
+  return outcome.ok ? format(outcome.value) : outcome.reason;
+};
+
+const type = (keys: string[], from: Entry = EMPTY) => keys.reduce(press, from).text;
+
+describe("evaluate", () => {
+  it("does × and ÷ before + and −", () => {
+    expect(value("2+3*4")).toBe("14");
+    expect(value("10-4/2")).toBe("8");
+    expect(value("(2+3)*4")).toBe("20");
+  });
+
+  it("reads negatives, percent and brackets next to a number", () => {
+    expect(value("-3*-2")).toBe("6");
+    expect(value("50%")).toBe("0.5");
+    expect(value("200*15%")).toBe("30");
+    expect(value("200+10%")).toBe("220");
+    expect(value("200-10%")).toBe("180");
+    expect(value("200+10%*2")).toBe("200.2");
+    expect(value("2(3+4)")).toBe("14");
+  });
+
+  it("closes brackets left open", () => {
+    expect(value("(2+3")).toBe("5");
+  });
+
+  it("rounds away float noise", () => {
+    expect(value("0.1+0.2")).toBe("0.3");
+    expect(value("1/3")).toBe("0.333333333333");
+  });
+
+  it("tells why it can't work something out", () => {
+    expect(value("")).toBe("incomplete");
+    expect(value("2+")).toBe("incomplete");
+    expect(value("5/0")).toBe("divide");
+    expect(value("5/(2-2)")).toBe("divide");
+    expect(value("2)")).toBe("invalid");
+    expect(value("abc")).toBe("invalid");
+    expect(value("1e308*10")).toBe("tooBig");
+  });
+
+  it("reads its own results back", () => {
+    expect(value(`${format(1e21)}*2`)).toBe("2e+21");
+  });
+});
+
+describe("press", () => {
+  it("replaces an operator typed twice", () => {
+    expect(type(["5", "+", "*", "2"])).toBe("5*2");
+  });
+
+  it("allows a minus after × or ÷ for a negative number", () => {
+    expect(type(["5", "*", "-", "2"])).toBe("5*-2");
+    expect(type(["5", "*", "-", "+"])).toBe("5+");
+  });
+
+  it("starts a number at 0. and keeps one point per number", () => {
+    expect(type([".", "5", ".", "+", "."])).toBe("0.5+0.");
+  });
+
+  it("only closes brackets that are open", () => {
+    expect(type([")", "(", "2", ")", ")"])).toBe("(2)");
+    expect(type(["2", "(", "3"])).toBe("2*(3");
+  });
+
+  it("starts over on a digit after a result, and goes on with an operator", () => {
+    const done: Entry = { text: "42", fresh: true };
+    expect(type(["7"], done)).toBe("7");
+    expect(type(["+", "1"], done)).toBe("42+1");
+  });
+
+  it("deletes the last key and clears", () => {
+    expect(type(["1", "2", "back"])).toBe("1");
+    expect(type(["1", "clear"])).toBe("");
+  });
+});
+
+describe("insert", () => {
+  it("adds a number after an operator and replaces otherwise", () => {
+    expect(insert({ text: "5+", fresh: false }, "3").text).toBe("5+3");
+    expect(insert({ text: "5+", fresh: false }, "-3").text).toBe("5+(-3)");
+    expect(insert({ text: "5", fresh: false }, "3")).toEqual({ text: "3", fresh: true });
+  });
+});
+
+describe("pretty", () => {
+  it("shows the signs a player knows", () => {
+    expect(pretty("-2*3/4")).toBe("−2×3÷4");
+    expect(pretty("1.5+2", true)).toBe("1,5+2");
+  });
+});
