@@ -26,3 +26,6 @@ export async function connectModule(onLanguage?: (language: string) => void): Pr
   }
   return sdk;
 }
+
+export{Tooltip}from"./components/tooltip";
+export{installTitleTooltips}from"./title-tooltips";

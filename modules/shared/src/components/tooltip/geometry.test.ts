@@ -1,0 +1,2 @@
+import{expect,it}from'vitest';import{tooltipPosition}from'./geometry';
+it('places readable text to a side without covering the pointer or exceeding a narrow viewport',()=>{for(const at of [{x:20,y:20},{x:200,y:250},{x:380,y:590}]){const b=tooltipPosition(at,320,180,{width:400,height:600});expect(b.width).toBeGreaterThanOrEqual(160);expect(b.left).toBeGreaterThanOrEqual(12);expect(b.left+b.width).toBeLessThanOrEqual(388);expect(b.top).toBeGreaterThanOrEqual(12);expect(b.top+180).toBeLessThanOrEqual(588);expect(at.x<b.left||at.x>b.left+b.width).toBe(true);}});

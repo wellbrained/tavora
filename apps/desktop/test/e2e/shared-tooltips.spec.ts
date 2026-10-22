@@ -1,0 +1,52 @@
+import { test, expect } from '@playwright/test';
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { launch, openModule, inModule, waitForShown } from './harness';
+
+test('shared module hints support pointer, keyboard, dynamic labels and narrow panels', async ({}, info) => {
+  const id = 'tavora.playground';
+  const { app, page } = await launch(undefined, [path.resolve('../../modules')]);
+  const run = <T = unknown>(source: string) => inModule<T>(app, id, source);
+  const input = async (event: Record<string, unknown>) => app.evaluate(({ webContents }, { id, event }) => {
+    const wc = webContents.getAllWebContents().find(w => w.getURL().startsWith('tavora-module://' + id + '/'))!;
+    wc.sendInputEvent(event as any);
+  }, { id, event });
+  try {
+    await openModule(page, id);
+    await waitForShown(app, id);
+    await expect.poll(() => run('!!document.querySelector("[data-tooltip-layer]")')).toBe(true);
+    await run('const filter=document.querySelector("[data-testid=filter]");filter.value="tooltips";filter.dispatchEvent(new Event("input",{bubbles:true}));');
+    await expect.poll(() => run('!!document.querySelector("#tooltips")')).toBe(true);
+    await run('document.querySelector("#tooltips button").id="hint-target"');
+    const point = await run<{x:number;y:number}>('(()=>{const r=document.querySelector("#hint-target").getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()');
+    await input({type:'mouseMove', ...point});
+    await expect.poll(() => run('document.querySelector("[role=tooltip] p")?.textContent')).toBe('Readable help from the shared kit.');
+    expect(await run('getComputedStyle(document.querySelector("[role=tooltip] p")).fontSize')).toBe('14px');
+    expect(await run('document.querySelector("#hint-target").getAttribute("title")')).toBe('');
+    expect(await run('document.querySelector("#hint-target").getAttribute("aria-describedby")')).toContain('tavora-title-tooltip');
+    await run('document.querySelector("#hint-target").title="Updated help"');
+    await expect.poll(() => run('document.querySelector("[role=tooltip] p")?.textContent')).toBe('Updated help');
+    await run('document.querySelector("#hint-target").removeAttribute("title")');
+    await expect.poll(() => run('document.querySelectorAll("[role=tooltip]").length')).toBe(0);
+    await run('document.querySelector("#hint-target").title="Keyboard help"');
+    await input({type:'mouseMove',x:10,y:10});
+    await input({type:'keyDown',keyCode:'Tab'});
+    await input({type:'keyUp',keyCode:'Tab'});
+    await run('document.querySelector("#hint-target").focus()');
+    await expect.poll(() => run('document.querySelector("[role=tooltip] p")?.textContent')).toBe('Keyboard help');
+    await input({type:'keyDown',keyCode:'Escape'});
+    await expect.poll(() => run('document.querySelectorAll("[role=tooltip]").length')).toBe(0);
+    await app.evaluate(({BrowserWindow},id)=>{
+      const host=BrowserWindow.getAllWindows().find(w=>!w.webContents.getURL().startsWith('data:'))!;
+      const view=host.contentView.children.find(v=>(v as any).webContents?.getURL().startsWith('tavora-module://'+id+'/'))!;
+      view.setBounds({...view.getBounds(),width:400});
+    },id);
+    await run('document.querySelector("#hint-target").blur();const b=document.querySelectorAll("#tooltips button")[1];b.focus();');
+    await expect.poll(() => run('document.querySelector("[role=tooltip] p")?.textContent')).toContain('Readable text');
+    expect(await run('getComputedStyle(document.querySelector("[role=tooltip] h2")).fontSize')).toBe('18px');
+    const bounds=await run<{left:number;right:number;width:number;body:string}>('(()=>{const e=document.querySelector("[role=tooltip]"),r=e.getBoundingClientRect();return{left:r.left,right:r.right,width:innerWidth,body:getComputedStyle(e.querySelector("p")).fontSize}})()');
+    expect(bounds.left).toBeGreaterThanOrEqual(12);expect(bounds.right).toBeLessThanOrEqual(bounds.width-12);expect(bounds.body).toBe('14px');
+    const png=await app.evaluate(async({webContents},id)=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://'+id+'/'))!;return(await wc.capturePage()).toPNG().toString('base64');},id);
+    await writeFile(info.outputPath('shared-tooltip-narrow.png'),Buffer.from(png,'base64'));
+  } finally { await app.close(); }
+});

@@ -1,3 +1,4 @@
+import { installTitleTooltips } from "@tavora/official-ui/title-tooltips";
 import {addMenuActions,panelMenuActions} from './panel-menus';
 import {equipmentOrder} from './item-details';
 import {buildDisplayTitle} from './item-data.js';
@@ -34,7 +35,8 @@ let library: {
 const treeState = { tree: 0, weapon: 'all', search: '', changes: false };
 let importing = false;
 function report(e: unknown) { $('#status').textContent = e instanceof Error ? e.message : String(e); }
-function applyTheme(theme: TavoraTheme) { for (const [key, value] of Object.entries(theme.tokens))
+function applyTheme(theme: TavoraTheme) {
+  installTitleTooltips(); for (const [key, value] of Object.entries(theme.tokens))
     document.documentElement.style.setProperty('--' + key, value); for (const [key, value] of Object.entries(theme.colors))
     document.documentElement.style.setProperty('--host-' + key, value); }
 function stage(): Stage { return build!.stages[view.stage]!; }

@@ -12,7 +12,8 @@
     "@excalidraw/excalidraw": "0.18.1",
     "@tavora/sdk": "workspace:*",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "@tavora/official-ui": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

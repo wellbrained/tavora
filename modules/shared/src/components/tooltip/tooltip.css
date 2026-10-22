@@ -1,0 +1,4 @@
+.tavora-tooltip{position:fixed;z-index:1000;pointer-events:none;box-sizing:border-box;max-height:calc(100vh - 24px);overflow:hidden;padding:14px 16px;border:1px solid var(--border,#625648);border-radius:8px;background:var(--popover,var(--background,#171412));color:var(--popover-foreground,var(--foreground,#eee7d9));box-shadow:0 6px 20px #0004;font-family:var(--tavora-font-sans,system-ui,sans-serif);font-size:var(--tavora-tooltip-text-size);line-height:1.5;overflow-wrap:anywhere}
+.tavora-tooltip h2{font-size:var(--tavora-tooltip-title-size);font-weight:600;line-height:1.35;margin:0}.tavora-tooltip p{font-size:var(--tavora-tooltip-text-size);line-height:1.5;margin:8px 0 0;color:var(--muted-foreground,#b8afa1)}
+
+.tavora-tooltip p:first-child{margin-top:0}
