@@ -92,7 +92,7 @@ function closeCrop() {
         type="button"
         :class="
           cn(
-            'group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors data-[state=open]:text-foreground',
+            'group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors focus-visible:-outline-offset-2 data-[state=open]:text-foreground',
             expanded && 'hover:bg-accent data-[state=open]:bg-accent',
           )
         "

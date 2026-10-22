@@ -36,7 +36,7 @@ function press() {
     type="button"
     :class="
       cn(
-        'text-primary mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors',
+        'text-primary mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors focus-visible:-outline-offset-2',
         busy ? 'cursor-default opacity-80' : 'hover:bg-accent',
       )
     "
