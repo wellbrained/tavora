@@ -94,7 +94,8 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
       class="flex size-full flex-col items-center justify-center gap-3 overflow-y-auto p-4 text-center"
       :data-testid="`panel-type-gone-${id}`"
     >
-      <p class="max-w-sm text-sm">{{ t("panel.typeGone", { module: module?.name ?? panel.moduleId, type: panel.name }) }}</p>
+      <p v-if="!module" class="max-w-sm text-sm" :data-testid="`panel-module-waiting-${id}`">{{ t("panel.moduleWaiting", { module: panel.name }) }}</p>
+      <p v-else class="max-w-sm text-sm">{{ t("panel.typeGone", { module: module.name, type: panel.name }) }}</p>
       <template v-if="module?.panels.length">
         <p class="text-muted-foreground text-sm">{{ t("panel.typeGoneChoose", { module: module.name }) }}</p>
         <div class="flex max-w-md flex-wrap justify-center gap-2">

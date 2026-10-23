@@ -74,8 +74,18 @@ export interface ModuleProblem {
   developmentProject?: string;
   /** What Settings can suggest: build it first, add another folder, or the folder is gone. */
   kind?: "not-built" | "no-module" | "missing";
-  /** The name and version its manifest gives, when it has them, so Settings can name the module. */
-  about?: { name: string; version: string | null };
+  /** The name and version its manifest gives, when it has them, so Settings can name the module; its id too, when it has one. */
+  about?: { name: string; version: string | null; id?: string };
+}
+
+/**
+ * Modules in a development folder whose manifest names them but that cannot load right now, most often because they
+ * are not built or a build watcher is rebuilding them. Their panels wait for them instead of being forgotten.
+ */
+export function waitingDevelopmentModules(problems: readonly ModuleProblem[]): Map<string, string> {
+  const waiting = new Map<string, string>();
+  for (const problem of problems) if (problem.developmentFolder && problem.about?.id) waiting.set(problem.about.id, problem.about.name);
+  return waiting;
 }
 
 export interface ModuleSources {
@@ -269,9 +279,9 @@ async function loadModule(
 /** The name and version a manifest gives, even one that doesn't validate yet. */
 function aboutOf(raw: unknown): ModuleProblem["about"] {
   if (typeof raw !== "object" || raw === null) return undefined;
-  const { name, version } = raw as { name?: unknown; version?: unknown };
+  const { name, version, id } = raw as { name?: unknown; version?: unknown; id?: unknown };
   if (typeof name !== "string" || !name.trim()) return undefined;
-  return { name: name.trim().slice(0, 80), version: typeof version === "string" ? version.slice(0, 40) : null };
+  return { name: name.trim().slice(0, 80), version: typeof version === "string" ? version.slice(0, 40) : null, ...(typeof id === "string" && id.length <= 200 ? { id } : {}) };
 }
 
 export interface ModuleInfo {

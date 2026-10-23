@@ -116,7 +116,7 @@ import { isWebUrl, siteOfUrl } from "./browser-url";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, developmentProjects, discoverModules, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, developmentProjects, discoverModules, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, waitingDevelopmentModules, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
@@ -527,7 +527,8 @@ export class Host {
       console.error("[tavora] moving module data under its owner failed", error),
     );
     const expired = purgeExpired(library, new Date());
-    const workspace = await savedData.loadWorkspace(Object.keys(library.games), (id) => modules.has(id));
+    const waiting = waitingDevelopmentModules(moduleProblems);
+    const workspace = await savedData.loadWorkspace(Object.keys(library.games), (id) => modules.has(id) || waiting.has(id));
     settlePanelTypes(workspace, panelTypesOf(modules));
     const { profile, saved: profileSaved } = await savedData.loadProfile();
     const windowState = initialBounds(
@@ -841,7 +842,8 @@ export class Host {
           if (!module || name === null || name === MANIFEST || name === built) changed(true);
           else if (built === undefined) changed(false);
         });
-        if (built !== undefined) watchFolder(path.join(root, built), true, () => changed(!module));
+        // A rebuild that empties the build folder takes the entry away: look again, so the panels wait for the next build.
+        if (built !== undefined) watchFolder(path.join(root, built), true, () => changed(!module || !existsSync(path.join(root, entry!))));
       }
     }
   }
@@ -1023,9 +1025,14 @@ export class Host {
     return { latest: notes[0]?.version ?? null, unseen: hasUnseenNotes(notes, module.manifest.version, this.library.moduleNotesSeen[Host.notesKey(module)]) };
   }
 
-  /** Closes and forgets every panel whose module is not installed any more, in every game. Module data stays. */
+  /**
+   * Closes and forgets every panel whose module is not installed any more, in every game. Module data stays. A module
+   * in a development folder that cannot load right now (being rebuilt, not built) keeps its panels; they start again
+   * once it loads (syncPanelTypes).
+   */
   private dropPanelsOfMissingModules(): void {
-    for (const instanceId of this.workspaces.dropMissingModules((moduleId) => this.modules.has(moduleId))) this.closeView(instanceId);
+    const waiting = waitingDevelopmentModules(this.moduleProblems);
+    for (const instanceId of this.workspaces.dropMissingModules((moduleId) => this.modules.has(moduleId) || waiting.has(moduleId))) this.closeView(instanceId);
   }
 
   // ── Pictures of modules ──────────────────────────────────────────────
@@ -3301,7 +3308,9 @@ export class Host {
       panels: workspace.instances.map((record) => {
         const view = this.views.get(record.instanceId);
         const type = this.panelTypeOf(record);
-        const name = type?.name ?? this.shown(this.modules.get(record.moduleId)!.manifest).name;
+        const module = this.modules.get(record.moduleId);
+        // A development module that cannot load right now is named from its manifest until it loads.
+        const name = type?.name ?? (module ? this.shown(module.manifest).name : (waitingDevelopmentModules(this.moduleProblems).get(record.moduleId) ?? record.moduleId));
         const panelType = record.panelType ?? null;
         const openedFrom = this.openedFrom.get(record.instanceId);
         if (type === undefined) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: record.panelType ?? name, status: "unavailable" as const, waiting: false, content: null };

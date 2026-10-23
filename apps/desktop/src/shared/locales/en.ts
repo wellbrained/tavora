@@ -1201,6 +1201,7 @@ export const en = {
   "panel.status.unavailable": "Not available",
   "panel.loading": "Loading {name}…",
   "panel.typeGone": "{module} no longer offers the panel \"{type}\". Its saved content is kept.",
+  "panel.moduleWaiting": "{module} can't load right now, for example while it's being built. This panel comes back once it loads.",
   "panel.typeGoneChoose": "Choose another panel of {module}:",
   "panel.remove": "Remove",
   "panel.reload": "Reload",
