@@ -91,8 +91,7 @@
           "*/tavora.module.json",
           "*/changelog.json",
           "*/dist/**",
-          "!poe2-builds/**",
-          "!satisfactory/**"
+          "!poe2-builds/**"
         ]
       },
       {
