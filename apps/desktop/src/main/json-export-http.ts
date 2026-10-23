@@ -4,7 +4,8 @@ import path from "node:path";
 import { cleanPictureName } from "./picture-save-http";
 import { json, readBody, STATUS } from "./clipboard-http";
 import { HostError } from "./errors";
-export const MAX_JSON_EXPORT_BYTES = 1024 * 1024;
+// Room for a guide build with its original source text (the largest seen is about 2.3 MiB).
+export const MAX_JSON_EXPORT_BYTES = 8 * 1024 * 1024;
 export interface JsonExportDeps {
   allowed(): boolean;
   consume(): void;
@@ -70,7 +71,7 @@ export async function serveJsonExport(
     }
     const data = Buffer.from(JSON.stringify(value, null, 2) + "\n");
     if (data.byteLength > MAX_JSON_EXPORT_BYTES)
-      throw new HostError("QUOTA_EXCEEDED", "formatted JSON exceeds 1 MiB");
+      throw new HostError("QUOTA_EXCEEDED", "formatted JSON exceeds 8 MiB");
     return json(200, {
       fileName: await deps.save(
         data,

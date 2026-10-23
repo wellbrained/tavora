@@ -38,6 +38,13 @@ describe("bounded JSON export", () => {
     expect(JSON.parse(saved[0]!.toString())).toEqual({ skills: ["2"] });
     expect((await serveJsonExport(post("{}"), url, value)).status).toBe(403);
   });
+  it("saves a guide build bigger than the old 1 MiB limit", async () => {
+    const { value, saved } = deps();
+    const build = { guideExport: "x".repeat(3 * 1024 * 1024) };
+    const reply = await serveJsonExport(post(JSON.stringify(build)), url, value);
+    expect(reply.status).toBe(200);
+    expect(JSON.parse(saved[0]!.toString())).toEqual(build);
+  });
   it("rejects invalid UTF-8, malformed or oversized JSON and non-POST methods", async () => {
     for (const data of [
       "not JSON",

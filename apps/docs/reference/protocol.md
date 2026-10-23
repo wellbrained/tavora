@@ -391,7 +391,7 @@ source data or destroying the triggering UI. Underlying panels remain live.
 
 ## JSON exports (Tavora 0.19.17+)
 
-`files.exportJson(value, name?)` in SDK 0.2.10 POSTs JSON to `/_exports/json/?name=...` in the module origin. Maximum 1 MiB before and after host formatting. A trusted click/key press is consumed once, shared with picture operations. Saves a new sanitized `.json` in Downloads/Tavora; no arbitrary paths or overwrite. Returns `{ fileName }`. No extra permission grant.
+`files.exportJson(value, name?)` in SDK 0.2.10 POSTs JSON to `/_exports/json/?name=...` in the module origin. Maximum 8 MiB before and after host formatting (1 MiB in Tavora 0.20.7 and older). A trusted click/key press is consumed once, shared with picture operations. Saves a new sanitized `.json` in Downloads/Tavora; no arbitrary paths or overwrite. Returns `{ fileName }`. No extra permission grant.
 
 
 ### Remembered read-only files
