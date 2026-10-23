@@ -23,6 +23,10 @@ The app and the official modules share one kit: `@tavora/official-ui` (`modules/
 - Use what the kit has. Restyle with classes where it's used, not with a copy of the component.
 - A missing control or variant is a decision for the maintainer: ask before building it. Once agreed, it goes into the kit and gets a specimen in the UI Playground (`modules/playground`).
 
+## Save as image
+
+Every Save as image, in the app and in every module (game modules too), saves through `pictures.save`: Tavora's save dialog with the name filled in, opening where the player last saved a picture (at first `Pictures\Tavora`). Never save a picture to a fixed folder without asking. Closing the dialog shows no message.
+
 ## Game modules (locked decision)
 
 Game-specific modules (Enshrouded Builds, Satisfactory Planner, PoE2 Builds and every future one) are separate from Tavora:
