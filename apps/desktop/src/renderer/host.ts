@@ -479,3 +479,13 @@ watch(overlayOpen, (open) => {
   if (!open) frozen.value = {};
   api.setOverlay(open);
 });
+
+// The system draws the window buttons above the page, so a dialog backdrop can't dim them: while one is open,
+// the host dims them instead.
+let dimmed = false;
+new MutationObserver(() => {
+  const now = document.querySelector('[data-slot="dialog-overlay"][data-state="open"]') !== null;
+  if (now === dimmed) return;
+  dimmed = now;
+  api.setDimmed(now);
+}).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-state"] });

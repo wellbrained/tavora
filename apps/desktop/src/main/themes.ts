@@ -92,6 +92,12 @@ export function contrast(a: string, b: string): number {
   return (light + 0.05) / (dark + 0.05);
 }
 
+/** A #rrggbb colour seen through a black veil of the given opacity, as a dialog backdrop draws it. */
+export function veiled(hex: string, opacity: number): string {
+  const channel = (offset: number) => Math.round(parseInt(hex.slice(offset, offset + 2), 16) * (1 - opacity));
+  return `#${[1, 3, 5].map((offset) => channel(offset).toString(16).padStart(2, "0")).join("")}`;
+}
+
 type Pair = [fore: ThemeToken, back: ThemeToken, kind: "text" | "non-text"];
 
 /**

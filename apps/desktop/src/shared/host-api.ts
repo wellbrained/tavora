@@ -873,6 +873,8 @@ export interface TavoraHostApi {
    * to `onFrozen`, so the workspace does not go blank.
    */
   setOverlay(open: boolean): void;
+  /** Dims the window buttons along with the page while a dialog backdrop covers it. */
+  setDimmed(dimmed: boolean): void;
   onState(listener: (state: HostViewState) => void): void;
   onFrozen(listener: (images: Record<string, string>) => void): void;
   /** Tavora-wide keyboard shortcuts, also when a module panel has focus. */
