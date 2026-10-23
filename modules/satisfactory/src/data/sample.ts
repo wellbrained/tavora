@@ -122,4 +122,44 @@ export const sampleData: GameData = {
     Desc_Rubber_C: "Recipe_Rubber_C",
     Desc_PetroleumCoke_C: "Recipe_PetroleumCoke_C",
   },
+  progress: {
+    phases: [
+      { phase: 0, name: { en: "Onboarding", de: "Einführung" }, cost: [], lastTier: 2 },
+      { phase: 1, name: { en: "Distribution Platform", de: "Verteilplattform" }, cost: [a("Desc_IronPlateReinforced_C", 50)], lastTier: 4 },
+    ],
+    milestones: [
+      {
+        id: "Schematic_Tutorial1_C",
+        name: { en: "HUB Upgrade 1", de: "HUB-Upgrade 1" },
+        tier: 0,
+        cost: [a("Desc_IronRod_C", 10)],
+        unlocks: { recipes: ["Recipe_IronPlate_C"], buildings: [], items: [] },
+        requires: [],
+      },
+      {
+        id: "Schematic_2-1_C",
+        name: { en: "Part Assembly", de: "Bauteilmontage" },
+        tier: 2,
+        cost: [a("Desc_IronPlate_C", 100), a("Desc_IronRod_C", 100)],
+        unlocks: { recipes: ["Recipe_IronPlateReinforced_C"], buildings: ["Build_AssemblerMk1_C"], items: [] },
+        requires: [],
+      },
+    ],
+    research: [
+      {
+        id: "BPD_ResearchTree_Oil_C",
+        name: { en: "Oil", de: "Öl" },
+        nodes: [
+          {
+            id: "Research_Oil_1_C",
+            name: { en: "Plastics", de: "Kunststoffe" },
+            cost: [a("Desc_IronPlate_C", 50)],
+            unlocks: { recipes: ["Recipe_Plastic_C", "Recipe_Rubber_C"], buildings: ["Build_OilRefinery_C"], items: [] },
+            requires: [],
+          },
+        ],
+      },
+    ],
+    hardDrives: [{ id: "Schematic_Alternate_Screw_C", recipes: ["Recipe_Alternate_Screw_C"], requires: ["Schematic_2-1_C"] }],
+  },
 };

@@ -15,7 +15,8 @@ import {
   serialize,
   type DocsClass,
   type DocsGroup,
-  type ResearchTree,
+  type GamePhaseAsset,
+  type ResearchTreeAsset,
 } from "../../tools/game-docs";
 import { patchUsmap } from "../../tools/usmap";
 import { sampleData } from "./sample";
@@ -58,13 +59,20 @@ const recipe = (id: string, name: string, producedIn: string, ingredients: strin
   ...extra,
 });
 
-const schematic = (id: string, type: string, name: string, unlocks: Record<string, string>[], tier = "0"): DocsClass => ({
+const schematic = (id: string, type: string, name: string, unlocks: Record<string, string>[], tier = "0", extra: Partial<DocsClass> = {}): DocsClass => ({
   ClassName: id,
   mType: type,
   mDisplayName: name,
   mTechTier: tier,
+  mMenuPriority: "0.000000",
+  mCost: "",
+  mSchematicDependencies: "",
   mUnlocks: unlocks,
+  ...extra,
 });
+const needs = (...ids: string[]) => [
+  { Class: "BP_SchematicPurchasedDependency_C", mSchematics: `(${ids.map((id) => `"${ref(id)}"`).join(",")})`, mRequireAllSchematicsToBePurchased: "True" },
+];
 const unlockRecipes = (...ids: string[]) => ({ Class: "BP_UnlockRecipe_C", mRecipes: `(${ids.map((id) => `"${ref(id)}"`).join(",")})` });
 const unlockSchematics = (...ids: string[]) => ({ Class: "BP_UnlockSchematic_C", mSchematics: `(${ids.map((id) => `"${ref(id)}"`).join(",")})` });
 
@@ -116,11 +124,19 @@ function fixture(): { en: DocsGroup[]; de: DocsGroup[] } {
       NativeClass: native("FGSchematic"),
       Classes: [
         schematic("Schematic_StartingRecipes_C", "EST_Custom", "Starting Blueprints", [unlockRecipes("Recipe_IngotIron_C", "Recipe_ConstructorMk1_C")]),
-        schematic("Schematic_1-1_C", "EST_Milestone", "Base Building", [unlockRecipes("Recipe_IronPlate_C"), unlockSchematics("Schematic_1-1-1_C")], "1"),
-        schematic("Schematic_1-1-1_C", "EST_Custom", "Base Building 2", [unlockRecipes("Recipe_WaterFuel_C")]),
-        schematic("Schematic_Alternate_WetPlate_C", "EST_Alternate", "Alternate: Wet Plate", [unlockRecipes("Recipe_Alternate_WetPlate_C")], "1"),
+        schematic("Schematic_Tutorial1_C", "EST_Tutorial", "HUB Upgrade 1", [], "0", { mMenuPriority: "1.000000" }),
+        schematic("Schematic_Tutorial2_C", "EST_Tutorial", "HUB Upgrade 2", [], "0", { mMenuPriority: "2.000000", mSchematicDependencies: needs("Schematic_Tutorial1_C") }),
+        schematic("Schematic_1-1_C", "EST_Milestone", "Base Building", [unlockRecipes("Recipe_IronPlate_C", "Recipe_Gadget_C"), unlockSchematics("Schematic_1-1-1_C")], "1", {
+          mCost: amounts(["Desc_IronPlate_C", 10], ["Desc_Water_C", 3000]),
+        }),
+        schematic("Schematic_1-1-1_C", "EST_Custom", "Base Building 2", [unlockRecipes("Recipe_WaterFuel_C", "Recipe_ConstructorMk1_C")]),
+        schematic("Schematic_Alternate_WetPlate_C", "EST_Alternate", "Alternate: Wet Plate", [unlockRecipes("Recipe_Alternate_WetPlate_C")], "1", {
+          mSchematicDependencies: needs("Schematic_1-1_C"),
+        }),
         schematic("Research_Old_C", "EST_MAM", "Discontinued - Plates", [unlockRecipes("Recipe_IronPlate_C")], "3"),
-        schematic("Research_Water_C", "EST_MAM", "Water Fuel", [unlockRecipes("Recipe_WaterFuel_C")], "3"),
+        schematic("Research_Water_C", "EST_MAM", "Water Fuel", [unlockRecipes("Recipe_WaterFuel_C")], "3", { mCost: amounts(["Desc_IronPlate_C", 5]) }),
+        schematic("Research_Water2_C", "EST_MAM", "More Water", [], "3", { mCost: amounts(["Desc_IronIngot_C", 5], ["Desc_HardDrive_C", 1]) }),
+        schematic("ResourceSink_Coupon_C", "EST_ResourceSink", "Shop Thing", [], "0", { mCost: `((ItemClass="${ref("Desc_ResourceSinkCoupon_C")}"))` }),
       ],
     },
   ];
@@ -132,13 +148,28 @@ function fixture(): { en: DocsGroup[]; de: DocsGroup[] } {
   return { en, de };
 }
 
-const trees: ResearchTree[] = [{ id: "BPD_ResearchTree_Water_C", name: { en: "Water", de: "Wasser" }, schematics: ["Research_Water_C"] }];
+const trees: ResearchTreeAsset[] = [
+  {
+    id: "BPD_ResearchTree_Water_C",
+    name: { en: "Water", de: "Wasser" },
+    nodes: [
+      // Listed bottom-up, with a parent position where no node is left, as the game files have.
+      { schematic: "Research_Water2_C", at: { x: 0, y: 1 }, parents: [{ x: 0, y: 0 }, { x: 5, y: 5 }] },
+      { schematic: "Research_Water_C", at: { x: 0, y: 0 }, parents: [] },
+    ],
+  },
+];
+const phases: GamePhaseAsset[] = [
+  { phase: 1, name: { en: "Platform", de: "Plattform" }, lastTier: 1, costs: [{ item: "Desc_IronPlate_C", amount: 50 }] },
+  { phase: 0, name: { en: "Onboarding" }, lastTier: 0, costs: [] },
+  { phase: 2, name: { en: "After" }, lastTier: 1, costs: [] },
+];
 
 function extract(change?: (en: DocsGroup[]) => void, choices: Record<string, string> = {}) {
   const { en, de } = fixture();
   change?.(en);
   const catalog = readDocs(en, de);
-  return { catalog, ...finish(catalog, { build: 1, version: "1.0", researchTrees: trees, icons: new Set(["Desc_IronPlate_C", "Build_ConstructorMk1_C"]) }, choices) };
+  return { catalog, ...finish(catalog, { build: 1, version: "1.0", researchTrees: trees, gamePhases: phases, icons: new Set(["Desc_IronPlate_C", "Build_ConstructorMk1_C"]) }, choices) };
 }
 
 function problems(run: () => unknown): string[] {
@@ -189,6 +220,56 @@ describe("Unreal text parsers", () => {
 });
 
 describe("readDocs and finish", () => {
+  it("list progress: phases, milestones in HUB order, research with its links, and hard drives", () => {
+    const { progress } = extract().data;
+    // Phases 0 to the last one that costs something; later ones are left out.
+    expect(progress.phases).toEqual([
+      { phase: 0, name: { en: "Onboarding" }, cost: [], lastTier: 0 },
+      { phase: 1, name: { en: "Platform", de: "Plattform" }, cost: [{ item: "Desc_IronPlate_C", amount: 50 }], lastTier: 1 },
+    ]);
+    expect(progress.milestones.map((m) => m.id)).toEqual(["Schematic_Tutorial1_C", "Schematic_Tutorial2_C", "Schematic_1-1_C"]);
+    expect(progress.milestones[1]?.requires).toEqual(["Schematic_Tutorial1_C"]);
+    // Costs with fluids in cubic metres; unlocks include the background schematic, the building it places and workshop items.
+    expect(progress.milestones[2]).toEqual({
+      id: "Schematic_1-1_C",
+      name: { en: "Base Building", de: "Basisbau" },
+      tier: 1,
+      cost: [{ item: "Desc_IronPlate_C", amount: 10 }, { item: "Desc_Water_C", amount: 3 }],
+      unlocks: { recipes: ["Recipe_IronPlate_C", "Recipe_WaterFuel_C"], buildings: ["Build_ConstructorMk1_C"], items: ["Desc_IronIngot_C"] },
+      requires: [],
+    });
+    // Nodes top-down; a parent position without a node is skipped; hard drives are counted apart from the cost.
+    expect(progress.research).toEqual([
+      {
+        id: "BPD_ResearchTree_Water_C",
+        name: { en: "Water", de: "Wasser" },
+        nodes: [
+          { id: "Research_Water_C", name: { en: "Water Fuel", de: "Water Fuel" }, cost: [{ item: "Desc_IronPlate_C", amount: 5 }], unlocks: { recipes: ["Recipe_WaterFuel_C"], buildings: [], items: [] }, requires: [] },
+          { id: "Research_Water2_C", name: { en: "More Water", de: "More Water" }, cost: [{ item: "Desc_IronIngot_C", amount: 5 }], hardDrives: 1, unlocks: { recipes: [], buildings: [], items: [] }, requires: ["Research_Water_C"] },
+        ],
+      },
+    ]);
+    expect(progress.hardDrives).toEqual([{ id: "Schematic_Alternate_WetPlate_C", recipes: ["Recipe_Alternate_WetPlate_C"], requires: ["Schematic_1-1_C"] }]);
+  });
+
+  it("refuse progress they cannot read", () => {
+    const runWith = (change: (en: DocsGroup[]) => void) => problems(() => extract(change));
+    expect(runWith((en) => {
+      group(en, "FGSchematic").Classes.find((c) => c.ClassName === "Schematic_1-1_C")!.mCost = amounts(["Desc_Mystery_C", 1]);
+    })).toContain("Schematic_1-1_C costs Desc_Mystery_C, which is not in the Docs.");
+    expect(runWith((en) => {
+      group(en, "FGSchematic").Classes.find((c) => c.ClassName === "Schematic_1-1_C")!.mTechTier = "4";
+    })).toContain("Schematic_1-1_C is in tier 4, which no phase opens.");
+    expect(runWith((en) => {
+      group(en, "FGSchematic").Classes.find((c) => c.ClassName === "Schematic_Alternate_WetPlate_C")!.mSchematicDependencies = [
+        { Class: "BP_SchematicPurchasedDependency_C", mSchematics: `("${ref("Schematic_1-1_C")}")`, mRequireAllSchematicsToBePurchased: "False" },
+      ];
+    })).toContain('Schematic_Alternate_WetPlate_C needs one of several schematics; the tracker only knows "all of".');
+    expect(runWith((en) => {
+      group(en, "FGSchematic").Classes.find((c) => c.ClassName === "Schematic_1-1_C")!.mSchematicDependencies = [{ Class: "BP_SomethingNew_C" }];
+    })).toContain("Schematic_1-1_C: unknown dependency BP_SomethingNew_C.");
+  });
+
   it("read items with fluids in cubic metres", () => {
     const { data } = extract();
     expect(data.items.Desc_Water_C).toMatchObject({ form: "liquid", kind: "resource", name: { en: "Water", de: "Wasser" } });
