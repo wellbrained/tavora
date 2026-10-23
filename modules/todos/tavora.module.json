@@ -9,5 +9,10 @@
   "changelog": "changelog.json",
   "games": [],
   "viewport": { "minWidth": 300, "minHeight": 240, "preferredWidth": 420, "preferredHeight": 600 },
+  "translations": {
+    "de": {
+      "description": "Was du in diesem Spiel vorhast, in eigenen Gruppen, mit Schritten und angehefteten Zielen."
+    }
+  },
   "permissions": { "network": [] }
 }

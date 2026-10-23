@@ -357,6 +357,65 @@
         }
       }
     },
+    "translations": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 32,
+      "description": "The name, description, panel and action names in other languages, keyed by a lowercase language code such as de or pt-br. Tavora takes the exact code, then the base language, then the plain fields. Needs a minTavora newer than 0.20.12 (except Tavora's own modules), and panels and actions may only name ids the manifest lists.",
+      "propertyNames": {
+        "pattern": "^[a-z]{2,3}(-[a-z0-9]{2,8})?$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "\\S",
+            "description": "Name shown to players in this language."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "pattern": "\\S",
+            "description": "Description in this language."
+          },
+          "panels": {
+            "type": "object",
+            "description": "Panel type id to its tab name in this language.",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 24,
+              "pattern": "^[^\\u0000-\\u001f]*\\S[^\\u0000-\\u001f]*$"
+            }
+          },
+          "actions": {
+            "type": "object",
+            "description": "Action id to its name in this language.",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "pattern": "^[^\\u0000-\\u001f]*\\S[^\\u0000-\\u001f]*$"
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "de": {
+            "name": "Kampagnen-Begleiter",
+            "panels": {
+              "planner": "Planer"
+            }
+          }
+        }
+      ]
+    },
     "permissions": {
       "type": "object",
       "additionalProperties": false,

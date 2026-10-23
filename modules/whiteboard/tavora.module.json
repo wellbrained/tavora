@@ -9,5 +9,10 @@
   "changelog": "changelog.json",
   "games": [],
   "viewport": { "minWidth": 360, "minHeight": 280, "preferredWidth": 760, "preferredHeight": 560 },
+  "translations": {
+    "de": {
+      "description": "Skizziere, markiere und plane auf einer Tafel pro Spiel: zeichne, füge Formen und Text hinzu und kritzle auf Screenshots. Wird beim Zeichnen gespeichert."
+    }
+  },
   "permissions": { "network": [], "webAssembly": true }
 }

@@ -9,5 +9,10 @@
   "changelog": "changelog.json",
   "games": [],
   "viewport": { "minWidth": 220, "minHeight": 200, "preferredWidth": 320, "preferredHeight": 520 },
+  "translations": {
+    "de": {
+      "description": "Wer in deinem Discord-Sprachkanal ist, wer spricht und wer stumm ist. Du redest wie gewohnt in Discord."
+    }
+  },
   "permissions": { "network": [], "connectors": ["discord"] }
 }

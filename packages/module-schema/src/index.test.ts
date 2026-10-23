@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, needsNewerTavora, panelTypes, validateManifest, type ModuleManifest } from "./index";
+import { CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, LAST_TAVORA_WITHOUT_TRANSLATIONS, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -98,6 +98,12 @@ describe("validateManifest", () => {
 // must agree, so editors flag exactly what Tavora refuses to load.
 const cases: [string, unknown, boolean][] = [
   ["minimal", valid, true],
+  ["translations", { ...valid, minTavora: "0.21.0", panels: [{ id: "planner", name: "Planner" }], translations: { de: { name: "Begleiter", description: "Plant Builds.", panels: { planner: "Planer" } }, "pt-br": {} } }, true],
+  ["translations with an upper-case code", { ...valid, minTavora: "0.21.0", translations: { DE: { name: "Begleiter" } } }, false],
+  ["translations empty", { ...valid, minTavora: "0.21.0", translations: {} }, false],
+  ["translation with an unknown field", { ...valid, minTavora: "0.21.0", translations: { de: { readme: "LIESMICH.md" } } }, false],
+  ["translated panel name too long", { ...valid, minTavora: "0.21.0", panels: [{ id: "planner", name: "Planner" }], translations: { de: { panels: { planner: "x".repeat(25) } } } }, false],
+  ["translated action name on two lines", { ...valid, minTavora: "0.21.0", actions: [{ id: "reset", name: "Reset" }], translations: { de: { actions: { reset: "Zurück\nsetzen" } } } }, false],
   ["full", { ...valid, $schema: "x", description: "Plans builds.", icon: "assets/icon.webp" }, true],
   ["any game", { ...valid, games: [] }, true],
   ["changelog", { ...valid, changelog: "changelog.json" }, true],
@@ -286,6 +292,50 @@ describe("actions", () => {
   });
 });
 
+
+describe("translations", () => {
+  const translated = {
+    ...valid,
+    minTavora: "0.21.0",
+    description: "Plans builds.",
+    panels: [{ id: "tree", name: "Tree" }, { id: "gear", name: "Gear" }],
+    actions: [{ id: "reset", name: "Reset" }],
+    translations: {
+      de: { name: "Begleiter", description: "Plant Builds.", panels: { tree: "Baum", gear: "Ausrüstung" }, actions: { reset: "Zurücksetzen" } },
+      "de-at": { name: "Begleiter (AT)" },
+    },
+  } as ModuleManifest;
+
+  // Neither rule fits in the JSON Schema, so only the validator checks them.
+  it("only names panels and actions the manifest lists", () => {
+    const result = validateManifest({ ...translated, translations: { de: { panels: { map: "Karte" }, actions: { lap: "Runde" } } } });
+    expect(result).toEqual({ ok: false, errors: ["translations.de.panels names map, which panels does not list", "translations.de.actions names lap, which actions does not list"] });
+  });
+
+  it("needs a Tavora newer than the last one without them, except for Tavora's own modules", () => {
+    const error = { ok: false, errors: [`translations need a minTavora newer than ${LAST_TAVORA_WITHOUT_TRANSLATIONS}, because older Tavoras refuse them`] };
+    expect(validateManifest({ ...translated, minTavora: undefined })).toEqual(error);
+    expect(validateManifest({ ...translated, minTavora: LAST_TAVORA_WITHOUT_TRANSLATIONS })).toEqual(error);
+    expect(validateManifest({ ...translated, minTavora: undefined, id: "tavora.companion" }).ok).toBe(true);
+    expect(validateManifest(translated).ok).toBe(true);
+  });
+
+  it("shows the texts of the exact language, then its base language, then the plain fields", () => {
+    const german = translateManifest(translated, "de");
+    expect([german.name, german.description, german.panels!.map((type) => type.name), german.actions![0]!.name]).toEqual(["Begleiter", "Plant Builds.", ["Baum", "Ausrüstung"], "Zurücksetzen"]);
+    const austrian = translateManifest(translated, "de-AT");
+    expect([austrian.name, austrian.panels![0]!.name]).toEqual(["Begleiter (AT)", "Baum"]);
+    expect(translateManifest(translated, "de-ch").name).toBe("Begleiter");
+    expect(translateManifest(translated, "en")).toBe(translated);
+    expect(translateManifest(valid as ModuleManifest, "de")).toBe(valid);
+  });
+
+  it("keeps the plain text where a translation leaves one out", () => {
+    const partial = { ...translated, translations: { de: { panels: { gear: "Ausrüstung" } } } } as ModuleManifest;
+    const german = translateManifest(partial, "de");
+    expect([german.name, german.description, german.panels!.map((type) => type.name), german.actions![0]!.name]).toEqual(["Campaign Companion", "Plans builds.", ["Tree", "Ausrüstung"], "Reset"]);
+  });
+});
 describe("needsNewerTavora", () => {
   it.each([
     [undefined, "0.17.0", false],

@@ -36,6 +36,19 @@ export interface ModuleAction {
   name: string;
 }
 
+/**
+ * One language's texts (manifest `translations`). Each one Tavora finds replaces the plain field when it shows
+ * that language; anything left out stays as the plain field says.
+ */
+export interface ModuleTranslation {
+  name?: string;
+  description?: string;
+  /** Panel type id to the name on its tab. */
+  panels?: Record<string, string>;
+  /** Action id to the name shown next to its key. */
+  actions?: Record<string, string>;
+}
+
 export interface ModuleManifest {
   $schema?: string;
   id: string;
@@ -74,6 +87,12 @@ export interface ModuleManifest {
   overlay?: string;
   /** What the module can do on a key press (hotkeys.set). Up to MAX_ACTIONS. */
   actions?: ModuleAction[];
+  /**
+   * The module's name, description, panel and action names in other languages, keyed by a lowercase language code
+   * such as `de` or `pt-br` (see translateManifest). Needs a `minTavora` newer than LAST_TAVORA_WITHOUT_TRANSLATIONS,
+   * because older Tavoras refuse the field; Tavora's own modules ship with the app and need none.
+   */
+  translations?: Record<string, ModuleTranslation>;
   permissions: {
     /** Hosts the module asks to reach through network.fetch, such as `api.example.com`. Each needs the player's grant. */
     network: string[];
@@ -99,7 +118,7 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "overlay", "actions", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "overlay", "actions", "translations", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
 
 /** Most screenshots a manifest may name, and the longest homepage address. */
@@ -287,6 +306,52 @@ export function isNetworkHost(value: unknown): value is string {
   return !/^\d+$/.test(last) && !["localhost", "local", "internal", "arpa"].includes(last);
 }
 
+/** Most languages one manifest may translate into. */
+export const MAX_TRANSLATIONS = 32;
+/** The last Tavora that refuses `translations`; a manifest with them needs a newer `minTavora`. */
+export const LAST_TAVORA_WITHOUT_TRANSLATIONS = "0.20.12";
+const LANGUAGE_CODE = /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/;
+
+/** Whether a manifest may key a translation by this: a lowercase language code such as `de` or `pt-br`. */
+export function isLanguageCode(value: unknown): value is string {
+  return typeof value === "string" && LANGUAGE_CODE.test(value);
+}
+const TRANSLATION_FIELDS = ["name", "description", "panels", "actions"];
+// Tavora's own modules ship with the app, so no older Tavora ever loads them.
+const OFFICIAL_ID_PREFIX = "tavora.";
+
+/**
+ * The translations that apply to `language` (Tavora's language, such as `de` or `pt-br`), the first one first:
+ * the one for exactly that code, then the one for its base language (`pt` for `pt-br`).
+ */
+export function translationsFor<T>(translations: Record<string, T> | undefined, language: string): T[] {
+  const code = language.toLowerCase();
+  const base = code.split("-")[0]!;
+  return [translations?.[code], base === code ? undefined : translations?.[base]].filter((translation): translation is T => translation !== undefined);
+}
+
+/**
+ * The manifest with its texts in `language`. For each text Tavora takes the first translation that has it
+ * (translationsFor), else the plain field.
+ */
+export function translateManifest(manifest: ModuleManifest, language: string): ModuleManifest {
+  const found = translationsFor(manifest.translations, language);
+  if (found.length === 0) return manifest;
+  const pick = <T>(text: (translation: ModuleTranslation) => T | undefined, plain: T): T => {
+    for (const translation of found) {
+      const value = text(translation);
+      if (value !== undefined) return value;
+    }
+    return plain;
+  };
+  const translated: ModuleManifest = { ...manifest, name: pick((t) => t.name, manifest.name) };
+  const description = pick((t) => t.description, manifest.description);
+  if (description !== undefined) translated.description = description;
+  if (manifest.panels) translated.panels = manifest.panels.map((type) => ({ ...type, name: pick((t) => t.panels?.[type.id], type.name) }));
+  if (manifest.actions) translated.actions = manifest.actions.map((action) => ({ ...action, name: pick((t) => t.actions?.[action.id], action.name) }));
+  return translated;
+}
+
 /** A Tavora release version: major.minor.patch, numbers only. */
 const TAVORA_VERSION = /^(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})$/;
 
@@ -392,6 +457,45 @@ function checkActions(actions: unknown, errors: string[]): void {
   });
 }
 
+function checkTranslations(input: Record<string, unknown>, errors: string[]): void {
+  const translations = input.translations;
+  if (!isRecord(translations) || Object.keys(translations).length === 0 || Object.keys(translations).length > MAX_TRANSLATIONS) {
+    errors.push(`translations must be an object of 1 to ${MAX_TRANSLATIONS} languages`);
+    return;
+  }
+  const idsOf = (list: unknown) => new Set(Array.isArray(list) ? list.filter(isRecord).map((item) => item.id) : []);
+  const panelIds = idsOf(input.panels);
+  const actionIds = idsOf(input.actions);
+  for (const [code, translation] of Object.entries(translations)) {
+    const at = `translations.${code}`;
+    if (!isLanguageCode(code)) errors.push(`translations must be keyed by lowercase language codes such as de or pt-br, not ${code}`);
+    if (!isRecord(translation)) {
+      errors.push(`${at} must be an object`);
+      continue;
+    }
+    if (translation.name !== undefined && !isText(translation.name, 80)) errors.push(`${at}.name must be a non-empty string of at most 80 characters`);
+    if (translation.description !== undefined && !isText(translation.description, 300)) errors.push(`${at}.description must be a non-empty string of at most 300 characters`);
+    const names = (field: "panels" | "actions", ids: Set<unknown>, max: number) => {
+      const map = translation[field];
+      if (map === undefined) return;
+      if (!isRecord(map)) return void errors.push(`${at}.${field} must be an object of ${field === "panels" ? "panel type" : "action"} ids to names`);
+      for (const [id, name] of Object.entries(map)) {
+        if (!ids.has(id)) errors.push(`${at}.${field} names ${id}, which ${field} does not list`);
+        if (!isText(name, max) || /[\u0000-\u001f]/.test(name)) errors.push(`${at}.${field}.${id} must be a non-empty string of at most ${max} characters on one line`);
+      }
+    };
+    names("panels", panelIds, MAX_PANEL_NAME);
+    names("actions", actionIds, MAX_ACTION_NAME);
+    const unknown = Object.keys(translation).filter((key) => !TRANSLATION_FIELDS.includes(key));
+    if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
+  }
+  const official = typeof input.id === "string" && input.id.startsWith(OFFICIAL_ID_PREFIX);
+  const minTavora = typeof input.minTavora === "string" ? { minTavora: input.minTavora } : {};
+  if (!official && !needsNewerTavora(minTavora, LAST_TAVORA_WITHOUT_TRANSLATIONS)) {
+    errors.push(`translations need a minTavora newer than ${LAST_TAVORA_WITHOUT_TRANSLATIONS}, because older Tavoras refuse them`);
+  }
+}
+
 export function validateManifest(input: unknown): ManifestResult {
   const errors: string[] = [];
   if (!isRecord(input)) return { ok: false, errors: ["manifest must be a JSON object"] };
@@ -442,6 +546,7 @@ export function validateManifest(input: unknown): ManifestResult {
   checkViewport(input.viewport, "viewport", errors);
   if (input.panels !== undefined) checkPanels(input.panels, errors);
   if (input.actions !== undefined) checkActions(input.actions, errors);
+  if (input.translations !== undefined) checkTranslations(input, errors);
   if (input.overlay !== undefined) {
     if (!isPackagePath(input.overlay)) errors.push("overlay must be a relative path inside the package");
     else if (!input.overlay.endsWith(".html")) errors.push("overlay must be an .html file");

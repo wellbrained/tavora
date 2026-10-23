@@ -5,7 +5,7 @@
 // matches the listing. After that the zip goes through the same installer as Install from zip, which
 // checks the publisher signature itself.
 import { createHash } from "node:crypto";
-import { isConnector, isGameId, isHomepage, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, type Connector } from "@tavora/module-schema";
+import { isConnector, isGameId, isHomepage, isLanguageCode, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, translationsFor, type Connector } from "@tavora/module-schema";
 import { ZIP_LIMITS } from "@tavora/pack";
 import type { CatalogListResult, CatalogModuleView, CatalogOwnReview, CatalogRating } from "../shared/host-api";
 import { isWebUrl } from "./browser-url";
@@ -44,6 +44,21 @@ export interface CatalogEntry extends Omit<CatalogModuleView, "screenshots" | "i
   shots: CatalogScreenshot[];
   /** At most MAX_MODULE_ICON, like an installed module's icon (G10). */
   icon: CatalogScreenshot | null;
+  /** The name and description in other languages, by language code (the manifest's `translations`). */
+  translations: Record<string, { name?: string; description?: string }>;
+}
+
+/** A listing's translated names and descriptions, as plain text; languages with neither are left out. */
+function parseTranslations(raw: unknown): CatalogEntry["translations"] {
+  const translations: CatalogEntry["translations"] = {};
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return translations;
+  for (const [code, value] of Object.entries(raw).slice(0, MAX_TRANSLATIONS)) {
+    if (!isLanguageCode(code) || typeof value !== "object" || value === null) continue;
+    const name = plain((value as Record<string, unknown>).name, 100);
+    const description = plain((value as Record<string, unknown>).description, 500);
+    if (name || description) translations[code] = { ...(name ? { name } : {}), ...(description ? { description } : {}) };
+  }
+  return translations;
 }
 
 /** One published version of a module, as GET /v1/catalog/modules/<id> lists them. */
@@ -233,6 +248,7 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
     homepage: isHomepage(entry.homepage) && isWebUrl(entry.homepage) ? entry.homepage : null,
     shots: parseScreenshots(entry.screenshots),
     icon: parsePicture(entry.icon, MAX_MODULE_ICON),
+    translations: parseTranslations(entry.translations),
     rating: parseRating(entry.rating),
   };
 }
@@ -243,10 +259,19 @@ export function fitsScope(entry: Pick<CatalogEntry, "games" | "workspaces">, sco
   return entry.games.length === 0 || entry.games.includes(scope.game);
 }
 
-/** The view the host UI gets: no hash, the games by name, whether it fits where the player is, and only whether there are pictures. */
-export function catalogView({ games, workspaces, zip: _zip, notes: _notes, shots, icon, ...view }: CatalogEntry, scope?: CatalogScope): CatalogModuleView {
+/** A listing's name and description in `language` (Tavora's), each from the first translation that has it, else as listed. */
+export function shownTexts(entry: Pick<CatalogEntry, "name" | "description" | "translations">, language: string): { name: string; description: string | null } {
+  const found = translationsFor(entry.translations, language);
+  return { name: found.find((t) => t.name)?.name ?? entry.name, description: found.find((t) => t.description)?.description ?? entry.description };
+}
+
+/**
+ * The view the host UI gets: no hash, the name and description in `language`, the games by name, whether it fits
+ * where the player is, and only whether there are pictures.
+ */
+export function catalogView({ games, workspaces, zip: _zip, notes: _notes, shots, icon, translations, ...view }: CatalogEntry, language: string, scope?: CatalogScope): CatalogModuleView {
   const fits = scope ? fitsScope({ games, workspaces }, scope) : true;
-  return { ...view, fits, forGames: games.map((id) => catalogGame(id)?.name ?? id), screenshots: shots.length, icon: icon !== null };
+  return { ...view, ...shownTexts({ ...view, translations }, language), fits, forGames: games.map((id) => catalogGame(id)?.name ?? id), screenshots: shots.length, icon: icon !== null };
 }
 
 export interface CatalogClientOptions {
@@ -276,10 +301,10 @@ export class CatalogClient {
   }
 
   /**
-   * Every listed module: those that fit the game or personal workspace first, then the rest, each by
+   * Every listed module, in `language`: those that fit the game or personal workspace first, then the rest, each by
    * name. The whole index is asked for, so the service doesn't learn which game is open. Never throws.
    */
-  async list(scope: CatalogScope): Promise<CatalogListResult> {
+  async list(scope: CatalogScope, language: string): Promise<CatalogListResult> {
     try {
       const response = await this.get("/v1/catalog", this.listTimeoutMs, "application/json");
       const failed = failure(response.status);
@@ -290,11 +315,11 @@ export class CatalogClient {
       const entries = raw
         .map(parseCatalogEntry)
         .filter((entry): entry is CatalogEntry => entry !== null && !seen.has(entry.id) && Boolean(seen.add(entry.id)))
-        .map((entry) => ({ entry, fits: fitsScope(entry, scope) }))
-        .sort((a, b) => Number(b.fits) - Number(a.fits) || a.entry.name.localeCompare(b.entry.name))
+        .map((entry) => ({ entry, fits: fitsScope(entry, scope), name: shownTexts(entry, language).name }))
+        .sort((a, b) => Number(b.fits) - Number(a.fits) || a.name.localeCompare(b.name))
         .map(({ entry }) => entry);
       this.listed = new Map(entries.map((entry) => [entry.id, entry]));
-      return { status: "ok", modules: entries.map((entry) => catalogView(entry, scope)) };
+      return { status: "ok", modules: entries.map((entry) => catalogView(entry, language, scope)) };
     } catch {
       return { status: "unreachable" };
     }
