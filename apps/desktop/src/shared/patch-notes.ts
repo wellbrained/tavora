@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.17",
+    date: "2026-10-24",
+    title: "Save as image asks where",
+    notes: [
+      "Save as image opens a save dialog with the name filled in, so you choose the folder and name.",
+      "It opens where you last saved a picture, at first in Pictures\\Tavora.",
+    ],
+  },
+  {
     version: "0.20.16",
     date: "2026-10-23",
     title: "Release copies stand out",
