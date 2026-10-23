@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.15",
+    date: "2026-10-23",
+    title: "Bigger build exports",
+    notes: [
+      "Modules can now save JSON files up to 8 MB, so builds with their full guide text fit.",
+    ],
+  },
+  {
     version: "0.20.14",
     date: "2026-10-23",
     title: "Settings window spacing",
