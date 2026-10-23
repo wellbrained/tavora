@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.14",
+    date: "2026-10-23",
+    title: "Settings window spacing",
+    notes: [
+      "Settings stays clear of the window buttons at the top right.",
+      "The window buttons dim with the rest of the app while a dialog is open.",
+    ],
+  },
+  {
     version: "0.20.13",
     date: "2026-10-23",
     title: "Module names in German",
