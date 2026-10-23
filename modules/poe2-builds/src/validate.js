@@ -1,6 +1,7 @@
 import { enrichItem, buildDisplayTitle } from './item-data.js';
 import {itemMetadata,questChoices,questAdvice} from './item-metadata.js';
 import { resolveItemIdentity } from './item-identity.js';
+import { t } from './i18n';
 // Portable v1 validation, independent of host storage and UI.
 const FORMAT = 'tavora.build', VERSION = 1, MAX_BYTES = 24 * 1024 * 1024;
 const text = (v, max = 200000) => typeof v === 'string' && v.length <= max ? v : '';
@@ -41,14 +42,14 @@ function guideText(value) {
     }
     // Additional imported guide sections can travel unchanged even before this UI places them.
     if (Array.isArray(value.sections) && value.sections.some(s => !plain(s) || typeof s.text !== 'string' || s.text.length > 2000000))
-        throw Error('A guide section is invalid or too large.');
+        throw Error(t('error.guideSection'));
     if (Array.isArray(value.sections))
         out.sections = value.sections.map(s => ({ title: text(s.title, 1000), text: text(s.text, 2000000), context: ['tree', 'gear', 'skills', 'overview'].includes(s.context) ? s.context : 'overview' }));
     return { ...JSON.parse(JSON.stringify(value)), ...out };
 }
 function checkedGem(g, depth = 0) {
     if (!plain(g) || typeof g.id !== 'string' || typeof g.name !== 'string' || depth > 5)
-        throw Error('The build contains invalid gem data.');
+        throw Error(t('error.gemData'));
     const out = { id: text(g.id, 1500), name: text(g.name, 1500), attributes: stringList(g.attributes, 3).filter(a => ['Strength', 'Dexterity', 'Intelligence'].includes(a)), isSupport: g.isSupport === true, lineage: g.lineage === true, tags: stringList(g.tags, 100) };
     if (Number.isInteger(g.level) && g.level > 0 && g.level <= 100)
         out.level = g.level;
@@ -58,53 +59,53 @@ function checkedGem(g, depth = 0) {
         out.levels = g.levels.slice(0, 2).filter(n => Number.isInteger(n) && n > 0 && n <= 100);
     if (Array.isArray(g.supports)) {
         if (g.supports.length > 100)
-            throw Error('A gem group is too large.');
+            throw Error(t('error.gemGroup'));
         out.supports = g.supports.map(s => checkedGem(s, depth + 1));
     }
     return out;
 }
 export function validate(document) {
     if (!plain(document) || document.format !== FORMAT)
-          throw Error('Choose a .tavora-build.json file exported by the prototype. This alpha does not load raw .build or ZIP files.');
+          throw Error(t('error.notTavoraFile'));
     if (document.formatVersion !== VERSION)
-        throw Error('This file uses an unsupported Tavora build format version. The file was left unchanged.');
+        throw Error(t('error.formatVersion'));
     if (typeof document.buildId !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(document.buildId))
-        throw Error('The build file has an invalid identity.');
+        throw Error(t('error.identity'));
     const b = document.build;
     if (!plain(b) || !text(b.title, 2000) || !Array.isArray(b.stages) || !b.stages.length || b.stages.length > 100)
-        throw Error('The build file has invalid or missing variants.');
+        throw Error(t('error.variants'));
     if (b.treeVersion && !['0.4', '0.5'].includes(b.treeVersion))
-        throw Error('This tree version is not bundled in this alpha.');
+        throw Error(t('error.treeVersion'));
     const out = { id: 'saved-' + document.buildId, fileId: document.buildId, title: buildDisplayTitle(text(b.title, 2000)), shortTitle: text(b.shortTitle, 2000) || text(b.title, 2000), source: text(b.source, 2000) || 'Saved Tavora build', kind: b.kind === 'leveling' ? 'leveling' : 'endgame', version: text(b.version, 2000), treeVersion: ['0.4', '0.5'].includes(b.treeVersion) ? b.treeVersion : '0.5', ascendancy: text(b.ascendancy, 2000) || 'Ascendancy', guideUrl: url(b.guideUrl), requestedUrl: url(b.requestedUrl), video: url(b.video), importerVersion: text(b.importerVersion, 100), importNotes: stringList(b.importNotes, 200), downloads: [], stages: [], guideText: guideText(document.guideText || b.guideText) };
     out.questSelections=questChoices(b.questSelections);
     if(typeof b.guideExport==='string'&&b.guideExport.length<=5*1024*1024)out.guideExport=b.guideExport;
     const source=plain(b.guideImport)&&Object.hasOwn(GUIDE_SOURCES,b.guideImport.source)&&GUIDE_SOURCES[b.guideImport.source];
     if(source&&text(b.guideImport.documentId,200)&&Number.isFinite(Date.parse(b.guideImport.importedAt))){
         const u=new URL(b.guideImport.url);
-        if(u.protocol!=='https:'||u.hostname!==source.host||u.port||u.username||u.password||!source.path.test(u.pathname))throw Error('The guide source URL is invalid.');
+        if(u.protocol!=='https:'||u.hostname!==source.host||u.port||u.username||u.password||!source.path.test(u.pathname))throw Error(t('error.sourceUrl'));
         out.guideImport={source:b.guideImport.source,url:u.href,documentId:b.guideImport.documentId,revision:text(b.guideImport.revision,200),importedAt:new Date(b.guideImport.importedAt).toISOString(),variantIds:stringList(b.guideImport.variantIds,100)};
     }
     out.questStats=stringList(b.questStats,100);
     if (b.character !== undefined) {
         const c=b.character;
         if (!plain(c) || !text(c.name,200) || !['poe.ninja','PoB'].includes(c.source) || !Number.isInteger(c.level) || c.level<1 || c.level>100 || !text(c.class,100) || !Number.isFinite(Date.parse(c.importedAt)))
-            throw Error('The character identity is invalid.');
+            throw Error(t('error.characterIdentity'));
         out.character={name:c.name,class:c.class,level:c.level,source:c.source,importedAt:new Date(c.importedAt).toISOString()};
         for(const field of ['account','league']) if(text(c[field],200))out.character[field]=c[field];
         if(c.source==='poe.ninja'){
             const u=new URL(c.url);
-            if(u.protocol!=='https:'||u.hostname!=='poe.ninja'||u.port||u.username||u.password||!/^\/poe2\/builds\/[^/]+\/character\/[^/]+\/[^/]+\/?$/.test(u.pathname))throw Error('The character source URL is invalid.');
+            if(u.protocol!=='https:'||u.hostname!=='poe.ninja'||u.port||u.username||u.password||!/^\/poe2\/builds\/[^/]+\/character\/[^/]+\/[^/]+\/?$/.test(u.pathname))throw Error(t('error.characterUrl'));
             out.character.url=u.origin+u.pathname;
         }
         if(typeof b.characterExport==='string' && b.characterExport.length<=8*1024*1024)out.characterExport=b.characterExport;
     }
     for (const s of b.stages) {
         if (!plain(s) || !Array.isArray(s.passives) || !Array.isArray(s.skills) || !Array.isArray(s.items) || s.passives.length > 10000 || s.skills.length > 1000 || s.items.length > 500)
-            throw Error('The build contains invalid or oversized planner data.');
+            throw Error(t('error.plannerData'));
         const stage = { questRecommendations:questAdvice(s.questRecommendations), name: text(s.name, 2000) || text(s.label, 2000) || 'Variant', label: text(s.label, 2000) || text(s.name, 2000) || 'Variant', author: text(s.author, 2000), link: url(s.link) || out.guideUrl, passives: s.passives.map(n => { if (!plain(n) || !/^\d+$/.test(String(n.id)) || ![0, 1, 2].includes(n.weapon ?? 0))
-                throw Error('The build contains invalid passive allocations.'); return { id: String(n.id), weapon: n.weapon ?? 0 }; }), skills: s.skills.map(g => checkedGem(g)), items: s.items.map(i => {
+                throw Error(t('error.passives')); return { id: String(n.id), weapon: n.weapon ?? 0 }; }), skills: s.skills.map(g => checkedGem(g)), items: s.items.map(i => {
                 if (!plain(i))
-                    throw Error('The build contains an invalid item.');
+                    throw Error(t('error.item'));
                 const item = { inventory_id: text(i.inventory_id, 500), name: text(i.name, 2000), base: text(i.base, 2000), mods: stringList(i.mods, 500), rarity: ['normal', 'magic', 'rare', 'unique', 'unknown'].includes(i.rarity) ? i.rarity : 'unknown', reference: i.reference === true, exact: i.exact === true, slot_x: Number.isFinite(i.slot_x) ? i.slot_x : 0, slot_y: Number.isFinite(i.slot_y) ? i.slot_y : 0 };
                 for (const key of ['unique_name', 'sourceBase', 'sourceUnique', 'category', 'sourceLabel'])
                     if (typeof i[key] === 'string')

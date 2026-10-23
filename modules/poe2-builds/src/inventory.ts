@@ -5,16 +5,18 @@ import type { Item } from './model';
 import { esc } from './presentation';
 import { resolveItemIdentity, weaponSlotState } from './item-identity.js';
 import { itemImage, placeholderImage } from './item-art';
+import { t, type Key } from './i18n';
 
-interface Slot { id: string; label: string; icon: string; x: number; y: number; w: number; h: number }
+// A label is a game item class (stays English) or, for a slot's position, a text key.
+interface Slot { id: string; label: string; key?: Key; set?: number; icon: string; x: number; y: number; w: number; h: number }
 export const equipmentSlots: Slot[] = [
-    {id:'weapon',label:'Main weapon',icon:'icons/gear-weapon.svg',x:42,y:27,w:76,h:150},
-    {id:'offhand',label:'Offhand',icon:'icons/gear-offhand.svg',x:337,y:27,w:76,h:150},
+    {id:'weapon',label:'Main weapon',key:'slot.mainWeapon',icon:'icons/gear-weapon.svg',x:42,y:27,w:76,h:150},
+    {id:'offhand',label:'Offhand',key:'slot.offhand',icon:'icons/gear-offhand.svg',x:337,y:27,w:76,h:150},
     {id:'Helm1',label:'Helmet',icon:'helmet.png',x:185,y:16,w:76,h:76},
     {id:'BodyArmour1',label:'Body armour',icon:'body_armour.png',x:185,y:98,w:76,h:114},
     {id:'Amulet1',label:'Amulet',icon:'amulet.png',x:275,y:94,w:40,h:40},
-    {id:'Ring1',label:'Left ring',icon:'ring.png',x:128,y:139,w:40,h:40},
-    {id:'Ring2',label:'Right ring',icon:'ring.png',x:275,y:139,w:40,h:40},
+    {id:'Ring1',label:'Left ring',key:'slot.leftRing',icon:'ring.png',x:128,y:139,w:40,h:40},
+    {id:'Ring2',label:'Right ring',key:'slot.rightRing',icon:'ring.png',x:275,y:139,w:40,h:40},
     {id:'Gloves1',label:'Gloves',icon:'gloves.png',x:94,y:184,w:76,h:76},
     {id:'Boots1',label:'Boots',icon:'boots.png',x:275,y:184,w:76,h:76},
     {id:'Belt1',label:'Belt',icon:'belt.png',x:185,y:219,w:76,h:40},
@@ -27,6 +29,9 @@ export const equipmentSlots: Slot[] = [
 
 /** Guide files use repeated Flask1/Charm1 records with slot_x; other exports
  * can use distinct numbered slot ids. Never fill a missing weapon swap from set 1. */
+/** A slot's label in the language shown. */
+export function slotLabel(slot: Slot): string { return slot.key ? t(slot.key) : slot.label; }
+
 export function itemForSlot(items: Item[], id: string, weapon: 1 | 2): Item | undefined {
     if (id === 'weapon' || id === 'offhand') return items.find(i => i.inventory_id === (id === 'weapon' ? 'Weapon' : 'Offhand') + weapon);
     const match = /^(flask|charm)([0-2])$/.exec(id);
@@ -39,7 +44,7 @@ export function itemForSlot(items: Item[], id: string, weapon: 1 | 2): Item | un
 }
 
 export function inventoryMarkup(shown: boolean, listShown = true): string {
-    return `<div class="inventory-bar"><span>Equipment</span><div class="inventory-actions">${visibilitySwitch('toggle-inventory','Inventory',shown,'character-inventory')}${visibilitySwitch('toggle-equipment-list','Equipment list',listShown,'equipment-list')}</div></div><div id="character-inventory" class="character-inventory" ${shown ? '' : 'hidden'}><div class="inventory-title">Inventory</div><div class="equipment" aria-label="Character equipment slots"></div></div>`;
+    return `<div class="inventory-bar"><span>${esc(t('gear.equipment'))}</span><div class="inventory-actions">${visibilitySwitch('toggle-inventory',esc(t('gear.inventory')),shown,'character-inventory')}${visibilitySwitch('toggle-equipment-list',esc(t('gear.equipmentList')),listShown,'equipment-list')}</div></div><div id="character-inventory" class="character-inventory" ${shown ? '' : 'hidden'}><div class="inventory-title">${esc(t('gear.inventory'))}</div><div class="equipment" aria-label="${esc(t('gear.slots'))}"></div></div>`;
 }
 function rarity(i?: Item) { return i?.rarity && ['normal','magic','rare','unique'].includes(i.rarity) ? i.rarity : 'unknown'; }
 
@@ -84,13 +89,13 @@ export class Inventory {
     private draw() {
         this.dismiss();
         const weapons = weaponSlotState(this.items,this.options.weapon);
-        this.equipment.innerHTML = ['left','right'].map(side => `<div class="inventory-set ${side}">${[1,2].map(set => `<button data-gear-weapon="${set}" aria-label="Weapon set ${set}" aria-pressed="${this.options.weapon === set}" class="${this.options.weapon === set ? 'active' : ''}">${set === 1 ? 'I' : 'II'}</button>`).join('')}</div>`).join('') + equipmentSlots.map(slot => {
+        this.equipment.innerHTML = ['left','right'].map(side => `<div class="inventory-set ${side}">${[1,2].map(set => `<button data-gear-weapon="${set}" aria-label="${esc(t('tree.weaponSet', { set }))}" aria-pressed="${this.options.weapon === set}" class="${this.options.weapon === set ? 'active' : ''}">${set === 1 ? 'I' : 'II'}</button>`).join('')}</div>`).join('') + equipmentSlots.map(slot => {
             const item = itemForSlot(this.items,slot.id,this.options.weapon);
-            const label = slot.id === 'weapon' ? weapons.mainLabel : slot.id === 'offhand' ? weapons.offhandLabel : slot.label;
+            const label = slot.id === 'weapon' ? weapons.mainLabel : slot.id === 'offhand' ? weapons.offhandLabel : slotLabel(slot);
             const blocked = slot.id === 'offhand' && weapons.blocked;
             const emptyId = slot.id === 'weapon' ? 'Weapon' + this.options.weapon : slot.id === 'offhand' ? 'Offhand' + this.options.weapon : slot.id.startsWith('flask') ? 'Flask1' : slot.id;
             const image = item ? itemImage(item,slot.icon) : {src:placeholderImage(emptyId,slot.id === 'flask1' ? 1 : 0,slot.icon,slot.id === 'offhand' ? weapons.offhandCategory : ''),actual:false};
-            return `<button class="equip-slot ${item ? '' : 'empty'} ${blocked?'unavailable':''}" data-slot="${slot.id}" data-rarity="${rarity(item)}" aria-label="${blocked ? esc(label) : esc(label)+': '+esc(item?.name || 'not provided')}" style="left:${slot.x/460*100}%;top:${slot.y/350*100}%;width:${slot.w/460*100}%;height:${slot.h/350*100}%">${blocked?'':`<img class="${image.actual ? 'item-art' : 'slot-art'}" src="${image.src}" alt="">`}${item ? '' : `<span class="slot-label">${esc(label)}</span>`}</button>`;
+            return `<button class="equip-slot ${item ? '' : 'empty'} ${blocked?'unavailable':''}" data-slot="${slot.id}" data-rarity="${rarity(item)}" aria-label="${blocked ? esc(label) : item ? esc(label)+': '+esc(item.name) : esc(t('gear.notProvided', { slot: label }))}" style="left:${slot.x/460*100}%;top:${slot.y/350*100}%;width:${slot.w/460*100}%;height:${slot.h/350*100}%">${blocked?'':`<img class="${image.actual ? 'item-art' : 'slot-art'}" src="${image.src}" alt="">`}${item ? '' : `<span class="slot-label">${esc(label)}</span>`}</button>`;
         }).join('');
         this.equipment.querySelectorAll<HTMLButtonElement>('[data-gear-weapon]').forEach(button => button.onclick = () => {
             this.options.weapon = Number(button.dataset.gearWeapon) as 1 | 2; this.draw(); this.options.onChange({gearWeapon:this.options.weapon});
@@ -113,7 +118,7 @@ export class Inventory {
         const slot = equipmentSlots.find(s => s.id === button.dataset.slot)!;
         const item = itemForSlot(this.items,slot.id,this.options.weapon);
         const weapons=weaponSlotState(this.items,this.options.weapon);
-        const label=slot.id==='weapon'?weapons.mainLabel:slot.id==='offhand'?weapons.offhandLabel:slot.label;
+        const label=slot.id==='weapon'?weapons.mainLabel:slot.id==='offhand'?weapons.offhandLabel:slotLabel(slot);
         if(this.options.tooltip&&item){
             const id=this.remoteId=`gear:${this.instance}:${++this.serial}`;
             this.remote=true;this.tooltip.hidden=true;
@@ -128,7 +133,7 @@ export class Inventory {
     }
     private showLocal(button:HTMLButtonElement,item:Item|undefined,label:string,pointer?:{clientX:number;clientY:number}) {
         this.tooltip.hidden = false; this.tooltip.classList.toggle('pinned',!!this.pinned);
-        this.tooltip.innerHTML = itemTooltipMarkup(item,label,item ? this.options.notesFor?.(item) : undefined,!!this.pinned);
+        this.tooltip.innerHTML = itemTooltipMarkup(item,label,item ? this.options.notesFor?.(item) : undefined,!!this.pinned,button.classList.contains('unavailable'));
         this.tooltip.classList.remove('compact');
         this.tooltip.style.width='';
         if(this.tooltip.offsetHeight>innerHeight-16){this.tooltip.style.width=Math.min(640,innerWidth-16)+'px';}
@@ -158,10 +163,10 @@ export class Inventory {
     }
 }
 
-export function itemTooltipMarkup(item: Item | undefined, slotLabel: string, notes?: string, pinned=false): string {
+export function itemTooltipMarkup(item: Item | undefined, slotLabel: string, notes?: string, pinned=false, bothHands=slotLabel===t('slot.bothHands')): string {
     if(item)item=resolveItemIdentity(item);
     const r=rarity(item);
-    return `${pinned ? '<button class="inventory-tooltip-close" aria-label="Unpin item details">×</button>' : ''}<div class="inventory-tooltip-body">${item?itemDetails(item):`<p class="reference-label">${slotLabel==='Uses both hands'?'The main-hand weapon uses both hands.':'This slot is not specified by the build.'}</p>`}</div>${notes?.trim()?`<section class="inventory-item-notes"><h4>Notes</h4><div>${esc(notes)}</div></section>`:''}<div class="inventory-tooltip-hint">${pinned?'Pinned · Press Escape to close':'Click to pin item details'}</div>`;
+    return `${pinned ? `<button class="inventory-tooltip-close" aria-label="${esc(t('gear.unpin'))}">×</button>` : ''}<div class="inventory-tooltip-body">${item?itemDetails(item):`<p class="reference-label">${esc(t(bothHands?'gear.bothHandsText':'gear.emptySlot'))}</p>`}</div>${notes?.trim()?`<section class="inventory-item-notes"><h4>${esc(t('notes.title'))}</h4><div>${esc(notes)}</div></section>`:''}<div class="inventory-tooltip-hint">${esc(t(pinned?'gear.pinned':'gear.pin'))}</div>`;
 }
 
 /** Prefer below the pointer; flip above at the bottom edge and keep panel gutters. */

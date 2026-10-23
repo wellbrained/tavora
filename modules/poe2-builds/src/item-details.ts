@@ -3,6 +3,7 @@ import {resolveItemIdentity} from './item-identity.js';
 import type {Item,AffixRow,ItemProperty} from './model';
 import {itemImage} from './item-art';
 import {esc} from './html';
+import {t} from './i18n';
 
 export const cleanStat=(s:string)=>s.replace(/\[([^\]|]+)\|([^\]]+)\]/g,'$2').replace(/\[([^\]]+)\]/g,'$1');
 const ordinary=['explicitMods','fracturedMods','craftedMods','desecratedMods'];
@@ -17,7 +18,7 @@ function property(p:ItemProperty){
  const text=filled(p);
  return text!==undefined?esc(text):`${esc(cleanStat(p.name).replace(/:$/,''))}: ${values(p)}`;
 }
-function label(a:AffixRow){return `${a.type==='P'?'Prefix':'Suffix'}${a.tier?' · Tier '+a.tier:' · Tier cannot be uniquely determined'}${a.name?' · '+a.name:''}${a.hybrid?' · One hybrid affix spanning connected lines':''}`;}
+function label(a:AffixRow){return `${t(a.type==='P'?'gear.prefix':'gear.suffix')} · ${a.tier?t('gear.tier',{tier:a.tier}):t('gear.tierUnknown')}${a.name?' · '+a.name:''}${a.hybrid?' · '+t('gear.hybrid'):''}`;}
 function affixInfo(item:Item,text:string,kind:string){
  if(!ordinary.includes(kind)||item.rarity==='unique')return undefined;
  return item.affixRows?.find(a=>a.text===cleanStat(text));
@@ -38,7 +39,7 @@ export function itemDetails(item:Item,notes=''):string{
  rows.sort((a,b)=>{const order=rank(a)-rank(b);if(order)return order;const x=affixInfo(item,a.text,a.kind),y=affixInfo(item,b.text,b.kind);return (first.get(x?.instanceId||x?.id||'')??positions.get(a)!)-(first.get(y?.instanceId||y?.id||'')??positions.get(b)!);});
  const implicit=sections.filter(s=>s.kind==='implicitMods').flatMap(s=>s.mods),runes=sections.filter(s=>socketed.includes(s.kind)).flatMap(s=>s.mods);
  const mods=(lines:{text:string;kind:string}[],heading='')=>lines.length?`<section class="item-mod-section">${heading?`<div class="item-mod-label">${heading}</div>`:''}<ul class="mods stat-list">${lines.map(r=>row(item,r.text,r.kind)).join('')}</ul></section>`:'';
- return `<div class="gear-item-body" data-rarity="${rarity}"><div class="item-art-column"><div class="gear-icon ${image.actual?'item-art':'slot-art'}"><img src="${image.src}" alt="" loading="lazy"></div>${item.requirements?.length?`<div class="item-requirements"><span class="requirements-label">Requires</span>${item.requirements.map(r=>`<span class="requirement-row"><span>${esc(cleanStat(r.name))}</span><b>${esc(r.values[0]?.[0]||'')}</b></span>`).join('')}</div>`:''}</div><div class="gear-details"><div class="item-name-row"><h2 class="gear-name rarity-${rarity}">${esc(item.name)}</h2>${item.itemLevel?`<span class="item-badge" title="Item level ${item.itemLevel}">ilvl ${item.itemLevel}</span>`:''}${quality.map(p=>`<span class="item-badge">${property(p)}</span>`).join('')}${!quality.length&&item.quality?`<span class="item-badge">Quality: +${item.quality}%</span>`:''}${rarity!=='unknown'?`<span class="rarity-badge rarity-${rarity} sr-only">${rarity[0]!.toUpperCase()+rarity.slice(1)}</span>`:''}</div>${item.base&&item.base!==item.name?`<div class="unique-base">${esc(item.base)}</div>`:''}<div class="item-properties">${(item.properties||[]).filter(p=>p.values.length&&!/^Quality/.test(cleanStat(p.name))).map(p=>`<div>${property(p)}</div>`).join('')}</div>${item.grantedSkills?.length?`<div class="item-granted">${item.grantedSkills.map(property).join('<br>')}</div>`:''}${mods(implicit.map(text=>({text,kind:'implicitMods'})),'Implicit')}${mods(rows)}${mods(runes.map(text=>({text,kind:'runeMods'})),'Socketed effects')}${item.corrupted?'<div class="item-corrupted">Corrupted</div>':''}${item.dps?`<div class="item-dps">DPS <b>${item.dps}</b></div>`:''}${item.reference?'<div class="reference-label">PoB reference · exact rolls not exported</div>':''}${notes}</div></div>`;
+ return `<div class="gear-item-body" data-rarity="${rarity}"><div class="item-art-column"><div class="gear-icon ${image.actual?'item-art':'slot-art'}"><img src="${image.src}" alt="" loading="lazy"></div>${item.requirements?.length?`<div class="item-requirements"><span class="requirements-label">${esc(t('gear.requires'))}</span>${item.requirements.map(r=>`<span class="requirement-row"><span>${esc(cleanStat(r.name))}</span><b>${esc(r.values[0]?.[0]||'')}</b></span>`).join('')}</div>`:''}</div><div class="gear-details"><div class="item-name-row"><h2 class="gear-name rarity-${rarity}">${esc(item.name)}</h2>${item.itemLevel?`<span class="item-badge" title="${esc(t('gear.itemLevel',{level:item.itemLevel}))}">ilvl ${item.itemLevel}</span>`:''}${quality.map(p=>`<span class="item-badge">${property(p)}</span>`).join('')}${!quality.length&&item.quality?`<span class="item-badge">Quality: +${item.quality}%</span>`:''}${rarity!=='unknown'?`<span class="rarity-badge rarity-${rarity} sr-only">${rarity[0]!.toUpperCase()+rarity.slice(1)}</span>`:''}</div>${item.base&&item.base!==item.name?`<div class="unique-base">${esc(item.base)}</div>`:''}<div class="item-properties">${(item.properties||[]).filter(p=>p.values.length&&!/^Quality/.test(cleanStat(p.name))).map(p=>`<div>${property(p)}</div>`).join('')}</div>${item.grantedSkills?.length?`<div class="item-granted">${item.grantedSkills.map(property).join('<br>')}</div>`:''}${mods(implicit.map(text=>({text,kind:'implicitMods'})),esc(t('gear.implicit')))}${mods(rows)}${mods(runes.map(text=>({text,kind:'runeMods'})),esc(t('gear.socketed')))}${item.corrupted?'<div class="item-corrupted">Corrupted</div>':''}${item.dps?`<div class="item-dps">DPS <b>${item.dps}</b></div>`:''}${item.reference?`<div class="reference-label">${esc(t('gear.reference'))}</div>`:''}${notes}</div></div>`;
 }
 export function equipmentOrder(item:Item):number{
  const id=item.inventory_id,n=Number(id.slice(-1))||1;
@@ -73,10 +74,10 @@ export function itemTooltipContent(item:Item,notes?:string):TooltipContent{
   badges:[...(item.itemLevel?[`ilvl ${item.itemLevel}`]:[]),...quality.map(p=>{const q=property(p);return q.label+': '+q.value;}),...(!quality.length&&item.quality?[`Quality: +${item.quality}%`]:[])],
   requirements:(item.requirements||[]).map(property),properties:[...(item.properties||[]).filter(p=>p.values.length&&!/^Quality/.test(cleanStat(p.name))).map(property),...(item.grantedSkills||[]).map(property)],sections:[]};
  const add=(lines:{text:string;kind:string}[],title?:string)=>{if(lines.length)content.sections!.push({...(title?{title}:{}),rows:lines.map(r=>row(r.text,r.kind))});};
- add(sections.filter(s=>s.kind==='implicitMods').flatMap(s=>s.mods.map(text=>({text,kind:s.kind}))),'Implicit');add(rows);
- add(sections.filter(s=>socketed.includes(s.kind)).flatMap(s=>s.mods.map(text=>({text,kind:s.kind}))),'Socketed effects');
+ add(sections.filter(s=>s.kind==='implicitMods').flatMap(s=>s.mods.map(text=>({text,kind:s.kind}))),t('gear.implicit'));add(rows);
+ add(sections.filter(s=>socketed.includes(s.kind)).flatMap(s=>s.mods.map(text=>({text,kind:s.kind}))),t('gear.socketed'));
  if(item.corrupted)add([{text:'Corrupted',kind:'info'}]);
  if(item.dps)add([{text:'DPS: '+item.dps,kind:'info'}]);
- if(notes?.trim())add([{text:notes.trim(),kind:'notes'}],'Notes');
+ if(notes?.trim())add([{text:notes.trim(),kind:'notes'}],t('notes.title'));
  return content;
 }

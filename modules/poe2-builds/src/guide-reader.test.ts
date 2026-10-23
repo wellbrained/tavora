@@ -72,7 +72,7 @@ it('groups exact known variant suffixes and gives each chapter a short tab label
  const groups=guideGroups(build);
  expect(groups.map(g=>g.label)).toEqual(['General','Early','non-crit Midgame']);
  expect(groups[1]!.chapters.map(c=>c.label)).toEqual(['Overview','Equipment','Skills']);
- expect(groups[2]!.chapters.map(c=>c.label)).toEqual(['Passive Tree']);
+ expect(groups[2]!.chapters.map(c=>c.label)).toEqual(['Passive tree']);
  expect(groups[0]!.chapters.some(c=>c.label==='Equipment · Unknown variant')).toBe(true);
  const markup=guideReaderMarkup(build,restoreView({section:3}));
  expect(markup).toContain('value="variant-0" selected');

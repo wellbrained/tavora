@@ -2,16 +2,17 @@ import type { TavoraSDK } from '@tavora/sdk';
 import { portable, MAX_FILE_BYTES, type Build, type Item, type ItemProperty } from './model';
 import { validate } from './validate.js';
 import { cleanGameText, decodePob, parsePob } from './pob-import';
+import { t } from './i18n';
 
 export interface CharacterImport { build: Build; warnings: string[] }
 export function ninjaAddress(input: string) {
  let url:URL;
- try {url=new URL(input.trim());}catch{throw Error('Paste a full poe.ninja character URL.');}
+ try {url=new URL(input.trim());}catch{throw Error(t('error.ninjaUrl'));}
  const match=/^\/poe2\/builds\/([^/]+)\/character\/([^/]+)\/([^/]+)\/?$/.exec(url.pathname);
  if(url.protocol!=='https:'||url.hostname!=='poe.ninja'||url.username||url.password||url.port||!match)
-  throw Error('Choose a specific PoE 2 character on poe.ninja, then paste its URL.');
+  throw Error(t('error.ninjaCharacter'));
  const [league,account,name]=match.slice(1).map(s=>decodeURIComponent(s));
- if([league,account,name].some(s=>!s||s.length>200||/[\x00-\x1f]/.test(s!)))throw Error('That character address is invalid.');
+ if([league,account,name].some(s=>!s||s.length>200||/[\x00-\x1f]/.test(s!)))throw Error(t('error.ninjaAddress'));
  return {url:`https://poe.ninja/poe2/builds/${encodeURIComponent(league!)}/character/${encodeURIComponent(account!)}/${encodeURIComponent(name!)}`,league:league!,account:account!,name:name!};
 }
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -36,17 +37,17 @@ export async function importNinja(input:string, network:Pick<TavoraSDK['network'
  const address=ninjaAddress(input);
  const get=async(url:string):Promise<Record<string,unknown>>=>{
   const response=await network.fetch(url);
-  if(response.status<200||response.status>=300)throw Error(`poe.ninja returned ${response.status}. Try again later or use a PoB export.`);
-  if(response.body.length>5*1024*1024)throw Error('The character response is too large.');
-  let data:unknown;try{data=JSON.parse(response.body);}catch{throw Error('poe.ninja returned an unreadable response. Try a PoB export.');}
-  if(!object(data))throw Error('poe.ninja returned an unsupported response.');return data;
+  if(response.status<200||response.status>=300)throw Error(t('error.ninjaStatus',{status:response.status}));
+  if(response.body.length>5*1024*1024)throw Error(t('error.ninjaTooLarge'));
+  let data:unknown;try{data=JSON.parse(response.body);}catch{throw Error(t('error.ninjaUnreadable'));}
+  if(!object(data))throw Error(t('error.ninjaUnsupported'));return data;
  };
  const index=await get('https://poe.ninja/poe2/api/data/index-state');
  const snapshot=array(index.snapshotVersions,1000).filter(object).find(s=>s.url===address.league);
- if(!snapshot||typeof snapshot.version!=='string'||typeof snapshot.snapshotName!=='string')throw Error('That poe.ninja league is unavailable. Use a current character URL or a PoB export.');
+ if(!snapshot||typeof snapshot.version!=='string'||typeof snapshot.snapshotName!=='string')throw Error(t('error.ninjaLeague'));
  const query=new URLSearchParams({account:address.account,name:address.name,overview:snapshot.snapshotName,timeMachine:''});
  const data=await get(`https://poe.ninja/poe2/api/builds/${encodeURIComponent(snapshot.version)}/character?${query}`);
- if(data.name!==address.name||data.account!==address.account||typeof data.pathOfBuildingExport!=='string')throw Error('The returned character does not match that URL, or its PoB export is unavailable.');
+ if(data.name!==address.name||data.account!==address.account||typeof data.pathOfBuildingExport!=='string')throw Error(t('error.ninjaMismatch'));
  const xml=await decodePob(data.pathOfBuildingExport), parsed=parsePob(xml,address.name), build=parsed.build;
  const sourceItems=new Map([...array(data.items),...array(data.flasks),...array(data.jewels)].filter(object).map(i=>i.itemData).filter(object).map(i=>[string(i.id),i]));
  for(const stage of build.stages) stage.items=stage.items.map(item=>{
@@ -64,11 +65,11 @@ export async function importNinja(input:string, network:Pick<TavoraSDK['network'
 
 /** Explicit target selection prevents a PoB export from overwriting a guide or guessed character. */
 export function prepareCharacterSave(candidate:Build, name:string, target:Build|null):Build {
- if(!candidate.character)throw Error('No character was imported.');
- const title=name.trim();if(!title||title.length>200)throw Error('Enter a character name up to 200 characters.');
- if(target&&!target.character)throw Error('A character cannot replace a guide build.');
+ if(!candidate.character)throw Error(t('error.noCharacter'));
+ const title=name.trim();if(!title||title.length>200)throw Error(t('error.characterName'));
+ if(target&&!target.character)throw Error(t('error.characterOverGuide'));
  const output={...candidate,fileId:target?.fileId||candidate.fileId,character:{...candidate.character,name:title},title:title+' · '+candidate.character.source,shortTitle:title};
- if(new TextEncoder().encode(JSON.stringify(output)).length>MAX_FILE_BYTES)throw Error('This character exceeds the 24 MB saved-build limit. Export fewer PoB profiles.');
+ if(new TextEncoder().encode(JSON.stringify(output)).length>MAX_FILE_BYTES)throw Error(t('error.characterTooBig'));
  return validate(portable(output));
 }
 

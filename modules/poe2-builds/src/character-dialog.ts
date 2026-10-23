@@ -3,6 +3,7 @@ import type { Build, Character } from './model';
 import { esc } from './html';
 import { importNinja, prepareCharacterSave, type CharacterImport } from './character-import';
 import { decodePob, parsePob, MAX_XML_BYTES } from './pob-import';
+import { t, plural, dateTime, noteText } from './i18n';
 
 interface Options {
  network:TavoraSDK['network'];
@@ -15,44 +16,44 @@ interface Options {
 export function openCharacterImport(options:Options):void {
  const dialog=document.createElement('dialog');dialog.className='character-import';
  dialog.setAttribute('aria-labelledby','character-import-title');
- dialog.innerHTML=`<form method="dialog"><div class="character-import-heading"><h2 id="character-import-title">Import character</h2><button value="cancel" aria-label="Close import">×</button></div></form>
- <details id="character-entry" open><summary>Import source</summary><label>Source<select id="character-source"><option value="ninja">poe.ninja character URL</option><option value="code">PoB export code</option><option value="xml">PoB XML file</option></select></label>
- <label id="character-text-label"><span>Character URL</span><textarea id="character-input" rows="4" spellcheck="false" placeholder="https://poe.ninja/poe2/builds/…/character/…/…"></textarea></label>
- <label id="character-file-label" hidden>PoB XML file<input id="character-file" type="file" accept=".xml,text/xml,application/xml"></label>
- <p class="character-import-help">Use a public PoE 2 character URL or an export from Path of Building PoE 2. No account sign-in needed.</p>
- <button id="character-read" type="button">Preview import</button></details><p id="character-error" role="status" aria-live="polite"></p>
- <section id="character-preview" hidden><h3>Character preview</h3><label>Name<input id="character-name" maxlength="200"></label><p id="character-summary"></p><ul id="character-warnings"></ul>
- <label>Save as<select id="character-target"><option value="">Import as new</option>${options.characters.map(c=>`<option value="${esc(c.id)}">Update ${esc(c.title)}</option>`).join('')}</select></label><p>Updates replace the saved snapshot after a successful import. Your guide builds stay separate.</p>
- <button id="character-save" type="button">Save character</button></section>`;
+ dialog.innerHTML=`<form method="dialog"><div class="character-import-heading"><h2 id="character-import-title">${esc(t('menu.character'))}</h2><button value="cancel" aria-label="${esc(t('dialog.close'))}">×</button></div></form>
+ <details id="character-entry" open><summary>${esc(t('character.source'))}</summary><label>${esc(t('character.sourceLabel'))}<select id="character-source"><option value="ninja">${esc(t('character.ninja'))}</option><option value="code">${esc(t('character.code'))}</option><option value="xml">${esc(t('character.xml'))}</option></select></label>
+ <label id="character-text-label"><span>${esc(t('character.url'))}</span><textarea id="character-input" rows="4" spellcheck="false" placeholder="https://poe.ninja/poe2/builds/…/character/…/…"></textarea></label>
+ <label id="character-file-label" hidden>${esc(t('character.xml'))}<input id="character-file" type="file" accept=".xml,text/xml,application/xml"></label>
+ <p class="character-import-help">${esc(t('character.help'))}</p>
+ <button id="character-read" type="button">${esc(t('dialog.preview'))}</button></details><p id="character-error" role="status" aria-live="polite"></p>
+ <section id="character-preview" hidden><h3>${esc(t('character.preview'))}</h3><label>${esc(t('dialog.name'))}<input id="character-name" maxlength="200"></label><p id="character-summary"></p><ul id="character-warnings"></ul>
+ <label>${esc(t('dialog.saveAs'))}<select id="character-target"><option value="">${esc(t('dialog.asNew'))}</option>${options.characters.map(c=>`<option value="${esc(c.id)}">${esc(t('dialog.update',{title:c.title}))}</option>`).join('')}</select></label><p>${esc(t('character.replace'))}</p>
+ <button id="character-save" type="button">${esc(t('character.save'))}</button></section>`;
  document.body.append(dialog);
  const get=<T extends HTMLElement=HTMLElement>(selector:string)=>dialog.querySelector<T>(selector)!;
  const source=get<HTMLSelectElement>('#character-source'),input=get<HTMLTextAreaElement>('#character-input'),file=get<HTMLInputElement>('#character-file'),target=get<HTMLSelectElement>('#character-target'),read=get<HTMLButtonElement>('#character-read'),save=get<HTMLButtonElement>('#character-save'),name=get<HTMLInputElement>('#character-name'),error=get('#character-error');
  let candidate:CharacterImport|null=null,serial=0,closed=false,saving=false;
  const invalidate=()=>{serial++;candidate=null;get('#character-preview').hidden=true;error.textContent='';read.disabled=false;};
- source.onchange=()=>{invalidate();get('#character-text-label').hidden=source.value==='xml';get('#character-file-label').hidden=source.value!=='xml';get('#character-text-label span').textContent=source.value==='ninja'?'Character URL':'PoB export code';input.placeholder=source.value==='ninja'?'https://poe.ninja/poe2/builds/…/character/…/…':'Paste the code from PoB → Import/Export Build → Generate';};
+ source.onchange=()=>{invalidate();get('#character-text-label').hidden=source.value==='xml';get('#character-file-label').hidden=source.value!=='xml';get('#character-text-label span').textContent=t(source.value==='ninja'?'character.url':'character.code');input.placeholder=source.value==='ninja'?'https://poe.ninja/poe2/builds/…/character/…/…':t('character.codePlaceholder');};
  input.oninput=invalidate;file.onchange=invalidate;
  const preview=async()=>{
-  const request=++serial;candidate=null;get('#character-preview').hidden=true;read.disabled=true;error.textContent='Reading character…';
+  const request=++serial;candidate=null;get('#character-preview').hidden=true;read.disabled=true;error.textContent=t('character.reading');
   try {
    let loaded:CharacterImport;
    if(source.value==='ninja')loaded=await importNinja(input.value,options.network);
    else {
     const chosen=file.files?.[0];
-    if(source.value==='xml'&&(!chosen||chosen.size>MAX_XML_BYTES))throw Error('Choose a PoB XML file up to 8 MB.');
+    if(source.value==='xml'&&(!chosen||chosen.size>MAX_XML_BYTES))throw Error(t('error.xmlFileTooBig'));
     const value=source.value==='xml'?await chosen!.text():input.value;
-    const parsed=parsePob(await decodePob(value),source.value==='xml'?chosen!.name.replace(/\.xml$/i,''):'PoB character');
+    const parsed=parsePob(await decodePob(value),source.value==='xml'?chosen!.name.replace(/\.xml$/i,''):t('character.defaultName'));
     loaded={build:parsed.build,warnings:parsed.warnings};
    }
    if(closed||request!==serial)return;
    candidate=loaded;const b=loaded.build,c=b.character!;
    name.value=options.initial?.build.character?.name||c.name;
    const active=b.stages[0]!;
-   get('#character-summary').textContent=`${c.class} · ${b.ascendancy} · Level ${c.level}\n${active.items.length} equipped items · ${active.skills.length} skill groups · ${new Set(active.passives.map(n=>n.id)).size} passive nodes\n${b.stages.length} selectable setup${b.stages.length===1?'':'s'} · Imported ${new Date(c.importedAt).toLocaleString()}`;
-   get('#character-warnings').innerHTML=loaded.warnings.map(w=>`<li>${esc(w)}</li>`).join('');
+   get('#character-summary').textContent=`${t('character.headline',{class:c.class,ascendancy:b.ascendancy,level:c.level})}\n${plural('character.items',active.items.length)} · ${plural('character.groups',active.skills.length)} · ${plural('character.nodes',new Set(active.passives.map(n=>n.id)).size)}\n${plural('character.setups',b.stages.length)} · ${t('character.imported',{date:dateTime(c.importedAt)})}`;
+   get('#character-warnings').innerHTML=loaded.warnings.map(w=>`<li>${esc(noteText(w))}</li>`).join('');
    target.value=options.initial?.id||options.characters.find(entry=>c.url&&entry.character?.url===c.url)?.id||'';
-   get('#character-preview').hidden=false;error.textContent='Check the character, then save.';
+   get('#character-preview').hidden=false;error.textContent=t('character.check');
    get<HTMLDetailsElement>('#character-entry').open=false;
-   get('#character-entry summary').textContent=source.selectedOptions[0]!.textContent+' · Change source';
+   get('#character-entry summary').textContent=t('character.changeSource',{source:source.selectedOptions[0]!.textContent||''});
   } catch(e) {if(!closed&&request===serial)error.textContent=e instanceof Error?e.message:String(e);}
   finally{if(!closed&&request===serial)read.disabled=false;}
  };
@@ -62,9 +63,9 @@ export function openCharacterImport(options:Options):void {
   saving=true;save.disabled=true;read.disabled=true;source.disabled=true;input.disabled=true;file.disabled=true;target.disabled=true;name.disabled=true;
   try {
    const existing=target.value?await options.load(target.value):null;
-   if(target.value&&!existing)throw Error('That saved character is no longer available. Import as new instead.');
+   if(target.value&&!existing)throw Error(t('error.characterGone'));
    const build=prepareCharacterSave(candidate.build,name.value,existing);
-   error.textContent='Saving character…';await options.save(build);dialog.close();
+   error.textContent=t('character.saving');await options.save(build);dialog.close();
   }catch(e){error.textContent=e instanceof Error?e.message:String(e);}
   finally{saving=false;for(const control of [save,read,source,input,file,target,name])control.disabled=false;}
  })();};

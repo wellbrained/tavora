@@ -468,6 +468,9 @@ importers:
 
   modules/poe2-builds:
     dependencies:
+      '@tavora/official-ui':
+        specifier: workspace:*
+        version: link:../shared
       '@tavora/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk

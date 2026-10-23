@@ -1,4 +1,5 @@
 import { guideSections, type Build, type GuideSection } from './model';
+import { t, dateTime, noteText } from './i18n';
 
 export interface ReaderChapter extends GuideSection {
     key: string;
@@ -29,21 +30,21 @@ export function readerChapters(build: Build): ReaderChapter[] {
         if (text) chapters.push({ key, title, text, context, buildData: true });
     };
     const choices=build.questSelections||[];
-    if(choices.length)append('quest-rewards','Quest rewards',(build.character?'Recorded character choices':'Guide recommendations')+'\n\n'+choices.map(q=>[q.act,q.area,q.quest,q.reward].filter(Boolean).join(' · ')).join('\n\n'),'overview');
-    else if(build.questStats?.length)append('quest-rewards','Quest rewards','Recorded character bonuses\n\n'+build.questStats.join('\n'),'overview');
-    build.stages.forEach((stage,i)=>{if(stage.questRecommendations?.length)append('quest-rewards-'+i,'Quest rewards · '+stage.label,stage.questRecommendations.map(q=>q.text).join('\n\n'),'overview');});
-    const information = [build.title, build.source ? `Source: ${build.source}` : '', build.version ? `Build version: ${build.version}` : '',
-        build.treeVersion ? `Passive tree: ${build.treeVersion}` : '', build.ascendancy,
+    if(choices.length)append('quest-rewards',t('guide.questRewards'),t(build.character?'guide.characterChoices':'guide.recommendations')+'\n\n'+choices.map(q=>[q.act,q.area,q.quest,q.reward].filter(Boolean).join(' · ')).join('\n\n'),'overview');
+    else if(build.questStats?.length)append('quest-rewards',t('guide.questRewards'),t('guide.characterBonuses')+'\n\n'+build.questStats.join('\n'),'overview');
+    build.stages.forEach((stage,i)=>{if(stage.questRecommendations?.length)append('quest-rewards-'+i,t('guide.questRewards')+' · '+stage.label,stage.questRecommendations.map(q=>q.text).join('\n\n'),'overview');});
+    const information = [build.title, build.source ? t('guide.source', { source: build.source }) : '', build.version ? t('guide.version', { version: build.version }) : '',
+        build.treeVersion ? t('guide.tree', { version: build.treeVersion }) : '', build.ascendancy,
         ...build.stages.filter(s => s.author).map(s => `${s.label} · ${s.author}`)].filter(Boolean);
-    if(build.character){const c=build.character;information.push(`Character: ${c.name}`,`${c.class} · Level ${c.level}`,`Imported: ${new Date(c.importedAt).toLocaleString()}`,...(build.importNotes||[]));}
-    append('build-information', 'Build information', information.join('\n'), 'overview');
+    if(build.character){const c=build.character;information.push(t('guide.character',{name:c.name}),t('guide.classLevel',{class:c.class,level:c.level}),t('guide.imported',{date:dateTime(c.importedAt)}),...(build.importNotes||[]).map(noteText));}
+    append('build-information', t('guide.information'), information.join('\n'), 'overview');
     const video = safeLink(build.video);
-    if (video) chapters.push({ key: 'build-video', title: 'Video', text: '', links: [{ label: 'Open build video ↗', url: video }], buildData: true });
+    if (video) chapters.push({ key: 'build-video', title: t('guide.video'), text: '', links: [{ label: t('guide.openVideo'), url: video }], buildData: true });
     const references = new Map<string, string>();
     for (const stage of build.stages) {
         const link = safeLink(stage.link);
         if (link && link !== safeLink(build.guideUrl) && link !== safeLink(build.guideText?.url)) references.set(link, stage.label);
     }
-    if (references.size) chapters.push({ key: 'build-references', title: 'Variant references', text: '', links: [...references].map(([url, label]) => ({ url, label: `${label} ↗` })), buildData: true });
+    if (references.size) chapters.push({ key: 'build-references', title: t('guide.references'), text: '', links: [...references].map(([url, label]) => ({ url, label: `${label} ↗` })), buildData: true });
     return chapters;
 }

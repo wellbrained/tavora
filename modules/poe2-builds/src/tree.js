@@ -1,4 +1,5 @@
 import { treeArtwork } from './tree-art';
+import { t } from './i18n';
 
 export function createTree(canvas, context, options = {}) {
     const { state, nodesFor, selectedStage, selectedBuild, ascendancyName, esc } = context;
@@ -125,7 +126,7 @@ export function createTree(canvas, context, options = {}) {
                 c.fillStyle = '#b8b0a4';
                 c.font = '14px "Segoe UI",sans-serif';
                 c.textAlign = 'center';
-                c.fillText('No allocations for this view in this stage', this.width / 2, this.height / 2);
+                c.fillText(t('tree.nothing'), this.width / 2, this.height / 2);
             }
         }
         hit(x, y) { let nearest = null, d = Infinity; for (const n of this.visibleNodes()) {
@@ -141,7 +142,7 @@ export function createTree(canvas, context, options = {}) {
         showTooltip(n, x, y) { const el = this.tooltip; if (!n) {
             this.hideTooltip();
             return;
-        } el.innerHTML = `<strong>${esc(n.name)}</strong>${n.stats.map(esc).join('<br>')}<span class="node-state">${this.eligible(n) ? '● In this stage' : '○ Not allocated in this stage'}${this.selected.get(n.id) ? ` · Weapon set ${this.selected.get(n.id)}` : ''}</span>`; el.hidden = false; el.style.left = Math.min(Math.max(x + 15, 8), this.width - el.offsetWidth - 8) + 'px'; el.style.top = Math.min(Math.max(y + 15, 65), this.height - el.offsetHeight - 8) + 'px'; }
+        } el.innerHTML = `<strong>${esc(n.name)}</strong>${n.stats.map(esc).join('<br>')}<span class="node-state">${esc(t(this.eligible(n) ? 'tree.inStage' : 'tree.notInStage'))}${this.selected.get(n.id) ? ' · ' + esc(t('tree.weaponSet', { set: this.selected.get(n.id) })) : ''}</span>`; el.hidden = false; el.style.left = Math.min(Math.max(x + 15, 8), this.width - el.offsetWidth - 8) + 'px'; el.style.top = Math.min(Math.max(y + 15, 65), this.height - el.offsetHeight - 8) + 'px'; }
         bind() { const cv = this.canvas; cv.onwheel = e => { e.preventDefault(); const r = cv.getBoundingClientRect(); this.zoom(Math.exp(-e.deltaY * .0015), e.clientX - r.left, e.clientY - r.top); }; cv.onpointerdown = e => { const r = cv.getBoundingClientRect(); this.drag = { x: e.clientX, y: e.clientY, tx: this.tx, ty: this.ty, moved: false }; cv.setPointerCapture(e.pointerId); cv.classList.add('dragging'); this.hideTooltip(); }; cv.onpointermove = e => { const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; if (this.drag) {
             const dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y;
             this.drag.moved = this.drag.moved || Math.abs(dx) + Math.abs(dy) > 4;

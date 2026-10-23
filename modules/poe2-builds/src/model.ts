@@ -1,3 +1,4 @@
+import { t, type Key } from './i18n';
 export interface Gem {
     id: string;
     name: string;
@@ -124,7 +125,11 @@ export interface Portable {
     guideText: Guide | null;
 }
 export const MAX_FILE_BYTES = 24 * 1024 * 1024;
-export const slots: Record<string, string> = { Weapon1: 'Main weapon', Weapon2: 'Weapon swap', Offhand1: 'Offhand / quiver', Offhand2: 'Swap offhand', Helm1: 'Helmet', BodyArmour1: 'Body armour', Gloves1: 'Gloves', Boots1: 'Boots', Amulet1: 'Amulet', Belt1: 'Belt', Ring1: 'Left ring', Ring2: 'Right ring', Flask1: 'Flask', Flask2: 'Flask', Charm1: 'Charm', Charm2: 'Charm', Charm3: 'Charm' };
+// Item classes such as Helmet or Flask are game names and stay English; where a slot sits is ours to translate.
+const slotKeys: Record<string, Key> = { Weapon1: 'slot.mainWeapon', Weapon2: 'slot.weaponSwap', Offhand1: 'slot.offhandQuiver', Offhand2: 'slot.swapOffhand', Ring1: 'slot.leftRing', Ring2: 'slot.rightRing' };
+const slotClasses: Record<string, string> = { Helm1: 'Helmet', BodyArmour1: 'Body armour', Gloves1: 'Gloves', Boots1: 'Boots', Amulet1: 'Amulet', Belt1: 'Belt', Flask1: 'Flask', Flask2: 'Flask', Charm1: 'Charm', Charm2: 'Charm', Charm3: 'Charm' };
+/** What a slot is called, or undefined for an unknown slot. */
+export function slotName(id: string): string | undefined { const key = Object.hasOwn(slotKeys, id) ? slotKeys[id] : undefined; return key ? t(key) : Object.hasOwn(slotClasses, id) ? slotClasses[id] : undefined; }
 export function portable(build: Build): Portable { return { format: 'tavora.build', formatVersion: 1, buildId: build.fileId, savedAt: new Date().toISOString(), build, guideText: build.guideText }; }
 export function guideSections(guide: Guide | null, stages: Stage[] = []): GuideSection[] {
     if (!guide)
@@ -132,19 +137,19 @@ export function guideSections(guide: Guide | null, stages: Stage[] = []): GuideS
     if (guide.sections?.length)
         return guide.sections;
     const sections: GuideSection[] = [];
-    for (const [context, title] of [['tree', 'Passive tree'], ['skills', 'Skills'], ['gear', 'Equipment']] as const) {
+    for (const [context, title] of [['tree', t('guide.passiveTree')], ['skills', t('guide.skills')], ['gear', t('guide.equipment')]] as const) {
         const text = guide[context];
         if (text)
             sections.push({ title, text, context });
     }
     for (const [slot, text] of Object.entries(guide.items || {}))
-        sections.push({ title: slots[slot] || 'Equipment notes', text, context: 'gear' });
+        sections.push({ title: slotName(slot) || t('guide.equipmentNotes'), text, context: 'gear' });
     for (const entry of Object.values(guide.crafting || {}))
         sections.push({ title: entry.label, text: entry.text, context: 'gear' });
     for (const [id, text] of Object.entries(guide.gems || {}))
-        sections.push({ title: stages.flatMap(s => s.skills).find(g => g.id === id)?.name || 'Skill notes', text, context: 'skills' });
+        sections.push({ title: stages.flatMap(s => s.skills).find(g => g.id === id)?.name || t('guide.skillNotes'), text, context: 'skills' });
     if (guide.mana)
-        sections.push({ title: 'Mana', text: guide.mana, context: 'gear' });
+        sections.push({ title: t('guide.mana'), text: guide.mana, context: 'gear' });
     for (const [key, text] of Object.entries(guide.variants || {}))
         if (typeof text === 'string')
             sections.push({ title: stages[Number(key)]?.label || key, text, context: 'overview' });

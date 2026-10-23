@@ -1,6 +1,7 @@
 import type { TavoraSDK, JsonValue } from '@tavora/sdk';
 import { portable, type Build } from './model';
 import { validate } from './validate.js';
+import { t } from './i18n';
 interface Header {
     kind: 'poe2-build';
     version: 1;
@@ -19,12 +20,12 @@ export class BuildRepository {
         if (!header)
             return null;
         if (header.data.kind !== 'poe2-build' || header.data.version !== 1 || !Array.isArray(header.data.chunks) || header.data.chunks.length > 200 || header.data.chunks.some(key => typeof key !== 'string' || !key.startsWith('poe2-data-')))
-            throw Error('This saved build has an unsupported record format.');
+            throw Error(t('error.recordFormat'));
         try {
             const chunks = await Promise.all(header.data.chunks.map(async (key) => { const doc = await this.documents.get<{
                 text: string;
             }>(key); if (!doc || typeof doc.data.text !== 'string')
-                throw Error('Part of this build is missing. Load the original build file again.'); return doc.data.text; }));
+                throw Error(t('error.partMissing')); return doc.data.text; }));
             return validate(portable(JSON.parse(chunks.join('')) as Build));
         }
         catch (error) {

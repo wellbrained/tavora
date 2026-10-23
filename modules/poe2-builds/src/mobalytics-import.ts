@@ -5,6 +5,7 @@ import uniqueReferences from './unique-references.json';
 import { portable, type Build, type Gem, type Guide, type Item, type Stage } from './model';
 import { validate } from './validate.js';
 import { cleanGameText } from './pob-import';
+import { t } from './i18n';
 
 type Obj = Record<string, unknown>;
 const obj = (v:unknown):Obj => v && typeof v==='object' && !Array.isArray(v) ? v as Obj : {};
@@ -17,8 +18,8 @@ export interface GuideImport { build:Build; warnings:string[]; method:'direct'|'
 export const MOBALYTICS_ADAPTER={source:'Mobalytics',version:'2',patches:['0.5']} as const;
 
 export function mobalyticsAddress(input:string):{url:string;canonical:string;variant:string} {
- let u:URL;try{u=new URL(input.trim());}catch{throw Error('Paste a Mobalytics PoE 2 build URL.');}
- if(u.protocol!=='https:'||u.hostname!=='mobalytics.gg'||u.port||u.username||u.password||!/^\/poe-2\/builds\/[a-z0-9-]+\/?$/.test(u.pathname))throw Error('Choose a build guide at mobalytics.gg/poe-2/builds.');
+ let u:URL;try{u=new URL(input.trim());}catch{throw Error(t('error.mobalyticsUrl'));}
+ if(u.protocol!=='https:'||u.hostname!=='mobalytics.gg'||u.port||u.username||u.password||!/^\/poe-2\/builds\/[a-z0-9-]+\/?$/.test(u.pathname))throw Error(t('error.mobalyticsPath'));
  const canonical=u.origin+u.pathname.replace(/\/$/,'');
  let variant='';for(const [key,value] of u.searchParams)if(/^ws-/.test(key)&&value.startsWith('activeVariantId,'))variant=value.slice('activeVariantId,'.length);
  return {url:u.href,canonical,variant};
@@ -26,9 +27,9 @@ export function mobalyticsAddress(input:string):{url:string;canonical:string;var
 
 /** JSON only: never evaluate source scripts. Braces and escapes inside strings stay intact. */
 export function publicDocument(html:string):Obj {
- if(html.length>5*1024*1024)throw Error('The guide page exceeds 5 MB.');
+ if(html.length>5*1024*1024)throw Error(t('error.pageTooBig'));
  const marker='window.__PRELOADED_STATE__=', at=html.indexOf(marker);
- if(at<0)throw Error('No supported public guide data was found. Attach a build file instead.');
+ if(at<0)throw Error(t('error.noGuideData'));
  let start=at+marker.length;while(/\s/.test(html[start]||'')&&start<html.length)start++;
  let depth=0,quoted=false,escaped=false,end=start;
  for(;end<html.length;end++){
@@ -36,7 +37,7 @@ export function publicDocument(html:string):Obj {
   if(quoted){if(escaped)escaped=false;else if(c==='\\')escaped=true;else if(c==='"')quoted=false;continue;}
   if(c==='"')quoted=true;else if(c==='{')depth++;else if(c==='}'&&--depth===0){end++;break;}
  }
- let state:unknown;try{state=JSON.parse(html.slice(start,end));}catch{throw Error('The guide returned incomplete data. Try again or attach its build file.');}
+ let state:unknown;try{state=JSON.parse(html.slice(start,end));}catch{throw Error(t('error.incompleteGuide'));}
  const queue:unknown[]=[state];let count=0;
  while(queue.length&&++count<30000){
   const value=obj(queue.shift());
@@ -46,12 +47,12 @@ export function publicDocument(html:string):Obj {
   }
   for(const entry of Object.values(value))if(entry&&typeof entry==='object')Array.isArray(entry)?queue.push(...entry):queue.push(entry);
  }
- throw Error('This page does not contain a supported Mobalytics build. Attach its build file instead.');
+ throw Error(t('error.notMobalytics'));
 }
 
 /** Preserve original words and inline reference labels; links become safe, readable URLs. */
 export function lexicalText(value:unknown, base:string, depth=0, ordered=false):string {
- if(depth>40)throw Error('The guide text is nested too deeply.');
+ if(depth>40)throw Error(t('error.nestedText'));
  const node=obj(value);
  if(node.root)return lexicalText(node.root,base,depth+1).trim();
  if(node.type==='text')return str(node.text);
@@ -71,7 +72,7 @@ const gemsByName=new Map(Object.entries(lookup.gems).map(([id,g])=>[g.name.toLow
 const requirement=[1,3,6,10,14,18,22,26,31,36,41,46,52,58,64,66,72,78,84,90];
 function gem(source:Obj, support=false):Gem {
  const slug=str(source.gemSlug),known=gemsByEffect.get(slug.toLowerCase())||gemsByName.get(str(source.name).toLowerCase());
- if(!known&&!str(source.name))throw Error(`A skill in this guide is not in the bundled game data (${slug}). Attach its build file or update the module.`);
+ if(!known&&!str(source.name))throw Error(t('error.skillNotBundled',{id:slug}));
  return {id:known?.gameId||known?.id||slug,name:str(source.name)||known!.name,attributes:known?.attributes||[],isSupport:known?.support??support,tags:known?.tags||[],...(known&&!known.support&&known.tier>0?{levels:[requirement[known.tier-1]||1]}:{}),...(typeof source.level==='number'?{level:source.level}:{})};
 }
 const slots:Record<string,string>={mainHand:'Weapon',offHand:'Offhand',helmet:'Helm1',body:'BodyArmour1',gloves:'Gloves1',boots:'Boots1',belt:'Belt1',amulet:'Amulet1',leftRing:'Ring1',rightRing:'Ring2',charm1:'Charm1',charm2:'Charm2',charm3:'Charm3',flask1:'Flask1',flask2:'Flask2'};
@@ -94,7 +95,7 @@ function equipment(value:unknown, key:string, set=1):Item|null {
 
 export function parseMobalytics(document:Obj,input:string):Build {
  const address=mobalyticsAddress(input),data=obj(document.data),content=items(document.content),variants=items(obj(data.buildVariants).values);
- if(!variants.length||variants.length>50||!str(data.name))throw Error('The guide has no supported variants. Attach its build file instead.');
+ if(!variants.length||variants.length>50||!str(data.name))throw Error(t('error.noVariants'));
  const variantWidget=content.find(c=>Array.isArray(obj(c.data).childrenVariants));
  const labels=items(obj(variantWidget?.data).childrenVariants);
  const nodes=trees['0.5'] as {id:string;ascendancy:string|null}[];
@@ -102,14 +103,14 @@ export function parseMobalytics(document:Obj,input:string):Build {
  const byId=new Map(content.map(c=>[str(c.id),c]));
  const title=text(data.name);
  const sourceVersion=/\b(0\.\d+(?:\.\d+)?)\b/.exec(title)?.[1]||'';
- if(sourceVersion&&!MOBALYTICS_ADAPTER.patches.some(p=>sourceVersion===p||sourceVersion.startsWith(p+'.')))throw Error('This guide uses a game version not supported by the bundled 0.5 tree. Your saved build was not changed.');
+ if(sourceVersion&&!MOBALYTICS_ADAPTER.patches.some(p=>sourceVersion===p||sourceVersion.startsWith(p+'.')))throw Error(t('error.gameVersion'));
  const knownNodes=new Set(nodes.map(n=>n.id));
  const stages:Stage[]=variants.map((variant,index)=>{
   const label=text(labels.find(v=>v.id===variant.id)?.title)||`Variant ${index+1}`;
   const tree=obj(variant.passiveTree),passives:Stage['passives']=[];
   for(const [field,weapon] of [['mainTree',0],['ascendancyTree',0],['set1Tree',1],['set2Tree',2]] as const)
    for(const slug of arr(obj(tree[field]).selectedSlugs)){
-    const id=/^node-(\d+)$/.exec(str(slug))?.[1];if(!id||!knownNodes.has(id))throw Error('This guide uses a passive tree not supported by the bundled game data.');
+    const id=/^node-(\d+)$/.exec(str(slug))?.[1];if(!id||!knownNodes.has(id))throw Error(t('error.treeNotBundled'));
     if(!passives.some(p=>p.id===id&&p.weapon===weapon))passives.push({id,weapon});
    }
   const equipmentData=obj(variant.equipment),equipped:Item[]=[];
@@ -147,7 +148,7 @@ export function parseMobalytics(document:Obj,input:string):Build {
   section(node,variantIndex);for(const child of arr(obj(node.data).childrenIds))walk(str(child),variantIndex);
  };
  for(const id of arr(data.childrenIds))walk(str(id));
- if(!guide.sections!.length)throw Error('The guide text could not be read. Your saved build was not changed.');
+ if(!guide.sections!.length)throw Error(t('error.noGuideText'));
  const questSelections=items(obj(data.questRewards).quests).map(q=>({quest:text(obj(q.quest).name),act:text(obj(q.quest).act),area:text(obj(q.quest).area),reward:text(obj(q.reward).bakedDescription)})).filter(q=>q.reward);
  const b:Build={id:'imported',fileId:crypto.randomUUID(),title:title+' · Mobalytics',shortTitle:title,source:'Mobalytics',version:sourceVersion,treeVersion:'0.5',ascendancy:stages[0]!.ascendancy||'',guideUrl:address.canonical,guideText:guide,stages,defaultStage:Math.max(0,variants.findIndex(v=>v.id===address.variant)),questSelections,
   guideImport:{source:'Mobalytics',url:address.url,documentId:str(document.id),revision:String(document.version??''),importedAt:new Date().toISOString(),variantIds:variants.map(v=>str(v.id))},
@@ -181,10 +182,10 @@ export async function importMobalytics(input:string,network:TavoraSDK['network']
 }
 
 export function prepareGuideSave(candidate:Build,name:string,target:Build|null):Build{
- if(candidate.character||target?.character)throw Error('A guide cannot replace a character.');
- const title=name.trim();if(!title||title.length>200)throw Error('Enter a build name up to 200 characters.');
- if(target?.guideImport&&candidate.guideImport&&target.guideImport.documentId!==candidate.guideImport.documentId)throw Error('This is a different guide. Choose Import as new.');
- if(target?.guideText?.sections?.length&&!candidate.guideText?.sections?.length)throw Error('This attachment has no guide text. Import as new, or retry the guide URL to update this build.');
- if(target?.guideUrl&&candidate.guideUrl){const a=new URL(target.guideUrl),b=new URL(candidate.guideUrl);if(a.origin+a.pathname.replace(/\/$/,'')!==b.origin+b.pathname.replace(/\/$/,''))throw Error('This is a different guide. Choose Import as new.');}
+ if(candidate.character||target?.character)throw Error(t('error.guideOverCharacter'));
+ const title=name.trim();if(!title||title.length>200)throw Error(t('error.buildName'));
+ if(target?.guideImport&&candidate.guideImport&&target.guideImport.documentId!==candidate.guideImport.documentId)throw Error(t('error.otherGuide'));
+ if(target?.guideText?.sections?.length&&!candidate.guideText?.sections?.length)throw Error(t('error.attachmentNoText'));
+ if(target?.guideUrl&&candidate.guideUrl){const a=new URL(target.guideUrl),b=new URL(candidate.guideUrl);if(a.origin+a.pathname.replace(/\/$/,'')!==b.origin+b.pathname.replace(/\/$/,''))throw Error(t('error.otherGuide'));}
  return validate(portable({...candidate,fileId:target?.fileId||candidate.fileId,title:title+' · '+candidate.source,shortTitle:title}));
 }

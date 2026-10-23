@@ -18,9 +18,10 @@ import { characterProfileIndices } from './character-import';
 import { createTree } from './tree.js';
 import trees from './trees.json';
 import { esc, skillCard, gearCard } from './presentation';
+import { t, setLanguage, dateTime, variantName } from './i18n';
 import './style.css';
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s)!;
-const names = { tree: 'Tree', skills: 'Skills', gear: 'Gear', guide: 'Guide' } as const;
+const names = { tree: 'panel.tree', skills: 'panel.skills', gear: 'panel.gear', guide: 'panel.guide' } as const;
 type PanelType = keyof typeof names;
 let sdk: TavoraSDK, repository: BuildRepository, type: PanelType = 'tree', view = restoreView(null), build: Build | null = null;
 let guideLinks: GuideLinks;
@@ -45,30 +46,30 @@ function importGuide(refresh=false){
     if(importing)return;
     importing=true;inventory?.destroy();inventory=null;
     openGuideImport({network:sdk.network,guides:library.filter(b=>!b.character),initial:refresh&&build&&view.build?{id:view.build,build,stage:view.stage}:undefined,load:id=>repository.get(id),save:async loaded=>{
-        const id=await repository.put(loaded);await refreshLibrary();await show(id);await sdk.storage.set('lastBuild',id);report(loaded.guideText?'Build saved with guide text. All four panels can select it.':'Build saved. All four panels can select it.');
+        const id=await repository.put(loaded);await refreshLibrary();await show(id);await sdk.storage.set('lastBuild',id);report(t(loaded.guideText?'status.savedWithText':'status.saved'));
     },onClose:()=>{importing=false;render();}});
 }
-function libraryOptions(){return [['My characters',true],['Guide builds',false]].map(([label,character])=>{const entries=library.filter(b=>!!b.character===character);return entries.length?`<optgroup label="${label}">${entries.map(b=>`<option value="${esc(b.id)}" ${b.id===view.build?'selected':''}>${esc(b.title)}</option>`).join('')}</optgroup>`:'';}).join('');}
+function libraryOptions(){return ([[t('library.characters'),true],[t('library.guides'),false]] as const).map(([label,character])=>{const entries=library.filter(b=>!!b.character===character);return entries.length?`<optgroup label="${esc(label)}">${entries.map(b=>`<option value="${esc(b.id)}" ${b.id===view.build?'selected':''}>${esc(b.title)}</option>`).join('')}</optgroup>`:'';}).join('');}
 function importCharacter(refresh=false){
     if(importing)return;
     importing=true;inventory?.destroy();inventory=null;
     const initial=refresh&&build&&view.build?{id:view.build,build}:undefined;
     openCharacterImport({network:sdk.network,characters:library.filter(b=>b.character),initial,load:id=>repository.get(id),save:async loaded=>{
-        const id=await repository.put(loaded);await refreshLibrary();await show(id);await sdk.storage.set('lastBuild',id);report('Character saved. Select it under My characters in any panel.');
+        const id=await repository.put(loaded);await refreshLibrary();await show(id);await sdk.storage.set('lastBuild',id);report(t('status.characterSaved'));
     },onClose:()=>{importing=false;render();}});
 }
 async function show(id: string | null, index?: number) { const current = ++request, loaded = id ? await repository.get(id) : null; if (current !== request)
     return; const same = view.build === id; build = loaded; view.build = id; view.stage = Math.max(0, Math.min(index ?? loaded?.defaultStage ?? 0, (loaded?.stages.length ?? 1) - 1)); if (loaded) { const fit = characterProfileIndices(loaded, type); if (!fit.includes(view.stage)) view.stage = fit[0]!; } if (!same) { if(loaded?.character)view.gearWeapon=loaded.stages[view.stage]?.weaponSet===2?2:1; view.section = 0; view.disclosures = {}; view.guideChapters = {}; } treeState.tree = view.stage; treeState.weapon = view.weapon; treeState.search = view.search; await remember(); render(); }
 function noteOpen(key: string) { return view.disclosures[key] ?? (key === 'gear-footer' ? true : view.notes); }
 function anyNotesOpen() { return view.notes || Object.values(view.disclosures).some(Boolean) || (type === 'gear' && build && !!guideNote(build.guideText,view.stage,'gear') && noteOpen('gear-footer')); }
-function excerpt(text: string | undefined, key: string = type) { const section = guideSectionIndex(guideSections(build!.guideText, build!.stages), type, text, (key === type || key === 'gear-footer') ? stage().label : undefined); return text ? `<details class="excerpt" data-note="${esc(key)}" ${noteOpen(key) ? 'open' : ''}><summary>Notes</summary><p>${esc(text)}</p><button data-open="guide" data-guide-section="${section}">Read in Guide ↗</button></details>` : ''; }
+function excerpt(text: string | undefined, key: string = type) { const section = guideSectionIndex(guideSections(build!.guideText, build!.stages), type, text, (key === type || key === 'gear-footer') ? stage().label : undefined); return text ? `<details class="excerpt" data-note="${esc(key)}" ${noteOpen(key) ? 'open' : ''}><summary>${esc(t('notes.title'))}</summary><p>${esc(text)}</p><button data-open="guide" data-guide-section="${section}">${esc(t('notes.read'))}</button></details>` : ''; }
 function skillsMarkup() { return excerpt(guideNote(build!.guideText, view.stage, 'skills')) + stage().skills.map(g => skillCard(g, excerpt(build!.guideText?.gems?.[g.id], 'gem:' + g.id))).join(''); }
 function gearMarkup() {
     const notes=excerpt(guideNote(build!.guideText,view.stage,'gear'),'gear-footer');
-    return `<div class="gear-scroll" tabindex="0" aria-label="Equipment inventory and list">${inventoryMarkup(view.inventory,view.equipmentList)}<div id="equipment-list" class="gear-list" ${view.equipmentList?'':'hidden'}>${stage().items.length ? [...stage().items].sort((a,b)=>equipmentOrder(a)-equipmentOrder(b)).map(i=>gearCard(i,excerpt(build!.guideText?.items?.[i.inventory_id],'item:'+i.inventory_id))).join(''):'<p>No equipment data in this variant.</p>'}</div></div>${notes?`<footer class="gear-notes">${notes}</footer>`:''}`;
+    return `<div class="gear-scroll" tabindex="0" aria-label="${esc(t('gear.list'))}">${inventoryMarkup(view.inventory,view.equipmentList)}<div id="equipment-list" class="gear-list" ${view.equipmentList?'':'hidden'}>${stage().items.length ? [...stage().items].sort((a,b)=>equipmentOrder(a)-equipmentOrder(b)).map(i=>gearCard(i,excerpt(build!.guideText?.items?.[i.inventory_id],'item:'+i.inventory_id))).join(''):`<p>${esc(t('gear.none'))}</p>`}</div></div>${notes?`<footer class="gear-notes">${notes}</footer>`:''}`;
 }
 function nodes() { return (trees as Record<string, unknown[]>)[build ? stage().treeVersion||build.treeVersion : '0.5'] || []; }
-function treeMarkup() { const counts = allocationCounts(stage().passives); return excerpt(guideNote(build!.guideText, view.stage, 'tree')) + `<div class="tree-body main-tree"><canvas tabindex="0" aria-label="Passive tree: drag to pan, scroll to zoom"></canvas><div class="tree-tools">${visibilitySwitch('ascendancy-toggle',esc(stage().ascendancy || build!.ascendancy || 'Ascendancy'),false,'ascendancy-view')}<input id="search" class="tree-search" placeholder="Find a passive…" aria-label="Search passives" maxlength="200" value="${esc(treeState.search)}"></div><div class="node-tooltip" hidden></div><div class="tree-bottom"><details class="tree-info"><summary><span class="info-mark" aria-hidden="true">i</span>Tree info<span class="control-chevron" aria-hidden="true"></span></summary><dl class="tree-status"><div><dt>Total</dt><dd>${counts.total}</dd></div><div><dt>Set 1</dt><dd>${counts.set1}</dd></div><div><dt>Set 2</dt><dd>${counts.set2}</dd></div></dl></details><div class="tree-buttons"><button id="minus" aria-label="Zoom out">−</button><button id="fit">Fit build</button><button id="plus" aria-label="Zoom in">+</button><button id="fit-all" title="Show the whole passive tree">All</button></div></div></div><div class="weapon-allocation"><span>Weapon allocation</span><div class="segmented" role="group" aria-label="Weapon allocation">${[['all','Both'],['1','Set 1'],['2','Set 2']].map(([value,label]) => `<button data-weapon="${value}" aria-pressed="${treeState.weapon === value}" class="${treeState.weapon === value ? 'active' : ''}">${label}</button>`).join('')}</div><div class="tree-display-options"><label title="Show decorative frames around passive nodes in both tree views. Allocation colours stay unchanged."><input id="decorative-frames" type="checkbox" ${view.decorativeFrames ? 'checked' : ''}> Decorative frames</label><label title="Show allocated notable and keystone names when zoomed in"><input id="node-names" type="checkbox" ${view.nodeNames ? 'checked' : ''}> Node names</label></div></div><div id="ascendancy-view" popover role="dialog" aria-labelledby="ascendancy-heading"><div class="ascendancy-header"><div><strong id="ascendancy-heading">${esc(stage().ascendancy || build!.ascendancy || 'Ascendancy')}</strong><small>${esc(stage().label)}</small></div><button aria-label="Close ascendancy" popovertarget="ascendancy-view" popovertargetaction="hide">×</button></div><div class="tree-body"><canvas tabindex="0" aria-label="Ascendancy tree"></canvas><div class="node-tooltip" hidden></div></div><footer>Hover a node for its effect. Press Escape to return to the main tree.</footer></div>`; }
+function treeMarkup() { const counts = allocationCounts(stage().passives); return excerpt(guideNote(build!.guideText, view.stage, 'tree')) + `<div class="tree-body main-tree"><canvas tabindex="0" aria-label="${esc(t('tree.canvas'))}"></canvas><div class="tree-tools">${visibilitySwitch('ascendancy-toggle',esc(stage().ascendancy || build!.ascendancy || 'Ascendancy'),false,'ascendancy-view')}<input id="search" class="tree-search" placeholder="${esc(t('tree.find'))}" aria-label="${esc(t('tree.search'))}" maxlength="200" value="${esc(treeState.search)}"></div><div class="node-tooltip" hidden></div><div class="tree-bottom"><details class="tree-info"><summary><span class="info-mark" aria-hidden="true">i</span>${esc(t('tree.info'))}<span class="control-chevron" aria-hidden="true"></span></summary><dl class="tree-status"><div><dt>${esc(t('tree.total'))}</dt><dd>${counts.total}</dd></div><div><dt>${esc(t('tree.set',{set:1}))}</dt><dd>${counts.set1}</dd></div><div><dt>${esc(t('tree.set',{set:2}))}</dt><dd>${counts.set2}</dd></div></dl></details><div class="tree-buttons"><button id="minus" aria-label="${esc(t('tree.zoomOut'))}">−</button><button id="fit">${esc(t('tree.fit'))}</button><button id="plus" aria-label="${esc(t('tree.zoomIn'))}">+</button><button id="fit-all" title="${esc(t('tree.allTitle'))}">${esc(t('tree.all'))}</button></div></div></div><div class="weapon-allocation"><span>${esc(t('tree.weapons'))}</span><div class="segmented" role="group" aria-label="${esc(t('tree.weapons'))}">${[['all',t('tree.both')],['1',t('tree.set',{set:1})],['2',t('tree.set',{set:2})]].map(([value,label]) => `<button data-weapon="${value}" aria-pressed="${treeState.weapon === value}" class="${treeState.weapon === value ? 'active' : ''}">${esc(label)}</button>`).join('')}</div><div class="tree-display-options"><label title="${esc(t('tree.framesTitle'))}"><input id="decorative-frames" type="checkbox" ${view.decorativeFrames ? 'checked' : ''}> ${esc(t('tree.frames'))}</label><label title="${esc(t('tree.namesTitle'))}"><input id="node-names" type="checkbox" ${view.nodeNames ? 'checked' : ''}> ${esc(t('tree.names'))}</label></div></div><div id="ascendancy-view" popover role="dialog" aria-labelledby="ascendancy-heading"><div class="ascendancy-header"><div><strong id="ascendancy-heading">${esc(stage().ascendancy || build!.ascendancy || 'Ascendancy')}</strong><small>${esc(stage().label)}</small></div><button aria-label="${esc(t('tree.closeAscendancy'))}" popovertarget="ascendancy-view" popovertargetaction="hide">×</button></div><div class="tree-body"><canvas tabindex="0" aria-label="${esc(t('tree.ascendancyCanvas'))}"></canvas><div class="node-tooltip" hidden></div></div><footer>${esc(t('tree.ascendancyHint'))}</footer></div>`; }
 function context() { return { state: treeState, nodesFor: nodes, selectedStage: stage, selectedBuild: () => ({...build!,treeVersion:stage().treeVersion||build!.treeVersion}), ascendancyName: () => stage().ascendancy || build!.ascendancy, decorativeFrames: () => view.decorativeFrames, nodeNames: () => view.nodeNames, esc }; }
 function mountTree() {
     tree = createTree($('.main-tree canvas'), context());
@@ -113,7 +114,7 @@ function jump(index: number, save = true) {
 }
 function syncGuideAll() {
     const control = document.querySelector<HTMLButtonElement>('#guide-toggle-all');
-    if (control) control.innerHTML = `${collapseIcon(!Array.from(document.querySelectorAll<HTMLDetailsElement>('[data-chapter]')).some(d=>d.open))}${Array.from(document.querySelectorAll<HTMLDetailsElement>('[data-chapter]')).some(d => d.open) ? 'Collapse' : 'Expand'} all`;
+    if (control) control.innerHTML = `${collapseIcon(!Array.from(document.querySelectorAll<HTMLDetailsElement>('[data-chapter]')).some(d=>d.open))}${Array.from(document.querySelectorAll<HTMLDetailsElement>('[data-chapter]')).some(d => d.open) ? t('guide.collapseAll') : t('guide.expandAll')}`;
 }
 function mountGuide() {
     $('#guide-nav-toggle').onchange = () => {
@@ -157,7 +158,7 @@ function render() {
     ascendancy?.destroy();
     tree = null;
     ascendancy = null;
-    $('#app').innerHTML = `<header><button class="add-build" popovertarget="add-actions" title="Add build or character">Add<span class="control-chevron" aria-hidden="true"></span></button><select id="build" aria-label="${names[type]} build" title="${esc(build?.title || 'Pick a build')}"><option value="">Pick a build</option>${libraryOptions()}</select>${build && type !== 'guide' ? `<select id="variant" aria-label="Build variant" title="${esc(stage().label)}">${characterProfileIndices(build,type).map(i => `<option value="${i}" ${i === view.stage ? 'selected' : ''}>${esc(build!.stages[i]!.label)}</option>`).join('')}</select>` : ''}<div id="add-actions" popover aria-label="Add content">${addMenuActions()}</div><button class="more" popovertarget="build-actions" aria-label="Build actions" title="Build actions">⋯</button><div id="build-actions" popover aria-label="Panel actions">${panelMenuActions(build,type,!!anyNotesOpen())}</div></header><div class="content ${type === 'tree' ? 'tree-content' : type === 'gear' ? 'gear-content' : type === 'guide' ? 'guide-content' : ''}">${build?.character ? `<div class="character-summary">${esc(build.character.class)} · Level ${build.character.level} · Imported ${esc(new Date(build.character.importedAt).toLocaleString())}</div>` : ''}${build ? (type === 'tree' ? treeMarkup() : type === 'skills' ? skillsMarkup() : type === 'gear' ? gearMarkup() : guideReaderMarkup(build, view)) : `<div class="empty"><h1>${view.build ? 'Build unavailable' : 'PoE 2 Builds · Alpha'}</h1><p>${view.build ? 'This build was removed or is unavailable. Choose another build or load its file.' : 'Load a .tavora-build.json file to view its passive tree, skills, gear and guide in independent panels.'}</p><div class="empty-actions">${addMenuActions(true)}</div></div>`}</div>`;
+    $('#app').innerHTML = `<header><button class="add-build" popovertarget="add-actions" title="${esc(t('header.addTitle'))}">${esc(t('header.add'))}<span class="control-chevron" aria-hidden="true"></span></button><select id="build" aria-label="${esc(t('header.buildSelect',{panel:t(names[type])}))}" title="${esc(build?.title || t('header.pick'))}"><option value="">${esc(t('header.pick'))}</option>${libraryOptions()}</select>${build && type !== 'guide' ? `<select id="variant" aria-label="${esc(t('header.variant'))}" title="${esc(variantName(stage().label))}">${characterProfileIndices(build,type).map(i => `<option value="${i}" ${i === view.stage ? 'selected' : ''}>${esc(variantName(build!.stages[i]!.label))}</option>`).join('')}</select>` : ''}<div id="add-actions" popover aria-label="${esc(t('header.addMenu'))}">${addMenuActions()}</div><button class="more" popovertarget="build-actions" aria-label="${esc(t('header.actions'))}" title="${esc(t('header.actions'))}">⋯</button><div id="build-actions" popover aria-label="${esc(t('header.actionsMenu'))}">${panelMenuActions(build,type,!!anyNotesOpen())}</div></header><div class="content ${type === 'tree' ? 'tree-content' : type === 'gear' ? 'gear-content' : type === 'guide' ? 'guide-content' : ''}">${build?.character ? `<div class="character-summary">${esc(t('character.summary',{class:build.character.class,level:build.character.level,date:dateTime(build.character.importedAt)}))}</div>` : ''}${build ? (type === 'tree' ? treeMarkup() : type === 'skills' ? skillsMarkup() : type === 'gear' ? gearMarkup() : guideReaderMarkup(build, view)) : `<div class="empty"><h1>${view.build ? esc(t('empty.unavailable')) : 'PoE 2 Builds · Alpha'}</h1><p>${esc(t(view.build ? 'empty.unavailableText' : 'empty.text'))}</p><div class="empty-actions">${addMenuActions(true)}</div></div>`}</div>`;
     const closeActions = () => { $('#build-actions').hidePopover(); $('#add-actions').hidePopover(); };
     $('#import-character').onclick=()=>{closeActions();importCharacter();};
     $('#import-build').onclick=()=>{closeActions();importGuide();};
@@ -175,7 +176,7 @@ function render() {
         $('#variant').onchange = e => { view.stage = Number((e.target as HTMLSelectElement).value); if(build?.character)view.gearWeapon=stage().weaponSet===2?2:1; treeState.tree = view.stage; render(); void remember().catch(report); };
     $('#toggle-excerpts').onclick = () => { view.notes = !anyNotesOpen(); view.disclosures = type === 'gear' ? { 'gear-footer': view.notes } : {}; render(); void remember().catch(report); };
     document.querySelectorAll<HTMLButtonElement>('[data-open]').forEach(button => button.onclick = () => { if (!view.build || !build)
-        return; const id = view.build, section = button.dataset.guideSection; void sdk.panels.open(button.dataset.open!, { content: { id, title: build.title.slice(0, 200) } }).then(async result => { if (result === 'failed') { report('The panel could not be opened.'); return; } if (section !== undefined && !await guideLinks.navigate(id, Number(section))) report('Guide opened. Select the section in its section navigator.'); }).catch(report); closeActions(); });
+        return; const id = view.build, section = button.dataset.guideSection; void sdk.panels.open(button.dataset.open!, { content: { id, title: build.title.slice(0, 200) } }).then(async result => { if (result === 'failed') { report(t('status.panelFailed')); return; } if (section !== undefined && !await guideLinks.navigate(id, Number(section))) report(t('status.pickSection')); }).catch(report); closeActions(); });
     document.querySelectorAll<HTMLButtonElement>('[data-section]').forEach(button => button.onclick = () => jump(Number(button.dataset.section)));
     const sectionSelect = document.querySelector<HTMLSelectElement>('#guide-section'); if (sectionSelect) sectionSelect.onchange = () => jump(Number(sectionSelect.value));
     document.querySelectorAll<HTMLDetailsElement>('[data-note]').forEach(details => details.ontoggle = () => { if (!details.isConnected) return; const key = details.dataset.note!; if (noteOpen(key) !== details.open) { view.disclosures[key] = details.open; void remember().catch(report); } });
@@ -187,31 +188,31 @@ function render() {
 /** Saves the open build as a portable file that Load build file reads back. Runs inside the click, which the host requires. */
 function exportBuild() {
     if (!build) return; const b = build;
-    report('Saving file…');
+    report(t('status.exporting'));
     void sdk.files.exportJson(portable(b) as unknown as JsonValue, (b.shortTitle || b.title) + '.tavora-build')
-        .then(({ fileName }) => report(`Saved in Downloads/Tavora: ${fileName}`))
-        .catch(e => report((e as { code?: string }).code === 'QUOTA_EXCEEDED' ? 'This build is too big to export. Update Tavora, then try again.' : e));
+        .then(({ fileName }) => report(t('status.exported', { file: fileName })))
+        .catch(e => report((e as { code?: string }).code === 'QUOTA_EXCEEDED' ? t('status.exportTooBig') : e));
 }
 async function loadFile(file: File) { if (importing)
-    throw Error('Wait for the current import to finish.'); importing = true; try {
+    throw Error(t('status.wait')); importing = true; try {
     if (file.size > MAX_FILE_BYTES)
-        throw Error('Choose a Tavora build file up to 24 MB.');
+        throw Error(t('status.fileTooBig'));
     const loaded = validate(JSON.parse(await file.text()) as unknown) as Build;
-    report('Saving build…');
+    report(t('status.savingBuild'));
     const id = await repository.put(loaded);
     await refreshLibrary();
     await show(id);
     await sdk.storage.set('lastBuild', id);
-    report('Build saved. All four panel types can select it.');
+    report(t('status.saved'));
 }
 finally {
     importing = false;
 } }
-async function start() { sdk = await connect(); repository = new BuildRepository(sdk.documents); if (sdk.panel.type && sdk.panel.type in names)
+async function start() { sdk = await connect(); setLanguage(await sdk.ui.getLanguage()); repository = new BuildRepository(sdk.documents); if (sdk.panel.type && sdk.panel.type in names)
     type = sdk.panel.type as PanelType; applyTheme(await sdk.ui.getTheme()); sdk.ui.onThemeChange(applyTheme); const launch = await sdk.panel.getLaunch(), saved = restoreView(await sdk.panel.getState()); if (launch.reason === 'restore') view = saved; guideLinks = new GuideLinks(() => ({ build: view.build, ready: type === 'guide' && build !== null }), index => jump(index)); await refreshLibrary(); const id = launch.reason === 'open' ? launch.content?.id : launch.reason === 'restore' ? saved.build ?? launch.content?.id : await sdk.storage.get<string>('lastBuild'); await show(id ?? null, launch.reason === 'restore' ? saved.stage : undefined); sdk.panel.onNavigate(async (content) => { await show(content.id); }); sdk.documents.onChange(change => { if (!change.id.startsWith('poe2-build-'))
     return; void (async () => { await refreshLibrary(); if (change.id === view.build)
     await show(view.build, view.stage);
 else
-    render(); })().catch(report); }); sdk.lifecycle.onDispose(() => { tree?.destroy(); ascendancy?.destroy(); guideLinks.destroy(); inventory?.destroy(); }); $('#file').onchange = e => { const input = e.target as HTMLInputElement, file = input.files?.[0]; if (file)
+    render(); })().catch(report); }); sdk.lifecycle.onDispose(() => { tree?.destroy(); ascendancy?.destroy(); guideLinks.destroy(); inventory?.destroy(); }); sdk.ui.onLanguageChange(language => { setLanguage(language); render(); }); $('#file').onchange = e => { const input = e.target as HTMLInputElement, file = input.files?.[0]; if (file)
     void loadFile(file).catch(report).finally(() => { input.value = ''; }); }; }
-void start().catch(e => { report(e); $('#app').innerHTML = '<div class="empty"><h1>Open this module in Tavora</h1><p>Install the module ZIP or add its development folder in Settings → Development.</p></div>'; });
+void start().catch(e => { report(e); $('#app').innerHTML = `<div class="empty"><h1>${esc(t('outside.title'))}</h1><p>${esc(t('outside.text'))}</p></div>`; });

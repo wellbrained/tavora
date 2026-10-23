@@ -6,6 +6,7 @@ import gemTables from './poevault-gems.json';
 import { portable, type Build, type Gem, type Guide, type GuideSection, type Stage } from './model';
 import { validate } from './validate.js';
 import type { GuideImport } from './mobalytics-import';
+import { t } from './i18n';
 
 type Obj = Record<string, unknown>;
 const obj = (v:unknown):Obj => v && typeof v==='object' && !Array.isArray(v) ? v as Obj : {};
@@ -16,8 +17,8 @@ export const POEVAULT_ADAPTER={source:'PoE Vault',version:'1',patches:['0.5']} a
 const ORIGIN='https://www.poe-vault.com';
 
 export function poeVaultAddress(input:string):{url:string;canonical:string} {
- let u:URL;try{u=new URL(input.trim());}catch{throw Error('Paste a PoE Vault PoE 2 guide URL.');}
- if(u.protocol!=='https:'||!['www.poe-vault.com','poe-vault.com'].includes(u.hostname)||u.port||u.username||u.password||!/^\/poe2\/[a-z0-9-]+\/[a-z0-9-]+\/[a-z0-9-]+\/?$/.test(u.pathname))throw Error('Choose a build guide at poe-vault.com/poe2.');
+ let u:URL;try{u=new URL(input.trim());}catch{throw Error(t('error.vaultUrl'));}
+ if(u.protocol!=='https:'||!['www.poe-vault.com','poe-vault.com'].includes(u.hostname)||u.port||u.username||u.password||!/^\/poe2\/[a-z0-9-]+\/[a-z0-9-]+\/[a-z0-9-]+\/?$/.test(u.pathname))throw Error(t('error.vaultPath'));
  const canonical=ORIGIN+u.pathname.replace(/\/$/,'');
  return {url:canonical,canonical};
 }
@@ -82,9 +83,9 @@ function context(title:string):string {
 }
 
 export function vaultPage(html:string, url:string):VaultPage {
- if(html.length>5*1024*1024)throw Error('The guide page exceeds 5 MB.');
+ if(html.length>5*1024*1024)throw Error(t('error.pageTooBig'));
  const title=decode((/<h1[^>]*>([\s\S]*?)<\/h1>/.exec(html)?.[1]||'').replace(/<[^>]+>/g,'')).replace(/\s+/g,' ').trim();
- if(!title)throw Error('This page does not look like a PoE Vault guide. Attach a build file instead.');
+ if(!title)throw Error(t('error.notVault'));
  const page:VaultPage={title,modified:/"dateModified":"([^"]{1,40})"/.exec(html)?.[1]||'',sections:articleSections(html,url),trees:[],skills:[],oldTrees:0};
  for(const m of pageData(html).matchAll(/"embedUrl":"((?:[^"\\]|\\.)*)"/g)){
   let u:URL;try{u=new URL(JSON.parse(`"${m[1]}"`));}catch{continue;}
@@ -104,8 +105,8 @@ export function vaultPage(html:string, url:string):VaultPage {
 
 /** The skill planner keeps its setups as Brotli-compressed JSON in the link. */
 export function gemSetups(hash:string):{name:string;slots:unknown[][]}[] {
- let bytes:Uint8Array;try{bytes=Uint8Array.from(atob(hash),c=>c.charCodeAt(0));}catch{throw Error('A gem planner link in this guide is damaged.');}
- let setups:unknown;try{setups=JSON.parse(new TextDecoder().decode(decompress(bytes)));}catch{throw Error('A gem planner link in this guide could not be read.');}
+ let bytes:Uint8Array;try{bytes=Uint8Array.from(atob(hash),c=>c.charCodeAt(0));}catch{throw Error(t('error.plannerDamaged'));}
+ let setups:unknown;try{setups=JSON.parse(new TextDecoder().decode(decompress(bytes)));}catch{throw Error(t('error.plannerUnreadable'));}
  return arr(setups).map(obj).filter(s=>str(s.name)&&Array.isArray(s.slots)).map(s=>({name:str(s.name),slots:arr(s.slots).filter(Array.isArray) as unknown[][]}));
 }
 
@@ -129,7 +130,7 @@ function vaultGem(value:unknown, table:Record<string,[string,string,number]>):Ge
 export function parsePoeVault(page:VaultPage, savedTrees:Obj[], input:string):Build {
  const address=poeVaultAddress(input),nodes=trees['0.5'] as {id:string;ascendancy:string|null}[];
  const versions=savedTrees.map(t=>str(t.version)).filter(Boolean);
- for(const v of versions)if(!POEVAULT_ADAPTER.patches.some(p=>v===p||v.startsWith(p+'.')))throw Error('This guide uses a game version not supported by the bundled 0.5 tree. Your saved build was not changed.');
+ for(const v of versions)if(!POEVAULT_ADAPTER.patches.some(p=>v===p||v.startsWith(p+'.')))throw Error(t('error.gameVersion'));
  const treeSetups=savedTrees.flatMap(t=>arr(t.build).map(obj).map(setup=>{
   const passives:Stage['passives']=[];
   for(const n of arr(setup.activeNodes).map(obj)){const id=str(n.id),weapon=[0,1,2].includes(n.weaponSet as number)?n.weaponSet as number:0;if(/^\d+$/.test(id)&&!passives.some(p=>p.id===id&&p.weapon===weapon))passives.push({id,weapon});}
@@ -155,8 +156,8 @@ export function parsePoeVault(page:VaultPage, savedTrees:Obj[], input:string):Bu
   stages.push({name:t.name,label:t.name,author:'',link:address.canonical,ascendancy:t.ascendancy,items:[],skills:j>=0?skillSetups[j]!.skills:[],passives:t.passives,...(j<0?{characterProfile:'tree' as const}:{})});
  }
  skillSetups.forEach((s,k)=>{if(!used.has(k))stages.push({name:s.name,label:s.name,author:'',link:address.canonical,items:[],skills:s.skills,passives:[],characterProfile:'skills'});});
- if(!stages.length)throw Error('This guide has no passive tree or gem planner Tavora can read. Attach a build file instead.');
- if(stages.length>50)throw Error('This guide has more setups than Tavora can show.');
+ if(!stages.length)throw Error(t('error.noSetups'));
+ if(stages.length>50)throw Error(t('error.tooManySetups'));
  // Variant names are the only identity PoE Vault gives; repeats get a number so updates can still match them.
  const seen=new Map<string,number>();
  for(const s of stages){const n=(seen.get(s.label)||0)+1;seen.set(s.label,n);if(n>1)s.name=s.label=`${s.label} (${n})`;}
@@ -184,14 +185,14 @@ let cachedAction='';
 async function treeAction(network:TavoraSDK['network'], uid:string):Promise<string> {
  if(cachedAction)return cachedAction;
  const tool=await network.fetch(`${ORIGIN}/poe2/tools/passive-tree?protocol=1&uid=${encodeURIComponent(uid)}`);
- if(tool.status<200||tool.status>=300)throw Error(`PoE Vault's tree planner didn't answer (HTTP ${tool.status}). Try again later.`);
+ if(tool.status<200||tool.status>=300)throw Error(t('error.vaultPlanner',{status:tool.status}));
  const scripts=[...new Set([...tool.body.matchAll(/<script[^>]+src="(\/poe2\/_next\/static\/chunks\/[\w./()[\]-]+\.js)"/g)].map(m=>m[1]!))].slice(0,40);
  for(const src of scripts){
   const code=await network.fetch(ORIGIN+src);
   const action=/createServerReference\)\("([a-f0-9]{20,64})"[^;]{0,200}?"loadPassiveTreeBuild"/.exec(code.body)?.[1];
   if(action)return cachedAction=action;
  }
- throw Error('PoE Vault changed its tree planner. Update the module, or attach a build file.');
+ throw Error(t('error.vaultChanged'));
 }
 export function treeAnswer(body:string):Obj {
  for(const line of body.split('\n')){
@@ -199,19 +200,19 @@ export function treeAnswer(body:string):Obj {
   let value:unknown;try{value=JSON.parse(line.slice(at+1));}catch{continue;}
   const answer=obj(value);if(answer.success===true&&Array.isArray(obj(answer.build).build))return obj(answer.build);
  }
- throw Error('A passive tree in this guide could not be loaded.');
+ throw Error(t('error.vaultTree'));
 }
 async function loadTree(network:TavoraSDK['network'], uid:string, retry=true):Promise<Obj> {
  const action=await treeAction(network,uid);
  const response=await network.fetch(`${ORIGIN}/poe2/tools/passive-tree?protocol=1&uid=${encodeURIComponent(uid)}`,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8','Accept':'text/x-component','Next-Action':action},body:JSON.stringify([uid])});
  try{if(response.status<200||response.status>=300)throw Error();return treeAnswer(response.body);}
- catch{if(!retry)throw Error('A passive tree in this guide could not be loaded.');cachedAction='';return loadTree(network,uid,false);}
+ catch{if(!retry)throw Error(t('error.vaultTree'));cachedAction='';return loadTree(network,uid,false);}
 }
 
 export async function importPoeVault(input:string, network:TavoraSDK['network']):Promise<GuideImport> {
  const address=poeVaultAddress(input),response=await network.fetch(address.url);
- if(response.status===404)throw Error('PoE Vault has no guide at this address.');
- if(response.status<200||response.status>=300)throw Error(`PoE Vault didn't answer (HTTP ${response.status}). Try again later.`);
+ if(response.status===404)throw Error(t('error.vaultMissing'));
+ if(response.status<200||response.status>=300)throw Error(t('error.vaultStatus',{status:response.status}));
  const page=vaultPage(response.body,address.url),savedTrees:Obj[]=[];
  for(const uid of page.trees.slice(0,10))savedTrees.push(await loadTree(network,uid));
  const build=parsePoeVault(page,savedTrees,address.url);

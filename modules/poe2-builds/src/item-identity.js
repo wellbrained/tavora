@@ -1,4 +1,5 @@
 import catalogue from './item-identities.json' with {type:'json'};
+import { t } from './i18n';
 const lookup = (table,key) => typeof key === 'string' && Object.hasOwn(table,key) ? table[key] : undefined;
 const clean = value => typeof value === 'string' && !/Metadata[\\/]/i.test(value) ? value : '';
 const slotTypes = {Helm1:'Helmet',BodyArmour1:'Body armour',Gloves1:'Gloves',Boots1:'Boots',Amulet1:'Amulet',Belt1:'Belt',Ring1:'Ring',Ring2:'Ring',Flask1:'Flask',Flask2:'Mana flask',Charm1:'Charm',Charm2:'Charm',Charm3:'Charm'};
@@ -16,11 +17,11 @@ export function resolveItemIdentity(item) {
 export function itemCategory(item) {return item ? resolveItemIdentity(item).category : '';}
 export function weaponLabel(item,offhand=false) {
  const type=itemCategory(item);
- return type ? `${type} · ${offhand?'Offhand':'Main hand'}` : offhand?'Offhand':'Main weapon';
+ return type ? `${type} · ${t(offhand?'slot.offhand':'slot.mainHand')}` : t(offhand?'slot.offhand':'slot.mainWeapon');
 }
 export function weaponSlotState(items,set) {
  const main=items.find(i=>i.inventory_id==='Weapon'+set),offhand=items.find(i=>i.inventory_id==='Offhand'+set);
  const type=itemCategory(main);
  const twoHanded=['Crossbow','Staff','Warstaff','Two Hand Mace','Two Hand Sword','Two Hand Axe'].includes(type);
- return {main,offhand,mainLabel:weaponLabel(main),offhandLabel:offhand?weaponLabel(offhand,true):type==='Bow'?'Quiver':twoHanded?'Uses both hands':'Offhand',blocked:twoHanded&&!offhand,offhandCategory:offhand?itemCategory(offhand):type==='Bow'?'Quiver':''};
+ return {main,offhand,mainLabel:weaponLabel(main),offhandLabel:offhand?weaponLabel(offhand,true):type==='Bow'?'Quiver':twoHanded?t('slot.bothHands'):t('slot.offhand'),blocked:twoHanded&&!offhand,offhandCategory:offhand?itemCategory(offhand):type==='Bow'?'Quiver':''};
 }

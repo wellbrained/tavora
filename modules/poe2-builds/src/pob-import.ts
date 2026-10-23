@@ -3,6 +3,7 @@ type XmlElement = Element;
 import lookup from './character-data.json';
 import { portable, type Build, type Gem, type Item, type Stage } from './model';
 import { validate } from './validate.js';
+import { t } from './i18n';
 
 export const MAX_XML_BYTES = 8 * 1024 * 1024;
 const MAX_CODE_BYTES = 4 * 1024 * 1024;
@@ -17,29 +18,29 @@ const gemData = lookup.gems as Record<string,{name:string;attributes:string[];su
 export async function decodePob(input: string): Promise<string> {
  const code = input.trim();
  if (code.startsWith('<')) {
-  if (new TextEncoder().encode(code).length > MAX_XML_BYTES) throw Error('Choose PoB XML up to 8 MB.');
+  if (new TextEncoder().encode(code).length > MAX_XML_BYTES) throw Error(t('error.pobTooBig'));
   return code;
  }
  if (!code || code.length > MAX_CODE_BYTES || !/^[A-Za-z0-9_+\/-]+={0,2}$/.test(code))
-  throw Error('Paste a PoB export code, or choose its XML file. Website links are not export codes.');
+  throw Error(t('error.pobNotCode'));
  let bytes: Uint8Array;
  try { bytes = Uint8Array.from(atob(code.replaceAll('-','+').replaceAll('_','/')),c=>c.charCodeAt(0)); }
- catch { throw Error('That PoB export code is invalid.'); }
+ catch { throw Error(t('error.pobCode')); }
  const reader = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate')).getReader();
  const chunks: Uint8Array[] = []; let size = 0;
  try {
   while (true) {
    const {value,done} = await reader.read(); if (done) break;
    size += value.byteLength;
-   if (size > MAX_XML_BYTES) { await reader.cancel(); throw Error('The expanded PoB build exceeds 8 MB.'); }
+   if (size > MAX_XML_BYTES) { await reader.cancel(); throw Error(t('error.pobExpanded')); }
    chunks.push(value);
   }
- } catch (error) { if (error instanceof Error && error.message.includes('8 MB')) throw error; throw Error('That PoB export code could not be decompressed.'); }
+ } catch (error) { if (error instanceof Error && error.message === t('error.pobExpanded')) throw error; throw Error(t('error.pobDecompress')); }
  finally { reader.releaseLock(); }
  const output = new Uint8Array(size); let offset=0;
  for (const chunk of chunks) { output.set(chunk,offset); offset+=chunk.length; }
  try { return new TextDecoder('utf-8',{fatal:true}).decode(output); }
- catch { throw Error('The PoB export contains invalid text.'); }
+ catch { throw Error(t('error.pobText')); }
 }
 
 const slotNames: Record<string,string> = {'Weapon 1':'Weapon1','Weapon 1 Swap':'Weapon2','Weapon 2':'Offhand1','Weapon 2 Swap':'Offhand2',Helmet:'Helm1','Body Armour':'BodyArmour1',Gloves:'Gloves1',Boots:'Boots1',Belt:'Belt1',Amulet:'Amulet1','Ring 1':'Ring1','Ring 2':'Ring2','Charm 1':'Charm1','Charm 2':'Charm2','Charm 3':'Charm3','Flask 1':'Flask1','Flask 2':'Flask2'};
@@ -50,11 +51,11 @@ function parseItem(element: XmlElement, slot: string): Item {
  const text = Array.from(element.childNodes).filter(n=>n.nodeType===3 || n.nodeType===4).map(n=>n.nodeValue).join('');
  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
  const rarity = /^Rarity: (NORMAL|MAGIC|RARE|UNIQUE)$/i.exec(lines[0]||'')?.[1]?.toLowerCase();
- if (!rarity) throw Error('A PoB item has no supported rarity.');
+ if (!rarity) throw Error(t('error.pobRarity'));
  const rare = ['rare','unique'].includes(rarity), base = lines[rare?2:1] || '', name=lines[1]||base;
  const item: Item = {inventory_id:slot,name,base,rarity,mods:[],exact:true,sourceSections:[],sourceText:text.trim()};
  const implicitAt=lines.findIndex(l=>/^Implicits: \d+$/.test(l));
- if(implicitAt<0) throw Error('A PoB item is missing its modifier boundary. Export it again from PoB.');
+ if(implicitAt<0) throw Error(t('error.pobBoundary'));
  const metadata=lines.slice(rare?3:2,implicitAt), get=(key:string)=>metadata.find(l=>l.startsWith(key+': '))?.slice(key.length+2);
  if(get('Item Level'))item.itemLevel=number(get('Item Level')!);
  if(get('Quality'))item.quality=number(get('Quality')!.replace('%',''));
@@ -86,7 +87,7 @@ function parseItem(element: XmlElement, slot: string): Item {
 function parseGem(element: XmlElement): Gem {
  const id=attr(element,'gemId'), known=gemData[id];
  const name=attr(element,'nameSpec') || known?.name;
- if(!name)throw Error('A PoB gem has no readable name.');
+ if(!name)throw Error(t('error.pobGem'));
  return {id:id||name,name,isSupport:known?.support ?? /SupportGem/.test(id),attributes:known?.attributes||[],tags:known?.tags||[],...(number(attr(element,'level'))?{level:number(attr(element,'level'))}:{}),quality:number(attr(element,'quality'))};
 }
 
@@ -99,7 +100,7 @@ function parseSkills(element: XmlElement): Gem[] {
 }
 
 function allocations(spec: XmlElement): Stage['passives'] {
- const ids=(value:string)=>value.split(',').filter(Boolean).map(id=>{if(!/^\d+$/.test(id))throw Error('Invalid passive node in PoB.');return id;});
+ const ids=(value:string)=>value.split(',').filter(Boolean).map(id=>{if(!/^\d+$/.test(id))throw Error(t('error.pobNode'));return id;});
  const one=new Set(ids(attr(first(spec,'WeaponSet1')||spec,'nodes'))), two=new Set(ids(first(spec,'WeaponSet2')?attr(first(spec,'WeaponSet2')!,'nodes'):''));
  // A missing WeaponSet1 means no set-specific nodes, not the entire tree.
  if(!first(spec,'WeaponSet1'))one.clear();
@@ -109,28 +110,28 @@ function allocations(spec: XmlElement): Stage['passives'] {
 
 export interface PobResult { build: Build; itemIds: Map<string,string>; warnings: string[] }
 export function parsePob(xml: string, name = 'PoB character'): PobResult {
- if(new TextEncoder().encode(xml).length>MAX_XML_BYTES)throw Error('Choose PoB XML up to 8 MB.');
- if(/<!\s*(?:DOCTYPE|ENTITY)/i.test(xml))throw Error('PoB XML cannot contain document types or entities.');
+ if(new TextEncoder().encode(xml).length>MAX_XML_BYTES)throw Error(t('error.pobTooBig'));
+ if(/<!\s*(?:DOCTYPE|ENTITY)/i.test(xml))throw Error(t('error.pobEntities'));
  let doc;
  try { doc=new DOMParser({errorHandler:{warning:()=>{throw Error('Malformed XML');},error:()=>{throw Error('Malformed XML');},fatalError:()=>{throw Error('Malformed XML');}}}).parseFromString(xml,'text/xml'); }
- catch { throw Error('That PoB XML is malformed.'); }
+ catch { throw Error(t('error.pobMalformed')); }
  const root=doc.documentElement;
- if(!root || root.nodeName!=='PathOfBuilding2')throw Error('Choose a Path of Building PoE 2 export. PoE 1 builds are not supported.');
- const all=Array.from(root.getElementsByTagName('*')); if(all.length>50000)throw Error('The PoB file contains too many entries.');
+ if(!root || root.nodeName!=='PathOfBuilding2')throw Error(t('error.pobVersion'));
+ const all=Array.from(root.getElementsByTagName('*')); if(all.length>50000)throw Error(t('error.pobEntries'));
  const info=first(root,'Build'), itemRoot=first(root,'Items'), skillsRoot=first(root,'Skills'), treeRoot=first(root,'Tree');
- if(!info||!itemRoot||!skillsRoot||!treeRoot)throw Error('The PoB export is missing equipment, skills or its passive tree.');
+ if(!info||!itemRoot||!skillsRoot||!treeRoot)throw Error(t('error.pobMissing'));
  const warnings=['PoB can include planned equipment and skills. Imported data reflects the export.','Unresolved affix tiers and item properties are left blank.'];
  const items=new Map(children(itemRoot,'Item').map(i=>[attr(i,'id'),i]));
  const itemIds=new Map<string,string>();
  const itemSets=children(itemRoot,'ItemSet'); if(!itemSets.length)itemSets.push(itemRoot);
  const skillSets=children(skillsRoot,'SkillSet'); if(!skillSets.length)skillSets.push(skillsRoot);
- const specs=children(treeRoot,'Spec'); if(!specs.length)throw Error('The PoB export contains no passive tree.');
- if(itemSets.length+skillSets.length+specs.length>101)throw Error('The PoB export contains too many profiles (maximum 100).');
+ const specs=children(treeRoot,'Spec'); if(!specs.length)throw Error(t('error.pobNoTree'));
+ if(itemSets.length+skillSets.length+specs.length>101)throw Error(t('error.pobProfiles'));
  const versions=specs.map(s=>attr(s,'treeVersion').replace('_','.'));
- if(versions.some(v=>!['0.4','0.5'].includes(v)))throw Error('This passive tree version is not bundled. Supported versions: 0.4 and 0.5.');
+ if(versions.some(v=>!['0.4','0.5'].includes(v)))throw Error(t('error.pobTreeVersion'));
  const activeIndex=(list:XmlElement[],id:string,byPosition=false)=>{
   const index=byPosition?number(id,1)-1:list.findIndex(e=>attr(e,'id')===id);
-  if(index<0||index>=list.length)throw Error('A PoB active profile is missing.'); return index;
+  if(index<0||index>=list.length)throw Error(t('error.pobProfile')); return index;
  };
  const ai=itemSets.length===1?0:activeIndex(itemSets,attr(itemRoot,'activeItemSet'));
  const as=skillSets.length===1?0:activeIndex(skillSets,attr(skillsRoot,'activeSkillSet'));
@@ -138,7 +139,7 @@ export function parsePob(xml: string, name = 'PoB character'): PobResult {
  const equipment=itemSets.map(set=>children(set,'Slot').flatMap(slot=>{
   const id=attr(slot,'itemId');if(!id||id==='0')return [];
   const inventory=slotNames[attr(slot,'name')]; if(!inventory){warnings.push(`Not displayed: equipment slot ${attr(slot,'name')}.`);return [];}
-  const element=items.get(id);if(!element)throw Error('An equipped PoB item is missing.');
+  const element=items.get(id);if(!element)throw Error(t('error.pobItem'));
   const item=parseItem(element,inventory);
   const uid=/^Unique ID: (\S+)/m.exec(item.sourceText||'')?.[1];
   if(uid)itemIds.set(inventory+':'+attr(set,'id'),uid);
