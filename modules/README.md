@@ -48,9 +48,9 @@ Need a control or variant the kit doesn't have? Talk it through with the
 maintainer first. Once it's agreed, it goes in `shared/src/components` and gets
 a specimen in the playground.
 
-## Standalone game modules
+## Game modules live outside this repo
 
-A `.standalone` marker keeps a repo module out of the dev host's Official list; install its signed package or add it as a development folder.
+Game-specific modules are never part of this repo or the app: each has its own repo, the dev Tavora loads its local folder, and releases are published from the installed Tavora. This is a locked decision; see "Game modules" in the repo's `CLAUDE.md`. Satisfactory and PoE2 Builds still sit here until they are moved to their own repos; until then their `.standalone` marker keeps them out of the dev host's Official list.
 
 ## Catalog page
 
