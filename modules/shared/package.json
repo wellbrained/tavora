@@ -9,6 +9,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./i18n": "./src/i18n.ts",
     "./theme.css": "./src/theme.css",
     "./components/*": "./src/components/*/index.ts",
     "./tooltip-typography": "./src/components/tooltip/typography.ts",
