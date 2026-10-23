@@ -4,9 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 // A fresh checkout or worktree has no build, and Electron then opens its own
-// "no app found" window instead of Tavora, while the modules in modules/ never
-// show up. CI and `pnpm release` build before the e2e step; this covers running
-// the suite by hand, and does nothing when everything is built.
+// "no app found" window instead of Tavora, while the modules in modules/ and
+// examples/ never show up. CI and `pnpm release` build before the e2e step;
+// this covers running the suite by hand, and does nothing when all is built.
 export default function globalSetup(): void {
   const desktopDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   if (!existsSync(path.join(desktopDir, "out/main/index.cjs"))) {
@@ -17,13 +17,11 @@ export default function globalSetup(): void {
   buildMissingModules(path.resolve(desktopDir, "../.."));
 }
 
-// Builds each module in modules/ whose manifest entry is missing, together with
+// Builds each module in modules/ and examples/ whose manifest entry is missing, with
 // the workspace packages it uses (pnpm's `name...` filter).
 function buildMissingModules(repoDir: string): void {
-  const modulesDir = path.join(repoDir, "modules");
-  const missing = readdirSync(modulesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(modulesDir, entry.name))
+  const missing = ["modules", "examples"]
+    .flatMap((folder) => readdirSync(path.join(repoDir, folder), { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => path.join(repoDir, folder, entry.name)))
     .filter((dir) => existsSync(path.join(dir, "tavora.module.json")) && existsSync(path.join(dir, "package.json")))
     .filter((dir) => {
       const manifest = JSON.parse(readFileSync(path.join(dir, "tavora.module.json"), "utf8")) as { entry: string };
