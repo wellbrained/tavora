@@ -83,10 +83,9 @@ const moduleDirs = !app.isPackaged && process.env.TAVORA_MODULE_DIRS
   : [app.isPackaged ? path.join(process.resourcesPath, "modules") : path.join(repoRoot, "examples")];
 // Official modules (Notes, To-Dos) ship inside a packaged build and are
 // loaded from the repo's modules/ folder in a dev run.
-// A standalone repo module is installed with its publisher, not treated as Official in dev.
 const repoModules=path.join(repoRoot,"modules");
 const devOfficialModuleDirs=app.isPackaged?[]:readdirSync(repoModules,{withFileTypes:true})
-  .filter(entry=>entry.isDirectory()&&existsSync(path.join(repoModules,entry.name,"tavora.module.json"))&&!existsSync(path.join(repoModules,entry.name,".standalone")))
+  .filter(entry=>entry.isDirectory()&&existsSync(path.join(repoModules,entry.name,"tavora.module.json")))
   .map(entry=>path.join(repoModules,entry.name));
 const officialModuleDirs = !app.isPackaged && process.env.TAVORA_OFFICIAL_MODULE_DIRS
   ? dirList(process.env.TAVORA_OFFICIAL_MODULE_DIRS)
