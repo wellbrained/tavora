@@ -4,8 +4,8 @@
 //
 // Reads CommunityResources/Docs (en-US.json, de.json), the Steam app manifest for the build id and
 // Engine/Binaries/Win64/*-Win64-Shipping.version for the game version. The asset exporter
-// (tools/asset-export, .NET 10 with CUE4Parse) reads the icons and the MAM research trees from the
-// IoStore archives; it needs an Oodle core library (oo2core_9_win64.dll) to decompress them.
+// (tools/asset-export, .NET 10 with CUE4Parse) reads the icons, the MAM research trees and the Space
+// Elevator phases from the IoStore archives; it needs an Oodle core library (oo2core_9_win64.dll) to decompress them.
 //
 // Writes src/data/game-data.json and public/icons/<Id>.webp. When the pinned data exists, new or
 // missing items, recipes and buildings stop the run unless --accept is given; nothing is written then.
@@ -17,7 +17,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import type { GameData } from "../src/contracts/data";
-import { compareIds, decodeDocs, DocsError, finish, iconRequests, readDocs, serialize, type ResearchTree } from "./game-docs.ts";
+import { compareIds, decodeDocs, DocsError, finish, iconRequests, readDocs, serialize, type GamePhaseAsset, type ResearchTreeAsset } from "./game-docs.ts";
 import { patchUsmap } from "./usmap.ts";
 
 const STEAM_APP_ID = 526870;
@@ -56,7 +56,7 @@ try {
   const assets = exportAssets(game, work, staged, iconRequests(catalog));
   const icons = new Set(Object.entries(assets.icons).filter(([, error]) => error === "").map(([id]) => id));
   const failed = Object.entries(assets.icons).filter(([, error]) => error !== "");
-  const report = finish(catalog, { build, version, researchTrees: assets.researchTrees, icons });
+  const report = finish(catalog, { build, version, researchTrees: assets.researchTrees, gamePhases: assets.gamePhases, icons });
   const data = report.data;
 
   if (existsSync(dataFile)) {
@@ -108,7 +108,8 @@ function gameVersion(install: string): string {
 
 interface AssetResult {
   icons: Record<string, string>;
-  researchTrees: ResearchTree[];
+  researchTrees: ResearchTreeAsset[];
+  gamePhases: GamePhaseAsset[];
 }
 
 function exportAssets(install: string, work: string, staged: string, icons: { id: string; texture: string }[]): AssetResult {
@@ -142,16 +143,18 @@ function exportAssets(install: string, work: string, staged: string, icons: { id
   if (run.status !== 0) fail(`The asset exporter failed (exit ${run.status}).`);
   const output = JSON.parse(readFileSync(result, "utf8")) as {
     icons: Record<string, string>;
-    researchTrees: { id: string; name: Record<string, string>; schematics: string[] }[];
+    researchTrees: { id: string; name: Record<string, string>; nodes: ResearchTreeAsset["nodes"] }[];
+    gamePhases: { phase: number; name: Record<string, string>; lastTier: number; costs: GamePhaseAsset["costs"] }[];
   };
   return {
     icons: output.icons,
-    researchTrees: output.researchTrees.map((tree) => ({
-      id: tree.id,
-      name: { en: tree.name[CULTURES.en] ?? tree.id, ...(tree.name[CULTURES.de] ? { de: tree.name[CULTURES.de] } : {}) },
-      schematics: tree.schematics,
-    })),
+    researchTrees: output.researchTrees.map((tree) => ({ id: tree.id, name: localized(tree.name, tree.id), nodes: tree.nodes })),
+    gamePhases: output.gamePhases.map((phase) => ({ ...phase, name: localized(phase.name, `Phase ${phase.phase}`) })),
   };
+}
+
+function localized(name: Record<string, string>, fallback: string) {
+  return { en: name[CULTURES.en] ?? fallback, ...(name[CULTURES.de] ? { de: name[CULTURES.de] } : {}) };
 }
 
 function fail(message: string): never {

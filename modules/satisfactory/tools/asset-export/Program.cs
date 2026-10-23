@@ -1,6 +1,7 @@
 // Reads what the Docs files leave out from the game's IoStore files: item and
-// building icons (written as square WebP files) and the MAM research trees with
-// their names in each requested culture.
+// building icons (written as square WebP files), the MAM research trees with
+// their names in each requested culture and their node links, and the Space
+// Elevator phases.
 //
 // dotnet run --project tools/asset-export -- <job.json>
 //
@@ -9,7 +10,9 @@
 //     "iconDir": "<dir>", "iconSize": 128, "icons": [{ "id": "Desc_IronPlate_C", "texture": "/Game/...X.X" }],
 //     "cultures": ["en-US", "de"], "result": "<result.json>" }
 // The result: { "icons": { "<id>": "<error, or empty when written>" },
-//   "researchTrees": [{ "id", "name": { "<culture>": "<text>" }, "schematics": ["Research_..._C"] }] }
+//   "researchTrees": [{ "id", "name": { "<culture>": "<text>" },
+//     "nodes": [{ "schematic": "Research_..._C", "at": { "x", "y" }, "parents": [{ "x", "y" }] }] }],
+//   "gamePhases": [{ "phase": 1, "name": { "<culture>": "<text>" }, "lastTier": 4, "costs": [{ "item": "Desc_..._C", "amount": 50 }] }] }
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -73,19 +76,53 @@ foreach (var path in provider.Files.Keys
         ?? throw new InvalidOperationException($"{path} has no mDisplayName.");
     var name = new JsonObject();
     foreach (var culture in cultures) name[culture] = ResolveText(displayName, stringTables[culture], path);
-    // Each node's data struct names its schematic in a property whose name starts with "Schematic".
-    var schematics = exports
-        .SelectMany(e => e["Properties"]?["mNodeDataStruct"] is JObject node ? node.Properties() : [])
-        .Where(p => p.Name.StartsWith("Schematic", StringComparison.Ordinal))
-        .Select(p => ClassName((string?)p.Value?["ObjectName"]))
-        .OfType<string>()
-        .Distinct()
-        .Order(StringComparer.Ordinal);
+    // Each node's data struct names its schematic, its grid position and the positions of the nodes
+    // that must be researched first, in properties whose names start with "Schematic", "Coordinates"
+    // and "Parents" (the rest of each name is a generated suffix).
+    var nodes = new JsonArray();
+    foreach (var node in exports.Select(e => e["Properties"]?["mNodeDataStruct"]).OfType<JObject>())
+    {
+        var schematic = ClassName((string?)Field(node, "Schematic")?["ObjectName"])
+            ?? throw new InvalidOperationException($"{path}: a node has no schematic.");
+        var parents = Field(node, "Parents") as JArray ?? [];
+        nodes.Add(new JsonObject
+        {
+            ["schematic"] = schematic,
+            ["at"] = Coordinates(Field(node, "Coordinates"), path),
+            ["parents"] = new JsonArray(parents.Select(p => (JsonNode)Coordinates(p, path)).ToArray()),
+        });
+    }
     researchTrees.Add(new JsonObject
     {
         ["id"] = Path.GetFileNameWithoutExtension(path) + "_C",
         ["name"] = name,
-        ["schematics"] = new JsonArray(schematics.Select(s => (JsonNode)s).ToArray()),
+        ["nodes"] = nodes,
+    });
+}
+
+// Space Elevator phases: what each delivery costs and the last milestone tier it opens. The Docs
+// files leave these out.
+var gamePhases = new JsonArray();
+foreach (var path in provider.Files.Keys
+    .Where(k => Regex.IsMatch(k, @"/GamePhases/GP_Project_Assembly_Phase_\d+\.uasset$", RegexOptions.IgnoreCase))
+    .Order(StringComparer.Ordinal))
+{
+    var phase = JArray.FromObject(provider.LoadPackage(path).GetExports())
+        .FirstOrDefault(e => (string?)e["Type"] == "FGGamePhase")?["Properties"]
+        ?? throw new InvalidOperationException($"{path} has no FGGamePhase.");
+    var name = new JsonObject();
+    foreach (var culture in cultures) name[culture] = ResolveText(phase["mDisplayName"]!, stringTables[culture], path);
+    var costs = (phase["mCosts"] as JArray ?? []).Select(cost => (JsonNode)new JsonObject
+    {
+        ["item"] = ClassName((string?)cost["ItemClass"]?["ObjectName"]) ?? throw new InvalidOperationException($"{path}: a cost has no item."),
+        ["amount"] = (int?)cost["Amount"] ?? throw new InvalidOperationException($"{path}: a cost has no amount."),
+    });
+    gamePhases.Add(new JsonObject
+    {
+        ["phase"] = int.Parse(Regex.Match(path, @"Phase_(\d+)\.uasset$", RegexOptions.IgnoreCase).Groups[1].Value),
+        ["name"] = name,
+        ["lastTier"] = (int?)phase["mLastTierOfPhase"] ?? throw new InvalidOperationException($"{path} has no mLastTierOfPhase."),
+        ["costs"] = new JsonArray(costs.ToArray()),
     });
 }
 
@@ -93,9 +130,10 @@ var result = new JsonObject
 {
     ["icons"] = new JsonObject(icons.Select(i => KeyValuePair.Create(i.Key, (JsonNode?)i.Value))),
     ["researchTrees"] = researchTrees,
+    ["gamePhases"] = gamePhases,
 };
 File.WriteAllText(Text("result"), result.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-Console.WriteLine($"Wrote {icons.Count(i => i.Value == "")} of {icons.Count} icons and {researchTrees.Count} research trees.");
+Console.WriteLine($"Wrote {icons.Count(i => i.Value == "")} of {icons.Count} icons, {researchTrees.Count} research trees and {gamePhases.Count} game phases.");
 
 void WriteIcon(string texture, string file)
 {
@@ -137,6 +175,17 @@ string ResolveText(JToken text, Dictionary<string, Dictionary<string, string>> t
     if (table is null || key is null) throw new InvalidOperationException($"{path}: mDisplayName is not a string table entry.");
     if (tables.TryGetValue(table, out var entries) && entries.TryGetValue(key, out var value) && value.Length > 0) return value;
     throw new InvalidOperationException($"{path}: {table}/{key} is missing from the string tables.");
+}
+
+static JToken? Field(JObject node, string prefix) =>
+    node.Properties().FirstOrDefault(p => p.Name.StartsWith(prefix + "_", StringComparison.Ordinal))?.Value;
+
+static JsonObject Coordinates(JToken? at, string path)
+{
+    if (at is not JObject point) throw new InvalidOperationException($"{path}: a node position is missing.");
+    // The archives leave out values equal to their default, so a missing axis is 0.
+    int Axis(string axis) => (int?)Field(point, axis) ?? 0;
+    return new JsonObject { ["x"] = Axis("X"), ["y"] = Axis("Y") };
 }
 
 static string? ClassName(string? objectName) =>

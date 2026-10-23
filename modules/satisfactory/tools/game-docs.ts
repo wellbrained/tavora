@@ -15,8 +15,13 @@ import type {
   ItemForm,
   ItemKind,
   Localized,
+  Milestone,
+  Phase,
+  Progress,
   Recipe,
+  ResearchNode,
   Unlock,
+  Unlocks,
 } from "../src/contracts/data";
 
 export interface DocsClass {
@@ -30,11 +35,24 @@ export interface DocsGroup {
 }
 
 /** A MAM research tree as the asset exporter reads it from the game archives. */
-export interface ResearchTree {
+export interface ResearchTreeAsset {
   id: string;
   name: Localized;
-  /** Schematic class names of the tree's nodes. */
-  schematics: string[];
+  /** The tree's nodes: a schematic at a grid position, and the positions of the nodes it needs first. */
+  nodes: { schematic: string; at: GridPoint; parents: GridPoint[] }[];
+}
+
+export interface GridPoint {
+  x: number;
+  y: number;
+}
+
+/** A Space Elevator phase as the asset exporter reads it from the game archives. */
+export interface GamePhaseAsset {
+  phase: number;
+  name: Localized;
+  lastTier: number;
+  costs: Amount[];
 }
 
 export interface IconRequest {
@@ -220,6 +238,12 @@ const NON_PRODUCTION_PRODUCERS = new Set([
 ]);
 const BUILD_GUN_PRODUCERS = new Set(["BP_BuildGun_C", "FGBuildGun"]);
 
+/** Dependency entries of a schematic. Only purchased-schematic dependencies matter to the module. */
+const DEPENDENCY_CLASSES = new Set(["BP_SchematicPurchasedDependency_C", "BP_GamePhaseReachedDependency_C"]);
+
+/** Workshop producers: their recipes make equipment, which a schematic then unlocks as an item. */
+const WORKSHOP_PRODUCERS = new Set(["BP_WorkshopComponent_C"]);
+
 /** The schematic every new game starts with. */
 const START_SCHEMATIC = "Schematic_StartingRecipes_C";
 
@@ -336,9 +360,17 @@ interface Schematic {
   id: string;
   type: string;
   tier: number;
+  /** The HUB's order within a tier. */
+  order: number;
   name: Localized;
+  /** mCost as the Docs write it; read only where the tracker shows it. */
+  cost: unknown;
   recipes: string[];
   schematics: string[];
+  /** Schematics that must all be bought first. */
+  requires: string[];
+  /** Schematics of which one must be bought first (only seen on shop and customizer entries). */
+  requiresAny: string[];
 }
 
 /** What the Docs alone say. Unlocks wait for the research trees, icons for the exporter. */
@@ -349,6 +381,10 @@ export interface Catalog {
   /** Icon texture per item and building id. */
   textures: Record<string, string>;
   schematics: Record<string, Schematic>;
+  /** Build gun recipe → the building it places. */
+  buildRecipes: Record<string, string>;
+  /** Equipment Workshop recipe → the items it makes. */
+  workshopRecipes: Record<string, string[]>;
 }
 
 export function readDocs(en: DocsGroup[], de: DocsGroup[]): Catalog {
@@ -431,6 +467,8 @@ export function readDocs(en: DocsGroup[], de: DocsGroup[]): Catalog {
   // Recipes
   const recipes: Record<string, Omit<Recipe, "unlockedBy">> = {};
   const buildCosts = new Map<string, string[]>();
+  const buildRecipes: Record<string, string> = {};
+  const workshopRecipes: Record<string, string[]> = {};
   for (const { group, c } of classesOf(RECIPE_CLASS)) {
     checkFields(RECIPE_CLASS, c, RECIPE_FIELDS);
     attempt(c.ClassName, () => {
@@ -451,9 +489,13 @@ export function readDocs(en: DocsGroup[], de: DocsGroup[]): Catalog {
           const product = parseItemAmounts(c.mProduct);
           const building = product.length === 1 && product[0] ? buildingOfDescriptor(product[0].item) : undefined;
           if (building && buildings[building]) {
+            buildRecipes[c.ClassName] = building;
             buildCosts.set(building, [...(buildCosts.get(building) ?? []), c.ClassName]);
             buildings[building].buildCost = amounts("mIngredients");
           }
+        }
+        if (producers.some((p) => WORKSHOP_PRODUCERS.has(p))) {
+          workshopRecipes[c.ClassName] = parseItemAmounts(c.mProduct).map((p) => p.item).filter((item) => items[item]);
         }
         return;
       }
@@ -505,10 +547,26 @@ export function readDocs(en: DocsGroup[], de: DocsGroup[]): Catalog {
         id: c.ClassName,
         type,
         tier: parseNumber(c.mTechTier, "mTechTier"),
+        order: parseNumber(c.mMenuPriority, "mMenuPriority"),
         name: localized(group, c, "mDisplayName"),
+        // Shop and hard drive schematics cost coupons or a hard drive; costs are checked only where the tracker shows them.
+        cost: c.mCost,
         recipes: [],
         schematics: [],
+        requires: [],
+        requiresAny: [],
       };
+      // An empty dependency list is written as an empty string.
+      const dependencies = c.mSchematicDependencies === "" || c.mSchematicDependencies === undefined ? [] : c.mSchematicDependencies;
+      if (!Array.isArray(dependencies)) throw new Error("mSchematicDependencies is not a list.");
+      for (const dependency of dependencies as Record<string, unknown>[]) {
+        const kind = String(dependency.Class);
+        if (!DEPENDENCY_CLASSES.has(kind)) throw new Error(`unknown dependency ${kind}.`);
+        if (kind !== "BP_SchematicPurchasedDependency_C") continue;
+        const listed = parsePathList(dependency.mSchematics).map(classNameOf);
+        if (dependency.mRequireAllSchematicsToBePurchased === "True") schematic.requires.push(...listed);
+        else schematic.requiresAny.push(...listed);
+      }
       for (const unlock of c.mUnlocks as Record<string, unknown>[]) {
         const known = UNLOCK_CLASSES[String(unlock.Class)];
         if (!known) throw new Error(`unknown unlock ${String(unlock.Class)}.`);
@@ -521,7 +579,7 @@ export function readDocs(en: DocsGroup[], de: DocsGroup[]): Catalog {
   if (!schematics[START_SCHEMATIC]) problems.push(`The start schematic ${START_SCHEMATIC} is missing.`);
 
   if (problems.length > 0) throw new DocsError(problems);
-  return { items, buildings, recipes, textures, schematics };
+  return { items, buildings, recipes, textures, schematics, buildRecipes, workshopRecipes };
 }
 
 function readItem(c: DocsClass, kind: ItemKind, name: Localized, description: Localized): Item {
@@ -567,7 +625,8 @@ export function iconRequests(catalog: Catalog): IconRequest[] {
 export interface FinishInput {
   build: number;
   version: string;
-  researchTrees: ResearchTree[];
+  researchTrees: ResearchTreeAsset[];
+  gamePhases: GamePhaseAsset[];
   /** Ids whose icon file was written. */
   icons: ReadonlySet<string>;
 }
@@ -586,9 +645,9 @@ export function finish(
   defaultChoices: Record<string, string> = DEFAULT_RECIPE_CHOICES,
 ): FinishReport {
   const problems: string[] = [];
-  const treeOf = new Map<string, ResearchTree>();
+  const treeOf = new Map<string, ResearchTreeAsset>();
   for (const tree of input.researchTrees) {
-    for (const schematic of tree.schematics) {
+    for (const { schematic } of tree.nodes) {
       if (treeOf.has(schematic)) problems.push(`${schematic} is in two research trees.`);
       treeOf.set(schematic, tree);
     }
@@ -692,6 +751,8 @@ export function finish(
     if (!pinned.has(item)) problems.push(`DEFAULT_RECIPE_CHOICES.${item} is no longer needed or no longer valid.`);
   }
 
+  const progress = readProgress(catalog, input, recipes, problems);
+
   if (problems.length > 0) throw new DocsError(problems);
   return {
     data: {
@@ -703,9 +764,135 @@ export function finish(
       buildings,
       resources,
       defaultRecipe,
+      progress,
     },
     unreachableResearch: [...unreachable].sort(),
   };
+}
+
+/** Hard drives are no item in the Docs; research that takes them says how many apart from its cost. */
+const HARD_DRIVE = "Desc_HardDrive_C";
+
+/** The MAM tree where hard drives are analysed: what it leads to is listed as hard drives, so it is no research tree to track. */
+const SKIPPED_RESEARCH_TREES = new Set(["BPD_ResearchTree_HardDrive_C"]);
+
+/** Schematic types the tracker lists as milestones: the HUB upgrades (tier 0) and the milestones. */
+const MILESTONE_TYPES = new Set(["EST_Tutorial", "EST_Milestone"]);
+
+function readProgress(catalog: Catalog, input: FinishInput, recipes: Record<string, Recipe>, problems: string[]): Progress {
+  const { schematics } = catalog;
+  // What a schematic gives, including the background schematics it grants.
+  const unlocksOf = (id: string): Unlocks => {
+    const found = { recipes: new Set<string>(), buildings: new Set<string>(), items: new Set<string>() };
+    const visit = (current: string, seen: string[]) => {
+      const s = schematics[current];
+      if (!s || seen.includes(current)) return;
+      for (const recipe of s.recipes) {
+        if (recipes[recipe]) found.recipes.add(recipe);
+        const building = catalog.buildRecipes[recipe];
+        if (building) found.buildings.add(building);
+        for (const item of catalog.workshopRecipes[recipe] ?? []) found.items.add(item);
+      }
+      // Background schematics count as part of this one; milestones a schematic merely opens are entries of their own.
+      for (const child of s.schematics) if (schematics[child]?.type === "EST_Custom") visit(child, [...seen, current]);
+    };
+    visit(id, []);
+    return { recipes: [...found.recipes].sort(), buildings: [...found.buildings].sort(), items: [...found.items].sort() };
+  };
+  // A requirement on a background schematic means the milestone or research that grants it.
+  const grantedBy = new Map<string, string[]>();
+  for (const parent of Object.values(schematics)) {
+    for (const child of parent.schematics) grantedBy.set(child, [...(grantedBy.get(child) ?? []), parent.id]);
+  }
+  const known = (owner: string, ids: string[]) => {
+    const resolved = new Set<string>();
+    const resolve = (id: string, seen: string[]) => {
+      const s = schematics[id];
+      if (!s) problems.push(`${owner} requires ${id}, which is not in the Docs.`);
+      else if (s.type === "EST_Custom" && (grantedBy.get(id)?.length ?? 0) > 0 && !seen.includes(id)) {
+        for (const parent of grantedBy.get(id)!) resolve(parent, [...seen, id]);
+      } else resolved.add(id);
+    };
+    for (const id of ids) resolve(id, []);
+    return [...resolved].sort();
+  };
+  const tracked = (s: Schematic) => {
+    if (s.requiresAny.length > 0) problems.push(`${s.id} needs one of several schematics; the tracker only knows "all of".`);
+    return s;
+  };
+  const costOf = (s: Schematic): Amount[] =>
+    parseItemAmounts(s.cost).flatMap(({ item, amount }) => {
+      if (item === HARD_DRIVE) return [];
+      const known = catalog.items[item];
+      if (!known) {
+        problems.push(`${s.id} costs ${item}, which is not in the Docs.`);
+        return [];
+      }
+      return [{ item, amount: known.form !== "solid" ? round(amount / LITRES_PER_CUBIC_METRE) : amount }];
+    });
+
+  const phases: Phase[] = [];
+  for (const asset of [...input.gamePhases].sort((a, b) => a.phase - b.phase)) {
+    for (const cost of asset.costs) if (!catalog.items[cost.item]) problems.push(`Phase ${asset.phase} costs ${cost.item}, which is not in the Docs.`);
+    // Phases after the last delivery cost nothing and open nothing new.
+    if (asset.phase > 0 && asset.costs.length === 0) continue;
+    phases.push({ phase: asset.phase, name: asset.name, cost: asset.costs.map((c) => ({ ...c })), lastTier: asset.lastTier });
+  }
+  phases.forEach((p, index) => {
+    if (p.phase !== index) problems.push(`Space Elevator phases are not numbered 0 to ${phases.length - 1}.`);
+  });
+
+  const milestones: Milestone[] = Object.values(schematics)
+    .filter((s) => MILESTONE_TYPES.has(s.type))
+    .map(tracked)
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      tier: s.tier,
+      cost: costOf(s),
+      unlocks: unlocksOf(s.id),
+      requires: known(s.id, s.requires),
+    }))
+    .sort((a, b) => a.tier - b.tier || schematics[a.id]!.order - schematics[b.id]!.order || compareText(a.id, b.id));
+  const lastTier = phases.at(-1)?.lastTier ?? 0;
+  for (const m of milestones) if (m.tier > lastTier) problems.push(`${m.id} is in tier ${m.tier}, which no phase opens.`);
+
+  const research = input.researchTrees.filter((tree) => !SKIPPED_RESEARCH_TREES.has(tree.id)).map((tree) => {
+    const at = new Map(tree.nodes.map((n) => [`${n.at.x},${n.at.y}`, n.schematic]));
+    const nodes: ResearchNode[] = [];
+    for (const node of [...tree.nodes].sort((a, b) => a.at.y - b.at.y || a.at.x - b.at.x)) {
+      const s = schematics[node.schematic];
+      if (!s) {
+        problems.push(`${tree.id} has ${node.schematic}, which is not in the Docs.`);
+        continue;
+      }
+      // Some nodes still list positions where no node is left; they always have a real parent too.
+      const requires = node.parents.flatMap((parent) => at.get(`${parent.x},${parent.y}`) ?? []);
+      if (node.parents.length > 0 && requires.length === 0) {
+        problems.push(`${node.schematic} in ${tree.id} needs nodes at positions where the tree has none.`);
+      }
+      const hardDrives = parseItemAmounts(s.cost).filter((c) => c.item === HARD_DRIVE).reduce((sum, c) => sum + c.amount, 0);
+      nodes.push({
+        id: s.id,
+        name: s.name,
+        cost: costOf(s),
+        ...(hardDrives > 0 ? { hardDrives } : {}),
+        unlocks: unlocksOf(s.id),
+        requires: [...new Set(requires)].sort(),
+      });
+    }
+    return { id: tree.id, name: tree.name, nodes };
+  });
+
+  const hardDrives = Object.values(schematics)
+    .filter((s) => s.type === "EST_Alternate")
+    .map(tracked)
+    .map((s) => ({ id: s.id, recipes: unlocksOf(s.id).recipes, requires: known(s.id, s.requires) }))
+    // Hard drive choices without a production recipe (inventory slots, equipment) are no alternates the planner knows.
+    .filter((h) => h.recipes.length > 0)
+    .sort((a, b) => compareText(a.id, b.id));
+
+  return { phases, milestones, research, hardDrives };
 }
 
 const unlockLabel = (unlock: Unlock) => ("name" in unlock ? unlock.name.en : "");
