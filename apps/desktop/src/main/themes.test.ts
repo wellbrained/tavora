@@ -16,6 +16,7 @@ import {
   THEME_MANIFEST,
   themeManifest,
   validateTheme,
+  veiled,
 } from "./themes";
 
 const repo = path.resolve(__dirname, "../../../..");
@@ -45,6 +46,14 @@ describe("contrast", () => {
 
   it("finds nothing wrong with the Tavora default", () => {
     expect(contrastProblems({ colors: THEME.tokens, contrast: "normal" })).toEqual([]);
+  });
+});
+
+describe("veiled", () => {
+  it("darkens a colour like a black backdrop of that opacity", () => {
+    expect(veiled("#ffffff", 0.8)).toBe("#333333");
+    expect(veiled("#1a2b3c", 0)).toBe("#1a2b3c");
+    expect(veiled("#1a2b3c", 1)).toBe("#000000");
   });
 });
 

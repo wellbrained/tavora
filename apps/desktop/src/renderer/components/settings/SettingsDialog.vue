@@ -117,7 +117,7 @@ function onSearchKey(event: KeyboardEvent) {
 <template>
   <Dialog v-model:open="settingsOpen">
     <DialogContent
-      class="bg-card flex h-[min(880px,calc(100vh-48px))] w-[min(1240px,calc(100vw-48px))] max-w-none gap-0 overflow-hidden p-0 sm:max-w-none"
+      class="bg-card flex top-[calc(50%+env(titlebar-area-height,0px)/2)] h-[min(880px,calc(100vh-env(titlebar-area-height,0px)-48px))] w-[min(1240px,calc(100vw-48px))] max-w-none gap-0 overflow-hidden p-0 sm:max-w-none"
       data-testid="settings"
       :show-close-button="false"
       :aria-describedby="undefined"

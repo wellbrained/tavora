@@ -143,6 +143,7 @@ import {
   starterTheme,
   THEME_MANIFEST,
   themeManifest,
+  veiled,
   type InstalledTheme,
   type ThemeProblem,
 } from "./themes";
@@ -202,6 +203,8 @@ async function realUserModulesDir(options: HostOptions): Promise<string> {
 
 /** Leaves the workspace header's bottom border visible below the window controls. */
 const TITLE_BAR_HEIGHT = 47;
+/** How dark the kit's dialog backdrop is (bg-black/80 in DialogOverlay). */
+const DIALOG_BACKDROP_OPACITY = 0.8;
 
 export interface HostOptions {
   userData: string;
@@ -349,6 +352,8 @@ export class Host {
   private overlay = false;
   /** Counts overlay changes, so a slow freeze does not hide panels after the overlay closed. */
   private overlayChanges = 0;
+  /** True while a dialog backdrop dims the host page, so the window buttons are dimmed too. */
+  private dimmed = false;
   /** True while the window is minimized or hidden. */
   private windowHidden = false;
   /**
@@ -1218,8 +1223,20 @@ export class Host {
     return { official: options.officialThemeDirs, local: [path.join(options.userData, "themes"), ...(options.themeDirs ?? [])] };
   }
 
+  /** The window buttons, in the theme's colours; under a dialog backdrop dimmed like the page around them. */
   private titleBarOverlay() {
-    return { color: this.currentTheme.colors.background, symbolColor: this.currentTheme.colors.text, height: TITLE_BAR_HEIGHT };
+    const { background, text } = this.currentTheme.colors;
+    const veil = this.dimmed ? DIALOG_BACKDROP_OPACITY : 0;
+    return { color: veiled(background, veil), symbolColor: veiled(text, veil), height: TITLE_BAR_HEIGHT };
+  }
+
+  private applyTitleBarOverlay(): void {
+    if (this.window.isDestroyed()) return;
+    try {
+      this.window.setTitleBarOverlay(this.titleBarOverlay());
+    } catch {
+      // Platforms without a window controls overlay have nothing to recolour.
+    }
   }
 
   /** The system's light or dark setting. */
@@ -1250,11 +1267,7 @@ export class Host {
     this.currentTheme = next;
     this.syncNativeTheme();
     this.window.setBackgroundColor(next.colors.background);
-    try {
-      this.window.setTitleBarOverlay(this.titleBarOverlay());
-    } catch {
-      // Platforms without a window controls overlay have nothing to recolour.
-    }
+    this.applyTitleBarOverlay();
     for (const view of this.views.values()) view.applyTheme(next);
   }
 
@@ -1434,6 +1447,12 @@ export class Host {
     });
     ipcMain.on("host:overlay", (event, open: unknown) => {
       if (fromHost(event) && typeof open === "boolean") void this.setOverlay(open);
+    });
+    ipcMain.on("host:dimmed", (event, dimmed: unknown) => {
+      if (fromHost(event) && typeof dimmed === "boolean" && dimmed !== this.dimmed) {
+        this.dimmed = dimmed;
+        this.applyTitleBarOverlay();
+      }
     });
     ipcMain.on("host:module-menu-answer", (event, answer: unknown) => {
       if (fromHost(event)) this.answerModuleMenu(answer);
