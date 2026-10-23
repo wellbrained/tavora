@@ -108,6 +108,16 @@ function allocations(spec: XmlElement): Stage['passives'] {
  return [...all].flatMap(id=>one.has(id)&&two.has(id)?[{id,weapon:1},{id,weapon:2}]:[{id,weapon:one.has(id)?1:two.has(id)?2:0}]);
 }
 
+/** The jewels a tree spec socketed. A socket naming a missing or unreadable item is skipped, so the rest still loads. */
+function socketedJewels(spec: XmlElement, items: Map<string,XmlElement>): Item[] {
+ const root=first(spec,'Sockets');
+ return (root?children(root,'Socket'):[]).slice(0,100).flatMap(socket=>{
+  const node=attr(socket,'nodeId'),element=items.get(attr(socket,'itemId'));
+  if(!/^\d+$/.test(node)||!element)return [];
+  try { return [{...parseItem(element,'Jewel'),node}]; } catch { return []; }
+ }).map((jewel,i)=>({...jewel,slot_x:i}));
+}
+
 export interface PobResult { build: Build; itemIds: Map<string,string>; warnings: string[] }
 export function parsePob(xml: string, name = 'PoB character'): PobResult {
  if(new TextEncoder().encode(xml).length>MAX_XML_BYTES)throw Error(t('error.pobTooBig'));
@@ -145,15 +155,13 @@ export function parsePob(xml: string, name = 'PoB character'): PobResult {
   if(uid)itemIds.set(inventory+':'+attr(set,'id'),uid);
   return [item];
  }));
- const skills=skillSets.map(parseSkills), passives=specs.map(allocations);
+ const skills=skillSets.map(parseSkills), passives=specs.map(allocations), jewels=specs.map(spec=>socketedJewels(spec,items));
  const ascendancies=specs.map((s,i)=>(lookup.ascendancies as Record<string,Record<string,string>>)[versions[i]!]![attr(s,'ascendancyInternalId')]||attr(info,'ascendClassName')||attr(info,'className'));
- const make=(label:string,i=ai,s=as,t=at,kind:NonNullable<Stage['characterProfile']>='active'):Stage=>({name:label,label,author:'',items:equipment[i]!,skills:skills[s]!,passives:passives[t]!,ascendancy:ascendancies[t]!,treeVersion:versions[t]!,characterProfile:kind,weaponSet:attr(itemSets[i]!,'useSecondWeaponSet')==='true'?2:1});
+ const make=(label:string,i=ai,s=as,t=at,kind:NonNullable<Stage['characterProfile']>='active'):Stage=>({name:label,label,author:'',items:equipment[i]!,skills:skills[s]!,passives:passives[t]!,ascendancy:ascendancies[t]!,treeVersion:versions[t]!,characterProfile:kind,weaponSet:attr(itemSets[i]!,'useSecondWeaponSet')==='true'?2:1,...(jewels[t]!.length?{jewels:jewels[t]}:{})});
  const stages=[make('Active setup')];
  itemSets.forEach((e,i)=>{if(i!==ai)stages.push(make(attr(e,'title')||`Equipment ${i+1}`,i,as,at,'gear'));});
  skillSets.forEach((e,i)=>{if(i!==as)stages.push(make(attr(e,'title')||`Skills ${i+1}`,ai,i,at,'skills'));});
  specs.forEach((e,i)=>{if(i!==at)stages.push(make(attr(e,'title')||`Tree ${i+1}`,ai,as,i,'tree'));});
- // Jewel sockets are retained in the source XML but not invented as equipment slots.
- if(specs.some(s=>first(s,'Sockets')&&children(first(s,'Sockets')!,'Socket').length))warnings.push('Socketed tree jewels are retained in the source export; jewel tooltips are not supported yet.');
  const character={name:name.trim()||'PoB character',class:attr(info,'className'),level:number(attr(info,'level')),source:'PoB' as const,importedAt:new Date().toISOString()};
  const build:Build={id:'',fileId:crypto.randomUUID(),title:character.name+' · PoB',shortTitle:character.name,source:'PoB',version:'',treeVersion:versions[at]!,ascendancy:ascendancies[at]!,guideUrl:'',guideText:null,stages,defaultStage:0,character,importNotes:[...new Set(warnings)],characterExport:xml};
  return {build:validate(portable(build)),itemIds,warnings:[...new Set(warnings)]};

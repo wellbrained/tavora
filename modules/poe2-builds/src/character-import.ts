@@ -50,10 +50,12 @@ export async function importNinja(input:string, network:Pick<TavoraSDK['network'
  if(data.name!==address.name||data.account!==address.account||typeof data.pathOfBuildingExport!=='string')throw Error(t('error.ninjaMismatch'));
  const xml=await decodePob(data.pathOfBuildingExport), parsed=parsePob(xml,address.name), build=parsed.build;
  const sourceItems=new Map([...array(data.items),...array(data.flasks),...array(data.jewels)].filter(object).map(i=>i.itemData).filter(object).map(i=>[string(i.id),i]));
- for(const stage of build.stages) stage.items=stage.items.map(item=>{
+ const exact=(item:Item)=>{
   const uid=/^Unique ID: (\S+)/m.exec(item.sourceText||'')?.[1], original=uid?sourceItems.get(uid):undefined;
   return original?ninjaItem(original,item):item;
- });
+ };
+ // The PoB export says which socket holds which jewel; poe.ninja's own copy of the jewel has the exact item.
+ for(const stage of build.stages){stage.items=stage.items.map(exact);if(stage.jewels)stage.jewels=stage.jewels.map(exact);}
  const character={name:address.name,class:string(data.baseClass)||build.character!.class,level:typeof data.level==='number'?data.level:build.character!.level,source:'poe.ninja' as const,importedAt:new Date().toISOString(),url:address.url,account:address.account,league:string(data.league)||address.league};
  build.character=character;build.source='poe.ninja';build.title=address.name+' · poe.ninja';build.shortTitle=address.name;build.guideUrl=address.url;
  build.questStats=array(data.questStats,100).filter((v):v is string=>typeof v==='string').map(cleanGameText);

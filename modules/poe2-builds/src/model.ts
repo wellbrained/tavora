@@ -41,6 +41,10 @@ export interface Item {
     level_interval?: number[];
     quality?: number;
     sourceStats?: Record<string, number | string | boolean>;
+    /** A jewel's passive tree socket. */
+    node?: string;
+    /** The guide gives none or only some of the item's mods. */
+    modsMissing?: boolean;
 }
 export interface Stage {
     /** Which panel lists this variant; unset or active means all. Guides use tree and skills when they don't pair a tree with a gem setup. */
@@ -58,6 +62,8 @@ export interface Stage {
         id: string;
         weapon: number;
     }[];
+    /** Jewels in this variant's tree sockets, numbered by slot_x. */
+    jewels?: Item[];
     link?: string;
 }
 export interface GuideSection {
@@ -127,7 +133,7 @@ export interface Portable {
 export const MAX_FILE_BYTES = 24 * 1024 * 1024;
 // Item classes such as Helmet or Flask are game names and stay English; where a slot sits is ours to translate.
 const slotKeys: Record<string, Key> = { Weapon1: 'slot.mainWeapon', Weapon2: 'slot.weaponSwap', Offhand1: 'slot.offhandQuiver', Offhand2: 'slot.swapOffhand', Ring1: 'slot.leftRing', Ring2: 'slot.rightRing' };
-const slotClasses: Record<string, string> = { Helm1: 'Helmet', BodyArmour1: 'Body armour', Gloves1: 'Gloves', Boots1: 'Boots', Amulet1: 'Amulet', Belt1: 'Belt', Flask1: 'Flask', Flask2: 'Flask', Charm1: 'Charm', Charm2: 'Charm', Charm3: 'Charm' };
+const slotClasses: Record<string, string> = { Helm1: 'Helmet', BodyArmour1: 'Body armour', Gloves1: 'Gloves', Boots1: 'Boots', Amulet1: 'Amulet', Belt1: 'Belt', Flask1: 'Flask', Flask2: 'Flask', Charm1: 'Charm', Charm2: 'Charm', Charm3: 'Charm', Jewel: 'Jewel' };
 /** What a slot is called, or undefined for an unknown slot. */
 export function slotName(id: string): string | undefined { const key = Object.hasOwn(slotKeys, id) ? slotKeys[id] : undefined; return key ? t(key) : Object.hasOwn(slotClasses, id) ? slotClasses[id] : undefined; }
 export function portable(build: Build): Portable { return { format: 'tavora.build', formatVersion: 1, buildId: build.fileId, savedAt: new Date().toISOString(), build, guideText: build.guideText }; }

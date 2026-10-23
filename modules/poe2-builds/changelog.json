@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.1.0-alpha.27",
+    "date": "2026-10-23",
+    "notes": [
+      "Jewels in your passive tree now show in Tree: hover a socket for the jewel, click to pin it.",
+      "Gear lists them under Jewels, for the tree of the variant you're looking at.",
+      "Characters bring their exact jewels. Guides give only some mods, so you see PoB's ranges and what the guide leaves out."
+    ]
+  },
+  {
     "version": "0.1.0-alpha.25",
     "date": "2026-10-23",
     "notes": [

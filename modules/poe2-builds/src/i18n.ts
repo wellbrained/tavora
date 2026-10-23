@@ -15,6 +15,7 @@ const notes: [RegExp, (m: RegExpExecArray) => string][] = [
  [/^(.+) adapter (\S+) · patch (.+)$/, m => t('note.importer', { source: m[1]!, version: m[2]!, patches: m[3]! })],
  [/^Attribute picks on (\d+) passive nodes? are saved but not shown yet\.$/, m => plural('note.attributes', Number(m[1]))],
  [/^The guide doesn't say which attribute to take on (\d+) of them\.$/, m => t('note.openAttributes', { count: m[1]! })],
+ // Builds saved before jewels were shown still carry this note and pobJewels.
  [/^Jewels in (\d+) tree sockets? are saved but not shown yet\.$/, m => plural('note.jewels', Number(m[1]))],
  [/^(\d+) soul cores and runes are saved but not shown yet\.$/, m => t('note.cores', { count: m[1]! })],
  [/^Gem setups from the patch (.+) planner are shown as the guide lists them\.$/, m => t('note.olderGems', { patches: m[1]! })],

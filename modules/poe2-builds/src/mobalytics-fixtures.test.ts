@@ -39,7 +39,8 @@ describe.each(guides)('%s',(slug,count,labels)=>{
 it('names what the guide leaves open instead of guessing',()=>{
  const notes=parse('ice-shot-deadeye').importNotes!.join('\n');
  expect(notes).toMatch(/Attribute picks on \d+ passive nodes are saved but not shown yet\./);
- expect(notes).toMatch(/Jewels in \d+ tree sockets are saved but not shown yet\./);
+ // Jewels are shown now, so the note that said they weren't is gone.
+ expect(notes).not.toMatch(/Jewels in/);
  expect(parse('martial-artist-league-starter-build').importNotes!.join('\n')).toMatch(/\d+ soul cores and runes are saved/);
  expect(parse('ignite-whirling-slash-gemling').importNotes!.join('\n')).not.toMatch(/soul cores/);
 });

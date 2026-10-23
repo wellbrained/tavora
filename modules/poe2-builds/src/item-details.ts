@@ -39,7 +39,7 @@ export function itemDetails(item:Item,notes=''):string{
  rows.sort((a,b)=>{const order=rank(a)-rank(b);if(order)return order;const x=affixInfo(item,a.text,a.kind),y=affixInfo(item,b.text,b.kind);return (first.get(x?.instanceId||x?.id||'')??positions.get(a)!)-(first.get(y?.instanceId||y?.id||'')??positions.get(b)!);});
  const implicit=sections.filter(s=>s.kind==='implicitMods').flatMap(s=>s.mods),runes=sections.filter(s=>socketed.includes(s.kind)).flatMap(s=>s.mods);
  const mods=(lines:{text:string;kind:string}[],heading='')=>lines.length?`<section class="item-mod-section">${heading?`<div class="item-mod-label">${heading}</div>`:''}<ul class="mods stat-list">${lines.map(r=>row(item,r.text,r.kind)).join('')}</ul></section>`:'';
- return `<div class="gear-item-body" data-rarity="${rarity}"><div class="item-art-column"><div class="gear-icon ${image.actual?'item-art':'slot-art'}"><img src="${image.src}" alt="" loading="lazy"></div>${item.requirements?.length?`<div class="item-requirements"><span class="requirements-label">${esc(t('gear.requires'))}</span>${item.requirements.map(r=>`<span class="requirement-row"><span>${esc(cleanStat(r.name))}</span><b>${esc(r.values[0]?.[0]||'')}</b></span>`).join('')}</div>`:''}</div><div class="gear-details"><div class="item-name-row"><h2 class="gear-name rarity-${rarity}">${esc(item.name)}</h2>${item.itemLevel?`<span class="item-badge" title="${esc(t('gear.itemLevel',{level:item.itemLevel}))}">ilvl ${item.itemLevel}</span>`:''}${quality.map(p=>`<span class="item-badge">${property(p)}</span>`).join('')}${!quality.length&&item.quality?`<span class="item-badge">Quality: +${item.quality}%</span>`:''}${rarity!=='unknown'?`<span class="rarity-badge rarity-${rarity} sr-only">${rarity[0]!.toUpperCase()+rarity.slice(1)}</span>`:''}</div>${item.base&&item.base!==item.name?`<div class="unique-base">${esc(item.base)}</div>`:''}<div class="item-properties">${(item.properties||[]).filter(p=>p.values.length&&!/^Quality/.test(cleanStat(p.name))).map(p=>`<div>${property(p)}</div>`).join('')}</div>${item.grantedSkills?.length?`<div class="item-granted">${item.grantedSkills.map(property).join('<br>')}</div>`:''}${mods(implicit.map(text=>({text,kind:'implicitMods'})),esc(t('gear.implicit')))}${mods(rows)}${mods(runes.map(text=>({text,kind:'runeMods'})),esc(t('gear.socketed')))}${item.corrupted?'<div class="item-corrupted">Corrupted</div>':''}${item.dps?`<div class="item-dps">DPS <b>${item.dps}</b></div>`:''}${item.reference?`<div class="reference-label">${esc(t('gear.reference'))}</div>`:''}${notes}</div></div>`;
+ return `<div class="gear-item-body" data-rarity="${rarity}"><div class="item-art-column"><div class="gear-icon ${image.actual?'item-art':'slot-art'}"><img src="${image.src}" alt="" loading="lazy"></div>${item.requirements?.length?`<div class="item-requirements"><span class="requirements-label">${esc(t('gear.requires'))}</span>${item.requirements.map(r=>`<span class="requirement-row"><span>${esc(cleanStat(r.name))}</span><b>${esc(r.values[0]?.[0]||'')}</b></span>`).join('')}</div>`:''}</div><div class="gear-details"><div class="item-name-row"><h2 class="gear-name rarity-${rarity}">${esc(item.name)}</h2>${item.itemLevel?`<span class="item-badge" title="${esc(t('gear.itemLevel',{level:item.itemLevel}))}">ilvl ${item.itemLevel}</span>`:''}${quality.map(p=>`<span class="item-badge">${property(p)}</span>`).join('')}${!quality.length&&item.quality?`<span class="item-badge">Quality: +${item.quality}%</span>`:''}${rarity!=='unknown'?`<span class="rarity-badge rarity-${rarity} sr-only">${rarity[0]!.toUpperCase()+rarity.slice(1)}</span>`:''}</div>${item.base&&item.base!==item.name?`<div class="unique-base">${esc(item.base)}</div>`:''}<div class="item-properties">${(item.properties||[]).filter(p=>p.values.length&&!/^Quality/.test(cleanStat(p.name))).map(p=>`<div>${property(p)}</div>`).join('')}</div>${item.grantedSkills?.length?`<div class="item-granted">${item.grantedSkills.map(property).join('<br>')}</div>`:''}${mods(implicit.map(text=>({text,kind:'implicitMods'})),esc(t('gear.implicit')))}${mods(rows)}${mods(runes.map(text=>({text,kind:'runeMods'})),esc(t('gear.socketed')))}${item.corrupted?'<div class="item-corrupted">Corrupted</div>':''}${item.dps?`<div class="item-dps">DPS <b>${item.dps}</b></div>`:''}${missing(item)?`<div class="reference-label">${esc(missing(item))}</div>`:''}${item.reference?`<div class="reference-label">${esc(t('gear.reference'))}</div>`:''}${notes}</div></div>`;
 }
 export function equipmentOrder(item:Item):number{
  const id=item.inventory_id,n=Number(id.slice(-1))||1;
@@ -51,6 +51,9 @@ export function equipmentOrder(item:Item):number{
  if(/^Flask[12]$/.test(id))return 15+(id==='Flask1'?(item.slot_x||0):1);
  return 99;
 }
+
+/** Says the guide left mods out, for a guide jewel. */
+function missing(item:Item){return item.modsMissing?t(item.mods.length?'gear.otherModsMissing':'gear.modsMissing'):'';}
 
 /** Portable structured content for the host-owned overlay; the host never receives markup. */
 export function itemTooltipContent(item:Item,notes?:string):TooltipContent{
@@ -76,8 +79,10 @@ export function itemTooltipContent(item:Item,notes?:string):TooltipContent{
  const add=(lines:{text:string;kind:string}[],title?:string)=>{if(lines.length)content.sections!.push({...(title?{title}:{}),rows:lines.map(r=>row(r.text,r.kind))});};
  add(sections.filter(s=>s.kind==='implicitMods').flatMap(s=>s.mods.map(text=>({text,kind:s.kind}))),t('gear.implicit'));add(rows);
  add(sections.filter(s=>socketed.includes(s.kind)).flatMap(s=>s.mods.map(text=>({text,kind:s.kind}))),t('gear.socketed'));
+ if(missing(item))add([{text:missing(item),kind:'info'}]);
  if(item.corrupted)add([{text:'Corrupted',kind:'info'}]);
  if(item.dps)add([{text:'DPS: '+item.dps,kind:'info'}]);
+ if(item.reference)add([{text:t('gear.reference'),kind:'info'}]);
  if(notes?.trim())add([{text:notes.trim(),kind:'notes'}],t('notes.title'));
  return content;
 }

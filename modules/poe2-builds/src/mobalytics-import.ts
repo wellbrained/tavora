@@ -5,6 +5,7 @@ import uniqueReferences from './unique-references.json';
 import { portable, type Build, type Gem, type Guide, type Item, type Stage } from './model';
 import { validate } from './validate.js';
 import { cleanGameText } from './pob-import';
+import { guideJewels } from './guide-jewels';
 import { t } from './i18n';
 
 type Obj = Record<string, unknown>;
@@ -120,7 +121,8 @@ export function parseMobalytics(document:Obj,input:string):Build {
   }
   const skills=items(obj(variant.skillGems).gems).map(group=>({...gem(obj(group.activeSkill)),supports:items(group.subSkills).map(s=>gem(s,s.gemType==='SUPPORT'))}));
   const ascendancy=nodes.find(n=>n.ascendancy&&passives.some(p=>p.id===n.id))?.ascendancy||'';
-  return {name:label,label,author:'',link:address.canonical,ascendancy,items:equipped,skills,passives};
+  const jewels=guideJewels(tree.jewels);
+  return {name:label,label,author:'',link:address.canonical,ascendancy,items:equipped,skills,passives,...(jewels.length?{jewels}:{})};
  });
  const section=(node:Obj,variantIndex?:number)=>{
   const info=obj(node.data),label=stages[variantIndex??-1]?.label;
@@ -164,11 +166,10 @@ function keptNotes(variants:Obj[]):string[] {
  const tree=variants.map(v=>obj(v.passiveTree)),gear=variants.map(v=>obj(v.equipment));
  const unique=(list:Obj[],key:string)=>new Set(list.map(e=>str(e[key])).filter(Boolean)).size;
  const attributes=tree.flatMap(t=>items(t.attributeNodes)),open=unique(attributes.filter(a=>a.attribute==='any'),'nodeSlug');
- const jewels=unique(tree.flatMap(t=>items(t.jewels)),'nodeSlug'),cores=unique(gear.flatMap(g=>items(g.chakras)),'slug');
+ const cores=unique(gear.flatMap(g=>items(g.chakras)),'slug');
  return [
   ...(attributes.length?[`Attribute picks on ${unique(attributes,'nodeSlug')} passive nodes are saved but not shown yet.`]:[]),
   ...(open?[`The guide doesn't say which attribute to take on ${open} of them.`]:[]),
-  ...(jewels?[`Jewels in ${jewels} tree sockets are saved but not shown yet.`]:[]),
   ...(cores?[`${cores} soul cores and runes are saved but not shown yet.`]:[]),
  ];
 }

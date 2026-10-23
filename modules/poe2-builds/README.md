@@ -51,14 +51,14 @@ An optional planner ZIP, .build, PoB XML or Tavora file provides a fallback when
 the page is unavailable. Attachments without guide text cannot recreate that text.
 ZIP imports never extract files; compressed size, expansion, entry count and CRC
 are checked. Original text, variant association, Quest Rewards and a public-only
-planner snapshot are saved for offline use. Unresolved affix tiers, socketed
-augment effects and tree jewels remain in source data and are not guessed.
+planner snapshot are saved for offline use. Unresolved affix tiers and socketed
+augment effects remain in source data and are not guessed.
 Updating matches variants by the guide's own variant ID, then by exact name, never
 by position. The preview lists new, changed and removed variants; removing needs
 **Save and remove**. The variant you had open stays open when the guide still has it.
 The preview names the adapter version and the game patch it supports (Mobalytics
 adapter 2, patch 0.5), and counts what the guide keeps but Tavora doesn't show yet,
-such as attribute picks, jewels and soul cores, or what the guide leaves open.
+such as attribute picks and soul cores, or what the guide leaves open.
 
 Tests run against eight public Mobalytics guides in `test/fixtures/mobalytics`,
 made with `tools/mobalytics-fixture.mjs`: real structure and game data, but the
@@ -117,9 +117,8 @@ types/entities are refused. Importing runs locally without AI or a Python helper
 poe.ninja can lag behind the game. Exact item properties, requirements, rarity,
 modifier sections/IDs and quest bonuses are retained where provided. PoB may
 contain planned gear; it is not proof of current in-game equipment. Missing
-properties/affix tiers are not guessed. Tree jewels remain in the saved source
-XML; jewel tooltips and full PoB calculation/configuration rendering are not yet
-available. Artwork uses the bundled catalogue with existing slot placeholders.
+properties/affix tiers are not guessed. Full PoB calculation/configuration
+rendering is not yet available. Artwork uses the bundled catalogue with existing slot placeholders.
 PoB source XML and additive character metadata survive portable-v1 validation.
 
 Files up to 24 MB are validated before saving. Large builds use revision-checked
@@ -266,3 +265,22 @@ Details prefer the pointer's right side, then left, within the app window. Click
 pins one item until Escape, close or another pin; hovering cannot replace it.
 Changing builds, hiding/closing Gear, changing games or leaving Tavora dismisses it.
 Underlying panels remain live. Requires Tavora 0.18.18 and SDK 0.2.8.
+
+### Tree jewels (alpha 27)
+
+A passive socket holding a jewel draws the jewel's bundled art. Hovering it opens the
+same host item tooltip as Gear; a click pins it, Escape or a click elsewhere closes it.
+Gear lists the jewels under **Jewels** after the equipment, never on the doll, for the
+tree that belongs to the variant shown (a character's active tree).
+
+Jewels belong to a tree: `stage.jewels` holds items with `inventory_id: 'Jewel'`,
+`node` (the socket's passive ID) and `slot_x` (their order). PoB reads
+`<Sockets><Socket nodeId itemId>` per tree spec; poe.ninja swaps in its own copy of
+each jewel by Unique ID, like equipment. Mobalytics gives `passiveTree.jewels` per
+variant with slugs but no rolls: rare mods resolve their game mod IDs through
+`src/mod-texts.json` (`node tools/mod-texts.mjs <PoB folder>`, from PoB's ModJewel and
+ModItem) as labelled PoB ranges; uniques use `unique-references.json`. Uniques whose
+mods PoB generates from a pool (Heart of the Well, Against the Darkness) have no
+reference. What doesn't resolve is marked `modsMissing` and shown as "The guide
+doesn't give its mods". Radius and timeless effects on nearby nodes are not shown.
+Files without jewels load as before.

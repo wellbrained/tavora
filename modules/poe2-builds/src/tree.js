@@ -1,12 +1,14 @@
 import { treeArtwork } from './tree-art';
+import { itemImage } from './item-art';
+import { itemTooltipContent } from './item-details';
 import { t } from './i18n';
 
 export function createTree(canvas, context, options = {}) {
     const { state, nodesFor, selectedStage, selectedBuild, ascendancyName, esc } = context;
     class PassiveTree {
-        constructor(canvas, options = {}) { this.ascendancy = !!options.ascendancy; this.compact = !!options.compact; this.tooltip = canvas.closest('.tree-body').querySelector('.node-tooltip'); this.canvas = canvas; this.ctx = canvas.getContext('2d'); const style = getComputedStyle(canvas); this.palette = { 1: style.getPropertyValue('--weapon-set-1').trim(), 2: style.getPropertyValue('--weapon-set-2').trim(), shared: style.getPropertyValue('--passive-shared').trim() }; this.nodes = nodesFor(); this.byId = new Map(this.nodes.map(n => [n.id, n])); this.atlas = new Image(); this.atlas.src = new URL('assets/passives.webp', document.baseURI).href; this.atlas.onload = () => this.draw(); this.selected = new Map(selectedStage('tree').passives.map(p => [p.id, p.weapon])); this.previous = new Set((selectedBuild('tree').stages[state.tree - 1]?.passives || []).map(p => p.id)); this.observer = new ResizeObserver(() => { this.resize(); this.fit(true); this.initial = true; }); this.observer.observe(canvas.parentElement); this.artwork = treeArtwork(selectedBuild().treeVersion, ascendancyName(), this.ascendancy); this.illustration = this.artwork ? this.loadImage('assets/classes/' + this.artwork.file) : null; this.frames = {}; for (const kind of ['Small', 'Notable', 'Keystone']) for (const status of ['Normal', 'Active']) this.frames[kind + status] = this.loadImage(`assets/frames/${kind}-${status}.webp`); this.bind(); }
+        constructor(canvas, options = {}) { this.ascendancy = !!options.ascendancy; this.compact = !!options.compact; this.tooltip = canvas.closest('.tree-body').querySelector('.node-tooltip'); this.canvas = canvas; this.ctx = canvas.getContext('2d'); const style = getComputedStyle(canvas); this.palette = { 1: style.getPropertyValue('--weapon-set-1').trim(), 2: style.getPropertyValue('--weapon-set-2').trim(), shared: style.getPropertyValue('--passive-shared').trim() }; this.nodes = nodesFor(); this.byId = new Map(this.nodes.map(n => [n.id, n])); this.atlas = new Image(); this.atlas.src = new URL('assets/passives.webp', document.baseURI).href; this.atlas.onload = () => this.draw(); this.selected = new Map(selectedStage('tree').passives.map(p => [p.id, p.weapon])); this.previous = new Set((selectedBuild('tree').stages[state.tree - 1]?.passives || []).map(p => p.id)); this.observer = new ResizeObserver(() => { this.resize(); this.fit(true); this.initial = true; }); this.observer.observe(canvas.parentElement); this.artwork = treeArtwork(selectedBuild().treeVersion, ascendancyName(), this.ascendancy); this.illustration = this.artwork ? this.loadImage('assets/classes/' + this.artwork.file) : null; this.jewels = new Map((selectedStage('tree').jewels || []).filter(j => j.node).map(j => [j.node, j])); this.jewelArt = new Map(); for (const jewel of this.jewels.values()) { const image = itemImage(jewel); if (image.actual && !this.jewelArt.has(image.src)) this.jewelArt.set(image.src, this.loadImage(image.src)); } this.remote = null; this.serial = 0; this.instance = crypto.randomUUID(); this.offClose = context.tooltip?.onClose(({ id }) => { if (this.remote?.id === id) this.remote = null; }); this.escape = e => { if (e.key === 'Escape') this.closeJewel(); }; document.addEventListener('keydown', this.escape); this.frames = {}; for (const kind of ['Small', 'Notable', 'Keystone']) for (const status of ['Normal', 'Active']) this.frames[kind + status] = this.loadImage(`assets/frames/${kind}-${status}.webp`); this.bind(); }
         loadImage(path) { const img = new Image(); img.onload = () => this.draw(); img.src = new URL(path, document.baseURI).href; return img; }
-        destroy() { this.observer.disconnect(); this.atlas.onload = null; if (this.illustration) this.illustration.onload = null; for (const image of Object.values(this.frames)) image.onload = null; }
+        destroy() { this.closeJewel(); this.offClose?.(); document.removeEventListener('keydown', this.escape); for (const image of this.jewelArt.values()) image.onload = null; this.observer.disconnect(); this.atlas.onload = null; if (this.illustration) this.illustration.onload = null; for (const image of Object.values(this.frames)) image.onload = null; }
         visibleNodes() { return this.nodes.filter(n => this.ascendancy ? n.ascendancy === ascendancyName() : !n.ascendancy); }
         eligible(n) { return this.selected.has(n.id) && (state.weapon === 'all' || !this.selected.get(n.id) || String(this.selected.get(n.id)) === state.weapon); }
         resize() { const r = this.canvas.getBoundingClientRect(); this.width = r.width; this.height = r.height; const dpr = devicePixelRatio || 1; this.canvas.width = Math.round(r.width * dpr); this.canvas.height = Math.round(r.height * dpr); this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
@@ -71,13 +73,20 @@ export function createTree(canvas, context, options = {}) {
                 if (p.x < -30 || p.y < -30 || p.x > this.width + 30 || p.y > this.height + 30)
                     continue;
                 const active = this.eligible(n), match = search && n.name.toLowerCase().includes(search), isNew = active && !this.previous.has(n.id);
-                const r = Math.max(active ? (n.notable ? 4 : 2.8) : .8, Math.min(n.keystone ? 24 : n.notable ? 19 : 12, (n.keystone ? 72 : n.notable ? 57 : 32) * this.scale));
+                const jewel = this.jewels.get(n.id), art = jewel && this.jewelArt.get(itemImage(jewel).src);
+                // A socket holding a jewel is drawn like a notable, so the jewel stays visible when zoomed out.
+                const r = jewel ? Math.max(5, Math.min(19, 57 * this.scale)) : Math.max(active ? (n.notable ? 4 : 2.8) : .8, Math.min(n.keystone ? 24 : n.notable ? 19 : 12, (n.keystone ? 72 : n.notable ? 57 : 32) * this.scale));
                 c.globalAlpha = search && !match ? .24 : state.changes && active && !isNew ? .4 : active ? 1 : .23;
                 c.beginPath();
                 c.arc(p.x, p.y, r + 1.5, 0, Math.PI * 2);
                 c.fillStyle = active ? '#28251d' : '#131719';
                 c.fill();
-                if (n.icon && this.atlas.complete && this.atlas.naturalWidth) {
+                if (art?.complete && art.naturalWidth) {
+                    // A socketed jewel shows its own art, a little larger than the socket.
+                    const size = r * 2.4;
+                    c.drawImage(art, p.x - size / 2, p.y - size / 2, size, size);
+                }
+                else if (n.icon && this.atlas.complete && this.atlas.naturalWidth) {
                     c.save();
                     c.beginPath();
                     c.arc(p.x, p.y, r, 0, Math.PI * 2);
@@ -131,18 +140,37 @@ export function createTree(canvas, context, options = {}) {
         }
         hit(x, y) { let nearest = null, d = Infinity; for (const n of this.visibleNodes()) {
             const p = this.point(n), dist = Math.hypot(p.x - x, p.y - y);
-            const radius = Math.max(n.notable ? 8 : 6, Math.min(24, (n.notable ? 57 : 32) * this.scale)) + 3;
+            const large = n.notable || this.jewels.has(n.id), radius = Math.max(large ? 8 : 6, Math.min(24, (large ? 57 : 32) * this.scale)) + 3;
             if (dist < radius && dist < d) {
                 nearest = n;
                 d = dist;
             }
         } return nearest; }
         hideTooltip() { const el = this.tooltip; if (el)
-            el.hidden = true; this.hover = null; }
+            el.hidden = true; this.hover = null; this.closeJewel(); }
+        /** A socketed jewel uses the same host item tooltip as Gear: hover shows it, a click pins it, Escape closes it. */
+        jewelAt(n) { return n ? this.jewels.get(n.id) : undefined; }
+        showJewel(n, x, y, pinned = false) {
+            const jewel = this.jewelAt(n), r = this.canvas.getBoundingClientRect(), at = { x: r.left + x, y: r.top + y };
+            if (this.tooltip) this.tooltip.hidden = true;
+            if (this.remote?.node === n.id && this.remote.pinned === pinned) { void context.tooltip.move({ id: this.remote.id, at }).catch(() => { }); return; }
+            this.closeJewel();
+            if (!context.tooltip) { this.showLocalJewel(jewel, x, y); return; }
+            const id = `tree:${this.instance}:${++this.serial}`;
+            this.remote = { id, node: n.id, pinned };
+            void context.tooltip.show({ id, at, content: itemTooltipContent(jewel), pinned }).catch(() => { if (this.remote?.id !== id) return; this.remote = null; this.showLocalJewel(jewel, x, y); });
+        }
+        /** Without the host tooltip (an older Tavora), the node tooltip names the jewel and its mods. */
+        showLocalJewel(jewel, x, y) { const el = this.tooltip; if (!el) return; el.innerHTML = `<strong>${esc(jewel.name)}</strong>${jewel.mods.map(esc).join('<br>')}`; el.hidden = false; el.style.left = Math.min(Math.max(x + 15, 8), this.width - el.offsetWidth - 8) + 'px'; el.style.top = Math.min(Math.max(y + 15, 65), this.height - el.offsetHeight - 8) + 'px'; }
+        /** Hover ends with the pointer; a pin stays until a click elsewhere, Escape, or a pan or zoom. */
+        closeJewel(pinnedToo = true) { const remote = this.remote; if (!remote || (remote.pinned && !pinnedToo)) return; this.remote = null; void (remote.pinned ? context.tooltip.close(remote.id) : context.tooltip.hide(remote.id)).catch(() => { }); }
         showTooltip(n, x, y) { const el = this.tooltip; if (!n) {
-            this.hideTooltip();
+            if (el) el.hidden = true; this.hover = null; this.closeJewel(false);
             return;
-        } el.innerHTML = `<strong>${esc(n.name)}</strong>${n.stats.map(esc).join('<br>')}<span class="node-state">${esc(t(this.eligible(n) ? 'tree.inStage' : 'tree.notInStage'))}${this.selected.get(n.id) ? ' · ' + esc(t('tree.weaponSet', { set: this.selected.get(n.id) })) : ''}</span>`; el.hidden = false; el.style.left = Math.min(Math.max(x + 15, 8), this.width - el.offsetWidth - 8) + 'px'; el.style.top = Math.min(Math.max(y + 15, 65), this.height - el.offsetHeight - 8) + 'px'; }
+        } if (this.jewelAt(n)) {
+            if (!this.remote?.pinned) this.showJewel(n, x, y);
+            return;
+        } this.closeJewel(false); el.innerHTML = `<strong>${esc(n.name)}</strong>${n.stats.map(esc).join('<br>')}<span class="node-state">${esc(t(this.eligible(n) ? 'tree.inStage' : 'tree.notInStage'))}${this.selected.get(n.id) ? ' · ' + esc(t('tree.weaponSet', { set: this.selected.get(n.id) })) : ''}</span>`; el.hidden = false; el.style.left = Math.min(Math.max(x + 15, 8), this.width - el.offsetWidth - 8) + 'px'; el.style.top = Math.min(Math.max(y + 15, 65), this.height - el.offsetHeight - 8) + 'px'; }
         bind() { const cv = this.canvas; cv.onwheel = e => { e.preventDefault(); const r = cv.getBoundingClientRect(); this.zoom(Math.exp(-e.deltaY * .0015), e.clientX - r.left, e.clientY - r.top); }; cv.onpointerdown = e => { const r = cv.getBoundingClientRect(); this.drag = { x: e.clientX, y: e.clientY, tx: this.tx, ty: this.ty, moved: false }; cv.setPointerCapture(e.pointerId); cv.classList.add('dragging'); this.hideTooltip(); }; cv.onpointermove = e => { const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; if (this.drag) {
             const dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y;
             this.drag.moved = this.drag.moved || Math.abs(dx) + Math.abs(dy) > 4;
@@ -157,9 +185,11 @@ export function createTree(canvas, context, options = {}) {
                 this.draw();
             }
             this.showTooltip(n, x, y);
-        } }; cv.onpointerup = e => { const r = cv.getBoundingClientRect(); if (!this.drag?.moved)
-            this.showTooltip(this.hit(e.clientX - r.left, e.clientY - r.top), e.clientX - r.left, e.clientY - r.top); this.drag = null; cv.classList.remove('dragging'); }; cv.onpointercancel = () => { this.drag = null; cv.classList.remove('dragging'); }; cv.onpointerleave = () => { if (!this.drag) {
-            this.hideTooltip();
+        } }; cv.onpointerup = e => { const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, n = this.hit(x, y); if (!this.drag?.moved) {
+            if (this.jewelAt(n)) { this.hover = n; this.showJewel(n, x, y, true); this.draw(); }
+            else this.showTooltip(n, x, y);
+        } this.drag = null; cv.classList.remove('dragging'); }; cv.onpointercancel = () => { this.drag = null; cv.classList.remove('dragging'); }; cv.onpointerleave = () => { if (!this.drag) {
+            if (this.tooltip) this.tooltip.hidden = true; this.hover = null; this.closeJewel(false);
             this.draw();
         } }; cv.ondblclick = e => { const r = cv.getBoundingClientRect(); this.zoom(1.8, e.clientX - r.left, e.clientY - r.top); }; cv.onkeydown = e => { if (['+', '=', '-', '0', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
             e.preventDefault();

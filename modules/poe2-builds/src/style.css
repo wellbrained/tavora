@@ -200,3 +200,4 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,#d
 #character-preview{border-top:1px solid #63563c;margin-top:12px}
 .character-import [hidden]{display:none!important}
 .character-summary{flex:0 0 auto;padding:6px 10px;color:var(--host-text-muted,#b4a995);font-size:12px;line-height:1.5;border-bottom:1px solid #63563c;overflow-wrap:anywhere}
+.gear-group-heading{grid-column:1/-1;margin:14px 0 0;padding:0 0 9px;border-bottom:1px solid var(--border,#3a3127);font-size:11px;font-weight:400;color:var(--host-textMuted)}

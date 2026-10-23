@@ -64,6 +64,27 @@ function checkedGem(g, depth = 0) {
     }
     return out;
 }
+function checkedItem(i) {
+    if (!plain(i))
+        throw Error(t('error.item'));
+    const item = { inventory_id: text(i.inventory_id, 500), name: text(i.name, 2000), base: text(i.base, 2000), mods: stringList(i.mods, 500), rarity: ['normal', 'magic', 'rare', 'unique', 'unknown'].includes(i.rarity) ? i.rarity : 'unknown', reference: i.reference === true, exact: i.exact === true, slot_x: Number.isFinite(i.slot_x) ? i.slot_x : 0, slot_y: Number.isFinite(i.slot_y) ? i.slot_y : 0 };
+    for (const key of ['unique_name', 'sourceBase', 'sourceUnique', 'category', 'sourceLabel'])
+        if (typeof i[key] === 'string')
+            item[key] = text(i[key], 2000);
+    for (const key of ['level', 'quality', 'implicitCount'])
+        if (Number.isFinite(i[key]))
+            item[key] = i[key];
+    if (Array.isArray(i.level_interval))
+        item.level_interval = i.level_interval.slice(0, 2).map(Number);
+    if (plain(i.sourceStats))
+        item.sourceStats = Object.fromEntries(Object.entries(i.sourceStats).slice(0, 1000).filter(([, v]) => ['number', 'string', 'boolean'].includes(typeof v)));
+    if(typeof i.sourceText==='string')item.sourceText=text(i.sourceText,100000);
+    if(Array.isArray(i.sourceModifiers))item.sourceModifiers=i.sourceModifiers.slice(0,100).filter(plain).map(m=>({kind:text(m.kind,100),id:text(m.id,500),stats:plain(m.stats)?Object.fromEntries(Object.entries(m.stats).slice(0,100).filter(([,n])=>typeof n==='number'&&Number.isFinite(n))):{}}));
+    // Jewels: the tree socket they sit in, and whether the guide left mods out.
+    if(typeof i.node==='string'&&/^\d{1,10}$/.test(i.node))item.node=i.node;
+    if(i.modsMissing===true)item.modsMissing=true;
+    return enrichItem({...resolveItemIdentity(item),...itemMetadata(i)});
+}
 export function validate(document) {
     if (!plain(document) || document.format !== FORMAT)
           throw Error(t('error.notTavoraFile'));
@@ -103,24 +124,13 @@ export function validate(document) {
         if (!plain(s) || !Array.isArray(s.passives) || !Array.isArray(s.skills) || !Array.isArray(s.items) || s.passives.length > 10000 || s.skills.length > 1000 || s.items.length > 500)
             throw Error(t('error.plannerData'));
         const stage = { questRecommendations:questAdvice(s.questRecommendations), name: text(s.name, 2000) || text(s.label, 2000) || 'Variant', label: text(s.label, 2000) || text(s.name, 2000) || 'Variant', author: text(s.author, 2000), link: url(s.link) || out.guideUrl, passives: s.passives.map(n => { if (!plain(n) || !/^\d+$/.test(String(n.id)) || ![0, 1, 2].includes(n.weapon ?? 0))
-                throw Error(t('error.passives')); return { id: String(n.id), weapon: n.weapon ?? 0 }; }), skills: s.skills.map(g => checkedGem(g)), items: s.items.map(i => {
-                if (!plain(i))
-                    throw Error(t('error.item'));
-                const item = { inventory_id: text(i.inventory_id, 500), name: text(i.name, 2000), base: text(i.base, 2000), mods: stringList(i.mods, 500), rarity: ['normal', 'magic', 'rare', 'unique', 'unknown'].includes(i.rarity) ? i.rarity : 'unknown', reference: i.reference === true, exact: i.exact === true, slot_x: Number.isFinite(i.slot_x) ? i.slot_x : 0, slot_y: Number.isFinite(i.slot_y) ? i.slot_y : 0 };
-                for (const key of ['unique_name', 'sourceBase', 'sourceUnique', 'category', 'sourceLabel'])
-                    if (typeof i[key] === 'string')
-                        item[key] = text(i[key], 2000);
-                for (const key of ['level', 'quality', 'implicitCount'])
-                    if (Number.isFinite(i[key]))
-                        item[key] = i[key];
-                if (Array.isArray(i.level_interval))
-                    item.level_interval = i.level_interval.slice(0, 2).map(Number);
-                if (plain(i.sourceStats))
-                    item.sourceStats = Object.fromEntries(Object.entries(i.sourceStats).slice(0, 1000).filter(([, v]) => ['number', 'string', 'boolean'].includes(typeof v)));
-                if(typeof i.sourceText==='string')item.sourceText=text(i.sourceText,100000);
-                if(Array.isArray(i.sourceModifiers))item.sourceModifiers=i.sourceModifiers.slice(0,100).filter(plain).map(m=>({kind:text(m.kind,100),id:text(m.id,500),stats:plain(m.stats)?Object.fromEntries(Object.entries(m.stats).slice(0,100).filter(([,n])=>typeof n==='number'&&Number.isFinite(n))):{}}));
-                return enrichItem({...resolveItemIdentity(item),...itemMetadata(i)});
-            }) };
+                throw Error(t('error.passives')); return { id: String(n.id), weapon: n.weapon ?? 0 }; }), skills: s.skills.map(g => checkedGem(g)), items: s.items.map(checkedItem) };
+        // Jewels came later; a file without them still loads.
+        if (Array.isArray(s.jewels) && s.jewels.length) {
+            if (s.jewels.length > 100)
+                throw Error(t('error.plannerData'));
+            stage.jewels = s.jewels.map(checkedItem);
+        }
         if(out.character){
             if(['active','gear','skills','tree'].includes(s.characterProfile))stage.characterProfile=s.characterProfile;
             if(['0.4','0.5'].includes(s.treeVersion))stage.treeVersion=s.treeVersion;

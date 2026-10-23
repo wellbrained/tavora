@@ -45,3 +45,5 @@ Planner string-to-numeric passive IDs are derived from Grinding Gear Games'
 public poe2-skilltree-export data. Range-only unique reference modifiers and
 planner gem identities are generated from local Path of Building Community PoE2
 data. These reference ranges do not represent a guide author's exact item rolls.
+Modifier texts by game mod ID (mod-texts.json) are generated the same way from
+its ModJewel and ModItem data, to name the mods on a guide's jewels.
