@@ -9,9 +9,12 @@ A Tavora module for Satisfactory: plan production lines and look up items, recip
 - See the production as a **Chain** (each target down to its raw resources), a **Graph** (a box per recipe, arrows with the rates between them; drag to move, Ctrl + scroll to zoom) or a **List**.
 - Keep as many named plans as you like, and export or import them as files.
 - A world holds the alternate recipes you've unlocked in one playthrough. **Alternates…** lets you tick them, or show all of them to theory-craft. "My world" is there from the start.
+- **Plan with what I've unlocked** (in Alternates… and in Progress) plans only with recipes from the milestones and research you've ticked off; anything else is listed under Bring in as "Not unlocked yet". Off by default, so every standard recipe counts until you track your progress.
 - Each Planner panel remembers its plan. Plans and worlds are shared by all panels of the game.
 
 **Codex.** Search items, recipes and buildings in English or German. An item shows its form, stack size, sink points and energy, the recipes that make it (with how they unlock: milestone, MAM, hard drive or AWESOME Shop) and the recipes that use it. A building shows its power, build cost and the recipes it runs. Every entry links to the ones around it. **Plan this** opens a Planner with a new plan for the item, and **Wiki** opens its page on the community wiki.
+
+**Progress.** Tick off what a world has done, in four tabs: **Space Elevator** phases (each with its parts and the tiers it opens), **Milestones** by tier with the HUB upgrades as tier 0, **MAM** research per tree, and **Alternates**. Every entry shows its cost, what it unlocks (links into the Codex) and what the game wants first; ticking is never blocked, so catching up on an old save is quick. **Mark all done** in a tier's or tree's menu ticks them all, with Undo. **Plan this** opens a Planner with the cost as targets, delivered in ten minutes. The toolbar shows the open tier and how many milestones are done; **Hide done** keeps the lists short. Each Progress panel remembers its world, tab and tree.
 
 Names follow the language Tavora is set to (English or German).
 

@@ -11,10 +11,15 @@ import { buildingName, itemName, recipeName } from "./names";
 export interface ModuleContext {
   sdk: TavoraSDK;
   services: Services;
-  /** Shows one line at the top of the panel for a few seconds. */
-  notify(message: string): void;
+  /** Shows one line at the top of the panel for a few seconds, with an optional button such as Undo. */
+  notify(message: string, action?: NoticeAction): void;
   /** The `v-tip` directive: `const vTip = useModule().tip` in a component. */
   tip: Directive<HTMLElement, () => TooltipContent | null>;
+}
+
+export interface NoticeAction {
+  label: string;
+  run(): void;
 }
 
 export const MODULE: InjectionKey<ModuleContext> = Symbol("satisfactory");

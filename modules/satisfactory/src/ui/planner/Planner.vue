@@ -23,6 +23,8 @@ import { parsePlannerContent } from "../content";
 import { useModule, useNames } from "../context";
 import { solveErrorText } from "../describe";
 import { newWorld } from "../../model/world";
+import { localize } from "../names";
+import { costPlan, progressEntry } from "../progress";
 import { canPlan, chooseRecipe, dropRecipe, emptyPlan, planForItem, removeItem, setAlternate, uniqueName } from "../planEdit";
 import AlternatesDialog from "./AlternatesDialog.vue";
 import NameDialog from "./NameDialog.vue";
@@ -161,13 +163,17 @@ async function openFallback() {
   await sdk.panel.setContent(null).catch(() => undefined);
 }
 
-/** Content from Tavora: a plan's id, or `new-plan:<item>` from the Codex's "Plan this". */
+/** Content from Tavora: a plan's id, or a new plan from "Plan this" in the Codex or in Progress. */
 async function show(contentId: string): Promise<boolean> {
   const content = parsePlannerContent(contentId);
   if (!content) return false;
   if (content.kind === "plan") return open(content.planId);
-  if (!data.items[content.item]) return false;
   const worldId = world.value?.id ?? (await repository.ensureWorld()).id;
+  if (content.kind === "progress-plan") {
+    const entry = progressEntry(data, content.entry);
+    return entry ? create(costPlan(entry.cost, localize(entry.name, language.value), worldId)) : false;
+  }
+  if (!data.items[content.item]) return false;
   return create(planForItem(data, content.item, names.item(content.item), worldId));
 }
 

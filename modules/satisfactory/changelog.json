@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.1.0-alpha.2",
+    "date": "2026-10-23",
+    "notes": [
+      "New Progress panel: tick off Space Elevator phases, milestones, MAM research and alternates.",
+      "See what each step costs, what it unlocks and what the game wants first. Plan this turns its cost into a plan.",
+      "Plan with what you've unlocked: recipes you don't have yet are listed under Bring in."
+    ]
+  },
+  {
     "version": "0.1.0-alpha.1",
     "date": "2026-10-22",
     "notes": [

@@ -1,13 +1,15 @@
 <script setup lang="ts">
-// One line at the top centre of the panel, gone after a few seconds.
+// One line at the top centre of the panel, gone after a few seconds. It can
+// carry one action, such as Undo, which also closes it.
 import { X } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { onBeforeUnmount, onMounted } from "vue";
 import { t } from "../../i18n";
+import type { NoticeAction } from "../context";
 
 const DURATION_MS = 6_000;
 
-defineProps<{ message: string }>();
+const props = defineProps<{ message: string; action?: NoticeAction }>();
 const emit = defineEmits<{ dismiss: [] }>();
 
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -23,6 +25,7 @@ onBeforeUnmount(() => clearTimeout(timer));
     data-testid="notice"
   >
     <span class="min-w-0">{{ message }}</span>
+    <Button v-if="action" size="sm" variant="ghost" class="flex-none" data-testid="notice-action" @click="props.action!.run(), emit('dismiss')">{{ action.label }}</Button>
     <Button size="icon-sm" variant="ghost" class="flex-none" :aria-label="t('dismiss')" :title="t('dismiss')" @click="emit('dismiss')">
       <X :stroke-width="1.5" />
     </Button>

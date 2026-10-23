@@ -5,19 +5,33 @@ import type { Entry, EntryKind } from "./search";
 
 /** A Planner asked to start a new plan for this item ("Plan this" in the Codex). */
 const NEW_PLAN = "new-plan:";
+/** A Planner asked to start a plan for a phase, milestone or research cost ("Plan this" in Progress). */
+const PROGRESS_PLAN = "progress-plan:";
 const ENTRY_KINDS: EntryKind[] = ["item", "recipe", "building"];
 
-export type PlannerContent = { kind: "plan"; planId: string } | { kind: "new-plan"; item: string };
+export type PlannerContent =
+  | { kind: "plan"; planId: string }
+  | { kind: "new-plan"; item: string }
+  | { kind: "progress-plan"; entry: string };
 
 export function newPlanContentId(item: string): string {
   return NEW_PLAN + item;
 }
 
-/** A Planner content id: `new-plan:<ItemId>` asks for a new plan, anything else is a plan's id. */
+/** `entry` is `phase-<n>`, a milestone's or a research node's id. */
+export function progressPlanContentId(entry: string): string {
+  return PROGRESS_PLAN + entry;
+}
+
+/** A Planner content id: `new-plan:<ItemId>` and `progress-plan:<entry>` ask for a new plan, anything else is a plan's id. */
 export function parsePlannerContent(id: string): PlannerContent | null {
   if (id.startsWith(NEW_PLAN)) {
     const item = id.slice(NEW_PLAN.length);
     return item ? { kind: "new-plan", item } : null;
+  }
+  if (id.startsWith(PROGRESS_PLAN)) {
+    const entry = id.slice(PROGRESS_PLAN.length);
+    return entry ? { kind: "progress-plan", entry } : null;
   }
   return id ? { kind: "plan", planId: id } : null;
 }
