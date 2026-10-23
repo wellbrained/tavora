@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.13",
+    date: "2026-10-23",
+    title: "Module names in German",
+    notes: [
+      "Modules can now bring their names in more languages, so tabs, Add module and the catalog show them in German.",
+      "Notes, Calculator and AI Usage are now called Notizen, Rechner and KI-Nutzung in German.",
+    ],
+  },
+  {
     version: "0.20.12",
     date: "2026-10-22",
     title: "Same tooltips everywhere",
