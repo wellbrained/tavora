@@ -453,59 +453,6 @@ importers:
         specifier: 3.3.11
         version: 3.3.11(typescript@5.9.3)
 
-  modules/poe2-builds:
-    dependencies:
-      '@tavora/official-ui':
-        specifier: workspace:*
-        version: link:../shared
-      '@tavora/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
-      '@xmldom/xmldom':
-        specifier: 0.8.15
-        version: 0.8.15
-      brotli:
-        specifier: 2.1.0
-        version: 2.1.0
-    devDependencies:
-      vite:
-        specifier: 8.3.4
-        version: 8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
-
-  modules/satisfactory:
-    dependencies:
-      '@dagrejs/dagre':
-        specifier: 3.1.1
-        version: 3.1.1
-      '@lucide/vue':
-        specifier: 1.57.0
-        version: 1.57.0(vue@3.5.43(typescript@5.9.3))
-      '@tavora/official-ui':
-        specifier: workspace:*
-        version: link:../shared
-      '@tavora/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
-      vue:
-        specifier: 3.5.43
-        version: 3.5.43(typescript@5.9.3)
-    devDependencies:
-      '@tailwindcss/vite':
-        specifier: 4.3.3
-        version: 4.3.3(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      '@vitejs/plugin-vue':
-        specifier: 6.0.9
-        version: 6.0.9(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vue@3.5.43(typescript@5.9.3))
-      tailwindcss:
-        specifier: 4.3.3
-        version: 4.3.3
-      vite:
-        specifier: 8.3.4
-        version: 8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
-      vue-tsc:
-        specifier: 3.3.11
-        version: 3.3.11(typescript@5.9.3)
-
   modules/shared:
     dependencies:
       '@fontsource-variable/inter':
@@ -784,12 +731,6 @@ packages:
   '@clack/prompts@1.8.1':
     resolution: {integrity: sha512-dlT1m5e/0yUL0kRNcQn7yGLVThkgbB0Ga/1AmfDDC/8ik6AIiSf2QLQO2zPYvefsHP0aFgxO93cVLCCfDp7kzQ==}
     engines: {node: '>= 20.12.0'}
-
-  '@dagrejs/dagre@3.1.1':
-    resolution: {integrity: sha512-zroZB1dFOFiGgv4Xcrn1DckB1o4aOikPqD2NDQPV0WM//CXGcS6xiD0rNkqHmw6FEg4tabt4nxPLwgCWT+Vb2A==}
-
-  '@dagrejs/graphlib@4.0.5':
-    resolution: {integrity: sha512-7xrBTqIts3o+PMUZX97wSc+7TUbW+/rULzGNCTP6yooNVDXbzw4Wutg/H/xOutTB/c/k0YqOAavgPh4/Zk9PFA==}
 
   '@docsearch/css@3.8.2':
     resolution: {integrity: sha512-y05ayQFyUmCXze79+56v/4HpycYF3uFqB78pLPrSV5ZKAlDuIAAJNhaRi8tTdRNXh05yxX/TyNnzD6LwSM89vQ==}
@@ -2689,9 +2630,6 @@ packages:
   braces@3.0.3:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
-
-  brotli@2.1.0:
-    resolution: {integrity: sha512-4KAtOr4Z3jaIQlXy9AeuaVz1vPWTyZ6eiQYu4SsSz6VcUsV6Epz6kA3Vf7eTGTaspaqlnQLBqvkozKP5WyQMZQ==}
 
   browser-fs-access@0.29.1:
     resolution: {integrity: sha512-LSvVX5e21LRrXqVMhqtAwj5xPgDb+fXAIH80NsnCQ9xuZPs2xWsOREi24RKgZa1XOiQRbcmVrv87+ulOKsgjxw==}
@@ -4982,12 +4920,6 @@ snapshots:
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
 
-  '@dagrejs/dagre@3.1.1':
-    dependencies:
-      '@dagrejs/graphlib': 4.0.5
-
-  '@dagrejs/graphlib@4.0.5': {}
-
   '@docsearch/css@3.8.2': {}
 
   '@docsearch/js@3.8.2(@algolia/client-search@5.60.0)(search-insights@2.17.3)':
@@ -6813,10 +6745,6 @@ snapshots:
   braces@3.0.3:
     dependencies:
       fill-range: 7.1.1
-
-  brotli@2.1.0:
-    dependencies:
-      base64-js: 1.5.1
 
   browser-fs-access@0.29.1: {}
 

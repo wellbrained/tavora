@@ -1,1 +1,0 @@
-window.addEventListener('message',event=>{if(event.source!==window||event.data?.type!=='tavora:hello')return;const channel=new MessageChannel();parent.attach(new URLSearchParams(location.search).get('type'),channel.port1);window.postMessage({type:'tavora:port'},location.origin,[channel.port2])});

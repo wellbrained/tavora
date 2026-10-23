@@ -48,12 +48,12 @@ Need a control or variant the kit doesn't have? Talk it through with the
 maintainer first. Once it's agreed, it goes in `shared/src/components` and gets
 a specimen in the playground.
 
-## Standalone game modules
+## Game modules live outside this repo
 
-A `.standalone` marker keeps a repo module out of the dev host's Official list; install its signed package or add it as a development folder.
+Game-specific modules are never part of this repo or the app. They live in the private `wellbrained/tavora-game-modules` repo: the dev Tavora loads each module's local folder (`local.<module>`), and a release copy with the catalog id is published from the dev Tavora. This is a locked decision; see "Game modules" in the repo's `CLAUDE.md`.
 
 ## Catalog page
 
 A module's `readme` (manifest) is the About text on its catalog page. Keep it short and for players: what the
 module is and what it does for them, as the Writing rules in the repo's CLAUDE.md say. Build steps, data sources,
-limits and licence notes go in the module's `README.md`. Satisfactory uses `ABOUT.md` for this.
+limits and licence notes go in the module's `README.md`.

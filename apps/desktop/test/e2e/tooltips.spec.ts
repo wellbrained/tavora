@@ -1,5 +1,5 @@
 import { test, expect, type ElectronApplication } from "@playwright/test";
-import { mkdtemp, mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { launch, openModule, inModule, waitForShown } from "./harness";
@@ -55,29 +55,6 @@ test('hover crosses panel bounds without freezing; pin survives unrelated input,
     finally {
         await app.close();
     }
-});
-
-test('PoE2 Gear imports a portable build and sends artwork and stats to the shared surface',async({ },testInfo)=>{
- test.skip(!process.env.POE2_SMOKE_FILE,'Set POE2_SMOKE_FILE to an exported build');
- const id='wellbrained.poe2-builds',modules=path.resolve(import.meta.dirname,'../../../../modules');
- const {app,page}=await launch(undefined,[modules]);try{
-  await page.getByTestId('add-module').click();await page.getByTestId('panel-menu-toggle-'+id).click();await page.getByTestId('open-'+id+'-gear').click();await page.keyboard.press('Escape');await waitForShown(app,id);
-  const file=await readFile(process.env.POE2_SMOKE_FILE!,'utf8');
-  await inModule(app,id,`(()=>{const input=document.querySelector('#file'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(file)}],'fixture.tavora-build.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-  await expect.poll(()=>inModule<number>(app,id,"document.querySelectorAll('.equip-slot').length")).toBe(15);
-  const at=await inModule<{x:number;y:number}>(app,id,"(()=>{const r=document.querySelector('[data-slot=weapon]').getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()");
-  await app.evaluate(({webContents},{id,at})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://'+id+'/'))!;wc.sendInputEvent({type:'mouseMove',...at});},{id,at});
-  await expect.poll(async()=> (await tooltip(app))?.visible).toBe(true);
-  const rendered=await app.evaluate(async({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith('data:text/html'))!;return w.webContents.executeJavaScript('({text:document.body.innerText,image:document.querySelector("img")?.src,html:document.querySelector("#card").innerHTML,bullet:getComputedStyle(document.querySelector("li .text"),"::before").content})');});
-  expect(rendered.bullet).toBe('"'+String.fromCharCode(8226)+'"');expect(rendered.text).toContain('Armageddon Edge');expect(rendered.text).toContain('[P5]');expect(rendered.image).toMatch(/^data:image\//);expect(rendered.html).not.toContain('tavora-module://');
-  const png=await app.evaluate(async({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith('data:text/html'))!;return(await w.webContents.capturePage()).toPNG().toString('base64');});
-  await writeFile(testInfo.outputPath('gear-tooltip.png'),Buffer.from(png,'base64'));
-  // Changing the source clears both the host surface and the module's local pin state.
-  await app.evaluate(({webContents},{id,at})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://'+id+'/'))!;wc.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...at});wc.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,...at});},{id,at});
-  await expect.poll(()=>inModule(app,id,"!!document.querySelector('.equip-slot.pinned')")).toBe(true);
-  await inModule(app,id,"document.querySelector('#build').value='';document.querySelector('#build').dispatchEvent(new Event('change'))");
-  await expect.poll(async()=> (await tooltip(app))?.visible).toBe(false);
- }finally{await app.close();}
 });
 
 test('a pinned tooltip closes on app focus loss or a hidden source',async()=>{
