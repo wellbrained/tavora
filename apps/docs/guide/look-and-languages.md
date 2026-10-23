@@ -62,6 +62,8 @@ tavora.ui.onLanguageChange((language) => {
 
 Store data in one language, not the player's: a default list named "To-Dos" keeps that name, and you show it translated. Then switching the language doesn't change what was saved.
 
+Your module's name, description and panel names come from the manifest. Add [`translations`](../reference/manifest.md#translations) to show them in the player's language too.
+
 ## Shortcuts and size
 
 - Tavora takes Ctrl+K (Cmd+K on macOS) for its own search before your page sees it. Choose other shortcuts.

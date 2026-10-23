@@ -51,6 +51,7 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `panels` | no | Named [panel types](#panel-types) the module offers, 1 to 16. Without it the module has one panel, made from `entry`, `icon` and `viewport`. |
 | `overlay` | no | The page for streaming software, see [Overlay](#overlay). Needs `"stream-overlay"` in `permissions.connectors`, and that connector needs this page. Needs Tavora 0.19.26 or newer. |
 | `actions` | no | What the module can do on a key press, 1 to 16, see [Actions](#actions). Needs Tavora 0.19.26 or newer. |
+| `translations` | no | The name, description, panel and action names in other languages, see [Translations](#translations). Needs a `minTavora` newer than `0.20.12`. |
 
 Paths (`entry`, `icon`, `readme`, `screenshots`, `overlay`, and the same fields of a panel type) are relative to the package root and must stay inside it: no leading `/`, no `.` or `..` segments, no empty segments, no backslashes or `:`. Tavora also checks that both files exist when it discovers the module.
 
@@ -104,6 +105,32 @@ The page loads only its own files: bundle your fonts, and give it colours and te
 | --- | --- | --- |
 | `id` | yes | Stable identity: lowercase letters, digits and `-`, starting with a letter, at most 32 characters, unique in the module. Saved hotkeys keep it, so never change it after release. |
 | `name` | yes | What Tavora shows next to the key, 1 to 40 characters on one line. |
+
+## Translations
+
+`translations` gives your module's name, description, panel names and action names in other languages, so players see them in the language they picked in Tavora. Key each language by its lowercase code, such as `de` or `pt-br`:
+
+```json
+"translations": {
+  "de": {
+    "name": "Kampagnen-Begleiter",
+    "description": "Plant deine Builds.",
+    "panels": { "planner": "Planer" },
+    "actions": { "reset": "Zurücksetzen" }
+  }
+}
+```
+
+| Field | Required | Rules |
+| --- | --- | --- |
+| `name` | no | Like `name`: 1 to 80 characters. |
+| `description` | no | Like `description`: 1 to 300 characters. |
+| `panels` | no | Panel type `id` to its tab name, 1 to 24 characters on one line. Only ids `panels` lists. |
+| `actions` | no | Action `id` to its name, 1 to 40 characters on one line. Only ids `actions` lists. |
+
+Each text Tavora shows comes from the translation for exactly the player's language, else from its base language (`pt` for `pt-br`), else from the plain field. Leave out what stays the same; the plain fields are what players in every other language see, so write them in English. At most 32 languages; codes Tavora doesn't speak yet are fine. The readme and patch notes have one language for now.
+
+Older Tavoras refuse a manifest with `translations`, so set `minTavora` to a version newer than `0.20.12`; Tavora refuses the manifest otherwise. The catalog then doesn't offer your module to older Tavoras.
 
 ## Game ids
 

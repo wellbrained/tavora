@@ -9,5 +9,11 @@
   "changelog": "changelog.json",
   "games": [],
   "viewport": { "minWidth": 280, "minHeight": 370, "preferredWidth": 320, "preferredHeight": 480 },
+  "translations": {
+    "de": {
+      "name": "Rechner",
+      "description": "Ein schneller Rechner, der sich deine letzten Ergebnisse für dieses Spiel merkt."
+    }
+  },
   "permissions": { "network": [], "connectors": [] }
 }

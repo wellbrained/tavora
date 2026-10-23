@@ -5,7 +5,7 @@ import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, type Connector, type ResolvedPanelType } from "@tavora/module-schema";
+import { continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, translateManifest, type Connector, type ModuleManifest, type ResolvedPanelType } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -488,7 +488,7 @@ export class Host {
         const view=this.views.get(owner),bounds=this.panelBounds.get(owner);
         if(!(view instanceof ModuleView)||!bounds||this.overlay||this.opening||this.windowHidden||!view.revealed)return undefined;
         const module=this.modules.get(view.moduleId);if(!module)return undefined;
-        return{root:module.root,name:module.manifest.name,bounds};
+        return{root:module.root,name:this.shown(module.manifest).name,bounds};
       }});
     this.watchShortcuts(this.window.webContents);
   }
@@ -735,7 +735,7 @@ export class Host {
   private panelTypeOf(record: InstanceRecord): ResolvedPanelType | null | undefined {
     const module = this.modules.get(record.moduleId);
     if (!module) return undefined;
-    const types = panelTypes(module.manifest);
+    const types = panelTypes(this.shown(module.manifest));
     if (types.length === 0) return null;
     return types.find((type) => type.id === record.panelType);
   }
@@ -1127,7 +1127,7 @@ export class Host {
     const shots = await Promise.all(details.entry.shots.map((shot) => this.catalog.picture(shot)));
     return {
       status: "ok",
-      module: catalogView(details.entry, this.catalogScope() ?? undefined),
+      module: catalogView(details.entry, this.language, this.catalogScope() ?? undefined),
       screenshots: shots.filter((url): url is string => url !== null),
       readme: details.readme === null ? [] : parseReadme(details.readme),
       versions: details.versions,
@@ -1206,7 +1206,7 @@ export class Host {
     const { updated, waiting } = await this.lifecycle.updates.check();
     if (updated.length === 1) {
       const { manifest } = updated[0]!;
-      this.notice = translate(this.language, "modules.catalogUpdated", { name: manifest.name, version: manifest.version });
+      this.notice = translate(this.language, "modules.catalogUpdated", { name: this.shown(manifest).name, version: manifest.version });
     } else if (updated.length > 1) {
       this.notice = translate(this.language, "modules.catalogUpdatedMany", { count: String(updated.length) });
     }
@@ -1402,7 +1402,7 @@ export class Host {
       if (!fromHost(event)) return { status: "unreachable" };
       if (!this.library.onlineSearch) return { status: "off" };
       const scope = this.catalogScope();
-      return scope ? this.catalog.list(scope) : { status: "ok", modules: [] };
+      return scope ? this.catalog.list(scope, this.language) : { status: "ok", modules: [] };
     });
     ipcMain.handle("host:catalog-page", async (event, moduleId: unknown): Promise<CatalogPageResult> =>
       fromHost(event) && isModuleId(moduleId) ? this.catalogPage(moduleId) : { status: "gone" },
@@ -2767,7 +2767,7 @@ export class Host {
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
       pickReadOnlyFile: async extensions => {
         const defaultPath=await saveDialogDirectory(new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,game.id),this.library.games[game.id]?.catalogId ?? game.id);
-        const picked = await dialog.showOpenDialog(this.window, {...(defaultPath?{defaultPath}:{}),title:this.language.startsWith('de')?'Datei mit '+module.manifest.name+' verknüpfen':'Link a file to '+module.manifest.name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
+        const picked = await dialog.showOpenDialog(this.window, {...(defaultPath?{defaultPath}:{}),title:this.language.startsWith('de')?'Datei mit '+this.shown(module.manifest).name+' verknüpfen':'Link a file to '+this.shown(module.manifest).name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
         return picked.canceled ? null : picked.filePaths[0] ?? null;
       },
       tooltip:{show:request=>this.tooltips.show(record.instanceId,request),move:anchor=>this.tooltips.move(record.instanceId,anchor.id,anchor.at),close:(id,hoverOnly)=>this.tooltips.close(record.instanceId,id,hoverOnly)},
@@ -2824,7 +2824,7 @@ export class Host {
     const game = this.game;
     const module = this.modules.get(from.moduleId);
     if (!game || !module || !this.records(game.id).includes(from)) throw new HostError("PERMISSION_DENIED", "panels.open works only in the game shown now");
-    const target = panelTypes(module.manifest).find((item) => item.id === type);
+    const target = panelTypes(this.shown(module.manifest)).find((item) => item.id === type);
     if (!target) throw new HostError("INVALID_PARAMS", `this module has no panel type "${type}"`);
     const others = this.records(game.id)
       .map((record, order) => ({ record, order, view: this.views.get(record.instanceId) }))
@@ -2992,7 +2992,8 @@ export class Host {
       // again, and a crash reported after the reload would leave the panel crashed.
       await Promise.all(views.map((view) => view.stop()));
       // Said before the clearing, which can take a few seconds; the panels already show they stopped.
-      const name = this.modules.get(moduleId)?.manifest.name ?? moduleId;
+      const installed = this.modules.get(moduleId);
+      const name = installed ? this.shown(installed.manifest).name : moduleId;
       this.notice = translate(this.language, "modules.storageCleared", { name });
       this.pushState();
       await ses?.clearStorageData();
@@ -3212,12 +3213,12 @@ export class Host {
       },
       modules: [...this.modules.values()].map((module) => ({
         id: module.manifest.id,
-        name: module.manifest.name,
-        description: module.manifest.description ?? null,
+        name: this.shown(module.manifest).name,
+        description: this.shown(module.manifest).description ?? null,
         available: game !== null && this.supportsGame(module, game.id),
         minWidth: module.manifest.viewport.minWidth,
         minHeight: module.manifest.viewport.minHeight,
-        panels: panelTypes(module.manifest).map((type) => ({
+        panels: panelTypes(this.shown(module.manifest)).map((type) => ({
           id: type.id,
           name: type.name,
           icon: this.moduleInfo.get(module.manifest.id)?.panelIcons[type.id] ?? null,
@@ -3279,7 +3280,7 @@ export class Host {
       panels: workspace.instances.map((record) => {
         const view = this.views.get(record.instanceId);
         const type = this.panelTypeOf(record);
-        const name = type?.name ?? this.modules.get(record.moduleId)!.manifest.name;
+        const name = type?.name ?? this.shown(this.modules.get(record.moduleId)!.manifest).name;
         const panelType = record.panelType ?? null;
         const openedFrom = this.openedFrom.get(record.instanceId);
         if (type === undefined) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: record.panelType ?? name, status: "unavailable" as const, waiting: false, content: null };
@@ -3324,6 +3325,11 @@ export class Host {
   /** The language of Tavora's texts now. */
   get language(): Language {
     return resolveLanguage(this.library.language, this.options.systemLocale ?? app.getLocale());
+  }
+
+  /** A module's manifest with its name, description, panel and action names in Tavora's language now. */
+  shown(manifest: ModuleManifest): ModuleManifest {
+    return translateManifest(manifest, this.language);
   }
 
   private appearanceView(): AppearanceView {
@@ -3441,7 +3447,7 @@ export class Host {
         if (next.overlayPort !== undefined) host.library.overlayPort = next.overlayPort;
         host.saveLibrary();
       },
-      module: (moduleId) => host.modules.get(moduleId),
+      module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
       overlayGranted: (moduleId) => host.connectorsOf(moduleId).has("stream-overlay"),
       askConnector: (moduleId, connector) => host.askConnector(moduleId, connector),
       gameId: () => host.gameId,

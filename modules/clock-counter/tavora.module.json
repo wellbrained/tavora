@@ -17,5 +17,16 @@
     { "id": "up", "name": "Count up" },
     { "id": "down", "name": "Count down" }
   ],
+  "translations": {
+    "de": {
+      "description": "Countdowns, Stoppuhren und Zähler für dieses Spiel, mit Hotkeys und Overlays für deinen Stream.",
+      "actions": {
+        "reset": "Zurücksetzen",
+        "lap": "Runde",
+        "up": "Hochzählen",
+        "down": "Runterzählen"
+      }
+    }
+  },
   "permissions": { "network": [], "connectors": ["stream-overlay"], "onRequest": ["stream-overlay"] }
 }

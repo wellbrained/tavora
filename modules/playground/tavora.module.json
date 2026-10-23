@@ -9,5 +9,10 @@
   "changelog": "changelog.json",
   "games": [],
   "viewport": { "minWidth": 300, "minHeight": 240, "preferredWidth": 480, "preferredHeight": 720 },
+  "translations": {
+    "de": {
+      "description": "Jedes Bedienelement, das ein Modul nutzen kann, nebeneinander zum Ausprobieren."
+    }
+  },
   "permissions": { "network": [] }
 }

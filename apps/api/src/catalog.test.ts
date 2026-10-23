@@ -25,6 +25,7 @@ interface Options {
   key?: KeyObject | null;
   changelog?: unknown;
   homepage?: string;
+  translations?: Record<string, unknown>;
   readme?: Buffer;
   icon?: ZipFile;
   /** Screenshot files, named in the manifest in this order and put in the zip. */
@@ -33,7 +34,7 @@ interface Options {
 }
 
 /** A module zip as tavora-pack makes it: manifest, page, optional changelog, and the signature. */
-function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], workspaces, key = publisher, changelog, homepage, readme, icon, screenshots = [], extra = [] }: Options = {}): Buffer {
+function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], workspaces, key = publisher, changelog, homepage, translations, readme, icon, screenshots = [], extra = [] }: Options = {}): Buffer {
   const manifest = {
     id,
     name: "Timer",
@@ -45,6 +46,7 @@ function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], wo
     ...(workspaces === undefined ? {} : { workspaces }),
     ...(changelog === undefined ? {} : { changelog: "changelog.json" }),
     ...(homepage === undefined ? {} : { homepage }),
+    ...(translations === undefined ? {} : { minTavora: "0.21.0", translations }),
     ...(readme === undefined ? {} : { readme: "README.md" }),
     ...(icon === undefined ? {} : { icon: icon.name }),
     ...(screenshots.length ? { screenshots: screenshots.map((shot) => shot.name) } : {}),
@@ -106,10 +108,17 @@ describe("adding to the catalog", () => {
         publishedAt: "2026-10-18T10:00:00.000Z",
         notes: ["First version."],
         homepage: null,
+        translations: {},
         screenshots: [],
         icon: null,
       },
     ]);
+  });
+
+  it("lists the translated name and description, by language", () => {
+    const catalog = store();
+    catalog.add(moduleZip({ translations: { de: { name: "Zeitmesser", description: "Zählt runter." }, fr: { name: "Minuteur" }, nl: { description: "Telt af." } } }));
+    expect(catalog.index()[0]?.translations).toEqual({ de: { name: "Zeitmesser", description: "Zählt runter." }, fr: { name: "Minuteur" }, nl: { description: "Telt af." } });
   });
 
   it("lists the homepage and checked screenshots, and serves only the newest version's", () => {

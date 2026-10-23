@@ -9,5 +9,11 @@
   "changelog": "changelog.json",
   "games": [],
   "viewport": { "minWidth": 300, "minHeight": 240, "preferredWidth": 640, "preferredHeight": 600 },
+  "translations": {
+    "de": {
+      "name": "Notizen",
+      "description": "Notizen für dieses Spiel, mit Notizblock, Pins und Suche. Wird beim Tippen gespeichert."
+    }
+  },
   "permissions": { "network": [] }
 }

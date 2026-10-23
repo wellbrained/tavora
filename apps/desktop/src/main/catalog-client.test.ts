@@ -100,7 +100,7 @@ describe("CatalogClient.list", () => {
     const { impl, calls } = fakeFetch(() =>
       json({ modules: [entry({ id: "wellbrained.another", name: "Another", games: ["satisfactory"], installs: 12 }), entry(), entry({ id: "bad id" }), entry()] }),
     );
-    const result = await new CatalogClient({ baseUrl: "https://catalog.test/", fetchImpl: impl }).list({ game: "poe2" });
+    const result = await new CatalogClient({ baseUrl: "https://catalog.test/", fetchImpl: impl }).list({ game: "poe2" }, "en");
     expect(calls.map((call) => call.url)).toEqual(["https://catalog.test/v1/catalog"]);
     expect(calls[0]!.init).toMatchObject({ credentials: "omit", referrerPolicy: "no-referrer", redirect: "error" });
     expect(result).toEqual({
@@ -115,9 +115,20 @@ describe("CatalogClient.list", () => {
 
   it("marks modules for a game as not fitting a personal workspace", async () => {
     const { impl, calls } = fakeFetch(() => json({ modules: [entry({ games: ["poe2"] })] }));
-    const result = await new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl }).list({ workspace: true });
+    const result = await new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl }).list({ workspace: true }, "en");
     expect(calls[0]!.url).toBe("https://catalog.test/v1/catalog");
     expect(result).toEqual({ status: "ok", modules: [expect.objectContaining({ fits: false, forGames: ["Path of Exile 2"] })] });
+  });
+
+  it("shows names and descriptions in Tavora's language, sorted by the name shown", async () => {
+    const translations = { de: { name: "Zeitmesser", description: "Zählt runter." }, "x-bad": { name: "Bad" }, fr: { description: 5 } };
+    const { impl } = fakeFetch(() => json({ modules: [entry({ id: "wellbrained.another", name: "Another" }), entry({ name: "Tracker", translations })] }));
+    const client = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl });
+    const german = await client.list({ game: "poe2" }, "de-at");
+    expect(german).toMatchObject({ status: "ok", modules: [{ name: "Another" }, { name: "Zeitmesser", description: "Zählt runter." }] });
+    expect(german).toMatchObject({ modules: [{}, expect.not.objectContaining({ translations: expect.anything() })] });
+    expect(await client.list({ game: "poe2" }, "fr")).toMatchObject({ modules: [{ name: "Another" }, { name: "Tracker" }] });
+    expect(parseCatalogEntry(entry({ translations }))?.translations).toEqual({ de: { name: "Zeitmesser", description: "Zählt runter." } });
   });
 
   it("tells the catalog about an install with only the module id, and never throws", async () => {
@@ -131,11 +142,11 @@ describe("CatalogClient.list", () => {
 
   it("says when the catalog is off, busy or unreachable", async () => {
     const client = (answer: () => Response) => new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: fakeFetch(answer).impl });
-    expect(await client(() => json({}, 503)).list({ game: "poe2" })).toEqual({ status: "unavailable" });
-    expect(await client(() => new Response("", { status: 429, headers: { "retry-after": "30" } })).list({ game: "poe2" })).toEqual({ status: "busy" });
-    expect(await client(() => new Response("not json")).list({ game: "poe2" })).toEqual({ status: "unreachable" });
+    expect(await client(() => json({}, 503)).list({ game: "poe2" }, "en")).toEqual({ status: "unavailable" });
+    expect(await client(() => new Response("", { status: 429, headers: { "retry-after": "30" } })).list({ game: "poe2" }, "en")).toEqual({ status: "busy" });
+    expect(await client(() => new Response("not json")).list({ game: "poe2" }, "en")).toEqual({ status: "unreachable" });
     const offline = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: (async () => Promise.reject(new TypeError("offline"))) as typeof fetch });
-    expect(await offline.list({ game: "poe2" })).toEqual({ status: "unreachable" });
+    expect(await offline.list({ game: "poe2" }, "en")).toEqual({ status: "unreachable" });
   });
 });
 
@@ -189,7 +200,7 @@ describe("CatalogClient.icon", () => {
     const { impl, calls } = fakeFetch((url) => (url.includes("/pictures/") ? new Response(new Uint8Array(png)) : json({ modules: [entry({ icon })] })));
     const client = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl });
     expect(await client.icon("wellbrained.tracker")).toBeNull();
-    const listed = await client.list({ game: "poe2" });
+    const listed = await client.list({ game: "poe2" }, "en");
     expect(listed).toMatchObject({ status: "ok", modules: [{ icon: true }] });
     expect(await client.icon("wellbrained.tracker")).toBe(`data:image/png;base64,${png.toString("base64")}`);
     expect(await client.icon("wellbrained.tracker")).not.toBeNull();
