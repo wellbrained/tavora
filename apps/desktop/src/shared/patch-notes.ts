@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.18",
+    date: "2026-10-24",
+    title: "Panels of development modules survive a rebuild",
+    notes: [
+      "A module from a development folder that can't load for a moment, for example while a watcher rebuilds it, keeps its panels. The panel says so and starts again with the next build, also after a restart.",
+    ],
+  },
+  {
     version: "0.20.17",
     date: "2026-10-24",
     title: "Save as image asks where",
