@@ -150,6 +150,7 @@ export const de: Record<keyof typeof en, string> = {
   "common.reload": "Neu laden",
   "common.official": "Offiziell",
   "common.local": "Lokal",
+  "common.release": "Release",
   "common.followSystem": "System folgen",
   "common.dark": "Dunkel",
   "common.light": "Hell",

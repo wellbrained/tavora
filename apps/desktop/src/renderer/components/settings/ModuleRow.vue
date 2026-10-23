@@ -2,12 +2,17 @@
 // One module in a Settings list: icon, name, version, who made it, what it
 // does and where it was found (the Official badge says it for Tavora's own; a list
 // that already says it, like a project folder's, hides it). The buttons for it go in the slot.
+import { computed } from "vue";
 import { cn } from "@/lib/utils";
 import { state } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 
-defineProps<{ module: NonNullable<typeof state.value>["modules"][number]; hideOrigin?: boolean }>();
+const props = defineProps<{ module: NonNullable<typeof state.value>["modules"][number]; hideOrigin?: boolean }>();
+// A development folder holding a module with a publishable id (not local.…) is a release copy.
+const tag = computed(() =>
+  props.module.provenance === "official" ? t("common.official") : props.module.origin.kind === "dev" && !props.module.id.startsWith("local.") ? t("common.release") : t("common.local"),
+);
 </script>
 
 <template>
@@ -21,7 +26,8 @@ defineProps<{ module: NonNullable<typeof state.value>["modules"][number]; hideOr
         <span class="text-muted-foreground flex-none text-xs tabular-nums">{{ module.version }}</span>
         <span
           :class="cn('flex-none rounded-sm border px-1.5 text-xs', module.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
-          >{{ module.provenance === "official" ? t("common.official") : t("common.local") }}</span
+          :data-testid="`module-tag-${module.id}`"
+          >{{ tag }}</span
         >
         <span
           v-if="module.publisher && module.publisherName"
