@@ -12,7 +12,7 @@ export interface Gem {
     tags?: string[];
 }
 export interface ItemProperty { name: string; values: [string,number][]; displayMode?:number }
-export interface AffixRow { text:string; type:'P'|'S'; id:string; instanceId?:string; name?:string; tier?:number; status?:string; evidence?:string; hybrid?:'start'|'middle'|'end'; contributors?:AffixRow[] }
+export interface AffixRow { text:string; type:'P'|'S'; id:string; instanceId?:string; name?:string; tier?:number; /** How many tiers the base has for this mod; 1 is the best. */ tiers?:number; /** The section of a row worked out on display; saved rows have none. */ kind?:string; status?:string; evidence?:string; hybrid?:'start'|'middle'|'end'; contributors?:AffixRow[] }
 export interface QuestChoice { quest:string; act:string; area:string; reward:string }
 export interface Item {
     sourceText?: string;

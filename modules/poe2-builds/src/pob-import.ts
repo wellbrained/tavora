@@ -120,7 +120,7 @@ export function parsePob(xml: string, name = 'PoB character'): PobResult {
  const all=Array.from(root.getElementsByTagName('*')); if(all.length>50000)throw Error(t('error.pobEntries'));
  const info=first(root,'Build'), itemRoot=first(root,'Items'), skillsRoot=first(root,'Skills'), treeRoot=first(root,'Tree');
  if(!info||!itemRoot||!skillsRoot||!treeRoot)throw Error(t('error.pobMissing'));
- const warnings=['PoB can include planned equipment and skills. Imported data reflects the export.','Unresolved affix tiers and item properties are left blank.'];
+ const warnings=['PoB can include planned equipment and skills. Imported data reflects the export.',"Affix tiers show only where they're certain. Missing item properties stay blank."];
  const items=new Map(children(itemRoot,'Item').map(i=>[attr(i,'id'),i]));
  const itemIds=new Map<string,string>();
  const itemSets=children(itemRoot,'ItemSet'); if(!itemSets.length)itemSets.push(itemRoot);

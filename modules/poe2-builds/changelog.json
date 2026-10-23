@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.0-alpha.26",
+    "date": "2026-10-23",
+    "notes": [
+      "Gear now shows prefix, suffix and tier for every imported item, like [P5] for tier 5 of 9.",
+      "Tiers only show where they're certain, and saved builds get them too."
+    ]
+  },
+  {
     "version": "0.1.0-alpha.25",
     "date": "2026-10-23",
     "notes": [

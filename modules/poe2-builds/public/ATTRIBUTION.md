@@ -32,6 +32,10 @@ Item identity and equipment-class associations use local Grinding Gear Games
 English data and Path of Building Community unique identifiers. Additional
 small pixel-grid SVG placeholders extend the Tavora fallback set.
 
+Affix tiers come from a compact table generated from Path of Building Community
+(PoE2) 0.23.1, Data/ModItem, ModVeiled, ModJewel, ModFlask, ModCharm and
+Data/Bases, ranked per item base the way its crafting editor does
+(scripts/affix-tiers.mjs). It is bundled; nothing is fetched at runtime.
 Affix metadata is cross-checked against Path of Building Community (PoE2) and
 the HivemindOverlord/poe2-mcp data-v0.5.0-1 modifier dataset. Game data and item
 assets remain copyright Grinding Gear Games. The MCP server is not installed

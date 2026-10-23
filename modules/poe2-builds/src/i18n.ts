@@ -24,11 +24,17 @@ const notes: [RegExp, (m: RegExpExecArray) => string][] = [
  [/^Not displayed: equipment slot (.+)\.$/, m => t('note.pobSlot', { slot: m[1]! })],
 ];
 const fixed = ['plannerGaps', 'uniqueRanges', 'noGearPlanner', 'unpaired', 'ninjaSnapshot', 'plannerOnly', 'pobPlanned', 'pobBlank', 'pobJewels'] as const;
+// Older wording saved with builds from before affix tiers were worked out on display.
+const reworded: Record<string, Key> = {
+ "Uniques without exact rolls use labelled PoB reference ranges. Affix tiers the guide doesn't give are left out, never guessed.": 'note.uniqueRanges',
+ 'Unresolved affix tiers and item properties are left blank.': 'note.pobBlank',
+};
 
 /** An import note in the language shown. */
 export function noteText(note: string): string {
  const known = fixed.find(key => en[`note.${key}`] === note);
  if (known) return t(`note.${known}`);
+ if (Object.hasOwn(reworded, note)) return t(reworded[note]!);
  for (const [pattern, text] of notes) { const m = pattern.exec(note); if (m) return text(m); }
  return note;
 }

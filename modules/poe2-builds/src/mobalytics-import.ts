@@ -154,7 +154,7 @@ export function parseMobalytics(document:Obj,input:string):Build {
   guideImport:{source:'Mobalytics',url:address.url,documentId:str(document.id),revision:String(document.version??''),importedAt:new Date().toISOString(),variantIds:variants.map(v=>str(v.id))},
   guideExport:JSON.stringify({id:document.id,version:document.version,data,content:content.filter(c=>!['NgfDocumentCmWidgetDiscoveryPreviewCompactV2','NgfDocumentCmWidgetCommentsV1','NgfDocumentCmWidgetPromoBannerHorizontalV1'].includes(str(c.__typename)))}),
   importerVersion:`${MOBALYTICS_ADAPTER.source} adapter ${MOBALYTICS_ADAPTER.version} · patch ${MOBALYTICS_ADAPTER.patches.join(', ')}`,
-  importNotes:['Planner recommendations may omit rarity, exact item rolls and gem levels. Missing values remain empty.','Uniques without exact rolls use labelled PoB reference ranges. Affix tiers the guide doesn\'t give are left out, never guessed.',...keptNotes(variants)]};
+  importNotes:['Planner recommendations may omit rarity, exact item rolls and gem levels. Missing values remain empty.','Uniques without exact rolls use labelled PoB reference ranges. Affix tiers show only where they\'re certain, never guessed.',...keptNotes(variants)]};
  const video=content.find(c=>str(obj(c.data).videoUrl));if(video)b.video=str(obj(video.data).videoUrl);
  return validate(portable(b));
 }

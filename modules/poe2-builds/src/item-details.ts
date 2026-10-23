@@ -4,6 +4,7 @@ import type {Item,AffixRow,ItemProperty} from './model';
 import {itemImage} from './item-art';
 import {esc} from './html';
 import {t} from './i18n';
+import {affixRows} from './affix-tiers';
 
 export const cleanStat=(s:string)=>s.replace(/\[([^\]|]+)\|([^\]]+)\]/g,'$2').replace(/\[([^\]]+)\]/g,'$1');
 const ordinary=['explicitMods','fracturedMods','craftedMods','desecratedMods'];
@@ -18,10 +19,11 @@ function property(p:ItemProperty){
  const text=filled(p);
  return text!==undefined?esc(text):`${esc(cleanStat(p.name).replace(/:$/,''))}: ${values(p)}`;
 }
-function label(a:AffixRow){return `${t(a.type==='P'?'gear.prefix':'gear.suffix')} · ${a.tier?t('gear.tier',{tier:a.tier}):t('gear.tierUnknown')}${a.name?' · '+a.name:''}${a.hybrid?' · '+t('gear.hybrid'):''}`;}
+function label(a:AffixRow){return `${t(a.type==='P'?'gear.prefix':'gear.suffix')} · ${a.tier?a.tiers?t('gear.tierOf',{tier:a.tier,count:a.tiers}):t('gear.tier',{tier:a.tier}):t('gear.tierNotGiven')}${a.name?' · '+a.name:''}${a.hybrid?' · '+t('gear.hybrid'):''}`;}
 function affixInfo(item:Item,text:string,kind:string){
  if(!ordinary.includes(kind)||item.rarity==='unique')return undefined;
- return item.affixRows?.find(a=>a.text===cleanStat(text));
+ const line=cleanStat(text);
+ return affixRows(item).find(a=>(!a.kind||a.kind===kind)&&a.text===line);
 }
 function row(item:Item,text:string,kind:string){
  const info=affixInfo(item,text,kind),status=info?.status||({craftedMods:'Crafted',fracturedMods:'Fractured',desecratedMods:'Desecrated'}[kind]||'');
