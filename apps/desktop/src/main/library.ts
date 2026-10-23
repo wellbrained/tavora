@@ -127,7 +127,7 @@ export const MAX_NAME = 80;
 export const MAX_LABEL = 3;
 
 /** The system file dialogs that open where the player last picked from. */
-export const DIALOG_PLACES = ["install-module", "development-folder", "game-image", "module-files", "cloud-copy"] as const;
+export const DIALOG_PLACES = ["install-module", "development-folder", "game-image", "module-files", "cloud-copy", "save-picture"] as const;
 export type DialogPlace = (typeof DIALOG_PLACES)[number];
 
 /** Most development folders kept. */

@@ -62,7 +62,7 @@ Some calls need no grant but only work right after the player clicked or pressed
 
 - `tavora.links.open(url)`: opens a web page in the game's Browser panel.
 - `tavora.clipboard.writeImage(png)`: copies a PNG.
-- `tavora.pictures.save(png, name)`: saves a PNG in the player's `Pictures\Tavora` folder.
+- `tavora.pictures.save(png, name)`: saves a PNG where the player picks in Tavora's save dialog.
 - `tavora.ui.showMenu(...)`: a menu Tavora draws above every panel.
 - `tavora.overlay.copyLink(key)`: copies an overlay's link for OBS.
 - `tavora.hotkeys.set(action, target, label)`: opens Tavora's hotkey dialog.

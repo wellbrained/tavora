@@ -286,7 +286,22 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Copied the board as an image");
   expect(await app.evaluate(async ({ clipboard }) => (await clipboard.read()).flatMap((item) => item.types))).toContain("image/png");
 
-  // Save as picture writes the same PNG into Pictures\Tavora, named after the board, and never replaces a file.
+  // Save as picture opens the save dialog in Pictures\Tavora with the board's name filled in (numbered when taken);
+  // here the player takes what it suggests. Closing the dialog saves nothing.
+  await app.evaluate(({ dialog }) => {
+    const state = globalThis as { saveAnswer?: "save" | "close"; savedIn?: string[] };
+    state.saveAnswer = "close";
+    state.savedIn = [];
+    dialog.showSaveDialog = (async (_window: unknown, options: { defaultPath?: string }) => {
+      state.savedIn!.push(options.defaultPath ?? "");
+      return state.saveAnswer === "close" ? { canceled: true, filePath: "" } : { canceled: false, filePath: options.defaultPath! };
+    }) as unknown as typeof dialog.showSaveDialog;
+  });
+  await inModule(app, WHITEBOARD, `${q("notice-toast")}?.querySelector("button")?.click()`);
+  await click(app, "save-picture");
+  await expect.poll(() => app.evaluate(() => (globalThis as { savedIn?: string[] }).savedIn!.length)).toBe(1);
+  expect(await app.evaluate(() => (globalThis as { savedIn?: string[] }).savedIn![0])).toMatch(/[\\/]Pictures[\\/]Tavora[\\/]Board 1 [^\\/]+\.png$/);
+  await app.evaluate(() => void ((globalThis as { saveAnswer?: string }).saveAnswer = "save"));
   for (const expected of [/^Board 1 \d{4}-\d\d-\d\d \d\d-\d\d\.png$/, /^Board 1 \d{4}-\d\d-\d\d \d\d-\d\d( \(2\))?\.png$/]) {
     await inModule(app, WHITEBOARD, `${q("notice-toast")}?.querySelector("button")?.click()`);
     await click(app, "save-picture");

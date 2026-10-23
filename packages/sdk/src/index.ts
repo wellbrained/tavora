@@ -256,13 +256,14 @@ export interface TavoraSDK {
   };
   pictures: {
     /**
-     * Saves a picture as a .png file in Tavora's folder in the player's Pictures (Pictures\Tavora), right away,
-     * without a dialog. `name` suggests the file name: Tavora makes it safe and adds " (2)" and so on rather than
-     * replace a file. Resolves with the name it was saved under; the module never learns where the folder is.
+     * Saves a picture as a .png file where the player says: Tavora's save dialog opens in the folder they last saved a
+     * picture to, at first Pictures\Tavora. `name` suggests the file name: Tavora makes it safe and adds " (2)" and so
+     * on when it is taken. Resolves with the name it was saved under, or null when the player closed the dialog; the
+     * module never learns the folder. Tavora 0.20.16 and older save in Pictures\Tavora without asking.
      * Call it from the click or key press that asked for it: the host refuses it otherwise (PERMISSION_DENIED), and
      * one press saves one picture. The same PNG limits as clipboard.writeImage apply.
      */
-    save(png: Blob, name?: string): Promise<{ fileName: string }>;
+    save(png: Blob, name?: string): Promise<{ fileName: string } | null>;
   };
   links: {
     /**
@@ -661,6 +662,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
           throw new TavoraError({ code: "INTERNAL", message: "could not save the picture" });
         }
         const body = (await response.json().catch(() => null)) as { fileName?: string; error?: ErrorPayload } | null;
+        if (response.ok && body?.fileName === null) return null;
         if (response.ok && typeof body?.fileName === "string") return { fileName: body.fileName };
         throw new TavoraError(body?.error ?? { code: "INTERNAL", message: `could not save the picture (${response.status})` });
       },
