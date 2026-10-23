@@ -31,7 +31,8 @@ export interface Controls {
   /** Puts the selection, or the whole board when nothing is selected, on the clipboard as a PNG. Call it from a click or key press. */
   copyAsPicture(): Promise<"selection" | "board">;
   /** Saves the same picture as a file in Pictures\Tavora, named after `name`. Call it from a click or key press. */
-  saveAsPicture(name: string): Promise<{ what: "selection" | "board"; fileName: string }>;
+  /** Null when the player closed the save dialog. */
+  saveAsPicture(name: string): Promise<{ what: "selection" | "board"; fileName: string } | null>;
   /** Takes everything off the board, as one step that Undo brings back; returns how to put it all back. */
   clear(): () => void;
 }
@@ -234,8 +235,8 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
       },
       saveAsPicture: async (name) => {
         const picture = await pictureOf(instance);
-        const { fileName } = await sdk.pictures.save(picture.png, name);
-        return { what: picture.what, fileName };
+        const saved = await sdk.pictures.save(picture.png, name);
+        return saved && { what: picture.what, fileName: saved.fileName };
       },
       clear: () => {
         const before = instance.getSceneElements();

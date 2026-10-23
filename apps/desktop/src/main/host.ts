@@ -108,7 +108,8 @@ import { Streaming } from "./streaming";
 import { findInstalledGames } from "./launcher-games";
 import { findSteamDir, isSteamAppId, loadAppInfo, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
-import { ModuleView, REVEAL_CAP_MS } from "./module-view";
+import { ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
+import { freeFileName } from "./picture-save-http";
 import { HostError } from "./errors";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { isWebUrl, siteOfUrl } from "./browser-url";
@@ -2784,6 +2785,7 @@ export class Host {
       },
       onOpenLink: (url) => this.openLinkFromModule(url),
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
+      savePicture: (png, name) => this.savePictureAs(png, name),
       pickReadOnlyFile: async extensions => {
         const defaultPath=await saveDialogDirectory(new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,game.id),this.library.games[game.id]?.catalogId ?? game.id);
         const picked = await dialog.showOpenDialog(this.window, {...(defaultPath?{defaultPath}:{}),title:this.language.startsWith('de')?'Datei mit '+this.shown(module.manifest).name+' verknüpfen':'Link a file to '+this.shown(module.manifest).name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
@@ -3398,6 +3400,36 @@ export class Host {
     const picked = await dialog.showOpenDialog(this.window, { ...options, ...(folder && existsSync(folder) ? { defaultPath: folder } : {}) });
     const file = picked.filePaths[0];
     return picked.canceled || !file ? undefined : file;
+  }
+
+  /**
+   * pictures.save: the system's save dialog with the module's name suggested (numbered when taken), opening in the
+   * folder the player last saved a picture to while it is still there, else Pictures\Tavora. Answers with the name
+   * the file was saved under, or null when the player closed the dialog.
+   */
+  private async savePictureAs(png: Buffer, name: string): Promise<string | null> {
+    const last = this.library.dialogFolders["save-picture"];
+    const folder = last && existsSync(last) ? last : picturesFolder();
+    await mkdir(folder, { recursive: true });
+    const german = this.language.startsWith("de");
+    const picked = await dialog.showSaveDialog(this.window, {
+      title: german ? "Bild speichern" : "Save picture",
+      defaultPath: path.join(folder, freeFileName(name, (fileName) => existsSync(path.join(folder, fileName)))),
+      filters: [{ name: german ? "PNG-Bild" : "PNG picture", extensions: ["png"] }],
+      properties: ["showOverwriteConfirmation"],
+    });
+    if (picked.canceled || !picked.filePath) return null;
+    const chosen = path.resolve(picked.filePath);
+    const file = /\.png$/i.test(chosen) ? chosen : `${chosen}.png`;
+    // The dialog asked before replacing the file the player chose; with .png added, it was never asked about.
+    try {
+      await writeFile(file, png, { flag: file === chosen ? "w" : "wx" });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new HostError("CONFLICT", `${path.basename(file)} already exists`);
+      throw error;
+    }
+    this.rememberPicked("save-picture", file);
+    return path.basename(file);
   }
 
   /** The dialog for `place` opens next time in the folder `picked` is in (for a picked folder, its parent), and the library is saved. */

@@ -678,8 +678,9 @@ export const BLOB_ID = /^[a-f0-9]{32}$/;
 export const CLIPBOARD_PATH = "/_clipboard/";
 
 /**
- * POST a PNG here, from the module's own page, to save it as a file in Tavora's folder in the player's Pictures
- * (see pictures.save). `?name=` suggests the file name; the answer is `{ fileName }`, the name it was saved under.
+ * POST a PNG here, from the module's own page, to save it as a file where the player picks in Tavora's save dialog
+ * (see pictures.save). `?name=` suggests the file name; the answer is `{ fileName }`, the name it was saved under,
+ * or `{ fileName: null }` when the player closed the dialog.
  */
 export const PICTURES_PATH = "/_pictures/";
 

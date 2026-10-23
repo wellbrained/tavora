@@ -294,7 +294,7 @@ export default function App() {
     }
   }, []);
 
-  /** Save as picture: the same picture as Copy as picture, saved as a file in Pictures\Tavora right after the click. */
+  /** Save as picture: the same picture as Copy as picture, handed to Tavora's save dialog right after the click. */
   const saveAsPicture = useCallback(async () => {
     const board = controls.current;
     if (!board || copyRunning.current) return;
@@ -302,7 +302,7 @@ export default function App() {
     setCopying(true);
     try {
       const saved = await board.saveAsPicture(pictureName(names.current.get(selectedId.current ?? "") ?? t("boardWord")));
-      setNotice({ id: ++noticeCount.current, message: t(saved.what === "selection" ? "savePicture.selection" : "savePicture.board", { name: saved.fileName }) });
+      if (saved) setNotice({ id: ++noticeCount.current, message: t(saved.what === "selection" ? "savePicture.selection" : "savePicture.board", { name: saved.fileName }) });
     } catch (reason: unknown) {
       const code = reason instanceof TavoraError ? reason.code : undefined;
       const message =

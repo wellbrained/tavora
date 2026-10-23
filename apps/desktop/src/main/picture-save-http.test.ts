@@ -1,9 +1,6 @@
-import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { makePng } from "./clipboard-http.test";
-import { cleanPictureName, freeFileName, savePictureFile, servePictureSave, type PictureSaveDeps } from "./picture-save-http";
+import { cleanPictureName, freeFileName, servePictureSave, type PictureSaveDeps } from "./picture-save-http";
 
 describe("cleanPictureName", () => {
   it("keeps a plain name", () => {
@@ -32,24 +29,14 @@ describe("freeFileName", () => {
   });
 });
 
-describe("savePictureFile", () => {
-  it("makes the folder and never replaces a file", async () => {
-    const folder = path.join(await mkdtemp(path.join(tmpdir(), "tavora-pictures-")), "Tavora");
-    expect(await savePictureFile(folder, Buffer.from("one"), "Board")).toBe("Board.png");
-    await writeFile(path.join(folder, "Board (2).png"), "someone else's");
-    expect(await savePictureFile(folder, Buffer.from("two"), "Board")).toBe("Board (3).png");
-    expect((await readdir(folder)).sort()).toEqual(["Board (2).png", "Board (3).png", "Board.png"]);
-    expect(await readFile(path.join(folder, "Board (2).png"), "utf8")).toBe("someone else's");
-  });
-});
-
 describe("servePictureSave", () => {
-  function deps(allowed = true) {
+  function deps(allowed = true, closed = false) {
     const state = { allowed, saved: [] as { png: Buffer; name: string }[] };
     const value: PictureSaveDeps = {
       allowed: () => state.allowed,
       consume: () => void (state.allowed = false),
       save: async (png, name) => {
+        if (closed) return null;
         state.saved.push({ png, name });
         return `${name}.png`;
       },
@@ -71,6 +58,15 @@ describe("servePictureSave", () => {
     expect(state.saved).toHaveLength(1);
     const again = post(png);
     expect((await servePictureSave(again.request, again.url, value)).status).toBe(403);
+  });
+
+  it("answers null when the player closed the save dialog", async () => {
+    const { state, value } = deps(true, true);
+    const closed = post(makePng(20, 20));
+    const response = await servePictureSave(closed.request, closed.url, value);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ fileName: null });
+    expect(state.saved).toHaveLength(0);
   });
 
   it("refuses without a click, and anything but a complete PNG", async () => {

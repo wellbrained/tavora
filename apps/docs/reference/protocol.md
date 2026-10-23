@@ -122,11 +122,11 @@ A module can keep pictures that are too big for a document: up to 50 MB each and
 
 ### Saving pictures
 
-`sdk.pictures.save(png, name)` saves a picture as a `.png` file in Tavora's own folder in the player's Pictures (`Pictures\Tavora`), right away, without a dialog. The PNG is sent to the module's own address, `POST /_pictures/?name=…`, as the request body, and the answer is `{ fileName }`, the name the file was saved under.
+`sdk.pictures.save(png, name)` saves a picture as a `.png` file where the player says. Tavora's save dialog opens in the folder they last saved a picture to, at first Tavora's own folder in their Pictures (`Pictures\Tavora`), with `name` filled in. The PNG is sent to the module's own address, `POST /_pictures/?name=…`, as the request body, and the answer is `{ fileName }`, the name the file was saved under, or `null` when the player closed the dialog. Tavora 0.20.16 and older save in `Pictures\Tavora` without a dialog.
 
 - **Only after the player did something:** the same as the clipboard, one picture per click or key press within 2 seconds, otherwise `PERMISSION_DENIED`. A press used for the clipboard is used up for saving too.
 - **Only a complete PNG,** with the same checks and limits as the clipboard (`INVALID_PARAMS`, `QUOTA_EXCEEDED`).
-- **Only that folder, only new files:** `name` is a suggestion. Tavora takes out anything a file name cannot hold (slashes, colons, control characters, leading and trailing dots), shortens it to 80 characters, uses `Picture` when nothing is left, adds `.png`, and adds ` (2)`, ` (3)` and so on rather than replace a file. A module cannot choose the folder, the type or overwrite anything, and never learns where the folder is.
+- **The player picks the file:** `name` is a suggestion. Tavora takes out anything a file name cannot hold (slashes, colons, control characters, leading and trailing dots), shortens it to 80 characters, uses `Picture` when nothing is left, adds `.png`, and adds ` (2)`, ` (3)` and so on when the folder already has it. Only the player chooses the folder and name, and a file is replaced only when they confirm that in the dialog. A module cannot choose the folder or the type, and never learns where the file went.
 
 ### Menus
 

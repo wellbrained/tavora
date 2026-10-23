@@ -1,11 +1,9 @@
 // The module address for saving a picture as a file (see png.ts): POST /_pictures/?name=… with a PNG as the body.
 // Like the clipboard, it works only right after the player clicked or pressed a key in the module (one picture per
-// click), and only for a complete, well-formed PNG within the size limits. The file always goes into Tavora's own
-// folder in the player's Pictures, as a new .png that never replaces another; the module only suggests its name and
-// learns the name it was saved under, never where the folder is.
+// click), and only for a complete, well-formed PNG within the size limits. Tavora's save dialog asks the player where
+// it goes (host.ts); the module only suggests its name and learns the name it was saved under, or null when the
+// player closed the dialog, never where the folder is.
 
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { LIMITS } from "@tavora/sdk/protocol";
 import { CLIPBOARD_PNG_LIMITS, json, readBody, STATUS } from "./clipboard-http";
 import { HostError } from "./errors";
@@ -14,8 +12,8 @@ import { checkPng } from "./png";
 export interface PictureSaveDeps {
   allowed(): boolean;
   consume(): void;
-  /** Writes the checked PNG under a name made from `name`, and returns the file name used. */
-  save(png: Buffer, name: string): Promise<string>;
+  /** Writes the checked PNG under a name made from `name`, and returns the file name used, or null when the player did not save it. */
+  save(png: Buffer, name: string): Promise<string | null>;
 }
 
 /** Longest file name (without .png) a module can suggest. */
@@ -42,22 +40,6 @@ export function freeFileName(name: string, taken: (fileName: string) => boolean)
     if (!taken(fileName)) return fileName;
   }
   throw new HostError("QUOTA_EXCEEDED", "too many pictures with this name");
-}
-
-/** Writes a picture into `folder` (made when missing) under the first free name; never replaces a file. */
-export async function savePictureFile(folder: string, png: Buffer, name: string): Promise<string> {
-  await mkdir(folder, { recursive: true });
-  const tried = new Set<string>();
-  for (;;) {
-    const fileName = freeFileName(name, (candidate) => tried.has(candidate));
-    tried.add(fileName);
-    try {
-      await writeFile(path.join(folder, fileName), png, { flag: "wx" });
-      return fileName;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    }
-  }
 }
 
 export async function servePictureSave(request: Request, url: URL, deps: PictureSaveDeps): Promise<Response> {

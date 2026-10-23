@@ -20,7 +20,7 @@ import type { DiscordConnector, DiscordListener } from "./discord";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
 import { serveClipboard } from "./clipboard-http";
-import { savePictureFile, servePictureSave } from "./picture-save-http";
+import { servePictureSave } from "./picture-save-http";
 import { saveJsonExport, serveJsonExport } from './json-export-http';
 import { isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
@@ -59,6 +59,8 @@ export interface ModuleViewOptions {
   /** Shows a module's menu in the host UI, over this panel (host.ts); resolves with the chosen id, or null. */
   showMenu(menu: CheckedMenu): Promise<string | null>;
   pickReadOnlyFile?(extensions:string[]):Promise<string|null>;
+  /** pictures.save, after its click was taken: Tavora's save dialog for the checked PNG; the file name, or null when the player closed it. */
+  savePicture(png: Buffer, name: string): Promise<string | null>;
   tooltip?: {
     show(request:TooltipRequest):Promise<boolean>;
     move(anchor:TooltipAnchor):void;
@@ -116,8 +118,8 @@ async function writeClipboardPicture(png: Buffer): Promise<void> {
   await clipboard.write([new ClipboardItem({ "image/png": new Blob([new Uint8Array(png)], { type: "image/png" }) })]);
 }
 
-/** Where modules save pictures: a Tavora folder in the player's Pictures (tests point Pictures elsewhere, unpackaged only). */
-function picturesFolder(): string {
+/** Where the save dialog for pictures first opens: a Tavora folder in the player's Pictures (tests point Pictures elsewhere, unpackaged only). */
+export function picturesFolder(): string {
   const pictures = !app.isPackaged && process.env.TAVORA_PICTURES_DIR ? path.resolve(process.env.TAVORA_PICTURES_DIR) : app.getPath("pictures");
   return path.join(pictures, "Tavora");
 }
@@ -126,7 +128,7 @@ function picturesFolder(): string {
  * Every module gets its own session per game: separate cookies, web storage,
  * cache and a separate renderer process from the host and other modules.
  */
-function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobStore): Session {
+function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobStore, savePicture: ModuleViewOptions["savePicture"]): Session {
   const ses = session.fromPartition(modulePartition(module.owner, module.manifest.id, game.id));
   if (hardened.has(ses)) return ses;
   hardened.add(ses);
@@ -155,7 +157,7 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
       return servePictureSave(request, url, {
         allowed: () => Date.now() - gesture.at <= GESTURE_MS,
         consume: () => void (gesture.at = 0),
-        save: (png, name) => savePictureFile(picturesFolder(), png, name),
+        save: savePicture,
       });
     }
     if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
@@ -241,7 +243,7 @@ export class ModuleView {
     const { module, game } = options;
     this.view = new WebContentsView({
       webPreferences: {
-        session: moduleSession(module, game, options.data.blobs),
+        session: moduleSession(module, game, options.data.blobs, (png, name) => options.savePicture(png, name)),
         preload: options.preload,
         sandbox: true,
         contextIsolation: true,
