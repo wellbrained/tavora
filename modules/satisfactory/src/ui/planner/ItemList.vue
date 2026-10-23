@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // A titled list of items with an amount each, such as the raw resources a plan needs.
+// An entry can carry a short note, such as why it has to be brought in.
 import { language, locale, t } from "../../i18n";
 import GameIcon from "../common/GameIcon.vue";
 import { useModule, useNames } from "../context";
 import { itemTooltip } from "../tooltip";
 
-defineProps<{ title: string; hint?: string; entries: { item: string; text: string }[]; testid?: string }>();
+defineProps<{ title: string; hint?: string; entries: { item: string; text: string; note?: string }[]; testid?: string }>();
 
 const context = useModule();
 const { data } = context.services;
@@ -22,6 +23,7 @@ const names = useNames(context);
         <span v-tip="() => itemTooltip(data, entry.item, language, locale(), t)" class="flex min-w-0 flex-1 items-center gap-2">
           <GameIcon :icon="data.items[entry.item]?.icon" :size="20" />
           <span class="min-w-0 truncate">{{ names.item(entry.item) }}</span>
+          <span v-if="entry.note" class="text-muted-foreground flex-none text-xs" data-testid="entry-note">{{ entry.note }}</span>
         </span>
         <span class="flex-none tabular-nums">{{ entry.text }}</span>
       </li>

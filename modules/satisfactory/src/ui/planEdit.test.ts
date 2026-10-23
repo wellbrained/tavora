@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { World } from "../contracts/plan";
 import { sampleData } from "../data/sample";
+import { newWorld } from "../model/world";
 import {
   addRate,
   canPlan,
@@ -8,7 +9,6 @@ import {
   defaultRate,
   dropRecipe,
   emptyPlan,
-  isUnlocked,
   parseRate,
   planForItem,
   recipesMaking,
@@ -19,7 +19,7 @@ import {
   uniqueName,
 } from "./planEdit";
 
-const world: World = { format: "tavora.satisfactory.world", version: 1, name: "W", unlockedAlternates: [], showAllAlternates: false };
+const world: World = newWorld("W");
 
 describe("defaultRate", () => {
   it("is one machine's output of the default recipe", () => {
@@ -100,14 +100,6 @@ describe("chooseRecipe", () => {
 
 describe("alternates in a world", () => {
   const cast = sampleData.recipes.Recipe_Alternate_Screw_C!;
-  const standard = sampleData.recipes.Recipe_Screw_C!;
-
-  it("count standard recipes as unlocked, alternates only when ticked or all are shown", () => {
-    expect(isUnlocked(world, standard)).toBe(true);
-    expect(isUnlocked(world, cast)).toBe(false);
-    expect(isUnlocked(setAlternate(world, cast.id, true), cast)).toBe(true);
-    expect(isUnlocked({ ...world, showAllAlternates: true }, cast)).toBe(true);
-  });
 
   it("tick and untick without duplicates", () => {
     const once = setAlternate(setAlternate(world, cast.id, true), cast.id, true);

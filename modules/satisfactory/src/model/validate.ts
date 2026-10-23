@@ -18,6 +18,8 @@ export const LIMITS = {
   rates: 100,
   recipeChoices: 1000,
   unlockedAlternates: 1000,
+  /** Milestones and research a world can have ticked off; the game has a few hundred. */
+  progressEntries: 2000,
   /** Per minute; far beyond any factory, low enough to keep the numbers sane. */
   maxPerMinute: 1_000_000,
   /** What files.exportJson takes. */
@@ -45,7 +47,30 @@ export function readWorld(value: unknown): World {
     unlockedAlternates.push(recipe);
   }
   if (typeof raw.showAllAlternates !== "boolean") throw new Error("This world is missing a setting.");
-  return { format: WORLD_FORMAT, version: 1, name: name(raw.name), unlockedAlternates, showAllAlternates: raw.showAllAlternates };
+  // Worlds saved before the tracker have none of the progress fields.
+  const phasesDelivered = ids(raw.phasesDelivered ?? [], (phase) => Number.isInteger(phase) && (phase as number) >= 0 && (phase as number) <= 100) as number[];
+  const milestonesDone = ids(raw.milestonesDone ?? [], (id) => typeof id === "string" && id.length > 0) as string[];
+  const researchDone = ids(raw.researchDone ?? [], (id) => typeof id === "string" && id.length > 0) as string[];
+  const planWithUnlocks = raw.planWithUnlocks ?? false;
+  if (typeof planWithUnlocks !== "boolean") throw new Error("This world is missing a setting.");
+  return {
+    format: WORLD_FORMAT,
+    version: 1,
+    name: name(raw.name),
+    unlockedAlternates,
+    showAllAlternates: raw.showAllAlternates,
+    phasesDelivered,
+    milestonesDone,
+    researchDone,
+    planWithUnlocks,
+  };
+}
+
+/** A list of distinct entries that each pass `valid`. */
+function ids(value: unknown, valid: (entry: unknown) => boolean): unknown[] {
+  const entries = list(value, LIMITS.progressEntries, "This world's progress is damaged.");
+  if (entries.some((entry) => !valid(entry)) || new Set(entries).size !== entries.length) throw new Error("This world's progress is damaged.");
+  return [...entries];
 }
 
 /** With `data`, every item and recipe must also be in it. */

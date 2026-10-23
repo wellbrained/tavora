@@ -9,6 +9,7 @@ import type { GameData } from "../contracts/data";
 import type { Plan, World } from "../contracts/plan";
 import type { Repository, RepositoryChange, Stored } from "../contracts/repository";
 import { LIMITS, PLAN_FILE_FORMAT, PLAN_FORMAT, WORLD_FORMAT, readPlan, readPlanFile, readWorld, type PlanFile } from "./validate";
+import { newWorld } from "./world";
 
 type Kind = RepositoryChange["kind"];
 
@@ -54,13 +55,7 @@ export class DocumentRepository implements Repository {
   async ensureWorld(): Promise<Stored<World>> {
     const [first] = await this.listWorlds();
     if (first) return first;
-    const world: World = {
-      format: WORLD_FORMAT,
-      version: 1,
-      name: this.language().toLowerCase().startsWith("de") ? "Meine Welt" : "My world",
-      unlockedAlternates: [],
-      showAllAlternates: false,
-    };
+    const world = newWorld(this.language().toLowerCase().startsWith("de") ? "Meine Welt" : "My world");
     try {
       return await this.putWorld(world, { id: FIRST_WORLD_ID, ifRevision: 0 });
     } catch (error) {

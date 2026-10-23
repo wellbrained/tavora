@@ -1,18 +1,12 @@
 // Shorthands for the solver tests.
 
-import type { GameData, ItemId, RecipeId } from "../contracts/data";
+import type { GameData, ItemId, Recipe, RecipeId, Unlock } from "../contracts/data";
 import type { Plan, PlanResult, Rate, SolveResult, World } from "../contracts/plan";
 import { sampleData } from "../data/sample";
+import { newWorld } from "../model/world";
 import { solve } from "./solve";
 
-export const world = (patch: Partial<World> = {}): World => ({
-  format: "tavora.satisfactory.world",
-  version: 1,
-  name: "World",
-  unlockedAlternates: [],
-  showAllAlternates: false,
-  ...patch,
-});
+export const world = (patch: Partial<World> = {}): World => ({ ...newWorld("World"), ...patch });
 
 export const plan = (
   targets: Record<ItemId, number>,
@@ -43,4 +37,23 @@ export function solved(input: { plan: Plan; world?: World; data?: GameData }): P
   const outcome = attempt(input);
   if (!outcome.ok) throw new Error(`Expected a result, got ${JSON.stringify(outcome.error)}`);
   return outcome.result;
+}
+
+/** The sample with the unlock sources its progress section names, instead of "start" everywhere. */
+export function tracked(): GameData {
+  const by = (unlock: Unlock) => [unlock];
+  const set = (id: string, unlockedBy: Unlock[]): [string, Recipe] => [id, { ...sampleData.recipes[id]!, unlockedBy }];
+  return {
+    ...sampleData,
+    recipes: {
+      ...sampleData.recipes,
+      ...Object.fromEntries([
+        set("Recipe_IronPlate_C", by({ kind: "milestone", tier: 0, name: { en: "HUB Upgrade 1" } })),
+        set("Recipe_IronPlateReinforced_C", by({ kind: "milestone", tier: 2, name: { en: "Part Assembly" } })),
+        set("Recipe_Plastic_C", by({ kind: "mam", tree: { en: "Oil" }, name: { en: "Plastics" } })),
+        set("Recipe_Rubber_C", by({ kind: "mam", tree: { en: "Oil" }, name: { en: "Plastics" } })),
+        set("Recipe_PetroleumCoke_C", by({ kind: "awesomeShop", name: { en: "Coke" } })),
+      ]),
+    },
+  };
 }

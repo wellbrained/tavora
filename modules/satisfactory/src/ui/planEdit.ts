@@ -94,10 +94,6 @@ export function dropRecipe(plan: Plan, recipe: RecipeId): Plan {
   return { ...plan, recipeChoices: Object.fromEntries(Object.entries(plan.recipeChoices).filter(([, chosen]) => chosen !== recipe)) };
 }
 
-export function isUnlocked(world: World, recipe: Recipe): boolean {
-  return !recipe.alternate || world.showAllAlternates || world.unlockedAlternates.includes(recipe.id);
-}
-
 export function setAlternate(world: World, recipe: RecipeId, unlocked: boolean): World {
   const others = world.unlockedAlternates.filter((id) => id !== recipe);
   return { ...world, unlockedAlternates: unlocked ? [...others, recipe] : others };

@@ -22,6 +22,7 @@ import { language, t } from "../../i18n";
 import { parsePlannerContent } from "../content";
 import { useModule, useNames } from "../context";
 import { solveErrorText } from "../describe";
+import { newWorld } from "../../model/world";
 import { canPlan, chooseRecipe, dropRecipe, emptyPlan, planForItem, removeItem, setAlternate, uniqueName } from "../planEdit";
 import AlternatesDialog from "./AlternatesDialog.vue";
 import NameDialog from "./NameDialog.vue";
@@ -252,7 +253,7 @@ async function applyName(name: string) {
       edit((current) => ({ ...current, name }));
       await flush();
     } else if (kind === "newWorld") {
-      const stored = await repository.putWorld({ format: "tavora.satisfactory.world", version: 1, name, unlockedAlternates: [], showAllAlternates: false });
+      const stored = await repository.putWorld(newWorld(name));
       worlds.value = await repository.listWorlds();
       edit((current) => ({ ...current, worldId: stored.id }));
     } else if (kind === "renameWorld" && world.value) await updateWorld(world.value.id, (current) => ({ ...current, name }));
@@ -280,6 +281,10 @@ function updateWorld(id: string, change: (current: World) => World): Promise<voi
 
 function setWorldAlternate(recipe: string, unlocked: boolean) {
   if (world.value) void updateWorld(world.value.id, (current) => setAlternate(current, recipe, unlocked)).catch((error) => context.notify(t("notice.saveFailed", { error: errorMessage(error) })));
+}
+
+function setPlanWithUnlocks(on: boolean) {
+  if (world.value) void updateWorld(world.value.id, (current) => ({ ...current, planWithUnlocks: on })).catch((error) => context.notify(t("notice.saveFailed", { error: errorMessage(error) })));
 }
 
 function setShowAll(on: boolean) {
@@ -490,6 +495,6 @@ const canTarget = (item: string) => canPlan(data, item);
       @confirm="deletePlan"
       @cancel="confirmDelete = false"
     />
-    <AlternatesDialog v-if="showAlternates && world" :world="world.value" @toggle="setWorldAlternate" @show-all="setShowAll" @close="showAlternates = false" />
+    <AlternatesDialog v-if="showAlternates && world" :world="world.value" @toggle="setWorldAlternate" @show-all="setShowAll" @plan-with-unlocks="setPlanWithUnlocks" @close="showAlternates = false" />
   </div>
 </template>

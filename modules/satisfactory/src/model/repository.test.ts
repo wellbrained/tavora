@@ -4,6 +4,7 @@ import type { Plan, World } from "../contracts/plan";
 import type { RepositoryChange } from "../contracts/repository";
 import { sampleData } from "../data/sample";
 import { DocumentRepository, FIRST_WORLD_ID } from "./repository";
+import { newWorld } from "./world";
 
 interface Doc {
   id: string;
@@ -64,14 +65,7 @@ function fakeSdk() {
 
 const repository = (fake = fakeSdk(), language = "en") => ({ fake, repo: new DocumentRepository(fake.sdk, { data: sampleData, language }) });
 
-const world = (name = "Main save", patch: Partial<World> = {}): World => ({
-  format: "tavora.satisfactory.world",
-  version: 1,
-  name,
-  unlockedAlternates: [],
-  showAllAlternates: false,
-  ...patch,
-});
+const world = (name = "Main save", patch: Partial<World> = {}): World => ({ ...newWorld(name), ...patch });
 
 const plan = (worldId: string, patch: Partial<Plan> = {}): Plan => ({
   format: "tavora.satisfactory.plan",

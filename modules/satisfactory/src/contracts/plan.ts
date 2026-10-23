@@ -1,7 +1,7 @@
 // Worlds, plans and the solver's input and result. The model stores worlds and
 // plans; the solver turns a plan into the tables the Planner shows.
 
-import type { Amount, BuildingId, GameData, ItemId, RecipeId } from "./data";
+import type { Amount, BuildingId, GameData, ItemId, RecipeId, SchematicId } from "./data";
 
 /** An item flowing at a rate, per minute (pieces, or cubic metres for fluids). */
 export interface Rate {
@@ -18,6 +18,17 @@ export interface World {
   unlockedAlternates: RecipeId[];
   /** Theory-crafting: treat every alternate as unlocked. */
   showAllAlternates: boolean;
+  /** Space Elevator phases delivered, by number. Worlds saved before the tracker read as none. */
+  phasesDelivered: number[];
+  /** HUB upgrades and milestones bought. */
+  milestonesDone: SchematicId[];
+  /** MAM research done. */
+  researchDone: SchematicId[];
+  /**
+   * Plan only with recipes this world has unlocked through what is ticked off. Off (the default): every
+   * standard recipe counts, as for players who never track their progress.
+   */
+  planWithUnlocks: boolean;
 }
 
 export interface Plan {
@@ -59,7 +70,7 @@ export type SolveError =
       recipe?: RecipeId;
       message: string;
     }
-  /** A chosen recipe is an alternate the world has not unlocked (and showAllAlternates is off). */
+  /** A chosen recipe is one the world has not unlocked: an alternate (and showAllAlternates is off), or with `planWithUnlocks` any recipe. */
   | { code: "LOCKED_RECIPE"; recipe: RecipeId; item: ItemId }
   /** A chosen recipe does not produce the item it was chosen for. */
   | { code: "WRONG_RECIPE"; recipe: RecipeId; item: ItemId }
@@ -73,6 +84,8 @@ export interface PlanResult {
   rawResources: Rate[];
   /** Items with no usable recipe in this world that are not resources: they must be brought in. */
   imports: Rate[];
+  /** Imports whose recipe the world has not unlocked yet (only with `planWithUnlocks`). */
+  notUnlocked: ItemId[];
   /** Fixed inputs the plan uses, at most what was supplied. */
   fixedInputsUsed: Rate[];
   /** Side products that leave the factory unused. */

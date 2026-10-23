@@ -4,6 +4,7 @@
 
 import type { Amount, GameData, ItemId, Recipe, RecipeId } from "../contracts/data";
 import type { Plan, PlanResult, Rate, RecipeRow, Solve, SolveError, World } from "../contracts/plan";
+import { recipeUnlocker } from "../model/world";
 import { minimise, type Constraint } from "./simplex";
 
 // The objective, cheapest first:
@@ -26,7 +27,7 @@ const DEFAULT_POWER_EXPONENT = 1.321928;
 export const solve: Solve = ({ data, plan, world }) => {
   const invalid = checkPlan(data, plan);
   if (invalid) return fail(invalid);
-  const usable = usableIn(world);
+  const usable = recipeUnlocker(data, world);
   const resources = new Set(data.resources);
   const choices = plan.recipeChoices ?? {};
 
@@ -131,6 +132,14 @@ export const solve: Solve = ({ data, plan, world }) => {
     else add(byproducts, item, left), add(surplus, item, unused);
   }
   for (const [item, perMinute] of supply) if (!seen.has(item)) add(surplus, item, perMinute);
+  // Brought in only because the world has not unlocked the recipe that would make it.
+  const notUnlocked = imports
+    .map((rate) => rate.item)
+    .filter((item) => {
+      const fallback = data.defaultRecipe[item];
+      const recipe = fallback === undefined ? undefined : data.recipes[fallback];
+      return recipe !== undefined && makes(recipe, item) && !usable(recipe);
+    });
 
   const alternatives = producers(data, usable);
   const rows = orderRows(running, recipeOf, plan.targets.map((target) => target.item)).map((recipe) =>
@@ -148,6 +157,7 @@ export const solve: Solve = ({ data, plan, world }) => {
     rows,
     rawResources,
     imports,
+    notUnlocked,
     fixedInputsUsed,
     byproducts,
     surplus,
@@ -186,12 +196,6 @@ function checkPlan(data: GameData, plan: Plan): InvalidPlan | null {
     if (!Object.hasOwn(data.recipes, recipe)) return invalid("UNKNOWN_RECIPE", `Unknown recipe for ${item}: ${recipe}.`, { item, recipe });
   }
   return null;
-}
-
-/** Standard recipes are always usable; alternates once unlocked, or all of them when the world shows all. */
-function usableIn(world: World): (recipe: Recipe) => boolean {
-  const unlocked = new Set(world.unlockedAlternates);
-  return (recipe) => !recipe.alternate || world.showAllAlternates || unlocked.has(recipe.id);
 }
 
 function makes(recipe: Recipe, item: ItemId): boolean {

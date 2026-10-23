@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Which alternate recipes a world has unlocked: a searchable checklist grouped
-// by product, and a switch to plan as if all were unlocked.
+// by product, a switch to plan with what the world has unlocked, and one to plan
+// as if every alternate were unlocked.
 import { Search } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
@@ -16,13 +17,14 @@ import { useModule } from "../context";
 import { recipeTooltip } from "../tooltip";
 
 const props = defineProps<{ world: World }>();
-const emit = defineEmits<{ toggle: [recipe: string, unlocked: boolean]; showAll: [on: boolean]; close: [] }>();
+const emit = defineEmits<{ toggle: [recipe: string, unlocked: boolean]; showAll: [on: boolean]; planWithUnlocks: [on: boolean]; close: [] }>();
 
 const context = useModule();
 const { data } = context.services;
 const vTip = context.tip;
 const query = ref("");
 const switchId = useId();
+const unlocksId = useId();
 
 const total = computed(() => Object.values(data.recipes).filter((recipe) => recipe.alternate).length);
 const unlockedCount = computed(() => props.world.unlockedAlternates.filter((id) => data.recipes[id]?.alternate).length);
@@ -37,6 +39,14 @@ const unlocked = computed(() => new Set(props.world.unlockedAlternates));
         <DialogTitle class="text-lg">{{ t("alt.title") }}</DialogTitle>
         <DialogDescription>{{ t("alt.description", { world: world.name }) }}</DialogDescription>
       </DialogHeader>
+
+      <div class="flex items-start gap-3">
+        <div class="min-w-0 flex-1">
+          <label :for="unlocksId" class="text-sm font-medium">{{ t("alt.planUnlocked") }}</label>
+          <p class="text-muted-foreground text-xs">{{ t("alt.planUnlockedHint") }}</p>
+        </div>
+        <Switch :id="unlocksId" :model-value="world.planWithUnlocks" data-testid="plan-unlocked" @update:model-value="(on: boolean) => emit('planWithUnlocks', on)" />
+      </div>
 
       <div class="flex items-start gap-3">
         <div class="min-w-0 flex-1">

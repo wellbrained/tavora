@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Amount, Building, GameData, Recipe } from "../contracts/data";
 import { sampleData } from "../data/sample";
-import { attempt, byItem, machinesOf, plan, solved, world } from "./testing";
+import { attempt, byItem, machinesOf, plan, solved, tracked, world } from "./testing";
 
 const ORE = "Desc_OreIron_C";
 const OIL = "Desc_LiquidOil_C";
@@ -122,6 +122,43 @@ describe("alternate recipes", () => {
   it("ignores choices for items the plan does not reach", () => {
     const unused = plan({ [PLATE]: 20 }, { recipeChoices: { [SCREW]: CAST_SCREW } });
     expect(machinesOf(solved({ plan: unused }))).toEqual({ Recipe_IronPlate_C: 1, Recipe_IngotIron_C: 1 });
+  });
+});
+
+describe("planning with what the world has unlocked", () => {
+  const data = tracked();
+
+  it("brings in what the world has not unlocked, and says so", () => {
+    const result = solved({ data, plan: plan({ Desc_IronPlateReinforced_C: 1 }), world: world({ planWithUnlocks: true }) });
+    expect(result.rows).toEqual([]);
+    expect(byItem(result.imports)).toEqual({ Desc_IronPlateReinforced_C: 1 });
+    expect(result.notUnlocked).toEqual(["Desc_IronPlateReinforced_C"]);
+  });
+
+  it("plans the chain once its milestones are ticked", () => {
+    const done = world({ planWithUnlocks: true, milestonesDone: ["Schematic_Tutorial1_C", "Schematic_2-1_C"] });
+    const result = solved({ data, plan: plan({ Desc_IronPlateReinforced_C: 1 }), world: done });
+    expect(Object.keys(machinesOf(result))).toContain("Recipe_IronPlateReinforced_C");
+    expect(result.imports).toEqual([]);
+    expect(result.notUnlocked).toEqual([]);
+  });
+
+  it("keeps items without any recipe apart from locked ones", () => {
+    const done = world({ planWithUnlocks: true, milestonesDone: ["Schematic_2-1_C"] });
+    const result = solved({ data, plan: plan({ Desc_IronPlateReinforced_C: 1 }), world: done });
+    expect(byItem(result.imports)).toHaveProperty("Desc_IronPlate_C");
+    expect(result.notUnlocked).toEqual(["Desc_IronPlate_C"]);
+  });
+
+  it("refuses a chosen recipe the world has not unlocked", () => {
+    const outcome = attempt({ data, plan: plan({ Desc_Plastic_C: 1 }, { recipeChoices: { Desc_Plastic_C: "Recipe_Plastic_C" } }), world: world({ planWithUnlocks: true }) });
+    expect(outcome).toEqual({ ok: false, error: { code: "LOCKED_RECIPE", recipe: "Recipe_Plastic_C", item: "Desc_Plastic_C" } });
+  });
+
+  it("changes nothing while the switch is off", () => {
+    const result = solved({ data, plan: plan({ Desc_IronPlateReinforced_C: 1 }), world: world() });
+    expect(result.imports).toEqual([]);
+    expect(result.notUnlocked).toEqual([]);
   });
 });
 

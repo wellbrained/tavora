@@ -50,7 +50,14 @@ const rateEntries = (rates: Rate[]) => rates.map((rate) => ({ item: rate.item, t
 const lists = computed(() =>
   [
     { key: "raw", title: t("results.raw"), entries: rateEntries(props.result.rawResources) },
-    { key: "imports", title: t("results.imports"), hint: t("results.importsHint"), entries: rateEntries(props.result.imports) },
+    {
+      key: "imports",
+      title: t("results.imports"),
+      hint: t("results.importsHint"),
+      entries: rateEntries(props.result.imports).map((entry) =>
+        props.result.notUnlocked.includes(entry.item) ? { ...entry, note: t("results.notUnlocked") } : entry,
+      ),
+    },
     { key: "fixed", title: t("results.fixedUsed"), entries: rateEntries(props.result.fixedInputsUsed) },
     { key: "byproducts", title: t("results.byproducts"), entries: rateEntries(props.result.byproducts) },
     { key: "surplus", title: t("results.surplus"), entries: rateEntries(props.result.surplus) },
