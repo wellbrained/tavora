@@ -90,8 +90,7 @@
         "filter": [
           "*/tavora.module.json",
           "*/changelog.json",
-          "*/dist/**",
-          "!poe2-builds/**"
+          "*/dist/**"
         ]
       },
       {

@@ -453,25 +453,6 @@ importers:
         specifier: 3.3.11
         version: 3.3.11(typescript@5.9.3)
 
-  modules/poe2-builds:
-    dependencies:
-      '@tavora/official-ui':
-        specifier: workspace:*
-        version: link:../shared
-      '@tavora/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
-      '@xmldom/xmldom':
-        specifier: 0.8.15
-        version: 0.8.15
-      brotli:
-        specifier: 2.1.0
-        version: 2.1.0
-    devDependencies:
-      vite:
-        specifier: 8.3.4
-        version: 8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
-
   modules/shared:
     dependencies:
       '@fontsource-variable/inter':
@@ -2649,9 +2630,6 @@ packages:
   braces@3.0.3:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
-
-  brotli@2.1.0:
-    resolution: {integrity: sha512-4KAtOr4Z3jaIQlXy9AeuaVz1vPWTyZ6eiQYu4SsSz6VcUsV6Epz6kA3Vf7eTGTaspaqlnQLBqvkozKP5WyQMZQ==}
 
   browser-fs-access@0.29.1:
     resolution: {integrity: sha512-LSvVX5e21LRrXqVMhqtAwj5xPgDb+fXAIH80NsnCQ9xuZPs2xWsOREi24RKgZa1XOiQRbcmVrv87+ulOKsgjxw==}
@@ -6767,10 +6745,6 @@ snapshots:
   braces@3.0.3:
     dependencies:
       fill-range: 7.1.1
-
-  brotli@2.1.0:
-    dependencies:
-      base64-js: 1.5.1
 
   browser-fs-access@0.29.1: {}
 
