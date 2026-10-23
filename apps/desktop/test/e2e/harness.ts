@@ -253,6 +253,83 @@ export async function waitForShown(app: ElectronApplication, moduleId: string): 
     .toBe(true);
 }
 
+/**
+ * Captures until every picture has something in it: a view that has just been shown can capture empty for a moment.
+ * `images` picks the pictures (base64 PNGs) out of what `capture` returns.
+ */
+async function untilDrawn<T>(capture: () => Promise<T>, images: (shot: T) => string[] = (shot) => shot as string[]): Promise<T> {
+  for (let tries = 0; ; tries++) {
+    const shot = await capture();
+    if (images(shot).every((png) => png.length > 0)) return shot;
+    if (tries === 50) throw new Error("a view never drew anything to capture");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+/**
+ * Saves a picture of each panel of a module, in the order inModule counts them: `file` itself for one panel,
+ * else name-1.png, name-2.png and so on. Returns the files.
+ */
+export async function shootPanels(app: ElectronApplication, moduleId: string, file: string): Promise<string[]> {
+  const images = await untilDrawn(() =>
+    app.evaluate(
+      async ({ webContents }, id) =>
+        Promise.all(
+          webContents
+            .getAllWebContents()
+            .filter((contents) => contents.getURL().startsWith(`tavora-module://${id}/`))
+            .sort((a, b) => a.id - b.id)
+            .map(async (contents) => (await contents.capturePage()).toPNG().toString("base64")),
+        ),
+      moduleId,
+    ),
+  );
+  if (images.length === 0) throw new Error(`no panel for ${moduleId}`);
+  const files = images.length === 1 ? [file] : images.map((_, i) => file.replace(/(\.png)?$/, `-${i + 1}.png`));
+  await Promise.all(images.map((image, i) => writeFile(files[i]!, Buffer.from(image, "base64"))));
+  return files;
+}
+
+/**
+ * Saves a picture of the whole window with its panels. BrowserWindow.capturePage and page.screenshot only see
+ * Tavora's own page, where each panel is an empty hole: the panels are separate views on top of it. This captures
+ * every shown view too and draws it at its place over the page.
+ */
+export async function shootWindow(app: ElectronApplication, page: Page, file: string): Promise<void> {
+  const capture = () =>
+    app.evaluate(async ({ BrowserWindow, WebContentsView }) => {
+      const window = BrowserWindow.getAllWindows().sort((a, b) => a.id - b.id)[0]!;
+      const [width, height] = window.getContentSize() as [number, number];
+      const png = async (contents: Electron.WebContents) => (await contents.capturePage()).toPNG().toString("base64");
+      const layers = [{ png: await png(window.webContents), x: 0, y: 0, width, height }];
+      for (const view of window.contentView.children) {
+        if (!(view instanceof WebContentsView) || !view.getVisible()) continue;
+        const bounds = view.getBounds();
+        if (bounds.width > 0 && bounds.height > 0) layers.push({ png: await png(view.webContents), ...bounds });
+      }
+      return { width, height, layers };
+    });
+  const { width, height, layers } = await untilDrawn(capture, (shot) => shot.layers.map((layer) => layer.png));
+  // Drawn in Tavora's own page, the one place with a canvas at hand.
+  const composed = await page.evaluate(
+    async ({ width, height, layers }) => {
+      const scale = devicePixelRatio;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(width * scale);
+      canvas.height = Math.round(height * scale);
+      const context = canvas.getContext("2d")!;
+      for (const layer of layers) {
+        const bytes = Uint8Array.from(atob(layer.png), (char) => char.charCodeAt(0));
+        const image = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+        context.drawImage(image, layer.x * scale, layer.y * scale, layer.width * scale, layer.height * scale);
+      }
+      return canvas.toDataURL("image/png").split(",")[1]!;
+    },
+    { width, height, layers },
+  );
+  await writeFile(file, Buffer.from(composed, "base64"));
+}
+
 /** A hover hint's text. The shared tooltip layer moves a `title` into `data-tavora-tooltip` once it shows or changes. */
 export function hintOf(locator: import("@playwright/test").Locator): Promise<string | null> {
   return locator.evaluate((element) => element.getAttribute("data-tavora-tooltip") || element.getAttribute("title"));

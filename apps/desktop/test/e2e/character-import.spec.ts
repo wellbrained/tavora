@@ -1,7 +1,7 @@
 import { test, expect, type ElectronApplication } from '@playwright/test';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { launch, inModule, waitForShown } from './harness';
+import { launch, inModule, shootPanels, waitForShown } from './harness';
 
 const ID='wellbrained.poe2-builds',modules=path.resolve(import.meta.dirname,'../../../../modules');
 const xml=`<PathOfBuilding2><Build className="Ranger" ascendClassName="Deadeye" level="80"/><Items activeItemSet="1"><Item id="1">Rarity: RARE
@@ -33,8 +33,7 @@ test('PoB preview, new character, safe update, independent library group and res
   expect(await inModule(app,ID,"Array.from(document.querySelectorAll('#add-actions .menu-label')).map(n=>n.textContent)")).toEqual(['Import build','Import character','Load build file']);
   expect(await inModule(app,ID,"document.querySelector('#import-build').disabled")).toBe(false);
   await openImport(app);await readPob(app);
-  const image=await app.evaluate(async({webContents})=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://wellbrained.poe2-builds/'))!;return(await wc.capturePage()).toPNG().toString('base64');});
-  await writeFile(info.outputPath('character-preview.png'),Buffer.from(image,'base64'));
+  await shootPanels(app,ID,info.outputPath('character-preview.png'));
   await inModule(app,ID,"document.querySelector('#character-name').value='Test character';document.querySelector('#character-save').click()");
   await expect.poll(()=>inModule(app,ID,"document.querySelector('#status').textContent")).toContain('Character saved');
   await expect.poll(()=>inModule(app,ID,"document.querySelector('#build optgroup').label")).toBe('My characters');
