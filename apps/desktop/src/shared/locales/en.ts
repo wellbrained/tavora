@@ -148,6 +148,7 @@ export const en = {
   "common.reload": "Reload",
   "common.official": "Official",
   "common.local": "Local",
+  "common.release": "Release",
   "common.followSystem": "Follow System",
   "common.dark": "Dark",
   "common.light": "Light",
