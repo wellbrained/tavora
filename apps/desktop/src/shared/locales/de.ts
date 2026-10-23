@@ -1203,6 +1203,7 @@ export const de: Record<keyof typeof en, string> = {
   "panel.status.unavailable": "Nicht verfügbar",
   "panel.loading": "{name} wird geladen…",
   "panel.typeGone": "{module} bietet das Panel „{type}“ nicht mehr an. Seine gespeicherten Inhalte bleiben erhalten.",
+  "panel.moduleWaiting": "{module} kann gerade nicht laden, zum Beispiel während es gebaut wird. Dieses Panel kommt zurück, sobald es lädt.",
   "panel.typeGoneChoose": "Wähle ein anderes Panel von {module}:",
   "panel.remove": "Entfernen",
   "panel.reload": "Neu laden",

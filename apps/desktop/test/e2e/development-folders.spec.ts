@@ -1,7 +1,7 @@
 // Development folders: a module developer adds their project folder (or a folder of projects) in Settings > Development,
 // Tavora loads the module straight from it, and its panels reload when the build changes.
 
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
@@ -44,6 +44,7 @@ test("a development folder loads its module, reloads its panels on a new build, 
     await page.keyboard.press("Escape");
 
     // It is added like any module and listed under Development.
+    await openGame(page, "poe2");
     await openModule(page, ID);
     await expectModuleText(app, ID, "build", "first build");
 
@@ -51,14 +52,34 @@ test("a development folder loads its module, reloads its panels on a new build, 
     await build(dir, "second build");
     await expectModuleText(app, ID, "build", "second build");
 
-    // Removing the folder removes the module; the project itself stays.
-    await page.getByTestId("rail-settings").click();
-    await page.getByTestId("settings-nav-development").click();
-    await folders.nth(0).getByTestId("remove-development-folder").click();
-    await expect(folders).toHaveCount(1);
-    await expect(page.getByTestId(`module-${ID}`)).toHaveCount(0);
+    // While its build is gone (a watcher rebuilding it), the panel waits instead of being removed, also over a
+    // restart, and starts again with the next build. A rebuild empties the build folder, as Vite does.
+    await rm(path.join(dir, "dist", "index.html"));
+    await expect(page.locator('[data-testid^="panel-module-waiting-"]')).toContainText("Tracker can't load right now");
   } finally {
     await app.close();
+  }
+  const waiting = await launch(userData);
+  try {
+    await openGame(waiting.page, "poe2");
+    await expect(waiting.page.locator('[data-testid^="panel-module-waiting-"]')).toContainText("Tracker can't load right now");
+    await build(dir, "third build");
+    await expectModuleText(waiting.app, ID, "build", "third build");
+  } finally {
+    await waiting.app.close();
+  }
+
+  const last = await launch(userData);
+  try {
+    const folders = last.page.getByTestId("development-folder");
+    // Removing the folder removes the module; the project itself stays.
+    await last.page.getByTestId("rail-settings").click();
+    await last.page.getByTestId("settings-nav-development").click();
+    await folders.nth(0).getByTestId("remove-development-folder").click();
+    await expect(folders).toHaveCount(1);
+    await expect(last.page.getByTestId(`module-${ID}`)).toHaveCount(0);
+  } finally {
+    await last.app.close();
   }
 });
 

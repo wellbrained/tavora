@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildFolderName, describeModules, developmentProjects, discoverModules, projectEntry, type ModuleProblem } from "./registry";
+import { buildFolderName, describeModules, developmentProjects, discoverModules, projectEntry, type ModuleProblem, waitingDevelopmentModules } from "./registry";
 
 async function makeModule(root: string, folder: string, id: string, name = id, permissions: Record<string, unknown> = { network: [] }): Promise<string> {
   const dir = path.join(root, folder);
@@ -187,11 +187,23 @@ describe("development folders", () => {
         developmentFolder: unbuilt,
         developmentProject: unbuilt,
         kind: "not-built",
-        about: { name: "example.unbuilt", version: "1.0.0" },
+        about: { name: "example.unbuilt", version: "1.0.0", id: "example.unbuilt" },
       },
       { folder: "fake", path: reserved, message: "its id is reserved for Tavora's own modules", developmentFolder: reserved, developmentProject: reserved, about: { name: "tavora.notes", version: "1.0.0" } },
       { folder: "gone", path: path.join(projects, "gone"), message: "this folder can't be found", developmentFolder: path.join(projects, "gone"), kind: "missing" },
     ]);
+  });
+
+  it("name the development modules that cannot load right now, so their panels wait for them", async () => {
+    const projects = await mkdtemp(path.join(tmpdir(), "tavora-projects-"));
+    const unbuilt = await makeModule(projects, "unbuilt", "example.unbuilt");
+    await rm(path.join(unbuilt, "index.html"));
+    const elsewhere = await makeModule(await mkdtemp(path.join(tmpdir(), "tavora-own-")), "own", "example.own");
+    await rm(path.join(elsewhere, "index.html"));
+    const problems: ModuleProblem[] = [];
+    await discoverModules({ development: [unbuilt, path.join(projects, "gone")], local: [path.dirname(elsewhere)] }, problems);
+    // Only a development module whose manifest names it waits; a missing folder or another module folder does not.
+    expect(waitingDevelopmentModules(problems)).toEqual(new Map([["example.unbuilt", "example.unbuilt"]]));
   });
 
   it("find the folder a project builds into, even before its manifest is valid", async () => {
