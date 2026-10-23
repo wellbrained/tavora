@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.16",
+    date: "2026-10-23",
+    title: "Release copies stand out",
+    notes: [
+      "In Settings > Development, a module ready to publish says Release instead of Local.",
+    ],
+  },
+  {
     version: "0.20.15",
     date: "2026-10-23",
     title: "Bigger build exports",
