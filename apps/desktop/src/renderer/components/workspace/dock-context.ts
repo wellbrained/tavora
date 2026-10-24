@@ -5,9 +5,12 @@ import type { InjectionKey } from "vue";
 import { act, showOrAddPanel, state, type MenuItem } from "../../host";
 import { t } from "../../i18n";
 import { TAB_HEIGHT, type PanelInfo } from "../../dock";
+import type { ColumnSide } from "../../dock-columns";
 
 export interface DockContext {
   info(instanceId: string): PanelInfo | undefined;
+  collapseSide(groupId: string): ColumnSide | undefined;
+  collapseColumn(side: ColumnSide): void;
   /** Panel content elements report themselves, so the host can place module views over them. */
   register(instanceId: string, element: HTMLElement): void;
   unregister(instanceId: string, element: HTMLElement): void;

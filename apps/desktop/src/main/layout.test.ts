@@ -20,6 +20,27 @@ const layout = (...children: LayoutNode[]): SavedLayout => ({
 const sample = layout(group(400, A), split(600, group(300, B), group(300, C, D)));
 
 describe("parseLayout", () => {
+  it("keeps hidden groups and columns, but rejects invalid visibility", () => {
+    const hidden = layout({ ...group(400, A), hidden: true }, split(600, group(300, B), group(300, C)));
+    expect(parseLayout(hidden)).toEqual(hidden);
+    expect(pruneLayout(hidden, () => true)).toEqual(hidden);
+    expect(parseLayout(layout({ ...group(400, A), hidden: "yes" } as unknown as LayoutNode))).toBeNull();
+    const stacked = layout(group(400, A), { ...split(600, { ...group(300, B), hidden: true }, { ...group(300, C), hidden: true }), hidden: true });
+    expect(parseLayout(stacked)).toEqual(stacked);
+    expect(pruneLayout(stacked, () => true)).toEqual(stacked);
+    expect(pruneLayout(stacked, (id) => id !== C)).toEqual(layout(group(400, A), { ...group(600, B), hidden: true }));
+  });
+
+  it("reveals a hidden column when the last visible column is closed", () => {
+    const hidden = layout({ ...group(400, A), hidden: true }, group(600, B));
+    expect(pruneLayout(hidden, (id) => id !== B)).toEqual(layout(group(400, A)));
+    const stacked = layout(group(400, A), { ...split(600, { ...group(300, B), hidden: true }, { ...group(300, C), hidden: true }), hidden: true });
+    expect(pruneLayout(stacked, (id) => id !== A)).toEqual({
+      ...layout(group(300, B), group(300, C)),
+      direction: "column",
+    });
+  });
+
   it("accepts a layout and returns a copy", () => {
     const parsed = parseLayout(JSON.parse(JSON.stringify(sample)));
     expect(parsed).toEqual(sample);

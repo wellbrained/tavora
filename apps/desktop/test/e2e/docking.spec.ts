@@ -17,6 +17,64 @@ import {
 
 const groups = (page: Page) => page.locator(".dv-groupview");
 
+test("outer columns fold together, suspend their panels, and survive a restart", async ({}, testInfo) => {
+  const { app, page, userData } = await launch();
+  await page.getByTestId("empty-template-main-stacked").click();
+  for (const moduleId of [VANILLA, REACT, VUE]) await openModule(page, moduleId);
+  await expect(groups(page)).toHaveCount(3);
+  const before = (await panels(page, REACT).boundingBox())!;
+  await page.screenshot({ path: testInfo.outputPath("stacked-headers.png") });
+  await page.getByTestId("hide-right-column").first().click();
+  await expect(page.getByTestId("show-right-column")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("collapsed-column.png") });
+  await expect(panels(page, REACT)).toBeHidden();
+  await expect(panels(page, VUE)).toBeHidden();
+  await expectModuleText(app, REACT, "lifecycle", "suspended");
+  await expectModuleText(app, VUE, "lifecycle", "suspended");
+  await expect(page.getByTestId("hide-left-column")).toHaveCount(0);
+  await page.waitForTimeout(500);
+  await app.close();
+
+  const again = await launch(userData);
+  await expect(again.page.getByTestId("show-right-column")).toBeVisible();
+  await expect(panels(again.page, REACT)).toBeHidden();
+  await again.page.getByTestId("show-right-column").focus();
+  await again.page.keyboard.press("Enter");
+  await expect(panels(again.page, REACT)).toBeVisible();
+  await expect(panels(again.page, VUE)).toBeVisible();
+  await expectModuleText(again.app, REACT, "lifecycle", "active");
+  const after = (await panels(again.page, REACT).boundingBox())!;
+  expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(2);
+  await again.page.getByTestId("hide-left-column").click();
+  await expect(again.page.getByTestId("show-left-column")).toBeVisible();
+  await expect(panels(again.page, VANILLA)).toBeHidden();
+  await again.page.getByTestId("show-left-column").click();
+  await expect(panels(again.page, VANILLA)).toBeVisible();
+  await again.app.close();
+});
+
+test("both outer columns can fold while the middle stays open", async () => {
+  const { app, page } = await launch();
+  await page.getByTestId("empty-template-main-stacked").click();
+  await page.getByTestId("layouts").click();
+  await page.getByTestId("layout-grid-3x1").click();
+  for (const moduleId of [VANILLA, REACT, VUE]) await openModule(page, moduleId);
+  await page.getByTestId("hide-left-column").click();
+  await page.getByTestId("hide-right-column").click();
+  await expect(page.getByTestId("show-left-column")).toBeVisible();
+  await expect(page.getByTestId("show-right-column")).toBeVisible();
+  await expect(panels(page, REACT)).toBeVisible();
+  await page.getByTestId("show-left-column").click();
+  await page.getByTestId("show-right-column").click();
+  for (const moduleId of [VANILLA, REACT, VUE]) await expect(panels(page, moduleId)).toBeVisible();
+  await page.getByTestId("hide-right-column").click();
+  await panelMenu(page, VANILLA, "panel-close");
+  await panelMenu(page, REACT, "panel-close");
+  await expect(panels(page, VUE)).toBeVisible();
+  await expect(page.getByTestId("show-right-column")).toHaveCount(0);
+  await app.close();
+});
+
 /** Opens the ⋯ menu of the group showing a module's panel and picks an item. */
 async function panelMenu(page: Page, moduleId: string, item: string) {
   await panels(page, moduleId).click({ button: "right" });

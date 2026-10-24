@@ -60,7 +60,8 @@
 }
 
 .dockview-theme-tavora .dv-tabs-and-actions-container {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 22%, var(--border));
+  background: color-mix(in srgb, var(--foreground) 5%, var(--card));
   box-sizing: border-box;
 }
 
@@ -145,9 +146,26 @@
   border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
 }
 
+.dockview-theme-tavora .dv-view:not(.visible) {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* A drag resize shows on the gap between cards. */
 .dockview-theme-tavora .dv-sash {
   border-radius: 2px;
+}
+
+.dockview-theme-tavora .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:not(.dv-disabled)::after {
+  content: "";
+  position: absolute;
+  width: 36px;
+  height: 2px;
+  left: calc(50% - 18px);
+  top: calc(50% - 1px);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--foreground) 35%, var(--border));
+  pointer-events: none;
 }
 
 /* Where a dragged panel will land: a clear, rounded area with a short label.
