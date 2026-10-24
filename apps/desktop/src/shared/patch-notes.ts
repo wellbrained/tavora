@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.22",
+    date: "2026-10-24",
+    title: "Quieter Whiteboard save status",
+    notes: [
+      "Whiteboard shows Saving… and Saved at the bottom right, just left of the info button, instead of in the top bar.",
+    ],
+  },
+  {
     version: "0.20.21",
     date: "2026-10-24",
     title: "Panels stay what they were",
