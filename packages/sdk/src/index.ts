@@ -183,6 +183,16 @@ export interface TavoraSDK {
      * panel instead of switching this one. Needs Tavora 0.17.18 or newer.
      */
     onNavigate(fn: (content: PanelContent) => void | Promise<void>): Unsubscribe;
+    /** Whether this panel fills the workspace now (Maximize in its menu). Needs Tavora 0.20.20 or newer. */
+    isMaximized(): Promise<boolean>;
+    /**
+     * Makes this panel fill the workspace (true), as Maximize in its menu does, or puts it back (false). Call true
+     * from the click or key press that asked for it: the host refuses it otherwise. Nothing happens while the panel
+     * is the only one, as it fills the workspace already. Needs Tavora 0.20.20 or newer.
+     */
+    setMaximized(maximized: boolean): Promise<void>;
+    /** Fires when this panel starts or stops filling the workspace, whoever did it. Needs Tavora 0.20.20 or newer. */
+    onMaximizedChange(fn: (maximized: boolean) => void): Unsubscribe;
   };
   /** The module's other panels. */
   panels: {
@@ -556,6 +566,11 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       setContent: async (content) => {
         await call("panel.setContent", { content });
       },
+      isMaximized: () => call("panel.isMaximized"),
+      setMaximized: async (maximized) => {
+        await call("panel.setMaximized", { maximized });
+      },
+      onMaximizedChange: (fn) => on("panel.maximized", ({ maximized }) => fn(maximized)),
       onNavigate: (fn) => {
         navigate = fn;
         return () => {

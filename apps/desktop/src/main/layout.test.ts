@@ -37,8 +37,18 @@ describe("parseLayout", () => {
     ["a negative size", layout(group(-1, A))],
     ["an endless size", { ...sample, width: Number.POSITIVE_INFINITY }],
     ["a node with extra keys", layout({ ...group(1, A), title: "x" } as unknown as LayoutNode)],
+    ["two maximized groups", layout({ ...group(500, A), maximized: true } as LayoutNode, { ...group(500, B), maximized: true } as LayoutNode)],
+    ["a maximized empty slot", layout(group(500, A), { kind: "group", size: 1, panels: [], active: null, maximized: true })],
+    ["maximized set to false", layout({ ...group(500, A), maximized: false } as unknown as LayoutNode)],
   ])("rejects %s", (_name, raw) => {
     expect(parseLayout(raw)).toBeNull();
+  });
+
+  it("keeps the maximized group, through pruning and vacating", () => {
+    const maximized = layout(group(400, A), { ...group(600, B, C), maximized: true } as LayoutNode);
+    expect(parseLayout(JSON.parse(JSON.stringify(maximized)))).toEqual(maximized);
+    expect(pruneLayout(maximized, (id) => id !== B)?.root.children[1]).toMatchObject({ panels: [C], maximized: true });
+    expect(vacateLayout(maximized, (id) => id === A)?.root.children[1]).toMatchObject({ maximized: true });
   });
 
   it("rejects layouts nested too deeply", () => {

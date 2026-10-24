@@ -17,7 +17,7 @@ import {
 import { computed, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds } from "../../shared/host-api";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { act, api as host, dialog, dragging, nextPanelSlot, panelToShow, state } from "../host";
+import { act, api as host, dialog, dragging, nextPanelSlot, panelToMaximize, panelToShow, state } from "../host";
 import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import {
@@ -27,6 +27,7 @@ import {
   groupMinimum,
   guardDrop,
   guideFits,
+  maximizedPanel,
   placePanel,
   placeTab,
   resolveDropPosition,
@@ -105,7 +106,8 @@ function reportSoon() {
       if (!element.isConnected || !dock?.getPanel(instanceId)?.api.isVisible) continue;
       const rect = element.getBoundingClientRect();
       if (rect.width < 1 || rect.height < 1) continue;
-      bounds.push({ instanceId, x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+      const maximized = dock.getPanel(instanceId)?.group.api.isMaximized() === true;
+      bounds.push({ instanceId, x: rect.left, y: rect.top, width: rect.width, height: rect.height, ...(maximized ? { maximized: true } : {}) });
     }
     const report = JSON.stringify(bounds);
     if (report === lastReport) return;
@@ -142,8 +144,17 @@ function restore(api: DockviewApi) {
       console.error("[tavora] could not restore the layout", error);
       api.clear();
     }
+    const maximized = maximizedPanel(layout);
+    const group = maximized ? api.getPanel(maximized)?.group : undefined;
+    if (group && api.groups.length > 1) group.api.maximize();
   });
   reconcile(api);
+}
+
+/** The panel of the group that fills the workspace, or null. */
+function maximizedNow(api: DockviewApi): string | null {
+  const group = (api.groups as DockviewGroupPanel[]).find((item) => item.api.isMaximized());
+  return group?.activePanel?.id ?? null;
 }
 
 function reconcile(api: DockviewApi) {
@@ -182,7 +193,7 @@ function updateConstraints(api: DockviewApi) {
 function saveSoon() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    if (dock) void act({ type: "save-layout", layout: fromDockview(dock.toJSON()) }, { quiet: true });
+    if (dock) void act({ type: "save-layout", layout: fromDockview(dock.toJSON(), maximizedNow(dock)) }, { quiet: true });
   }, SAVE_DELAY_MS);
 }
 
@@ -195,6 +206,20 @@ watch(panelToShow, (request) => {
   if (!request || !dock) return;
   panelToShow.value = null;
   dock.getPanel(request.instanceId)?.api.setActive();
+});
+// A panel asked to fill the workspace or to go back (panel.setMaximized), as Maximize and Restore in its menu do.
+watch(panelToMaximize, (request) => {
+  if (!request || !dock) return;
+  panelToMaximize.value = null;
+  const panel = dock.getPanel(request.instanceId);
+  if (!panel) return;
+  const group = panel.group;
+  if (!request.maximized) {
+    if (group.api.isMaximized()) group.api.exitMaximized();
+    return;
+  }
+  panel.api.setActive();
+  if (!group.api.isMaximized() && dock.groups.length > 1) group.api.maximize();
 });
 watch(
   () => view.value.layoutEpoch,
@@ -296,7 +321,10 @@ function onReady({ api }: DockviewReadyEvent) {
     updateConstraints(api);
     reportSoon();
   });
-  api.onDidMaximizedGroupChange(() => reportSoon());
+  api.onDidMaximizedGroupChange(() => {
+    reportSoon();
+    if (!applying) saveSoon();
+  });
   api.onWillDragPanel(() => (dragging.value = true));
   api.onWillDragGroup(() => (dragging.value = true));
   api.onWillDrop((event) => guardDrop(event, api, info));

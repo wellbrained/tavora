@@ -72,6 +72,8 @@ export interface ModuleViewOptions {
   setContent(content: PanelContent | null): void;
   /** panels.open from this panel, after its click was taken: the host picks or opens the destination. */
   openPanel(type: string, content: PanelContent | null): Promise<PanelOpenResult>;
+  /** panel.setMaximized from this panel (after its click was taken to maximize): asks the host UI to do it. */
+  setMaximized(maximized: boolean): void;
   /** Hosts the player granted this module for network.fetch, as installed now; asked on every call and redirect. */
   networkHosts(): ReadonlySet<string>;
   /** Connectors the player granted this module, as installed now; asked on every call. */
@@ -461,6 +463,12 @@ export class ModuleView {
         navigated: (requestId, handled, ok) => {
           if (this.bridge === bridge) this.navigated(requestId, handled, ok);
         },
+        isMaximized: () => this.maximized,
+        setMaximized: async (maximized) => {
+          // Covering the other panels takes a click, so a page cannot take over the workspace on its own.
+          if (maximized) await this.takeGesture("panel.setMaximized");
+          this.options.setMaximized(maximized);
+        },
         game,
         data,
         panelState,
@@ -621,6 +629,16 @@ export class ModuleView {
 
   setVisible(visible: boolean): void {
     this.view.setVisible(visible);
+  }
+
+  /** Whether the panel's group fills the workspace, as the host UI last reported it. */
+  private maximized = false;
+
+  /** The host UI reported whether the panel fills the workspace; the module hears a change. */
+  setMaximized(maximized: boolean): void {
+    if (maximized === this.maximized) return;
+    this.maximized = maximized;
+    this.bridge?.emit("panel.maximized", { maximized });
   }
 
   /** Recolours the page and tells the module, which may restyle itself through ui.onThemeChange. */

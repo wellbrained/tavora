@@ -1,7 +1,38 @@
 import { describe, expect, it } from "vitest";
 import type { Position } from "dockview-vue";
-import { dropReorders, GUIDE, resolveDropPosition, resolveOuterEdge, shareOut } from "./dock";
+import { dropReorders, fromDockview, GUIDE, maximizedPanel, resolveDropPosition, resolveOuterEdge, shareOut, toDockview } from "./dock";
+import type { SavedLayout } from "../shared/host-api";
 import { gridName, gridTemplate, LAYOUT_TEMPLATES, templateRects } from "../shared/layout-templates";
+
+describe("the maximized group", () => {
+  const layout: SavedLayout = {
+    width: 1000,
+    height: 600,
+    direction: "row",
+    root: {
+      kind: "split",
+      size: 600,
+      children: [
+        { kind: "group", size: 400, panels: ["a"], active: "a" },
+        { kind: "group", size: 600, panels: ["b", "c"], active: "c" },
+      ],
+    },
+  };
+  const info = () => ({ title: "x", minWidth: 0, minHeight: 0 });
+
+  it("is marked on the group of the panel given, and found again", () => {
+    const saved = fromDockview(toDockview(layout, info), "b");
+    expect(saved?.root.children[1]).toMatchObject({ panels: ["b", "c"], maximized: true });
+    expect(saved?.root.children[0]).not.toHaveProperty("maximized");
+    expect(maximizedPanel(saved)).toBe("c");
+  });
+
+  it("is not there when no group fills the workspace", () => {
+    const saved = fromDockview(toDockview(layout, info));
+    expect(saved).toEqual(layout);
+    expect(maximizedPanel(saved)).toBeNull();
+  });
+});
 
 describe("shareOut", () => {
   it("shares room evenly when every minimum fits", () => {

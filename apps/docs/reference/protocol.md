@@ -65,6 +65,8 @@ Methods without params must be sent with `params` left out.
 | `panels.open` | `{ type, content? }` | `"shown"`, `"switched"`, `"opened"` or `"failed"`: opens one of this module's own panel types in the current game, on `content` (`{ id, title }`) when given. See [Opening another panel](#opening-another-panel). Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for a type the module does not have (Tavora 0.17.18 and newer) |
 | `panel.navigated` | `{ requestId, handled, ok }` | `null`; the answer to a `panel.navigate` event. The SDK sends it for you from `panel.onNavigate` (Tavora 0.17.18 and newer) |
 | `panel.setContent` | `{ content }` | `null`; `content` is `{ id, title }` or `null`: what the panel shows now. `id` is your own, 1 to 200 characters; `title` is its full name, 1 to 200 characters, kept on one line. `INVALID_PARAMS` otherwise (Tavora 0.17.17 and newer) |
+| `panel.isMaximized` | none | `true` while the panel fills the workspace (Maximize in its menu, or `panel.setMaximized`) (Tavora 0.20.20 and newer) |
+| `panel.setMaximized` | `{ maximized }` | `null`; `true` makes the panel fill the workspace, as Maximize in its menu does, `false` puts it back. Nothing happens while the panel is the only one, as it fills the workspace already. `true` only right after a real click or key press in the panel (`PERMISSION_DENIED` otherwise) (Tavora 0.20.20 and newer) |
 | `workspace.getViewport` | none | `{ width, height }` of the panel in CSS pixels |
 | `ui.getLanguage` | none | the language of Tavora's own texts as a code, `"en"` or `"de"` for now; show your module in it, or in English when you have no translation |
 | `ui.showMenu` | `{ items, at, side?, align? }` | the chosen item's `id`, or `null` when the player closed the menu; see [Menus](#menus) |
@@ -262,6 +264,7 @@ The Panel Types Example in Tavora's examples folder does all of this.
 | `discord.event` | `{ event, data }` | a Discord event the panel subscribed to; only with the `discord` capability |
 | `hotkeys.pressed` | `{ action, target }` | the player pressed a hotkey set for this module in the game shown now; sent to one panel of the module there, the one used last |
 | `panel.navigate` | `{ requestId, content }` | another panel of this module asked this one to show `content` (`panels.open`); answer with `panel.navigated` within 5 seconds. The SDK does it for you: use `panel.onNavigate` (Tavora 0.17.18 and newer) |
+| `panel.maximized` | `{ maximized }` | the panel started or stopped filling the workspace, by the player or `panel.setMaximized`. The SDK hands it to `panel.onMaximizedChange` (Tavora 0.20.20 and newer) |
 | `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden, its tab is in the background, or another group is maximized); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
 | `lifecycle.resume` | `null` | the panel is visible again |
 | `lifecycle.dispose` | `null` | the panel is closing. Best effort only: it may never arrive, so never rely on it to save |

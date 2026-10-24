@@ -48,6 +48,8 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     setContent: () => {},
     openPanel: () => Promise.resolve("opened"),
     navigated: () => {},
+    isMaximized: () => false,
+    setMaximized: () => Promise.resolve(),
     game: { id: "poe2", displayName: "Path of Exile 2" },
     data: registry.get("local", moduleId, "poe2"),
     appSettings: registry.appSettings("local", moduleId),
@@ -215,6 +217,18 @@ describe("panel content", () => {
       ["planner", { id: "b1", title: "Ice Shot" }],
       ["gear", null],
     ]);
+  });
+
+  it("says whether the panel fills the workspace and passes on a checked request to change it", async () => {
+    const asked: boolean[] = [];
+    const p = await connected({ ...makeContext(), isMaximized: () => true, setMaximized: (maximized) => (asked.push(maximized), Promise.resolve()) });
+    expect(await call(p, "panel.isMaximized")).toMatchObject({ ok: true, result: true });
+    expect(await call(p, "panel.setMaximized", { maximized: true })).toMatchObject({ ok: true, result: null });
+    expect(await call(p, "panel.setMaximized", { maximized: false })).toMatchObject({ ok: true, result: null });
+    for (const params of [{}, { maximized: "yes" }, { maximized: null }]) {
+      expect(await call(p, "panel.setMaximized", params)).toMatchObject({ error: { code: "INVALID_PARAMS" } });
+    }
+    expect(asked).toEqual([true, false]);
   });
 
   it("passes on the page's answer to panel.navigate", async () => {

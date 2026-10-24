@@ -47,8 +47,11 @@ export function toDockview(layout: SavedLayout, info: (id: string) => PanelInfo 
   };
 }
 
-/** Reads the docked part of a layout, empty slots included; null when nothing is docked. */
-export function fromDockview(json: SerializedDockview): SavedLayout | null {
+/**
+ * Reads the docked part of a layout, empty slots included; null when nothing is docked. `maximized` is a panel
+ * of the group that fills the workspace, if one does.
+ */
+export function fromDockview(json: SerializedDockview, maximized: string | null = null): SavedLayout | null {
   const node = (value: GridNode): LayoutNode | null => {
     if (value.type === "branch") {
       const children = (value.data as GridNode[]).map(node).filter((child) => child !== null);
@@ -57,7 +60,7 @@ export function fromDockview(json: SerializedDockview): SavedLayout | null {
     const group = value.data as GroupState;
     if (!group.views.length) return { kind: "group", size: value.size ?? 0, panels: [], active: null };
     const active = group.activeView && group.views.includes(group.activeView) ? group.activeView : group.views[0]!;
-    return { kind: "group", size: value.size ?? 0, panels: [...group.views], active };
+    return { kind: "group", size: value.size ?? 0, panels: [...group.views], active, ...(maximized && group.views.includes(maximized) ? { maximized: true } : {}) };
   };
   const root = node(json.grid.root);
   if (!root) return null;
@@ -67,6 +70,13 @@ export function fromDockview(json: SerializedDockview): SavedLayout | null {
     direction: json.grid.orientation === Orientation.HORIZONTAL ? "row" : "column",
     root: root.kind === "split" ? root : { kind: "split", size: 0, children: [root] },
   };
+}
+
+/** A panel of the layout's maximized group, or null when no group fills the workspace. */
+export function maximizedPanel(layout: SavedLayout | null): string | null {
+  const find = (node: LayoutNode): string | null =>
+    node.kind === "group" ? (node.maximized ? (node.active ?? node.panels[0] ?? null) : null) : node.children.reduce<string | null>((found, child) => found ?? find(child), null);
+  return layout ? find(layout.root) : null;
 }
 
 /** The smallest size a group can have: room for each of its panels. */

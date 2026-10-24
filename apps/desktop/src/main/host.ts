@@ -2802,6 +2802,7 @@ export class Host {
       launch: () => this.launchOf(record),
       setContent: (content) => this.setPanelContent(record, content),
       openPanel: (type, content) => this.openRelatedPanel(record, type, content),
+      setMaximized: (maximized) => this.window.webContents.send("host:shortcut", `${maximized ? "maximize" : "restore"}:${record.instanceId}`),
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
@@ -3061,7 +3062,7 @@ export class Host {
     if (!Array.isArray(raw) || raw.length > LAYOUT_LIMITS.panels) return;
     const { width, height } = this.window.getContentBounds();
     const bounds = new Map<string, Rect>();
-    for (const item of raw as Partial<Rect & { instanceId: unknown }>[]) {
+    for (const item of raw as Partial<Rect & { instanceId: unknown; maximized: unknown }>[]) {
       const id = item?.instanceId;
       if (typeof id !== "string" || !INSTANCE_ID.test(id) || !this.views.has(id)) continue;
       const numbers = [item.x, item.y, item.width, item.height];
@@ -3070,6 +3071,9 @@ export class Host {
       const y = Math.min(Math.round(item.y!), height);
       const rect = { x, y, width: Math.min(Math.round(item.width!), width - x), height: Math.min(Math.round(item.height!), height - y) };
       if (rect.width > 0 && rect.height > 0) bounds.set(id, rect);
+      // Panels left out keep what they knew: a tab behind another in a maximized group still fills the workspace.
+      const view = this.views.get(id);
+      if (view instanceof ModuleView) view.setMaximized(item.maximized === true);
     }
     this.panelBounds = bounds;
     this.applyBounds();

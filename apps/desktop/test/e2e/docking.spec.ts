@@ -9,6 +9,7 @@ import {
   RAIL_WIDTH,
   REACT,
   setContentSize,
+  typeInModule,
   VANILLA,
   VUE,
   waitForShown,
@@ -98,6 +99,41 @@ test("panels are moved, split and maximized from their menu, and the layout is k
   const bottomAgain = (await panels(again.page, REACT).boundingBox())!;
   expect(bottomAgain.y).toBeCloseTo(bottom.y, -1);
   expect(topAgain.x).toBe(bottomAgain.x);
+  await again.app.close();
+});
+
+test("a module maximizes its own panel after a key press, and it stays maximized after a restart", async () => {
+  const { app, page, userData } = await launch();
+  await openModule(page, VANILLA);
+  await openModule(page, REACT);
+  await expect(groups(page)).toHaveCount(2);
+  await expectModuleText(app, VANILLA, "maximized", "no");
+
+  // Without a real click or key press the panel stays where it is.
+  await inModule(app, VANILLA, `document.querySelector('[data-testid="toggle-maximized"]').click()`);
+  await expectModuleText(app, VANILLA, "maximized", "PERMISSION_DENIED");
+  await expectModuleText(app, REACT, "lifecycle", "active");
+
+  await inModule(app, VANILLA, `document.querySelector('[data-testid="toggle-maximized"]').focus()`);
+  await typeInModule(app, VANILLA, "\n");
+  await expectModuleText(app, VANILLA, "maximized", "yes");
+  await expectModuleText(app, REACT, "lifecycle", "suspended");
+  await page.waitForTimeout(500); // the layout is saved once it has been still briefly
+  await app.close();
+
+  const again = await launch(userData);
+  await expectModuleText(again.app, VANILLA, "maximized", "yes");
+  await expectModuleText(again.app, REACT, "lifecycle", "suspended");
+  // Restore in the panel's menu tells the module too.
+  await panelMenu(again.page, VANILLA, "panel-restore");
+  await expectModuleText(again.app, VANILLA, "maximized", "no");
+  await expectModuleText(again.app, REACT, "lifecycle", "active");
+  // Maximize from the menu, then put back by the module, which needs no key press.
+  await panelMenu(again.page, VANILLA, "panel-maximize");
+  await expectModuleText(again.app, VANILLA, "maximized", "yes");
+  await inModule(again.app, VANILLA, `document.querySelector('[data-testid="toggle-maximized"]').click()`);
+  await expectModuleText(again.app, VANILLA, "maximized", "no");
+  await expectModuleText(again.app, REACT, "lifecycle", "active");
   await again.app.close();
 });
 
