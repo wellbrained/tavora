@@ -75,20 +75,28 @@ function panBy(dx: number, dy: number, from = view.value) {
 function moveOrigin(dx: number, dy: number) {
   view.value = { ...view.value, x: view.value.x - dx * view.value.zoom, y: view.value.y - dy * view.value.zoom }
 }
-/** The view a parent asked for before the pane was measured; it replaces the first fit. */
-let pendingView: ZoomView | undefined
+/** The view a parent asked for before the pane was measured, worked out once it is; it replaces the first fit. */
+let pendingView: (() => ZoomView) | undefined
 const measured = () => paneSize.value.width > 0 && paneSize.value.height > 0 && contentSize.value.width > 0 && contentSize.value.height > 0
 function applyView(next: ZoomView) {
   view.value = clampPan({ ...next, zoom: clampZoom(next.zoom, limits.value) }, paneSize.value, contentSize.value)
 }
+function whenMeasured(next: () => ZoomView) {
+  if (measured()) applyView(next())
+  else pendingView = next
+}
 /** Sets the view (for example one saved earlier). Zoom and pan are kept in reach. Before the first show it is used instead of the first fit. */
 function setView(next: ZoomView) {
-  if (measured()) applyView(next)
-  else pendingView = { ...next }
+  const copy = { ...next }
+  whenMeasured(() => copy)
 }
-/** Zooms and pans so `area` (content pixels at zoom 1) fills the pane, centred, with `padding` pixels around it. */
+/**
+ * Zooms and pans so `area` (content pixels at zoom 1) fills the pane, centred, with `padding` pixels around it.
+ * Before the first show it is used instead of the first fit.
+ */
 function showArea(area: ZoomArea, options: { padding?: number } = {}) {
-  applyView(areaView(paneSize.value, area, limits.value, options.padding ?? 24))
+  const copy = { ...area }
+  whenMeasured(() => areaView(paneSize.value, copy, limits.value, options.padding ?? 24))
 }
 const zoomIn = () => zoomBy(STEP)
 const zoomOut = () => zoomBy(1 / STEP)
@@ -228,7 +236,7 @@ onMounted(() => {
     paneSize.value = nextPane
     contentSize.value = nextContent
     if (pendingView && measured()) {
-      applyView(pendingView)
+      applyView(pendingView())
       pendingView = undefined
     }
     else if ((contentChanged && props.autoFit) || paneWasEmpty || widthChanged) fit()
