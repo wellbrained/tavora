@@ -230,6 +230,17 @@ describe("publishing to the catalog", () => {
     daily.clock.now += 86_400_001;
     expect((await daily.send(dev.key, moduleZip(dev.key, "wellbrained.timer", "1.0.2"))).status).toBe(201);
 
+    // The maintainer's account (MAINTAINER_EMAIL, any case) has no daily limit.
+    const own = setup({ uploadsPerDay: 2 }, "Maintainer@Example.com");
+    const maintainer = own.developer("maintainer@example.com");
+    for (const version of ["1.0.0", "1.0.1", "1.0.2", "1.0.3"]) {
+      expect((await own.send(maintainer.key, moduleZip(maintainer.key, "wellbrained.timer", version))).status).toBe(201);
+    }
+    const other = own.developer("dev@example.com");
+    expect((await own.send(other.key, moduleZip(other.key, "other.timer", "1.0.0"))).status).toBe(201);
+    expect((await own.send(other.key, moduleZip(other.key, "other.timer", "1.0.1"))).status).toBe(201);
+    expect(await own.reason(await own.send(other.key, moduleZip(other.key, "other.timer", "1.0.2")))).toBe("daily-limit");
+
     const small = moduleZip(dev.key);
     const room = setup({ accountBytes: small.length + 10 });
     const roomDev = room.developer("dev@example.com");
