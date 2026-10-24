@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.23",
+    date: "2026-10-24",
+    title: "More panels, fewer clicks",
+    notes: [
+      "Use the arrow next to Add module or In this game in a panel's menu to open another panel of a module you're already using.",
+      "Panels you already have are checked. Pick one to bring it to the front without opening a copy.",
+      "Find each panel type in Ctrl+K by its name.",
+    ],
+  },
+  {
     version: "0.20.22",
     date: "2026-10-24",
     title: "Quieter Whiteboard save status",
