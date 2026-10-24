@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.31",
+    date: "2026-10-25",
+    title: "Tooltips fit their text",
+    notes: [
+      "Short hover tooltips are only as wide as they need to be. Long ones still wrap at the old width.",
+    ],
+  },
+  {
     version: "0.20.30",
     date: "2026-10-24",
     title: "Buttons you can feel",
