@@ -280,13 +280,16 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // An empty board has nothing to come back to, so it opens at 100%. A zoom left from before (up to 3000%) would make
+  // every stroke drawn next far too thick, with nothing on the board to show why.
+  const start = data.elements.length > 0 ? view : undefined;
   const initialData = {
     elements: data.elements as unknown as readonly ExcalidrawElement[],
     appState: {
       viewBackgroundColor: data.background,
-      ...(view ? { scrollX: view.scrollX, scrollY: view.scrollY, zoom: { value: view.zoom as never } } : {}),
+      ...(start ? { scrollX: start.scrollX, scrollY: start.scrollY, zoom: { value: start.zoom as never } } : {}),
     },
-    scrollToContent: !view && data.elements.length > 0,
+    scrollToContent: !start && data.elements.length > 0,
   };
 
   function setPictureLocked(id: string, locked: boolean) {

@@ -10,7 +10,7 @@ overrides:
 
 patchedDependencies:
   '@excalidraw/excalidraw@0.18.1':
-    hash: ea85afc925d261cf064703c9f4a150a10a232f33db98ed6acaee5647c001ec50
+    hash: 325ad0284f61032baf832f5b5a305233a74c91a8f69dd9f8dda999c5c3222aa7
     path: patches/@excalidraw__excalidraw@0.18.1.patch
 
 importers:
@@ -534,7 +534,7 @@ importers:
     dependencies:
       '@excalidraw/excalidraw':
         specifier: 0.18.1
-        version: 0.18.1(patch_hash=ea85afc925d261cf064703c9f4a150a10a232f33db98ed6acaee5647c001ec50)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        version: 0.18.1(patch_hash=325ad0284f61032baf832f5b5a305233a74c91a8f69dd9f8dda999c5c3222aa7)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@tavora/official-ui':
         specifier: workspace:*
         version: link:../shared
@@ -5186,7 +5186,7 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@excalidraw/excalidraw@0.18.1(patch_hash=ea85afc925d261cf064703c9f4a150a10a232f33db98ed6acaee5647c001ec50)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@excalidraw/excalidraw@0.18.1(patch_hash=325ad0284f61032baf832f5b5a305233a74c91a8f69dd9f8dda999c5c3222aa7)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@braintree/sanitize-url': 6.0.2
       '@excalidraw/laser-pointer': 1.3.1

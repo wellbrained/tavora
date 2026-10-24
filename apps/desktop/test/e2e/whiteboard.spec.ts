@@ -394,3 +394,74 @@ test("whiteboard: the toolbar can sit at the bottom, chosen once for every game"
   await expect.poll(() => inModule<number>(again.app, WHITEBOARD, `Math.round(document.querySelector(".App-toolbar-container").getBoundingClientRect().top - document.querySelector(".excalidraw").getBoundingClientRect().top)`)).toBeGreaterThan(height - 160);
   await again.app.close();
 });
+
+/** Zooms in with Ctrl and the mouse wheel (a touchpad pinch sends the same), over `at`. */
+async function zoomIn(app: ElectronApplication, at: { x: number; y: number }, notches: number) {
+  await app.evaluate(
+    async ({ webContents }, { moduleId, at, notches }) => {
+      const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
+      if (!target) throw new Error("no panel");
+      const x = Math.round(at.x);
+      const y = Math.round(at.y);
+      target.sendInputEvent({ type: "mouseMove", x, y });
+      for (let notch = 0; notch < notches; notch++) {
+        target.sendInputEvent({ type: "mouseWheel", x, y, deltaX: 0, deltaY: 100, wheelTicksY: -1, canScroll: true, modifiers: ["control"] });
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      }
+    },
+    { moduleId: WHITEBOARD, at, notches },
+  );
+}
+
+test("whiteboard: zoomed far in, a pasted picture keeps its size and an empty board opens at 100%", async () => {
+  const { app, page, userData } = await launch();
+  await openModule(page, WHITEBOARD);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`).catch(() => ""), { timeout: 20_000 }).toBe("Board 1");
+  await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
+  const area = await inModule<{ x: number; y: number; width: number; height: number }>(app, WHITEBOARD, `(() => { const r = document.querySelector(".excalidraw canvas.interactive").getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
+  const middle = { x: area.x + area.width / 2, y: area.y + area.height / 2 };
+  const zoom = () => inModule<number>(app, WHITEBOARD, `parseInt(document.querySelector(".excalidraw .reset-zoom-button").textContent, 10)`);
+
+  // Zoomed far in, the way a pinch or Ctrl and the wheel easily gets there.
+  await zoomIn(app, middle, 25);
+  await expect.poll(zoom).toBeGreaterThan(1000);
+
+  // A pasted screenshot gets the size it gets at 100%, not one shrunk to the zoom: strokes drawn on it would be
+  // twenty times too thick for it.
+  await inModule(
+    app,
+    WHITEBOARD,
+    `(async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1600;
+      canvas.height = 900;
+      canvas.getContext("2d").fillRect(0, 0, 1600, 900);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      const data = new DataTransfer();
+      data.items.add(new File([blob], "shot.png", { type: "image/png" }));
+      document.querySelector(".excalidraw").focus();
+      document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+    })()`,
+  );
+  const picture = async () => (await storedBoard(userData, "Board 1"))?.elements.find((element) => element.type === "image") as unknown as { height: number } | undefined;
+  await expect.poll(async () => (await picture())?.height ?? 0, { timeout: 15_000 }).toBeCloseTo(Math.floor(area.height * 0.5), 0);
+
+  // An empty board left zoomed far in opens at 100% again; one with a drawing comes back where it was left.
+  await inModule(app, WHITEBOARD, `${q("board-menu")}.click()`);
+  await inModule(app, WHITEBOARD, `${q("board-new")}.click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`)).toBe("Board 2");
+  await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
+  await zoomIn(app, middle, 25);
+  await expect.poll(zoom).toBeGreaterThan(1000);
+  const open = async (name: string) => {
+    await inModule(app, WHITEBOARD, `${q("board-menu")}.click()`);
+    await inModule(app, WHITEBOARD, `[...${q("board-list")}.querySelectorAll('[data-testid^="board-board-"]')].find((item) => item.textContent.includes(${JSON.stringify(name)})).click()`);
+    await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`)).toBe(name);
+    await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
+  };
+  await open("Board 1");
+  await expect.poll(zoom).toBeGreaterThan(1000);
+  await open("Board 2");
+  await expect.poll(zoom).toBe(100);
+  await app.close();
+});
