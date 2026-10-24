@@ -67,6 +67,13 @@ function zoomBy(factor: number, at = middle()) {
 function panBy(dx: number, dy: number, from = view.value) {
   view.value = clampPan({ ...from, x: from.x + dx, y: from.y + dy }, paneSize.value, contentSize.value)
 }
+/**
+ * The content is about to be drawn shifted by dx, dy (content pixels), for example because it grew to the
+ * left: moves the view along so nothing jumps. Not clamped; the next size check clamps with the new size.
+ */
+function moveOrigin(dx: number, dy: number) {
+  view.value = { ...view.value, x: view.value.x - dx * view.value.zoom, y: view.value.y - dy * view.value.zoom }
+}
 const zoomIn = () => zoomBy(STEP)
 const zoomOut = () => zoomBy(1 / STEP)
 
@@ -216,7 +223,7 @@ onBeforeUnmount(() => {
   clearTimeout(hintTimer)
 })
 
-defineExpose({ fit, zoomIn, zoomOut, zoom: computed(() => view.value.zoom) })
+defineExpose({ fit, zoomIn, zoomOut, moveOrigin, zoom: computed(() => view.value.zoom) })
 </script>
 
 <template>
