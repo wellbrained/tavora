@@ -127,6 +127,13 @@ const pressed = ref<string>();
 const grownFrom = ref(2);
 const grownTo = ref(4);
 const growing = ref<InstanceType<typeof ZoomPane> | null>(null);
+/** The pan and zoom specimen with a remembered view: save it, move around, put it back. */
+const remembering = ref<InstanceType<typeof ZoomPane> | null>(null);
+const savedView = ref<{ x: number; y: number; zoom: number }>();
+function saveView() {
+  const view = remembering.value?.view;
+  if (view) savedView.value = { ...view };
+}
 /** A card (w-44) and the gap after it (gap-10). */
 const STEP_WIDTH = 176 + 40;
 function addInFront() {
@@ -507,6 +514,21 @@ function bump(by: number) {
           <div class="flex gap-2">
             <Button size="xs" variant="secondary" :disabled="off || grownFrom <= 0" @click="addInFront">Add a step in front (moveOrigin)</Button>
             <Button size="xs" variant="secondary" :disabled="off || grownTo >= STEPS.length" @click="grownTo++">Add a step after</Button>
+          </div>
+        </Specimen>
+        <Specimen label="view, setView and showArea: remember a view, show a chosen area" column>
+          <ZoomPane ref="remembering" class="h-64" label="Remembered line">
+            <div class="flex items-center gap-10 p-4">
+              <div v-for="step in STEPS" :key="step" class="bg-card flex w-44 flex-none flex-col gap-2 rounded-lg border p-3">
+                <span class="font-medium">{{ step }}</span>
+                <span class="text-muted-foreground text-xs">60 / min</span>
+              </div>
+            </div>
+          </ZoomPane>
+          <div class="flex gap-2">
+            <Button size="xs" variant="secondary" :disabled="off" @click="saveView">Save this view</Button>
+            <Button size="xs" variant="secondary" :disabled="off" @click="remembering?.showArea({ x: 0, y: 0, width: 200, height: 100 })">Show the top-left corner</Button>
+            <Button size="xs" variant="secondary" :disabled="off || !savedView" @click="savedView && remembering?.setView(savedView)">Back to saved view</Button>
           </div>
         </Specimen>
         <Specimen label="Tall content with fit=&quot;width&quot;: fills the width, starts at the top, a plain scroll moves it" column>
