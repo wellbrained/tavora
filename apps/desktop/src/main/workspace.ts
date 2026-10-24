@@ -141,12 +141,14 @@ export interface PanelTypesOf {
  * Gives every panel of a module with panel types its type, and takes it from panels of a module that
  * no longer has any (the decision log, named panels round 6). A panel opened before its module had
  * types becomes the continuing type; one whose type an update removed keeps it, so its slot can say
- * the type is gone. Snapshots get the same treatment.
+ * the type is gone. A module Tavora can't see right now (a development build being rebuilt) leaves its
+ * panels' types alone, so they come back as the same panels. Snapshots get the same treatment.
  */
 export function settlePanelTypes(state: WorkspaceState, typesOf: (moduleId: string) => PanelTypesOf | undefined): void {
   const settle = (moduleId: string, panelType: string | undefined): string | undefined => {
     const types = typesOf(moduleId);
-    if (!types || types.ids.length === 0) return undefined;
+    if (!types) return panelType;
+    if (types.ids.length === 0) return undefined;
     return panelType ?? types.continuing ?? undefined;
   };
   for (const game of Object.values(state.games)) {
