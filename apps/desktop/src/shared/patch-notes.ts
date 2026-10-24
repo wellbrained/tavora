@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.29",
+    date: "2026-10-24",
+    title: "Save and open files, your way",
+    notes: [
+      "Modules that save a file now show Tavora's save dialog first, with the name filled in.",
+      "Saving and opening start in the folder you used last for that module, at first Documents\\Tavora.",
+    ],
+  },
+  {
     version: "0.20.28",
     date: "2026-10-24",
     title: "More room, steadier panels",
