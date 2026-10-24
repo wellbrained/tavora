@@ -95,6 +95,6 @@ function render(data: Data) {
 }
 function measure() { if (!current)
     return; const card = document.getElementById("card")!; if (card.scrollHeight > innerHeight && innerHeight > 100)
-    document.body.classList.add("compact"); ipcRenderer.send("tooltip:size", current.serial, card.scrollHeight); }
+    document.body.classList.add("compact"); ipcRenderer.send("tooltip:size", current.serial, card.scrollHeight, Math.ceil(card.getBoundingClientRect().width)); }
 ipcRenderer.on("tooltip:render", (_event, data: Data) => render(data));
 window.addEventListener("DOMContentLoaded", () => ipcRenderer.send("tooltip:ready"));
