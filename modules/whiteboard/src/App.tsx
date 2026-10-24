@@ -407,9 +407,6 @@ export default function App() {
             {t(level === "full" ? "size.full" : "size.warn", { used: formatMegabytes(bytes), max: formatMegabytes(MAX_BOARD_BYTES) })}
           </span>
         ) : null}
-        <span className={saveState === "error" ? "save save-error" : "save"} role="status" data-testid="save-state" data-state={saveState}>
-          {saveState === "idle" ? "" : t(`save.${saveState}` as "save.saved")}
-        </span>
       </header>
       <main className="board" data-board={shown.id} data-pictures={picturesLoaded} data-testid="board" ref={setBoardElement}>
         <Suspense fallback={<p className="status">{t("loading")}</p>}>
@@ -420,6 +417,7 @@ export default function App() {
             view={views.current[shown.id]}
             mode={mode}
             language={language}
+            saveState={saveState}
             onSave={save}
             onView={rememberView}
             onState={setSaveState}
