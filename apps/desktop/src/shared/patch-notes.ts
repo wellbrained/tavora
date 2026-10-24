@@ -22,167 +22,21 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.20.27",
     date: "2026-10-24",
-    title: "Project folders show what they hold",
+    title: "More room, steadier panels",
     notes: [
-      "In Settings > Development, a folder of Local modules has a blue row and a folder of Release copies a green one, like their badges.",
-      "A Local module whose Release copy is loaded too no longer offers Publish; it says it's published from its Release copy.",
-    ],
-  },
-  {
-    version: "0.20.26",
-    date: "2026-10-24",
-    title: "Local and Release tell apart at a glance",
-    notes: [
-      "In Settings > Development, Local is blue with a folder icon and Release is green with a package icon, so the copy you publish stands out.",
-    ],
-  },
-  {
-    version: "0.20.25",
-    date: "2026-10-24",
-    title: "More room when you need it",
-    notes: [
-      "Fold the left or right column into a narrow strip, then click it to bring all its panels back.",
-      "Stacked panels have clearer headers and a visible resize grip between them.",
-    ],
-  },
-  {
-    version: "0.20.24",
-    date: "2026-10-24",
-    title: "Dialogs stay inside their parent",
-    notes: [
-      "A dialog you open from Settings or Add module, like Publish or a confirmation, now stays inside the dialog you opened it from instead of sticking out above it.",
-      "In a small window it fits too, and scrolls if it's long.",
-    ],
-  },
-  {
-    version: "0.20.23",
-    date: "2026-10-24",
-    title: "More panels, fewer clicks",
-    notes: [
-      "Use the arrow next to Add module or In this game in a panel's menu to open another panel of a module you're already using.",
-      "Panels you already have are checked. Pick one to bring it to the front without opening a copy.",
-      "Find each panel type in Ctrl+K by its name.",
-    ],
-  },
-  {
-    version: "0.20.22",
-    date: "2026-10-24",
-    title: "Quieter Whiteboard save status",
-    notes: [
-      "Whiteboard shows Saving… and Saved at the bottom right, just left of the info button, instead of in the top bar.",
-    ],
-  },
-  {
-    version: "0.20.21",
-    date: "2026-10-24",
-    title: "Panels stay what they were",
-    notes: [
-      "When a module in a development folder rebuilds, its panels come back as the same panels instead of all turning into its first panel.",
-    ],
-  },
-  {
-    version: "0.20.20",
-    date: "2026-10-24",
-    title: "Maximize stays",
-    notes: [
-      "A maximized panel stays maximized after a restart and when you switch games.",
-      "Modules can maximize their own panel with a button, such as a focus mode.",
-    ],
-  },
-  {
-    version: "0.20.19",
-    date: "2026-10-24",
-    title: "Whiteboard: no more giant strokes",
-    notes: [
-      "A pasted picture gets the same size at any zoom, so what you draw on it keeps its thickness.",
-      "An empty board opens at 100% again, not at a zoom left over from before.",
-    ],
-  },
-  {
-    version: "0.20.18",
-    date: "2026-10-24",
-    title: "Panels of development modules survive a rebuild",
-    notes: [
-      "A module from a development folder that can't load for a moment, for example while a watcher rebuilds it, keeps its panels. The panel says so and starts again with the next build, also after a restart.",
-    ],
-  },
-  {
-    version: "0.20.17",
-    date: "2026-10-24",
-    title: "Save as image asks where",
-    notes: [
-      "Save as image opens a save dialog with the name filled in, so you choose the folder and name.",
-      "It opens where you last saved a picture, at first in Pictures\\Tavora.",
-    ],
-  },
-  {
-    version: "0.20.16",
-    date: "2026-10-23",
-    title: "Release copies stand out",
-    notes: [
-      "In Settings > Development, a module ready to publish says Release instead of Local.",
-    ],
-  },
-  {
-    version: "0.20.15",
-    date: "2026-10-23",
-    title: "Bigger build exports",
-    notes: [
-      "Modules can now save JSON files up to 8 MB, so builds with their full guide text fit.",
-    ],
-  },
-  {
-    version: "0.20.14",
-    date: "2026-10-23",
-    title: "Settings window spacing",
-    notes: [
-      "Settings stays clear of the window buttons at the top right.",
-      "The window buttons dim with the rest of the app while a dialog is open.",
-    ],
-  },
-  {
-    version: "0.20.13",
-    date: "2026-10-23",
-    title: "Module names in German",
-    notes: [
-      "Modules can now bring their names in more languages, so tabs, Add module and the catalog show them in German.",
-      "Notes, Calculator and AI Usage are now called Notizen, Rechner and KI-Nutzung in German.",
-    ],
-  },
-  {
-    version: "0.20.12",
-    date: "2026-10-22",
-    title: "Same tooltips everywhere",
-    notes: [
-      "Hints on Tavora's own buttons, tabs and lists now look like the ones in modules.",
-      "Game and folder names in the rail use the same tooltip too.",
-      "Short hints get a small card instead of a wide one.",
-    ],
-  },
-  {
-    version: "0.20.11",
-    date: "2026-10-22",
-    title: "Tidier rail footer",
-    notes: [
-      "The focus ring on your profile and Settings no longer crowds the buttons next to it.",
-    ],
-  },
-  {
-    version: "0.20.10",
-    date: "2026-10-22",
-    title: "Easier-to-read tooltips",
-    notes: [
-      "Hover hints use readable text and also appear when you reach a control with Tab.",
-      "Tooltips use 14 px text and 18 px headings while keeping each game’s card styling.",
-    ],
-  },
-  {
-    version: "0.20.9",
-    date: "2026-10-22",
-    title: "Find your saves faster",
-    notes: [
-      "File pickers remember your last folder for each module and game.",
-      "Enshrouded starts in a detected save folder when you haven't chosen one yet.",
+      "Fold the left or right column into a narrow strip, then click it to bring all its panels back. Stacked panels have clearer headers and a visible resize grip between them.",
+      "Use the arrow next to Add module or In this game in a panel's menu to open another panel of a module you're already using. Panels you already have are checked, and each panel type is in Ctrl+K by its name.",
+      "A maximized panel stays maximized after a restart and when you switch games. Modules can maximize their own panel with a button, such as a focus mode.",
+      "A dialog you open from Settings or Add module, like Publish or a confirmation, stays inside the dialog you opened it from, also in a small window.",
+      "Save as image opens a save dialog with the name filled in. It opens where you last saved a picture, at first in Pictures\Tavora.",
+      "File pickers remember your last folder for each module and game. Enshrouded starts in a detected save folder when you haven't chosen one yet.",
+      "Modules can bring their names in more languages, so tabs, Add module and the catalog show them in German. Notes, Calculator and AI Usage are now called Notizen, Rechner and KI-Nutzung.",
+      "Modules can save JSON files up to 8 MB, so builds with their full guide text fit.",
+      "Whiteboard: a pasted picture keeps the same size at any zoom, so what you draw on it keeps its thickness. An empty board opens at 100%. Saving and Saved show at the bottom right.",
+      "Panels of a module from a development folder come back as the same panels after it rebuilds, instead of all turning into its first panel.",
+      "In Settings > Development, a folder of Local modules has a blue row and a folder of Release copies a green one. Only the Release copy offers Publish.",
+      "Hover hints on Tavora's own buttons, tabs and lists look like the ones in modules, use readable 14 px text and also appear when you reach a control with Tab.",
+      "Settings stays clear of the window buttons at the top right, and the window buttons dim while a dialog is open. The focus ring in the rail footer no longer crowds the buttons next to it.",
     ],
   },
   {
