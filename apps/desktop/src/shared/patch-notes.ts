@@ -22,26 +22,12 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.20.31",
     date: "2026-10-25",
-    title: "Tooltips fit their text",
-    notes: [
-      "Short hover tooltips are only as wide as they need to be. Long ones still wrap at the old width.",
-    ],
-  },
-  {
-    version: "0.20.30",
-    date: "2026-10-24",
-    title: "Buttons you can feel",
-    notes: [
-      "Buttons now light up clearly when you point at them.",
-    ],
-  },
-  {
-    version: "0.20.29",
-    date: "2026-10-24",
     title: "Save and open files, your way",
     notes: [
       "Modules that save a file now show Tavora's save dialog first, with the name filled in.",
       "Saving and opening start in the folder you used last for that module, at first Documents\\Tavora.",
+      "Buttons now light up clearly when you point at them.",
+      "Short hover tooltips are only as wide as they need to be. Long ones still wrap at the old width.",
     ],
   },
   {
