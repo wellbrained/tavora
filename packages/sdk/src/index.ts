@@ -9,6 +9,8 @@ import {
   CLIPBOARD_PATH,
   PICTURES_PATH,
   JSON_EXPORT_PATH,
+  JSON_SAVE_PATH,
+  JSON_OPEN_PATH,
   READ_ONLY_FILE_PATH,
   type ReadOnlyFile,
   HELLO_MESSAGE,
@@ -261,8 +263,28 @@ export interface TavoraSDK {
     read(id: string): Promise<Uint8Array>;
     /** Revokes a remembered file reference; never deletes the player's file. */
     forget(id: string): Promise<void>;
-    /** Saves JSON (up to 8 MiB; 1 MiB on Tavora 0.20.7 and older) in Downloads/Tavora after a click or key press. Never replaces a file. Tavora 0.19.17+. */
+    /**
+     * Saves JSON (up to 8 MiB) in Downloads/Tavora after a click or key press, without asking. Never replaces a file. Tavora 0.19.17+.
+     * @deprecated Use {@link files.saveJson}, which shows Tavora's save dialog. Kept for modules made for older Tavora versions.
+     */
     exportJson(value: JsonValue, name?: string): Promise<{ fileName: string }>;
+    /**
+     * Saves JSON (up to 8 MiB) as a .json file where the player says: Tavora's save dialog opens in the folder they
+     * last saved a file to or opened one from for this module, at first Documents\Tavora. `name` suggests the file
+     * name: Tavora makes it safe and adds " (2)" and so on when it is taken. Resolves with the name it was saved
+     * under, or null when the player closed the dialog; the module never learns the folder. Replacing a file needs
+     * the player's OK in the dialog.
+     * Call it from the click or key press that asked for it: the host refuses it otherwise (PERMISSION_DENIED), and
+     * one press saves one file.
+     */
+    saveJson(value: JsonValue, name?: string): Promise<{ fileName: string } | null>;
+    /**
+     * Opens a .json file the player picks in Tavora's open dialog, which starts in the same folder as saveJson.
+     * Resolves with the file's name and its parsed content (at most 8 MiB), or null when the player closed the dialog;
+     * a file that is not JSON is INVALID_PARAMS. The module never learns the folder.
+     * Call it from the click or key press that asked for it (PERMISSION_DENIED otherwise); one press opens one file.
+     */
+    openJson(): Promise<{ fileName: string; value: JsonValue } | null>;
   };
   pictures: {
     /**
@@ -663,6 +685,29 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         const result = await response.json().catch(() => null) as {fileName?:string;error?:ErrorPayload}|null;
         if(response.ok && typeof result?.fileName === 'string') return {fileName:result.fileName};
         throw new TavoraError(result?.error ?? {code:'INTERNAL',message:'could not export the JSON file'});
+      },
+      saveJson: async (value, name = '') => {
+        const address = new URL(JSON_SAVE_PATH, window.location.href);
+        if (name) address.searchParams.set('name', name);
+        const body = JSON.stringify(value);
+        if (body === undefined) throw new TavoraError({code:'INVALID_PARAMS',message:'only JSON can be saved'});
+        if (new TextEncoder().encode(body).byteLength > 8 * 1024 * 1024) throw new TavoraError({code:'QUOTA_EXCEEDED',message:'JSON files may be at most 8 MiB'});
+        let response: Response;
+        try { response = await fetch(address, {method:'POST',headers:{'Content-Type':'application/json'},body}); }
+        catch { throw new TavoraError({code:'INTERNAL',message:'could not save the file'}); }
+        const result = await response.json().catch(() => null) as {fileName?:string|null;error?:ErrorPayload}|null;
+        if(response.ok && result?.fileName === null) return null;
+        if(response.ok && typeof result?.fileName === 'string') return {fileName:result.fileName};
+        throw new TavoraError(result?.error ?? {code:'INTERNAL',message:`could not save the file (${response.status})`});
+      },
+      openJson: async () => {
+        let response: Response;
+        try { response = await fetch(new URL(JSON_OPEN_PATH, window.location.href), {method:'POST'}); }
+        catch { throw new TavoraError({code:'INTERNAL',message:'could not open the file'}); }
+        const result = await response.json().catch(() => null) as {fileName?:string;value?:JsonValue;error?:ErrorPayload}|null;
+        if(response.ok && result === null) return null;
+        if(response.ok && typeof result?.fileName === 'string' && result.value !== undefined) return {fileName:result.fileName,value:result.value};
+        throw new TavoraError(result?.error ?? {code:'INTERNAL',message:`could not open the file (${response.status})`});
       },
     },
     pictures: {

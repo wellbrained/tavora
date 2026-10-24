@@ -108,7 +108,8 @@ import { Streaming } from "./streaming";
 import { findInstalledGames } from "./launcher-games";
 import { findSteamDir, isSteamAppId, loadAppInfo, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
-import { ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
+import { documentsFolder, ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
+import { readJsonText } from "./json-file-http";
 import { freeFileName } from "./picture-save-http";
 import { HostError } from "./errors";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
@@ -2800,6 +2801,8 @@ export class Host {
       onOpenLink: (url) => this.openLinkFromModule(url),
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
       savePicture: (png, name) => this.savePictureAs(png, name),
+      saveJson: (data, name) => this.saveJsonAs(module, data, name),
+      openJson: () => this.openJsonFrom(module),
       pickReadOnlyFile: async extensions => {
         const defaultPath=await saveDialogDirectory(new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,game.id),this.library.games[game.id]?.catalogId ?? game.id);
         const picked = await dialog.showOpenDialog(this.window, {...(defaultPath?{defaultPath}:{}),title:this.language.startsWith('de')?'Datei mit '+this.shown(module.manifest).name+' verknüpfen':'Link a file to '+this.shown(module.manifest).name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
@@ -3454,6 +3457,68 @@ export class Host {
     }
     this.rememberPicked("save-picture", file);
     return path.basename(file);
+  }
+
+  /** The folder a module's file dialogs open in: where the player last saved or opened a file for it while that is still there, else Documents\Tavora (made when needed). */
+  private async fileFolderOf(module: InstalledModule): Promise<string> {
+    const last = this.library.moduleFolders[Host.notesKey(module)];
+    const folder = last && existsSync(last) ? last : documentsFolder();
+    await mkdir(folder, { recursive: true });
+    return folder;
+  }
+
+  private rememberFileFolder(module: InstalledModule, picked: string): void {
+    this.library.moduleFolders[Host.notesKey(module)] = path.dirname(path.resolve(picked));
+    this.saveLibrary();
+  }
+
+  /**
+   * files.saveJson: the system's save dialog with the module's name suggested (numbered when taken), opening in the
+   * module's remembered folder, else Documents\Tavora. Answers with the name the file was saved under, or null when
+   * the player closed the dialog.
+   */
+  private async saveJsonAs(module: InstalledModule, data: Buffer, name: string): Promise<string | null> {
+    const folder = await this.fileFolderOf(module);
+    const german = this.language.startsWith("de");
+    const picked = await dialog.showSaveDialog(this.window, {
+      title: german ? "Datei speichern" : "Save file",
+      defaultPath: path.join(folder, freeFileName(name, (fileName) => existsSync(path.join(folder, fileName)), "json")),
+      filters: [{ name: german ? "JSON-Dateien" : "JSON files", extensions: ["json"] }],
+      properties: ["showOverwriteConfirmation"],
+    });
+    if (picked.canceled || !picked.filePath) return null;
+    const chosen = path.resolve(picked.filePath);
+    const file = /\.json$/i.test(chosen) ? chosen : `${chosen}.json`;
+    // The dialog asked before replacing the file the player chose; with .json added, it was never asked about.
+    try {
+      await writeFile(file, data, { flag: file === chosen ? "w" : "wx" });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new HostError("CONFLICT", `${path.basename(file)} already exists`);
+      throw error;
+    }
+    this.rememberFileFolder(module, file);
+    return path.basename(file);
+  }
+
+  /**
+   * files.openJson: the system's open dialog in the module's remembered folder, else Documents\Tavora. Answers with
+   * the chosen file's name and text (at most 8 MiB), or null when the player closed the dialog. The folder is
+   * remembered once the file was read.
+   */
+  private async openJsonFrom(module: InstalledModule): Promise<{ fileName: string; text: string } | null> {
+    const folder = await this.fileFolderOf(module);
+    const german = this.language.startsWith("de");
+    const picked = await dialog.showOpenDialog(this.window, {
+      title: german ? "Datei öffnen" : "Open file",
+      defaultPath: folder,
+      filters: [{ name: german ? "JSON-Dateien" : "JSON files", extensions: ["json"] }],
+      properties: ["openFile"],
+    });
+    const file = picked.filePaths[0];
+    if (picked.canceled || !file) return null;
+    const text = await readJsonText(file);
+    this.rememberFileFolder(module, file);
+    return { fileName: path.basename(file), text };
   }
 
   /** The dialog for `place` opens next time in the folder `picked` is in (for a picked folder, its parent), and the library is saved. */

@@ -33,13 +33,13 @@ export function cleanPictureName(value: string): string {
   return name;
 }
 
-/** The first of "name.png", "name (2).png", … that is not taken. */
-export function freeFileName(name: string, taken: (fileName: string) => boolean): string {
+/** The first of "name.png", "name (2).png", … that is not taken (another `extension`, such as "json", for other files). */
+export function freeFileName(name: string, taken: (fileName: string) => boolean, extension = "png"): string {
   for (let count = 1; count < 10_000; count++) {
-    const fileName = count === 1 ? `${name}.png` : `${name} (${count}).png`;
+    const fileName = count === 1 ? `${name}.${extension}` : `${name} (${count}).${extension}`;
     if (!taken(fileName)) return fileName;
   }
-  throw new HostError("QUOTA_EXCEEDED", "too many pictures with this name");
+  throw new HostError("QUOTA_EXCEEDED", "too many files with this name");
 }
 
 export async function servePictureSave(request: Request, url: URL, deps: PictureSaveDeps): Promise<Response> {

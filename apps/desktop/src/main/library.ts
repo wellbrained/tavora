@@ -100,6 +100,8 @@ export interface Library {
   developmentFolders: string[];
   /** Per system file dialog, the folder the player last picked from in it; the dialog opens there next time. */
   dialogFolders: Partial<Record<DialogPlace, string>>;
+  /** Per `owner:module id`, the folder the player last saved a file to or opened one from for that module (files.saveJson, files.openJson). */
+  moduleFolders: Record<string, string>;
   /** Per `owner:module id`, the module version whose patch notes the player has seen; newer notes are marked new. */
   moduleNotesSeen: Record<string, string>;
   /** The Steam profile link or id the player chose to remember for the Steam import, or null. Kept only on this PC. */
@@ -134,6 +136,8 @@ export type DialogPlace = (typeof DIALOG_PLACES)[number];
 export const MAX_DEVELOPMENT_FOLDERS = 20;
 /** Modules whose seen patch notes are remembered; more than anyone installs. */
 export const MAX_NOTES_SEEN = 1000;
+/** Modules whose file folder is remembered; more than anyone installs. */
+export const MAX_MODULE_FOLDERS = 1000;
 /** Offered icons of games not in the library that are remembered; as many as a Steam import can list. */
 export const MAX_ICONS_OFFERED = 5000;
 
@@ -178,6 +182,7 @@ export function emptyLibrary(): Library {
     moduleFilesFolder: null,
     developmentFolders: [],
     dialogFolders: {},
+    moduleFolders: {},
     moduleNotesSeen: {},
     steamProfile: null,
     iconsOffered: [],
@@ -705,6 +710,9 @@ export function sanitizeLibrary(raw: unknown): Library {
   for (const place of DIALOG_PLACES) {
     const folder = dialogFolders[place];
     if (typeof folder === "string" && folder.length <= 500 && path.isAbsolute(folder)) library.dialogFolders[place] = folder;
+  }
+  for (const [key, folder] of Object.entries(asRecord(saved.moduleFolders)).slice(0, MAX_MODULE_FOLDERS)) {
+    if (key.length <= 200 && /^[^:]+:[^:]+$/.test(key) && typeof folder === "string" && folder.length <= 500 && path.isAbsolute(folder)) library.moduleFolders[key] = folder;
   }
   for (const [key, version] of Object.entries(asRecord(saved.moduleNotesSeen)).slice(0, MAX_NOTES_SEEN)) {
     if (key.length <= 200 && /^[^:]+:[^:]+$/.test(key) && typeof version === "string" && version.length <= 64) library.moduleNotesSeen[key] = version;
