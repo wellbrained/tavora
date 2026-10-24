@@ -6,13 +6,14 @@
 // only when it first shows, so content that grows (a box dragged past the edge) keeps the view.
 // With fit "width" the content fills the width and is read top to bottom like a page: a
 // plain wheel scrolls it, and it is fitted again when the pane's width changes.
+// A parent can read `view`, put a saved one back with setView() and show an area with showArea().
 import type { HTMLAttributes } from "vue"
 import { Maximize, Minus, Plus } from "@lucide/vue"
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
 import { uiText } from "../text"
-import { clampPan, fitView, type Size, type ZoomAlign, type ZoomFit, zoomAt, type ZoomView } from "./view"
+import { areaView, clampPan, clampZoom, fitView, type Size, type ZoomAlign, type ZoomArea, type ZoomFit, zoomAt, type ZoomView } from "./view"
 
 const props = withDefaults(defineProps<{
   /** Smallest and largest zoom, 1 = 100 %. */
@@ -73,6 +74,21 @@ function panBy(dx: number, dy: number, from = view.value) {
  */
 function moveOrigin(dx: number, dy: number) {
   view.value = { ...view.value, x: view.value.x - dx * view.value.zoom, y: view.value.y - dy * view.value.zoom }
+}
+/** The view a parent asked for before the pane was measured; it replaces the first fit. */
+let pendingView: ZoomView | undefined
+const measured = () => paneSize.value.width > 0 && paneSize.value.height > 0 && contentSize.value.width > 0 && contentSize.value.height > 0
+function applyView(next: ZoomView) {
+  view.value = clampPan({ ...next, zoom: clampZoom(next.zoom, limits.value) }, paneSize.value, contentSize.value)
+}
+/** Sets the view (for example one saved earlier). Zoom and pan are kept in reach. Before the first show it is used instead of the first fit. */
+function setView(next: ZoomView) {
+  if (measured()) applyView(next)
+  else pendingView = { ...next }
+}
+/** Zooms and pans so `area` (content pixels at zoom 1) fills the pane, centred, with `padding` pixels around it. */
+function showArea(area: ZoomArea, options: { padding?: number } = {}) {
+  applyView(areaView(paneSize.value, area, limits.value, options.padding ?? 24))
 }
 const zoomIn = () => zoomBy(STEP)
 const zoomOut = () => zoomBy(1 / STEP)
@@ -211,7 +227,11 @@ onMounted(() => {
     const widthChanged = props.fit === "width" && nextPane.width !== paneSize.value.width
     paneSize.value = nextPane
     contentSize.value = nextContent
-    if ((contentChanged && props.autoFit) || paneWasEmpty || widthChanged) fit()
+    if (pendingView && measured()) {
+      applyView(pendingView)
+      pendingView = undefined
+    }
+    else if ((contentChanged && props.autoFit) || paneWasEmpty || widthChanged) fit()
     else view.value = clampPan(view.value, nextPane, nextContent)
   })
   observer.observe(pane.value!)
@@ -223,7 +243,7 @@ onBeforeUnmount(() => {
   clearTimeout(hintTimer)
 })
 
-defineExpose({ fit, zoomIn, zoomOut, moveOrigin, zoom: computed(() => view.value.zoom) })
+defineExpose({ fit, zoomIn, zoomOut, moveOrigin, setView, showArea, zoom: computed(() => view.value.zoom), view: computed(() => view.value) })
 </script>
 
 <template>

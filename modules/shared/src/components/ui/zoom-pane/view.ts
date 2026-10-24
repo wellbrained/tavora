@@ -50,6 +50,24 @@ export function zoomAt(view: ZoomView, factor: number, at: { x: number, y: numbe
   return clampPan({ zoom, x: at.x - (at.x - view.x) * scale, y: at.y - (at.y - view.y) * scale }, pane, content)
 }
 
+/** A rectangle of the content, in content pixels at zoom 1. */
+export interface ZoomArea {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/**
+ * Shows `area` as big as fits the pane with `padding` pixels around it, centred. The zoom stays
+ * within `limits`, so a tiny area (or a point) zooms in only up to the maximum. Not clamped to the content.
+ */
+export function areaView(pane: Size, area: ZoomArea, limits: ZoomLimits, padding: number): ZoomView {
+  const room = { width: Math.max(1, pane.width - 2 * padding), height: Math.max(1, pane.height - 2 * padding) }
+  const zoom = clampZoom(Math.min(room.width / Math.max(area.width, 0), room.height / Math.max(area.height, 0)), limits)
+  return { zoom, x: pane.width / 2 - (area.x + area.width / 2) * zoom, y: pane.height / 2 - (area.y + area.height / 2) * zoom }
+}
+
 /**
  * The whole content in view, never above 100 % and never below `floor`. Content still
  * too big at `floor` starts at the side `align` names and is centred top to bottom.

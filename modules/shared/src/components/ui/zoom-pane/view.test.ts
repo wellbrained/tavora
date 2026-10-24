@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { clampPan, FIT_PADDING, fitView, zoomAt } from "./view"
+import { areaView, clampPan, FIT_PADDING, fitView, zoomAt } from "./view"
 
 const limits = { min: 0.25, max: 2 }
 const pane = { width: 400, height: 300 }
@@ -69,5 +69,39 @@ describe("clampPan", () => {
     expect(clampPan({ x: 500, y: 0, zoom: 1 }, pane, content).x).toBe(200)
     expect(clampPan({ x: -5000, y: 0, zoom: 1 }, pane, content).x).toBe(200 - 1000)
     expect(clampPan({ x: 0, y: -500, zoom: 1 }, pane, content).y).toBe(150 - 100)
+  })
+})
+
+describe("areaView", () => {
+  it("fits a small area and centres it", () => {
+    // Room is 352 x 252; a 100 x 50 area fits 3.52 times, so the zoom stops at the maximum of 2.
+    const view = areaView(pane, { x: 10, y: 20, width: 100, height: 50 }, limits, 24)
+    expect(view.zoom).toBe(2)
+    expect(view.x + 60 * view.zoom).toBeCloseTo(pane.width / 2)
+    expect(view.y + 45 * view.zoom).toBeCloseTo(pane.height / 2)
+  })
+
+  it("zooms so the limiting side fills the room inside the padding", () => {
+    const view = areaView(pane, { x: 0, y: 0, width: 704, height: 100 }, limits, 24)
+    expect(view.zoom).toBeCloseTo(0.5)
+    expect(view.x).toBeCloseTo(24)
+  })
+
+  it("zooms out for an area bigger than the pane, down to the minimum", () => {
+    expect(areaView(pane, { x: 0, y: 0, width: 1408, height: 100 }, limits, 24).zoom).toBeCloseTo(0.25)
+    expect(areaView(pane, { x: 0, y: 0, width: 9000, height: 100 }, limits, 24).zoom).toBe(0.25)
+  })
+
+  it("treats a zero-size area as a point: maximum zoom, point in the middle", () => {
+    const view = areaView(pane, { x: 50, y: 80, width: 0, height: 0 }, limits, 24)
+    expect(view.zoom).toBe(2)
+    expect(view.x + 50 * 2).toBeCloseTo(200)
+    expect(view.y + 80 * 2).toBeCloseTo(150)
+  })
+
+  it("uses the padding on all sides", () => {
+    const view = areaView(pane, { x: 0, y: 0, width: 704, height: 504 }, limits, 24)
+    expect(view.zoom).toBeCloseTo(0.5)
+    expect(view.y).toBeCloseTo(24)
   })
 })
