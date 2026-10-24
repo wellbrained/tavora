@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.19",
+    date: "2026-10-24",
+    title: "Whiteboard: no more giant strokes",
+    notes: [
+      "A pasted picture gets the same size at any zoom, so what you draw on it keeps its thickness.",
+      "An empty board opens at 100% again, not at a zoom left over from before.",
+    ],
+  },
+  {
     version: "0.20.18",
     date: "2026-10-24",
     title: "Panels of development modules survive a rebuild",
