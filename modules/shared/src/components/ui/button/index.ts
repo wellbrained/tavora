@@ -9,15 +9,16 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         // Hovers mix some of the text colour into the surface, so they show on dark and light themes alike.
+        // A variant with a dark: background needs its own dark:hover: one, or the dark: one wins over the hover.
         default:
           "bg-primary text-primary-foreground hover:bg-primary-hover",
         destructive:
-          "bg-destructive text-white hover:bg-[color-mix(in_srgb,black_15%,var(--destructive))]focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+          "bg-destructive text-white hover:bg-[color-mix(in_srgb,black_15%,var(--destructive))]focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60 dark:hover:bg-destructive/85",
         // Remove, delete and take-back buttons: always red, quieter than a confirm dialog's destructive one.
         danger:
           "bg-destructive/10 text-destructive hover:bg-destructive/25 hover:text-destructive dark:bg-destructive/15 dark:hover:bg-destructive/30",
         outline:
-          "border bg-background shadow-xs hover:border-input hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] hover:text-accent-foreground dark:bg-input/30 dark:border-input",
+          "border bg-background shadow-xs hover:border-input hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/60",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--secondary))]",
         ghost:
