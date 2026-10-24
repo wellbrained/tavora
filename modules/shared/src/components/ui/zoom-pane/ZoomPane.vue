@@ -3,13 +3,15 @@
 // zooms, a plain wheel keeps scrolling the page (with a short hint), and the buttons in
 // the corner zoom in, out and fit. With focus: + and - zoom, 0 fits, arrow keys pan.
 // The content is fitted when it first shows and whenever its size changes.
+// With fit "width" the content fills the width and is read top to bottom like a page: a
+// plain wheel scrolls it, and it is fitted again when the pane's width changes.
 import type { HTMLAttributes } from "vue"
 import { Maximize, Minus, Plus } from "@lucide/vue"
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
 import { uiText } from "../text"
-import { clampPan, fitView, type Size, type ZoomAlign, zoomAt, type ZoomView } from "./view"
+import { clampPan, fitView, type Size, type ZoomAlign, type ZoomFit, zoomAt, type ZoomView } from "./view"
 
 const props = withDefaults(defineProps<{
   /** Smallest and largest zoom, 1 = 100 %. */
@@ -18,6 +20,8 @@ const props = withDefaults(defineProps<{
   /** Fitting never goes below this zoom; bigger content then starts at the side `align` names. Defaults to minZoom. */
   fitFloor?: number
   align?: ZoomAlign
+  /** Fit the whole content, or only its width (a plain wheel then scrolls it). */
+  fit?: ZoomFit
   /** What the pane shows, for screen readers. */
   label?: string
   class?: HTMLAttributes["class"]
@@ -25,6 +29,7 @@ const props = withDefaults(defineProps<{
   minZoom: 0.25,
   maxZoom: 2,
   align: "center",
+  fit: "whole",
 })
 
 /** One press of a button or key. */
@@ -48,7 +53,7 @@ const contentSize = ref<Size>({ width: 0, height: 0 })
 const transform = computed(() => `translate(${view.value.x}px, ${view.value.y}px) scale(${view.value.zoom})`)
 
 function fit() {
-  view.value = fitView(paneSize.value, contentSize.value, limits.value, props.fitFloor ?? props.minZoom, props.align)
+  view.value = fitView(paneSize.value, contentSize.value, limits.value, props.fitFloor ?? props.minZoom, props.align, props.fit)
 }
 
 const middle = () => ({ x: paneSize.value.width / 2, y: paneSize.value.height / 2 })
@@ -143,6 +148,14 @@ function onClickCapture(event: MouseEvent) {
 
 let hintTimer: ReturnType<typeof setTimeout> | undefined
 function onWheel(event: WheelEvent) {
+  if (!event.ctrlKey && props.fit === "width") {
+    // Read like a page: the wheel scrolls, Shift + wheel goes sideways.
+    event.preventDefault()
+    const lines = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1
+    const sideways = event.shiftKey && !event.deltaX
+    panBy(-(sideways ? event.deltaY : event.deltaX) * lines, sideways ? 0 : -event.deltaY * lines)
+    return
+  }
   if (!event.ctrlKey) {
     // A plain wheel scrolls the page; say how to zoom instead.
     hint.value = true
@@ -184,9 +197,10 @@ onMounted(() => {
     const nextContent = { width: content.value!.offsetWidth, height: content.value!.offsetHeight }
     const contentChanged = nextContent.width !== contentSize.value.width || nextContent.height !== contentSize.value.height
     const paneWasEmpty = paneSize.value.width === 0 || paneSize.value.height === 0
+    const widthChanged = props.fit === "width" && nextPane.width !== paneSize.value.width
     paneSize.value = nextPane
     contentSize.value = nextContent
-    if (contentChanged || paneWasEmpty) fit()
+    if (contentChanged || paneWasEmpty || widthChanged) fit()
     else view.value = clampPan(view.value, nextPane, nextContent)
   })
   observer.observe(pane.value!)
