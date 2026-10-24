@@ -77,7 +77,7 @@ const SECTIONS = [
   { id: "ratings", title: "Star rating", keywords: "stars rating review score" },
   { id: "expandable", title: "Show more", keywords: "expand collapse more less long text read clamp" },
   { id: "tabs", title: "Tabs", keywords: "tabs views" },
-  { id: "zoom", title: "Pan and zoom", keywords: "zoom pan drag pinch fit graph map canvas viewport" },
+  { id: "zoom", title: "Pan and zoom", keywords: "zoom pan drag pinch fit width scroll graph tree map canvas viewport" },
   { id: "status", title: "Badges and status", keywords: "badge chip tag status dot kbd shortcut" },
   { id: "progress", title: "Progress and loading", keywords: "progress spinner skeleton loading" },
   { id: "menus", title: "Menus", keywords: "dropdown menu context right-click submenu actions" },
@@ -471,7 +471,7 @@ function bump(by: number) {
       </DemoSection>
 
       <!-- Pan and zoom -->
-      <DemoSection v-if="visible.has('zoom')" id="zoom" :title="title('zoom')" description="Drag to move, Ctrl + scroll or pinch to zoom. A plain scroll keeps scrolling the page.">
+      <DemoSection v-if="visible.has('zoom')" id="zoom" :title="title('zoom')" description="Drag to move, Ctrl + scroll or pinch to zoom. A plain scroll keeps scrolling the page, unless the pane fits only the width.">
         <Specimen label="Wide content, starting at its right end when it doesn't fit at 60 %" column>
           <ZoomPane class="h-64" align="end" :fit-floor="0.6" label="Production line">
             <div class="flex items-center gap-10 p-4">
@@ -483,6 +483,16 @@ function bump(by: number) {
             </div>
           </ZoomPane>
           <p class="text-muted-foreground text-xs">{{ pressed ? `Picked ${pressed}.` : "Buttons inside still work." }}</p>
+        </Specimen>
+        <Specimen label="Tall content with fit=&quot;width&quot;: fills the width, starts at the top, a plain scroll moves it" column>
+          <ZoomPane class="h-64" fit="width" label="Production tree">
+            <div class="flex w-[520px] flex-col items-center gap-6 p-4">
+              <div v-for="step in [...STEPS].reverse()" :key="step" class="bg-card flex w-44 flex-col gap-1 rounded-lg border p-3">
+                <span class="font-medium">{{ step }}</span>
+                <span class="text-muted-foreground text-xs">60 / min</span>
+              </div>
+            </div>
+          </ZoomPane>
         </Specimen>
       </DemoSection>
 

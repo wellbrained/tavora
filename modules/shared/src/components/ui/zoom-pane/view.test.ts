@@ -25,6 +25,18 @@ describe("fitView", () => {
     expect(fitView(pane, content, limits, 0.6, "center").x).toBeCloseTo((400 - 1800) / 2)
   })
 
+  it("fits only the width when asked, and starts tall content at its top", () => {
+    const tall = { width: 736, height: 2000 }
+    const view = fitView(pane, tall, limits, 0.25, "center", "width")
+    expect(view.zoom).toBeCloseTo(0.5)
+    expect(view.x).toBeCloseTo(FIT_PADDING)
+    expect(view.y).toBe(FIT_PADDING)
+    // Never above 100 %, and content that fits top to bottom stays centred.
+    expect(fitView(pane, { width: 200, height: 100 }, limits, 0.25, "center", "width")).toEqual({ x: 100, y: 100, zoom: 1 })
+    // The whole fit would have shrunk it to the height.
+    expect(fitView(pane, tall, { min: 0.1, max: 2 }, 0.1, "center").zoom).toBeCloseTo(268 / 2000)
+  })
+
   it("keeps within the zoom limits", () => {
     expect(fitView(pane, { width: 100000, height: 100 }, limits, 0, "center").zoom).toBe(0.25)
   })

@@ -23,6 +23,9 @@ export const FIT_PADDING = 16
 /** Where content too big to fit starts: its left side, its middle or its right side. */
 export type ZoomAlign = "start" | "center" | "end"
 
+/** What fitting fills: the whole content, or only its width (taller content then starts at its top). */
+export type ZoomFit = "whole" | "width"
+
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
 
 export function clampZoom(zoom: number, limits: ZoomLimits): number {
@@ -50,15 +53,17 @@ export function zoomAt(view: ZoomView, factor: number, at: { x: number, y: numbe
 /**
  * The whole content in view, never above 100 % and never below `floor`. Content still
  * too big at `floor` starts at the side `align` names and is centred top to bottom.
+ * With `fit` "width" only the width has to fit; taller content starts at its top.
  */
-export function fitView(pane: Size, content: Size, limits: ZoomLimits, floor: number, align: ZoomAlign): ZoomView {
+export function fitView(pane: Size, content: Size, limits: ZoomLimits, floor: number, align: ZoomAlign, fit: ZoomFit = "whole"): ZoomView {
   if (content.width <= 0 || content.height <= 0) return { x: FIT_PADDING, y: FIT_PADDING, zoom: 1 }
   const room = { width: Math.max(1, pane.width - 2 * FIT_PADDING), height: Math.max(1, pane.height - 2 * FIT_PADDING) }
-  const whole = Math.min(1, room.width / content.width, room.height / content.height)
-  const zoom = clampZoom(Math.max(whole, floor), limits)
+  const fits = Math.min(1, room.width / content.width, fit === "width" ? 1 : room.height / content.height)
+  const zoom = clampZoom(Math.max(fits, floor), limits)
   const width = content.width * zoom
   const height = content.height * zoom
   const centred = (pane.width - width) / 2
   const x = width <= room.width || align === "center" ? centred : align === "start" ? FIT_PADDING : pane.width - FIT_PADDING - width
-  return { x, y: (pane.height - height) / 2, zoom }
+  const y = fit === "width" && height > room.height ? FIT_PADDING : (pane.height - height) / 2
+  return { x, y, zoom }
 }
