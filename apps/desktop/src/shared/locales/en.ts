@@ -366,6 +366,7 @@ export const en = {
   "devStart.done.text": "Your module now shows up under Add module, so you can try it right away. When it's ready for other players, press Publish next to it in Settings > Development.",
   "devStart.done.button": "Done",
   "publish.button": "Publish",
+  "publish.fromRelease": "Published from its Release copy",
   "publish.saveZip": "Save as zip",
   "publish.zipSaved": "Saved {file}.",
   "publish.more": "More for {name}",
