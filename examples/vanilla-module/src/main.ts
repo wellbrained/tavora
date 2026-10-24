@@ -90,6 +90,25 @@ async function setUpView(tavora: TavoraSDK) {
   }
 }
 
+/** Maximize: this panel fills the workspace, by its own button or the panel's menu. Only this example has it. */
+async function setUpMaximize(tavora: TavoraSDK) {
+  let maximized = await tavora.panel.isMaximized();
+  const button = el<HTMLButtonElement>("toggle-maximized");
+  const show = (value: boolean) => {
+    maximized = value;
+    el("maximized").textContent = value ? "yes" : "no";
+    button.textContent = value ? "Restore" : "Maximize";
+  };
+  show(maximized);
+  tavora.panel.onMaximizedChange(show);
+  button.addEventListener("click", () => {
+    tavora.panel.setMaximized(!maximized).catch((error: unknown) => {
+      el("maximized").textContent = error instanceof TavoraError ? error.code : String(error);
+    });
+  });
+  button.disabled = false;
+}
+
 function setUpLifecycle(tavora: TavoraSDK) {
   el("lifecycle").textContent = "active";
   tavora.lifecycle.onSuspend(() => {
@@ -116,7 +135,7 @@ try {
   });
   tavora.ui.onThemeChange(applyTheme);
   setUpLifecycle(tavora);
-  await Promise.all([setUpCounter(tavora), setUpNote(tavora), setUpView(tavora)]);
+  await Promise.all([setUpCounter(tavora), setUpNote(tavora), setUpView(tavora), setUpMaximize(tavora)]);
   el("status").textContent = "Connected";
 } catch (error) {
   el("status").textContent = `Could not connect: ${error instanceof Error ? error.message : String(error)}`;

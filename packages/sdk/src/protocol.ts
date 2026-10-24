@@ -365,6 +365,13 @@ export interface Methods {
    * whether it now shows the content. Tavora 0.17.18 and newer.
    */
   "panel.navigated": { params: { requestId: number; handled: boolean; ok: boolean }; result: null };
+  /** Whether the panel fills the workspace now (Maximize). Tavora 0.20.20 and newer. */
+  "panel.isMaximized": { params: undefined; result: boolean };
+  /**
+   * Makes the panel fill the workspace (true), as Maximize in its menu does, or puts it back (false). Filling it
+   * only right after a click or key press in the panel. Tavora 0.20.20 and newer.
+   */
+  "panel.setMaximized": { params: { maximized: boolean }; result: null };
   /**
    * Opens one of this module's own panel types in the current game, optionally on some content. Only right after a
    * click or key press in the panel, once per click. Tavora 0.17.18 and newer.
@@ -458,6 +465,8 @@ export interface Events {
   "discord.event": DiscordEvent;
   /** Another panel of this module asked this one to show other content; answer with `panel.navigated` within navigateTimeoutMs. */
   "panel.navigate": PanelNavigateRequest;
+  /** The panel started or stopped filling the workspace (Maximize and Restore, by the player or panel.setMaximized). */
+  "panel.maximized": { maximized: boolean };
   /** The player pressed a hotkey set for this module (hotkeys.set). Sent to one panel of the module in the game shown now, the one used last. */
   "hotkeys.pressed": HotkeyBinding;
   "lifecycle.suspend": null;

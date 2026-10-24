@@ -76,6 +76,7 @@ Some calls change something outside the module's panel. They work only within 2 
 - **`overlay.copyLink`** puts the link of one of the module's own overlays on the clipboard, and nothing else. There is no call to read the clipboard.
 - **`hotkeys.set`** opens Tavora's own hotkey dialog. The module names the action and the target; the player picks the key, or cancels.
 - **`panels.open`** opens, brings forward or switches a panel of the same module, in the game shown now, so it changes the workspace outside the module's panel. A module can open only its own panel types, never another module's panels, and one press opens or switches one panel. The panel asked to switch is the module's own page and may refuse; then nothing changes, and only the player can open the content in a new panel. The module learns only what Tavora did: shown, switched, opened or failed.
+- **`panel.setMaximized(true)`** makes the module's own panel fill the workspace, as Maximize in its menu does, so it covers the other panels and they pause. It never reaches past the workspace: not the rest of the window, not fullscreen, not a new window. One press maximizes once. Putting the panel back needs no press, and the player can always do it with Restore in the panel's menu. The module learns only whether its own panel fills the workspace.
 
 A module can still label a button misleadingly and get the player to click it. The result is the same as a link on any web page: the player sees the new tab, and the Browser panel is sandboxed.
 

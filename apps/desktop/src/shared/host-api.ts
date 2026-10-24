@@ -405,6 +405,8 @@ export interface LayoutGroup {
   panels: string[];
   /** The panel whose tab is selected; null in an empty slot. */
   active: string | null;
+  /** The group fills the workspace (Maximize); one group of a layout at most. */
+  maximized?: true;
 }
 
 export type LayoutNode = LayoutSplit | LayoutGroup;
@@ -423,6 +425,8 @@ export interface PanelBounds {
   y: number;
   width: number;
   height: number;
+  /** The panel's group fills the workspace (Maximize). */
+  maximized?: true;
 }
 
 /** What the host UI renders. Contains no module data. */
@@ -899,5 +903,8 @@ export interface TavoraHostApi {
   answerModuleMenu(requestId: number, id: string | null): void;
 }
 
-/** `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). */
-export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}` | `address:${string}` | `panel:${string}` | `setting:${string}`;
+/**
+ * `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). `maximize:<instance id>` and
+ * `restore:<instance id>` make that panel's group fill the workspace or put it back (panel.setMaximized).
+ */
+export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}` | `address:${string}` | `panel:${string}` | `maximize:${string}` | `restore:${string}` | `setting:${string}`;

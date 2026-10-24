@@ -70,6 +70,10 @@ export interface BridgeContext {
   openPanel(type: string, content: PanelContent | null): Promise<PanelOpenResult>;
   /** The page's answer to a panel.navigate event. */
   navigated(requestId: number, handled: boolean, ok: boolean): void;
+  /** Whether the panel fills the workspace now (Maximize). */
+  isMaximized(): boolean;
+  /** panel.setMaximized: true throws PERMISSION_DENIED unless the panel just got a click or key press. */
+  setMaximized(maximized: boolean): Promise<void>;
   game: TavoraGame;
   data: ModuleData;
   /** The module's settings shared by every game (storage.app). */
@@ -388,6 +392,17 @@ const handlers = new Map<string, Handler>([
         );
       }
       s.context.setContent(content);
+      return null;
+    },
+  ],
+
+  ["panel.isMaximized", (s, params) => (noParams(params), s.context.isMaximized())],
+  [
+    "panel.setMaximized",
+    async (s, params) => {
+      const maximized = required(object(params), "maximized");
+      if (typeof maximized !== "boolean") throw new HostError("INVALID_PARAMS", "params.maximized must be a boolean");
+      await s.context.setMaximized(maximized);
       return null;
     },
   ],
