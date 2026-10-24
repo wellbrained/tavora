@@ -166,6 +166,15 @@ body {
 .size-full {
   color: var(--destructive);
 }
+.board .excalidraw .footer-center {
+  justify-content: flex-end;
+  align-items: center;
+  align-self: center;
+}
+.save {
+  min-width: 11ch;
+  text-align: right;
+}
 .size {
   color: var(--foreground);
 }

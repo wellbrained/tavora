@@ -2,7 +2,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { inModule, launch, openModule, panels, WHITEBOARD } from "./harness";
+import { inModule, launch, openModule, panels, shootPanels, WHITEBOARD } from "./harness";
 
 const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
 
@@ -61,6 +61,23 @@ test("whiteboard: draw on a board, keep it, switch boards, delete one and bring 
   const box = await inModule<{ x: number; y: number; width: number; height: number }>(app, WHITEBOARD, `(() => { const r = document.querySelector(".excalidraw canvas.interactive").getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
   await drag(app, { x: box.x + box.width * 0.3, y: box.y + box.height * 0.3 }, { x: box.x + box.width * 0.6, y: box.y + box.height * 0.6 });
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("save-state")}.dataset.state`), { timeout: 10_000 }).toBe("saved");
+  const savePosition = await inModule<{ inHeader: boolean; inFooter: boolean; gap: number; centerOffset: number }>(app, WHITEBOARD, `(() => {
+    const status = ${q("save-state")};
+    const statusBox = status.getBoundingClientRect();
+    const helpBox = document.querySelector(".excalidraw .help-icon").getBoundingClientRect();
+    return {
+      inHeader: !!status.closest("header.bar"),
+      inFooter: !!status.closest("footer"),
+      gap: helpBox.left - statusBox.right,
+      centerOffset: Math.abs((statusBox.top + statusBox.bottom - helpBox.top - helpBox.bottom) / 2),
+    };
+  })()`);
+  expect(savePosition.inHeader).toBe(false);
+  expect(savePosition.inFooter).toBe(true);
+  expect(savePosition.gap).toBeGreaterThanOrEqual(0);
+  expect(savePosition.gap).toBeLessThan(20);
+  expect(savePosition.centerOffset).toBeLessThan(2);
+  await shootPanels(app, WHITEBOARD, test.info().outputPath("save-status.png"));
   await expect.poll(async () => (await storedBoards(userData))["Board 1"]?.map((element) => element.type)).toEqual(["rectangle"]);
 
   // A second board starts empty; the first keeps its drawing.

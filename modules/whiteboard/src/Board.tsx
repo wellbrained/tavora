@@ -2,7 +2,7 @@
 // another board is opened. Remounted (key) for every board, so each starts with fresh undo history.
 // Pictures (pasted, dropped or inserted) are kept in the file store and come back when the board is opened.
 
-import { CaptureUpdateAction, Excalidraw, exportToBlob, MainMenu } from "@excalidraw/excalidraw";
+import { CaptureUpdateAction, Excalidraw, exportToBlob, Footer, MainMenu } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import type { ExcalidrawElement, ExcalidrawImageElement, OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { AppState, BinaryFiles, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
@@ -49,6 +49,7 @@ interface Props {
   view: View | undefined;
   mode: "light" | "dark";
   language: Language;
+  saveState: SaveState;
   /** Stores the board. Resolves once it is stored, rejects when it could not be. */
   onSave(data: BoardData): Promise<void>;
   onView(view: View): void;
@@ -71,7 +72,7 @@ interface Props {
   onToolbar(place: "top" | "bottom"): void;
 }
 
-export default function Board({ sdk, data, view, mode, language, onSave, onView, onState, onSize, onDirty, onPictures, onEmpty, onCopyShortcut, onPicturesLoaded, onNotice, onControls, toolbar, onToolbar }: Props) {
+export default function Board({ sdk, data, view, mode, language, saveState, onSave, onView, onState, onSize, onDirty, onPictures, onEmpty, onCopyShortcut, onPicturesLoaded, onNotice, onControls, toolbar, onToolbar }: Props) {
   // The newest drawing, and what was last stored, kept outside React's render so drawing never waits for it.
   const latest = useRef<{ elements: readonly OrderedExcalidrawElement[]; background: string; files: BinaryFiles } | null>(null);
   const pictures = useMemo(() => createPictures(sdk, data.files), [sdk, data.files]);
@@ -318,6 +319,11 @@ export default function Board({ sdk, data, view, mode, language, onSave, onView,
           canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, toggleTheme: false },
         }}
       >
+        <Footer>
+          <span className={saveState === "error" ? "save save-error" : "save"} role="status" data-testid="save-state" data-state={saveState}>
+            {saveState === "idle" ? "" : t(`save.${saveState}` as "save.saved")}
+          </span>
+        </Footer>
         <MainMenu>
           <MainMenu.DefaultItems.ClearCanvas />
           <MainMenu.DefaultItems.ChangeCanvasBackground />
