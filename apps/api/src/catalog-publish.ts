@@ -45,7 +45,10 @@ export interface PublishOptions {
   now?: () => number;
   /** The catalogue public key the signed lists are checked against (CATALOGUE_PUBLIC_KEY outside tests). */
   catalogueKey?: string;
-  /** Who is told when the catalog is full (MAINTAINER_EMAIL), and how. Absent: only the review page shows it. */
+  /**
+   * Who is told when the catalog is full (MAINTAINER_EMAIL), and how. Absent: only the review page shows it.
+   * The account with this address has no daily upload limit.
+   */
   maintainer?: { email: string; mailer: Mailer; mailDailyLimit?: number };
   /** How the developer is told about each publish. Absent: nobody is (tests that don't look). */
   mail?: { mailer: Mailer; mailDailyLimit?: number };
@@ -162,7 +165,11 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     }
 
     const at = now();
-    if (catalog.uploadsSince(key.accountId, new Date(at - 86_400_000)) >= uploadsPerDay) {
+    // The maintainer's own account (MAINTAINER_EMAIL) ships as often as it needs; the hourly, account and
+    // catalog limits still hold for it.
+    const email = store.account(key.accountId)?.email?.toLowerCase();
+    const isMaintainer = maintainer !== undefined && email !== undefined && email === maintainer.email.toLowerCase();
+    if (!isMaintainer && catalog.uploadsSince(key.accountId, new Date(at - 86_400_000)) >= uploadsPerDay) {
       return refuse(context, 429, "daily-limit", `An account can publish ${uploadsPerDay} versions a day. Try again tomorrow.`);
     }
     if (catalog.storedBytes(key.accountId) + checked.size > accountBytes) {
