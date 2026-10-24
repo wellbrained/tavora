@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.26",
+    date: "2026-10-24",
+    title: "Local and Release tell apart at a glance",
+    notes: [
+      "In Settings > Development, Local is blue with a folder icon and Release is green with a package icon, so the copy you publish stands out.",
+    ],
+  },
+  {
     version: "0.20.25",
     date: "2026-10-24",
     title: "More room when you need it",
