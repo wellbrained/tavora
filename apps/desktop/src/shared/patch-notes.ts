@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.21",
+    date: "2026-10-24",
+    title: "Panels stay what they were",
+    notes: [
+      "When a module in a development folder rebuilds, its panels come back as the same panels instead of all turning into its first panel.",
+    ],
+  },
+  {
     version: "0.20.20",
     date: "2026-10-24",
     title: "Maximize stays",
