@@ -1,4 +1,4 @@
-# Dialogs stay inside Settings
+# Dialogs stay inside their parent
 
-- A dialog you open from Settings, like Publish or a confirmation, now sits inside Settings instead of sticking out above it.
+- A dialog you open from Settings or Add module, like Publish or a confirmation, now stays inside the dialog you opened it from instead of sticking out above it.
 - In a small window it fits too, and scrolls if it's long.
