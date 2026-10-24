@@ -33,20 +33,22 @@ export function parseLayout(raw: unknown): SavedLayout | null {
 
   const node = (value: unknown, depth: number): LayoutNode | null => {
     if (++nodes > LAYOUT_LIMITS.nodes || depth > LAYOUT_LIMITS.depth || !isObject(value) || !extent(value.size)) return null;
+    if (value.hidden !== undefined && value.hidden !== true) return null;
+    const visibility = value.hidden ? { hidden: true as const } : {};
     if (value.kind === "split") {
-      if (!only(value, "kind", "size", "children") || !Array.isArray(value.children)) return null;
+      if (!only(value, "kind", "size", "children", "hidden") || !Array.isArray(value.children)) return null;
       const children: LayoutNode[] = [];
       for (const child of value.children) {
         const parsed = node(child, depth + 1);
         if (!parsed) return null;
         children.push(parsed);
       }
-      return { kind: "split", size: value.size, children };
+      return { kind: "split", size: value.size, ...visibility, children };
     }
     if (value.kind === "group") {
-      if (!only(value, "kind", "size", "panels", "active", "maximized") || !Array.isArray(value.panels)) return null;
+      if (!only(value, "kind", "size", "panels", "active", "hidden", "maximized") || !Array.isArray(value.panels)) return null;
       if (value.maximized !== undefined && (value.maximized !== true || value.panels.length === 0 || maximized)) return null;
-      if (value.panels.length === 0) return value.active === null ? { kind: "group", size: value.size, panels: [], active: null } : null;
+      if (value.panels.length === 0) return value.active === null ? { kind: "group", size: value.size, ...visibility, panels: [], active: null } : null;
       for (const id of value.panels) {
         if (typeof id !== "string" || !INSTANCE_ID.test(id) || seen.has(id)) return null;
         seen.add(id);
@@ -54,7 +56,7 @@ export function parseLayout(raw: unknown): SavedLayout | null {
       if (seen.size > LAYOUT_LIMITS.panels) return null;
       if (typeof value.active !== "string" || !value.panels.includes(value.active)) return null;
       if (value.maximized) maximized = true;
-      return { kind: "group", size: value.size, panels: [...(value.panels as string[])], active: value.active, ...(value.maximized ? { maximized: true } : {}) };
+      return { kind: "group", size: value.size, ...visibility, panels: [...(value.panels as string[])], active: value.active, ...(value.maximized ? { maximized: true } : {}) };
     }
     return null;
   };
@@ -95,31 +97,37 @@ export function pruneLayout(
       const panels = node.panels.filter(keep);
       if (panels.length === 0) return [];
       const active = node.active !== null && panels.includes(node.active) ? node.active : panels[0]!;
-      return [{ kind: "group", size: node.size, panels: panels.map(rename), active: rename(active), ...(node.maximized ? { maximized: true } : {}) }];
+      return [{ ...node, panels: panels.map(rename), active: rename(active) }];
     }
     const children = node.children.flatMap(prune);
     if (children.length === 0) return [];
-    if (children.length > 1) return [{ kind: "split", size: node.size, children }];
+    if (children.length > 1) return [{ ...node, children }];
     const only = children[0]!;
     // A lone group takes the split's place. A lone split runs the same
     // direction as this split's parent, so its children join the parent.
-    if (only.kind === "group") return [{ ...only, size: node.size }];
-    return scale(only.children, node.size);
+    if (only.kind === "group") return [{ ...only, size: node.size, ...(node.hidden ? { hidden: true } : {}) }];
+    return scale(only.children, node.size).map((child) => ({ ...child, ...(node.hidden ? { hidden: true as const } : {}) }));
   };
 
   const children = layout.root.children.flatMap(prune);
   if (children.length === 0) return null;
   // A root left with one split hands the root over to it, turned.
   const first = children[0]!;
+  const reveal = (node: LayoutNode): LayoutNode => {
+    const { hidden, ...visible } = node;
+    return visible.kind === "split" ? { ...visible, children: visible.children.map(reveal) } : visible;
+  };
   if (children.length === 1 && first.kind === "split") {
     return {
       width: layout.width,
       height: layout.height,
       direction: layout.direction === "row" ? "column" : "row",
-      root: { kind: "split", size: layout.root.size, children: first.children },
+      root: { kind: "split", size: layout.root.size, children: first.children.map(reveal) },
     };
   }
-  return { ...layout, root: { kind: "split", size: layout.root.size, children } };
+  const hasVisible = (node: LayoutNode): boolean => !node.hidden && (node.kind === "group" || node.children.some(hasVisible));
+  const accessible = children.some(hasVisible) ? children : children.map(reveal);
+  return { ...layout, root: { kind: "split", size: layout.root.size, children: accessible } };
 }
 
 /**
@@ -131,9 +139,9 @@ export function vacateLayout(layout: SavedLayout | null, remove: (id: string) =>
   if (!layout) return null;
   const group = (node: LayoutGroup): LayoutGroup => {
     const panels = node.panels.filter((id) => !remove(id));
-    if (panels.length === 0) return { kind: "group", size: node.size, panels: [], active: null };
+    if (panels.length === 0) return { kind: "group", size: node.size, ...(node.hidden ? { hidden: true } : {}), panels: [], active: null };
     const active = node.active !== null && panels.includes(node.active) ? node.active : panels[0]!;
-    return { kind: "group", size: node.size, panels, active, ...(node.maximized ? { maximized: true } : {}) };
+    return { ...node, panels, active };
   };
   const split = (node: LayoutSplit): LayoutSplit => ({ ...node, children: node.children.map((child) => (child.kind === "split" ? split(child) : group(child))) });
   return { ...layout, root: split(layout.root) };

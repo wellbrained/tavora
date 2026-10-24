@@ -6,9 +6,13 @@ import { state } from "../../host";
 import { t } from "../../i18n";
 import MenuButton from "../menus/MenuButton.vue";
 import { DOCK, panelMenu } from "./dock-context";
+import { ChevronLeft, ChevronRight } from "@lucide/vue";
+import { Button } from "@tavora/official-ui/components/ui/button";
 
 const props = defineProps<{ params: IDockviewHeaderActionsProps }>();
 const dock = inject(DOCK)!;
+const side = computed(() => dock.collapseSide(props.params.group.id));
+const collapseLabel = computed(() => t(side.value === "left" ? "dock.hideLeftColumn" : "dock.hideRightColumn"));
 const name = computed(() => {
   const id = props.params.activePanel?.id;
   return state.value?.panels.find((item) => item.instanceId === id)?.name ?? t("workspace.panel");
@@ -22,6 +26,18 @@ function items() {
 
 <template>
   <div class="flex h-full items-center pr-1">
+    <Button
+      v-if="side"
+      variant="ghost"
+      size="icon"
+      class="size-7"
+      :aria-label="collapseLabel"
+      :title="collapseLabel"
+      :data-testid="`hide-${side}-column`"
+      @click="dock.collapseColumn(side!)"
+    >
+      <component :is="side === 'left' ? ChevronLeft : ChevronRight" class="size-4" aria-hidden="true" />
+    </Button>
     <MenuButton
       v-if="params.activePanel"
       :items="items"

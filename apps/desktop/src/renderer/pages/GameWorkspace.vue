@@ -3,7 +3,7 @@
 // lays out tabs, groups and splits in this page; each panel's module runs in
 // a native view that the main process draws over the panel's content area,
 // at the bounds this page reports.
-import { LayoutGrid, Plus } from "@lucide/vue";
+import { ChevronLeft, ChevronRight, LayoutGrid, Plus } from "@lucide/vue";
 import {
   DockviewVue,
   type DockviewApi,
@@ -14,7 +14,7 @@ import {
   type PositionResolver,
   type VueComponent,
 } from "dockview-vue";
-import { computed, onBeforeUnmount, provide, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds } from "../../shared/host-api";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, api as host, dialog, dragging, nextPanelSlot, panelToMaximize, panelToShow, state } from "../host";
@@ -47,6 +47,7 @@ import CampfireLoader from "../components/workspace/CampfireLoader.vue";
 import PanelContent from "../components/workspace/PanelContent.vue";
 import PanelTab from "../components/workspace/PanelTab.vue";
 import { DOCK } from "../components/workspace/dock-context";
+import { outerColumns, type ColumnSide, type DockColumn } from "../dock-columns";
 
 /** Width of a panel card's border (dock.css), in px. */
 const CARD_BORDER = 1;
@@ -82,9 +83,64 @@ const resizes = new ResizeObserver(() => reportSoon());
 let dock: DockviewApi | null = null;
 let lastReport = "";
 let reportFrame = 0;
+const columns = ref<DockColumn[]>([]);
+let changingColumn = false;
+const leftColumn = computed(() => columns.value.find((column) => column.side === "left" && column.hidden));
+const rightColumn = computed(() => columns.value.find((column) => column.side === "right" && column.hidden));
+
+function refreshColumns() {
+  if (changingColumn) return;
+  columns.value = dock && !dock.hasMaximizedGroup() ? outerColumns(dock.toJSON()) : [];
+  if (!dock || dock.hasMaximizedGroup()) return;
+  const reachable = new Set(columns.value.filter((column) => column.hidden).flatMap((column) => column.groups));
+  changingColumn = true;
+  try {
+    for (const group of dock.groups) {
+      if (!group.api.isVisible && !reachable.has(group.id)) group.api.setVisible(true);
+    }
+  } finally {
+    changingColumn = false;
+  }
+  columns.value = outerColumns(dock.toJSON());
+}
+
+function setColumnHidden(side: ColumnSide, hidden: boolean) {
+  if (!dock) return;
+  const column = outerColumns(dock.toJSON()).find((item) => item.side === side);
+  if (!column || (hidden && !column.canCollapse)) return;
+  if (hidden && dock.activePanel && column.panels.includes(dock.activePanel.id)) {
+    dock.panels.find((panel) => panel.group.api.isVisible && !column.groups.includes(panel.group.id))?.api.setActive();
+  }
+  changingColumn = true;
+  try {
+    for (const id of column.groups) dock.getGroup(id)?.api.setVisible(!hidden);
+  } finally {
+    changingColumn = false;
+  }
+  refreshColumns();
+  if (!hidden) {
+    void nextTick(() => {
+      const element = root.value?.querySelector<HTMLElement>(".dockview-theme-tavora");
+      if (!dock || !element) return;
+      dock.layout(element.clientWidth, element.clientHeight);
+      dock.getGroup(column.groups[0]!)?.api.setSize({ width: column.width });
+      reportSoon();
+    });
+  }
+  reportSoon();
+  saveSoon();
+}
+
+function columnTitle(column: DockColumn) {
+  return [...new Set(column.panels.map((id) => info(id)?.title).filter(Boolean))].join(" · ") || t("workspace.panel");
+}
 
 provide(DOCK, {
   info,
+  collapseSide(groupId) {
+    return columns.value.find((column) => !column.hidden && column.canCollapse && column.groups.includes(groupId))?.side;
+  },
+  collapseColumn: (side) => setColumnHidden(side, true),
   register(id, element) {
     elements.set(id, element);
     resizes.observe(element);
@@ -104,10 +160,11 @@ function reportSoon() {
     reportFrame = 0;
     const bounds: PanelBounds[] = [];
     for (const [instanceId, element] of elements) {
-      if (!element.isConnected || !dock?.getPanel(instanceId)?.api.isVisible) continue;
+      const panel = dock?.getPanel(instanceId);
+      if (!element.isConnected || !panel?.api.isVisible || !panel.group.api.isVisible) continue;
       const rect = element.getBoundingClientRect();
       if (rect.width < 1 || rect.height < 1) continue;
-      const maximized = dock.getPanel(instanceId)?.group.api.isMaximized() === true;
+      const maximized = panel.group.api.isMaximized();
       bounds.push({ instanceId, x: rect.left, y: rect.top, width: rect.width, height: rect.height, ...(maximized ? { maximized: true } : {}) });
     }
     const report = JSON.stringify(bounds);
@@ -150,6 +207,7 @@ function restore(api: DockviewApi) {
     if (group && api.groups.length > 1) group.api.maximize();
   });
   reconcile(api);
+  refreshColumns();
 }
 
 /** The panel of the group that fills the workspace, or null. */
@@ -177,7 +235,12 @@ function reconcile(api: DockviewApi) {
       changed = true;
     }
   }
+  if (api.groups.length && !api.groups.some((group) => group.api.isVisible)) {
+    for (const group of api.groups) group.api.setVisible(true);
+    changed = true;
+  }
   updateConstraints(api);
+  refreshColumns();
   if (changed) saveSoon();
 }
 
@@ -206,6 +269,8 @@ watch(
 watch(panelToShow, (request) => {
   if (!request || !dock) return;
   panelToShow.value = null;
+  const column = columns.value.find((item) => item.hidden && item.panels.includes(request.instanceId));
+  if (column) setColumnHidden(column.side, false);
   dock.getPanel(request.instanceId)?.api.setActive();
 });
 // A panel asked to fill the workspace or to go back (panel.setMaximized), as Maximize and Restore in its menu do.
@@ -313,16 +378,22 @@ function onReady({ api }: DockviewReadyEvent) {
   dock = api;
   restore(api);
   api.onDidLayoutChange(() => {
+    refreshColumns();
     reportSoon();
     if (!applying) saveSoon();
   });
   api.onDidAddGroup(() => updateConstraints(api));
   api.onDidMovePanel(() => updateConstraints(api));
-  api.onDidActivePanelChange(() => {
+  api.onDidActivePanelChange(({ panel }) => {
+    if (!applying && panel) {
+      const column = outerColumns(api.toJSON()).find((item) => item.hidden && item.panels.includes(panel.id));
+      if (column) setColumnHidden(column.side, false);
+    }
     updateConstraints(api);
     reportSoon();
   });
   api.onDidMaximizedGroupChange(() => {
+    refreshColumns();
     reportSoon();
     if (!applying) saveSoon();
   });
@@ -377,18 +448,44 @@ const emptySlot = EmptySlot as unknown as VueComponent;
     </header>
 
     <div ref="root" class="relative min-h-0 flex-1" :data-drop-line="dropLine ?? undefined" @pointerdown.capture="onPointerDown">
-      <DockviewVue
-        class="absolute inset-x-2 top-0 bottom-2"
-        :theme="THEME"
-        :components="components"
-        :default-tab-component="tab"
-        :right-header-actions-component="groupActions"
-        :watermark-component="emptySlot"
-        :disable-floating-groups="true"
-        dnd-strategy="html5"
-        :drop-position-resolver="dropResolver"
-        @ready="onReady"
-      />
+      <div class="absolute inset-x-2 top-0 bottom-2 flex gap-2">
+        <Button
+          v-if="leftColumn"
+          variant="secondary"
+          class="h-full w-7 flex-none flex-col justify-start gap-3 overflow-hidden rounded-lg border px-0 py-3"
+          :aria-label="t('dock.showLeftColumn')"
+          :title="`${t('dock.showLeftColumn')}: ${columnTitle(leftColumn)}`"
+          data-testid="show-left-column"
+          @click="setColumnHidden('left', false)"
+        >
+          <ChevronRight class="size-4 flex-none" aria-hidden="true" />
+          <span class="max-h-[70%] truncate text-xs [writing-mode:vertical-rl]">{{ columnTitle(leftColumn) }}</span>
+        </Button>
+        <DockviewVue
+          class="min-w-0 flex-1"
+          :theme="THEME"
+          :components="components"
+          :default-tab-component="tab"
+          :right-header-actions-component="groupActions"
+          :watermark-component="emptySlot"
+          :disable-floating-groups="true"
+          dnd-strategy="html5"
+          :drop-position-resolver="dropResolver"
+          @ready="onReady"
+        />
+        <Button
+          v-if="rightColumn"
+          variant="secondary"
+          class="h-full w-7 flex-none flex-col justify-start gap-3 overflow-hidden rounded-lg border px-0 py-3"
+          :aria-label="t('dock.showRightColumn')"
+          :title="`${t('dock.showRightColumn')}: ${columnTitle(rightColumn)}`"
+          data-testid="show-right-column"
+          @click="setColumnHidden('right', false)"
+        >
+          <ChevronLeft class="size-4 flex-none" aria-hidden="true" />
+          <span class="max-h-[70%] truncate text-xs [writing-mode:vertical-rl]">{{ columnTitle(rightColumn) }}</span>
+        </Button>
+      </div>
       <DropGuide v-if="guide" :guide="guide" />
       <!-- The game just opened: one card over the dock, where the panels go, until every panel has its data and all show at once. -->
       <div v-if="view.opening" class="bg-background absolute inset-x-2 top-0 bottom-2 z-20 rounded-[10px] border" data-testid="workspace-loading">

@@ -31,9 +31,10 @@ export function toDockview(layout: SavedLayout, info: (id: string) => PanelInfo 
   let groups = 0;
   const panels: SerializedDockview["panels"] = {};
   const node = (value: LayoutNode): GridNode => {
-    if (value.kind === "split") return { type: "branch", size: value.size, data: value.children.map(node) };
+    const visibility = value.hidden ? { visible: false } : {};
+    if (value.kind === "split") return { type: "branch", size: value.size, ...visibility, data: value.children.map(node) };
     for (const id of value.panels) panels[id] = { id, contentComponent: PANEL_COMPONENT, title: info(id)?.title ?? "" };
-    return { type: "leaf", size: value.size, data: { id: `group-${++groups}`, views: value.panels, activeView: value.active ?? undefined } };
+    return { type: "leaf", size: value.size, ...visibility, data: { id: `group-${++groups}`, views: value.panels, activeView: value.active ?? undefined } };
   };
   const row = layout.direction === "row";
   return {
@@ -53,14 +54,15 @@ export function toDockview(layout: SavedLayout, info: (id: string) => PanelInfo 
  */
 export function fromDockview(json: SerializedDockview, maximized: string | null = null): SavedLayout | null {
   const node = (value: GridNode): LayoutNode | null => {
+    const visibility = value.visible === false ? { hidden: true as const } : {};
     if (value.type === "branch") {
       const children = (value.data as GridNode[]).map(node).filter((child) => child !== null);
-      return children.length ? { kind: "split", size: value.size ?? 0, children } : null;
+      return children.length ? { kind: "split", size: value.size ?? 0, ...visibility, children } : null;
     }
     const group = value.data as GroupState;
-    if (!group.views.length) return { kind: "group", size: value.size ?? 0, panels: [], active: null };
+    if (!group.views.length) return { kind: "group", size: value.size ?? 0, ...visibility, panels: [], active: null };
     const active = group.activeView && group.views.includes(group.activeView) ? group.activeView : group.views[0]!;
-    return { kind: "group", size: value.size ?? 0, panels: [...group.views], active, ...(maximized && group.views.includes(maximized) ? { maximized: true } : {}) };
+    return { kind: "group", size: value.size ?? 0, ...visibility, panels: [...group.views], active, ...(maximized && group.views.includes(maximized) ? { maximized: true } : {}) };
   };
   const root = node(json.grid.root);
   if (!root) return null;

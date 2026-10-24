@@ -395,12 +395,14 @@ export interface SavedLayout {
 export interface LayoutSplit {
   kind: "split";
   size: number;
+  hidden?: true;
   children: LayoutNode[];
 }
 
 export interface LayoutGroup {
   kind: "group";
   size: number;
+  hidden?: true;
   /** Panel instance ids, in tab order; none in an empty slot. */
   panels: string[];
   /** The panel whose tab is selected; null in an empty slot. */
