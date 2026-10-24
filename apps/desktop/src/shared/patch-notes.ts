@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.27",
+    date: "2026-10-24",
+    title: "Project folders show what they hold",
+    notes: [
+      "In Settings > Development, a folder of Local modules has a blue row and a folder of Release copies a green one, like their badges.",
+      "A Local module whose Release copy is loaded too no longer offers Publish; it says it's published from its Release copy.",
+    ],
+  },
+  {
     version: "0.20.26",
     date: "2026-10-24",
     title: "Local and Release tell apart at a glance",
