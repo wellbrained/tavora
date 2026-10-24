@@ -33,6 +33,26 @@ const folders = computed(() => state.value!.developmentFolders);
 const examples = computed(() => modules.value.filter((module) => module.origin.kind === "example").sort((a, b) => a.name.localeCompare(b.name)));
 const moduleById = (id: string) => modules.value.find((module) => module.id === id);
 
+type Module = (typeof modules.value)[number];
+/** A development folder holding a module with a publishable id (not local.…) is a release copy, as ModuleRow tags it. */
+const isRelease = (module: Module) => module.origin.kind === "dev" && !module.id.startsWith("local.");
+/** The names after the prefix of the release copies loaded now: "enshrouded" for wellbrained.enshrouded. */
+const releaseNames = computed(() => new Set(modules.value.filter(isRelease).map((module) => module.id.slice(module.id.indexOf(".") + 1))));
+/** A local.… module whose release copy is loaded too: that copy is the one to publish, so this one has no Publish. */
+const hasReleaseCopy = (module: Module) => module.id.startsWith("local.") && releaseNames.value.has(module.id.slice("local.".length));
+/**
+ * What a folder holds, for its row's tint: only local modules (blue, like their badge), only release copies (green),
+ * or something else (mixed, none loaded yet): no tint.
+ */
+function folderKind(entry: (typeof folders.value)[number]): "local" | "release" | null {
+  const loaded = entry.projects.map((project) => (project.moduleId ? moduleById(project.moduleId) : undefined)).filter((module) => module !== undefined);
+  if (!loaded.length) return null;
+  if (loaded.every(isRelease)) return "release";
+  if (loaded.every((module) => !isRelease(module))) return "local";
+  return null;
+}
+const folderTint = { local: "bg-info/15 shadow-[inset_3px_0_0_var(--info)]", release: "bg-success/15 shadow-[inset_3px_0_0_var(--success)]" } as const;
+
 async function addFolder() {
   const result = await act({ type: "add-development-folder" });
   if (result.ok && result.id) showToast(t("settings.devFolders.added", { folder: result.id }));
@@ -89,8 +109,12 @@ function advice(kind: DevelopmentProblemKind | null, message: string | null, fol
       </Button>
     </SettingRow>
     <ul v-if="folders.length" class="flex flex-col" :aria-label="t('settings.development-folders.label')" data-testid="development-folders">
-      <li v-for="entry in folders" :key="entry.folder" class="flex flex-col gap-2 border-b py-3 last:border-b-0" data-testid="development-folder">
-        <div class="flex items-center gap-3">
+      <li v-for="entry in folders" :key="entry.folder" class="flex flex-col gap-2 border-b pb-3 last:border-b-0" data-testid="development-folder">
+        <div
+          :class="cn('-mx-5 flex items-center gap-3 px-5 py-2.5', folderKind(entry) && folderTint[folderKind(entry)!])"
+          :data-kind="folderKind(entry) ?? undefined"
+          data-testid="development-folder-head"
+        >
           <FolderCode class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" />
           <span class="min-w-0 flex-1 truncate font-mono text-sm" :title="entry.folder" data-testid="development-folder-path">{{ shortPath(entry.folder) }}</span>
           <Button
@@ -131,7 +155,10 @@ function advice(kind: DevelopmentProblemKind | null, message: string | null, fol
                 >
                   <FileArchive :stroke-width="1.5" />
                 </Button>
-                <Button variant="secondary" :data-testid="`publish-${project.moduleId}`" @click="publishModule(project.moduleId)">
+                <span v-if="hasReleaseCopy(moduleById(project.moduleId)!)" class="text-muted-foreground text-xs" :data-testid="`publish-from-release-${project.moduleId}`">{{
+                  t("publish.fromRelease")
+                }}</span>
+                <Button v-else variant="secondary" :data-testid="`publish-${project.moduleId}`" @click="publishModule(project.moduleId)">
                   <Upload :stroke-width="1.5" /> {{ t("publish.button") }}
                 </Button>
               </template>

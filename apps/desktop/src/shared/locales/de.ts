@@ -368,6 +368,7 @@ export const de: Record<keyof typeof en, string> = {
   "devStart.done.text": "Dein Modul taucht jetzt unter Modul hinzufügen auf, damit du es gleich ausprobieren kannst. Wenn es für andere Spieler bereit ist, drück daneben in Einstellungen > Entwicklung auf Veröffentlichen.",
   "devStart.done.button": "Fertig",
   "publish.button": "Veröffentlichen",
+  "publish.fromRelease": "Wird über die Release-Kopie veröffentlicht",
   "publish.saveZip": "Als ZIP speichern",
   "publish.zipSaved": "{file} gespeichert.",
   "publish.more": "Mehr zu {name}",
