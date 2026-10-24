@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.24",
+    date: "2026-10-24",
+    title: "Dialogs stay inside their parent",
+    notes: [
+      "A dialog you open from Settings or Add module, like Publish or a confirmation, now stays inside the dialog you opened it from instead of sticking out above it.",
+      "In a small window it fits too, and scrolls if it's long.",
+    ],
+  },
+  {
     version: "0.20.23",
     date: "2026-10-24",
     title: "More panels, fewer clicks",
