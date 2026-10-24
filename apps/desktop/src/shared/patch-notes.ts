@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.28",
+    date: "2026-10-24",
+    title: "A tidier bottom of the rail",
+    notes: [
+      "The running game, the update marker, your profile and Settings now share one tile size and shape.",
+      "Status dots sit in the same corner on every tile.",
+    ],
+  },
+  {
     version: "0.20.27",
     date: "2026-10-24",
     title: "More room, steadier panels",
