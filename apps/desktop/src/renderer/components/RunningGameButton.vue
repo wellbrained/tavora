@@ -7,6 +7,7 @@ import { computed } from "vue";
 import { cn } from "@/lib/utils";
 import { act, state } from "../host";
 import { t } from "../i18n";
+import RailFooterTile from "./RailFooterTile.vue";
 import RailTooltip from "./RailTooltip.vue";
 
 defineProps<{ expanded: boolean }>();
@@ -22,19 +23,15 @@ const label = computed(() => (game.value ? t("rail.running", { name: game.value.
   <RailTooltip v-if="game" :text="label" :hint="t('rail.runningSwitch')" :disabled="expanded">
     <button
       type="button"
-      :class="cn('running-in mx-2 mt-1 mb-1.5 flex items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent')"
+      :class="cn('running-in mx-2 flex items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent')"
       data-rail-item
       data-testid="rail-running"
       :aria-label="`${label}. ${t('rail.runningSwitch')}`"
       @click="act({ type: 'open-game', gameId: game.id })"
     >
-      <!-- A 48 px slot keeps the button on the same centre line as the tiles. -->
-      <span class="relative flex w-12 flex-none justify-center">
-        <span class="running-tile text-success grid size-10 place-items-center rounded-[10px]">
-          <Gamepad2 class="running-glyph size-7" :stroke-width="1.75" />
-        </span>
-        <span class="bg-success ring-rail absolute -top-1 right-0 size-3 rounded-full ring-[3px]" aria-hidden="true" />
-      </span>
+      <RailFooterTile dot="success" class="running-tile text-success">
+        <Gamepad2 class="running-glyph size-5" :stroke-width="1.5" />
+      </RailFooterTile>
       <span v-if="expanded" class="flex min-w-0 flex-col leading-tight">
         <span class="truncate text-sm font-semibold">{{ game.name }}</span>
         <span class="text-success truncate text-xs">{{ t("rail.runningHint") }}</span>
@@ -54,11 +51,11 @@ const label = computed(() => (game.value ? t("rail.running", { name: game.value.
     transform: translateY(8px);
   }
 }
-.running-tile {
+:deep(.running-tile) {
   background: color-mix(in oklab, var(--success) 16%, var(--card));
   animation: running-ring 2.4s ease-in-out infinite;
 }
-.running-glyph {
+:deep(.running-glyph) {
   animation: running-glyph 2.4s ease-in-out infinite;
 }
 /* A slow breath that never gets loud: the ring and glow rise only a little. */
@@ -90,8 +87,8 @@ const label = computed(() => (game.value ? t("rail.running", { name: game.value.
 }
 @media (prefers-reduced-motion: reduce) {
   .running-in,
-  .running-tile,
-  .running-glyph {
+  :deep(.running-tile),
+  :deep(.running-glyph) {
     animation: none;
   }
 }

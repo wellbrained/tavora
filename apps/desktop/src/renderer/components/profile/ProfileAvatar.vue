@@ -6,8 +6,8 @@ import { autoInitials } from "./initials";
 // The player's round avatar: their picture, else their initials in gold
 // (their own or taken from the name), else a person icon.
 const props = withDefaults(
-  defineProps<{ name: string; pictureUrl: string | null; size?: number; initials?: string }>(),
-  { size: 36, initials: "" },
+  defineProps<{ name: string; pictureUrl: string | null; size?: number; initials?: string; square?: boolean }>(),
+  { size: 36, initials: "", square: false },
 );
 
 const initials = computed(() => props.initials.trim() || autoInitials(props.name));
@@ -15,7 +15,8 @@ const initials = computed(() => props.initials.trim() || autoInitials(props.name
 
 <template>
   <span
-    class="bg-muted inline-flex flex-none items-center justify-center overflow-hidden rounded-full shadow-[inset_0_0_0_1px_rgb(255_255_255/0.06)]"
+    :class="square ? 'rounded-[10px]' : 'bg-muted rounded-full'"
+    class="inline-flex flex-none items-center justify-center overflow-hidden shadow-[inset_0_0_0_1px_rgb(255_255_255/0.06)]"
     :style="{ width: `${size}px`, height: `${size}px` }"
     aria-hidden="true"
   >

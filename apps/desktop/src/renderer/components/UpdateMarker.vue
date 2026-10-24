@@ -7,6 +7,7 @@ import { computed } from "vue";
 import { cn } from "@/lib/utils";
 import { act, state } from "../host";
 import { t } from "../i18n";
+import RailFooterTile from "./RailFooterTile.vue";
 
 defineProps<{ expanded: boolean }>();
 
@@ -36,7 +37,7 @@ function press() {
     type="button"
     :class="
       cn(
-        'text-primary mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors focus-visible:-outline-offset-2',
+        'text-primary mx-2 flex items-center gap-3 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2',
         busy ? 'cursor-default opacity-80' : 'hover:bg-accent',
       )
     "
@@ -47,12 +48,11 @@ function press() {
     :title="label"
     @click="press"
   >
-    <!-- Same 48 px slot as the other bottom items, so the icon stays on the tiles' centre line. -->
-    <span class="flex w-12 flex-none justify-center">
+    <RailFooterTile :dot="busy ? undefined : 'primary'">
       <Loader v-if="update.status === 'downloading'" class="size-5 animate-spin motion-reduce:animate-none" :stroke-width="1.5" />
       <RefreshCw v-else-if="update.status === 'ready'" class="size-5" :stroke-width="1.5" />
       <ArrowDownToLine v-else class="size-5" :stroke-width="1.5" />
-    </span>
+    </RailFooterTile>
     <span v-if="expanded" class="truncate text-sm font-medium">{{ label }}</span>
   </button>
 </template>
