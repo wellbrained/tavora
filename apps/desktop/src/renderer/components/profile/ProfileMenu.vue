@@ -11,6 +11,7 @@ import ImageCropDialog from "../ImageCropDialog.vue";
 import { autoInitials } from "./initials";
 import { readPicture } from "./picture";
 import ProfileAvatar from "./ProfileAvatar.vue";
+import RailFooterTile from "../RailFooterTile.vue";
 
 // The player's avatar in the rail footer. A click opens a small card above
 // it to change the name, initials and picture; there is no account behind it
@@ -92,7 +93,7 @@ function closeCrop() {
         type="button"
         :class="
           cn(
-            'group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors focus-visible:-outline-offset-2 data-[state=open]:text-foreground',
+            'group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-3 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2 data-[state=open]:text-foreground',
             expanded && 'hover:bg-accent data-[state=open]:bg-accent',
           )
         "
@@ -101,10 +102,9 @@ function closeCrop() {
         :aria-label="profile.name.trim() ? t('profile.named', { name: profile.name.trim() }) : t('profile.label')"
         :title="expanded ? undefined : profile.name.trim() || t('profile.label')"
       >
-        <!-- A 48 px slot keeps the avatar on the same centre line as the tiles. -->
-        <span class="flex w-12 flex-none justify-center">
-          <ProfileAvatar :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="32" />
-        </span>
+        <RailFooterTile>
+          <ProfileAvatar :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="40" square />
+        </RailFooterTile>
         <span v-if="expanded" class="truncate text-sm font-medium">{{ profile.name.trim() || t("profile.label") }}</span>
       </button>
     </PopoverTrigger>

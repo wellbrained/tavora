@@ -10,6 +10,7 @@ import { folderMenu, gameMenu } from "../rail-actions";
 import MenuArea from "./menus/MenuArea.vue";
 import MenuButton from "./menus/MenuButton.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
+import RailFooterTile from "./RailFooterTile.vue";
 import RunningGameButton from "./RunningGameButton.vue";
 import UpdateMarker from "./UpdateMarker.vue";
 import RailGame from "./RailGame.vue";
@@ -510,7 +511,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       <ProfileMenu :expanded="expanded" />
       <button
         type="button"
-        :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-1 transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
+        :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-3 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
         data-rail-item
         data-testid="rail-settings"
         :aria-label="t('rail.settings')"
@@ -518,10 +519,9 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         :title="t('rail.settings')"
         @click="openSettings()"
       >
-        <!-- A 48 px slot keeps the icon on the same centre line as the tiles. -->
-        <span class="flex w-12 flex-none justify-center">
+        <RailFooterTile>
           <Settings class="size-5 transition-transform duration-300 group-hover:rotate-45 motion-reduce:group-hover:rotate-0" :stroke-width="1.5" />
-        </span>
+        </RailFooterTile>
         <span v-if="expanded" class="text-sm font-medium">{{ t("rail.settings") }}</span>
       </button>
     </div>
