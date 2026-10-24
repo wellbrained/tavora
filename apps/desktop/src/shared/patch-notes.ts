@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.20",
+    date: "2026-10-24",
+    title: "Maximize stays",
+    notes: [
+      "A maximized panel stays maximized after a restart and when you switch games.",
+      "Modules can maximize their own panel with a button, such as a focus mode.",
+    ],
+  },
+  {
     version: "0.20.19",
     date: "2026-10-24",
     title: "Whiteboard: no more giant strokes",
