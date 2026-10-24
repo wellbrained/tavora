@@ -9,7 +9,7 @@ import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { CatalogMatch, GameView, OnlineGame } from "../../shared/host-api";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
-import { act, addModule, api, dialog, hiddenSettings, openSettings, searchOpen, state } from "../host";
+import { act, addModule, api, dialog, hiddenSettings, openSettings, searchOpen, showOrAddPanel, state } from "../host";
 import { t, templateName } from "../i18n";
 
 import GameIcon from "./GameIcon.vue";
@@ -139,16 +139,30 @@ const groups = computed<Group[]>(() => {
       id: "game",
       label: t("search.group.in", { name: currentGame.value.name }),
       items: [
+        // A module with panel types is one entry per type; an open one comes to the front instead of opening twice.
         ...view.value.modules
           .filter((module) => module.available)
-          .map((module) => ({
-            id: `module-${module.id}`,
-            label: t("search.openModule", { name: module.name }),
-            hint: t("search.module"),
-            keywords: [module.name, module.description ?? "", ...splitWords(t("search.moduleKeywords"))],
-            icon: Blocks,
-            run: close(() => addModule(module.id)),
-          })),
+          .flatMap((module) =>
+            module.panels.length
+              ? module.panels.map((type) => ({
+                  id: `panel-${module.id}-${type.id}`,
+                  label: t("search.openPanel", { panel: type.name, module: module.name }),
+                  hint: t("search.panel"),
+                  keywords: [type.name, module.name, module.description ?? "", ...splitWords(t("search.moduleKeywords"))],
+                  icon: Blocks,
+                  run: close(() => showOrAddPanel(module.id, type.id)),
+                }))
+              : [
+                  {
+                    id: `module-${module.id}`,
+                    label: t("search.openModule", { name: module.name }),
+                    hint: t("search.module"),
+                    keywords: [module.name, module.description ?? "", ...splitWords(t("search.moduleKeywords"))],
+                    icon: Blocks,
+                    run: close(() => addModule(module.id)),
+                  },
+                ],
+          ),
         ...view.value.snapshots.map((snapshot) => ({
           id: `layout-${snapshot.id}`,
           label: t("search.useLayout", { name: snapshot.name }),

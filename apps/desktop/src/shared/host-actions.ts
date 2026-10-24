@@ -310,8 +310,11 @@ export function hostActionTable(c: HostChecks) {
     "seen-module-notes": { moduleId: c.moduleId },
 
     // Panels and workspace
-    /** Opens a new panel; `panelType` picks one of the module's panel types (its continuing type when left out). */
-    "open-module": { moduleId: c.moduleId, panelType: optional(c.panelType) },
+    /**
+     * Opens a new panel; `panelType` picks one of the module's panel types (its continuing type when left out).
+     * With `reuse`, a panel of that type already open comes to the front instead.
+     */
+    "open-module": { moduleId: c.moduleId, panelType: optional(c.panelType), reuse: optional(bool) },
     /** Gives a panel whose type an update removed another type of the same module. */
     "choose-panel-type": { instanceId: c.uuid, panelType: c.panelType },
     "close-panel": { instanceId: c.uuid },

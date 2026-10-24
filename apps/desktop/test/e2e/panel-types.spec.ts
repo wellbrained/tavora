@@ -184,3 +184,45 @@ test("a panel opens the module's other panels on its content, switching the one 
   await expect(page.locator('[data-panel-tab][data-panel-type="inventory"]')).toHaveAttribute("data-content", "Minion Witch for maps");
   await app.close();
 });
+
+test("the modules menu adds the panel types not open yet and brings open ones to the front", async () => {
+  const { app, page } = await launch(await newUserData());
+  const tab = (type: string) => page.locator(`[data-panel-tab][data-panel-type="${type}"]`);
+  const front = (type: string) => page.locator(`.dv-tab.dv-active-tab [data-panel-type="${type}"]`);
+  // Nothing in the game yet: only Add module.
+  await expect(page.getByTestId("modules-in-game")).toHaveCount(0);
+  await addPanel(page, "planner");
+
+  // The toolbar's ▾ lists the module with its panel types; the open one is checked.
+  await page.getByTestId("modules-in-game").click();
+  await expect(page.getByTestId(`in-game-heading-${PANELS}`)).toHaveText("Panel Types Example");
+  await expect(page.getByTestId(`in-game-${PANELS}-planner`)).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId(`in-game-${PANELS}-inventory`)).toHaveAttribute("aria-checked", "false");
+  await page.getByTestId(`in-game-${PANELS}-inventory`).click();
+  await expect(tab("inventory")).toHaveCount(1);
+  await expect(panels(page, PANELS)).toHaveCount(2);
+
+  // The same list on a tab's right-click: picking an open type brings it to the front, it never opens twice.
+  await tab("inventory").click({ button: "right" });
+  await page.getByTestId("panel-move-next").click();
+  await expect(front("inventory")).toHaveCount(1);
+  await expect(front("planner")).toHaveCount(0);
+  await tab("inventory").click({ button: "right" });
+  await page.getByTestId("panel-in-game").click();
+  await page.getByTestId(`in-game-${PANELS}-planner`).click();
+  await expect(front("planner")).toHaveCount(1);
+  await expect(panels(page, PANELS)).toHaveCount(2);
+
+  // Ctrl+K has an entry per panel type, with the same rule.
+  await page.keyboard.press("Control+K");
+  await page.getByTestId("search-input").fill("overview");
+  await page.getByTestId(`search-panel-${PANELS}-overview`).click();
+  await expect(tab("overview")).toHaveCount(1);
+  await page.keyboard.press("Control+K");
+  await page.getByTestId("search-input").fill("inventory");
+  await expect(page.getByTestId(`search-panel-${PANELS}-inventory`)).toContainText("Open Inventory · Panel Types Example");
+  await page.getByTestId(`search-panel-${PANELS}-inventory`).click();
+  await expect(front("inventory")).toHaveCount(1);
+  await expect(panels(page, PANELS)).toHaveCount(3);
+  await app.close();
+});
