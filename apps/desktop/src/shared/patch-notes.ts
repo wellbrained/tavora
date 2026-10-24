@@ -22,15 +22,6 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.20.28",
     date: "2026-10-24",
-    title: "A tidier bottom of the rail",
-    notes: [
-      "The running game, the update marker, your profile and Settings now share one tile size and shape.",
-      "Status dots sit in the same corner on every tile.",
-    ],
-  },
-  {
-    version: "0.20.27",
-    date: "2026-10-24",
     title: "More room, steadier panels",
     notes: [
       "Fold the left or right column into a narrow strip, then click it to bring all its panels back. Stacked panels have clearer headers and a visible resize grip between them.",
@@ -46,6 +37,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "In Settings > Development, a folder of Local modules has a blue row and a folder of Release copies a green one. Only the Release copy offers Publish.",
       "Hover hints on Tavora's own buttons, tabs and lists look like the ones in modules, use readable 14 px text and also appear when you reach a control with Tab.",
       "Settings stays clear of the window buttons at the top right, and the window buttons dim while a dialog is open. The focus ring in the rail footer no longer crowds the buttons next to it.",
+      "The running game, the update marker, your profile and Settings share one tile size and shape at the bottom of the rail, with status dots in the same corner.",
     ],
   },
   {
