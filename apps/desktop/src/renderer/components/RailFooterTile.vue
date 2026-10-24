@@ -10,7 +10,11 @@ defineOptions({ inheritAttrs: false });
 
 <template>
   <span class="relative flex w-12 flex-none justify-center">
-    <span class="bg-card relative grid size-10 place-items-center overflow-hidden rounded-[10px]" v-bind="$attrs">
+    <!-- Lights up while the rail item around it is hovered, also when the rail is collapsed. -->
+    <span
+      class="bg-card relative grid size-10 place-items-center overflow-hidden rounded-[10px] transition-[background-color,box-shadow] duration-150 [[data-rail-item]:hover_&]:bg-[color-mix(in_srgb,var(--foreground)_12%,var(--card))] [[data-rail-item]:hover_&]:shadow-[0_0_12px_0_color-mix(in_oklab,var(--primary)_30%,transparent)]"
+      v-bind="$attrs"
+    >
       <slot />
     </span>
     <span
