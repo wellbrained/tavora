@@ -2,7 +2,8 @@
 // A viewport that pans and zooms what is inside it. Drag pans, Ctrl + wheel or a pinch
 // zooms, a plain wheel keeps scrolling the page (with a short hint), and the buttons in
 // the corner zoom in, out and fit. With focus: + and - zoom, 0 fits, arrow keys pan.
-// The content is fitted when it first shows and whenever its size changes.
+// The content is fitted when it first shows and whenever its size changes. With autoFit off
+// only when it first shows, so content that grows (a box dragged past the edge) keeps the view.
 // With fit "width" the content fills the width and is read top to bottom like a page: a
 // plain wheel scrolls it, and it is fitted again when the pane's width changes.
 import type { HTMLAttributes } from "vue"
@@ -22,6 +23,8 @@ const props = withDefaults(defineProps<{
   align?: ZoomAlign
   /** Fit the whole content, or only its width (a plain wheel then scrolls it). */
   fit?: ZoomFit
+  /** Fit again whenever the content changes size. Off: only the first show fits; call fit() when the content is new. */
+  autoFit?: boolean
   /** What the pane shows, for screen readers. */
   label?: string
   class?: HTMLAttributes["class"]
@@ -30,6 +33,7 @@ const props = withDefaults(defineProps<{
   maxZoom: 2,
   align: "center",
   fit: "whole",
+  autoFit: true,
 })
 
 /** One press of a button or key. */
@@ -200,7 +204,7 @@ onMounted(() => {
     const widthChanged = props.fit === "width" && nextPane.width !== paneSize.value.width
     paneSize.value = nextPane
     contentSize.value = nextContent
-    if (contentChanged || paneWasEmpty || widthChanged) fit()
+    if ((contentChanged && props.autoFit) || paneWasEmpty || widthChanged) fit()
     else view.value = clampPan(view.value, nextPane, nextContent)
   })
   observer.observe(pane.value!)

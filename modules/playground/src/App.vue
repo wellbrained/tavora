@@ -123,6 +123,8 @@ const renaming = ref(false);
 // Steps of a made-up production line for the pan and zoom specimen.
 const STEPS = ["Iron Ore", "Iron Ingot", "Iron Rod", "Screw", "Reinforced Plate", "Modular Frame"];
 const pressed = ref<string>();
+/** Cards in the auto-fit-off specimen; adding one grows the content without moving the view. */
+const grown = ref(3);
 
 const query = computed(() => panel.value.filter.trim().toLowerCase());
 const visible = computed(() => {
@@ -483,6 +485,17 @@ function bump(by: number) {
             </div>
           </ZoomPane>
           <p class="text-muted-foreground text-xs">{{ pressed ? `Picked ${pressed}.` : "Buttons inside still work." }}</p>
+        </Specimen>
+        <Specimen label="auto-fit off: growing content keeps the view (fit only on first show or the button)" column>
+          <ZoomPane class="h-64" :auto-fit="false" label="Growing line">
+            <div class="flex items-center gap-10 p-4">
+              <div v-for="step in STEPS.slice(0, grown)" :key="step" class="bg-card flex w-44 flex-none flex-col gap-2 rounded-lg border p-3">
+                <span class="font-medium">{{ step }}</span>
+                <span class="text-muted-foreground text-xs">60 / min</span>
+              </div>
+            </div>
+          </ZoomPane>
+          <Button size="xs" variant="secondary" class="self-start" :disabled="off || grown >= STEPS.length" @click="grown++">Add a step</Button>
         </Specimen>
         <Specimen label="Tall content with fit=&quot;width&quot;: fills the width, starts at the top, a plain scroll moves it" column>
           <ZoomPane class="h-64" fit="width" label="Production tree">
