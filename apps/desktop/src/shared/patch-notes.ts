@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.25",
+    date: "2026-10-24",
+    title: "More room when you need it",
+    notes: [
+      "Fold the left or right column into a narrow strip, then click it to bring all its panels back.",
+      "Stacked panels have clearer headers and a visible resize grip between them.",
+    ],
+  },
+  {
     version: "0.20.24",
     date: "2026-10-24",
     title: "Dialogs stay inside their parent",
