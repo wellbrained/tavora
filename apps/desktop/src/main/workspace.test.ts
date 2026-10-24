@@ -199,6 +199,19 @@ describe("panel types", () => {
     ]);
     expect(state.games.poe2!.snapshots[0]!.panelTypes).toEqual({ [A]: "planner" });
   });
+
+  it("keeps the types of a module it can't see right now, so a rebuild doesn't turn every panel into the first type", () => {
+    const state = emptyWorkspace(["poe2"]);
+    state.games.poe2!.instances = [
+      { instanceId: A, moduleId: "m.typed", panelType: "planner" },
+      { instanceId: B, moduleId: "m.typed", panelType: "inventory" },
+    ];
+    state.games.poe2!.snapshots = [{ ...snapshot, modules: { [A]: "m.typed" }, panelTypes: { [A]: "planner" } }];
+    settlePanelTypes(state, () => undefined);
+    settlePanelTypes(state, () => ({ ids: ["inventory", "planner"], continuing: "inventory" }));
+    expect(state.games.poe2!.instances.map((record) => record.panelType)).toEqual(["planner", "inventory"]);
+    expect(state.games.poe2!.snapshots[0]!.panelTypes).toEqual({ [A]: "planner" });
+  });
 });
 
 describe("GameWorkspaces", () => {
