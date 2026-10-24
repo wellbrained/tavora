@@ -55,6 +55,9 @@ const label = computed(() => (game.value ? t("rail.running", { name: game.value.
   background: color-mix(in oklab, var(--success) 16%, var(--card));
   animation: running-ring 2.4s ease-in-out infinite;
 }
+button:hover :deep(.running-tile) {
+  background: color-mix(in oklab, var(--success) 30%, var(--card));
+}
 :deep(.running-glyph) {
   animation: running-glyph 2.4s ease-in-out infinite;
 }
