@@ -28,7 +28,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "Use the arrow next to Add module or In this game in a panel's menu to open another panel of a module you're already using. Panels you already have are checked, and each panel type is in Ctrl+K by its name.",
       "A maximized panel stays maximized after a restart and when you switch games. Modules can maximize their own panel with a button, such as a focus mode.",
       "A dialog you open from Settings or Add module, like Publish or a confirmation, stays inside the dialog you opened it from, also in a small window.",
-      "Save as image opens a save dialog with the name filled in. It opens where you last saved a picture, at first in Pictures\Tavora.",
+      "Save as image opens a save dialog with the name filled in. It opens where you last saved a picture, at first in Pictures\\Tavora.",
       "File pickers remember your last folder for each module and game. Enshrouded starts in a detected save folder when you haven't chosen one yet.",
       "Modules can bring their names in more languages, so tabs, Add module and the catalog show them in German. Notes, Calculator and AI Usage are now called Notizen, Rechner and KI-Nutzung.",
       "Modules can save JSON files up to 8 MB, so builds with their full guide text fit.",
