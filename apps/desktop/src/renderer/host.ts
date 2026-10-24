@@ -152,6 +152,10 @@ export interface MenuItem {
   checked?: boolean;
   /** Opens a nested list. */
   submenu?: () => MenuItem[];
+  /** A section's heading, not something to pick. */
+  heading?: boolean;
+  /** A module's (or one of its panel types') icon in front of the label. */
+  icon?: { moduleId: string; panelType?: string | null };
   run?: () => unknown;
 }
 
@@ -395,6 +399,16 @@ export function addModule(moduleId: string, slot: string | null = null, panelTyp
   }
   if (!stay) dialog.value = null;
   void openPanels(moduleId, slot, panelTypes);
+}
+
+/**
+ * One of a module's panel types (null: a module without types) from the modules menu or Ctrl+K: a panel of it
+ * already open in this game comes to the front (the one used last), else one is added.
+ */
+export function showOrAddPanel(moduleId: string, panelType: string | null): void {
+  const open = state.value?.panels.some((panel) => panel.moduleId === moduleId && panel.panelType === panelType);
+  if (open) void act({ type: "open-module", moduleId, ...(panelType ? { panelType } : {}), reuse: true });
+  else addModule(moduleId, null, panelType ? [panelType] : []);
 }
 
 /** Opens a module's panels one after another, the first into `slot`; stops at the first that fails (its error is shown). */

@@ -1798,7 +1798,8 @@ export class Host {
       },
 
       // Panels and workspace
-      "open-module": (action) => this.openModule(action.moduleId, { ...(action.panelType ? { panelType: action.panelType } : {}) }),
+      "open-module": (action) =>
+        this.openModule(action.moduleId, { ...(action.panelType ? { panelType: action.panelType } : {}), ...(action.reuse ? { reuse: true } : {}) }),
       "choose-panel-type": (action) => this.choosePanelType(action.instanceId, action.panelType),
       "close-panel": (action) => this.closePanel(action.instanceId),
       "remove-module-from-game": (action) => this.removeModuleFromGame(action.moduleId),
@@ -2320,11 +2321,12 @@ export class Host {
 
   /**
    * Opens a new panel; the host UI docks it. Returns its instance id. A module with panel types opens
-   * the type asked for, or its continuing type.
+   * the type asked for, or its continuing type. With `reuse`, a panel of that type already open (the one
+   * used last) comes to the front instead.
    */
   private openModule(
     moduleId: string,
-    options: { openedFrom?: { instanceId: string; background: boolean }; panelType?: string; launch?: PanelLaunch } = {},
+    options: { openedFrom?: { instanceId: string; background: boolean }; panelType?: string; launch?: PanelLaunch; reuse?: boolean } = {},
   ): string | void {
     const { openedFrom } = options;
     const game = this.game;
@@ -2333,6 +2335,11 @@ export class Host {
     const types = panelTypes(module.manifest);
     const panelType = options.panelType ?? continuingPanelType(module.manifest) ?? undefined;
     if (panelType !== undefined && !types.some((type) => type.id === panelType)) throw new WorkspaceError("error.panelTypeGone");
+    const open = options.reuse ? this.panelsOfType(game.id, moduleId, panelType)[0] : undefined;
+    if (open) {
+      this.showPanel(open.record.instanceId);
+      return open.record.instanceId;
+    }
     const record: InstanceRecord = { instanceId: randomUUID(), moduleId, ...(panelType ? { panelType } : {}) };
     this.workspaces.openPanel(game.id, record);
     if (openedFrom) this.openedFrom.set(record.instanceId, openedFrom);
@@ -2855,14 +2862,9 @@ export class Host {
     if (!game || !module || !this.records(game.id).includes(from)) throw new HostError("PERMISSION_DENIED", "panels.open works only in the game shown now");
     const target = panelTypes(this.shown(module.manifest)).find((item) => item.id === type);
     if (!target) throw new HostError("INVALID_PARAMS", `this module has no panel type "${type}"`);
-    const others = this.records(game.id)
-      .map((record, order) => ({ record, order, view: this.views.get(record.instanceId) }))
-      .filter(
-        (item): item is { record: InstanceRecord; order: number; view: ModuleView } =>
-          item.record !== from && item.record.moduleId === from.moduleId && item.record.panelType === type && item.view instanceof ModuleView,
-      )
-      // The one used last first; of panels nobody used, the newest.
-      .sort((a, b) => b.view.usedAt - a.view.usedAt || b.order - a.order);
+    const others = this.panelsOfType(game.id, from.moduleId, type).filter(
+      (item): item is { record: InstanceRecord; order: number; view: ModuleView } => item.record !== from && item.view instanceof ModuleView,
+    );
     const showing = content ? others.find((item) => item.record.content?.id === content.id) : others[0];
     if (showing) {
       this.showPanel(showing.record.instanceId);
@@ -2885,6 +2887,15 @@ export class Host {
       // The page takes no navigation: a new panel shows the content instead.
     }
     return this.openPanelOn(from.moduleId, type, content) ? "opened" : "failed";
+  }
+
+  /** A game's panels of one of a module's panel types (undefined: a module without types); the one used last first, of panels nobody used the newest. */
+  private panelsOfType(gameId: string, moduleId: string, type: string | undefined) {
+    const usedAt = (view: unknown) => (view instanceof ModuleView ? view.usedAt : 0);
+    return this.records(gameId)
+      .map((record, order) => ({ record, order, view: this.views.get(record.instanceId) }))
+      .filter((item) => item.record.moduleId === moduleId && item.record.panelType === type)
+      .sort((a, b) => usedAt(b.view) - usedAt(a.view) || b.order - a.order);
   }
 
   /** A new panel of a module's panel type, told it was opened on `content`; false when the workspace is full. */

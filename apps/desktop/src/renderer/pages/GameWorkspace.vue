@@ -40,6 +40,7 @@ import GameIcon from "../components/GameIcon.vue";
 import EmptySlot from "../components/workspace/EmptySlot.vue";
 import GroupActions from "../components/workspace/GroupActions.vue";
 import LayoutsMenu from "../components/workspace/LayoutsMenu.vue";
+import ModulesMenu from "../components/workspace/ModulesMenu.vue";
 import GridPicker from "../components/workspace/GridPicker.vue";
 import TemplatePreview from "../components/workspace/TemplatePreview.vue";
 import CampfireLoader from "../components/workspace/CampfireLoader.vue";
@@ -366,9 +367,12 @@ const emptySlot = EmptySlot as unknown as VueComponent;
       <span class="text-info ml-auto min-w-0 truncate text-sm" role="status" data-testid="notice">{{ view.notice ?? "" }}</span>
       <div class="app-no-drag flex flex-none items-center gap-2">
         <LayoutsMenu />
-        <Button size="sm" variant="secondary" data-testid="add-module" @click="dialog = { kind: 'add-module' }">
-          <Plus :stroke-width="1.5" /> {{ t("workspace.addModule") }}
-        </Button>
+        <div class="flex">
+          <Button size="sm" variant="secondary" :class="{ 'rounded-r-none': view.panels.length > 0 }" data-testid="add-module" @click="dialog = { kind: 'add-module' }">
+            <Plus :stroke-width="1.5" /> {{ t("workspace.addModule") }}
+          </Button>
+          <ModulesMenu v-if="view.panels.length" />
+        </div>
       </div>
     </header>
 

@@ -2,7 +2,7 @@
 // renders inside it (panel content, tabs and group actions).
 import type { DockviewApi, DockviewGroupPanel, IDockviewPanel } from "dockview-vue";
 import type { InjectionKey } from "vue";
-import { act, type MenuItem } from "../../host";
+import { act, showOrAddPanel, state, type MenuItem } from "../../host";
 import { t } from "../../i18n";
 import { TAB_HEIGHT, type PanelInfo } from "../../dock";
 
@@ -27,6 +27,42 @@ function canSplit(group: DockviewGroupPanel, side: "right" | "below", info: Dock
 }
 
 /**
+ * The modules in this game, A–Z, each with all its panel types (a module without types is one row). An open
+ * type is checked and picking it brings that panel to the front; any other is added, placed from `from`, the
+ * group whose menu was used (else the active one). New modules come from Add module.
+ */
+export function gameModulesMenu(from?: DockviewGroupPanel): MenuItem[] {
+  const view = state.value;
+  if (!view) return [];
+  const inGame = new Set(view.panels.map((panel) => panel.moduleId));
+  const modules = view.modules.filter((module) => inGame.has(module.id)).sort((a, b) => a.name.localeCompare(b.name));
+  const items: MenuItem[] = [];
+  let typed = false;
+  for (const module of modules) {
+    const row = (panelType: string | null, label: string): MenuItem => ({
+      label,
+      icon: { moduleId: module.id, panelType },
+      checked: view.panels.some((panel) => panel.moduleId === module.id && panel.panelType === panelType),
+      testid: `in-game-${module.id}${panelType ? `-${panelType}` : ""}`,
+      run: () => {
+        from?.api.setActive();
+        showOrAddPanel(module.id, panelType);
+      },
+    });
+    // A section per module with types; modules without types follow each other without one.
+    const separator = items.length > 0 && (typed || module.panels.length > 0);
+    typed = module.panels.length > 0;
+    if (!typed) {
+      items.push({ ...row(null, module.name), separator });
+      continue;
+    }
+    items.push({ label: module.name, heading: true, icon: { moduleId: module.id }, separator, testid: `in-game-heading-${module.id}` });
+    for (const type of module.panels) items.push(row(type.id, type.name));
+  }
+  return items;
+}
+
+/**
  * Keyboard and menu alternatives to dragging: everything a drag can do to a
  * panel is also here, on the ⋯ button and on right-click of its tab.
  */
@@ -44,9 +80,11 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
   const maximized = group.api.isMaximized();
   const module = info(panel.id)?.module;
   return [
+    { label: t("workspace.inGame"), testid: "panel-in-game", submenu: () => gameModulesMenu(group) },
     {
       label: t("dock.splitRight"),
       testid: "panel-split-right",
+      separator: true,
       disabled: !canSplit(group, "right", info),
       run: split("right"),
     },
