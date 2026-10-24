@@ -236,6 +236,9 @@ describe("Steam icons", () => {
     // The folders file dialogs open in: absolute paths, for the dialogs Tavora has.
     expect(emptyLibrary().dialogFolders).toEqual({});
     expect(sanitizeLibrary({ dialogFolders: { "install-module": folder, "game-image": "relative/x", other: folder, "module-files": 4 } }).dialogFolders).toEqual({ "install-module": folder });
+    // The folder each module's file dialogs open in (files.saveJson, files.openJson): per owner:module id, absolute paths.
+    expect(emptyLibrary().moduleFolders).toEqual({});
+    expect(sanitizeLibrary({ moduleFolders: { "wellbrained:planner": folder, "wellbrained:other": "relative/x", "no-owner": folder, "a:b": 4 } }).moduleFolders).toEqual({ "wellbrained:planner": folder });
     // Development folders: absolute paths, each once, at most 20.
     expect(emptyLibrary().developmentFolders).toEqual([]);
     const project = process.platform === "win32" ? "D:\\Code\\my-tracker" : "/home/dev/my-tracker";

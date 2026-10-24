@@ -9,7 +9,7 @@ import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./gamedata";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
-import { BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH, JSON_EXPORT_PATH } from "@tavora/sdk/protocol";
+import { BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH, JSON_EXPORT_PATH, JSON_SAVE_PATH, JSON_OPEN_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession, type BridgeContext } from "./bridge";
 import { moduleReadPage } from "./page-import";
 import type { CheckedMenu } from "./module-menu";
@@ -20,7 +20,8 @@ import type { DiscordConnector, DiscordListener } from "./discord";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
 import { serveClipboard } from "./clipboard-http";
-import { servePictureSave } from "./picture-save-http";
+import { cleanPictureName, servePictureSave } from "./picture-save-http";
+import { serveJsonOpen, serveJsonSave } from "./json-file-http";
 import { saveJsonExport, serveJsonExport } from './json-export-http';
 import { isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
@@ -61,6 +62,10 @@ export interface ModuleViewOptions {
   pickReadOnlyFile?(extensions:string[]):Promise<string|null>;
   /** pictures.save, after its click was taken: Tavora's save dialog for the checked PNG; the file name, or null when the player closed it. */
   savePicture(png: Buffer, name: string): Promise<string | null>;
+  /** files.saveJson, after its click was taken: Tavora's save dialog for the formatted JSON; the file name, or null when the player closed it. */
+  saveJson(data: Buffer, name: string): Promise<string | null>;
+  /** files.openJson, after its click was taken: Tavora's open dialog; the chosen file's name and text, or null when the player closed it. */
+  openJson(): Promise<{ fileName: string; text: string } | null>;
   tooltip?: {
     show(request:TooltipRequest):Promise<boolean>;
     move(anchor:TooltipAnchor):void;
@@ -126,11 +131,17 @@ export function picturesFolder(): string {
   return path.join(pictures, "Tavora");
 }
 
+/** Where the save and open dialogs for a module's files first open: a Tavora folder in the player's Documents (tests point Documents elsewhere, unpackaged only). */
+export function documentsFolder(): string {
+  const documents = !app.isPackaged && process.env.TAVORA_DOCUMENTS_DIR ? path.resolve(process.env.TAVORA_DOCUMENTS_DIR) : app.getPath("documents");
+  return path.join(documents, "Tavora");
+}
+
 /**
  * Every module gets its own session per game: separate cookies, web storage,
  * cache and a separate renderer process from the host and other modules.
  */
-function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobStore, savePicture: ModuleViewOptions["savePicture"]): Session {
+function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobStore, files: Pick<ModuleViewOptions, "savePicture" | "saveJson" | "openJson">): Session {
   const ses = session.fromPartition(modulePartition(module.owner, module.manifest.id, game.id));
   if (hardened.has(ses)) return ses;
   hardened.add(ses);
@@ -159,8 +170,16 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
       return servePictureSave(request, url, {
         allowed: () => Date.now() - gesture.at <= GESTURE_MS,
         consume: () => void (gesture.at = 0),
-        save: savePicture,
+        save: files.savePicture,
       });
+    }
+    if (url.pathname === JSON_SAVE_PATH) {
+      const gesture = gestureOf(ses);
+      return serveJsonSave(request, url, { allowed: () => Date.now() - gesture.at <= GESTURE_MS, consume: () => void (gesture.at = 0), save: files.saveJson }, cleanPictureName);
+    }
+    if (url.pathname === JSON_OPEN_PATH) {
+      const gesture = gestureOf(ses);
+      return serveJsonOpen(request, { allowed: () => Date.now() - gesture.at <= GESTURE_MS, consume: () => void (gesture.at = 0), open: files.openJson });
     }
     if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
     const file = await resolveAsset(module.root, url.pathname);
@@ -245,7 +264,11 @@ export class ModuleView {
     const { module, game } = options;
     this.view = new WebContentsView({
       webPreferences: {
-        session: moduleSession(module, game, options.data.blobs, (png, name) => options.savePicture(png, name)),
+        session: moduleSession(module, game, options.data.blobs, {
+          savePicture: (png, name) => options.savePicture(png, name),
+          saveJson: (data, name) => options.saveJson(data, name),
+          openJson: () => options.openJson(),
+        }),
         preload: options.preload,
         sandbox: true,
         contextIsolation: true,

@@ -347,6 +347,7 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | Stored files (`blobs`) | 50 MB each, 500 MB per module and game; PNG, JPEG, GIF and WebP only |
 | `clipboard.writeImage` | one PNG per click or key press, at most 20 MB, 16384 pixels on a side and 100 million pixels |
 | `pictures.save` | the same as `clipboard.writeImage`; names up to 80 characters |
+| `files.saveJson`, `files.openJson` | one file per click or key press, JSON up to 8 MiB; names up to 80 characters |
 | Panel state | 256 KiB |
 | JSON nesting depth | 64 |
 | `network.fetch` answer | 5 MB of body, 15 s, 5 redirects, 6 requests at once per panel |
@@ -392,9 +393,19 @@ assets are capped at 512 KB. See the SDK's exported types for individual bounds.
 Use `ui.tooltip.onClose` to clear local pin state. Close details before changing
 source data or destroying the triggering UI. Underlying panels remain live.
 
+## Saving and opening JSON files
+
+`sdk.files.saveJson(value, name?)` saves JSON as a `.json` file where the player says, and `sdk.files.openJson()` opens one they pick. Both use Tavora's own dialogs, which start in the folder the player last saved a file to or opened one from for this module, at first Tavora's own folder in their Documents (`Documents\Tavora`). Each module has its own remembered folder.
+
+- `saveJson` POSTs the JSON to the module's own address, `/_files/json/save/?name=…`; `name` is filled in (cleaned, up to 80 characters, numbered `name (2).json` when taken) and `.json` is added when missing. The answer is `{ fileName }`, the name it was saved under, or `null` when the player closed the dialog. Replacing a file needs the player's OK in the dialog.
+- `openJson` POSTs to `/_files/json/open/`. The answer is `{ fileName, value }` with the parsed content (a file over 8 MiB is `QUOTA_EXCEEDED`, a file that is not JSON is `INVALID_PARAMS`), or `null` when the player closed the dialog.
+- Both work only right after a real click or key press (one file per press, shared with the clipboard and picture calls), otherwise `PERMISSION_DENIED`. The module never learns a path. No extra permission grant.
+
+They go through module addresses rather than bridge calls so a document up to 8 MiB does not hit the bridge's message limit, like `pictures.save`.
+
 ## JSON exports (Tavora 0.19.17+)
 
-`files.exportJson(value, name?)` in SDK 0.2.10 POSTs JSON to `/_exports/json/?name=...` in the module origin. Maximum 8 MiB before and after host formatting (1 MiB in Tavora 0.20.7 and older). A trusted click/key press is consumed once, shared with picture operations. Saves a new sanitized `.json` in Downloads/Tavora; no arbitrary paths or overwrite. Returns `{ fileName }`. No extra permission grant.
+`files.exportJson(value, name?)` (deprecated: use `files.saveJson`, which asks the player where to save) in SDK 0.2.10 POSTs JSON to `/_exports/json/?name=...` in the module origin. Maximum 8 MiB before and after host formatting (1 MiB in Tavora 0.20.7 and older). A trusted click/key press is consumed once, shared with picture operations. Saves a new sanitized `.json` in Downloads/Tavora; no arbitrary paths or overwrite. Returns `{ fileName }`. No extra permission grant.
 
 
 ### Remembered read-only files

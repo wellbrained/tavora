@@ -27,6 +27,10 @@ The app and the official modules share one kit: `@tavora/official-ui` (`modules/
 
 Every Save as image, in the app and in every module (game modules too), saves through `pictures.save`: Tavora's save dialog with the name filled in, opening where the player last saved a picture (at first `Pictures\Tavora`). Never save a picture to a fixed folder without asking. Closing the dialog shows no message.
 
+## Save and open files
+
+Every save of a file, in the app and in every module (game modules too), saves through `files.saveJson`: Tavora's save dialog with the name filled in, opening where the player last saved or opened a file of that module (at first `Documents\Tavora`). Opening a file uses `files.openJson`, starting in that same folder. Never save a file to a fixed folder without asking. Closing the dialog shows no message.
+
 ## Game modules (locked decision)
 
 Game-specific modules (Enshrouded Builds, Satisfactory Planner, PoE2 Builds and every future one) are separate from Tavora:

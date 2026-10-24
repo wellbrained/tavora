@@ -696,5 +696,18 @@ export const PICTURES_PATH = "/_pictures/";
 /** Document ids: host-generated UUIDs or module-chosen slugs. */
 export const DOCUMENT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
+/**
+ * POST a JSON document here, from the module's own page, to save it as a file where the player picks in Tavora's save
+ * dialog (see files.saveJson). `?name=` suggests the file name; the answer is `{ fileName }`, or `{ fileName: null }`
+ * when the player closed the dialog.
+ */
+export const JSON_SAVE_PATH = "/_files/json/save/";
+
+/**
+ * POST here, from the module's own page, to open a JSON file the player picks in Tavora's open dialog (see
+ * files.openJson). The answer is `{ fileName, value }`, or `null` when the player closed the dialog.
+ */
+export const JSON_OPEN_PATH = "/_files/json/open/";
+
 /** POST a bounded JSON document after a gesture; saves a new .json in Downloads/Tavora. */
 export const JSON_EXPORT_PATH = "/_exports/json/";

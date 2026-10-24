@@ -30,7 +30,7 @@ export const DATA_FILES = [LIBRARY_FILE, WORKSPACE_FILE, PROFILE_FILE] as const;
 export const SUPPORTED_VERSIONS = { [LIBRARY_FILE]: 1, [WORKSPACE_FILE]: 2, [PROFILE_FILE]: 1, [GRANTS_FILE]: GRANTS_VERSION } as const;
 
 /** Library settings that belong to this PC; a cloud copy from another PC never replaces them. */
-export const PC_SETTINGS = ["moduleFilesFolder", "developmentFolders", "dialogFolders", "steamProfile"] as const satisfies readonly (keyof Library)[];
+export const PC_SETTINGS = ["moduleFilesFolder", "developmentFolders", "dialogFolders", "moduleFolders", "steamProfile"] as const satisfies readonly (keyof Library)[];
 
 export function libraryFile(userData: string): string {
   return path.join(userData, LIBRARY_FILE);
