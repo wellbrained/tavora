@@ -148,20 +148,20 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
       <p class="text-muted-foreground text-xs tabular-nums" data-testid="ram-text">{{ ram.line }}</p>
     </section>
 
-    <section v-if="blocks.drives" class="bg-card text-card-foreground col-span-full flex flex-col gap-1.5 rounded-lg border px-3 py-2" data-testid="block-drives">
-      <p v-if="drives.length === 0" class="text-muted-foreground text-xs">{{ t("drive.none") }}</p>
-      <div v-for="drive in drives" :key="drive.id" class="flex flex-col gap-1" :data-testid="`drive-${drive.id}`">
+    <p v-if="blocks.drives && drives.length === 0" class="text-muted-foreground col-span-full text-xs" data-testid="no-drives">{{ t("drive.none") }}</p>
+    <template v-if="blocks.drives">
+      <section v-for="drive in drives" :key="drive.id" class="bg-card text-card-foreground flex flex-col gap-1 rounded-lg border px-2.5 py-2" :data-testid="`drive-${drive.id}`">
         <div class="flex items-baseline gap-2">
-          <span class="text-muted-foreground w-14 flex-none text-xs font-medium">{{ drive.id }}</span>
+          <span class="text-muted-foreground flex-none text-xs font-medium">{{ drive.id }}</span>
           <span class="min-w-0 flex-1 truncate">{{ drive.label }}</span>
           <span v-if="drive.missing" class="text-muted-foreground flex-none text-xs" data-testid="drive-missing">{{ t("drive.missing") }}</span>
           <span v-else :class="cn('flex-none text-xs tabular-nums', TEXT_TONE[drive.tone])" data-testid="drive-free">{{ drive.text }}</span>
         </div>
         <template v-if="!drive.missing && drive.loaded">
-          <Progress :model-value="drive.used" :class="cn('ml-16 w-auto', BAR, BAR_TONE[drive.tone])" :aria-label="`${drive.id} ${drive.text}`" />
-          <p class="text-muted-foreground pl-16 text-xs tabular-nums" data-testid="drive-io">{{ drive.io }}</p>
+          <Progress :model-value="drive.used" :class="cn(BAR, BAR_TONE[drive.tone])" :aria-label="`${drive.id} ${drive.text}`" />
+          <p class="text-muted-foreground text-xs tabular-nums" data-testid="drive-io">{{ drive.io }}</p>
         </template>
-      </div>
-    </section>
+      </section>
+    </template>
   </div>
 </template>
