@@ -11,6 +11,7 @@ import { computed, ref } from "vue";
 import { useEventListener } from "@vueuse/core";
 import { account, act, addModule, dialog, openSettings, publishModule, saveModuleZip, state, type AddModuleRequest, type MenuItem } from "../host";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
 import { t } from "../i18n";
@@ -345,11 +346,11 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                         · <span class="text-primary" :data-testid="`in-game-${module.id}`">{{ t("addModule.inGame", { count: openCount(module.id) }) }}</span>
                       </template>
                     </button>
-                    <div class="flex shrink-0">
+                    <ButtonGroup class="shrink-0">
                       <Button
                         size="sm"
                         variant="outline"
-                        :class="cn(ADD_CLASS, 'rounded-r-none')"
+                        :class="ADD_CLASS"
                         :data-testid="`open-all-${module.id}`"
                         :aria-label="t('addModule.addAllLabel', { name: module.name })"
                         @click="add(module.id, module.panels.map((type) => type.id))"
@@ -358,7 +359,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                       <Button
                         size="sm"
                         variant="outline"
-                        :class="cn(ADD_CLASS, 'rounded-l-none border-l-0 px-2')"
+                        :class="cn(ADD_CLASS, 'px-2')"
                         :aria-label="t('addModule.showPanels', { name: module.name })"
                         :aria-expanded="expanded === module.id"
                         :aria-controls="`panel-menu-${module.id}`"
@@ -366,7 +367,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                         @click="toggle(module.id)"
                         ><ChevronDown :class="cn('size-4 transition-transform motion-reduce:transition-none', expanded === module.id && 'rotate-180')" :stroke-width="1.75"
                       /></Button>
-                    </div>
+                    </ButtonGroup>
                   </template>
                   <template v-else>
                     <span v-if="openCount(module.id)" class="text-primary text-xs" :data-testid="`in-game-${module.id}`">{{ t("addModule.inGame", { count: openCount(module.id) }) }}</span>
