@@ -130,6 +130,8 @@ import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
 import { AiUsageConnector } from "./ai-usage";
+import { SystemMonitor } from "./system-info";
+import { systemProbe } from "./system-info-windows";
 import { readClaudeEmail } from "./ai-usage-claude";
 import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
@@ -332,6 +334,16 @@ export class Host {
   private readonly discord: DiscordConnector;
   /** The AI Usage connector: the AI accounts, read for modules granted it. */
   private readonly aiUsage: AiUsageConnector;
+  /** The System info connector: this PC's hardware and usage, read only while a shown panel of a granted module watches. */
+  private readonly systemInfo = new SystemMonitor({
+    probe: systemProbe(),
+    // Electron's CPU figure is already a share of the whole PC; its memory is in kilobytes.
+    tavora: () => {
+      const metrics = app.getAppMetrics();
+      return { cpu: metrics.reduce((sum, item) => sum + item.cpu.percentCPUUsage, 0), memoryBytes: metrics.reduce((sum, item) => sum + item.memory.workingSetSize, 0) * 1024 };
+    },
+    log: (message, error) => console.warn(`[tavora] ${message}`, error),
+  });
   /** The player's Tavora account; the sign-in never leaves the main process. */
   private readonly account: AccountClient;
   /** The cloud copy: made before the data is read, since a newer copy is taken before anything reads it. */
@@ -1592,6 +1604,7 @@ export class Host {
       this.viewsByContents.clear();
       this.browsersByContents.clear();
       this.discord.dispose();
+      this.systemInfo.dispose();
       this.gameWatcher.stop();
       this.copySync.dispose();
       this.pairing.dispose();
@@ -3017,6 +3030,7 @@ export class Host {
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
       aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
       discord: this.discord,
+      systemInfo: this.systemInfo,
       overlay: { ...this.streaming.overlayFor(module, game.id), showOverGame: (key) => this.gameOverlays.show(module, game.id, key) },
       hotkeys: this.streaming.hotkeysFor(module, game.id),
       ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),

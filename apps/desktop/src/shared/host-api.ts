@@ -705,7 +705,7 @@ export interface ModulePermissions {
 }
 
 /** The connectors Tavora has (module-schema CONNECTORS). */
-export type ModuleConnector = "ai-usage" | "discord" | "stream-overlay";
+export type ModuleConnector = "ai-usage" | "discord" | "stream-overlay" | "system-info";
 
 /** Everything the host UI can ask the main process to do: the table in host-actions.ts. */
 export type { HostAction, HostActionType } from "./host-actions";

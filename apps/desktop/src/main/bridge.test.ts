@@ -54,6 +54,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     data: registry.get("local", moduleId, "poe2"),
     appSettings: registry.appSettings("local", moduleId),
     aiUsage: { accounts: () => Promise.reject(new Error("no AI accounts in this test")), read: () => Promise.reject(new Error("no AI accounts in this test")) },
+    systemInfo: { info: () => { throw new Error("no system info in this test"); }, watch: () => { throw new Error("no system info in this test"); } },
     discord: noDiscord,
     panelState: registry.panelState,
     capabilities: () => new Set(),
@@ -548,6 +549,62 @@ describe("aiUsage", () => {
   it("passes on that an account does not exist", async () => {
     const p = await granted({ aiUsage: { accounts: async () => [], read: async () => Promise.reject(new HostError("INVALID_PARAMS", "there is no AI account with that id")) } });
     expect(await call(p, "aiUsage.read", { accountId: "gone" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+});
+
+describe("systemInfo", () => {
+  const INFO = { cpu: { model: "Test CPU", threads: 8 }, ramBytes: 16e9, gpus: [], drives: [{ id: "C:", label: "", kind: "internal" as const, totalBytes: 1e12 }] };
+  const watching: unknown[] = [];
+  const granted = (extra: Partial<BridgeContext> = {}) =>
+    connected({ ...makeContext(), capabilities: () => new Set(["systemInfo"] as const), systemInfo: { info: () => INFO, watch: (request) => void watching.push(request) }, ...extra });
+  const request = { blocks: { cpu: true, drives: ["C:", "D:"] }, intervalMs: 1000 };
+
+  it.each([
+    ["systemInfo.info", undefined],
+    ["systemInfo.watch", request],
+  ])("denies %s without the system-info connector", async (method, params) => {
+    expect(await call(port, method, params)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "systemInfo" } });
+  });
+
+  it("answers info and passes on a checked watch", async () => {
+    watching.length = 0;
+    const p = await granted();
+    expect(await call(p, "systemInfo.info")).toMatchObject({ ok: true, result: INFO });
+    expect(await call(p, "systemInfo.watch", request)).toMatchObject({ ok: true, result: null });
+    expect(watching).toEqual([{ blocks: { cpu: true, gpu: false, ram: false, drives: ["C:", "D:"], tavora: false }, intervalMs: 1000 }]);
+  });
+
+  it("takes no params for info", async () => {
+    const p = await granted();
+    expect(await call(p, "systemInfo.info", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+
+  it.each([
+    [undefined],
+    [{}],
+    [{ blocks: {}, intervalMs: 3000 }],
+    [{ blocks: { cpu: true } }],
+    [{ blocks: { cpu: true }, intervalMs: "1000" }],
+    [{ blocks: { cpu: 1 }, intervalMs: 1000 }],
+    [{ blocks: { temperature: true }, intervalMs: 1000 }],
+    [{ blocks: { drives: "C:" }, intervalMs: 1000 }],
+    [{ blocks: { drives: ["c:"] }, intervalMs: 1000 }],
+    [{ blocks: { drives: ["C:\\"] }, intervalMs: 1000 }],
+    [{ blocks: { drives: Array.from({ length: 27 }, () => "C:") }, intervalMs: 1000 }],
+    [{ blocks: { cpu: true }, intervalMs: 1000, extra: 1 }],
+    [{ blocks: [], intervalMs: 1000 }],
+  ])("refuses %j as a watch", async (params) => {
+    watching.length = 0;
+    const p = await granted();
+    expect(await call(p, "systemInfo.watch", params)).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(watching).toEqual([]);
+  });
+
+  it("takes empty blocks as stopping", async () => {
+    watching.length = 0;
+    const p = await granted();
+    expect(await call(p, "systemInfo.watch", { blocks: {}, intervalMs: 60000 })).toMatchObject({ ok: true });
+    expect(watching).toEqual([{ blocks: { cpu: false, gpu: false, ram: false, drives: [], tavora: false }, intervalMs: 60000 }]);
   });
 });
 

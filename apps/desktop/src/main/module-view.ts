@@ -18,6 +18,7 @@ import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
 import type { PanelContent, PanelLaunch } from "./panel-content";
 import { LIMITS, type PanelOpenResult } from "@tavora/sdk/protocol";
 import type { DiscordConnector, DiscordListener } from "./discord";
+import type { SystemMonitor, SystemSubscription } from "./system-info";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
 import { serveClipboard } from "./clipboard-http";
@@ -90,6 +91,8 @@ export interface ModuleViewOptions {
   appSettings: ModuleStore;
   /** The ai-usage connector, for a module granted it. */
   aiUsage: BridgeContext["aiUsage"];
+  /** The system-info connector, shared by every panel; each view holds one subscription of its own. */
+  systemInfo: Pick<SystemMonitor, "info" | "subscribe">;
   /** The discord connector, shared by every panel; this view uses it under its own instance id. */
   discord: Pick<DiscordConnector, "use" | "release" | "state" | "connectNow" | "allowControl" | "command" | "subscribe" | "unsubscribe" | "image">;
   /** Overlays of this module in this game: Stream overlay links (granted the stream-overlay connector) and game overlays. */
@@ -270,6 +273,8 @@ export class ModuleView {
   private bridge: BridgeSession | undefined;
   private viewport: TavoraViewport = { width: 0, height: 0 };
   private suspended = false;
+  /** This panel's watch of the PC (system-info.ts), once it asked to watch something. */
+  private systemWatch: SystemSubscription | undefined;
   /** The inserted theme stylesheet of the current page, removed when the theme changes. */
   private themeCssKey: string | undefined;
   /** Theme stylesheets are swapped one at a time, so none is left behind. */
@@ -564,6 +569,7 @@ export class ModuleView {
         panelState,
         appSettings: this.options.appSettings,
         aiUsage: this.options.aiUsage,
+        systemInfo: this.systemInfoFor(() => bridge),
         discord: this.discordFor(() => bridge),
         capabilities: () => this.capabilities(),
         readPage: (params) => moduleReadPage(params, {
@@ -646,6 +652,7 @@ export class ModuleView {
         if (this.bridge !== bridge) return;
         this.options.tooltip?.close();
         this.bridge = undefined;
+        this.stopSystemWatch();
         this.options.discord.release(this.options.instanceId);
       },
     );
@@ -653,14 +660,47 @@ export class ModuleView {
     this.view.webContents.postMessage("tavora:port", null, [port2]);
   }
 
-  /** What the player has granted now (grants.ts): `network` with any granted host, `aiUsage`, `discord` and `overlay` with their connectors. */
+  /** What the player has granted now (grants.ts): `network` with any granted host, `aiUsage`, `systemInfo`, `discord` and `overlay` with their connectors. */
   private capabilities(): ReadonlySet<Capability> {
     const granted = new Set<Capability>();
     if (this.options.networkHosts().size > 0) granted.add("network");
     if (this.options.connectors().has("ai-usage")) granted.add("aiUsage");
+    if (this.options.connectors().has("system-info")) granted.add("systemInfo");
     if (this.options.connectors().has("discord")) granted.add("discord");
     if (this.options.connectors().has("stream-overlay")) granted.add("overlay");
     return granted;
+  }
+
+  /**
+   * The system-info connector as this panel uses it. Its snapshots reach only this page, only while the grant lasts
+   * (a revoke ends the watch at the next snapshot at the latest, and closing the panel ends it at once), and not
+   * while the panel is hidden (suspend and resume).
+   */
+  private systemInfoFor(bridge: () => BridgeSession): BridgeContext["systemInfo"] {
+    const connected = () => this.bridge === bridge() && this.capabilities().has("systemInfo");
+    return {
+      info: () => this.options.systemInfo.info(),
+      watch: (request) => {
+        if (!this.systemWatch) {
+          this.systemWatch = this.options.systemInfo.subscribe({
+            snapshot: (snapshot) => {
+              if (connected()) bridge().emit("systemInfo.snapshot", snapshot);
+              else this.stopSystemWatch();
+            },
+            drivesChanged: () => {
+              if (connected()) bridge().emit("systemInfo.drivesChanged", null);
+            },
+          });
+          if (this.suspended) this.systemWatch.setSuspended(true);
+        }
+        this.systemWatch.watch(request);
+      },
+    };
+  }
+
+  private stopSystemWatch(): void {
+    this.systemWatch?.close();
+    this.systemWatch = undefined;
   }
 
   /**
@@ -829,12 +869,14 @@ export class ModuleView {
     this.options.tooltip?.close();
     if (this.suspended) return;
     this.suspended = true;
+    this.systemWatch?.setSuspended(true);
     this.bridge?.emit("lifecycle.suspend", null);
   }
 
   resume(): void {
     if (!this.suspended) return;
     this.suspended = false;
+    this.systemWatch?.setSuspended(false);
     this.bridge?.emit("lifecycle.resume", null);
   }
 
@@ -959,6 +1001,7 @@ export class ModuleView {
     for (const finish of [...this.navigations.values()]) finish("failed");
     this.bridge?.close();
     this.bridge = undefined;
+    this.stopSystemWatch();
     this.options.discord.release(this.options.instanceId);
   }
 
