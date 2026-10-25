@@ -13,6 +13,7 @@ import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
 import { t } from "../i18n";
+import { formatSize } from "../catalog-size";
 import { cn } from "@/lib/utils";
 import { CircleCheck, Gamepad2, ShieldCheck } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
@@ -86,10 +87,6 @@ function fitLabel(module: CatalogModuleView): string {
 
 /** New until enough players rated it to show its stars. */
 const isNew = (module: CatalogModuleView) => !module.rating || module.rating.count < MIN_RATINGS_SHOWN;
-
-function size(bytes: number): string {
-  return bytes < 1024 * 1024 ? t("catalog.sizeKb", { size: Math.max(1, Math.round(bytes / 1024)) }) : t("catalog.sizeMb", { size: (bytes / 1024 / 1024).toFixed(1) });
-}
 
 async function install(module: CatalogModuleView) {
   installing.value = module.id;
@@ -187,7 +184,7 @@ function settings() {
         {{ query.trim() ? t("addModule.none", { query: query.trim() }) : t("catalog.empty") }}
       </p>
     </template>
-    <CatalogModuleDialog v-if="info" :module="info" :at-reviews="infoAtReviews" :installed="installed.has(info.id)" :installing="installing === info.id" :size="size(info.size)"
+    <CatalogModuleDialog v-if="info" :module="info" :at-reviews="infoAtReviews" :installed="installed.has(info.id)" :installing="installing === info.id" :size="formatSize(info.size)"
       :error="errors[info.id]" :reporting="reporting === info.id" :reported="reported.has(info.id)"
       @close="info = null" @install="install(info)" @add="add(info.id)" @report="report(info)"
     />

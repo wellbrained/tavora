@@ -5,10 +5,11 @@
 // them in a list that drops over the card below, each with its own Add (the decision log, named
 // panels round 1), next to an Add all that opens one of each; adding one of those panels keeps the
 // library open for the next. A module
-// made for other games (its manifest's `games`) is not listed at all.
+// made for other games (its manifest's `games`) is not listed at all. A card's icon or name opens the
+// module's page (CatalogModuleDialog.vue), from the catalog or, without it, from the module's own files.
 import { computed, ref } from "vue";
 import { useEventListener } from "@vueuse/core";
-import { account, addModule, dialog, openSettings, publishModule, saveModuleZip, state, type AddModuleRequest, type MenuItem } from "../host";
+import { account, act, addModule, dialog, openSettings, publishModule, saveModuleZip, state, type AddModuleRequest, type MenuItem } from "../host";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,8 @@ import { Blocks, ChevronDown, Code, Download, Gamepad2, Search, Settings2, Shiel
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import ModuleIcon from "./ModuleIcon.vue";
 import CatalogBrowse from "./CatalogBrowse.vue";
+import CatalogModuleDialog from "./CatalogModuleDialog.vue";
+import { pageModule } from "../module-page";
 import MenuButton from "./menus/MenuButton.vue";
 import { MODULE_TAG_TEXT, moduleTag, type TaggedModule } from "../../shared/module-tag";
 
@@ -103,6 +106,31 @@ function openCount(moduleId: string, panelType?: string): number {
  */
 function add(moduleId: string, panelTypes: string[] = []) {
   addModule(moduleId, (dialog.value as AddModuleRequest).slot ?? null, panelTypes, { stay: panelTypes.length > 0 });
+}
+
+/** The module whose page is open, and the report being sent from it (the catalog ones). */
+const info = ref<ModuleView | null>(null);
+const infoError = ref<string | undefined>();
+const reporting = ref(false);
+const reported = ref<Set<string>>(new Set());
+
+function openInfo(module: ModuleView) {
+  infoError.value = undefined;
+  info.value = module;
+}
+
+/** Add on the page does what the card's Add does, then the page closes. */
+function addFromInfo(module: ModuleView) {
+  add(module.id, module.panels.map((type) => type.id));
+  info.value = null;
+}
+
+async function report(module: ModuleView) {
+  reporting.value = true;
+  const outcome = await act({ type: "report-catalog-module", moduleId: module.id }, { quiet: true });
+  reporting.value = false;
+  if (outcome.ok) reported.value = new Set([...reported.value, module.id]);
+  else infoError.value = outcome.error;
 }
 
 function manage() {
@@ -253,10 +281,14 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                 :data-panel-menu="module.id"
               >
                 <div class="flex items-start gap-3">
-                  <span class="bg-primary/10 border-primary/20 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg border" aria-hidden="true"><ModuleIcon :module-id="module.id" size="size-5" /></span>
+                  <button type="button" class="bg-primary/10 border-primary/20 text-primary focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg border outline-none focus-visible:ring-2" tabindex="-1" aria-hidden="true" @click="openInfo(module)">
+                    <ModuleIcon :module-id="module.id" size="size-5" />
+                  </button>
                   <div class="min-w-0 flex-1">
                     <div class="flex min-w-0 items-center gap-2">
-                      <span class="truncate font-medium" :title="module.name">{{ module.name }}</span>
+                      <button type="button" class="hover:text-primary focus-visible:ring-ring truncate rounded-sm text-left font-medium outline-none focus-visible:ring-2" :title="module.name"
+                        :aria-label="t('catalog.infoLabel', { name: module.name })" :data-testid="`module-name-${module.id}`" @click="openInfo(module)"
+                      >{{ module.name }}</button>
                       <span
                         :class="cn('shrink-0 rounded-sm border px-1.5 text-xs', module.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
                         :data-testid="`provenance-${module.id}`"
@@ -361,6 +393,9 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
           </div>
         </div>
       </div>
+      <CatalogModuleDialog v-if="info" :module="pageModule(info)" :local="info" installed :installing="false" :error="infoError" :reporting="reporting" :reported="reported.has(info.id)"
+        @close="info = null" @add="addFromInfo(info)" @report="report(info)"
+      />
     </DialogContent>
   </Dialog>
 </template>

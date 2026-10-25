@@ -64,3 +64,33 @@ test("80 modules distinguish ten game modules from duplicate panels", async () =
     await expect(page.getByTestId("install-module")).toBeVisible();
   } finally { await app.close(); }
 });
+
+test("a module's icon or name opens its page, built from its own files", async () => {
+  test.setTimeout(120_000);
+  const userData = await newUserData();
+  const dir = path.join(userData, "modules", "paged");
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, "tavora.module.json"), JSON.stringify({
+    id: "local.test.paged", name: "Paged module", description: "Has a readme.", version: "2.3.4", apiVersion: "1", entry: "index.html", games: [],
+    viewport: { minWidth: 100, minHeight: 100 }, permissions: { network: ["api.example.com"] },
+  }));
+  await writeFile(path.join(dir, "index.html"), "<!doctype html><title>Paged</title>");
+  await writeFile(path.join(dir, "README.md"), "# Paged\n\nAbout **this** module <b>x</b>.\n\n- First\n- Second\n");
+  const { app, page } = await launch(userData);
+  try {
+    await page.getByTestId("add-module").click();
+    await page.getByTestId("module-search").fill("Paged module");
+    await page.getByTestId("module-name-local.test.paged").click();
+    const info = page.getByTestId("catalog-info-local.test.paged");
+    await expect(info).toBeVisible();
+    await expect(info.getByTestId("catalog-info-readme")).toContainText("About this module <b>x</b>.");
+    await expect(info.getByTestId("catalog-info-readme").locator("li")).toHaveText(["First", "Second"]);
+    await expect(info.getByTestId("catalog-info-details")).toContainText("2.3.4");
+    await expect(info.getByTestId("catalog-info-access")).toContainText("Loads data from api.example.com");
+    await expect(info.getByTestId("catalog-reviews")).toHaveCount(0);
+    await expect(info.getByTestId("catalog-info-report")).toHaveCount(0);
+    await expect(info.getByTestId("catalog-info-install")).toHaveCount(0);
+    await info.getByTestId("catalog-info-add").click();
+    await expect(page.getByTestId("add-module-dialog")).toHaveCount(0);
+  } finally { await app.close(); }
+});

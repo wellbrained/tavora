@@ -27,7 +27,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, GameView, HostViewState, ModuleMenu, OnlineSearchResult, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, ModulePageResult, GameView, HostViewState, ModuleMenu, OnlineSearchResult, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { PlayerError } from "./messages";
@@ -39,6 +39,7 @@ import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
 import { applyOwners, checkZipData, readOwnerRecords } from "./installer";
+import { readModulePage } from "./module-page";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
 import { ModuleLifecycle } from "./module-lifecycle";
@@ -1149,6 +1150,13 @@ export class Host {
     };
   }
 
+  /** An installed module's page from its own folder (module-page.ts), so it works offline. */
+  private async modulePage(moduleId: string): Promise<ModulePageResult> {
+    const module = this.modules.get(moduleId);
+    if (!module) return { status: "gone" };
+    return { status: "ok", ...(await readModulePage(module.root, module.manifest)) };
+  }
+
   /**
    * A catalog module's ratings and reviews (decided 2026-10-21), with the player's own rating and what
    * they can do. Rating needs a sign-in and the module installed; the service can't check the second,
@@ -1429,6 +1437,9 @@ export class Host {
     });
     ipcMain.handle("host:catalog-page", async (event, moduleId: unknown): Promise<CatalogPageResult> =>
       fromHost(event) && isModuleId(moduleId) ? this.catalogPage(moduleId) : { status: "gone" },
+    );
+    ipcMain.handle("host:module-page", async (event, moduleId: unknown): Promise<ModulePageResult> =>
+      fromHost(event) && isModuleId(moduleId) ? this.modulePage(moduleId) : { status: "gone" },
     );
     ipcMain.handle("host:catalog-reviews", async (event, moduleId: unknown): Promise<CatalogReviewsResult> =>
       fromHost(event) && isModuleId(moduleId) ? this.catalogReviews(moduleId) : { status: "gone" },

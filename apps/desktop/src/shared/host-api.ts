@@ -851,6 +851,9 @@ export interface CatalogPage {
   versions: { version: string; publishedAt: string; notes: string[] }[];
 }
 
+/** An installed module's page from its own files: its readme and screenshots, as plain text and checked pictures. */
+export type ModulePageResult = { status: "ok"; readme: ReadmeBlock[]; screenshots: string[] } | { status: "gone" };
+
 export type CatalogPageResult = ({ status: "ok" } & CatalogPage) | { status: "off" | "unavailable" | "busy" | "unreachable" | "gone" };
 
 /**
@@ -876,6 +879,8 @@ export interface TavoraHostApi {
   browseCatalog(): Promise<CatalogListResult>;
   /** A catalog module's page: its readme, screenshots and versions. Never rejects. */
   catalogPage(moduleId: string): Promise<CatalogPageResult>;
+  /** An installed module's page from its own folder: readme and screenshots. Works offline. Never rejects. */
+  modulePage(moduleId: string): Promise<ModulePageResult>;
   /** The icon of a module from the last catalog list, as a checked data address, or null. Never rejects. */
   catalogIcon(moduleId: string): Promise<string | null>;
   /** A catalog module's ratings and reviews, and the player's own rating. Never rejects. */

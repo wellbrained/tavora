@@ -13,6 +13,7 @@ const api: TavoraHostApi = {
   steamShareIcons: (appids) => ipcRenderer.invoke("host:steam-share-icons", appids),
   browseCatalog: () => ipcRenderer.invoke("host:browse-catalog"),
   catalogPage: (moduleId) => ipcRenderer.invoke("host:catalog-page", moduleId),
+  modulePage: (moduleId) => ipcRenderer.invoke("host:module-page", moduleId),
   catalogIcon: (moduleId) => ipcRenderer.invoke("host:catalog-icon", moduleId),
   catalogReviews: (moduleId) => ipcRenderer.invoke("host:catalog-reviews", moduleId),
   releaseStatuses: (copies) => ipcRenderer.invoke("host:release-statuses", copies),
