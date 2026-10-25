@@ -264,7 +264,7 @@ export interface SystemWatchBlocks {
   ram?: boolean;
   /** Drive letters with a colon ("C:"), at most 26. */
   drives?: string[];
-  /** The internet connection: pings, packet loss and speed (SystemConnection). Tavora 0.21.10 and newer. */
+  /** The internet connection: pings, packet loss and speed (SystemConnection). Tavora 0.21.14 and newer. */
   connection?: boolean;
   /** Tavora's own CPU and memory use. */
   tavora?: boolean;
@@ -326,7 +326,7 @@ export interface SystemSnapshot {
   }[];
   /** Tavora's own use: `cpu` as a share of the whole PC, `memoryBytes` in working set. */
   tavora?: { cpu: number; memoryBytes: number };
-  /** The connection as of its last check (every 5 seconds), when the panel asked for it. Tavora 0.21.10 and newer. */
+  /** The connection as of its last check (every 5 seconds), when the panel asked for it. Tavora 0.21.14 and newer. */
   connection?: SystemConnection;
 }
 
@@ -591,16 +591,16 @@ export interface Methods {
    * `systemInfo.snapshot` at once, then one every `intervalMs`. A panel that is hidden gets none.
    */
   "systemInfo.watch": { params: { blocks: SystemWatchBlocks; intervalMs: SystemInterval }; result: null };
-  /** The drops of the connection in the last 30 days (capability `systemInfo`). Tavora 0.21.10 and newer. */
+  /** The drops of the connection in the last 30 days (capability `systemInfo`). Tavora 0.21.14 and newer. */
   "systemInfo.connectionLog": { params: undefined; result: SystemConnectionLog };
-  /** Empties the log of drops. Only for Tavora's own System Monitor, right after a click or key press (capability `systemInfo`). Tavora 0.21.10 and newer. */
+  /** Empties the log of drops. Only for Tavora's own System Monitor, right after a click or key press (capability `systemInfo`). Tavora 0.21.14 and newer. */
   "systemInfo.clearConnectionLog": { params: undefined; result: null };
-  /** Whether the connection is watched and which address is pinged (capability `systemInfo`). Tavora 0.21.10 and newer. */
+  /** Whether the connection is watched and which address is pinged (capability `systemInfo`). Tavora 0.21.14 and newer. */
   "systemInfo.connectionSettings": { params: undefined; result: SystemConnectionSettings };
   /**
    * Changes what is given and leaves the rest. Only for Tavora's own System Monitor, right after a click or key press, and
    * once every 5 seconds (capability `systemInfo`). A `target` that is not a public IPv4 address or a public name is
-   * `INVALID_PARAMS`. Tavora 0.21.10 and newer.
+   * `INVALID_PARAMS`. Tavora 0.21.14 and newer.
    */
   "systemInfo.setConnectionSettings": { params: Partial<SystemConnectionSettings>; result: SystemConnectionSettings };
   /** The connection to the Discord app; starts it for this panel (capability `discord`). */
@@ -685,7 +685,7 @@ export interface Events {
   "systemInfo.drivesChanged": null;
   /**
    * The connection went down, changed kind or came back. Only with capability `systemInfo`, while the panel watches
-   * the `connection` block and is shown. Ask systemInfo.connectionLog again. Tavora 0.21.10 and newer.
+   * the `connection` block and is shown. Ask systemInfo.connectionLog again. Tavora 0.21.14 and newer.
    */
   "systemInfo.connectionChanged": SystemConnection;
   /** The player added, renamed or removed an AI account; ask aiUsage.accounts again. Only with capability `aiUsage`. */
