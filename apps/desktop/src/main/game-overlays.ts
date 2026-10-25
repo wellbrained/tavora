@@ -22,8 +22,11 @@ export const LAYER_OWNER = "tavora";
 /** The "game" of the layer key: it works over every game. */
 export const ALL_GAMES = "$all";
 
-/** Panels moved over a game in 0.20.54 had overlay keys behind this prefix; they are dropped when found. */
-const LEGACY_PANEL_KEY_PREFIX = "panel-";
+/**
+ * Overlay keys of a module can't start with this: older Tavoras kept panels moved over a game under such keys.
+ * show() refuses them, and a file of that time (version 1) is cleaned of them once, when it is migrated.
+ */
+export const RESERVED_KEY_PREFIX = "panel-";
 
 /** How much of the page shows through the window: Tavora's own setting per overlay. */
 export const OPACITIES = [100, 75, 50, 25] as const;
@@ -83,7 +86,7 @@ export interface InGamePanel {
   rect: RelativeRect;
 }
 
-type GameOverlayFile = { version: 2; exclusiveHintShown?: boolean; overlays: GameOverlay[]; panels: InGamePanel[] };
+type GameOverlayFile = { version?: number; exclusiveHintShown?: boolean; overlays: GameOverlay[]; panels: InGamePanel[] };
 
 /** What the player can change on an existing overlay. */
 export type GameOverlayChange = Partial<Pick<GameOverlay, "mode" | "opacity" | "hideFromCapture" | "rect">>;
@@ -225,6 +228,8 @@ const INSTANCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 const validField = (value: unknown) => typeof value === "string" && value.length > 0 && value.length <= 128;
 
 export class GameOverlayStore {
+  /** The file was of an older version; it is written as version 2 from now on. */
+  migrated = false;
   private readonly queue = new SerialQueue();
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -236,18 +241,20 @@ export class GameOverlayStore {
   ) {}
 
   /**
-   * Loads what was kept. Files of 0.20.54 and before have no scope: `scopeOf` tells it from the workspace's kind.
-   * Their panels over the game are not kept.
+   * Loads what was kept. A file of version 1 (Tavora 0.21.0 and before) is migrated: its overlays have no scope, so
+   * `scopeOf` tells it from the workspace's kind, and the permanent panels over the game it may hold (keys behind
+   * RESERVED_KEY_PREFIX) are not kept. `migrated` says so. A file of version 2 is taken as it is.
    */
   static async load(userData: string, scopeOf: (gameId: string) => OverlayScope = () => "game"): Promise<GameOverlayStore> {
     const file = path.join(userData, GAME_OVERLAYS_FILE);
     const raw = await readJsonOrSetAside<Partial<GameOverlayFile>>(file);
     const store = new GameOverlayStore(file, [], [], raw?.exclusiveHintShown === true);
+    store.migrated = raw !== null && raw !== undefined && raw.version !== 2;
     for (const entry of Array.isArray(raw?.overlays) ? raw.overlays : []) {
       if (typeof entry !== "object" || entry === null) continue;
       const { owner, moduleId, gameId, key, scope, mode, opacity, hideFromCapture, rect } = entry as Partial<Record<keyof GameOverlay, unknown>>;
       const relative = normalizeRelative(rect);
-      if (![owner, moduleId, gameId].every(validField) || typeof key !== "string" || !OVERLAY_KEY.test(key) || key.startsWith(LEGACY_PANEL_KEY_PREFIX) || !relative) continue;
+      if (![owner, moduleId, gameId].every(validField) || typeof key !== "string" || !OVERLAY_KEY.test(key) || (store.migrated && key.startsWith(RESERVED_KEY_PREFIX)) || !relative) continue;
       const overlay: GameOverlay = {
         owner: owner as string,
         moduleId: moduleId as string,

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -88,7 +88,8 @@ class FakeVeil implements VeilWindow {
   }
 }
 
-async function setup({ supported = true, enabled = true } = {}) {
+async function setup({ supported = true, enabled = true, file }: { supported?: boolean; enabled?: boolean; file?: unknown } = {}) {
+  if (file !== undefined) await writeFile(path.join(dir, "game-overlays.json"), JSON.stringify(file));
   const world = {
     enabled,
     modules: new Map<string, StreamingModule>([[CLOCK.manifest.id, CLOCK], [TODOS.manifest.id, TODOS]]),
@@ -96,6 +97,9 @@ async function setup({ supported = true, enabled = true } = {}) {
     opened: [] as string[],
     notices: [] as string[],
     removedKeys: [] as HotkeyRecord[],
+    movedKeys: [] as { from: HotkeyRecord | undefined; to: unknown }[],
+    /** Panel instances whose type no longer allows being in the game. */
+    notAllowed: new Set<string>(),
     changes: 0,
     focused: 0,
     registered: new Map<string, () => void>(),
@@ -136,6 +140,7 @@ async function setup({ supported = true, enabled = true } = {}) {
     panels: {
       name: (instanceId) => world.panelNames.get(instanceId) ?? null,
       exists: (_gameId, instanceId) => !world.gone.has(instanceId),
+      allowed: (_gameId, instanceId) => !world.notAllowed.has(instanceId),
       usedAt: (instanceId) => world.panelUsed.get(instanceId) ?? 0,
       openWindow: (request) => {
         if (!world.panelNames.has(request.instanceId)) return null;
@@ -161,6 +166,11 @@ async function setup({ supported = true, enabled = true } = {}) {
     notify: (message) => void world.notices.push(message),
     removeKeys: (test) => {
       for (const record of [...keys]) if (test(record)) world.removedKeys.push(record);
+    },
+    moveKey: (test, to) => {
+      const matches = keys.filter(test);
+      world.movedKeys.push({ from: matches.at(-1), to });
+      for (const record of matches) world.removedKeys.push(record);
     },
     keyOf: () => null,
     language: () => "en",
@@ -414,6 +424,51 @@ describe("the in-game layer", () => {
     expect(world.veils[0]!.destroyed).toBe(true);
     expect(world.registered.has("Escape")).toBe(false);
     expect(world.focused).toBe(0);
+  });
+
+  it("closes, giving the keyboard to nobody, when the game window it opened over is another one, or minimized", async () => {
+    const { service, world, key } = await setup();
+    show(service);
+    world.foreground = { program: GAME_EXE, handle: "0x10", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    service.pressed(layerKey(key));
+    expect(service.layerOpen).toBe(true);
+    // The same window stays open.
+    service.tick();
+    expect(service.layerOpen).toBe(true);
+    // A new window of the same program (the game restarted): not the one the layer opened over.
+    world.foreground = { program: GAME_EXE, handle: "0x20", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(service.layerOpen).toBe(false);
+    expect(world.veils[0]!.destroyed).toBe(true);
+    // Minimized (the probe finds no window).
+    service.pressed(layerKey(key));
+    expect(service.layerOpen).toBe(true);
+    world.foreground = null;
+    service.tick();
+    expect(service.layerOpen).toBe(false);
+    expect(world.focused).toBe(0);
+  });
+
+  it("doesn't open for a game that owns the screen exclusively, and says why instead", async () => {
+    const { service, world, key } = await setup();
+    show(service);
+    world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 3 };
+    service.tick();
+    world.notices.length = 0;
+    service.pressed(layerKey(key));
+    expect(service.layerOpen).toBe(false);
+    expect(world.veils).toHaveLength(0);
+    expect(world.notices).toEqual(["Switch the game to borderless to see overlays."]);
+  });
+
+  it("closes the layer when the game goes exclusive full screen", async () => {
+    const { service, world, key } = await setup();
+    show(service);
+    service.pressed(layerKey(key));
+    world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 3 };
+    service.tick();
+    expect(service.layerOpen).toBe(false);
   });
 
   it("follows the game's window with the veil", async () => {
@@ -716,8 +771,8 @@ describe("leftovers", () => {
     expect(world.windows).toHaveLength(0);
   });
 
-  it("takes away the per-game arrange keys of 0.20.54 and the keys of panels over the game then, when it starts", async () => {
-    const { service, world, key } = await setup();
+  it("takes away the per-game arrange keys and the keys of panels over the game of Tavora 0.21.0 and before, when it starts", async () => {
+    const { service, world, key } = await setup({ file: { version: 1, overlays: [] } });
     const arrange = key({ owner: "tavora", moduleId: "tavora", gameId: "elden", action: "$arrange", target: "arrange" });
     const panelToggle = key({ owner: "official", moduleId: TODOS.manifest.id, gameId: "elden", action: OVERLAY_TOGGLE_ACTION, target: `panel-${PANEL}` });
     const keep = key(toggleBinding({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" }));
@@ -725,6 +780,44 @@ describe("leftovers", () => {
     expect(world.removedKeys).toEqual([arrange, panelToggle]);
     expect(world.removedKeys).not.toContain(keep);
     await service.shutdown();
+  });
+
+  it("hands the arrange key set last to the layer key when migrating, and does nothing for a file of version 2", async () => {
+    const old = await setup({ file: { version: 1, overlays: [] } });
+    old.key({ owner: "tavora", moduleId: "tavora", gameId: "elden", action: "$arrange", target: "arrange" });
+    const newest = old.key({ owner: "tavora", moduleId: "tavora", gameId: "other", action: "$arrange", target: "arrange" });
+    old.service.start();
+    expect(old.world.movedKeys).toEqual([{ from: newest, to: layerBinding() }]);
+    await old.service.shutdown();
+
+    const current = await setup({ file: { version: 2, overlays: [], panels: [] } });
+    current.key({ owner: "tavora", moduleId: "tavora", gameId: "elden", action: "$arrange", target: "arrange" });
+    current.service.start();
+    expect(current.world.movedKeys).toEqual([]);
+    expect(current.world.removedKeys).toEqual([]);
+    await current.service.shutdown();
+  });
+
+  it("refuses overlay keys behind the reserved panel- prefix", async () => {
+    const { service, world } = await setup();
+    expect(() => show(service, CLOCK, "elden", `panel-${PANEL}`)).toThrow(/reserved/);
+    expect(world.windows).toHaveLength(0);
+  });
+
+  const OTHER: StreamingModule = { ...CLOCK, manifest: { ...CLOCK.manifest, id: "tavora.other" } };
+
+  it("hides one overlay of the module and lists the module's keys in its workspace scope", async () => {
+    const { service } = await setup();
+    show(service);
+    show(service, CLOCK, "elden", "item-2");
+    show(service, CLOCK, "personal", "item-9");
+    show(service, OTHER, "elden", "other-module");
+    expect(service.keysOf(CLOCK, "elden")).toEqual(["item-1", "item-2"]);
+    expect(service.keysOf(CLOCK, "personal")).toEqual(["item-9"]);
+    service.hide(CLOCK, "elden", "item-1");
+    service.hide(CLOCK, "elden", "never-there");
+    expect(service.keysOf(CLOCK, "elden")).toEqual(["item-2"]);
+    expect(service.keysOf(OTHER, "elden")).toEqual(["other-module"]);
   });
 
   it("closes the window of a game that stays out of the front for 30 seconds, and makes it again when it is back", async () => {
@@ -939,19 +1032,31 @@ describe("a panel in the game", () => {
     expect(service.hasPanel(PANEL)).toBe(false);
   });
 
+  it("drops a panel whose type no longer allows being shown in the game", async () => {
+    const { service, world } = await setup();
+    add(service);
+    add(service, SECOND);
+    service.tick();
+    expect(service.hasPanel(PANEL)).toBe(true);
+    world.notAllowed.add(PANEL);
+    service.tick();
+    expect(service.hasPanel(PANEL)).toBe(false);
+    expect(service.hasPanel(SECOND)).toBe(true);
+  });
+
   it("shows the Live badge when it is in the game or its module has an overlay over the game", async () => {
     const { service } = await setup();
-    expect(service.liveFor(PANEL, TODOS.manifest.id, "elden")).toBe(false);
+    expect(service.liveFor(PANEL, "official", TODOS.manifest.id, "elden")).toBe(false);
     add(service);
-    expect(service.liveFor(PANEL, TODOS.manifest.id, "elden")).toBe(true);
+    expect(service.liveFor(PANEL, "official", TODOS.manifest.id, "elden")).toBe(true);
     // A tab of the clock: no panel in the game, but the module has an overlay.
-    expect(service.liveFor(SECOND, CLOCK.manifest.id, "elden")).toBe(false);
+    expect(service.liveFor(SECOND, "official", CLOCK.manifest.id, "elden")).toBe(false);
     show(service);
-    expect(service.liveFor(SECOND, CLOCK.manifest.id, "elden")).toBe(true);
+    expect(service.liveFor(SECOND, "official", CLOCK.manifest.id, "elden")).toBe(true);
     // Another game's overlay doesn't count; a general one does.
-    expect(service.liveFor(SECOND, CLOCK.manifest.id, "other")).toBe(false);
+    expect(service.liveFor(SECOND, "official", CLOCK.manifest.id, "other")).toBe(false);
     show(service, CLOCK, "personal", "item-9");
-    expect(service.liveFor(SECOND, CLOCK.manifest.id, "other")).toBe(true);
+    expect(service.liveFor(SECOND, "official", CLOCK.manifest.id, "other")).toBe(true);
   });
 
   it("keeps the game in front while its window has the keyboard, and ends the layer when Tavora's window is in front with no panel focused", async () => {

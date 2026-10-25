@@ -3057,6 +3057,8 @@ export class Host {
       overlay: {
         ...this.streaming.overlayFor(module, game.id),
         showOverGame: (key) => this.gameOverlays.show(module, game.id, key),
+        hideOverGame: (key) => this.gameOverlays.hide(module, game.id, key),
+        overGame: () => this.gameOverlays.keysOf(module, game.id),
         preview: async (key) => this.previews.show({ owner: module.owner, moduleId: module.manifest.id, gameId: game.id, key }),
       },
       hotkeys: this.streaming.hotkeysFor(module, game.id),
@@ -3399,6 +3401,9 @@ export class Host {
     if (this.gameId !== gameId) return this.destroyView(instanceId, false);
     this.window.contentView.addChildView(view.view);
     view.setVisible(false);
+    // Laid out right now: its overlay window still counts as holding it while this runs, so applyBounds would skip it
+    // and it would wait for the next bounds push from the workspace.
+    this.layOut(instanceId, view);
     this.applyBounds();
     this.pushStateSoon();
   }
@@ -3439,14 +3444,19 @@ export class Host {
     for (const [instanceId, view] of this.views) {
       // A panel over the game is placed, shown and paused by its overlay window (game-overlay-window.ts), not by this slot.
       if (this.floating(instanceId)) continue;
-      const rect = this.panelBounds.get(instanceId);
-      if (rect) view.setBounds(rect);
-      // A module page stays hidden until it has its data, so switching games does not show it building itself;
-      // while a game opens, every panel waits for the others.
-      view.setVisible(rect !== undefined && !this.overlay && !this.opening && (!(view instanceof ModuleView) || view.revealed));
-      if (rect && !this.windowHidden) view.resume();
-      else view.suspend();
+      this.layOut(instanceId, view);
     }
+  }
+
+  /** Puts one panel's view where the workspace last said it goes, and shows, pauses or resumes it accordingly. */
+  private layOut(instanceId: string, view: ModuleView | BrowserPanel): void {
+    const rect = this.panelBounds.get(instanceId);
+    if (rect) view.setBounds(rect);
+    // A module page stays hidden until it has its data, so switching games does not show it building itself;
+    // while a game opens, every panel waits for the others.
+    view.setVisible(rect !== undefined && !this.overlay && !this.opening && (!(view instanceof ModuleView) || view.revealed));
+    if (rect && !this.windowHidden) view.resume();
+    else view.suspend();
   }
 
   /**
@@ -3679,7 +3689,7 @@ export class Host {
           const overGame = this.floating(record.instanceId);
           const waiting = !overGame && (status === "loading" || status === "ready") && !view?.revealed;
           const inGame = this.gameOverlays.hasPanel(record.instanceId);
-          const live = this.gameOverlays.liveFor(record.instanceId, record.moduleId, game?.id ?? "");
+          const live = this.gameOverlays.liveFor(record.instanceId, this.modules.get(record.moduleId)?.owner ?? "", record.moduleId, game?.id ?? "");
           return {
             instanceId: record.instanceId,
             moduleId: record.moduleId,
@@ -3978,11 +3988,17 @@ export class Host {
       module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
       gameName: (gameId) => host.library.games[gameId]?.name ?? null,
       gamesOf: (program) => host.gameWatcher.gamesOf(program),
-      scopeOf: (gameId) => scopeForKind(host.library.games[gameId]?.kind),
+      scopeOf: (gameId) => ((entry) => (entry ? scopeForKind(entry.kind) : "game"))(host.library.games[gameId]),
       openVeil: () => new GameVeilWindow({ hidden: !!options.hidden }),
       panels: {
         name: (instanceId) => host.panelName(instanceId),
         exists: (gameId, instanceId) => host.recordOf(instanceId, gameId) !== undefined,
+        // Unknown (module not loaded yet) counts as allowed: a panel is dropped only when its type is known to say no.
+        allowed: (gameId, instanceId) => {
+          const record = host.recordOf(instanceId, gameId);
+          const type = record ? host.panelTypeOf(record) : undefined;
+          return type === undefined || type?.inGame === true;
+        },
         usedAt: (instanceId) => {
           const view = host.views.get(instanceId);
           return view instanceof ModuleView ? view.usedAt : 0;
@@ -4015,6 +4031,7 @@ export class Host {
         host.pushStateSoon();
       },
       removeKeys: (test) => host.streaming.removeKeys(test),
+      moveKey: (test, to) => host.streaming.moveKey(test, to),
       keyOf: (binding) => host.streaming.keyOf(binding),
       language: () => host.language,
       changed: () => {

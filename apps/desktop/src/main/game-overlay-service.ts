@@ -21,6 +21,7 @@ import {
   LEGACY_ARRANGE_ACTION,
   OVERLAY_LAYER_ACTION,
   OVERLAY_TOGGLE_ACTION,
+  RESERVED_KEY_PREFIX,
   appliesTo,
   gameInFront,
   isLive,
@@ -89,6 +90,8 @@ export interface GameOverlayServiceOptions {
     name(instanceId: string): string | null;
     /** Whether the panel still exists in its workspace. */
     exists(gameId: string, instanceId: string): boolean;
+    /** Whether the panel's type still allows being shown in the game (`inGame`); true when that isn't known yet. */
+    allowed?(gameId: string, instanceId: string): boolean;
     /** When the panel was used last, to give the keyboard to the newest one. */
     usedAt(instanceId: string): number;
     /** The window holding the panel (moved out of its workspace slot); null when the panel is gone. */
@@ -101,6 +104,8 @@ export interface GameOverlayServiceOptions {
   notify(message: string): void;
   /** Takes away the hotkeys matching `test`. */
   removeKeys(test: (record: HotkeyRecord) => boolean): void;
+  /** Takes away the hotkeys matching `test`, but gives the layer key the key of the one set last, if the layer has none. */
+  moveKey(test: (record: HotkeyRecord) => boolean, to: Pick<HotkeyRecord, "owner" | "moduleId" | "gameId" | "action" | "target">): void;
   /** The key set for a binding, as Streaming holds it. */
   keyOf(binding: Pick<HotkeyRecord, "owner" | "moduleId" | "gameId" | "action" | "target">): { accelerator: string; taken: boolean } | null;
   language(): Language;
@@ -148,6 +153,10 @@ export class GameOverlays {
   private game: Rect | null = null;
   /** The game whose in-game layer is open. */
   private layer: string | null = null;
+  /** The window handle of the game window in front (when known), the one the layer opened over, and what Windows says about full screen. */
+  private frontWindow: string | null = null;
+  private layerWindow: string | null = null;
+  private notification: number | null = null;
   private veil: VeilWindow | null = null;
   private escape = false;
   /** "Hide all for now": nothing shows until Tavora starts again or the player shows it again. */
@@ -168,8 +177,13 @@ export class GameOverlays {
 
   /** Starts looking at the window in front; called once Tavora is up. */
   start(): void {
-    // The per-game arrange keys of 0.20.54 are gone, and so are the keys of panels that were over the game then.
-    this.options.removeKeys((record) => record.action === LEGACY_ARRANGE_ACTION || (record.action === OVERLAY_TOGGLE_ACTION && record.target.startsWith("panel-")));
+    // Coming from Tavora 0.21.0 or before (file version 1): its per-game arrange keys are gone (the key set last becomes
+    // the layer key, if there is none), and so are the keys of panels that were over the game then.
+    if (this.store.migrated) {
+      this.options.moveKey((record) => record.action === LEGACY_ARRANGE_ACTION, layerBinding());
+      this.options.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.target.startsWith(RESERVED_KEY_PREFIX));
+      void this.store.save();
+    }
     if (this.timer || !this.options.supported) return;
     this.timer = setInterval(() => this.tick(), this.options.everyMs ?? LOOK_MS);
     this.timer.unref?.();
@@ -185,6 +199,7 @@ export class GameOverlays {
   /** overlay.showOverGame for a panel of `module` in `gameId`; the module view checked the key and the click. */
   show(module: StreamingModule, gameId: string, key: string): GameOverlayResult {
     if (!module.manifest.overlay) throw new HostError("INVALID_PARAMS", "this module has no overlay page in its manifest");
+    if (key.startsWith(RESERVED_KEY_PREFIX)) throw new HostError("INVALID_PARAMS", "this overlay key is reserved");
     if (!this.options.supported || !this.options.enabled()) {
       if (this.options.supported) this.options.openSetting("game-overlays");
       return "off";
@@ -205,6 +220,16 @@ export class GameOverlays {
     this.options.changed();
     this.tick();
     return "shown";
+  }
+
+  /** overlay.hideOverGame: takes this module's overlay for `key` away from the workspace's scope; nothing happens when there is none. */
+  hide(module: StreamingModule, gameId: string, key: string): void {
+    this.remove({ owner: module.owner, moduleId: module.manifest.id, gameId, key });
+  }
+
+  /** overlay.overGame: the keys of this module's game overlays in the workspace's scope. */
+  keysOf(module: StreamingModule, gameId: string): string[] {
+    return this.store.all().filter((overlay) => overlay.owner === module.owner && overlay.moduleId === module.manifest.id && overlay.gameId === gameId).map((overlay) => overlay.key);
   }
 
   /**
@@ -240,8 +265,8 @@ export class GameOverlays {
   }
 
   /** The Live badge of a panel's tab: it is in the game, or its module has an overlay that shows over its workspace's game. */
-  liveFor(instanceId: string, moduleId: string, gameId: string): boolean {
-    const overlays = this.store.all().filter((overlay) => overlay.moduleId === moduleId && (overlay.scope === "all" || overlay.gameId === gameId)).length;
+  liveFor(instanceId: string, owner: string, moduleId: string, gameId: string): boolean {
+    const overlays = this.store.all().filter((overlay) => overlay.owner === owner && overlay.moduleId === moduleId && (overlay.scope === "all" || overlay.gameId === gameId)).length;
     return isLive(this.hasPanel(instanceId), overlays);
   }
 
@@ -331,11 +356,21 @@ export class GameOverlays {
     return record.action === OVERLAY_TOGGLE_ACTION && overlay?.mode === "toggle" && appliesTo(overlay, this.front);
   }
 
+  /** Whether a key works over every game (the layer key, and the toggle key of a general overlay): it collides with any game's keys. */
+  general(record: Pick<HotkeyRecord, "owner" | "moduleId" | "gameId" | "action" | "target">): boolean {
+    if (record.action === OVERLAY_LAYER_ACTION) return true;
+    if (record.action !== OVERLAY_TOGGLE_ACTION) return false;
+    return this.store.find({ owner: record.owner, moduleId: record.moduleId, gameId: record.gameId, key: record.target })?.scope === "all";
+  }
+
   pressed(record: HotkeyRecord): void {
     if (this.front === null) return;
     if (record.action === OVERLAY_LAYER_ACTION) {
       if (this.layer !== null) this.closeLayer(true);
-      else this.openLayer(this.front);
+      else if (looksExclusive(this.notification)) {
+        // No window can be drawn over a game that owns the screen exclusively: say so instead of opening nothing.
+        this.options.notify(translate(this.options.language(), "overlays.exclusiveHint"));
+      } else this.openLayer(this.front);
       return;
     }
     const overlay = this.store.find({ owner: record.owner, moduleId: record.moduleId, gameId: record.gameId, key: record.target });
@@ -354,6 +389,8 @@ export class GameOverlays {
 
   private openLayer(gameId: string): void {
     this.layer = gameId;
+    // The layer belongs to this game window: another window of the program (a restart) is not the one it opened over.
+    this.layerWindow = this.frontWindow;
     // Esc ends it too; the key is the game's again afterwards.
     this.escape = this.options.shortcuts.register("Escape", () => this.closeLayer(true));
     this.tick();
@@ -413,11 +450,14 @@ export class GameOverlays {
     const general = [...this.store.all(), ...this.store.panels()].some((item) => item.scope === "all");
     const front = foreground?.program ? gameInFront(this.options.gamesOf(foreground.program), withItems, general, (id) => this.options.scopeOf(id) === "game") : null;
     this.setFront(front, front && foreground ? this.options.toDip(foreground.bounds) : null);
+    this.frontWindow = front && foreground?.handle ? foreground.handle : null;
+    this.notification = front && foreground ? foreground.notification : null;
     if (front && foreground && looksExclusive(foreground.notification) && !this.store.exclusiveHintShown) {
       this.store.markExclusiveHintShown();
       this.options.notify(translate(this.options.language(), "overlays.exclusiveHint"));
     }
-    if (this.layer !== null && this.layer !== this.front) this.closeLayer(false);
+    // The layer ends (and gives the keyboard to nobody) when its game window is gone, minimized, another one, or the game went exclusive full screen.
+    if (this.layer !== null && (this.layer !== this.front || (this.layerWindow !== null && this.frontWindow !== this.layerWindow) || looksExclusive(this.notification))) this.closeLayer(false);
     this.apply();
   }
 
@@ -614,7 +654,7 @@ export class GameOverlays {
       return module !== undefined && module.owner !== item.owner;
     };
     const overlays = this.drop(replaced);
-    const panels = this.store.forgetPanels((panel) => replaced(panel) || (this.options.panels !== undefined && !this.options.panels.exists(panel.gameId, panel.instanceId)));
+    const panels = this.store.forgetPanels((panel) => replaced(panel) || (this.options.panels !== undefined && (!this.options.panels.exists(panel.gameId, panel.instanceId) || this.options.panels.allowed?.(panel.gameId, panel.instanceId) === false)));
     if (overlays || panels) this.options.changed();
   }
 

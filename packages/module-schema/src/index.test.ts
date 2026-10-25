@@ -253,9 +253,9 @@ const cases: [string, unknown, boolean][] = [
   ["svg panel icon", { ...valid, panels: [{ id: "planner", name: "Planner", icon: "x.svg" }] }, false],
   ["panel viewport without a height", { ...valid, panels: [{ id: "planner", name: "Planner", viewport: { minWidth: 100 } }] }, false],
   ["panel continues as a string", { ...valid, panels: [{ id: "planner", name: "Planner", continues: "yes" }] }, false],
-  ["panel inGame", { ...valid, minTavora: "0.20.55", panels: [{ id: "planner", name: "Planner", inGame: true }] }, true],
+  ["panel inGame", { ...valid, minTavora: "0.21.1", panels: [{ id: "planner", name: "Planner", inGame: true }] }, true],
   ["panel inGame false", { ...valid, panels: [{ id: "planner", name: "Planner", inGame: false }] }, true],
-  ["panel inGame as a string", { ...valid, minTavora: "0.20.55", panels: [{ id: "planner", name: "Planner", inGame: "yes" }] }, false],
+  ["panel inGame as a string", { ...valid, minTavora: "0.21.1", panels: [{ id: "planner", name: "Planner", inGame: "yes" }] }, false],
   ["unknown panel field", { ...valid, panels: [{ id: "planner", name: "Planner", title: "x" }] }, false],
 ];
 
@@ -268,17 +268,17 @@ describe("panel types", () => {
     expect(result).toEqual({ ok: false, errors: ["panels lists the id planner twice"] });
   });
 
-  it("needs a minTavora newer than 0.20.54 for inGame, except Tavora's own modules", () => {
+  it("needs a minTavora newer than 0.21.0 for inGame, except Tavora's own modules", () => {
     const panels = [{ id: "planner", name: "Planner", inGame: true }];
     const refused = validateManifest({ ...valid, panels });
-    expect(refused).toEqual({ ok: false, errors: [expect.stringContaining("panels[0].inGame needs a minTavora newer than 0.20.54")] });
-    expect(validateManifest({ ...valid, minTavora: "0.20.54", panels })).toMatchObject({ ok: false });
-    expect(validateManifest({ ...valid, minTavora: "0.20.55", panels })).toMatchObject({ ok: true });
+    expect(refused).toEqual({ ok: false, errors: [expect.stringContaining("panels[0].inGame needs a minTavora newer than 0.21.0")] });
+    expect(validateManifest({ ...valid, minTavora: "0.21.0", panels })).toMatchObject({ ok: false });
+    expect(validateManifest({ ...valid, minTavora: "0.21.1", panels })).toMatchObject({ ok: true });
     expect(validateManifest({ ...valid, id: "tavora.planner", panels })).toMatchObject({ ok: true });
   });
 
   it("passes inGame on to the resolved type", () => {
-    const types = panelTypes({ ...valid, minTavora: "0.20.55", panels: [{ id: "a", name: "A", inGame: true }, { id: "b", name: "B" }] } as ModuleManifest);
+    const types = panelTypes({ ...valid, minTavora: "0.21.1", panels: [{ id: "a", name: "A", inGame: true }, { id: "b", name: "B" }] } as ModuleManifest);
     expect(types.map((type) => type.inGame)).toEqual([true, undefined]);
   });
 

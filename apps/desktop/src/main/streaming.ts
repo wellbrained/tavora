@@ -58,6 +58,8 @@ export interface OverlayKeys {
   /** Whether the player has a game overlay for this key. */
   has(subject: OverlaySubject): boolean;
   pressed(record: HotkeyRecord): void;
+  /** Whether the key works over every game (the layer key, a general overlay's key): it collides with any game's keys. */
+  general(binding: Omit<HotkeyRecord, "label" | "accelerator">): boolean;
 }
 
 interface PendingHotkey {
@@ -194,6 +196,19 @@ export class Streaming {
     if (this.hotkeys.remove(test)) this.changed();
   }
 
+  /**
+   * Takes away the hotkeys matching `test`; when none is set for `to` yet, the one set last (the last of the file)
+   * is given to `to` instead, if no other key uses it. For keys that a newer Tavora replaced by another.
+   */
+  moveKey(test: (record: HotkeyRecord) => boolean, to: Omit<HotkeyRecord, "label" | "accelerator">): void {
+    const last = this.hotkeys.all().filter(test).at(-1);
+    const removed = this.hotkeys.remove(test);
+    if (last && !this.hotkeys.find(to) && !this.hotkeys.conflict(to, last.accelerator, (key) => this.overlayKeys?.general(key) ?? false)) {
+      this.hotkeys.set({ ...to, label: last.label, accelerator: last.accelerator });
+      this.changed();
+    } else if (removed) this.changed();
+  }
+
   /** The player's answer in the hotkey dialog. A refused key keeps the dialog open with the reason. */
   answer(id: number, choice: "set" | "remove" | "cancel", accelerator?: string): ActionResult {
     const pending = this.pending;
@@ -205,7 +220,7 @@ export class Streaming {
         this.changed();
         return { ok: true };
       }
-      const other = this.hotkeys.conflict(pending.binding, accelerator);
+      const other = this.hotkeys.conflict(pending.binding, accelerator, (key) => this.overlayKeys?.general(key) ?? false);
       if (other) {
         pending.error = say("hotkey.inUse", { label: other.label, action: this.actionName(other) });
         this.changed();

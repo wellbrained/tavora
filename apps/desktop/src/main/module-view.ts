@@ -104,6 +104,8 @@ export interface ModuleViewOptions {
     copyNeedsWindow?(): boolean;
     resetLink(key: string): void;
     showOverGame(key: string): GameOverlayResult;
+    hideOverGame(key: string): void;
+    overGame(): string[];
     /** Opens the preview window of the overlay for `key`; throws INVALID_PARAMS for a module without an overlay page. */
     preview(key: string): Promise<void>;
   };
@@ -636,6 +638,8 @@ export class ModuleView {
             await this.takeGesture("overlay.showOverGame");
             return this.options.overlay.showOverGame(key);
           },
+          hideOverGame: (key) => this.options.overlay.hideOverGame(key),
+          overGame: () => this.options.overlay.overGame(),
           preview: async (key) => {
             // One click opens one window, so a page cannot keep opening windows.
             this.refuseOverGame("overlay.preview");

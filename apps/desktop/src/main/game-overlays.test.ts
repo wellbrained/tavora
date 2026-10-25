@@ -327,6 +327,25 @@ describe("panels in the game", () => {
     const store = await GameOverlayStore.load(dir);
     expect(store.all().map((item) => item.key)).toEqual(["item-1"]);
     expect(store.panels().map((item) => item.instanceId)).toEqual([ID]);
+    expect(store.migrated).toBe(true);
+  });
+
+  it("cleans the panel- keys out of a file of version 1 only, and a new file is not a migration", async () => {
+    const rect = { x: 0.1, y: 0.1, width: 0.2, height: 0.2 };
+    const overlay = { ...subject("item-1"), scope: "game", mode: "always", opacity: 100, hideFromCapture: false, rect };
+    expect((await GameOverlayStore.load(dir)).migrated).toBe(false);
+    await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version: 2, overlays: [overlay, { ...overlay, key: `panel-${ID}` }], panels: [] }));
+    const current = await GameOverlayStore.load(dir);
+    expect(current.migrated).toBe(false);
+    expect(current.all().map((item) => item.key)).toEqual(["item-1", `panel-${ID}`]);
+  });
+
+  it("gives an old overlay the scope scopeOf says", async () => {
+    const rect = { x: 0.1, y: 0.1, width: 0.2, height: 0.2 };
+    const overlay = { ...subject("item-1"), mode: "always", opacity: 100, hideFromCapture: false, rect };
+    await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version: 1, overlays: [overlay, { ...overlay, gameId: "personal" }] }));
+    const store = await GameOverlayStore.load(dir, (gameId) => (gameId === "personal" ? "all" : "game"));
+    expect(store.all().map((item) => [item.gameId, item.scope])).toEqual([[overlay.gameId, "game"], ["personal", "all"]]);
   });
 
   it("take the keyboard and the player's clicks only while the layer is open", () => {

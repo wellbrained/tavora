@@ -128,6 +128,10 @@ export interface BridgeContext {
     resetLink(key: string): void;
     /** Throws PERMISSION_DENIED unless the panel just got a click or key press. */
     showOverGame(key: string): Promise<GameOverlayResult>;
+    /** Removes this module's game overlay for `key` in the panel's workspace scope; no error when there is none. */
+    hideOverGame(key: string): void;
+    /** The keys of this module's game overlays in the panel's workspace scope. */
+    overGame(): string[];
     /** Throws PERMISSION_DENIED unless the panel just got a click or key press, and INVALID_PARAMS without an overlay in the manifest. */
     preview(key: string): Promise<void>;
   };
@@ -366,6 +370,9 @@ const handlers = new Map<string, Handler>([
   ["overlay.remove", (s, params) => (s.context.overlay.remove(moduleKey(object(params), "key")), null)],
   // Needs no capability either: a window of Tavora's own shows the page, only after a click, and the player can turn it off.
   ["overlay.showOverGame", (s, params) => s.context.overlay.showOverGame(moduleKey(object(params), "key"))],
+  // Needs neither a capability nor a click: it only takes this module's own overlay away, or lists it.
+  ["overlay.hideOverGame", (s, params) => (s.context.overlay.hideOverGame(moduleKey(object(params), "key")), null)],
+  ["overlay.overGame", (s) => s.context.overlay.overGame()],
   // Needs no capability: a window of Tavora's own shows the page, only after a click.
   ["overlay.preview", async (s, params) => (await s.context.overlay.preview(moduleKey(object(params), "key")), null)],
   // A module that asks for the connector on request may call it without the grant: Tavora asks the player then.

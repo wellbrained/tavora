@@ -122,17 +122,17 @@ Tavora can show two kinds of things over the player's game: a module's **overlay
 
 ### Overlays
 
-An overlay page can't take input: it is transparent to the mouse, never takes the keyboard, and is always there (or toggled by a key the player set), as the player chose. The key that toggles an overlay is set in Tavora's hotkey dialog and works only while a game it applies to is in front. The module never learns it.
+An overlay page can't take input: it is transparent to the mouse, never takes the keyboard, and is always there (or toggled by a key the player set), as the player chose. The key that toggles an overlay is set in Tavora's hotkey dialog and works only while a game it applies to is in front. The module never learns it. A module's keys for overlay pages can't start with `panel-`, which Tavora keeps for itself; `overlay.showOverGame` refuses them. `overlay.hideOverGame` and `overlay.overGame` only remove or list the module's own overlays for its own game (or the general ones, for a panel in a workspace that is no game), and need neither a click nor a permission.
 
 ### The in-game layer
 
 The player has **one** key for it ("Tavora over game", set in Settings > Overlays with the hotkey dialog; it works over any library game that is in front). While the player holds the layer open:
 
-- **A veil** covers the game's window: a Tavora window, black at about 30 % opacity, that takes clicks and does nothing with them, so the game isn't played by accident. It never takes the keyboard.
+- **A veil** covers the game's window: a Tavora window, black at about 30 % opacity, that takes clicks and does nothing with them, so the game isn't played by accident. It never takes the keyboard. It is one small page of Tavora's own (no files, no network, no bridge) that paints the dark sheet only while Tavora's main process keeps telling it so, twice a second; with nothing heard for 2 seconds it turns fully transparent, and if the page itself stops it makes the window click-through. It stops mouse clicks the way a window does: a game that reads the mouse straight from the device (raw input) may still see them. And if Tavora's main process hangs altogether, Windows alone decides what a click on its unresponsive window does; the veil can only become invisible then. Closing Tavora, or the game window going away or being minimized, ends it.
 - **Panels in game** show on top of the veil and take the mouse and the keyboard.
 - **Every overlay** of the game gets a frame Tavora draws (the page is below it), so the player can move, resize or close it.
 
-The key again, or Esc, closes it: panels return to their workspace slots, overlays are click-through again, and the game gets the focus back. While the layer is open Tavora takes Esc globally, so the game doesn't get Esc until it is closed. Nothing else from Tavora is shown over the game. If the game leaves the front, the layer closes.
+While any general overlay or panel exists (made in a workspace that is no game), the layer key and the toggle keys of general overlays are taken in **every** library game while it is in front, so such a key can't be used for anything else there; Tavora's hotkey dialog refuses a key that collides with another one that works in the same game. A general panel learns when the layer opens and closes and the size of the game window (the usual `workspace.resize`), not which game it is. The layer opens only over the window that was in front when the key was pressed, and not over a game that owns the screen exclusively (Tavora says so instead). The key again, or Esc, closes it: panels return to their workspace slots, overlays are click-through again, and the game gets the focus back. While the layer is open Tavora takes Esc globally, so the game doesn't get Esc until it is closed. Nothing else from Tavora is shown over the game. If the game leaves the front, the layer closes.
 
 ### Panels in game
 
@@ -148,7 +148,7 @@ A panel type can set `inGame: true` in the manifest. Only for those types, the p
 
 ### Overlay previews
 
-A module with an overlay page can ask, after a real click in its panel, for `overlay.preview(key)`; Settings > Overlays and Settings > Streaming have a Preview button per overlay and per OBS link. It opens a small, ordinary Tavora window (not on top, not click-through, in the taskbar) titled with the module's name, showing the overlay page at its real size on a dark, light or checkered background. It is served exactly like the game overlay page: from a Tavora-internal address, with no bridge, no network and the same policy, and it reads the same live state the module publishes. There is one window per overlay. It needs no permission and works whether Game overlays and Stream overlays are on or off, because it shows nothing over a game and serves nothing outside Tavora.
+A module with an overlay page can ask, after a real click in its panel, for `overlay.preview(key)`; Settings > Overlays and Settings > Streaming have a Preview button per overlay and per OBS link. It opens a small, ordinary Tavora window (not on top, not click-through, in the taskbar) titled with the module's name, showing the overlay page at its real size on a dark, light or checkered background. It is served exactly like the game overlay page: from a Tavora-internal address, with no bridge, no network and the same policy, and it reads the same live state the module publishes. There is one window per overlay. It needs no permission and works whether Game overlays and Stream overlays are on or off, because it shows nothing over a game and serves nothing outside Tavora. To feed the preview, Tavora keeps an OBS link (a secret address) for the key, as it does for a game overlay; that link is still served on the network only while the module has the `stream-overlay` connector and Stream overlays is on, so a preview alone puts nothing on the network.
 
 ## Hotkeys
 

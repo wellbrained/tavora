@@ -17,6 +17,8 @@ export interface Foreground {
   bounds: Rect;
   /** SHQueryUserNotificationState, or null when it couldn't be read (see looksExclusive). */
   notification: number | null;
+  /** The game window's handle as a text, to tell one window of a program from the next (the layer keeps the window it opened over). */
+  handle?: string;
   /** The window belongs to Tavora itself (a panel over the game that took the keyboard while arranging). */
   own?: boolean;
 }
@@ -81,7 +83,8 @@ export function windowsForegroundProbe(): ForegroundProbe {
       if (own) {
         // The game window found before is gone (the game exited while a panel over it had the keyboard): nothing is in front but Tavora.
         // GetClientRect fails for a window that no longer exists; no new call is needed.
-        if (!last || !user32.getClientRect(last, new Int32Array(4))) {
+        // A minimized game window counts as gone too (IsIconic).
+        if (!last || user32.isIconic(last) || !user32.getClientRect(last, new Int32Array(4))) {
           last = null;
           return null;
         }
@@ -99,7 +102,7 @@ export function windowsForegroundProbe(): ForegroundProbe {
         notification = null;
       }
       if (!own) last = window;
-      return { program: known.program, bounds: { x: origin[0]!, y: origin[1]!, width: size[2]!, height: size[3]! }, notification, ...(own ? { own } : {}) };
+      return { program: known.program, handle: own && last ? user32.handleOf(last) : handle, bounds: { x: origin[0]!, y: origin[1]!, width: size[2]!, height: size[3]! }, notification, ...(own ? { own } : {}) };
     },
     focus() {
       if (user32 && last) user32.setForegroundWindow(last);

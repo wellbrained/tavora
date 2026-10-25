@@ -545,9 +545,16 @@ export interface Methods {
    */
   "overlay.showOverGame": { params: { key: string }; result: GameOverlayResult };
   /**
+   * Takes this module's game overlay for `key` away in the panel's workspace scope (game or general). Needs no click and
+   * no capability; nothing happens when there is none. Tavora 0.21.1 and newer.
+   */
+  "overlay.hideOverGame": { params: { key: string }; result: null };
+  /** The keys of this module's game overlays in the panel's workspace scope. Needs no capability. Tavora 0.21.1 and newer. */
+  "overlay.overGame": { params: undefined; result: string[] };
+  /**
    * Opens (or brings forward) a small Tavora window with the overlay page for `key` at its real size, for the player to
    * see what it looks like. Only right after a click or key press in the panel; needs no capability, but the module must
-   * have an `overlay` in its manifest. Tavora 0.20.55 and newer.
+   * have an `overlay` in its manifest. Tavora 0.21.1 and newer.
    */
   "overlay.preview": { params: { key: string }; result: null };
   /** The hotkeys the player set for this module in the current game. Tavora 0.19.26 and newer. */
