@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // An item's settings, below its card: name and how it counts, how it looks on stream with its OBS link, and its
 // hotkeys. Text and number fields save when they lose focus or on Enter, not on every key.
-import { ArrowDown, ArrowUp, Check, Link, Plus, Trash2, X } from "@lucide/vue";
-import { cn, SegmentedControl } from "@tavora/official-ui";
+import { ArrowDown, ArrowUp, Link, Plus, Trash2, X } from "@lucide/vue";
+import { SegmentedControl } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
+import { ColorPicker } from "@tavora/official-ui/components/ui/color-picker";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { computed, inject, ref, watch } from "vue";
 import { t } from "./i18n";
@@ -285,22 +286,7 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
       </Label>
       <div class="flex flex-col gap-1.5">
         <span class="font-medium">{{ t("edit.color") }}</span>
-        <div class="flex flex-wrap gap-1.5" role="radiogroup" :aria-label="t('edit.color')">
-          <button
-            v-for="(color, index) in COLORS"
-            :key="color"
-            type="button"
-            role="radio"
-            :aria-checked="item.look.color === color"
-            :aria-label="t(`color.${COLOR_NAMES[index]!}`)"
-            :title="t(`color.${COLOR_NAMES[index]!}`)"
-            :class="cn('grid size-6 place-items-center rounded-full border', item.look.color === color && 'ring-ring ring-2 ring-offset-1 ring-offset-[var(--card)]')"
-            :style="{ background: color }"
-            @click="updateLook((look) => (look.color = color))"
-          >
-            <Check v-if="item.look.color === color" class="size-3.5" :stroke-width="2.5" :style="{ color: index === COLORS.length - 1 ? '#fff' : '#111' }" />
-          </button>
-        </div>
+        <ColorPicker :model-value="item.look.color" :label="t('edit.color')" :colors="[...COLORS]" :labels="COLOR_NAMES.map((name) => t(`color.${name}`))" @update:model-value="(color: string) => updateLook((look) => (look.color = color))" />
       </div>
       <div class="flex flex-wrap items-center justify-between gap-2">
         <span class="font-medium">{{ t("edit.font") }}</span>
