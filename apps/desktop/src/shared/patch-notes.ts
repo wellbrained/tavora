@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.2",
+    date: "2026-10-25",
+    title: "System Monitor",
+    notes: [
+      "The new System Monitor module shows how busy your PC is: CPU, graphics card, memory and drives.",
+      "Pick the drives to watch and how often it updates from its menu.",
+    ],
+  },
+  {
     version: "0.21.1",
     date: "2026-10-25",
     title: "System info for modules",
