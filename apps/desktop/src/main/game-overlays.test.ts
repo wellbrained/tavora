@@ -38,13 +38,13 @@ describe("GameOverlayStore", () => {
     const store = await GameOverlayStore.load(dir);
     expect(store.add(subject())).toBe("added");
     expect(store.add(subject())).toBe("exists");
-    expect(store.find(subject())).toMatchObject({ mode: "always", opacity: 100, showOnStream: false });
-    store.update(subject(), { mode: "toggle", opacity: 50, showOnStream: true, rect: { x: 0.5, y: 0.25, width: 0.1, height: 0.1 } });
+    expect(store.find(subject())).toMatchObject({ mode: "always", opacity: 100, hideFromCapture: false });
+    store.update(subject(), { mode: "toggle", opacity: 50, hideFromCapture: true, rect: { x: 0.5, y: 0.25, width: 0.1, height: 0.1 } });
     store.markExclusiveHintShown();
     await store.save();
 
     const again = await GameOverlayStore.load(dir);
-    expect(again.find(subject())).toEqual({ ...subject(), mode: "toggle", opacity: 50, showOnStream: true, rect: { x: 0.5, y: 0.25, width: 0.1, height: 0.1 } });
+    expect(again.find(subject())).toEqual({ ...subject(), mode: "toggle", opacity: 50, hideFromCapture: true, rect: { x: 0.5, y: 0.25, width: 0.1, height: 0.1 } });
     expect(again.exclusiveHintShown).toBe(true);
   });
 
@@ -86,17 +86,26 @@ describe("GameOverlayStore", () => {
     expect((await GameOverlayStore.load(dir)).all()).toEqual([]);
     expect((await readdir(dir)).some((name) => name.startsWith(GAME_OVERLAYS_FILE) && name !== GAME_OVERLAYS_FILE)).toBe(true);
 
-    const good = { ...subject(), mode: "toggle", opacity: 75, showOnStream: false, rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } };
+    const good = { ...subject(), mode: "toggle", opacity: 75, hideFromCapture: false, rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } };
     await writeFile(
       path.join(dir, GAME_OVERLAYS_FILE),
       JSON.stringify({
         version: 1,
-        overlays: [good, good, { ...good, key: "bad key!" }, { ...good, key: "no-rect", rect: null }, { ...good, key: "odd", mode: "sideways", opacity: 33, showOnStream: "yes" }, "nonsense", null],
+        overlays: [good, good, { ...good, key: "bad key!" }, { ...good, key: "no-rect", rect: null }, { ...good, key: "odd", mode: "sideways", opacity: 33, hideFromCapture: "yes" }, "nonsense", null],
       }),
     );
     const store = await GameOverlayStore.load(dir);
     expect(store.all().map((overlay) => overlay.key)).toEqual(["item-1", "odd"]);
-    expect(store.find(subject("odd"))).toMatchObject({ mode: "always", opacity: 100, showOnStream: false });
+    expect(store.find(subject("odd"))).toMatchObject({ mode: "always", opacity: 100, hideFromCapture: false });
+  });
+
+  it("starts every stored overlay with capture hiding off, whatever the old Show on stream said", async () => {
+    const old = { ...subject(), mode: "always", opacity: 100, showOnStream: true, rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } };
+    await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version: 1, overlays: [old, { ...old, key: "item-2", showOnStream: false, hideFromCapture: true }] }));
+    const store = await GameOverlayStore.load(dir);
+    expect(store.find(subject("item-1"))?.hideFromCapture).toBe(false);
+    expect(store.find(subject("item-2"))?.hideFromCapture).toBe(true);
+    expect(store.find(subject("item-1"))).not.toHaveProperty("showOnStream");
   });
 
   it("writes the file whole, so a crash leaves the old one or the new one", async () => {

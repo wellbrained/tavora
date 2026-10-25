@@ -228,7 +228,7 @@ export function hostActionTable(c: HostChecks) {
     },
     /** Settings > Overlays: the Game overlays switch. */
     "set-game-overlays": { enabled: bool },
-    /** Changes what the player set for one game overlay (mode, opacity, Show on stream). */
+    /** Changes what the player set for one game overlay (mode, opacity, Hide from capture). */
     "set-game-overlay": {
       owner: c.ownerId,
       moduleId: c.moduleId,
@@ -236,7 +236,7 @@ export function hostActionTable(c: HostChecks) {
       key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/),
       mode: optional(oneOf("always", "toggle")),
       opacity: optional(check<100 | 75 | 50 | 25>((value) => value === 100 || value === 75 || value === 50 || value === 25)),
-      showOnStream: optional(bool),
+      hideFromCapture: optional(bool),
     },
     /** Removes one game overlay, and its key. */
     "remove-game-overlay": { owner: c.ownerId, moduleId: c.moduleId, gameId: c.gameId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },

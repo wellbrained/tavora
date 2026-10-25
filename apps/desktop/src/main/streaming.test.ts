@@ -206,6 +206,45 @@ describe("overlay links", () => {
   });
 });
 
+describe("publishing without the connector", () => {
+  const stored = (streaming: Streaming, key: string) => streaming.overlayStore.peek({ owner: "official", moduleId: MODULE.manifest.id, gameId: "poe2", key });
+
+  it("stores nothing for a key without a game overlay or a link, and resolves", async () => {
+    const { streaming, overlay, world } = await setup();
+    world.granted = false;
+    overlay.publish("item-1", { value: 1 });
+    expect(stored(streaming, "item-1")).toBeNull();
+    overlay.remove("item-1");
+  });
+
+  it("keeps state for a key that has a game overlay, or a link already", async () => {
+    const { streaming, overlay, world } = await setup();
+    world.granted = false;
+    streaming.useOverlayKeys({ frontGame: () => null, wants: () => false, has: (subject) => subject.key === "item-2", pressed: () => {} });
+    overlay.publish("item-2", { value: 2 });
+    expect(stored(streaming, "item-2")?.state).toEqual({ value: 2 });
+    streaming.overlayStore.link({ owner: "official", moduleId: MODULE.manifest.id, gameId: "poe2", key: "item-3" });
+    overlay.publish("item-3", { value: 3 });
+    expect(stored(streaming, "item-3")?.state).toEqual({ value: 3 });
+  });
+
+  it("removes what was published for a game overlay, with or without the connector", async () => {
+    const { streaming, overlay, world } = await setup();
+    world.granted = false;
+    streaming.useOverlayKeys({ frontGame: () => null, wants: () => false, has: () => true, pressed: () => {} });
+    overlay.publish("item-1", { value: 4 });
+    expect(stored(streaming, "item-1")?.state).toEqual({ value: 4 });
+    overlay.remove("item-1");
+    expect(stored(streaming, "item-1")?.state).toBeNull();
+  });
+
+  it("is unchanged with the connector", async () => {
+    const { streaming, overlay } = await setup();
+    overlay.publish("item-1", { value: 1 });
+    expect(stored(streaming, "item-1")?.state).toEqual({ value: 1 });
+  });
+});
+
 describe("keys of game overlays", () => {
   const toggle = { owner: "official", moduleId: MODULE.manifest.id, gameId: "elden", action: "$overlay", target: "item-1" };
   const arrange = { owner: "tavora", moduleId: "tavora", gameId: "elden", action: "$arrange", target: "arrange" };
@@ -215,7 +254,7 @@ describe("keys of game overlays", () => {
     const made = await setup();
     const heard: string[] = [];
     let front: string | null = null;
-    made.streaming.useOverlayKeys({ frontGame: () => front, wants: () => true, pressed: (record) => void heard.push(`${record.action}:${record.target}`) });
+    made.streaming.useOverlayKeys({ frontGame: () => front, wants: () => true, has: () => false, pressed: (record) => void heard.push(`${record.action}:${record.target}`) });
     return { ...made, heard, front: (id: string | null) => (front = id) };
   }
 
@@ -286,13 +325,3 @@ describe("keys of game overlays", () => {
   });
 });
 
-describe("publishing without the connector", () => {
-  it("keeps what a module publishes for a game overlay, whether or not the connector was granted", async () => {
-    const { streaming, world, overlay } = await setup();
-    world.granted = false;
-    overlay.publish("item-1", { value: 4 });
-    expect(streaming.overlayStore.peek({ owner: "official", moduleId: MODULE.manifest.id, gameId: "poe2", key: "item-1" })?.state).toEqual({ value: 4 });
-    overlay.remove("item-1");
-    expect(streaming.overlayStore.peek({ owner: "official", moduleId: MODULE.manifest.id, gameId: "poe2", key: "item-1" })?.state).toBeNull();
-  });
-});

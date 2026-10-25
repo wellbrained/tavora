@@ -32,6 +32,8 @@ interface User32 {
   isIconic: (window: unknown) => number;
   getClientRect: (window: unknown, rect: Int32Array) => number;
   clientToScreen: (window: unknown, point: Int32Array) => number;
+  /** The window handle as a text, to tell windows apart. */
+  handleOf: (window: unknown) => string;
   setForegroundWindow: (window: unknown) => number;
   queryUserNotificationState: (state: number[]) => number;
 }
@@ -47,6 +49,7 @@ function loadUser32(): User32 {
     isIconic: user32.func("int __stdcall IsIconic(void *window)"),
     getClientRect: user32.func("int __stdcall GetClientRect(void *window, _Out_ int32_t *rect)"),
     clientToScreen: user32.func("int __stdcall ClientToScreen(void *window, _Inout_ int32_t *point)"),
+    handleOf: (window) => String(koffi.address(window as never)),
     setForegroundWindow: user32.func("int __stdcall SetForegroundWindow(void *window)"),
     queryUserNotificationState: shell32.func("long __stdcall SHQueryUserNotificationState(_Out_ int32_t *state)"),
   };
@@ -57,19 +60,23 @@ export function windowsForegroundProbe(): ForegroundProbe {
   let user32: User32 | null = null;
   let windows: Windows | null = null;
   let last: unknown = null;
-  // A program keeps its path while it runs, so the same process is asked about once.
-  let known: { pid: number; program: string | null } | null = null;
+  // A program keeps its path while it runs, so the same window of the same process is asked about once. The window
+  // counts too: Windows reuses process ids, and a new process must not be given the path of one that ended.
+  let known: { handle: string; pid: number; program: string | null } | null = null;
   const name = new Uint16Array(1024);
   return {
     look() {
       user32 ??= loadUser32();
       windows ??= loadWindows();
+      // Nothing to give the keyboard back to unless this look finds a window.
+      last = null;
       const window = user32.getForegroundWindow();
       if (!window || user32.isIconic(window)) return null;
       const pid = [0];
       user32.getWindowThreadProcessId(window, pid);
       if (!pid[0]) return null;
-      if (known?.pid !== pid[0]) known = { pid: pid[0], program: programPath(windows, pid[0], name) };
+      const handle = user32.handleOf(window);
+      if (known?.pid !== pid[0] || known.handle !== handle) known = { handle, pid: pid[0], program: programPath(windows, pid[0], name) };
       const size = new Int32Array(4);
       const origin = new Int32Array(2);
       if (!user32.getClientRect(window, size) || !user32.clientToScreen(window, origin)) return null;

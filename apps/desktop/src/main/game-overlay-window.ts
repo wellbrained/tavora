@@ -1,11 +1,11 @@
 // The window one game overlay lives in: a frameless, transparent Tavora window above the game that never takes the
 // keyboard or the mouse (clicks go through to the game), loading the module's overlay page from game-overlay-page.ts.
 // Nothing is injected into the game or drawn by it. The page has no bridge and no preload, its session can reach only
-// its own address, and the window is hidden from screen capture unless the player turned "Show on stream" on. While
+// its own address, and the window is visible to screen capture unless the player turned "Hide from capture" on (some anti-cheats flag windows hidden from capture over a game). While
 // the player arranges overlays a second view of Tavora's own, with an outline, edges and a close button, sits on top
 // and the window takes the mouse, but still never the keyboard.
 import { BrowserWindow, WebContentsView, screen, session, type Session } from "electron";
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
 import { dragRect, type Opacity, type Rect } from "./game-overlays";
 import { GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from "./game-overlay-page";
@@ -17,6 +17,8 @@ export interface GameOverlayWindowOptions {
   /** Test runs: the window stays invisible. */
   hidden: boolean;
   source: GameOverlaySource;
+  /** Names the overlay; its sessions are named after it, so a window made again (after a crash) reuses them. */
+  id: string;
   /** The game window's client area now, to keep drags inside it. */
   gameBounds(): Rect | null;
   /** The player dragged or resized the window; where it is now. */
@@ -39,6 +41,8 @@ function edgesOf(edge: unknown): Edges | null {
 /** A session that can reach nothing but the overlay's own address. */
 function lockedSession(partition: string, allowed: (url: string) => boolean): Session {
   const ses = session.fromPartition(partition);
+  // The same session comes back when a window is made again for the same overlay; its handlers are replaced.
+  if (ses.protocol.isProtocolHandled(GAME_OVERLAY_SCHEME)) ses.protocol.unhandle(GAME_OVERLAY_SCHEME);
   ses.webRequest.onBeforeRequest((details, callback) => callback({ cancel: !allowed(details.url) }));
   // Belt and braces: anything that bypasses webRequest still has to go through a proxy that does not exist.
   void ses.setProxy({ mode: "fixed_servers", proxyRules: "http://127.0.0.1:9", proxyBypassRules: "<-loopback>" });
@@ -60,8 +64,10 @@ export class GameOverlayWindow {
   private destroyed = false;
 
   constructor(private readonly options: GameOverlayWindowOptions) {
-    // No "persist:" prefix: nothing of the page is kept on disk, and every window has a session of its own.
-    const partition = `game-overlay-${randomUUID()}`;
+    // No "persist:" prefix: nothing of the page is kept on disk. Each overlay has a session of its own, kept for as long
+    // as Tavora runs, so a page that keeps crashing doesn't leave a new session behind every time.
+    const name = createHash("sha256").update(options.id).digest("hex").slice(0, 32);
+    const partition = `game-overlay-${name}`;
     const ses = lockedSession(partition, (url) => url.startsWith(`${GAME_OVERLAY_ORIGIN}/`));
     ses.protocol.handle(GAME_OVERLAY_SCHEME, (request) => serveGameOverlay(request, options.source));
 
@@ -86,8 +92,7 @@ export class GameOverlayWindow {
     // Above full-screen windows too; the lowest level that is.
     window.setAlwaysOnTop(true, "screen-saver");
     window.setIgnoreMouseEvents(true);
-    // Hidden from screen capture and streaming software until the player says otherwise (setShowOnStream).
-    window.setContentProtection(true);
+    // Visible to screen capture; setHideFromCapture hides it when the player asks.
     if (options.hidden) window.setOpacity(0);
     const contents = window.webContents;
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -99,7 +104,7 @@ export class GameOverlayWindow {
     });
     void contents.loadURL(`${GAME_OVERLAY_ORIGIN}/`).catch(() => this.end());
 
-    const frameSession = lockedSession(`game-overlay-frame-${randomUUID()}`, (url) => url.startsWith("data:"));
+    const frameSession = lockedSession(`game-overlay-frame-${name}`, (url) => url.startsWith("data:"));
     this.frame = new WebContentsView({
       webPreferences: { session: frameSession, preload: options.preload, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, devTools: false },
     });
@@ -165,8 +170,9 @@ export class GameOverlayWindow {
     if (arranging) this.sendFrameText();
   }
 
-  setShowOnStream(show: boolean): void {
-    if (!this.isDestroyed) this.window.setContentProtection(!show);
+  /** Only with this on is the window hidden from screen capture. */
+  setHideFromCapture(hide: boolean): void {
+    if (!this.isDestroyed) this.window.setContentProtection(hide);
   }
 
   setOpacity(opacity: Opacity): void {
@@ -180,7 +186,7 @@ export class GameOverlayWindow {
     const contents = this.window.webContents;
     try {
       if (this.opacityCss) await contents.removeInsertedCSS(this.opacityCss);
-      this.opacityCss = this.opacity === 100 ? undefined : await contents.insertCSS(`html{opacity:${this.opacity / 100} !important}`);
+      this.opacityCss = this.opacity === 100 ? undefined : await contents.insertCSS(`html{opacity:${this.opacity / 100} !important}`, { cssOrigin: "user" });
     } catch {
       // The page went away while the style was being set; the next load sets it again.
     }
@@ -207,6 +213,11 @@ export class GameOverlayWindow {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    if (!this.window.isDestroyed()) this.window.destroy();
+    // Close the pages' processes too, as the other views do; destroying the window alone can leave them running.
+    if (!this.frame.webContents.isDestroyed()) this.frame.webContents.close();
+    if (!this.window.isDestroyed()) {
+      if (!this.window.webContents.isDestroyed()) this.window.webContents.close();
+      this.window.destroy();
+    }
   }
 }

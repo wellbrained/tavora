@@ -55,6 +55,8 @@ export interface OverlayKeys {
   /** The game in front; the keys of game overlays work only there. */
   frontGame(): string | null;
   wants(record: HotkeyRecord): boolean;
+  /** Whether the player has a game overlay for this key. */
+  has(subject: OverlaySubject): boolean;
   pressed(record: HotkeyRecord): void;
 }
 
@@ -124,7 +126,12 @@ export class Streaming {
       return this.options.askConnector(module.manifest.id, "stream-overlay");
     };
     return {
-      publish: (key: string, state: JsonValue) => this.overlays.publish(subject(key), state),
+      publish: (key: string, state: JsonValue) => {
+        // Without the connector nothing reads a link, so state is kept only for a key that a game overlay shows or that
+        // has a link already (a link made before the grant was taken back). Otherwise a module could fill the disk.
+        const own = subject(key);
+        if (this.options.overlayGranted(module.manifest.id) || this.overlays.peek(own) || this.overlayKeys?.has(own)) this.overlays.publish(own, state);
+      },
       remove: (key: string) => this.overlays.remove(subject(key)),
       copyLink: async (key: string): Promise<OverlayLinkResult> => {
         if (!(await granted())) return "denied";

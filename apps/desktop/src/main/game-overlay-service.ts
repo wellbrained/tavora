@@ -30,13 +30,16 @@ import type { OverlayPage, OverlayStore, OverlaySubject } from "./overlays";
 import type { StreamingModule } from "./streaming";
 
 /** The part of a game overlay's window the service drives (a test stands in for Electron). */
-export type OverlayWindow = Pick<GameOverlayWindow, "setRect" | "setShown" | "setArranging" | "setShowOnStream" | "setOpacity" | "destroy" | "dragging">;
+export type OverlayWindow = Pick<GameOverlayWindow, "setRect" | "setShown" | "setArranging" | "setHideFromCapture" | "setOpacity" | "destroy" | "dragging">;
 
 /** What a window shows and tells back; the service hands it to `openWindow`. */
 export interface OverlayWindowRequest {
+  /** Names the overlay, for the window's sessions. */
+  id: string;
   page(): OverlayPage | null;
   state(): JsonValue | null;
-  watch(fn: (state: JsonValue | null | undefined) => void): () => void;
+  /** Null when the overlay has no link to hear from, so the page's stream ends and the page asks again. */
+  watch(fn: (state: JsonValue | null | undefined) => void): (() => void) | null;
   gameBounds(): Rect | null;
   moved(rect: Rect): void;
   closeRequested(): void;
@@ -77,6 +80,11 @@ export interface GameOverlayServiceOptions {
 }
 
 export const LOOK_MS = 400;
+/** A window of a game that is not in front is closed after this long (it is made again when the game is back). */
+export const IDLE_CLOSE_MS = 30_000;
+/** A page that crashed this many times within CRASH_SPAN_MS is not made again until the player shows or toggles it. */
+export const MAX_CRASHES = 3;
+export const CRASH_SPAN_MS = 5 * 60_000;
 
 /** The hotkey binding of a game's arrange key, and of one overlay's toggle key. */
 export const arrangeBinding = (gameId: string) => ({ owner: ARRANGE_OWNER, moduleId: ARRANGE_OWNER, gameId, action: OVERLAY_ARRANGE_ACTION, target: "arrange" });
@@ -88,9 +96,11 @@ export const isOverlayAction = (action: string) => action === OVERLAY_TOGGLE_ACT
 interface Open {
   window: OverlayWindow;
   opacity: Opacity;
-  showOnStream: boolean;
+  hideFromCapture: boolean;
   arranging: boolean;
   shown: boolean;
+  /** Since when the window is hidden because its game is not in front; null while it isn't. */
+  idleSince: number | null;
 }
 
 export class GameOverlays {
@@ -103,6 +113,9 @@ export class GameOverlays {
   private game: Rect | null = null;
   private arranging: string | null = null;
   private escape = false;
+  /** When each overlay's page crashed lately, and the overlays whose page crashed so often they are left alone. */
+  private readonly crashes = new Map<string, number[]>();
+  private readonly stopped = new Set<string>();
 
   private constructor(
     private readonly options: GameOverlayServiceOptions,
@@ -130,9 +143,18 @@ export class GameOverlays {
       return "off";
     }
     const subject: GameOverlaySubject = { owner: module.owner, moduleId: module.manifest.id, gameId, key };
-    if (this.store.add(subject) === "full") return "full";
-    // The link holds what the module publishes for the key; making it now means the page hears it from the start.
-    this.options.overlays.link(subject);
+    const added = this.store.add(subject);
+    if (added === "full") return "full";
+    try {
+      // The link holds what the module publishes for the key; making it now means the page hears it from the start.
+      // When it can't be made (too many for the module) nothing of the overlay is kept.
+      this.options.overlays.link(subject);
+    } catch (error) {
+      if (added === "added") this.store.forget((overlay) => sameOverlay(overlay, subject));
+      throw error;
+    }
+    // The player asked for it: a page that crashed too often gets another chance.
+    this.revive(overlayId(subject));
     this.options.changed();
     this.tick();
     return "shown";
@@ -160,6 +182,12 @@ export class GameOverlays {
     this.forget((overlay) => overlay.moduleId === moduleId && (owner === undefined || overlay.owner === owner));
   }
 
+  /** Forgets that an overlay's page crashed. */
+  private revive(id: string): void {
+    this.crashes.delete(id);
+    this.stopped.delete(id);
+  }
+
   private forget(test: (overlay: GameOverlay) => boolean): void {
     if (!this.drop(test)) return;
     this.tick();
@@ -173,6 +201,11 @@ export class GameOverlays {
     for (const overlay of gone) {
       this.options.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.owner === overlay.owner && record.moduleId === overlay.moduleId && record.gameId === overlay.gameId && record.target === overlay.key);
       this.toggled.delete(overlayId(overlay));
+      this.revive(overlayId(overlay));
+    }
+    // A game without overlays has no arrange key either.
+    for (const gameId of new Set(gone.map((overlay) => overlay.gameId))) {
+      if (this.store.of(gameId).length === 0) this.options.removeKeys((record) => record.action === OVERLAY_ARRANGE_ACTION && record.gameId === gameId);
     }
     return true;
   }
@@ -200,7 +233,7 @@ export class GameOverlays {
   pressed(record: HotkeyRecord): void {
     if (record.gameId !== this.front) return;
     if (record.action === OVERLAY_ARRANGE_ACTION) {
-      if (this.arranging === record.gameId) this.stopArranging();
+      if (this.arranging === record.gameId) this.stopArranging(true);
       else this.startArranging(record.gameId);
       return;
     }
@@ -208,22 +241,26 @@ export class GameOverlays {
     if (!overlay || overlay.mode !== "toggle") return;
     const id = overlayId(overlay);
     if (!this.toggled.delete(id)) this.toggled.add(id);
+    // Toggling is the player asking for it, also for a page that crashed too often.
+    this.revive(id);
     this.tick();
   }
 
   private startArranging(gameId: string): void {
     this.arranging = gameId;
     // Esc ends it too; the key is the game's again afterwards.
-    this.escape = this.options.shortcuts.register("Escape", () => this.stopArranging());
+    this.escape = this.options.shortcuts.register("Escape", () => this.stopArranging(true));
     this.tick();
   }
 
-  private stopArranging(): void {
+  /** Ends arranging. `refocus`: the player ended it (Esc or the key), so the game gets the keyboard back; not when it left the front. */
+  private stopArranging(refocus: boolean): void {
     if (this.arranging === null) return;
     this.arranging = null;
     if (this.escape) this.options.shortcuts.unregister("Escape");
     this.escape = false;
     this.tick();
+    if (!refocus) return;
     // The windows never took the keyboard, but the click on one may have left the game without focus.
     try {
       this.probe?.focus();
@@ -263,7 +300,7 @@ export class GameOverlays {
       this.store.markExclusiveHintShown();
       this.options.notify(translate(this.options.language(), "overlays.exclusiveHint"));
     }
-    if (this.arranging !== null && this.arranging !== this.front) this.stopArranging();
+    if (this.arranging !== null && this.arranging !== this.front) this.stopArranging(false);
     this.apply();
   }
 
@@ -277,6 +314,7 @@ export class GameOverlays {
 
   private apply(): void {
     const enabled = this.options.enabled();
+    const now = Date.now();
     const live = new Set<string>();
     for (const overlay of this.store.all()) {
       const id = overlayId(overlay);
@@ -284,8 +322,9 @@ export class GameOverlays {
       const module = this.options.module(overlay.moduleId);
       const usable = module !== undefined && module.owner === overlay.owner && !!module.manifest.overlay;
       const arranging = this.arranging === overlay.gameId;
+      const inFront = this.front === overlay.gameId;
       const visible =
-        usable && this.game !== null && overlayVisible({ enabled, gameInFront: this.front === overlay.gameId, mode: overlay.mode, toggledOn: this.toggled.has(id), arranging });
+        usable && !this.stopped.has(id) && this.game !== null && overlayVisible({ enabled, gameInFront: inFront, mode: overlay.mode, toggledOn: this.toggled.has(id), arranging });
       let entry = this.open.get(id);
       if (!visible) {
         if (entry?.shown) {
@@ -294,11 +333,17 @@ export class GameOverlays {
           entry.window.setShown(false);
           entry.shown = false;
         }
+        if (entry) {
+          // Hidden because its game is gone from the front for a while: the window goes, and is made again on show.
+          entry.idleSince = inFront ? null : (entry.idleSince ?? now);
+          if (entry.idleSince !== null && now - entry.idleSince >= IDLE_CLOSE_MS) this.dropWindow(id);
+        }
         continue;
       }
       entry ??= this.create(overlay, id);
+      entry.idleSince = null;
       if (entry.opacity !== overlay.opacity) entry.window.setOpacity((entry.opacity = overlay.opacity));
-      if (entry.showOnStream !== overlay.showOnStream) entry.window.setShowOnStream((entry.showOnStream = overlay.showOnStream));
+      if (entry.hideFromCapture !== overlay.hideFromCapture) entry.window.setHideFromCapture((entry.hideFromCapture = overlay.hideFromCapture));
       if (entry.arranging !== arranging) entry.window.setArranging((entry.arranging = arranging));
       if (!entry.window.dragging) entry.window.setRect(placeRelative(overlay.rect, this.game!));
       if (!entry.shown) entry.window.setShown((entry.shown = true));
@@ -314,6 +359,7 @@ export class GameOverlays {
     const subject: OverlaySubject = { owner: overlay.owner, moduleId: overlay.moduleId, gameId: overlay.gameId, key: overlay.key };
     const store = this.options.overlays;
     const window = this.options.openWindow({
+      id,
       // Looked up at every request: a module that was removed or replaced by another publisher's stops being served.
       page: () => {
         const now = this.options.module(overlay.moduleId);
@@ -322,20 +368,31 @@ export class GameOverlays {
       state: () => store.peek(subject)?.state ?? null,
       watch: (fn) => {
         const link = store.peek(subject)?.link;
-        return link ? store.watch(link.token, fn) : () => {};
+        return link ? store.watch(link.token, fn) : null;
       },
       gameBounds: () => this.game,
       moved: (rect) => {
         if (this.game) this.store.update(subject, { rect: relativeTo(rect, this.game) });
       },
       closeRequested: () => this.remove(subject),
-      ended: () => this.dropWindow(id),
+      ended: () => this.crashed(id),
       frameText: () => ({ name: this.nameOf(overlay), closeLabel: translate(this.options.language(), "overlays.closeLabel") }),
     });
-    // A new window is fully opaque, hidden from capture and click-through; apply sets the rest.
-    const entry: Open = { window, opacity: 100, showOnStream: false, arranging: false, shown: false };
+    // A new window is fully opaque, click-through and visible to capture; apply sets the rest.
+    const entry: Open = { window, opacity: 100, hideFromCapture: false, arranging: false, shown: false, idleSince: null };
     this.open.set(id, entry);
     return entry;
+  }
+
+  /** A window's page is gone. It is made again on the next look, unless that keeps happening. */
+  private crashed(id: string): void {
+    this.dropWindow(id);
+    const now = Date.now();
+    const lately = [...(this.crashes.get(id) ?? []).filter((at) => now - at < CRASH_SPAN_MS), now];
+    this.crashes.set(id, lately);
+    if (lately.length < MAX_CRASHES || this.stopped.has(id)) return;
+    this.stopped.add(id);
+    this.options.notify(translate(this.options.language(), "overlays.stopped"));
   }
 
   private dropWindow(id: string): void {
@@ -392,7 +449,7 @@ export class GameOverlays {
             name: this.nameOf(overlay),
             mode: overlay.mode,
             opacity: overlay.opacity,
-            showOnStream: overlay.showOnStream,
+            hideFromCapture: overlay.hideFromCapture,
             hotkey: this.options.keyOf(toggleBinding(overlay)),
           })),
         }))

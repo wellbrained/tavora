@@ -35,7 +35,7 @@ const opacities = (["100", "75", "50", "25"] as const).map((value) => ({ value, 
 
 const target = (overlay: Overlay, game: Game) => ({ owner: overlay.owner, moduleId: overlay.moduleId, gameId: game.id, key: overlay.key });
 
-function change(game: Game, overlay: Overlay, change: { mode?: "always" | "toggle"; opacity?: 100 | 75 | 50 | 25; showOnStream?: boolean }) {
+function change(game: Game, overlay: Overlay, change: { mode?: "always" | "toggle"; opacity?: 100 | 75 | 50 | 25; hideFromCapture?: boolean }) {
   void act({ type: "set-game-overlay", ...target(overlay, game), ...change });
 }
 
@@ -120,8 +120,9 @@ function askKey(game: Game, overlay?: Overlay) {
               />
             </div>
             <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <span class="text-muted-foreground w-24 flex-none text-sm">{{ t("overlays.stream.label") }}</span>
-              <Switch :model-value="overlay.showOnStream" :aria-label="t('overlays.stream.label')" @update:model-value="change(game, overlay, { showOnStream: $event })" />
+              <span class="text-muted-foreground w-24 flex-none text-sm">{{ t("overlays.capture.label") }}</span>
+              <Switch :model-value="overlay.hideFromCapture" :aria-label="t('overlays.capture.label')" @update:model-value="change(game, overlay, { hideFromCapture: $event })" />
+              <span class="text-muted-foreground text-xs">{{ t("overlays.capture.hint") }}</span>
             </div>
           </li>
         </ul>

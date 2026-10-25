@@ -95,6 +95,14 @@ describe("serveGameOverlay", () => {
     expect(src.watchers.size).toBe(0);
   });
 
+  it("ends the stream at once when the overlay has no link, so the page asks again", async () => {
+    const src = source(null);
+    const reader = (await get({ ...src.value, watch: () => null }, "/_state")).body!.getReader();
+    let done = false;
+    for (let i = 0; i < 5 && !done; i++) done = (await reader.read()).done;
+    expect(done).toBe(true);
+  });
+
   it("ends the stream when the link goes away, so the page asks again", async () => {
     const src = source(null);
     const reader = (await get(src.value, "/_state")).body!.getReader();
