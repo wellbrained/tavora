@@ -6,6 +6,7 @@
 // A module whose update asks for more gets a bar above its view to review it, and so does one whose
 // catalog update waits for the player's yes because it asks for more (the panel keeps running the
 // installed version until then).
+// A panel the player moved over their game leaves a quiet note with Bring back (game-overlay-window.ts).
 // A panel whose type the module no longer offers says so, with Remove and the
 // module's other panel types (the decision log, named panels round 4).
 import type { IDockviewPanelProps } from "dockview-vue";
@@ -80,8 +81,16 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
     </Button>
   </div>
   <div ref="element" class="relative min-h-0 w-full flex-1 overflow-hidden" :data-testid="`panel-content-${id}`">
+    <div
+      v-if="panel?.overGame"
+      class="text-muted-foreground flex size-full flex-col items-center justify-center gap-3 p-4 text-center text-sm"
+      :data-testid="`panel-over-game-${id}`"
+    >
+      <p>{{ t("panel.overGame") }}</p>
+      <Button size="sm" variant="outline" :data-testid="`panel-bring-back-${id}`" @click="act({ type: 'bring-panel-back', instanceId: id })">{{ t("panel.bringBack") }}</Button>
+    </div>
     <img
-      v-if="image"
+      v-else-if="image"
       :src="image"
       alt=""
       class="absolute top-0 left-0 max-w-none"

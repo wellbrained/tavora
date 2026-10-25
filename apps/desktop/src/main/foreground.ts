@@ -17,6 +17,8 @@ export interface Foreground {
   bounds: Rect;
   /** SHQueryUserNotificationState, or null when it couldn't be read (see looksExclusive). */
   notification: number | null;
+  /** The window belongs to Tavora itself (a panel over the game that took the keyboard while arranging). */
+  own?: boolean;
 }
 
 export interface ForegroundProbe {
@@ -68,13 +70,22 @@ export function windowsForegroundProbe(): ForegroundProbe {
     look() {
       user32 ??= loadUser32();
       windows ??= loadWindows();
-      // Nothing to give the keyboard back to unless this look finds a window.
-      last = null;
       const window = user32.getForegroundWindow();
-      if (!window || user32.isIconic(window)) return null;
       const pid = [0];
-      user32.getWindowThreadProcessId(window, pid);
-      if (!pid[0]) return null;
+      if (window) user32.getWindowThreadProcessId(window, pid);
+      // One of Tavora's own windows is in front: the window found before stays the one to give the keyboard back to.
+      const own = pid[0] === process.pid;
+      // Nothing to give the keyboard back to unless this look finds a window.
+      if (!own) last = null;
+      if (!window || user32.isIconic(window) || !pid[0]) return null;
+      if (own) {
+        // The game window found before is gone (the game exited while a panel over it had the keyboard): nothing is in front but Tavora.
+        // GetClientRect fails for a window that no longer exists; no new call is needed.
+        if (!last || !user32.getClientRect(last, new Int32Array(4))) {
+          last = null;
+          return null;
+        }
+      }
       const handle = user32.handleOf(window);
       if (known?.pid !== pid[0] || known.handle !== handle) known = { handle, pid: pid[0], program: programPath(windows, pid[0], name) };
       const size = new Int32Array(4);
@@ -87,8 +98,8 @@ export function windowsForegroundProbe(): ForegroundProbe {
       } catch {
         notification = null;
       }
-      last = window;
-      return { program: known.program, bounds: { x: origin[0]!, y: origin[1]!, width: size[2]!, height: size[3]! }, notification };
+      if (!own) last = window;
+      return { program: known.program, bounds: { x: origin[0]!, y: origin[1]!, width: size[2]!, height: size[3]! }, notification, ...(own ? { own } : {}) };
     },
     focus() {
       if (user32 && last) user32.setForegroundWindow(last);

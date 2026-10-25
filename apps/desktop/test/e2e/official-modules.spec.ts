@@ -430,7 +430,7 @@ test("ui playground: shows every section, filters them and disables the controls
   await openModule(page, PLAYGROUND);
   await ready(app, PLAYGROUND, "section-empty");
   const sections = () => inModule<string[]>(app, PLAYGROUND, `[...document.querySelectorAll('[data-testid^="section-"]')].map((el) => el.id)`);
-  await expect.poll(sections).toEqual(["colours", "type", "buttons", "tooltips", "fields", "choices", "ratings", "expandable", "tabs", "zoom", "status", "progress", "menus", "dialogs", "lists", "notices", "empty"]);
+  await expect.poll(sections).toEqual(["colours", "type", "buttons", "tooltips", "fields", "choices", "ratings", "expandable", "collapsible", "tabs", "zoom", "status", "progress", "menus", "dialogs", "lists", "notices", "empty"]);
 
   // The swatches show the host's theme, not only the built-in default.
   await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
@@ -607,12 +607,13 @@ test("calculator: works out sums from keys and the keyboard, and keeps the last 
   await ready(again.app, CALCULATOR, "history-item");
   await expect.poll(() => results(again.app)).toEqual(["7,056", "84"]);
   await click(again.app, CALCULATOR, `[data-testid="clear-history"]`);
+  // Clearing asks first.
+  await click(again.app, CALCULATOR, `[data-testid="confirm-submit"]`);
   await expect.poll(() => results(again.app)).toEqual([]);
 
   // The toolbar switches to the Basic keypad and hides the history.
   const shown = (testId: string) => inModule<boolean>(again.app, CALCULATOR, `!!${q(testId)}`);
-  // A tab switches on mouse down, not on click.
-  await inModule(again.app, CALCULATOR, `${q("mode-basic")}.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }))`);
+  await click(again.app, CALCULATOR, `[data-testid="mode-basic"]`);
   await expect.poll(() => shown("key-square")).toBe(false);
   await click(again.app, CALCULATOR, `[data-testid="toggle-history"]`);
   await expect.poll(() => shown("history")).toBe(false);

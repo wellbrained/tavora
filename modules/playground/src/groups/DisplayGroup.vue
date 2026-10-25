@@ -3,6 +3,7 @@ import { AlertTriangle, Blocks, CheckCircle2, Gamepad2, Info, Loader2, MoreHoriz
 import { SegmentedControl } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
 import { Expandable } from "@tavora/official-ui/components/ui/expandable";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
@@ -113,6 +114,19 @@ function bump(by: number) {
           <Expandable :max-height="72" class="max-w-md">
             <p class="text-sm">A quick calculator that keeps your last results.</p>
           </Expandable>
+        </Specimen>
+      </DemoSection>
+
+<DemoSection v-if="visible.has('collapsible')" id="collapsible" :title="title('collapsible')" description="A heading that opens and closes the part below it. Use it for notes and details people don't always need.">
+        <Specimen label="Closed and open" column>
+          <Collapsible class="w-full max-w-md rounded-md border px-3 py-2">
+            <CollapsibleTrigger class="py-1" :disabled="off">Notes</CollapsibleTrigger>
+            <CollapsibleContent class="text-muted-foreground pt-2 pb-1 text-sm">Swap the second gem once you reach level 40.</CollapsibleContent>
+          </Collapsible>
+          <Collapsible default-open class="w-full max-w-md rounded-md border px-3 py-2">
+            <CollapsibleTrigger class="py-1" :disabled="off">Skill tree info</CollapsibleTrigger>
+            <CollapsibleContent class="text-muted-foreground pt-2 pb-1 text-sm">118 points spent, 12 in the Deadeye ascendancy.</CollapsibleContent>
+          </Collapsible>
         </Specimen>
       </DemoSection>
 

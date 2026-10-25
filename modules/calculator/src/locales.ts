@@ -1,6 +1,7 @@
 // The Calculator's texts in English and German. Keys are flat.
 export const en = {
   loading: "Loading…",
+  cancel: "Cancel",
   connectError: "Could not connect: {error}",
   saveError: "Could not save your history: {error}",
   copyError: "Can't copy right now",
@@ -39,12 +40,15 @@ export const en = {
   "history.title": "History",
   "history.empty": "Your last results show up here.",
   "history.clear": "Clear history",
+  "history.clearTitle": "Clear your history?",
+  "history.clearText": "Your saved results for this game are removed.",
   "history.show": "Show history",
   "history.use": "Use {result}",
 };
 
 export const de: Record<keyof typeof en, string> = {
   loading: "Lädt…",
+  cancel: "Abbrechen",
   connectError: "Keine Verbindung: {error}",
   saveError: "Verlauf nicht gespeichert: {error}",
   copyError: "Kopieren klappt gerade nicht",
@@ -83,6 +87,8 @@ export const de: Record<keyof typeof en, string> = {
   "history.title": "Verlauf",
   "history.empty": "Hier siehst du deine letzten Ergebnisse.",
   "history.clear": "Verlauf löschen",
+  "history.clearTitle": "Verlauf löschen?",
+  "history.clearText": "Deine gespeicherten Ergebnisse für dieses Spiel werden entfernt.",
   "history.show": "Verlauf zeigen",
   "history.use": "{result} nehmen",
 };

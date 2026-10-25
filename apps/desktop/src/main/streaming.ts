@@ -145,6 +145,9 @@ export class Streaming {
         return "copied";
       },
       resetLink: (key: string) => this.overlays.reset(subject(key)),
+      /** Whether copyLink would open Tavora's own window now: the consent dialog, or the setting that is off. */
+      copyNeedsWindow: (): boolean =>
+        !this.options.overlayGranted(module.manifest.id) || !this.options.settings().streamOverlays || this.server.port === null,
     };
   }
 
