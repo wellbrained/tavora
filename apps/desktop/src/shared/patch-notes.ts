@@ -22,16 +22,6 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.21.8",
     date: "2026-10-25",
-    title: "Smoother game switching",
-    notes: [
-      "When you switch games, all panels now show up together, with no empty panels for a moment.",
-      "The loading fire only shows when a game takes a while to open.",
-      "After you close a dialog, like Add module, big panels like a skill tree don't go blank for a moment anymore.",
-    ],
-  },
-  {
-    version: "0.21.7",
-    date: "2026-10-25",
     title: "Tavora in your game, and a tidier Tavora",
     notes: [
       "One key, Tavora over game, opens your overlays and panels over the game. Set it in Settings > Overlays, and press it again or Esc when you are done.",
@@ -41,6 +31,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "Module updates wait for you: a button next to Layouts shows what is new. Prefer the old way? Turn on Update modules automatically in Settings > Modules.",
       "Module pages show every version with its date, mark the ones you missed and have a Send feedback button when the developer added a link.",
       "Saving a file or an image opens Tavora's save dialog with the name filled in, in the folder you used last.",
+      "Switching games is smoother: panels show up together, and the loading fire only shows when a game takes a while.",
       "Fold a column into a narrow strip, open another panel of a module you already use, and maximized panels stay maximized.",
       "Fewer antivirus alarms, and a download that is about 10 MB smaller.",
       "Calculator has new keys like √, x² and ans, plus a toolbar for Basic, Plus and your history.",

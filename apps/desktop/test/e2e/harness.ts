@@ -115,13 +115,21 @@ export async function launch(
       ...env,
     },
   });
-  const page = await app.firstWindow();
+  const page = await hostWindow(app);
   await expect(page.getByTestId("rail")).toBeVisible();
   await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0]!.setContentSize(size.width, size.height), WINDOW);
   return { app, page, userData: dir };
 }
 
+/** The Tavora window. Panels restored from the last run can open before it, so the first window is not always this one. */
+async function hostWindow(app: ElectronApplication): Promise<Page> {
+  const isHost = (page: Page) => page.url().startsWith("tavora-host://app/");
+  await expect.poll(() => app.windows().some(isHost)).toBe(true);
+  return app.windows().find(isHost)!;
+}
+
 /** Runs JavaScript inside the nth panel of a module and returns the result. */
+
 export async function inModule<T>(app: ElectronApplication, moduleId: string, script: string, index = 0): Promise<T> {
   return app.evaluate(
     async ({ webContents }, { moduleId, script, index }) => {
