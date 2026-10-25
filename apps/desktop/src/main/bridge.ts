@@ -364,7 +364,7 @@ const handlers = new Map<string, Handler>([
       const p = object(params);
       const key = moduleKey(p, "key");
       const state = required(p, "state");
-      if (serializeJson(state, "params.state").length > LIMITS.maxOverlayStateBytes) throw new HostError("QUOTA_EXCEEDED", `an overlay's state may be at most ${LIMITS.maxOverlayStateBytes} bytes`);
+      if (Buffer.byteLength(serializeJson(state, "params.state"), "utf8") > LIMITS.maxOverlayStateBytes) throw new HostError("QUOTA_EXCEEDED", `an overlay's state may be at most ${LIMITS.maxOverlayStateBytes} bytes`);
       s.context.overlay.publish(key, state as JsonValue);
       return null;
     },
@@ -446,7 +446,7 @@ const handlers = new Map<string, Handler>([
     "panel.setLive",
     (s, params) => {
       const state = required(object(params), "state");
-      if (serializeJson(state, "params.state").length > LIMITS.maxOverlayStateBytes) throw new HostError("QUOTA_EXCEEDED", `a live view's state may be at most ${LIMITS.maxOverlayStateBytes} bytes`);
+      if (Buffer.byteLength(serializeJson(state, "params.state"), "utf8") > LIMITS.maxOverlayStateBytes) throw new HostError("QUOTA_EXCEEDED", `a live view's state may be at most ${LIMITS.maxOverlayStateBytes} bytes`);
       s.context.setLive(state as JsonValue | null);
       return null;
     },

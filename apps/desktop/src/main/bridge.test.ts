@@ -239,6 +239,8 @@ describe("panel content", () => {
     expect(await call(p, "panel.setLive", { state: { hp: 3 } })).toMatchObject({ ok: true, result: null });
     expect(await call(p, "panel.setLive", { state: null })).toMatchObject({ ok: true, result: null });
     expect(await call(p, "panel.setLive", { state: "x".repeat(LIMITS.maxOverlayStateBytes) })).toMatchObject({ error: { code: "QUOTA_EXCEEDED" } });
+    // The limit counts bytes, not characters.
+    expect(await call(p, "panel.setLive", { state: "é".repeat(LIMITS.maxOverlayStateBytes / 2) })).toMatchObject({ error: { code: "QUOTA_EXCEEDED" } });
     expect(await call(p, "panel.setLive", {})).toMatchObject({ error: { code: "INVALID_PARAMS" } });
     expect(states).toEqual([{ hp: 3 }, null]);
   });

@@ -150,7 +150,7 @@ A panel type can set `inGame: true` in the manifest. Only for those types, the p
 
 A panel in game can also have a **live view**: while the layer is closed, Tavora shows the panel's module overlay page (the manifest's `overlay`) in the panel's spot over the game. It is the same kind of window as a game overlay, so everything under [Overlays](#overlays) holds: it is click-through, never takes the keyboard, has no bridge and no network, and shows only while its game is in front and Game overlays are on.
 
-- **`panel.setLive(state)`** sets what that page shows: plain JSON, at most 16 KB, kept in memory only and forgotten when the panel closes. It needs no click or permission, because it adds no new window by itself: the player already chose Show in game for that panel, and can set per panel whether the view is always there or toggled by a key, its opacity and Hide from capture (off at first), or stop showing the panel in game.
+- **`panel.setLive(state)`** sets what that page shows: plain JSON, at most 16 KB, kept in memory only and forgotten when the panel closes. It needs no click or permission, and it is what makes the live window appear over the game: for a panel the player already put in game (Show in game, which is the consent), the module decides when its page shows, by setting or clearing the state. The player can set per panel whether the view is always there or toggled by a key, its opacity and Hide from capture (off at first), or stop showing the panel in game.
 - **It reaches nothing else.** The page can read only the state its own panel passed. A module without an overlay page gets no live view.
 
 ### Overlay previews

@@ -169,7 +169,9 @@ export class GameOverlays {
   private readonly crashes = new Map<string, number[]>();
   private readonly stopped = new Set<string>();
   /** What each panel passes to panel.setLive, and who listens (live view windows); kept while the panel exists, in memory only. */
-  private readonly liveStates = new Map<string, JsonValue>();
+  private readonly liveStates = new Map<string, { owner: string; state: JsonValue }>();
+  /** The one pending look after a state appeared or went, so a page calling panel.setLive in a loop costs one look. */
+  private liveTick: ReturnType<typeof setTimeout> | undefined;
   private readonly liveWatchers = new Map<string, Set<(state: JsonValue | null | undefined) => void>>();
 
   private constructor(
@@ -250,6 +252,8 @@ export class GameOverlays {
     }
     const added = this.store.addPanel({ ...panel, scope: this.options.scopeOf(panel.gameId) });
     if (added === "full") return "full";
+    // The player asked for it: a live view whose page crashed too often gets another chance.
+    this.revive(liveWindowId(panel.instanceId));
     this.options.changed();
     this.tick();
     return "shown";
@@ -266,20 +270,45 @@ export class GameOverlays {
   }
 
   /** panel.setLive: what the panel's live view shows (already size-checked); null shows nothing. */
-  setLive(instanceId: string, state: JsonValue | null): void {
+  setLive(instanceId: string, owner: string, state: JsonValue | null): void {
+    // A panel of another publisher's module (the module was replaced) can't feed a view that belongs to the first one.
+    const panel = this.store.panelOf(instanceId);
+    if (panel && panel.owner !== owner) return;
     const had = this.liveStates.has(instanceId);
     if (state === null) this.liveStates.delete(instanceId);
-    else this.liveStates.set(instanceId, state);
+    else this.liveStates.set(instanceId, { owner, state });
     for (const fn of this.liveWatchers.get(instanceId) ?? []) fn(state);
     // The view appears or goes when there is something to show or not; a changed state is just passed on.
-    if (had !== (state !== null) && this.hasPanel(instanceId)) this.tick();
+    if (had !== (state !== null) && panel) this.lookSoon();
+  }
+
+  /** One look at the window in front soon, however many calls ask for it before then. */
+  private lookSoon(): void {
+    if (this.liveTick) return;
+    this.liveTick = setTimeout(() => {
+      this.liveTick = undefined;
+      this.tick();
+    }, 0);
+    this.liveTick.unref?.();
+  }
+
+  /** The state a panel's live view shows: only what the module of the panel's publisher passed. */
+  private liveStateOf(panel: Pick<InGamePanel, "instanceId" | "owner">): JsonValue | undefined {
+    const entry = this.liveStates.get(panel.instanceId);
+    return entry && entry.owner === panel.owner ? entry.state : undefined;
+  }
+
+  /** The state of a panel's live view goes (the panel is gone or its module was replaced); its page hears that nothing is shown. */
+  private clearLive(instanceId: string): void {
+    if (!this.liveStates.delete(instanceId)) return;
+    for (const fn of this.liveWatchers.get(instanceId) ?? []) fn(null);
   }
 
   /** The panel is closing for good: its live state goes. */
   forgetLive(instanceId: string): void {
-    if (!this.liveStates.delete(instanceId)) return;
-    for (const fn of this.liveWatchers.get(instanceId) ?? []) fn(null);
-    if (this.hasPanel(instanceId)) this.tick();
+    if (!this.liveStates.has(instanceId)) return;
+    this.clearLive(instanceId);
+    if (this.hasPanel(instanceId)) this.lookSoon();
   }
 
   /** Settings > Overlays: the live view's mode, opacity and Hide from capture of a panel in the game. */
@@ -326,13 +355,13 @@ export class GameOverlays {
   /** A game left the library for good. */
   forgetGame(gameId: string): void {
     this.forget((overlay) => overlay.gameId === gameId);
-    this.forgetPanels((panel) => panel.gameId === gameId);
+    this.forgetPanels((panel) => panel.gameId === gameId, true);
   }
 
   /** A module's data was deleted, or the module was removed. */
   forgetModule(moduleId: string, owner?: string): void {
     this.forget((overlay) => overlay.moduleId === moduleId && (owner === undefined || overlay.owner === owner));
-    this.forgetPanels((panel) => panel.moduleId === moduleId && (owner === undefined || panel.owner === owner));
+    this.forgetPanels((panel) => panel.moduleId === moduleId && (owner === undefined || panel.owner === owner), true);
   }
 
   /** "Hide all for now" in Settings > Overlays: nothing shows, and no key is taken, until Tavora starts again or this is called with false. */
@@ -359,17 +388,18 @@ export class GameOverlays {
     this.options.changed();
   }
 
-  private forgetPanels(test: (panel: InGamePanel) => boolean): void {
-    if (!this.dropPanels(test)) return;
+  private forgetPanels(test: (panel: InGamePanel) => boolean, clearLive = false): void {
+    if (!this.dropPanels(test, clearLive)) return;
     this.tick();
     this.options.changed();
   }
 
   /** Forgets the panels matching `test` with their live view's key; whether any went. */
-  private dropPanels(test: (panel: InGamePanel) => boolean): boolean {
+  private dropPanels(test: (panel: InGamePanel) => boolean, clearLive = false): boolean {
     const gone = this.store.panels().filter(test);
     if (!this.store.forgetPanels(test)) return false;
     for (const panel of gone) {
+      if (clearLive) this.clearLive(panel.instanceId);
       this.options.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.owner === panel.owner && record.moduleId === panel.moduleId && record.gameId === panel.gameId && record.target === panel.instanceId);
       this.toggled.delete(liveWindowId(panel.instanceId));
       this.revive(liveWindowId(panel.instanceId));
@@ -613,7 +643,7 @@ export class GameOverlays {
       const module = this.options.module(panel.moduleId);
       const usable = module !== undefined && module.owner === panel.owner && !!module.manifest.overlay;
       const inFront = front !== null && appliesTo(panel, front);
-      const visible = usable && this.liveStates.has(panel.instanceId) && !this.stopped.has(id) && this.game !== null && !layerOpen && overlayVisible({ enabled: active, gameInFront: inFront, mode: panel.mode, toggledOn: this.toggled.has(id), layerOpen: false });
+      const visible = usable && this.liveStateOf(panel) !== undefined && !this.stopped.has(id) && this.game !== null && !layerOpen && overlayVisible({ enabled: active, gameInFront: inFront, mode: panel.mode, toggledOn: this.toggled.has(id), layerOpen: false });
       let entry = this.open.get(id);
       if (!visible) {
         if (entry?.shown) {
@@ -685,7 +715,7 @@ export class GameOverlays {
     const window = this.options.openWindow({
       id,
       page: () => this.pageOf(panel),
-      state: () => this.liveStates.get(instanceId) ?? null,
+      state: () => this.liveStateOf(panel) ?? null,
       watch: (fn) => {
         const watchers = this.liveWatchers.get(instanceId) ?? new Set();
         this.liveWatchers.set(instanceId, watchers);
@@ -770,7 +800,7 @@ export class GameOverlays {
       return module !== undefined && module.owner !== item.owner;
     };
     const overlays = this.drop(replaced);
-    const panels = this.store.forgetPanels((panel) => replaced(panel) || (this.options.panels !== undefined && (!this.options.panels.exists(panel.gameId, panel.instanceId) || this.options.panels.allowed?.(panel.gameId, panel.instanceId) === false)));
+    const panels = this.dropPanels((panel) => replaced(panel) || (this.options.panels !== undefined && (!this.options.panels.exists(panel.gameId, panel.instanceId) || this.options.panels.allowed?.(panel.gameId, panel.instanceId) === false)), true);
     if (overlays || panels) this.options.changed();
   }
 
@@ -794,6 +824,8 @@ export class GameOverlays {
    * or the process exiting. Tavora's windows must never outlive it.
    */
   closeNow(): void {
+    clearTimeout(this.liveTick);
+    this.liveTick = undefined;
     clearInterval(this.timer);
     this.timer = undefined;
     try {
@@ -870,7 +902,12 @@ export class GameOverlays {
 
   /** Whether the player has this overlay (a key can be set only for one that exists). */
   has(subject: GameOverlaySubject): boolean {
-    return this.store.find(subject) !== undefined || this.panelOfKey({ ...subject, target: subject.key }) !== undefined;
+    return this.store.find(subject) !== undefined;
+  }
+
+  /** Whether the key is one of an overlay or of a panel in game: a toggle key can be set for either. */
+  hasKey(subject: GameOverlaySubject): boolean {
+    return this.has(subject) || this.panelOfKey({ ...subject, target: subject.key }) !== undefined;
   }
 
   /** Quitting: every window closes and the last changes are written. */

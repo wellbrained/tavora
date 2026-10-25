@@ -209,8 +209,9 @@ export interface TavoraSDK {
     /**
      * What this panel's live view shows: while the player shows the panel in their game and the in-game layer is closed,
      * Tavora shows the module's overlay page (the manifest's `overlay`) read-only and click-through in the panel's spot,
-     * with this state. Any JSON up to LIMITS.maxOverlayStateBytes; null shows nothing. Tavora keeps the last state, so
-     * the view goes on showing it while the panel is suspended. Needs no click or permission. Tavora 0.21.9 and newer.
+     * with this state. Any JSON up to LIMITS.maxOverlayStateBytes; null shows nothing. Tavora keeps showing the last
+     * state while the panel isn't running, e.g. while you look at another game in Tavora; after a restart nothing shows
+     * until the panel runs again and calls setLive. Needs no click or permission. Tavora 0.21.9 and newer.
      */
     setLive(state: JsonValue | null): Promise<void>;
   };

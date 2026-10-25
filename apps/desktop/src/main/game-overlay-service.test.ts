@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LIMITS } from "@tavora/sdk/protocol";
+import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
 import type { Foreground, ForegroundProbe } from "./foreground";
 import { GameOverlays, isOverlayAction, layerBinding, toggleBinding, type OverlayWindow, type OverlayWindowRequest } from "./game-overlay-service";
 import type { VeilWindow } from "./game-veil-window";
@@ -1126,12 +1126,17 @@ describe("a panel's live view", () => {
   const add = (service: GameOverlays, module = CLOCK, instanceId = PANEL) => service.showPanel({ owner: module.owner, moduleId: module.manifest.id, gameId: "elden", instanceId });
   const liveWindows = (world: { windows: FakeWindow[] }) => world.windows.filter((window) => window.request.id.startsWith("live\n") && !window.destroyed);
   const panelWindows = (world: { windows: FakeWindow[] }) => world.windows.filter((window) => window.request.instanceId !== undefined);
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 5));
+  const feed = async (service: GameOverlays, state: JsonValue | null, owner = "official") => {
+    service.setLive(PANEL, owner, state);
+    await flush();
+  };
 
   it("shows nothing until the panel passes a state, then the overlay page in the panel's spot with that state", async () => {
     const { service, world } = await setup();
     add(service);
     expect(liveWindows(world)).toHaveLength(0);
-    service.setLive(PANEL, { hp: 3 });
+    await feed(service, { hp: 3 });
     const [window] = liveWindows(world);
     expect(window).toMatchObject({ shown: true, arranging: false, opacity: 100, hideFromCapture: false });
     expect(window!.rect).toEqual({ x: expect.any(Number), y: expect.any(Number), width: expect.any(Number), height: expect.any(Number) });
@@ -1143,26 +1148,26 @@ describe("a panel's live view", () => {
   it("feeds the page every new state, and hides the view when the state goes", async () => {
     const { service, world } = await setup();
     add(service);
-    service.setLive(PANEL, 1);
+    await feed(service, 1);
     const [window] = liveWindows(world);
     const heard: unknown[] = [];
     const stop = window!.request.watch((state) => heard.push(state));
-    service.setLive(PANEL, 2);
+    await feed(service, 2);
     expect(heard).toEqual([2]);
     expect(window!.request.state()).toBe(2);
     stop?.();
-    service.setLive(PANEL, 3);
+    await feed(service, 3);
     expect(heard).toEqual([2]);
-    service.setLive(PANEL, null);
+    await feed(service, null);
     expect(window!.shown).toBe(false);
-    service.setLive(PANEL, 4);
+    await feed(service, 4);
     expect(window!.shown).toBe(true);
   });
 
   it("gives way to the full panel while the layer is open, and returns in the new spot", async () => {
     const { service, world, key } = await setup();
     add(service);
-    service.setLive(PANEL, "x");
+    await feed(service, "x");
     const [view] = liveWindows(world);
     service.pressed(layerKey(key));
     expect(view!.shown).toBe(false);
@@ -1177,7 +1182,7 @@ describe("a panel's live view", () => {
   it("is click-through and read-only: it is never arranged and has no frame actions", async () => {
     const { service, world, key } = await setup();
     add(service);
-    service.setLive(PANEL, "x");
+    await feed(service, "x");
     const [view] = liveWindows(world);
     service.pressed(layerKey(key));
     world.registered.get("Escape")!();
@@ -1191,12 +1196,13 @@ describe("a panel's live view", () => {
   it("shows only with the toggle key in toggle mode, and the key belongs to the panel", async () => {
     const { service, world } = await setup();
     add(service);
-    service.setLive(PANEL, "x");
+    await feed(service, "x");
     service.updatePanelView(PANEL, { mode: "toggle" });
     expect(liveWindows(world).every((window) => !window.shown)).toBe(true);
     const subject = service.panelSubject(PANEL)!;
     expect(subject).toEqual({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: PANEL });
-    expect(service.has(subject)).toBe(true);
+    expect(service.hasKey(subject)).toBe(true);
+    expect(service.has(subject)).toBe(false);
     const record: HotkeyRecord = { ...toggleBinding(subject), label: "x", accelerator: "F8" };
     expect(service.wants(record)).toBe(true);
     expect(service.general(record)).toBe(false);
@@ -1213,7 +1219,7 @@ describe("a panel's live view", () => {
   it("applies opacity and Hide from capture, and lists them in the settings view", async () => {
     const { service, world } = await setup();
     add(service);
-    service.setLive(PANEL, "x");
+    await feed(service, "x");
     service.updatePanelView(PANEL, { opacity: 50, hideFromCapture: true });
     expect(liveWindows(world)[0]).toMatchObject({ opacity: 50, hideFromCapture: true });
     expect(service.view().panels).toEqual([
@@ -1225,7 +1231,7 @@ describe("a panel's live view", () => {
     const { service, world } = await setup();
     world.modules.set(NO_OVERLAY.manifest.id, NO_OVERLAY);
     add(service, NO_OVERLAY);
-    service.setLive(PANEL, "x");
+    await feed(service, "x");
     expect(liveWindows(world)).toHaveLength(0);
     expect(service.view().panels[0]!.live).toBe(false);
   });
@@ -1233,7 +1239,7 @@ describe("a panel's live view", () => {
   it("is not there when the game is not in front, or Game overlays are off", async () => {
     const { service, world } = await setup();
     add(service);
-    service.setLive(PANEL, "x");
+    await feed(service, "x");
     world.enabled = false;
     service.tick();
     expect(liveWindows(world)).toHaveLength(0);
@@ -1248,7 +1254,7 @@ describe("a panel's live view", () => {
   it("goes with the panel: stop showing or closing for good, with its key and its state", async () => {
     const { service, world, key } = await setup();
     add(service);
-    service.setLive(PANEL, "x");
+    await feed(service, "x");
     key(toggleBinding(service.panelSubject(PANEL)!));
     service.stopPanel(PANEL);
     expect(liveWindows(world)).toHaveLength(0);
@@ -1257,9 +1263,101 @@ describe("a panel's live view", () => {
     service.forgetLive(PANEL);
     add(service);
     expect(liveWindows(world)).toHaveLength(0);
-    service.setLive(PANEL, "y");
+    await feed(service, "y");
     expect(liveWindows(world)).toHaveLength(1);
     service.forgetLive(PANEL);
+    await flush();
     expect(liveWindows(world).every((window) => !window.shown)).toBe(true);
+  });
+
+  it("goes with its key and state for every reason a panel is pruned", async () => {
+    const reasons: [string, (world: Awaited<ReturnType<typeof setup>>["world"]) => void][] = [
+      ["the panel is gone", (world) => world.gone.add(PANEL)],
+      ["its type no longer allows being in game", (world) => world.notAllowed.add(PANEL)],
+      ["its module was replaced by another publisher's", (world) => world.modules.set(CLOCK.manifest.id, { ...CLOCK, owner: "someone-else" })],
+    ];
+    for (const [, apply] of reasons) {
+      const { service, world, key } = await setup();
+      add(service);
+      await feed(service, "x");
+      key(toggleBinding(service.panelSubject(PANEL)!));
+      apply(world);
+      service.tick();
+      expect(service.hasPanel(PANEL)).toBe(false);
+      expect(world.removedKeys.map((record) => record.target)).toEqual([PANEL]);
+      expect(liveWindows(world)).toHaveLength(0);
+      // Back to normal and shown again: the old state doesn't come back.
+      world.gone.clear();
+      world.notAllowed.clear();
+      world.modules.set(CLOCK.manifest.id, CLOCK);
+      add(service);
+      expect(liveWindows(world)).toHaveLength(0);
+    }
+  });
+
+  it("goes with a removed module or game, and with it the state", async () => {
+    const module = await setup();
+    add(module.service);
+    await feed(module.service, "x");
+    module.key(toggleBinding(module.service.panelSubject(PANEL)!));
+    module.service.forgetModule(CLOCK.manifest.id);
+    expect(liveWindows(module.world)).toHaveLength(0);
+    expect(module.world.removedKeys.map((record) => record.target)).toEqual([PANEL]);
+    add(module.service);
+    expect(liveWindows(module.world)).toHaveLength(0);
+    const game = await setup();
+    add(game.service);
+    await feed(game.service, "x");
+    game.service.forgetGame("elden");
+    expect(liveWindows(game.world)).toHaveLength(0);
+    add(game.service);
+    expect(liveWindows(game.world)).toHaveLength(0);
+  });
+
+  it("looks once for any number of calls in a row", async () => {
+    const { service, world } = await setup();
+    add(service);
+    const before = world.probeCalls;
+    for (let i = 0; i < 50; i++) {
+      service.setLive(PANEL, "official", i % 2 === 0 ? "x" : null);
+      service.setLive(PANEL, "official", i % 2 === 0 ? null : "y");
+    }
+    expect(world.probeCalls).toBe(before);
+    await flush();
+    expect(world.probeCalls).toBe(before + 1);
+    expect(liveWindows(world)).toHaveLength(1);
+  });
+
+  it("keeps showing the last state, also when the panel isn't running", async () => {
+    const { service, world } = await setup();
+    add(service);
+    await feed(service, "x");
+    await flush();
+    service.tick();
+    expect(liveWindows(world)[0]!.shown).toBe(true);
+    expect(liveWindows(world)[0]!.request.state()).toBe("x");
+  });
+
+  it("ignores a state from another publisher's module, and never serves it to a page", async () => {
+    const { service, world } = await setup();
+    add(service);
+    await feed(service, "x", "someone-else");
+    expect(liveWindows(world)).toHaveLength(0);
+    await feed(service, "mine");
+    expect(liveWindows(world)[0]!.request.state()).toBe("mine");
+  });
+
+  it("gives a view whose page crashed too often another chance when the player shows the panel again", async () => {
+    const { service, world } = await setup();
+    add(service);
+    await feed(service, "x");
+    for (let i = 0; i < 3; i++) {
+      liveWindows(world)[0]!.request.ended();
+      service.tick();
+    }
+    expect(liveWindows(world)).toHaveLength(0);
+    expect(world.notices).toEqual(["This overlay stopped working."]);
+    add(service);
+    expect(liveWindows(world)).toHaveLength(1);
   });
 });
