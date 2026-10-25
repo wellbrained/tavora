@@ -90,13 +90,13 @@ const taskTitles = (app: ElectronApplication, scope = "", index = 0) =>
     index,
   );
 
-test("official modules are marked Official, other installed modules Local", async () => {
+test("official modules are marked Official, the examples Example", async () => {
   const { app, page } = await launch();
   await page.getByTestId("add-module").click();
   await expect(page.getByTestId(`provenance-${NOTES}`)).toHaveText("Official");
   await expect(page.getByTestId(`provenance-${TODOS}`)).toHaveText("Official");
   await expect(page.getByTestId(`provenance-${PLAYGROUND}`)).toHaveText("Official");
-  await expect(page.getByTestId(`provenance-${VUE}`)).toHaveText("Local");
+  await expect(page.getByTestId(`provenance-${VUE}`)).toHaveText("Example");
   await app.close();
 });
 

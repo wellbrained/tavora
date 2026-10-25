@@ -2,30 +2,32 @@
 // One module in a Settings list: icon, name, version, who made it, what it
 // does and where it was found (the Official badge says it for Tavora's own; a list
 // that already says it, like a project folder's, hides it). The buttons for it go in the slot.
-import { FolderCode, Package, Upload } from "@lucide/vue";
+import { FileArchive, FolderCode, Package, Store, Upload } from "@lucide/vue";
 import { computed } from "vue";
 import { cn } from "@/lib/utils";
 import { releaseStatus, state } from "../../host";
 import { t } from "../../i18n";
+import { MODULE_TAG_TEXT, moduleTag } from "../../../shared/module-tag";
 import ModuleIcon from "../ModuleIcon.vue";
 
 const props = defineProps<{ module: NonNullable<typeof state.value>["modules"][number]; hideOrigin?: boolean }>();
-// A development folder holding a module with a publishable id (not local.…) is a release copy. Local and Release
-// sit side by side in Settings > Development, so each has its own color and icon: blue for work in progress, green
-// for the copy that gets published. Official keeps the gold.
-const kind = computed(() =>
-  props.module.provenance === "official" ? "official" : props.module.origin.kind === "dev" && !props.module.id.startsWith("local.") ? "release" : "local",
-);
+// Where this copy came from (shared/module-tag.ts). Local and Release sit side by side in Settings > Development,
+// so each has its own color and icon: blue for work in progress, green for the copy that gets published. Official
+// keeps the gold; Catalog and From file, what players install, stay quiet.
+const kind = computed(() => moduleTag(props.module));
 // A release copy that the catalog does not have yet, or has only in an older version, says so; unknown (offline) says nothing.
 const pending = computed(() => {
   const status = kind.value === "release" ? releaseStatus.value?.[props.module.id] : undefined;
   return status === "new-version" || status === "not-published" ? status : null;
 });
-const tag = computed(() => t(`common.${kind.value}`));
+const tag = computed(() => t(MODULE_TAG_TEXT[kind.value]));
 const tagClass = {
   official: "border-primary/40 text-primary",
   release: "border-success/40 bg-success/15 text-success",
   local: "border-info/40 bg-info/15 text-info",
+  catalog: "text-muted-foreground",
+  file: "text-muted-foreground",
+  example: "text-muted-foreground",
 } as const;
 </script>
 
@@ -42,7 +44,7 @@ const tagClass = {
           :class="cn('inline-flex flex-none items-center gap-1 rounded-sm border px-1.5 text-xs font-medium', tagClass[kind])"
           :data-testid="`module-tag-${module.id}`"
           :data-kind="kind"
-          ><Package v-if="kind === 'release'" class="size-3" aria-hidden="true" /><FolderCode v-else-if="kind === 'local'" class="size-3" aria-hidden="true" />{{ tag }}</span
+          ><Package v-if="kind === 'release'" class="size-3" aria-hidden="true" /><FolderCode v-else-if="kind === 'local'" class="size-3" aria-hidden="true" /><Store v-else-if="kind === 'catalog'" class="size-3" aria-hidden="true" /><FileArchive v-else-if="kind === 'file'" class="size-3" aria-hidden="true" />{{ tag }}</span
         >
         <span
           v-if="pending"

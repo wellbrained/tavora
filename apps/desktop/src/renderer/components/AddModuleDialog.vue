@@ -18,6 +18,7 @@ import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/officia
 import ModuleIcon from "./ModuleIcon.vue";
 import CatalogBrowse from "./CatalogBrowse.vue";
 import MenuButton from "./menus/MenuButton.vue";
+import { MODULE_TAG_TEXT, moduleTag, type TaggedModule } from "../../shared/module-tag";
 
 type ModuleView = NonNullable<typeof state.value>["modules"][number];
 type Kind = "official" | "local" | "development";
@@ -34,7 +35,8 @@ const VIEWS = [
 ] as const;
 
 /** Who publishes a module: Tavora itself, or a package found on this computer. */
-const provenanceLabel = (provenance: "official" | "local") => (provenance === "official" ? t("common.official") : t("common.local"));
+/** Where this copy of a module came from: Official, Catalog, From file, Local, Release or Example (shared/module-tag.ts). */
+const provenanceLabel = (module: TaggedModule) => t(MODULE_TAG_TEXT[moduleTag(module)]);
 
 /** The one kind a module is listed under; playgrounds and examples go to Development. */
 function kindOf(module: ModuleView): Kind {
@@ -258,7 +260,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                       <span
                         :class="cn('shrink-0 rounded-sm border px-1.5 text-xs', module.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
                         :data-testid="`provenance-${module.id}`"
-                        >{{ provenanceLabel(module.provenance) }}</span
+                        >{{ provenanceLabel(module) }}</span
                       >
                       <MenuButton
                         v-if="module.project && accounts"
