@@ -8,7 +8,7 @@
   "entry": "dist/index.html",
   "changelog": "changelog.json",
   "games": [],
-  "viewport": { "minWidth": 260, "minHeight": 160, "preferredWidth": 360, "preferredHeight": 320 },
+  "viewport": { "minWidth": 380, "minHeight": 160, "preferredWidth": 360, "preferredHeight": 320 },
   "translations": {
     "de": {
       "name": "KI-Nutzung",

@@ -1,7 +1,7 @@
 // AI Usage's texts in English and German. Keys are flat; `.one` / `.other` pair up for numbers.
 export const en = {
   loading: "Loading your AI accounts…",
-  connectError: "Could not connect: {error}",
+  connectError: "Can't connect: {error}",
   denied: "AI Usage may not read your AI accounts. Review its access with the bar above, or add it again.",
 
   "empty.title": "See what is left of your AI plans",
@@ -28,10 +28,10 @@ export const en = {
   "panel.signedInAs": "Signed in as {email}",
 
   "state.waiting": "Waiting for the first reading…",
-  "state.signIn": "Sign in again with this profile's CLI, then refresh.",
-  "state.rateLimited": "The provider asked to slow down. AI Usage tries again later.",
+  "state.signIn": "Sign in again in this profile's CLI, then refresh.",
+  "state.rateLimited": "The provider needs a break. AI Usage tries again later.",
   "state.apiKey": "This profile signs in with an API key, which has no subscription allowance.",
-  "state.unavailable": "No allowance could be read. The provider may have changed, or this login has no subscription allowance.",
+  "state.unavailable": "Can't read an allowance. This login may have none.",
   "state.cliMissing": "The Codex command was not found. Install the Codex CLI.",
 
   "provider.claude": "Claude",
@@ -60,7 +60,7 @@ export const en = {
 
 export const de: Record<keyof typeof en, string> = {
   loading: "Lade deine KI-Konten…",
-  connectError: "Verbindung nicht möglich: {error}",
+  connectError: "Keine Verbindung: {error}",
   denied: "KI-Nutzung darf deine KI-Konten nicht lesen. Prüfe den Zugriff über die Leiste oben, oder füge es neu hinzu.",
 
   "empty.title": "Sieh, was von deinen KI-Abos übrig ist",
@@ -88,9 +88,9 @@ export const de: Record<keyof typeof en, string> = {
 
   "state.waiting": "Warte auf die erste Messung…",
   "state.signIn": "Melde dich mit der CLI dieses Profils neu an und aktualisiere dann.",
-  "state.rateLimited": "Der Anbieter hat gebeten, langsamer zu sein. KI-Nutzung versucht es später erneut.",
+  "state.rateLimited": "Der Anbieter braucht eine Pause. KI-Nutzung versucht es später erneut.",
   "state.apiKey": "Dieses Profil meldet sich mit einem API-Schlüssel an, der kein Abo-Kontingent hat.",
-  "state.unavailable": "Es konnte kein Kontingent gelesen werden. Der Anbieter hat sich vielleicht geändert, oder dieser Login hat kein Abo-Kontingent.",
+  "state.unavailable": "Kein Kontingent lesbar. Dieser Login hat vielleicht keins.",
   "state.cliMissing": "Der Codex-Befehl wurde nicht gefunden. Installiere die Codex-CLI.",
 
   "provider.claude": "Claude",
