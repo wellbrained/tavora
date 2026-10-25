@@ -11,7 +11,7 @@ const delegatedProps = reactiveOmit(props, "class")
 </script>
 
 <template>
-  <CollapsibleContent data-slot="collapsible-content" v-bind="delegatedProps" :class="cn('overflow-hidden', props.class)">
+  <CollapsibleContent data-slot="collapsible-content" v-bind="delegatedProps" :class="cn('overflow-hidden data-[state=closed]:hidden', props.class)">
     <slot />
   </CollapsibleContent>
 </template>
