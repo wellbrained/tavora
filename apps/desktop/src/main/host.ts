@@ -4004,8 +4004,8 @@ export class Host {
         // Unknown (module not loaded yet) counts as allowed: a panel is dropped only when its type is known to say no.
         allowed: (gameId, instanceId) => {
           const record = host.recordOf(instanceId, gameId);
-          const type = record ? host.panelTypeOf(record) : undefined;
-          return type === undefined || type?.inGame === true;
+          // A module without panel types says it at the top (`inGame`), as To-Dos does.
+          return !record || host.panelTypeOf(record) === undefined || host.canShowInGame(record);
         },
         usedAt: (instanceId) => {
           const view = host.views.get(instanceId);
