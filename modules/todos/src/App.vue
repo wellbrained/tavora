@@ -185,7 +185,7 @@ function dropTask() {
   <p v-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">
     {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
-  <div v-else class="relative flex h-full min-h-0 flex-col" data-testid="todos-app">
+  <div v-else class="@container relative flex h-full min-h-0 flex-col" data-testid="todos-app">
     <header
       class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2"
       role="toolbar"
@@ -212,9 +212,10 @@ function dropTask() {
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button variant="ghost" size="sm" data-testid="finished-mode" :data-mode="finished">
+          <!-- In a small panel (over the game, say) only the icon stays, so the toolbar keeps its room for the count. -->
+          <Button variant="ghost" size="sm" data-testid="finished-mode" :data-mode="finished" :aria-label="t(`app.finishedLabel.${finished}`)" :title="t(`app.finishedLabel.${finished}`)">
             <ListChecks :stroke-width="1.5" />
-            {{ t(`app.finishedLabel.${finished}`) }}
+            <span class="hidden @min-[20rem]:inline">{{ t(`app.finishedLabel.${finished}`) }}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

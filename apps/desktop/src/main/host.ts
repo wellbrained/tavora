@@ -109,7 +109,7 @@ import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, sha
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
 import { windowsForegroundProbe } from "./foreground";
 import { GameOverlayWindow } from "./game-overlay-window";
-import { arrangeBinding, GameOverlays, toggleBinding } from "./game-overlay-service";
+import { arrangeBinding, GameOverlays, toggleBinding, type OverlayWindowRequest } from "./game-overlay-service";
 import { GameWatcher } from "./game-watch";
 import { Streaming } from "./streaming";
 import { findInstalledGames } from "./launcher-games";
@@ -530,7 +530,7 @@ export class Host {
       closed:(owner,id)=>{const view=this.views.get(owner);if(view instanceof ModuleView)view.tooltipClosed(id);},
       source:owner=>{
         const view=this.views.get(owner),bounds=this.panelBounds.get(owner);
-        if(!(view instanceof ModuleView)||!bounds||this.overlay||this.opening||this.windowHidden||!view.revealed)return undefined;
+        if(!(view instanceof ModuleView)||!bounds||this.overlay||this.opening||this.windowHidden||!view.revealed||this.floating(owner))return undefined;
         const module=this.modules.get(view.moduleId);if(!module)return undefined;
         return{root:module.root,name:this.shown(module.manifest).name,bounds};
       }});
@@ -1585,6 +1585,8 @@ export class Host {
     this.window.on("show", hidden(false));
     this.window.on("closed", () => {
       this.windowClosed = true;
+      // The overlay windows (and the keys for arranging) go with the main window; they would keep Tavora running.
+      void this.gameOverlays.shutdown().catch((error: unknown) => console.error("[tavora]", error));
       for (const view of this.views.values()) view.dispose();
       this.views.clear();
       this.viewsByContents.clear();
@@ -1964,6 +1966,8 @@ export class Host {
       "remove-module-from-game": (action) => this.removeModuleFromGame(action.moduleId),
       "reload-panel": (action) => this.views.get(action.instanceId)?.reload(),
       "stop-panel": (action) => this.views.get(action.instanceId)?.stop(),
+      "show-panel-over-game": (action) => this.showPanelOverGame(action.instanceId),
+      "bring-panel-back": (action) => this.gameOverlays.bringBack(action.instanceId),
       "save-layout": (action) => this.workspaces.saveLayout(this.currentGameId(), action.layout),
       "apply-layout-template": (action) => this.workspaces.applyTemplate(this.currentGameId(), layoutTemplate(action.templateId)),
       "apply-layout-grid": (action) => this.workspaces.applyTemplate(this.currentGameId(), gridTemplate(action.columns, action.rows)),
@@ -2476,6 +2480,8 @@ export class Host {
   /** deleteGameData without the browser sessions, so many games can be deleted and the sessions cleared once. */
   private async forgetGameData(game: GameEntry): Promise<void> {
     const records = this.workspaces.forgetGame(game.id);
+    // A panel of this game that was over the game closes with it.
+    for (const record of records) this.destroyView(record.instanceId);
     await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
     this.data.forgetGame(game.id);
     this.streaming.forgetGame(game.id);
@@ -2539,8 +2545,10 @@ export class Host {
    * A module asked to open a web address (links.open, already checked): a new tab in the game's
    * newest Browser panel, or in that panel itself while it is still empty, or in a new Browser panel.
    */
-  private openLinkFromModule(url: string): void {
+  private openLinkFromModule(url: string, gameId?: string): void {
     const game = this.game;
+    // The panel that asked belongs to a game that isn't the one shown (it is over its game): its link is not for this one.
+    if (gameId !== undefined && game?.id !== gameId) throw new HostError("PERMISSION_DENIED", "links.open works only in the game shown now");
     if (!game) return;
     try {
       const browserId = this.records(game.id)
@@ -2958,6 +2966,8 @@ export class Host {
 
   /** openedAt is when the player asked for the panel; its time to a loaded page is measured from there. */
   private createView(record: InstanceRecord, game: TavoraGame, openedAt?: number): void {
+    // Its panel is over the game and kept running there while another game was shown: it comes back with Bring back.
+    if (this.views.has(record.instanceId)) return;
     if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, game);
     const panelType = this.panelTypeOf(record);
     // Its type is gone: the slot says so and offers another type; nothing runs.
@@ -2983,7 +2993,11 @@ export class Host {
         this.applyBounds();
         this.pushStateSoon();
       },
-      onOpenLink: (url) => this.openLinkFromModule(url),
+      onOpenLink: (url) => this.openLinkFromModule(url, game.id),
+      onNeedsTavora: () => {
+        this.notice = translate(this.language, "overlays.bringBackFirst");
+        this.pushState();
+      },
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
       savePicture: (png, name) => this.savePictureAs(png, name),
       saveJson: (data, name) => this.saveJsonAs(module, data, name),
@@ -3007,6 +3021,8 @@ export class Host {
       hotkeys: this.streaming.hotkeysFor(module, game.id),
       ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
       onStatus: (status) => {
+        // A panel over the game that crashed goes back to its slot, where the crash screen is.
+        if (status === "crashed" && this.floating(record.instanceId)) this.gameOverlays.bringBack(record.instanceId);
         if (!measured && status === "ready") {
           measured = true;
           timings.record("panel-open", performance.now() - openedAt!);
@@ -3194,6 +3210,8 @@ export class Host {
   private watchShortcuts(contents: WebContents): void {
     contents.on("before-input-event", (event, input) => {
       if(input.key==="Escape"&&this.tooltips?.state.current){event.preventDefault();this.tooltips.close();return;}
+      // Typing in a panel over the game is the panel's: Tavora's shortcuts don't pull the keyboard away to the main window.
+      if (this.viewsByContents.get(contents.id)?.isOverGame) return;
       const shortcut = shortcutFor(input);
       if (!shortcut) return;
       event.preventDefault();
@@ -3242,14 +3260,76 @@ export class Host {
     this.views.delete(instanceId);
     this.viewsByContents.delete(view.webContentsId);
     this.browsersByContents.delete(view.webContentsId);
+    // A panel over its game is let go of by its window first (the window never closes the page, this does).
+    if (view instanceof ModuleView && this.gameOverlays?.hasPanel(instanceId)) this.gameOverlays.bringBack(instanceId);
     this.window.contentView.removeChildView(view.view);
     view.dispose();
   }
 
+  /** Whether a panel is over its game now: its view is in an overlay window and the workspace slot only says so. */
+  private floating(instanceId: string): boolean {
+    return this.gameOverlays?.hasPanel(instanceId) ?? false;
+  }
+
   private closeAllViews(): void {
     this.endOpening();
-    for (const instanceId of [...this.views.keys()]) this.destroyView(instanceId);
+    // A panel over its game goes on running there, also while another game or the library is shown.
+    for (const instanceId of [...this.views.keys()]) if (!this.floating(instanceId)) this.destroyView(instanceId);
     this.panelBounds.clear();
+  }
+
+  /** Panel menu > Show over game. The click is the player's consent; the panel must be one of the game shown now. */
+  private showPanelOverGame(instanceId: string): void {
+    const game = this.game;
+    const record = game && this.records(game.id).find((item) => item.instanceId === instanceId);
+    const view = this.views.get(instanceId);
+    const module = record && this.modules.get(record.moduleId);
+    if (!game || !record || !module || !(view instanceof ModuleView)) throw new WorkspaceError("error.panelClosed");
+    const result = this.gameOverlays.showPanel({ owner: module.owner, moduleId: module.manifest.id, gameId: game.id, instanceId });
+    if (result === "full") this.notice = translate(this.language, "overlays.full");
+  }
+
+  /** The name a panel's tab shows, for Settings > Overlays; null once the panel is gone. */
+  private panelName(instanceId: string): string | null {
+    const view = this.views.get(instanceId);
+    if (!(view instanceof ModuleView)) return null;
+    const module = this.modules.get(view.moduleId);
+    return view.typeName ?? (module ? this.shown(module.manifest).name : null);
+  }
+
+  /** The overlay window for a panel that moves over its game: the panel's own view goes into it, and no copy is made. */
+  private openPanelWindow(request: OverlayWindowRequest & { instanceId: string; gameId: string }): GameOverlayWindow | null {
+    const view = this.views.get(request.instanceId);
+    if (!(view instanceof ModuleView) || view.view.webContents.isDestroyed() || this.window.isDestroyed()) return null;
+    this.tooltips.close(request.instanceId);
+    this.closeModuleMenu(request.instanceId);
+    this.window.contentView.removeChildView(view.view);
+    return new GameOverlayWindow({
+      preload: path.join(path.dirname(this.options.modulePreload), "game-overlay.cjs"),
+      hidden: !!this.options.hidden,
+      id: request.id,
+      source: { page: request.page, state: request.state, watch: request.watch },
+      gameBounds: request.gameBounds,
+      moved: request.moved,
+      closeRequested: request.closeRequested,
+      ended: request.ended,
+      frameText: request.frameText,
+      panel: view,
+      released: () => this.panelReturned(request.instanceId, request.gameId),
+    });
+  }
+
+  /** A panel's overlay window let go of it (Bring back, overlays turned off, the game gone): back into its workspace slot. */
+  private panelReturned(instanceId: string, gameId: string): void {
+    const view = this.views.get(instanceId);
+    // Not here any more: the panel itself is closing (destroyView), or Tavora is.
+    if (!(view instanceof ModuleView) || this.windowClosed || this.window.isDestroyed() || view.view.webContents.isDestroyed()) return;
+    // The slot it comes back to is not on screen: the panel closes like any panel of a game that is left, and opens again with its game.
+    if (this.gameId !== gameId) return this.destroyView(instanceId);
+    this.window.contentView.addChildView(view.view);
+    view.setVisible(false);
+    this.applyBounds();
+    this.pushStateSoon();
   }
 
   private forEachView(fn: (view: ModuleView | BrowserPanel) => void): void {
@@ -3286,6 +3366,8 @@ export class Host {
     this.tooltips?.ensureVisible();
     if (this.opening && this.openingDone()) return this.endOpening(true);
     for (const [instanceId, view] of this.views) {
+      // A panel over the game is placed, shown and paused by its overlay window (game-overlay-window.ts), not by this slot.
+      if (this.floating(instanceId)) continue;
       const rect = this.panelBounds.get(instanceId);
       if (rect) view.setBounds(rect);
       // A module page stays hidden until it has its data, so switching games does not show it building itself;
@@ -3310,7 +3392,7 @@ export class Host {
     const images: Record<string, string> = {};
     await Promise.all(
       [...this.views].map(async ([instanceId, view]) => {
-        if (!this.panelBounds.has(instanceId) || view.status !== "ready" || (view instanceof ModuleView && !view.revealed)) return;
+        if (this.floating(instanceId) || !this.panelBounds.has(instanceId) || view.status !== "ready" || (view instanceof ModuleView && !view.revealed)) return;
         if (view instanceof BrowserPanel && !view.capturable) return;
         const image = await Promise.race([
           view.view.webContents.capturePage().catch(() => null),
@@ -3321,7 +3403,7 @@ export class Host {
     );
     if (change !== this.overlayChanges || this.window.isDestroyed()) return;
     this.window.webContents.send("host:frozen", images);
-    this.forEachView((view) => view.setVisible(false));
+    for (const [instanceId, view] of this.views) if (!this.floating(instanceId)) view.setVisible(false);
   }
 
   // ── Module menus ─────────────────────────────────────────────────────
@@ -3335,7 +3417,7 @@ export class Host {
    * new one closes the last. Nothing is shown for a panel that is hidden or under a host menu or dialog.
    */
   private showModuleMenu(instanceId: string, menu: CheckedMenu): Promise<string | null> {
-    if (!this.views.has(instanceId) || !this.panelBounds.has(instanceId) || this.overlay || this.window.isDestroyed()) return Promise.resolve(null);
+    if (!this.views.has(instanceId) || !this.panelBounds.has(instanceId) || this.floating(instanceId) || this.overlay || this.window.isDestroyed()) return Promise.resolve(null);
     this.closeModuleMenu();
     const requestId = ++this.moduleMenuRequests;
     return new Promise((resolve) => {
@@ -3523,8 +3605,9 @@ export class Host {
         if (!(view instanceof BrowserPanel)) {
           const status = view?.status ?? "loading";
           // Hidden until its page has its data.
-          const waiting = (status === "loading" || status === "ready") && !view?.revealed;
-          return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status, waiting, content };
+          const overGame = this.floating(record.instanceId);
+          const waiting = !overGame && (status === "loading" || status === "ready") && !view?.revealed;
+          return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status, waiting, content, ...(overGame ? { overGame } : {}) };
         }
         const browser = view.state;
         // A Browser tab is named after its page, like a browser tab.
@@ -3791,6 +3874,7 @@ export class Host {
       module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
       gameName: (gameId) => host.library.games[gameId]?.name ?? null,
       gamesOf: (program) => host.gameWatcher.gamesOf(program),
+      panels: { name: (instanceId) => host.panelName(instanceId), openWindow: (request) => host.openPanelWindow(request) },
       probe: () => windowsForegroundProbe(),
       // Windows reports pixels; windows are placed in DIPs.
       toDip: (rect) => screen.screenToDipRect(null, rect),

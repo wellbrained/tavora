@@ -16,6 +16,17 @@ export const OVERLAY_ARRANGE_ACTION = "$arrange";
 /** Who owns the arrange hotkey of a game: Tavora itself. */
 export const ARRANGE_OWNER = "tavora";
 
+/**
+ * A panel the player moved over its game (from Tavora's own panel menu) is a game overlay whose key is the panel's id
+ * behind this prefix. Modules can't pick keys that start with it (game-overlay-service.ts show), and these overlays are
+ * not kept across a restart: the panel is back in its workspace slot the next time Tavora starts.
+ */
+export const PANEL_KEY_PREFIX = "panel-";
+export const panelKey = (instanceId: string) => `${PANEL_KEY_PREFIX}${instanceId}`;
+export const isPanelKey = (key: string) => key.startsWith(PANEL_KEY_PREFIX);
+/** The panel instance a panel overlay's key names. */
+export const panelInstanceOf = (key: string) => key.slice(PANEL_KEY_PREFIX.length);
+
 /** How much of the page shows through the window: Tavora's own setting per overlay. */
 export const OPACITIES = [100, 75, 50, 25] as const;
 export type Opacity = (typeof OPACITIES)[number];
@@ -37,6 +48,8 @@ export type RelativeRect = Rect;
 export const MIN_OVERLAY_SIZE = 48;
 /** What a new overlay is given: the top left corner of the game window. */
 export const DEFAULT_RELATIVE_RECT: RelativeRect = { x: 0.02, y: 0.03, width: 0.2, height: 0.16 };
+/** A panel over the game is taller than an overlay page: it is a whole panel, not one number. */
+export const DEFAULT_PANEL_RECT: RelativeRect = { x: 0.02, y: 0.03, width: 0.22, height: 0.4 };
 
 /** Who a game overlay belongs to: one key of one module in one game. */
 export interface GameOverlaySubject {
@@ -118,6 +131,24 @@ export function dragRect(rect: Rect, game: Rect, edges: { left?: boolean; right?
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
+// ── Panels over the game ───────────────────────────────────────────────
+
+/** How much room the arrange frame takes around a panel while arranging: a bar on top (name, close) and edges to grab. */
+export const PANEL_ARRANGE_INSET = { top: 30, side: 8 } as const;
+
+/** Where a panel sits in its overlay window: all of it, or inside the arrange frame. */
+export function panelBounds(size: { width: number; height: number }, arranging: boolean): Rect {
+  if (!arranging) return { x: 0, y: 0, width: size.width, height: size.height };
+  const { top, side } = PANEL_ARRANGE_INSET;
+  return { x: side, y: top, width: Math.max(1, size.width - 2 * side), height: Math.max(1, size.height - top - side) };
+}
+
+/**
+ * Whether a click or key press in a panel counts as the player's (links.open, pictures.save and the like need one).
+ * A panel over the game takes input only while arranging, so nothing else is the player's.
+ */
+export const gestureCounts = (overGame: boolean, arranging: boolean) => !overGame || arranging;
+
 // ── When an overlay shows ──────────────────────────────────────────────
 
 export interface VisibilityInput {
@@ -179,7 +210,8 @@ export class GameOverlayStore {
       const { owner, moduleId, gameId, key, mode, opacity, hideFromCapture, rect } = entry as Partial<Record<keyof GameOverlay, unknown>>;
       const fields = [owner, moduleId, gameId].every((value) => typeof value === "string" && value.length > 0 && value.length <= 128);
       const relative = normalizeRelative(rect);
-      if (!fields || typeof key !== "string" || !OVERLAY_KEY.test(key) || !relative) continue;
+      // Panels over the game are not kept (see PANEL_KEY_PREFIX).
+      if (!fields || typeof key !== "string" || !OVERLAY_KEY.test(key) || isPanelKey(key) || !relative) continue;
       const overlay: GameOverlay = {
         owner: owner as string,
         moduleId: moduleId as string,
@@ -214,7 +246,8 @@ export class GameOverlayStore {
     if (this.of(subject.gameId).length >= LIMITS.maxGameOverlays) return "full";
     // Overlays of one game start below each other, so a second one doesn't hide the first.
     const row = this.of(subject.gameId).length % 4;
-    const rect = { ...DEFAULT_RELATIVE_RECT, y: Math.min(DEFAULT_RELATIVE_RECT.y + row * (DEFAULT_RELATIVE_RECT.height + 0.02), 1 - DEFAULT_RELATIVE_RECT.height) };
+    const first = isPanelKey(subject.key) ? DEFAULT_PANEL_RECT : DEFAULT_RELATIVE_RECT;
+    const rect = { ...first, y: Math.min(first.y + row * (first.height + 0.02), 1 - first.height) };
     this.overlays.push({ ...subject, mode: "always", opacity: 100, hideFromCapture: false, rect });
     this.saveSoon();
     return "added";
@@ -260,7 +293,7 @@ export class GameOverlayStore {
   save(): Promise<void> {
     clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
-    const body: GameOverlayFile = { version: 1, exclusiveHintShown: this.hintShown, overlays: this.overlays };
+    const body: GameOverlayFile = { version: 1, exclusiveHintShown: this.hintShown, overlays: this.overlays.filter((overlay) => !isPanelKey(overlay.key)) };
     const text = `${JSON.stringify(body, null, 2)}\n`;
     return this.queue.run(() => writeFileAtomic(this.file, text)).catch((error: unknown) => console.error("[tavora] saving game overlays failed", error));
   }

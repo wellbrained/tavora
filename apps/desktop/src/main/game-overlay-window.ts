@@ -4,12 +4,30 @@
 // its own address, and the window is visible to screen capture unless the player turned "Hide from capture" on (some anti-cheats flag windows hidden from capture over a game). While
 // the player arranges overlays a second view of Tavora's own, with an outline, edges and a close button, sits on top
 // and the window takes the mouse, but still never the keyboard.
-import { BrowserWindow, WebContentsView, screen, session, type Session } from "electron";
+//
+// The same window also holds a whole panel the player moved over its game (`panel`). It is the panel's own view, moved
+// here from the workspace and moved back when the window goes; nothing about the panel changes. While arranging, that
+// window takes the mouse and the keyboard too, and the frame sits around the panel instead of over it.
+import { BrowserWindow, WebContentsView, app, screen, session, type Session } from "electron";
 import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
-import { dragRect, type Opacity, type Rect } from "./game-overlays";
+import { dragRect, panelBounds, type Opacity, type Rect } from "./game-overlays";
 import { GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from "./game-overlay-page";
 import { GAME_OVERLAY_FRAME_DOCUMENT } from "../shared/game-overlay-frame";
+
+/** What the window needs of a panel it holds (implemented by ModuleView). */
+export interface OverlayPanel {
+  readonly view: WebContentsView;
+  /** The panel is over the game now; its clicks and keys count as the player's only while `arranging()` says so. */
+  enterGame(arranging: () => boolean): void;
+  /** The panel is in its workspace slot again. */
+  leaveGame(): void;
+  setBounds(rect: Rect): void;
+  setVisible(visible: boolean): void;
+  setGameOpacity(opacity: Opacity): void;
+  suspend(): void;
+  resume(): void;
+}
 
 export interface GameOverlayWindowOptions {
   /** Tavora's preload for the arrange frame. */
@@ -29,6 +47,10 @@ export interface GameOverlayWindowOptions {
   ended(): void;
   /** The name and the close button's label the frame shows. */
   frameText(): { name: string; closeLabel: string };
+  /** A panel to hold instead of an overlay page. */
+  panel?: OverlayPanel;
+  /** The window let go of its panel; the host puts it back in its workspace slot (unless the panel itself is going). */
+  released?(): void;
 }
 
 type Edges = { left?: boolean; right?: boolean; top?: boolean; bottom?: boolean };
@@ -39,7 +61,7 @@ function edgesOf(edge: unknown): Edges | null {
 }
 
 /** A session that can reach nothing but the overlay's own address. */
-function lockedSession(partition: string, allowed: (url: string) => boolean): Session {
+export function lockedSession(partition: string, allowed: (url: string) => boolean): Session {
   const ses = session.fromPartition(partition);
   // The same session comes back when a window is made again for the same overlay; its handlers are replaced.
   if (ses.protocol.isProtocolHandled(GAME_OVERLAY_SCHEME)) ses.protocol.unhandle(GAME_OVERLAY_SCHEME);
@@ -62,6 +84,11 @@ export class GameOverlayWindow {
   private arranging = false;
   private drag: { rect: Rect; cursor: { x: number; y: number }; edges: Edges | null } | null = null;
   private destroyed = false;
+  /** Tavora is quitting: the window may close then (an app quit closes every window and must not be held up). */
+  private quitting = false;
+  private readonly onQuit = () => {
+    this.quitting = true;
+  };
 
   constructor(private readonly options: GameOverlayWindowOptions) {
     // No "persist:" prefix: nothing of the page is kept on disk. Each overlay has a session of its own, kept for as long
@@ -69,7 +96,7 @@ export class GameOverlayWindow {
     const name = createHash("sha256").update(options.id).digest("hex").slice(0, 32);
     const partition = `game-overlay-${name}`;
     const ses = lockedSession(partition, (url) => url.startsWith(`${GAME_OVERLAY_ORIGIN}/`));
-    ses.protocol.handle(GAME_OVERLAY_SCHEME, (request) => serveGameOverlay(request, options.source));
+    if (!options.panel) ses.protocol.handle(GAME_OVERLAY_SCHEME, (request) => serveGameOverlay(request, options.source));
 
     this.window = new BrowserWindow({
       show: false,
@@ -99,10 +126,25 @@ export class GameOverlayWindow {
     contents.on("will-navigate", (event) => event.preventDefault());
     contents.on("did-finish-load", () => void this.applyOpacity());
     contents.once("render-process-gone", () => this.end());
-    window.once("closed", () => {
-      this.destroyed = true;
+    // A window holding a panel is never closed by the player (Alt+F4 while arranging): that would strand the panel.
+    // Bring back is how it leaves. Tavora's own destroy() does not go through this.
+    window.on("close", (event) => {
+      if (options.panel && !this.destroyed && !this.quitting) event.preventDefault();
     });
-    void contents.loadURL(`${GAME_OVERLAY_ORIGIN}/`).catch(() => this.end());
+    app.on("before-quit", this.onQuit);
+    window.once("closed", () => {
+      app.removeListener("before-quit", this.onQuit);
+      const unexpected = !this.destroyed;
+      this.destroyed = true;
+      // Closed by something other than destroy(): let go of the panel and tell the service, so no dead entry stays.
+      if (unexpected) {
+        this.release();
+        if (!this.frame.webContents.isDestroyed()) this.frame.webContents.close();
+        this.options.ended();
+      }
+    });
+    // A panel brings its own page; this window only holds it.
+    if (!options.panel) void contents.loadURL(`${GAME_OVERLAY_ORIGIN}/`).catch(() => this.end());
 
     const frameSession = lockedSession(`game-overlay-frame-${name}`, (url) => url.startsWith("data:"));
     this.frame = new WebContentsView({
@@ -111,6 +153,13 @@ export class GameOverlayWindow {
     this.frame.setBackgroundColor("#00000000");
     this.frame.setVisible(false);
     window.contentView.addChildView(this.frame);
+    // The panel goes above the frame, so the frame shows around it and never covers it.
+    if (options.panel) {
+      options.panel.setVisible(true);
+      window.contentView.addChildView(options.panel.view);
+      options.panel.enterGame(() => this.arranging);
+      options.panel.suspend();
+    }
     const frame = this.frame.webContents;
     frame.setWindowOpenHandler(() => ({ action: "deny" }));
     frame.on("will-navigate", (event) => event.preventDefault());
@@ -147,6 +196,18 @@ export class GameOverlayWindow {
     if (now.x === rect.x && now.y === rect.y && now.width === rect.width && now.height === rect.height) return;
     this.window.setBounds(rect);
     this.frame.setBounds({ x: 0, y: 0, width: rect.width, height: rect.height });
+    this.placePanel();
+  }
+
+  private placePanel(): void {
+    if (!this.options.panel) return;
+    const { width, height } = this.window.getContentBounds();
+    this.options.panel.setBounds(panelBounds({ width, height }, this.arranging));
+  }
+
+  /** Whether this window has the keyboard (only a panel's window ever takes it, while arranging). */
+  get focused(): boolean {
+    return !this.isDestroyed && this.window.isFocused();
   }
 
   setShown(shown: boolean): void {
@@ -155,12 +216,22 @@ export class GameOverlayWindow {
       this.window.showInactive();
       // The system may have put it under the game's window; ask again each time it comes back.
       this.window.setAlwaysOnTop(true, "screen-saver");
+      this.options.panel?.resume();
     } else {
       this.window.hide();
+      this.options.panel?.suspend();
     }
   }
 
-  /** Whether the window takes the mouse and shows the frame, for arranging. */
+  /** Gives the keyboard to the panel (the service does so for one panel window only). */
+  focusPanel(): void {
+    const panel = this.options.panel;
+    if (!panel || this.isDestroyed || !this.arranging) return;
+    this.window.focus();
+    panel.view.webContents.focus();
+  }
+
+  /** Whether the window takes the mouse and shows the frame, for arranging. The keyboard is given with focusPanel. */
   setArranging(arranging: boolean): void {
     if (this.isDestroyed || this.arranging === arranging) return;
     this.arranging = arranging;
@@ -168,6 +239,11 @@ export class GameOverlayWindow {
     this.window.setIgnoreMouseEvents(!arranging);
     this.frame.setVisible(arranging);
     if (arranging) this.sendFrameText();
+    const panel = this.options.panel;
+    if (!panel) return;
+    // A panel takes the keyboard as well while arranging, so its text fields can be typed in.
+    this.window.setFocusable(arranging);
+    this.placePanel();
   }
 
   /** Only with this on is the window hidden from screen capture. */
@@ -177,7 +253,8 @@ export class GameOverlayWindow {
 
   setOpacity(opacity: Opacity): void {
     this.opacity = opacity;
-    void this.applyOpacity();
+    if (this.options.panel) this.options.panel.setGameOpacity(opacity);
+    else void this.applyOpacity();
   }
 
   /** Fades the page by a style of Tavora's own, so the frame on top stays clear. */
@@ -210,9 +287,20 @@ export class GameOverlayWindow {
     }
   }
 
+  /** The panel is let go, not closed: its page goes on running wherever the host puts it. It closes only when the panel itself does. */
+  private release(): void {
+    const panel = this.options.panel;
+    if (!panel) return;
+    if (!this.window.isDestroyed()) this.window.contentView.removeChildView(panel.view);
+    panel.leaveGame();
+    this.options.released?.();
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    app.removeListener("before-quit", this.onQuit);
+    this.release();
     // Close the pages' processes too, as the other views do; destroying the window alone can leave them running.
     if (!this.frame.webContents.isDestroyed()) this.frame.webContents.close();
     if (!this.window.isDestroyed()) {

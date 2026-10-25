@@ -82,6 +82,7 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
   };
   const maximized = group.api.isMaximized();
   const module = info(panel.id)?.module;
+  const overGame = state.value?.panels.find((item) => item.instanceId === panel.id)?.overGame === true;
   return [
     { label: t("workspace.inGame"), testid: "panel-in-game", submenu: () => gameModulesMenu(group) },
     {
@@ -118,6 +119,14 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
           disabled: api.groups.length < 2,
           run: () => group.api.maximize(),
         },
+    // Only where Tavora can draw over a game; with Game overlays off the item opens Settings > Overlays.
+    ...(module && state.value?.gameOverlays.supported
+      ? [
+          overGame
+            ? { label: t("dock.bringBack"), testid: "panel-bring-back", separator: true, run: () => act({ type: "bring-panel-back", instanceId: panel.id }) }
+            : { label: t("dock.showOverGame"), testid: "panel-show-over-game", separator: true, run: () => act({ type: "show-panel-over-game", instanceId: panel.id }) },
+        ]
+      : []),
     {
       label: t("dock.closePanel"),
       testid: "panel-close",

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Settings > Overlays: Game overlays, module overlay pages Tavora shows over a game while it is in front. The master
 // switch, then for each game its arrange key and its overlays: when each shows, its key, how see-through it is and
-// whether stream capture may see it. Modules add overlays with "Show over game"; they are removed here.
+// whether stream capture may see it. Modules add overlays with "Show over game"; they are removed here. A whole
+// panel the player moved over the game from its menu is listed like the others, with Bring back instead of Remove.
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
@@ -89,7 +90,17 @@ function askKey(game: Game, overlay?: Overlay) {
           <li v-for="overlay in game.overlays" :key="`${overlay.moduleId}:${overlay.key}`" class="bg-card flex flex-col gap-2 rounded-lg border px-4 py-3" :data-testid="`game-overlay-${overlay.moduleId}-${overlay.key}`">
             <div class="flex items-center gap-3">
               <span class="min-w-0 flex-1 truncate font-medium">{{ overlay.name }}</span>
-              <Button variant="ghost" size="sm" :aria-label="t('overlays.removeLabel', { name: overlay.name, game: game.name })" @click="remove(game, overlay)">{{ t("overlays.remove") }}</Button>
+              <Button
+                v-if="overlay.panel"
+                variant="secondary"
+                size="sm"
+                :aria-label="t('overlays.bringBackNamed', { name: overlay.name, game: game.name })"
+                :data-testid="`overlay-bring-back-${overlay.key}`"
+                @click="remove(game, overlay)"
+              >
+                {{ t("overlays.bringBack") }}
+              </Button>
+              <Button v-else variant="ghost" size="sm" :aria-label="t('overlays.removeLabel', { name: overlay.name, game: game.name })" @click="remove(game, overlay)">{{ t("overlays.remove") }}</Button>
             </div>
             <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
               <span class="text-muted-foreground w-24 flex-none text-sm">{{ t("overlays.mode.label") }}</span>
