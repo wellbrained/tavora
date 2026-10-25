@@ -9,6 +9,8 @@ import { cn, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
+import { Label } from "@tavora/official-ui/components/ui/label";
+import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import MemberRow from "./MemberRow.vue";
 import { setLanguage, t } from "./i18n";
@@ -64,6 +66,18 @@ const notice = computed(() => {
       return { title: t("status.connectingTitle"), text: "", action: false, busy: true };
   }
 });
+
+// The voice overlay's settings: over the game, a preview, a link for OBS, and names on it.
+const overlay = computed(() => panel.value?.overlay.value ?? { names: true, overGame: false });
+const overlayNote = ref<string | null>(null);
+async function overGame(on: boolean) {
+  const result = await panel.value?.setOverGame(on);
+  overlayNote.value = result === "off" ? t("overlay.gameOff") : result === "full" ? t("overlay.gameFull") : null;
+}
+async function copyLink() {
+  const result = await panel.value?.copyOverlayLink();
+  overlayNote.value = result === "copied" ? t("overlay.copied") : result === "off" ? t("overlay.streamOff") : result === "denied" ? t("overlay.denied") : null;
+}
 
 const server = computed(() => view.value?.server ?? null);
 const browseServer = computed(() => view.value?.browseServer ?? null);
@@ -255,6 +269,22 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", closeOutside))
       </div>
 
       <footer class="flex flex-none flex-col gap-1.5 border-t px-3 py-2" data-testid="discord-game">
+        <section class="flex flex-col gap-1.5 pb-1" :aria-label="t('overlay.title')" data-testid="discord-overlay">
+          <h3 class="font-medium">{{ t("overlay.title") }}</h3>
+          <Label class="justify-between font-normal">
+            {{ t("overlay.overGame") }}
+            <Switch :model-value="overlay.overGame" data-testid="discord-over-game" @update:model-value="(on: boolean) => act(() => overGame(on))" />
+          </Label>
+          <Label class="justify-between font-normal">
+            {{ t("overlay.names") }}
+            <Switch :model-value="overlay.names" data-testid="discord-overlay-names" @update:model-value="(on: boolean) => act((current) => current.setOverlayNames(on))" />
+          </Label>
+          <div class="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" data-testid="discord-preview" @click="act((current) => current.previewOverlay())">{{ t("overlay.preview") }}</Button>
+            <Button variant="secondary" size="sm" data-testid="discord-copy-link" @click="act(() => copyLink())">{{ t("overlay.copyLink") }}</Button>
+          </div>
+          <p v-if="overlayNote" class="text-muted-foreground text-xs" role="status" data-testid="discord-overlay-note">{{ overlayNote }}</p>
+        </section>
         <div class="flex items-center gap-2">
           <label for="discord-remember" class="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
             <Checkbox id="discord-remember" :model-value="view.game.remember" data-testid="discord-remember" @update:model-value="(value) => act((current) => current.rememberGame(value === true))" />
