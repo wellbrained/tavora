@@ -128,6 +128,8 @@ export interface BridgeContext {
     resetLink(key: string): void;
     /** Throws PERMISSION_DENIED unless the panel just got a click or key press. */
     showOverGame(key: string): Promise<GameOverlayResult>;
+    /** Throws PERMISSION_DENIED unless the panel just got a click or key press, and INVALID_PARAMS without an overlay in the manifest. */
+    preview(key: string): Promise<void>;
   };
   /** Hotkeys of this module in this game (hotkeys.ts); actions and targets already checked. */
   hotkeys: {
@@ -364,6 +366,8 @@ const handlers = new Map<string, Handler>([
   ["overlay.remove", (s, params) => (s.context.overlay.remove(moduleKey(object(params), "key")), null)],
   // Needs no capability either: a window of Tavora's own shows the page, only after a click, and the player can turn it off.
   ["overlay.showOverGame", (s, params) => s.context.overlay.showOverGame(moduleKey(object(params), "key"))],
+  // Needs no capability: a window of Tavora's own shows the page, only after a click.
+  ["overlay.preview", async (s, params) => (await s.context.overlay.preview(moduleKey(object(params), "key")), null)],
   // A module that asks for the connector on request may call it without the grant: Tavora asks the player then.
   ["overlay.copyLink", (s, params) => s.context.overlay.copyLink(moduleKey(object(params), "key"))],
   ["overlay.resetLink", (s, params) => (needs(s, "overlay", "overlay.resetLink"), s.context.overlay.resetLink(moduleKey(object(params), "key")), null)],

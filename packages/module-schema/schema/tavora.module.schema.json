@@ -291,6 +291,10 @@
           "continues": {
             "type": "boolean",
             "description": "Panels opened before the module had panel types become this type. Without it, the first type."
+          },
+          "inGame": {
+            "type": "boolean",
+            "description": "The player may show this panel in their game: its menu offers Show in game, and the panel appears over the game only while the player holds Tavora's in-game layer open. Needs a minTavora newer than 0.20.54 (except Tavora's own modules); the TypeScript validator checks that."
           }
         }
       }

@@ -4,6 +4,7 @@ What changed in `@tavora/module-schema`, newest first.
 
 ## Unreleased
 
+- Panel types: `inGame`, whether the player may show the panel in their game (`LAST_TAVORA_WITHOUT_IN_GAME_PANELS`, 0.20.54). The panel appears over the game only while the player holds Tavora's in-game layer open. A manifest with it needs a `minTavora` newer than that, except Tavora's own modules.
 - `overlay` no longer needs the `stream-overlay` connector: game overlays (`overlay.showOverGame`) show the page without it. The connector still needs an `overlay`. A manifest with an `overlay` and no connector needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_GAME_OVERLAYS` (0.20.50), except Tavora's own modules, because older Tavoras refuse it.
 - `translations`: the module's name, description, panel and action names in other languages, keyed by language code (`ModuleTranslation`, `isLanguageCode`, `MAX_TRANSLATIONS`). `translateManifest` gives the manifest in a language, `translationsFor` the translations that apply. A manifest with them needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_TRANSLATIONS` (0.20.12), except Tavora's own modules.
 - `support`: where players send feedback, an `https` address or an email address (`isSupportLink`, `isSupportEmail`, `MAX_SUPPORT_LENGTH`). The module's page has a Send feedback button for it. Needs Tavora 0.20.39 or newer.

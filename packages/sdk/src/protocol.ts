@@ -544,6 +544,12 @@ export interface Methods {
    * key press in the panel; needs no capability. Tavora 0.20.51 and newer.
    */
   "overlay.showOverGame": { params: { key: string }; result: GameOverlayResult };
+  /**
+   * Opens (or brings forward) a small Tavora window with the overlay page for `key` at its real size, for the player to
+   * see what it looks like. Only right after a click or key press in the panel; needs no capability, but the module must
+   * have an `overlay` in its manifest. Tavora 0.20.55 and newer.
+   */
+  "overlay.preview": { params: { key: string }; result: null };
   /** The hotkeys the player set for this module in the current game. Tavora 0.19.26 and newer. */
   "hotkeys.list": { params: undefined; result: HotkeyBinding[] };
   /**
