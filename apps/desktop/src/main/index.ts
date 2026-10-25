@@ -1,7 +1,7 @@
 import { readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { app, protocol } from "electron";
-import { HOST_SCHEME, MODULE_SCHEME } from "./assets";
+import { GAME_OVERLAY_SCHEME, HOST_SCHEME, MODULE_SCHEME } from "./assets";
 import { errorLog } from "./diagnostics";
 import { Host } from "./host";
 import { parseTestHosts } from "./network";
@@ -34,6 +34,7 @@ if (unsafe) {
 protocol.registerSchemesAsPrivileged([
   { scheme: MODULE_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
   { scheme: HOST_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  { scheme: GAME_OVERLAY_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ]);
 
 // Every renderer is sandboxed, including any created by accident.

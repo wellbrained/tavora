@@ -118,6 +118,18 @@ describe("GameWatcher", () => {
     }
   });
 
+  it("says which games a program belongs to once the installed games are known, for the window in front", async () => {
+    const library = emptyLibrary();
+    addGame(library, { name: "Fortnite" }, day(1));
+    const watcher = new GameWatcher({ entries: () => liveGames(library), findInstalled: async () => [FORTNITE], onChange: () => undefined, probe: () => look([]), platform: "win32" });
+    expect(watcher.gamesOf(FORTNITE_EXE).size).toBe(0);
+    watcher.start();
+    await watcher.refreshInstalled();
+    expect([...watcher.gamesOf(FORTNITE_EXE)]).toEqual(["local-fortnite"]);
+    expect(watcher.gamesOf("C:\Windows\explorer.exe").size).toBe(0);
+    watcher.stop();
+  });
+
   it("stops looking when Windows can't be asked", async () => {
     vi.useFakeTimers();
     try {

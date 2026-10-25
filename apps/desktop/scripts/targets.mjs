@@ -24,7 +24,7 @@ export const targets = [
   },
   // Sandboxed preloads can only require a few electron modules, so they are
   // bundled for the browser with everything inlined.
-  ...["module", "host", "tooltip"].map((name) => ({
+  ...["module", "host", "tooltip", "game-overlay"].map((name) => ({
     ...common,
     entryPoints: [`src/preload/${name}.ts`],
     outfile: `out/preload/${name}.cjs`,
