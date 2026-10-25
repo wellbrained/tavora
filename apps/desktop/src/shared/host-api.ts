@@ -952,10 +952,13 @@ export interface TavoraHostApi {
   releaseStatuses(copies: ReleaseCopy[]): Promise<Record<string, ReleaseStatus> | null>;
   /** Where the visible panels are. Panels not listed are hidden. */
   setPanelBounds(bounds: PanelBounds[]): void;
+  /** Where the workspace is (the card that covers it while a game opens), or null when it is not on screen. */
+  setWorkspaceBounds(bounds: { x: number; y: number; width: number; height: number } | null): void;
   /**
    * Hides module panels while a menu, dialog or drag would be drawn under
    * them. Before hiding, the host sends a still image of each visible panel
-   * to `onFrozen`, so the workspace does not go blank.
+   * to `onFrozen`, so the workspace does not go blank. After it closes, the
+   * host sends `{}` once every panel has drawn again.
    */
   setOverlay(open: boolean): void;
   /** Dims the window buttons along with the page while a dialog backdrop covers it. */

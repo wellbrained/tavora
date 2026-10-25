@@ -45,7 +45,6 @@ import ModuleUpdatesButton from "../components/workspace/ModuleUpdatesButton.vue
 import ModulesMenu from "../components/workspace/ModulesMenu.vue";
 import GridPicker from "../components/workspace/GridPicker.vue";
 import TemplatePreview from "../components/workspace/TemplatePreview.vue";
-import CampfireLoader from "../components/workspace/CampfireLoader.vue";
 import PanelContent from "../components/workspace/PanelContent.vue";
 import PanelTab from "../components/workspace/PanelTab.vue";
 import { DOCK } from "../components/workspace/dock-context";
@@ -84,6 +83,7 @@ const elements = new Map<string, HTMLElement>();
 const resizes = new ResizeObserver(() => reportSoon());
 let dock: DockviewApi | null = null;
 let lastReport = "";
+let lastArea = "";
 let reportFrame = 0;
 const columns = ref<DockColumn[]>([]);
 let changingColumn = false;
@@ -169,11 +169,22 @@ function reportSoon() {
       const maximized = panel.group.api.isMaximized();
       bounds.push({ instanceId, x: rect.left, y: rect.top, width: rect.width, height: rect.height, ...(maximized ? { maximized: true } : {}) });
     }
+    reportArea();
     const report = JSON.stringify(bounds);
     if (report === lastReport) return;
     lastReport = report;
     host.setPanelBounds(bounds);
   });
+}
+
+/** Tells the main process where the workspace is: its cover goes there while a game opens. */
+function reportArea() {
+  const rect = area.value?.getBoundingClientRect();
+  const bounds = rect && rect.width >= 1 && rect.height >= 1 ? { x: rect.left, y: rect.top, width: rect.width, height: rect.height } : null;
+  const report = JSON.stringify(bounds);
+  if (report === lastArea) return;
+  lastArea = report;
+  host.setWorkspaceBounds(bounds);
 }
 
 // ── Keeping the dock in step with the host ─────────────────────────────
@@ -407,9 +418,11 @@ function onReady({ api }: DockviewReadyEvent) {
 }
 
 const root = ref<HTMLElement | null>(null);
-watch(root, (element, previous) => {
-  if (previous) resizes.unobserve(previous);
-  if (element) resizes.observe(element);
+/** The room the panels share, where the loading card and the host's cover go. */
+const area = ref<HTMLElement | null>(null);
+watch([root, area], (elements, previous) => {
+  for (const element of previous ?? []) if (element) resizes.unobserve(element);
+  for (const element of elements) if (element) resizes.observe(element);
 });
 
 onBeforeUnmount(() => {
@@ -423,6 +436,7 @@ onBeforeUnmount(() => {
   removeEventListener("resize", reportSoon);
   endDrag();
   host.setPanelBounds([]);
+  host.setWorkspaceBounds(null);
 });
 
 // The library types components loosely; these take its documented props.
@@ -451,7 +465,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
     </header>
 
     <div ref="root" class="relative min-h-0 flex-1" :data-drop-line="dropLine ?? undefined" @pointerdown.capture="onPointerDown">
-      <div class="absolute inset-x-2 top-0 bottom-2 flex gap-2">
+      <div ref="area" class="absolute inset-x-2 top-0 bottom-2 flex gap-2">
         <Button
           v-if="leftColumn"
           variant="secondary"
@@ -490,10 +504,9 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         </Button>
       </div>
       <DropGuide v-if="guide" :guide="guide" />
-      <!-- The game just opened: one card over the dock, where the panels go, until every panel has its data and all show at once. -->
-      <div v-if="view.opening" class="bg-background absolute inset-x-2 top-0 bottom-2 z-20 rounded-[10px] border" data-testid="workspace-loading">
-        <CampfireLoader :name="game?.name ?? ''" />
-      </div>
+      <!-- The game just opened: one plain card over the dock until every panel has its data. The host's cover lies over it
+           until every panel has drawn, and shows the fire when opening takes long (panel-cover.ts). -->
+      <div v-if="view.opening" class="bg-background absolute inset-x-2 top-0 bottom-2 z-20 rounded-[10px] border" role="status" :aria-label="t('panel.loading', { name: game?.name ?? '' })" data-testid="workspace-loading"></div>
       <div
         v-if="!view.panels.length && !view.layout"
         class="bg-background absolute inset-x-2 top-0 bottom-2 z-10 flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed text-center"

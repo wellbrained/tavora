@@ -170,6 +170,7 @@ import {
 import type { PanelContent, PanelLaunch } from "./panel-content";
 import type { PanelOpenResult } from "@tavora/sdk/protocol";
 import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
+import { layoutKey, OpenTimes, PanelCover } from "./panel-cover";
 
 interface Rect {
   x: number;
@@ -184,6 +185,8 @@ interface Rect {
  * Tavora starts, pages start late, so a cap close to REVEAL_CAP_MS took the cover away while they still waited.
  */
 const OPENING_CAP_MS = REVEAL_CAP_MS * 4;
+/** A development run with TAVORA_TIMINGS set logs how long games and panels take to draw. */
+const timingLog = !app.isPackaged && process.env.TAVORA_TIMINGS ? (line: string) => console.log(`[tavora] ${line}`) : null;
 /** How long to wait for a still image of a panel before hiding it anyway. */
 const FREEZE_TIMEOUT_MS = 250;
 /** How long a development folder's build must be quiet before its panels reload. */
@@ -392,7 +395,15 @@ export class Host {
    * Set while a game just opened and its panels load: none is shown until every visible one has its data, so
    * the workspace appears at once rather than panel by panel.
    */
-  private opening: { startedAt: number; timer: ReturnType<typeof setTimeout> } | null = null;
+  private opening: { startedAt: number; timer: ReturnType<typeof setTimeout>; layout: string } | null = null;
+  /** Covers the workspace while a game opens, until every panel has drawn (panel-cover.ts). */
+  private cover!: PanelCover;
+  /** How long each game took to open here, so the cover knows whether to show the fire from the start. */
+  private openTimes!: OpenTimes;
+  /** Tavora's emblem for the cover's fire, read once. */
+  private emblem: string | null = null;
+  /** Counts game openings, so the end of one that was left does not end the next. */
+  private openings = 0;
   private readonly onlineSearch: OnlineSearch;
   /** Tavora's module catalog (catalog-client.ts). */
   private readonly catalog: CatalogClient;
@@ -615,6 +626,10 @@ export class Host {
     host.syncNativeTheme();
     await host.account.init();
     await host.publisherNames.load();
+    host.openTimes = new OpenTimes(path.join(userData, "open-times.json"));
+    await host.openTimes.load();
+    host.emblem = await Host.readEmblem(options);
+    host.cover = new PanelCover({ parent: host.window.contentView, emblem: () => host.emblem });
     void host.refreshPublisherNames();
     void host.refreshSafetyLists();
     setInterval(() => void host.refreshSafetyLists(), SAFETY_REFRESH_MS).unref();
@@ -1451,6 +1466,10 @@ export class Host {
       if(event.senderFrame?.parent!==null)return;
       this.viewsByContents.get(event.sender.id)?.notePointer(point);
     });
+    ipcMain.on("tavora:framed", (event: IpcMainEvent, requestId: unknown) => {
+      if (event.senderFrame?.parent !== null) return;
+      this.viewsByContents.get(event.sender.id)?.framed(requestId);
+    });
     ipcMain.on("tavora:pong", (event: IpcMainEvent) => {
       if (event.senderFrame?.parent !== null) return;
       this.viewsByContents.get(event.sender.id)?.pong();
@@ -1542,6 +1561,9 @@ export class Host {
     ipcMain.on("host:panel-bounds", (event, bounds: unknown) => {
       if (fromHost(event)) this.setPanelBounds(bounds);
     });
+    ipcMain.on("host:workspace-bounds", (event, bounds: unknown) => {
+      if (fromHost(event)) this.cover.setBounds(this.windowRect(bounds));
+    });
     ipcMain.on("host:overlay", (event, open: unknown) => {
       if (fromHost(event) && typeof open === "boolean") void this.setOverlay(open);
     });
@@ -1588,6 +1610,7 @@ export class Host {
       // The overlay windows (and the keys for arranging) go with the main window; they would keep Tavora running.
       void this.gameOverlays.shutdown().catch((error: unknown) => console.error("[tavora]", error));
       for (const view of this.views.values()) view.dispose();
+      this.cover.dispose();
       this.views.clear();
       this.viewsByContents.clear();
       this.browsersByContents.clear();
@@ -2936,7 +2959,9 @@ export class Host {
     this.workspaces.relayout();
     if ([...this.views.values()].some((view) => view instanceof ModuleView)) {
       this.endOpening();
-      this.opening = { startedAt: performance.now(), timer: setTimeout(() => this.endOpening(true), OPENING_CAP_MS) };
+      const layout = layoutKey(game.id, this.records(game.id));
+      this.opening = { startedAt: performance.now(), timer: setTimeout(() => this.endOpening(true), OPENING_CAP_MS), layout };
+      this.cover.start(this.currentTheme, translate(this.language, "panel.loading", { name: game.displayName }), this.openTimes.estimate(layout));
       // The host UI covers the panels from now on, not each panel with its own loader.
       this.pushStateSoon();
     }
@@ -2955,13 +2980,26 @@ export class Host {
   /** Ends the wait for a game's panels; `show` places them and tells the host UI, which takes its loading cover away. */
   private endOpening(show = false): void {
     if (!this.opening) return;
-    clearTimeout(this.opening.timer);
-    const took = performance.now() - this.opening.startedAt;
+    const { startedAt, timer, layout } = this.opening;
+    clearTimeout(timer);
+    const took = performance.now() - startedAt;
     this.opening = null;
-    if (!show) return;
+    const opening = ++this.openings;
+    if (!show) return this.cover.cancel();
     timings.record("game-open", took);
     this.applyBounds();
     this.pushState();
+    // The panels are shown now, under the cover; it goes once every one has drawn.
+    const shown = this.panelsInSlots();
+    this.logDraws(shown, "game open");
+    void Promise.all(shown.map((view) => view.drawn)).then(() => {
+      if (opening !== this.openings || !this.cover.covering) return;
+      const total = performance.now() - startedAt;
+      timings.record("game-drawn", total);
+      timingLog?.(`game open: data ${Math.round(took)} ms, every panel drawn ${Math.round(total)} ms, cover fire ${this.cover.fireShown ? "shown" : "not shown"}`);
+      void this.openTimes.record(layout, total);
+      this.cover.finish();
+    });
   }
 
   /** openedAt is when the player asked for the panel; its time to a loaded page is measured from there. */
@@ -2993,6 +3031,7 @@ export class Host {
         this.applyBounds();
         this.pushStateSoon();
       },
+      onDrawn: () => this.pushStateSoon(),
       onOpenLink: (url) => this.openLinkFromModule(url, game.id),
       onNeedsTavora: () => {
         this.notice = translate(this.language, "overlays.bringBackFirst");
@@ -3273,6 +3312,7 @@ export class Host {
 
   private closeAllViews(): void {
     this.endOpening();
+    this.cover.cancel();
     // A panel over its game goes on running there, also while another game or the library is shown.
     for (const instanceId of [...this.views.keys()]) if (!this.floating(instanceId)) this.destroyView(instanceId);
     this.panelBounds.clear();
@@ -3388,7 +3428,9 @@ export class Host {
     if(open)this.tooltips.close();
     this.overlay = open;
     const change = ++this.overlayChanges;
-    if (!open) return this.applyBounds();
+    if (!open) return this.showAfterOverlay(change);
+    // The dialog has to be seen; the panels' pictures stand in for them, so the cover goes.
+    this.cover.cancel();
     const images: Record<string, string> = {};
     await Promise.all(
       [...this.views].map(async ([instanceId, view]) => {
@@ -3404,6 +3446,59 @@ export class Host {
     if (change !== this.overlayChanges || this.window.isDestroyed()) return;
     this.window.webContents.send("host:frozen", images);
     for (const [instanceId, view] of this.views) if (!this.floating(instanceId)) view.setVisible(false);
+  }
+
+  /**
+   * The dialog closed: the panels are shown again. Each stays see-through until it has drawn (ModuleView.drawn), and
+   * its picture stays in the host UI under it until then, so a slow one does not show empty for a moment.
+   */
+  private showAfterOverlay(change: number): void {
+    this.applyBounds();
+    const shown = this.panelsInSlots();
+    this.logDraws(shown, "dialog closed");
+    void Promise.all(shown.map((view) => view.drawn)).then(() => {
+      if (change === this.overlayChanges && !this.window.isDestroyed()) this.window.webContents.send("host:frozen", {});
+    });
+  }
+
+  /** The module panels placed in their workspace slots now. */
+  private panelsInSlots(): ModuleView[] {
+    return [...this.views].flatMap(([instanceId, view]) => (view instanceof ModuleView && this.panelBounds.has(instanceId) && !this.floating(instanceId) ? [view] : []));
+  }
+
+  /** With TAVORA_TIMINGS, says how long each panel took to draw once shown: without being covered, it showed empty that long. */
+  private logDraws(views: ModuleView[], what: string): void {
+    if (!timingLog) return;
+    const shownAt = performance.now();
+    for (const view of views) {
+      void view.drawn.then(() => timingLog?.(`${what}: ${view.moduleId}${view.typeName ? ` (${view.typeName})` : ""} drew ${Math.round(performance.now() - shownAt)} ms after it was shown`));
+    }
+  }
+
+  /** A place on the window from the host UI, or null when it is none. */
+  private windowRect(raw: unknown): Rect | null {
+    const item = raw as Partial<Rect> | null;
+    if (!item || typeof item !== "object") return null;
+    const numbers = [item.x, item.y, item.width, item.height];
+    if (!numbers.every((n) => typeof n === "number" && Number.isFinite(n) && n >= 0)) return null;
+    const { width, height } = this.window.getContentBounds();
+    const x = Math.min(Math.round(item.x!), width);
+    const y = Math.min(Math.round(item.y!), height);
+    const rect = { x, y, width: Math.min(Math.round(item.width!), width - x), height: Math.min(Math.round(item.height!), height - y) };
+    return rect.width > 0 && rect.height > 0 ? rect : null;
+  }
+
+  /** Tavora's emblem as a data: URL for the cover's fire, from the built host UI (or its dev server); null when it cannot be read. */
+  private static async readEmblem(options: HostOptions): Promise<string | null> {
+    const name = "brand/emblem-transparent-512.png";
+    try {
+      const bytes = options.devServer
+        ? Buffer.from(await (await fetch(new URL(name, options.devServer), { signal: AbortSignal.timeout(2_000) })).arrayBuffer())
+        : await readFile(path.join(options.rendererDir, name));
+      return `data:image/png;base64,${bytes.toString("base64")}`;
+    } catch {
+      return null;
+    }
   }
 
   // ── Module menus ─────────────────────────────────────────────────────
@@ -3606,7 +3701,8 @@ export class Host {
           const status = view?.status ?? "loading";
           // Hidden until its page has its data.
           const overGame = this.floating(record.instanceId);
-          const waiting = !overGame && (status === "loading" || status === "ready") && !view?.revealed;
+          // A new page is also waiting until it has drawn once: its loader stays under the see-through view until then.
+          const waiting = !overGame && (status === "loading" || status === "ready") && (!view?.revealed || !view.firstDrawn);
           return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status, waiting, content, ...(overGame ? { overGame } : {}) };
         }
         const browser = view.state;

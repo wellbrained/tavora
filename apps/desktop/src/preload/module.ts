@@ -37,6 +37,13 @@ for (const type of ["pointerdown", "keydown"]) {
 
 ipcRenderer.on("tavora:ping", () => ipcRenderer.send("tavora:pong"));
 
+// The host shows a panel see-through (or under a cover) until it has drawn. A frame callback runs just before a
+// frame is drawn, and only while the page is shown; the second one runs once the first frame is out.
+ipcRenderer.on("tavora:frame", (_event, requestId: unknown) => {
+  if (typeof requestId !== "number") return;
+  requestAnimationFrame(() => requestAnimationFrame(() => ipcRenderer.send("tavora:framed", requestId)));
+});
+
 // Keep the last point as well as the first: dropping the trailing event can
 // reject a tooltip when the player crosses slots faster than the throttle.
 let pointerSentAt=0;
