@@ -77,7 +77,7 @@ const checkedDrives = computed(() => (monitor.value?.info.value ? watchedDrives(
     <p v-else-if="status === 'error'" class="text-muted-foreground flex flex-1 items-center justify-center p-4 text-center" role="alert" data-testid="read-error">
       {{ t("readError", { error: monitor.error.value }) }}
     </p>
-    <div v-else class="min-h-0 flex-1 overflow-y-auto">
+    <div v-else class="@container min-h-0 flex-1 overflow-y-auto">
       <SystemSection :monitor="monitor" />
       <p v-if="!snapshot" class="text-muted-foreground px-3 py-2 text-xs" data-testid="waiting">{{ t("waiting") }}</p>
     </div>

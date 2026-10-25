@@ -41,6 +41,12 @@ export function speed(bytesPerSec: number, language = "en"): string {
   return `${num(mb, mb < 10 ? 1 : 0, language)} MB/s`;
 }
 
+/** The number of a speed, for lines that say "MB/s" once: "3.2", "120". */
+export function speedNumber(bytesPerSec: number, language = "en"): string {
+  const mb = bytesPerSec / MB;
+  return num(mb, mb < 10 ? 1 : 0, language);
+}
+
 /** Tavora's own memory: "180 MB", or "1.2 GB" from a gigabyte on. */
 export function memory(bytes: number, language = "en"): string {
   return bytes >= GB ? size(bytes, language) : `${num(bytes / MB, 0, language)} MB`;

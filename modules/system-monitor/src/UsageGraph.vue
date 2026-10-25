@@ -1,13 +1,11 @@
 <script setup lang="ts">
-// The place for a small usage graph under the CPU and GPU rows. It draws nothing yet: the kit has no chart control,
-// and a new one needs the maintainer's OK. The rows already hand it their last 5 minutes (History.values(), oldest
-// first, 0 to 100), so a chart only has to be drawn here later. Keep it cheap: no animations, redraw once per snapshot.
-import type { History } from "./history";
+// The graph under the CPU and GPU numbers: the last 5 minutes (History.values(), oldest first, 0 to 100) as a kit
+// Sparkline. The parent hands over a fresh array with each snapshot, which is what makes it redraw, and only then.
+import { Sparkline } from "@tavora/official-ui/components/ui/sparkline";
 
-defineProps<{ history: History }>();
+defineProps<{ values: number[]; label: string }>();
 </script>
 
 <template>
-  <!-- Intentionally empty: see above. -->
-  <span v-if="false" />
+  <Sparkline :values="values" :height="40" :label="label" data-testid="graph" />
 </template>

@@ -10,6 +10,7 @@ import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
+import { Sparkline } from "@tavora/official-ui/components/ui/sparkline";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
@@ -21,6 +22,7 @@ import { type SectionId, sectionTitle as title } from "../sections";
 defineProps<{ visible: Set<SectionId>; off: boolean }>();
 
 const progress = ref(45);
+const spark = Array.from({ length: 60 }, (_, i) => Math.round(50 + 30 * Math.sin(i / 5) + 12 * Math.sin(i * 1.7)));
 const switchOn = ref(true);
 const density = ref<"tight" | "normal">("normal");
 const selectedRow = ref("b");
@@ -68,6 +70,10 @@ function bump(by: number) {
             <Button size="xs" variant="secondary" :disabled="off" @click="bump(-15)">Less</Button>
             <Button size="xs" variant="secondary" :disabled="off" @click="bump(15)">More</Button>
           </div>
+        </Specimen>
+        <Specimen label="Sparkline" column>
+          <Sparkline :values="spark" class="max-w-64" label="Usage over the last minute" />
+          <Sparkline :values="spark" color="success" :height="24" class="max-w-64" label="Usage, short and green" />
         </Specimen>
         <Specimen label="Spinner">
           <Loader2 class="text-muted-foreground size-4 animate-spin" :stroke-width="1.5" />

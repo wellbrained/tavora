@@ -68,3 +68,10 @@ describe("usedPercent", () => {
     expect(usedPercent(null, 1000)).toBe(0);
   });
 });
+
+describe("speedNumber", () => {
+  it("is the number without the unit", async () => {
+    const { speedNumber } = await import("./format");
+    expect([speedNumber(2.34 * MB), speedNumber(8.2 * MB), speedNumber(120 * MB), speedNumber(3 * MB, "de")]).toEqual(["2.3", "8.2", "120", "3,0"]);
+  });
+});
