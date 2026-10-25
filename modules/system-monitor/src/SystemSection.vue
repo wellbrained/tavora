@@ -24,6 +24,7 @@ const peakText = (value: number | undefined) => (value !== undefined && showPeak
 
 // The graphs: a fresh array with each snapshot, which is what redraws them.
 const cpuValues = computed(() => (snapshot.value, props.monitor.cpuHistory.values()));
+const ramValues = computed(() => (snapshot.value, props.monitor.ramHistory.values()));
 const gpuValues = computed(() => (snapshot.value, props.monitor.gpuHistory.values()));
 
 // CPU
@@ -62,6 +63,7 @@ const ram = computed(() => {
   const value = total > 0 ? Math.min(100, (used / total) * 100) : 0;
   return {
     value,
+    total: total > 0 ? size(total, lang.value) : "",
     big: now ? percent(value, lang.value) : "",
     line: now ? t("ram.line", { used: size(used, lang.value), free: size(Math.max(0, total - used), lang.value) }) : "",
   };
@@ -139,14 +141,19 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
       :graph-label="t('gpu.title')"
     />
 
-    <section v-if="blocks.ram" :class="CARD" data-testid="block-ram">
-      <header class="flex items-baseline justify-between gap-2">
-        <span :class="LABEL">{{ t("ram.title") }}</span>
-        <span class="text-2xl leading-none font-semibold tabular-nums" data-testid="ram-big">{{ ram.big }}<span v-if="ram.big" class="text-muted-foreground ml-0.5 text-sm font-normal">%</span></span>
-      </header>
-      <Progress :model-value="ram.value" :class="cn(BAR)" :aria-label="t('ram.title')" />
-      <p class="text-muted-foreground text-xs tabular-nums" data-testid="ram-text">{{ ram.line }}</p>
-    </section>
+    <MetricCard
+      v-if="blocks.ram"
+      testid="block-ram"
+      :title="t('ram.title')"
+      :name="ram.total"
+      :usage="ram.big"
+      :has-temperature="false"
+      :peak="ram.line"
+      detail=""
+      hint=""
+      :values="ramValues"
+      :graph-label="t('ram.title')"
+    />
 
     <p v-if="blocks.drives && drives.length === 0" class="text-muted-foreground col-span-full text-xs" data-testid="no-drives">{{ t("drive.none") }}</p>
     <!-- Drives flow in their own grid under the cards: one per row in one column, else as many as stay readable (about 250 px each). -->

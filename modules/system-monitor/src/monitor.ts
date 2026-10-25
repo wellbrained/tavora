@@ -24,6 +24,7 @@ export function createMonitor(sdk: TavoraSDK) {
   /** The last 5 minutes of CPU and GPU use, for the graphs. */
   const cpuHistory: History = markRaw(createHistory(app.value.intervalMs));
   const gpuHistory: History = markRaw(createHistory(app.value.intervalMs));
+  const ramHistory: History = markRaw(createHistory(app.value.intervalMs));
 
   let watched = "";
   let stopped = false;
@@ -70,11 +71,13 @@ export function createMonitor(sdk: TavoraSDK) {
     panel.value = parsePanel(storedPanel);
     cpuHistory.setInterval(app.value.intervalMs);
     gpuHistory.setInterval(app.value.intervalMs);
+    ramHistory.setInterval(app.value.intervalMs);
     cleanup.push(
       sdk.connectors.systemInfo.onSnapshot((next) => {
         if (stopped) return;
         snapshot.value = next;
         if (next.cpu) cpuHistory.push(next.cpu.usage);
+        if (next.ram && next.ram.totalBytes > 0) ramHistory.push((next.ram.usedBytes / next.ram.totalBytes) * 100);
         const id = info.value ? pickGpu(info.value, panel.value.gpu) : null;
         const gpu = next.gpus?.find((entry) => entry.id === id);
         if (gpu) gpuHistory.push(gpu.usage);
@@ -132,6 +135,7 @@ export function createMonitor(sdk: TavoraSDK) {
     panel,
     cpuHistory,
     gpuHistory,
+    ramHistory,
     start,
     retry,
     stop,
@@ -141,6 +145,7 @@ export function createMonitor(sdk: TavoraSDK) {
       if (intervalMs === app.value.intervalMs) return;
       cpuHistory.setInterval(intervalMs);
       gpuHistory.setInterval(intervalMs);
+      ramHistory.setInterval(intervalMs);
       saveApp({ ...app.value, intervalMs });
     },
     /** The player's own choice of drives; once saved, newly seen drives are not added to it. */
