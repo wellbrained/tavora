@@ -50,6 +50,7 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `permissions.webAssembly` | no | `true` lets the page compile WebAssembly (the page's security policy gets `'wasm-unsafe-eval'`). Only Tavora's own modules may ask for it; a module from your modules folder that does is not loaded, and the Modules page says why. |
 
 | `panels` | no | Named [panel types](#panel-types) the module offers, 1 to 16. Without it the module has one panel, made from `entry`, `icon` and `viewport`. |
+| `inGame` | no | For a module without `panels`: `true` when the player may show its panel in their game, as a panel type's `inGame` does (see below). Not together with `panels`. Needs a `minTavora` newer than `0.21.2` (except Tavora's own modules). |
 | `overlay` | no | The page for streaming software, see [Overlay](#overlay). The `"stream-overlay"` connector (for OBS links) needs this page, but the page needs no connector: without it the page serves game overlays only, and `minTavora` must be newer than `0.20.50`, because older Tavoras refuse it. Needs Tavora 0.19.26 or newer. |
 | `actions` | no | What the module can do on a key press, 1 to 16, see [Actions](#actions). Needs Tavora 0.19.26 or newer. |
 | `translations` | no | The name, description, panel and action names in other languages, see [Translations](#translations). Needs a `minTavora` newer than `0.20.12`. |

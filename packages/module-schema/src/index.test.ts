@@ -254,6 +254,7 @@ const cases: [string, unknown, boolean][] = [
   ["panel viewport without a height", { ...valid, panels: [{ id: "planner", name: "Planner", viewport: { minWidth: 100 } }] }, false],
   ["panel continues as a string", { ...valid, panels: [{ id: "planner", name: "Planner", continues: "yes" }] }, false],
   ["panel inGame", { ...valid, minTavora: "0.21.3", panels: [{ id: "planner", name: "Planner", inGame: true }] }, true],
+  ["module inGame", { ...valid, minTavora: "0.21.3", inGame: true }, true],
   ["panel inGame false", { ...valid, panels: [{ id: "planner", name: "Planner", inGame: false }] }, true],
   ["panel inGame as a string", { ...valid, minTavora: "0.21.3", panels: [{ id: "planner", name: "Planner", inGame: "yes" }] }, false],
   ["unknown panel field", { ...valid, panels: [{ id: "planner", name: "Planner", title: "x" }] }, false],
@@ -266,6 +267,12 @@ describe("panel types", () => {
   it("refuses an id given twice", () => {
     const result = validateManifest({ ...valid, panels: [{ id: "planner", name: "A" }, { id: "planner", name: "B" }] });
     expect(result).toEqual({ ok: false, errors: ["panels lists the id planner twice"] });
+  });
+
+  it("takes a module-level inGame only without panel types and with a newer minTavora", () => {
+    expect(validateManifest({ ...valid, inGame: true }).ok).toBe(false);
+    expect(validateManifest({ ...valid, minTavora: "0.21.3", inGame: true, panels: [{ id: "planner", name: "Planner" }] }).ok).toBe(false);
+    expect(validateManifest({ ...valid, minTavora: "0.21.3", inGame: true }).ok).toBe(true);
   });
 
   it("needs a minTavora newer than 0.21.2 for inGame, except Tavora's own modules", () => {
