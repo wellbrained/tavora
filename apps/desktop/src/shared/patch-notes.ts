@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.35",
+    date: "2026-10-25",
+    title: "Module pages for what you have",
+    notes: [
+      "Click an installed module's icon or name in the module library to see its page.",
+      "Modules you added from the catalog open their catalog page. All others show their readme, screenshots and what they can reach, even offline.",
+    ],
+  },
+  {
     version: "0.20.34",
     date: "2026-10-25",
     title: "Tavora starts again",
