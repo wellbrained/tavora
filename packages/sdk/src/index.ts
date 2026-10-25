@@ -206,6 +206,13 @@ export interface TavoraSDK {
     setMaximized(maximized: boolean): Promise<void>;
     /** Fires when this panel starts or stops filling the workspace, whoever did it. Needs Tavora 0.20.20 or newer. */
     onMaximizedChange(fn: (maximized: boolean) => void): Unsubscribe;
+    /**
+     * What this panel's live view shows: while the player shows the panel in their game and the in-game layer is closed,
+     * Tavora shows the module's overlay page (the manifest's `overlay`) read-only and click-through in the panel's spot,
+     * with this state. Any JSON up to LIMITS.maxOverlayStateBytes; null shows nothing. Tavora keeps the last state, so
+     * the view goes on showing it while the panel is suspended. Needs no click or permission. Tavora 0.21.9 and newer.
+     */
+    setLive(state: JsonValue | null): Promise<void>;
   };
   /** The module's other panels. */
   panels: {
@@ -631,6 +638,9 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         await call("panel.setState", { value });
       },
       getLaunch: () => call("panel.getLaunch"),
+      setLive: async (state) => {
+        await call("panel.setLive", { state });
+      },
       setContent: async (content) => {
         await call("panel.setContent", { content });
       },
