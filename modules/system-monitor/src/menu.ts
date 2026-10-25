@@ -8,8 +8,7 @@ export type Pick =
   | { kind: "interval"; ms: (typeof INTERVALS)[number] }
   | { kind: "gpu"; id: string }
   | { kind: "drives" }
-  | { kind: "watch" }
-  | { kind: "target" };
+  | { kind: "connection" };
 
 /** Writes a text of the panel in the language shown (the panel passes its `t`). */
 export type Say = (key: any, params?: Record<string, string | number>) => string;
@@ -61,11 +60,10 @@ export function buildMenu(t: Say, info: SystemInfo | null, app: AppSettings, pan
   }
   if (panel.sections.system) items.push({ type: "separator" }, { type: "item", id: "drives", label: t("menu.drives") });
   if (connection) {
+    // One dialog for both choices, so one click saves them (Tavora wants a click for what changes the whole PC).
     items.push(
       { type: "separator" },
-      { type: "heading", label: t("menu.connection") },
-      { type: "item", id: "connection:watch", label: t("menu.watch"), checked: connection.enabled },
-      { type: "item", id: "connection:target", label: t("menu.target"), hint: connection.target.length <= 30 ? connection.target : `${connection.target.slice(0, 29)}…` },
+      { type: "item", id: "connection", label: t("menu.connection"), hint: connection.enabled ? (connection.target.length <= 30 ? connection.target : `${connection.target.slice(0, 29)}…`) : t("menu.connectionOff") },
     );
   }
   return items;
@@ -74,8 +72,7 @@ export function buildMenu(t: Say, info: SystemInfo | null, app: AppSettings, pan
 /** What a picked menu item asks for, or null for an id this menu doesn't have. */
 export function parsePick(id: string): Pick | null {
   if (id === "drives") return { kind: "drives" };
-  if (id === "connection:watch") return { kind: "watch" };
-  if (id === "connection:target") return { kind: "target" };
+  if (id === "connection") return { kind: "connection" };
   const [kind, rest = ""] = [id.slice(0, id.indexOf(":")), id.slice(id.indexOf(":") + 1)];
   if (kind === "section" && (SECTIONS as readonly string[]).includes(rest)) return { kind: "section", id: rest as SectionId };
   if (kind === "block" && (BLOCKS as readonly string[]).includes(rest)) return { kind: "block", id: rest as BlockId };

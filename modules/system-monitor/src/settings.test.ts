@@ -84,7 +84,7 @@ describe("cleanTarget", () => {
   it("takes an IPv4 address or a name, as Tavora does", () => {
     expect(cleanTarget(" 1.1.1.1 ")).toBe("1.1.1.1");
     expect(cleanTarget("Example.com")).toBe("example.com");
-    for (const bad of ["", "300.1.1.1", "1.1.1", "0.0.0.0", "224.0.0.1", "http://x.com", "x.com/a", "a b", "-a.com"]) expect(cleanTarget(bad), bad).toBeNull();
+    for (const bad of ["", "300.1.1.1", "1.1.1", "0.0.0.0", "224.0.0.1", "http://x.com", "x.com/a", "a b", "-a.com", "router"]) expect(cleanTarget(bad), bad).toBeNull();
   });
 });
 
@@ -125,12 +125,12 @@ describe("menu", () => {
     expect(checked).toEqual(["section:system", "section:connection", "block:cpu", "block:gpu", "block:ram", "block:drives", "interval:1000", "gpu:dgpu"]);
     expect(buildMenu(say, info({ gpus: [] }), defaultApp(), defaultPanel()).some((entry) => entry.type === "item" && entry.id.startsWith("gpu:"))).toBe(false);
   });
-  it("offers the watcher's choices once Tavora has one, and only with the Connection section", () => {
+  it("offers the connection dialog once Tavora has settings, with the address or 'off' as hint", () => {
     const settings = { enabled: true, target: "1.1.1.1" };
-    const ids = (entries: ReturnType<typeof buildMenu>) => entries.flatMap((entry) => (entry.type === "item" ? [entry.id] : []));
-    expect(ids(buildMenu(say, info(), defaultApp(), defaultPanel(), settings)).slice(-2)).toEqual(["connection:watch", "connection:target"]);
-    expect(buildMenu(say, info(), defaultApp(), defaultPanel(), { enabled: false, target: "x.com" }).find((entry) => entry.type === "item" && entry.id === "connection:watch")).toMatchObject({ checked: false });
-    expect(buildMenu(say, info(), defaultApp(), defaultPanel(), settings).find((entry) => entry.type === "item" && entry.id === "connection:target")).toMatchObject({ hint: "1.1.1.1" });
+    const item = (entries: ReturnType<typeof buildMenu>) => entries.find((entry) => entry.type === "item" && entry.id === "connection");
+    expect(item(buildMenu(say, info(), defaultApp(), defaultPanel(), settings))).toMatchObject({ hint: "1.1.1.1" });
+    expect(item(buildMenu(say, info(), defaultApp(), defaultPanel(), { enabled: false, target: "x.com" }))).toMatchObject({ hint: "menu.connectionOff" });
+    expect(item(buildMenu(say, info(), defaultApp(), defaultPanel()))).toBeUndefined();
   });
   it("leaves out the System choices when that section is hidden, and keeps the last section", () => {
     const panel = parsePanel({ sections: { system: false, connection: true } });
@@ -150,8 +150,7 @@ describe("menu", () => {
     expect(parsePick("gpu:0x00000000_0x0001defc")).toEqual({ kind: "gpu", id: "0x00000000_0x0001defc" });
     expect(parsePick("drives")).toEqual({ kind: "drives" });
     expect(parsePick("section:connection")).toEqual({ kind: "section", id: "connection" });
-    expect(parsePick("connection:watch")).toEqual({ kind: "watch" });
-    expect(parsePick("connection:target")).toEqual({ kind: "target" });
+    expect(parsePick("connection")).toEqual({ kind: "connection" });
     expect(parsePick("section:nope")).toBeNull();
     expect(parsePick("interval:3000")).toBeNull();
     expect(parsePick("block:nope")).toBeNull();

@@ -370,11 +370,14 @@ export interface TavoraSDK {
        * and one internet address every 5 seconds and sends nothing else.
        */
       connectionLog(): Promise<SystemConnectionLog>;
-      /** Empties the log of drops (Tavora 0.21.10 and newer). */
+      /** Empties the log of drops. Only for Tavora's own System Monitor, right after a click or key press (Tavora 0.21.10 and newer). */
       clearConnectionLog(): Promise<void>;
       /** Whether the connection is watched and which address is pinged (Tavora 0.21.10 and newer). */
       connectionSettings(): Promise<SystemConnectionSettings>;
-      /** Changes the settings given and returns all of them; a `target` that is no IP address or name is refused (Tavora 0.21.10 and newer). */
+      /**
+       * Changes the settings given and returns all of them. Only for Tavora's own System Monitor, right after a click or key
+       * press, once every 5 seconds; a `target` that is not a public IPv4 address or public name is refused (Tavora 0.21.10 and newer).
+       */
       setConnectionSettings(settings: Partial<SystemConnectionSettings>): Promise<SystemConnectionSettings>;
       /** Fires when the connection goes down, changes kind or comes back, for a panel that watches `connection` (Tavora 0.21.10 and newer). */
       onConnectionChange(fn: (connection: SystemConnection) => void): Unsubscribe;

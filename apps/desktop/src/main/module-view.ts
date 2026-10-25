@@ -18,7 +18,7 @@ import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
 import type { PanelContent, PanelLaunch } from "./panel-content";
 import { LIMITS, type PanelOpenResult } from "@tavora/sdk/protocol";
 import type { DiscordConnector, DiscordListener } from "./discord";
-import type { ConnectionWatcher } from "./connection";
+import { connectionAccess, type ConnectionWatcher } from "./connection";
 import type { SystemMonitor, SystemSubscription } from "./system-info";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
@@ -717,10 +717,7 @@ export class ModuleView {
         }
         this.systemWatch.watch(request);
       },
-      connectionLog: () => this.options.connection.outageLog(),
-      clearConnectionLog: () => this.options.connection.clearLog(),
-      connectionSettings: () => this.options.connection.getSettings(),
-      setConnectionSettings: (change) => this.options.connection.setSettings(change),
+      ...connectionAccess(this.options.module, this.options.connection, (what) => this.takeGesture(what)),
     };
   }
 

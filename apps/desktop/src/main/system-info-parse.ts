@@ -3,7 +3,9 @@
  * Windows' counter names into numbers per graphics card. Nothing here touches the PC.
  */
 import { SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, type SystemInterval } from "@tavora/sdk/protocol";
+import { isPrivateHost } from "./browser-url";
 import { HostError } from "./errors";
+import { isPublicAddress } from "./network";
 
 /** What one panel watches, checked: every part spelled out, drive letters without repeats. */
 export interface WatchBlocks {
@@ -134,18 +136,20 @@ export function parseIpv4(text: string): [number, number, number, number] | null
 }
 
 /**
- * Checks a ping address: an IPv4 address or a host name such as "example.com". No scheme, port, path or spaces; IPv6 is not
- * offered yet. Returns it in lower case.
+ * Checks a ping address: a public IPv4 address or a host name such as "example.com". No scheme, port, path or spaces;
+ * IPv6 is not offered yet. Nothing on this PC or the local network: no private, loopback, link-local or reserved
+ * address, no name without a dot, no local ending such as ".lan" and no router name such as "fritz.box". Returns it in
+ * lower case. A name is judged again after it is looked up (connection.ts).
  */
 export function parseConnectionTarget(value: unknown): string {
   if (typeof value !== "string") throw new HostError("INVALID_PARAMS", "params.target must be an IP address or a name");
   const target = value.trim().toLowerCase().replace(/\.$/, "");
   const ip = parseIpv4(target);
   if (ip) {
-    // Nothing that is not a single computer: 0.x.x.x, multicast and above (224 and up).
-    if (ip[0] === 0 || ip[0] >= 224) throw new HostError("INVALID_PARAMS", "params.target must be the address of one computer");
+    if (!isPublicAddress(target)) throw new HostError("INVALID_PARAMS", "params.target must be a public address, not one on this PC or the local network");
     return target;
   }
+  if (isPrivateHost(target)) throw new HostError("INVALID_PARAMS", "params.target must be a public name, not one on this PC or the local network");
   const labels = target.split(".");
   // All digits and dots is a broken IP address, not a name.
   if (target.length === 0 || target.length > 253 || /^[\d.]+$/.test(target) || !labels.every((label) => HOST_LABEL.test(label))) {

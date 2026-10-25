@@ -11,8 +11,10 @@
 import { SYSTEM_PING_TARGET, type SystemConnection, type SystemConnectionLog, type SystemConnectionSettings, type SystemOutage, type SystemOutageKind } from "@tavora/sdk/protocol";
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { HostError } from "./errors";
 import { readJsonOrSetAside } from "./json";
 import { writeFileAtomic } from "./fsutil";
+import { isPublicAddress } from "./network";
 import { parseConnectionTarget, parseIpv4, type ConnectionSettingsChange } from "./system-info-parse";
 
 /** Time between two looks. */
@@ -27,8 +29,14 @@ export const LOSS_WINDOW = 100;
 export const LOG_DAYS = 30;
 /** The most drops kept, the oldest go first. */
 const MAX_OUTAGES = 500;
-/** An address found for a name is used this long before asking again (sooner when the ping to it fails). */
+/** An address found for a name is used this long before asking again. */
 const RESOLVE_TTL_MS = 5 * 60 * 1000;
+/** A name that could not be found, or came out on this PC or the local network, is asked again after this long. */
+const RESOLVE_RETRY_MS = 30 * 1000;
+/** The watcher's settings change at most this often, so a page can't make Tavora switch targets or restart it in a loop. */
+export const SETTINGS_EVERY_MS = CONNECTION_TICK_MS;
+/** A drop that goes on is written this often, so a crash does not record it as a few seconds long. */
+const SAVE_OPEN_EVERY_MS = 60 * 1000;
 
 /** What one look at the local network found. */
 export interface LocalNetwork {
@@ -122,8 +130,8 @@ export class ConnectionFile implements ConnectionStore {
   saveNow(data: StoredConnection): void {
     try {
       mkdirSync(path.dirname(this.file), { recursive: true });
-      writeFileSync(`${this.file}.tmp`, `${JSON.stringify({ version: 1, ...data }, null, 2)}\n`);
-      renameSync(`${this.file}.tmp`, this.file);
+      writeFileSync(`${this.file}.now`, `${JSON.stringify({ version: 1, ...data }, null, 2)}\n`);
+      renameSync(`${this.file}.now`, this.file);
     } catch {
       // The log of this run may be lost; nothing else depends on it.
     }
@@ -147,6 +155,9 @@ export interface ConnectionSample {
   upMbit: number | null;
 }
 
+/** How bad a kind of drop is; a drop only gets worse. */
+const RANK: Record<"online" | SystemOutageKind, number> = { online: 0, "no-internet": 1, "no-router": 2, offline: 3 };
+
 const round = (value: number, digits: number): number => Math.round(value * 10 ** digits) / 10 ** digits;
 
 /** The last pings as lost or not, for the loss percentage. */
@@ -160,6 +171,11 @@ class LossWindow {
     if (this.lost.length > LOSS_WINDOW && this.lost.shift()) this.count--;
   }
 
+  clear(): void {
+    this.lost.length = 0;
+    this.count = 0;
+  }
+
   percent(): number {
     return this.lost.length === 0 ? 0 : round((this.count / this.lost.length) * 100, 1);
   }
@@ -167,10 +183,10 @@ class LossWindow {
 
 /**
  * The rules, without any PC in them. A drop is when Windows says there is no network or 3 pings to the internet are lost
- * in a row; it ends with the first answer. Single losses only count towards the loss percentage. What kind of drop it
- * is depends on the router: when it answered before and has stopped answering, it is "no-router"; when it answers
- * still, "no-internet". A router that never answers pings (some do not) can't be told from a dead one, so it does not
- * count: the drop is then just "offline".
+ * in a row; it ends with the first answer. Single losses only count towards the loss percentage. The kind of a drop:
+ * "offline" when Windows says there is no network; "no-router" when the router answered before and has lost 3 pings
+ * in a row; else "no-internet" (the router answers, or is unknown, or never answers pings, which some do not). A drop
+ * keeps the worst kind it had (no-internet, then no-router, then offline), so it never flip-flops.
  */
 export class ConnectionTracker {
   private routerLost = 0;
@@ -215,23 +231,22 @@ export class ConnectionTracker {
       if (open) open.end = sample.at;
       this.since = null;
     } else if (open) {
-      open.kind = next;
+      if (RANK[next] > RANK[open.kind]) open.kind = next;
       this.since = open.start;
     } else {
       const start = sample.windowsOffline ? sample.at : Math.min(sample.at, this.internetLostSince);
       this.outages.push({ start, end: null, kind: next });
       this.since = start;
     }
-    this.state = next;
-    return { changed: next !== before };
+    const after = open && next !== "online" ? open.kind : next;
+    this.state = after;
+    return { changed: after !== before };
   }
 
   private stateNow(sample: ConnectionSample): "online" | SystemOutageKind {
     if (sample.windowsOffline) return "offline";
     if (this.internetLost < LOST_IN_A_ROW) return "online";
-    if (!sample.routerFound) return "offline";
-    if (!this.routerSeen) return "offline";
-    return this.routerLost > 0 ? "no-router" : "no-internet";
+    return sample.routerFound && this.routerSeen && this.routerLost >= LOST_IN_A_ROW ? "no-router" : "no-internet";
   }
 
   /** Closes a drop that goes on, as when the watching stops. */
@@ -246,6 +261,8 @@ export class ConnectionTracker {
     this.routerLost = 0;
     this.internetLost = 0;
     this.routerSeen = false;
+    this.routerWindow.clear();
+    this.internetWindow.clear();
     this.last = null;
     this.state = "online";
     this.since = null;
@@ -295,6 +312,39 @@ export interface ConnectionWatcherOptions {
   log?: (message: string, error: unknown) => void;
 }
 
+/** The id of the one module that may change the watcher: Tavora's own System Monitor. */
+export const SYSTEM_MONITOR_ID = "tavora.system-monitor";
+
+/**
+ * What a module granted System info gets of the watcher. Everyone granted may read the log and the settings. Changing
+ * the settings (where Tavora pings, whether it watches) and clearing the log affect the whole PC, so they are only for
+ * the official System Monitor, and each needs a click or key press in its page (`gesture` waits for it and throws
+ * without one), as Discord's sign-in does.
+ */
+export function connectionAccess(
+  module: { owner: string; manifest: { id: string } },
+  watcher: Pick<ConnectionWatcher, "outageLog" | "clearLog" | "getSettings" | "setSettings">,
+  gesture: (what: string) => Promise<void>,
+) {
+  const official = (what: string): void => {
+    if (module.owner !== "official" || module.manifest.id !== SYSTEM_MONITOR_ID) throw new HostError("PERMISSION_DENIED", `${what} is only for Tavora's own System Monitor`);
+  };
+  return {
+    connectionLog: () => watcher.outageLog(),
+    connectionSettings: () => watcher.getSettings(),
+    clearConnectionLog: async (): Promise<void> => {
+      official("systemInfo.clearConnectionLog");
+      await gesture("systemInfo.clearConnectionLog");
+      watcher.clearLog();
+    },
+    setConnectionSettings: async (change: ConnectionSettingsChange): Promise<SystemConnectionSettings> => {
+      official("systemInfo.setConnectionSettings");
+      await gesture("systemInfo.setConnectionSettings");
+      return watcher.setSettings(change);
+    },
+  };
+}
+
 export class ConnectionWatcher implements ConnectionSource {
   private readonly probe: ConnectionProbe;
   private readonly store: ConnectionStore;
@@ -309,7 +359,11 @@ export class ConnectionWatcher implements ConnectionSource {
   private busy = false;
   /** Raised whenever the watching stops or its address changes, so a look still under way is dropped. */
   private generation = 0;
-  private resolved: { name: string; ip: string; at: number } | null = null;
+  /** What the last lookup of the chosen name gave: an address, or null when it was not found or not a public one. */
+  private resolved: { name: string; ip: string | null; at: number } | null = null;
+  private changedAt = -Infinity;
+  private savedAt = 0;
+  private readonly warned = new Set<string>();
   private previous: { index: number; bytesIn: number; bytesOut: number; at: number } | null = null;
 
   constructor(options: ConnectionWatcherOptions) {
@@ -337,8 +391,14 @@ export class ConnectionWatcher implements ConnectionSource {
     return { ...this.settings };
   }
 
+  /** At most one change every 5 seconds; a change that changes nothing is free. */
   setSettings(change: ConnectionSettingsChange): SystemConnectionSettings {
     const targetChanged = change.target !== undefined && change.target !== this.settings.target;
+    const enabledChanged = change.enabled !== undefined && change.enabled !== this.settings.enabled;
+    if (!targetChanged && !enabledChanged) return this.getSettings();
+    const now = this.now();
+    if (now - this.changedAt < SETTINGS_EVERY_MS) throw new HostError("QUOTA_EXCEEDED", "The connection settings were just changed; try again in a few seconds");
+    this.changedAt = now;
     if (change.enabled !== undefined) this.settings.enabled = change.enabled;
     if (change.target !== undefined) this.settings.target = change.target;
     if (targetChanged) {
@@ -348,7 +408,8 @@ export class ConnectionWatcher implements ConnectionSource {
       this.tracker.close(this.now());
     }
     this.persist();
-    this.refresh(targetChanged);
+    // A new address waits for the next look in turn: no extra ping now.
+    this.refresh();
     if (targetChanged) this.announce();
     return this.getSettings();
   }
@@ -391,9 +452,8 @@ export class ConnectionWatcher implements ConnectionSource {
     return { state: "off", routerMs: null, internetMs: null, routerFound: false, lossPercent: 0, downMbit: null, upMbit: null, target: this.settings.target, since: null };
   }
 
-  private refresh(restart = false): void {
+  private refresh(): void {
     const wanted = this.active && this.settings.enabled;
-    if (wanted && restart) this.stopTimer();
     if (wanted && !this.running) {
       this.timer = setInterval(() => void this.tick(), CONNECTION_TICK_MS);
       this.timer.unref?.();
@@ -425,6 +485,7 @@ export class ConnectionWatcher implements ConnectionSource {
 
   private persist(immediately = false): void {
     const stamp = this.now();
+    this.savedAt = stamp;
     this.tracker.outages.splice(0, this.tracker.outages.length, ...prune(this.tracker.outages, stamp));
     try {
       const data = { ...this.settings, outages: this.tracker.outages.map((outage) => ({ ...outage })), savedAt: stamp };
@@ -433,6 +494,13 @@ export class ConnectionWatcher implements ConnectionSource {
     } catch (error) {
       this.log("connection: could not save the log", error);
     }
+  }
+
+  /** Each problem is told once, not every 5 seconds. */
+  private warnOnce(message: string, error: unknown): void {
+    if (this.warned.has(message)) return;
+    this.warned.add(message);
+    this.log(message, error);
   }
 
   private announce(): void {
@@ -450,9 +518,11 @@ export class ConnectionWatcher implements ConnectionSource {
   private async addressOf(target: string): Promise<string | null> {
     if (parseIpv4(target)) return target;
     const known = this.resolved;
-    if (known && known.name === target && this.now() - known.at < RESOLVE_TTL_MS) return known.ip;
-    const ip = await this.probe.resolve(target);
-    this.resolved = ip ? { name: target, ip, at: this.now() } : null;
+    if (known && known.name === target && this.now() - known.at < (known.ip ? RESOLVE_TTL_MS : RESOLVE_RETRY_MS)) return known.ip;
+    const found = await this.probe.resolve(target);
+    // A name that comes out on this PC or the local network is never pinged: it counts as lost.
+    const ip = found && isPublicAddress(found) ? found : null;
+    this.resolved = { name: target, ip, at: this.now() };
     return ip;
   }
 
@@ -466,7 +536,7 @@ export class ConnectionWatcher implements ConnectionSource {
       try {
         local = this.probe.local();
       } catch (error) {
-        this.log("connection: could not look at the network", error);
+        this.warnOnce("connection: could not look at the network", error);
       }
       const target = this.settings.target;
       const address = await this.addressOf(target);
@@ -476,8 +546,6 @@ export class ConnectionWatcher implements ConnectionSource {
       ]);
       // The watching stopped or changed its address while the pings were out.
       if (generation !== this.generation) return;
-      // A lost ping to a name's address asks the name again next time.
-      if (internetMs === null) this.resolved = null;
       const speed = this.speed(local, at);
       const { changed } = this.tracker.feed({
         at,
@@ -491,6 +559,8 @@ export class ConnectionWatcher implements ConnectionSource {
       if (changed) {
         this.persist();
         this.announce();
+      } else if (this.tracker.outages.at(-1)?.end === null && at - this.savedAt >= SAVE_OPEN_EVERY_MS) {
+        this.persist();
       }
     } catch (error) {
       this.log("connection: a look failed", error);

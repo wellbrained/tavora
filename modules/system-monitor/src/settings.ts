@@ -134,7 +134,8 @@ export function cleanTarget(text: string): string | null {
     const parts = ip.slice(1).map(Number);
     return parts.every((part) => part <= 255) && parts[0]! > 0 && parts[0]! < 224 ? target : null;
   }
-  if (target.length === 0 || target.length > 253 || /^[\d.]+$/.test(target)) return null;
+  // A name needs a dot: one without is on the local network. Tavora refuses private and local ones too.
+  if (target.length === 0 || target.length > 253 || !target.includes(".") || /^[\d.]+$/.test(target)) return null;
   return target.split(".").every((label) => LABEL.test(label)) ? target : null;
 }
 

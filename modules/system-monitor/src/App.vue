@@ -16,13 +16,13 @@ import { buildMenu, parsePick } from "./menu";
 import { createMonitor, type Monitor } from "./monitor";
 import { watchedDrives } from "./settings";
 import SystemSection from "./SystemSection.vue";
-import TargetDialog from "./TargetDialog.vue";
+import ConnectionDialog from "./ConnectionDialog.vue";
 
 const sdk = shallowRef<TavoraSDK | null>(null);
 const monitor = shallowRef<Monitor | null>(null);
 const connectError = ref<string | null>(null);
 const picking = ref(false);
-const targeting = ref(false);
+const connecting = ref(false);
 
 onMounted(async () => {
   try {
@@ -61,8 +61,7 @@ async function openMenu(event: MouseEvent): Promise<void> {
   else if (pick.kind === "block") started.toggleBlock(pick.id);
   else if (pick.kind === "interval") started.setInterval(pick.ms);
   else if (pick.kind === "gpu") started.setGpu(pick.id);
-  else if (pick.kind === "watch") void started.setWatching(!started.connectionSettings.value?.enabled);
-  else if (pick.kind === "target") targeting.value = true;
+  else if (pick.kind === "connection") connecting.value = true;
   else picking.value = true;
 }
 
@@ -102,7 +101,7 @@ const checkedDrives = computed(() => (monitor.value?.info.value ? watchedDrives(
       </Button>
     </footer>
 
-    <TargetDialog v-if="targeting && monitor.connectionSettings.value" :current="monitor.connectionSettings.value.target" :save="monitor.setTarget" @done="targeting = false" @cancel="targeting = false" />
+    <ConnectionDialog v-if="connecting && monitor.connectionSettings.value" :current="monitor.connectionSettings.value" :save="monitor.setConnection" @done="connecting = false" @cancel="connecting = false" />
     <DrivesDialog v-if="picking && monitor.info.value" :info="monitor.info.value" :checked="checkedDrives" @save="saveDrives" @cancel="picking = false" />
   </div>
 </template>

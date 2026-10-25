@@ -94,9 +94,10 @@ export interface BridgeContext {
     watch(request: WatchRequest): void;
     /** The connection watcher's log, settings and the change of settings (connection.ts); the change comes already checked. */
     connectionLog(): SystemConnectionLog;
-    clearConnectionLog(): void;
     connectionSettings(): SystemConnectionSettings;
-    setConnectionSettings(change: ConnectionSettingsChange): SystemConnectionSettings;
+    /** These two change something for the whole PC: only for the official System Monitor, and right after a click or key press. */
+    clearConnectionLog(): void | Promise<void>;
+    setConnectionSettings(change: ConnectionSettingsChange): SystemConnectionSettings | Promise<SystemConnectionSettings>;
   };
   /**
    * The discord connector (discord.ts) for this panel; only reached with the `discord` capability. Commands
@@ -326,13 +327,13 @@ const handlers = new Map<string, Handler>([
     },
   ],
   ["systemInfo.connectionLog", (s, params) => (needs(s, "systemInfo", "systemInfo.connectionLog"), noParams(params), s.context.systemInfo.connectionLog())],
-  ["systemInfo.clearConnectionLog", (s, params) => (needs(s, "systemInfo", "systemInfo.clearConnectionLog"), noParams(params), s.context.systemInfo.clearConnectionLog(), null)],
+  ["systemInfo.clearConnectionLog", async (s, params) => (needs(s, "systemInfo", "systemInfo.clearConnectionLog"), noParams(params), await s.context.systemInfo.clearConnectionLog(), null)],
   ["systemInfo.connectionSettings", (s, params) => (needs(s, "systemInfo", "systemInfo.connectionSettings"), noParams(params), s.context.systemInfo.connectionSettings())],
   [
     "systemInfo.setConnectionSettings",
-    (s, params) => {
+    async (s, params) => {
       needs(s, "systemInfo", "systemInfo.setConnectionSettings");
-      return s.context.systemInfo.setConnectionSettings(parseConnectionSettings(params));
+      return await s.context.systemInfo.setConnectionSettings(parseConnectionSettings(params));
     },
   ],
 

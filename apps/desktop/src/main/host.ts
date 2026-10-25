@@ -134,7 +134,7 @@ import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
 import { AiUsageConnector } from "./ai-usage";
-import { ConnectionFile, ConnectionWatcher } from "./connection";
+import { ConnectionFile, ConnectionWatcher, SYSTEM_MONITOR_ID } from "./connection";
 import { connectionProbe } from "./connection-windows";
 import { SystemMonitor } from "./system-info";
 import { systemProbe } from "./system-info-windows";
@@ -211,8 +211,6 @@ const CREATE_MODULE_COMMAND = "npm create @tavora/module";
 
 /** Folders watched in one development folder for a new project, at most. */
 const MAX_DEVELOPMENT_SUBFOLDERS = 100;
-/** The official System Monitor module, whose presence in a game or workspace starts the connection watcher. */
-const SYSTEM_MONITOR_ID = "tavora.system-monitor";
 
 /** The player's own modules, next to the themes folder in their data folder. */
 function userModulesDir(options: HostOptions): string {
@@ -490,6 +488,7 @@ export class Host {
       autoUpdateModules: () => this.library.autoUpdateModules,
       firstKey: (key) => this.safetyLists.firstKey(key),
       panels: { reload: (moduleId) => this.reloadModuleViews(moduleId), close: (moduleId) => this.removeModulePanels(moduleId) },
+      grantsChanged: () => this.syncConnection(),
       removed: (owner, moduleId) => {
         this.gameOverlays.forgetModule(moduleId, owner);
         this.previews.closeModule(moduleId, owner);

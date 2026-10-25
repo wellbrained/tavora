@@ -332,8 +332,9 @@ export interface SystemSnapshot {
 
 /**
  * What kind of trouble a drop of the connection was.
- * offline: Windows says there is no network. no-router: the router doesn't answer. no-internet: the router
- * answers but the internet doesn't.
+ * offline: Windows says there is no network. no-router: the router stopped answering (3 pings in a row) and the
+ * internet is down too. no-internet: 3 pings in a row to the internet address were lost, and the router answers, is
+ * not found or never answers pings.
  */
 export type SystemOutageKind = "offline" | "no-router" | "no-internet";
 
@@ -344,7 +345,8 @@ export type SystemOutageKind = "offline" | "no-router" | "no-internet";
  */
 export interface SystemConnection {
   /**
-   * online: all is well. offline, no-router and no-internet: a drop is going on (SystemOutageKind). off: the
+   * online: all is well. offline, no-router and no-internet: a drop is going on (SystemOutageKind; a drop keeps the worst
+   * kind it had). off: the
    * watcher is switched off (SystemConnectionSettings.enabled) or not running, so there are no readings.
    */
   state: "online" | SystemOutageKind | "off";
@@ -589,11 +591,15 @@ export interface Methods {
   "systemInfo.watch": { params: { blocks: SystemWatchBlocks; intervalMs: SystemInterval }; result: null };
   /** The drops of the connection in the last 30 days (capability `systemInfo`). Tavora 0.21.10 and newer. */
   "systemInfo.connectionLog": { params: undefined; result: SystemConnectionLog };
-  /** Empties the log of drops (capability `systemInfo`). Tavora 0.21.10 and newer. */
+  /** Empties the log of drops. Only for Tavora's own System Monitor, right after a click or key press (capability `systemInfo`). Tavora 0.21.10 and newer. */
   "systemInfo.clearConnectionLog": { params: undefined; result: null };
   /** Whether the connection is watched and which address is pinged (capability `systemInfo`). Tavora 0.21.10 and newer. */
   "systemInfo.connectionSettings": { params: undefined; result: SystemConnectionSettings };
-  /** Changes what is given and leaves the rest; a `target` that is no IP address or name is `INVALID_PARAMS` (capability `systemInfo`). Tavora 0.21.10 and newer. */
+  /**
+   * Changes what is given and leaves the rest. Only for Tavora's own System Monitor, right after a click or key press, and
+   * once every 5 seconds (capability `systemInfo`). A `target` that is not a public IPv4 address or a public name is
+   * `INVALID_PARAMS`. Tavora 0.21.10 and newer.
+   */
   "systemInfo.setConnectionSettings": { params: Partial<SystemConnectionSettings>; result: SystemConnectionSettings };
   /** The connection to the Discord app; starts it for this panel (capability `discord`). */
   "discord.state": { params: undefined; result: DiscordState };

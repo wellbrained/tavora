@@ -24,7 +24,9 @@ const outages = computed(() => props.monitor.outages.value);
 const at = computed(() => props.monitor.snapshot.value?.at ?? Date.now());
 const confirming = ref(false);
 
+// The long texts say it all in the notice; the short ones fit the status card and the list. "Router OK" is only said when the router answered.
 const KIND_TEXT: Record<SystemOutageKind, "state.offline" | "state.noRouter" | "state.noInternet"> = { offline: "state.offline", "no-router": "state.noRouter", "no-internet": "state.noInternet" };
+const KIND_SHORT: Record<SystemOutageKind, "status.offline" | "status.noRouter" | "status.noInternet"> = { offline: "status.offline", "no-router": "status.noRouter", "no-internet": "status.noInternet" };
 
 const isOff = computed(() => connection.value?.state === "off" || props.monitor.connectionSettings.value?.enabled === false);
 const down = computed(() => {
@@ -38,7 +40,7 @@ const TEXT_TONE: Record<DriveTone, string> = { ok: "", warning: "text-warning", 
 const status = computed(() => {
   if (isOff.value) return { text: t("state.off"), class: "text-muted-foreground" };
   if (checking.value) return { text: t("state.checking"), class: "text-muted-foreground" };
-  if (down.value) return { text: t("state.offline"), class: "text-destructive" };
+  if (down.value) return { text: t(KIND_SHORT[down.value]), class: "text-destructive" };
   return { text: t("state.online"), class: "text-success" };
 });
 
@@ -46,7 +48,8 @@ const banner = computed(() => {
   const now = connection.value;
   if (!down.value || !now) return null;
   const since = now.since ?? at.value;
-  return { title: t(KIND_TEXT[down.value]), text: t("banner.since", { time: clock(since, lang.value), duration: duration(at.value - since) }) };
+  const title = down.value === "no-internet" && now.routerMs === null ? t("state.noInternetShort") : t(KIND_TEXT[down.value]);
+  return { title, text: t("banner.since", { time: clock(since, lang.value), duration: duration(at.value - since) }) };
 });
 
 /** A ping: the number, or a word when lost. A lost ping is yellow, and red while the connection is down. */
@@ -83,7 +86,7 @@ const rows = computed(() =>
       key: outage.start,
       when: sameDay ? clock(outage.start, lang.value) : dayAndClock(outage.start, lang.value),
       length: outage.end === null ? t("drops.ongoing") : duration(outage.durationMs),
-      kind: t(KIND_TEXT[outage.kind]),
+      kind: outage.kind === "no-internet" ? t("state.noInternetShort") : t(KIND_TEXT[outage.kind]),
       ongoing: outage.end === null,
     };
   }),

@@ -42,12 +42,21 @@ interface Native {
   };
   bestRoute: (luid: null, index: number, source: null, destination: Buffer, options: number, route: Buffer, bestSource: Buffer) => number;
   ifEntry: (row: Buffer) => number;
-  hint: (hint: Buffer) => number;
+  /** Null on a Windows without it (before Windows 10 version 2004): the pings alone tell then. */
+  hint: ((hint: Buffer) => number) | null;
 }
 
-function loadNative(): Native {
-  const koffi = require("koffi") as typeof import("koffi");
+/** The part of koffi this file uses, so a test can stand in for it. */
+type Koffi = Pick<typeof import("koffi"), "load">;
+
+export function loadNative(koffi: Koffi = require("koffi") as typeof import("koffi")): Native {
   const iphlpapi = koffi.load("iphlpapi.dll");
+  let hint: Native["hint"] = null;
+  try {
+    hint = iphlpapi.func("uint32_t __stdcall GetNetworkConnectivityHint(_Out_ uint8_t *hint)") as Native["hint"];
+  } catch {
+    // An older Windows has no such function; everything else still works.
+  }
   return {
     icmpCreate: iphlpapi.func("void *__stdcall IcmpCreateFile()"),
     icmpClose: iphlpapi.func("int __stdcall IcmpCloseHandle(void *handle)"),
@@ -56,8 +65,7 @@ function loadNative(): Native {
     ) as Native["icmpSend"],
     bestRoute: iphlpapi.func("uint32_t __stdcall GetBestRoute2(void *luid, uint32_t index, void *source, void *destination, uint32_t options, _Out_ uint8_t *route, _Out_ uint8_t *bestSource)"),
     ifEntry: iphlpapi.func("uint32_t __stdcall GetIfEntry2(_Inout_ uint8_t *row)"),
-    // Windows 10 version 2004 and newer; the watcher goes on without it.
-    hint: iphlpapi.func("uint32_t __stdcall GetNetworkConnectivityHint(_Out_ uint8_t *hint)"),
+    hint,
   };
 }
 
@@ -67,11 +75,26 @@ export function icmpAddress(ip: string): number | null {
   return parts ? (parts[0] | (parts[1] << 8) | (parts[2] << 16) | (parts[3] << 24)) >>> 0 : null;
 }
 
-/** A probe for this PC. Throws on the first look when Windows' functions can't be loaded. */
-export function windowsConnectionProbe(): ConnectionProbe {
+/**
+ * A probe for this PC. Throws on the looks when Windows' functions can't be loaded; the loading is tried once, not
+ * every 5 seconds.
+ */
+export function windowsConnectionProbe(loader: () => Native = loadNative): ConnectionProbe {
   let native: Native | null = null;
+  let failure: unknown = null;
   let hintBroken = false;
-  const load = () => (native ??= loadNative());
+  /** Echoes still out, and whether a name is being looked up (the lookup waits on a thread of Node's small pool). */
+  let echoes = 0;
+  let looking = false;
+  const load = (): Native => {
+    if (failure) throw failure;
+    try {
+      return (native ??= loader());
+    } catch (error) {
+      failure = error;
+      throw error;
+    }
+  };
   /** One handle and one reply buffer for each channel, so the two echoes at once never share anything. */
   const channels = new Map<string, { handle: unknown; reply: Buffer }>();
   const data = Buffer.alloc(32, 0x61);
@@ -93,7 +116,7 @@ export function windowsConnectionProbe(): ConnectionProbe {
     local(): LocalNetwork {
       const n = load();
       let windowsOffline = false;
-      if (!hintBroken) {
+      if (n.hint && !hintBroken) {
         const hint = Buffer.alloc(16);
         try {
           if (n.hint(hint) === 0) windowsOffline = hint.readUInt32LE(0) === LEVEL_NONE;
@@ -123,9 +146,11 @@ export function windowsConnectionProbe(): ConnectionProbe {
           const { handle, reply } = channel(name);
           reply.fill(0);
           load().icmpSend.async(handle, target, data, data.length, null, reply, reply.length, timeoutMs, (error, count) => {
+            echoes--;
             if (error || count < 1 || reply.readUInt32LE(REPLY_STATUS) !== IP_SUCCESS) return resolve(null);
             resolve(reply.readUInt32LE(REPLY_TIME));
           });
+          echoes++;
         } catch {
           resolve(null);
         }
@@ -134,17 +159,25 @@ export function windowsConnectionProbe(): ConnectionProbe {
 
     resolve(name) {
       return new Promise<string | null>((resolve) => {
+        // One lookup at a time: a name server that hangs holds one thread of the pool, never all of them.
+        if (looking) return resolve(null);
+        looking = true;
         const timer = setTimeout(() => resolve(null), RESOLVE_TIMEOUT_MS);
         timer.unref?.();
         dns.promises
           .lookup(name, { family: 4 })
           .then((found) => resolve(found.address))
           .catch(() => resolve(null))
-          .finally(() => clearTimeout(timer));
+          .finally(() => {
+            clearTimeout(timer);
+            looking = false;
+          });
       });
     },
 
     close() {
+      // An echo still out is left to finish: closing its handle under it is not safe, and Tavora is closing anyway.
+      if (echoes > 0) return;
       for (const { handle } of channels.values()) {
         try {
           load().icmpClose(handle);
