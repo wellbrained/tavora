@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.40",
+    date: "2026-10-25",
+    title: "Bigger module icons",
+    notes: [
+      "Module icons fill their tile in Add module, Settings > Modules and module updates, so they're easier to tell apart.",
+    ],
+  },
+  {
     version: "0.20.39",
     date: "2026-10-25",
     title: "Send feedback to a module's developer",
