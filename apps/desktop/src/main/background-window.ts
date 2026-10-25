@@ -92,6 +92,9 @@ export function showInBackground(window: BrowserWindow, how: "behind" | "minimiz
       } else {
         user32.setWindowPos(hwnd, active, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
       }
+      // Shown by Windows alone, Electron still takes the window for hidden and never draws the page (0.20.53 started
+      // to a blank window). Already shown, it stays where it is.
+      window.showInactive();
       return;
     } catch (error) {
       console.warn("[tavora] cannot show the window in the background", error);
