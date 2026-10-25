@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { AlertTriangle, CheckCircle2, Info, Loader2, MoreHorizontal, Plus, XCircle } from "@lucide/vue";
+import { AlertTriangle, Blocks, CheckCircle2, Gamepad2, Info, Loader2, MoreHorizontal, Plus, StickyNote, Store, XCircle } from "@lucide/vue";
 import { SegmentedControl } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Expandable } from "@tavora/official-ui/components/ui/expandable";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
+import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
+import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
+import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
@@ -20,6 +23,11 @@ const progress = ref(45);
 const switchOn = ref(true);
 const density = ref<"tight" | "normal">("normal");
 const selectedRow = ref("b");
+const navSelected = ref("all");
+const NAV_GROUPS: NavGroup[] = [
+  { heading: "Installed", items: [{ id: "all", label: "All", icon: Blocks, badge: 12 }, { id: "game", label: "In this game", icon: Gamepad2, badge: 3 }] },
+  { heading: "More", items: [{ id: "catalog", label: "Catalog", icon: Store }] },
+];
 function bump(by: number) {
   progress.value = Math.min(100, Math.max(0, progress.value + by));
 }
@@ -72,33 +80,23 @@ function bump(by: number) {
         </Specimen>
       </DemoSection>
 
-<DemoSection v-if="visible.has('notices')" id="notices" :title="title('notices')" description="Inline notices inside a module. An icon and a sentence; colour only tints.">
+<DemoSection v-if="visible.has('notices')" id="notices" :title="title('notices')" description="Inline notices inside a module. An icon and a sentence; colour only tints. Errors are announced at once.">
         <div class="flex flex-col gap-2">
-          <div role="status" class="bg-info/10 flex items-start gap-2 rounded-md p-3 text-sm">
-            <Info class="text-info mt-0.5 size-4 flex-none" :stroke-width="1.5" />
-            <span>Notes are shared by every panel of this module in the current game.</span>
-          </div>
-          <div role="status" class="bg-success/10 flex items-start gap-2 rounded-md p-3 text-sm">
-            <CheckCircle2 class="text-success mt-0.5 size-4 flex-none" :stroke-width="1.5" />
-            <span>Imported 24 to-dos.</span>
-          </div>
-          <div role="status" class="bg-warning/10 flex items-start gap-2 rounded-md p-3 text-sm">
-            <AlertTriangle class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" />
-            <span>This note is almost at its size limit.</span>
-          </div>
-          <div role="alert" class="bg-destructive/10 flex items-start gap-2 rounded-md p-3 text-sm">
-            <XCircle class="text-destructive mt-0.5 size-4 flex-none" :stroke-width="1.5" />
-            <span class="flex-1">Could not save. Your change is kept and will be tried again.</span>
-            <Button size="xs" variant="secondary" :disabled="off">Retry</Button>
-          </div>
+          <Notice>Notes are shared by every panel of this module in the current game.</Notice>
+          <Notice variant="success">Imported 24 to-dos.</Notice>
+          <Notice variant="warning" title="Almost full">This note is almost at its size limit.</Notice>
+          <Notice variant="error">
+            Could not save. Your change is kept and will be tried again.
+            <template #action><Button size="xs" variant="secondary" :disabled="off">Retry</Button></template>
+          </Notice>
         </div>
       </DemoSection>
 
-<DemoSection v-if="visible.has('empty')" id="empty" :title="title('empty')" description="One sentence and one action. No illustrations.">
-        <div class="flex flex-col items-center gap-3 rounded-lg border border-dashed px-4 py-10 text-center">
-          <p class="text-muted-foreground text-sm">No notes for this game yet.</p>
-          <Button :disabled="off"><Plus :stroke-width="1.5" /> New note</Button>
-        </div>
+<DemoSection v-if="visible.has('empty')" id="empty" :title="title('empty')" description="A short title, one line and one action. Use it where a list has nothing in it yet.">
+        <EmptyState title="No notes yet" description="Notes you write for this game show up here.">
+          <template #icon><StickyNote :stroke-width="1.5" /></template>
+          <template #action><Button :disabled="off"><Plus :stroke-width="1.5" /> New note</Button></template>
+        </EmptyState>
       </DemoSection>
 
 <DemoSection v-if="visible.has('expandable')" id="expandable" :title="title('expandable')" description="Long text cut to a set height, with Show more below. Short text shows in full.">
@@ -195,6 +193,12 @@ function bump(by: number) {
             </div>
             <p class="text-muted-foreground text-sm">Fast clear, cheap to start, scales well into the atlas.</p>
           </div>
+        </Specimen>
+      </DemoSection>
+
+<DemoSection v-if="visible.has('navlist')" id="navlist" :title="title('navlist')" description="The list of categories beside a page, like in Settings. Arrow keys, Home and End move through it.">
+        <Specimen label="Grouped, with counts" column>
+          <NavList v-model="navSelected" class="w-56" label="Categories" :groups="NAV_GROUPS" />
         </Specimen>
       </DemoSection>
 </template>
