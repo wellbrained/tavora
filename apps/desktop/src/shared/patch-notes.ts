@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.38",
+    date: "2026-10-25",
+    title: "Module updates wait for you",
+    notes: [
+      "Updates for your modules no longer install by themselves. A button next to Layouts, like \"2 updates\", opens the module library on Updates.",
+      "Each update shows what's new and has its own Update button, or press Update all.",
+      "Prefer the old way? Turn on Update modules automatically in Settings > Modules.",
+    ],
+  },
+  {
     version: "0.20.37",
     date: "2026-10-25",
     title: "Clearer module pages",
