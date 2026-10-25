@@ -540,7 +540,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
 
     <div
       v-if="expanded"
-      class="hover:bg-primary/15 focus-visible:bg-primary/15 absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize focus-visible:outline-none"
+      class="hover:bg-primary/15 focus-visible:bg-primary absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize focus-visible:outline-none"
       role="separator"
       aria-orientation="vertical"
       :aria-label="t('rail.resize')"
