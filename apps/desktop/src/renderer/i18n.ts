@@ -5,9 +5,12 @@ import { ref } from "vue";
 import { hasMessage, intlLocale, translate, type Language, type MessageKey, type Params } from "../shared/i18n";
 
 export const language = ref<Language>("en");
+/** Whether a language was set, from the app's state; until then "en" is only the default. */
+export let languageSet = false;
 
 export function setLanguage(next: Language): void {
   language.value = next;
+  languageSet = true;
   document.documentElement.lang = next;
   setUiLanguage(next);
 }

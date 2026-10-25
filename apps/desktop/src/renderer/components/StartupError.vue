@@ -1,21 +1,24 @@
 <script setup lang="ts">
-// Shown instead of the app when the host UI fails to load or mount (see main.ts).
+// Shown instead of the app when the host UI fails to load or start, or its window crashed twice (see main.ts).
 import { Check, Copy, RotateCw } from "@lucide/vue";
 import { ref, useTemplateRef } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { setLanguage, t } from "../i18n";
+import { languageSet, setLanguage, t } from "../i18n";
+// Its own styles: when start.ts failed to load, they were never loaded.
+import "../styles.css";
 
-const props = defineProps<{ detail: string }>();
+const props = defineProps<{ reason: "error" | "noAnswer" | "crashed"; detail: string }>();
 
-// The language setting comes with the app's state, which never arrived; the system's is the best guess.
-setLanguage(navigator.language.toLowerCase().startsWith("de") ? "de" : "en");
+// The language setting comes with the app's state; when that never arrived, the system's is the best guess.
+if (!languageSet) setLanguage(navigator.language.toLowerCase().startsWith("de") ? "de" : "en");
 
 const [message = "", ...stack] = props.detail.split("\n");
 const details = useTemplateRef<HTMLElement>("details");
 const copied = ref(false);
 
+// Without ?crashed=, so the app itself loads again.
 function reload(): void {
-  location.reload();
+  location.replace(location.origin + location.pathname);
 }
 
 // The host page may not use the clipboard API, but copying a selection works.
@@ -33,8 +36,8 @@ function copy(): void {
     <div class="app-drag h-[47px] shrink-0" />
     <main class="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-8 pb-8 text-center">
       <img class="mt-8 mb-6 opacity-60 grayscale" src="/brand/emblem-240.png" alt="" width="74" height="80" draggable="false" />
-      <h1 class="text-2xl font-semibold">{{ t("startupError.title") }}</h1>
-      <p class="text-muted-foreground mt-2 max-w-[480px]">{{ t("startupError.description") }}</p>
+      <h1 class="text-2xl font-semibold">{{ reason === "crashed" ? t("startupError.title.crashed") : t("startupError.title.start") }}</h1>
+      <p class="text-muted-foreground mt-2 max-w-[480px]">{{ t(`startupError.description.${reason}`) }}</p>
 
       <section class="bg-card mt-8 w-full max-w-[720px] rounded-lg border text-left" :aria-label="t('startupError.details')">
         <div ref="details" class="max-h-[50vh] overflow-auto p-4 font-mono text-xs leading-relaxed select-text">

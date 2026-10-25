@@ -1485,6 +1485,17 @@ export class Host {
       this.windowHidden = value;
       this.applyBounds();
     };
+    // The host page crashed or ran out of memory: it loads again once. A second crash within a minute loads
+    // the error screen instead (?crashed=, see renderer/main.ts), so a page that keeps crashing isn't a loop.
+    let lastCrash = 0;
+    this.window.webContents.on("render-process-gone", (_event, details) => {
+      if (details.reason === "clean-exit" || this.window.isDestroyed()) return;
+      console.error(`[tavora] the host page is gone: ${details.reason} (exit code ${details.exitCode})`);
+      const page = new URL(this.options.devServer ?? `${HOST_SCHEME}://app/index.html`);
+      if (Date.now() - lastCrash < 60_000) page.searchParams.set("crashed", `${details.reason} (exit code ${details.exitCode})`);
+      lastCrash = Date.now();
+      void this.window.loadURL(page.href);
+    });
     this.window.on("minimize", hidden(true));
     this.window.on("hide", hidden(true));
     this.window.on("restore", hidden(false));

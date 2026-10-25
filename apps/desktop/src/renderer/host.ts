@@ -13,7 +13,8 @@ export const api = window.tavoraHost;
 export const state = shallowRef<HostViewState | null>(null);
 
 api.onState((next) => (state.value = next));
-void api.getState().then((initial) => {
+/** The first state; rejects when the main process fails to give one, so start.ts can show why. */
+export const firstState = api.getState().then((initial) => {
   if (initial && !state.value) state.value = initial;
 });
 watch(state, (next) => {
