@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.45",
+    date: "2026-10-25",
+    title: "Notes polish",
+    notes: [
+      "Notes tells you plainly when it can't open.",
+      "Clearer texts for links, images and unsaved changes.",
+      "The big picture view is easier to use with the keyboard.",
+    ],
+  },
+  {
     version: "0.20.44",
     date: "2026-10-25",
     title: "Discord module polish",
