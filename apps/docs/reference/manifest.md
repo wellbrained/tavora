@@ -50,7 +50,7 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `permissions.webAssembly` | no | `true` lets the page compile WebAssembly (the page's security policy gets `'wasm-unsafe-eval'`). Only Tavora's own modules may ask for it; a module from your modules folder that does is not loaded, and the Modules page says why. |
 
 | `panels` | no | Named [panel types](#panel-types) the module offers, 1 to 16. Without it the module has one panel, made from `entry`, `icon` and `viewport`. |
-| `overlay` | no | The page for streaming software, see [Overlay](#overlay). The `"stream-overlay"` connector (for OBS links) needs this page, but the page needs no connector: without it the page serves game overlays only, and `minTavora` must be newer than `0.20.48`, because older Tavoras refuse it. Needs Tavora 0.19.26 or newer. |
+| `overlay` | no | The page for streaming software, see [Overlay](#overlay). The `"stream-overlay"` connector (for OBS links) needs this page, but the page needs no connector: without it the page serves game overlays only, and `minTavora` must be newer than `0.20.50`, because older Tavoras refuse it. Needs Tavora 0.19.26 or newer. |
 | `actions` | no | What the module can do on a key press, 1 to 16, see [Actions](#actions). Needs Tavora 0.19.26 or newer. |
 | `translations` | no | The name, description, panel and action names in other languages, see [Translations](#translations). Needs a `minTavora` newer than `0.20.12`. |
 
@@ -84,7 +84,7 @@ When an update removes a panel type, its open panels keep their place and say th
 
 `overlay` names an `.html` page inside the package that OBS or other streaming software shows as a Browser Source, on top of the game on stream. The player copies its link from your panel (`overlay.copyLink`); Tavora serves it with the files next to it from this PC only, and passes on what your panels publish for it. It runs outside Tavora, so it has no bridge: it reads its data with `watchOverlay` from the SDK. See [Stream overlays](./protocol.md#stream-overlays).
 
-The same page is what `overlay.showOverGame` shows over the player's game, in a window of Tavora's own; see [Game overlays](./protocol.md#game-overlays). That needs no connector. List `stream-overlay` (with `onRequest`, the player is asked only if they copy an OBS link) only if you want OBS links too. A module that lists no connector needs a `minTavora` newer than `0.20.48`; Tavora refuses the manifest otherwise.
+The same page is what `overlay.showOverGame` shows over the player's game, in a window of Tavora's own; see [Game overlays](./protocol.md#game-overlays). That needs no connector. List `stream-overlay` (with `onRequest`, the player is asked only if they copy an OBS link) only if you want OBS links too. A module that lists no connector needs a `minTavora` newer than `0.20.50`; Tavora refuses the manifest otherwise.
 
 ```json
 "overlay": "dist/overlay.html",

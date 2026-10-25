@@ -4,7 +4,7 @@ What changed in `@tavora/module-schema`, newest first.
 
 ## Unreleased
 
-- `overlay` no longer needs the `stream-overlay` connector: game overlays (`overlay.showOverGame`) show the page without it. The connector still needs an `overlay`. A manifest with an `overlay` and no connector needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_GAME_OVERLAYS` (0.20.48), except Tavora's own modules, because older Tavoras refuse it.
+- `overlay` no longer needs the `stream-overlay` connector: game overlays (`overlay.showOverGame`) show the page without it. The connector still needs an `overlay`. A manifest with an `overlay` and no connector needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_GAME_OVERLAYS` (0.20.50), except Tavora's own modules, because older Tavoras refuse it.
 - `translations`: the module's name, description, panel and action names in other languages, keyed by language code (`ModuleTranslation`, `isLanguageCode`, `MAX_TRANSLATIONS`). `translateManifest` gives the manifest in a language, `translationsFor` the translations that apply. A manifest with them needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_TRANSLATIONS` (0.20.12), except Tavora's own modules.
 - `support`: where players send feedback, an `https` address or an email address (`isSupportLink`, `isSupportEmail`, `MAX_SUPPORT_LENGTH`). The module's page has a Send feedback button for it. Needs Tavora 0.20.39 or newer.
 - `homepage`: the module's web page, `http` or `https`, shown in the catalog (`isHomepage`, `MAX_HOMEPAGE_LENGTH`). Needs Tavora 0.18.17 or newer.
