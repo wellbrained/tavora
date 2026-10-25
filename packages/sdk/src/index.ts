@@ -20,6 +20,10 @@ import {
   PROTOCOL_VERSION,
   type AiUsageAccountInfo,
   type AiUsageReading,
+  type SystemInfo,
+  type SystemSnapshot,
+  type SystemWatchBlocks,
+  type SystemInterval,
   type BlobInfo,
   type BlobUsage,
   type Capability,
@@ -66,6 +70,11 @@ export type {
   GameOverlayResult,
   AiUsageAccountInfo,
   AiUsageReading,
+  SystemInfo,
+  SystemSnapshot,
+  SystemWatchBlocks,
+  SystemInterval,
+  SystemDriveKind,
   BlobInfo,
   BlobType,
   BlobUsage,
@@ -96,7 +105,7 @@ export type {
   TavoraViewport,
   ThemeToken,
 } from "./protocol.js";
-export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, THEME_TOKENS } from "./protocol.js";
+export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, THEME_TOKENS } from "./protocol.js";
 
 /** How long a menu may stay open; the host closes it itself when its panel goes. */
 const MENU_TIMEOUT_MS = 60 * 60_000;
@@ -328,6 +337,23 @@ export interface TavoraSDK {
       read(accountId: string): Promise<AiUsageReading>;
       /** Fires when the player adds, renames or removes an account. */
       onAccountsChange(fn: () => void): Unsubscribe;
+    };
+    /**
+     * `system-info`: this PC's hardware and how busy it is, read by Tavora while a panel shows it. Nothing is read
+     * while no panel watches, and a hidden panel gets no snapshots. Names and numbers only, never paths or serial numbers.
+     */
+    systemInfo: {
+      /** The processor, memory, graphics cards and drives. Read once and kept; ask again after onDrivesChange. */
+      info(): Promise<SystemInfo>;
+      /**
+       * Sets what this panel watches, replacing what it watched before; empty `blocks` stop it. A first snapshot comes
+       * at once, then one every `intervalMs` (1000, 2000, 5000, 15000 or 60000). The panel's watch ends with the page.
+       */
+      watch(options: { blocks: SystemWatchBlocks; intervalMs: SystemInterval }): Promise<void>;
+      /** Fires with each snapshot of what the panel watches. */
+      onSnapshot(fn: (snapshot: SystemSnapshot) => void): Unsubscribe;
+      /** Fires when a drive is plugged in or removed; ask info() again. */
+      onDrivesChange(fn: () => void): Unsubscribe;
     };
     /**
      * `discord`: the Discord app on this PC, through Tavora's Discord sign-in. The connection runs while a
@@ -751,6 +777,14 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         accounts: () => call("aiUsage.accounts"),
         read: (accountId) => call("aiUsage.read", { accountId }, LIMITS.aiUsageTimeoutMs + 5000),
         onAccountsChange: (fn) => on("aiUsage.accountsChanged", () => fn()),
+      },
+      systemInfo: {
+        info: () => call("systemInfo.info"),
+        watch: async (options) => {
+          await call("systemInfo.watch", options);
+        },
+        onSnapshot: (fn) => on("systemInfo.snapshot", fn),
+        onDrivesChange: (fn) => on("systemInfo.drivesChanged", () => fn()),
       },
       discord: {
         state: () => call("discord.state"),

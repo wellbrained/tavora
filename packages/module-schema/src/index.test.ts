@@ -202,6 +202,7 @@ const cases: [string, unknown, boolean][] = [
   ["no connectors", { ...valid, permissions: { network: [], connectors: [] } }, true],
   ["discord connector", { ...valid, permissions: { network: [], connectors: ["discord", "ai-usage"] } }, true],
   ["unknown connector", { ...valid, permissions: { network: [], connectors: ["steam"] } }, false],
+  ["system-info connector", { ...valid, permissions: { network: [], connectors: ["system-info"] } }, true],
   ["connector twice", { ...valid, permissions: { network: [], connectors: ["ai-usage", "ai-usage"] } }, false],
   ["connectors not a list", { ...valid, permissions: { network: [], connectors: "ai-usage" } }, false],
   ["shared data permission", { ...valid, permissions: { network: [], sharedData: { consume: [] } } }, false],
