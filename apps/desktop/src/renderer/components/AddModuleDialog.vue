@@ -13,6 +13,7 @@ import { account, act, addModule, dialog, openSettings, publishModule, saveModul
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
+import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
 import { t } from "../i18n";
@@ -82,6 +83,30 @@ function inView(module: ModuleView, id: View): boolean {
 function count(id: View): number {
   return searched.value.filter((module) => inView(module, id)).length;
 }
+
+/** The list on the left: the installed modules by view, then Updates (while there are some) and the catalog. */
+const navGroups = computed<NavGroup[]>(() => [
+  {
+    heading: t("addModule.installed"),
+    items: VIEWS.map((item) => ({
+      id: item.id,
+      label: t(`addModule.category.${item.id}`),
+      icon: item.icon,
+      badge: count(item.id),
+      title: t(`addModule.about.${item.id}`),
+      testid: `module-category-${item.id}`,
+    })),
+  },
+  {
+    heading: t("addModule.more"),
+    items: [
+      ...(updateCount.value || view.value === "updates"
+        ? [{ id: "updates", label: t("addModule.category.updates"), icon: CloudDownload, badge: updateCount.value, badgeAccent: true, badgeTestid: "module-updates-count", title: t("addModule.about.updates"), testid: "module-category-updates" }]
+        : []),
+      { id: "catalog", label: t("addModule.tab.browse"), icon: Store, title: t("addModule.about.catalog"), testid: "module-tab-browse" },
+    ],
+  },
+]);
 
 /** The modules shown, by kind; a kind with nothing shown is left out. */
 const groups = computed(() => {
@@ -202,63 +227,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
           <label class="sr-only" for="module-search">{{ t("addModule.search") }}</label>
           <Input id="module-search" v-model="query" class="h-10 pr-3 pl-9" :placeholder="t('addModule.search')" autocomplete="off" data-testid="module-search" autofocus />
         </form>
-        <nav class="flex gap-0.5 overflow-x-auto sm:flex-col" :aria-label="t('addModule.categories')">
-          <h3 class="text-muted-foreground hidden px-3 pb-1 text-xs font-semibold tracking-wider uppercase sm:block">{{ t("addModule.installed") }}</h3>
-          <button
-            v-for="item in VIEWS"
-            :key="item.id"
-            type="button"
-            :class="
-              cn(
-                'text-muted-foreground hover:bg-accent hover:text-foreground group flex h-9 shrink-0 items-center gap-3 rounded-lg px-3 text-left font-medium whitespace-nowrap',
-                view === item.id && 'bg-primary/10 text-foreground hover:bg-primary/15',
-              )
-            "
-            :aria-pressed="view === item.id"
-            :title="t(`addModule.about.${item.id}`)"
-            :data-testid="`module-category-${item.id}`"
-            @click="view = item.id"
-          >
-            <component :is="item.icon" :class="cn('hidden size-4 flex-none transition-colors sm:block', view === item.id ? 'text-primary' : 'group-hover:text-primary/80')" :stroke-width="1.75" />
-            <span class="flex-1 truncate">{{ t(`addModule.category.${item.id}`) }}</span>
-            <span :class="cn('text-xs tabular-nums', view === item.id ? 'text-primary' : 'text-muted-foreground')">{{ count(item.id) }}</span>
-          </button>
-          <h3 class="text-muted-foreground hidden px-3 pt-4 pb-1 text-xs font-semibold tracking-wider uppercase sm:block">{{ t("addModule.more") }}</h3>
-          <button
-            v-if="updateCount || view === 'updates'"
-            type="button"
-            :class="
-              cn(
-                'text-muted-foreground hover:bg-accent hover:text-foreground group flex h-9 shrink-0 items-center gap-3 rounded-lg px-3 text-left font-medium whitespace-nowrap',
-                view === 'updates' && 'bg-primary/10 text-foreground hover:bg-primary/15',
-              )
-            "
-            :aria-pressed="view === 'updates'"
-            :title="t('addModule.about.updates')"
-            data-testid="module-category-updates"
-            @click="view = 'updates'"
-          >
-            <CloudDownload :class="cn('hidden size-4 flex-none transition-colors sm:block', view === 'updates' ? 'text-primary' : 'text-primary/80')" :stroke-width="1.75" />
-            <span class="flex-1 truncate">{{ t("addModule.category.updates") }}</span>
-            <span class="bg-primary text-primary-foreground rounded-sm px-1.5 text-xs tabular-nums" data-testid="module-updates-count">{{ updateCount }}</span>
-          </button>
-          <button
-            type="button"
-            :class="
-              cn(
-                'text-muted-foreground hover:bg-accent hover:text-foreground group flex h-9 shrink-0 items-center gap-3 rounded-lg px-3 text-left font-medium whitespace-nowrap',
-                view === 'catalog' && 'bg-primary/10 text-foreground hover:bg-primary/15',
-              )
-            "
-            :aria-pressed="view === 'catalog'"
-            :title="t('addModule.about.catalog')"
-            data-testid="module-tab-browse"
-            @click="view = 'catalog'"
-          >
-            <Store :class="cn('hidden size-4 flex-none transition-colors sm:block', view === 'catalog' ? 'text-primary' : 'group-hover:text-primary/80')" :stroke-width="1.75" />
-            <span class="flex-1">{{ t("addModule.tab.browse") }}</span>
-          </button>
-        </nav>
+        <NavList v-model="view" class="flex-row overflow-x-auto sm:flex-col" heading-class="hidden sm:block" icon-class="hidden sm:block" :label="t('addModule.categories')" :groups="navGroups" />
         <Button variant="ghost" class="text-muted-foreground justify-start sm:mt-auto" data-testid="manage-modules" @click="manage">
           <Settings2 :stroke-width="1.5" /> {{ t("addModule.manage") }}
         </Button>

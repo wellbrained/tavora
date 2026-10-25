@@ -11,6 +11,8 @@ export interface NavItem {
   /** Shown on hover as a hint. */
   title?: string;
   testid?: string;
+  /** A test id for the badge. */
+  badgeTestid?: string;
 }
 
 export interface NavGroup {

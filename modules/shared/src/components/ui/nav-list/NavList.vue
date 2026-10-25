@@ -5,7 +5,7 @@ import { computed, ref, type HTMLAttributes } from "vue";
 import { cn } from "../../../lib/utils";
 import type { NavGroup } from "./types";
 
-const props = defineProps<{ groups: NavGroup[]; label: string; modelValue?: string | null; class?: HTMLAttributes["class"] }>();
+const props = defineProps<{ groups: NavGroup[]; label: string; modelValue?: string | null; class?: HTMLAttributes["class"]; headingClass?: HTMLAttributes["class"]; iconClass?: HTMLAttributes["class"] }>();
 const emit = defineEmits<{
   "update:modelValue": [id: string];
   /** Every press, also on the entry that is already selected. */
@@ -40,7 +40,7 @@ function onKey(event: KeyboardEvent) {
 <template>
   <nav ref="list" data-slot="nav-list" :aria-label="label" :class="cn('flex flex-col gap-0.5', props.class)" @keydown="onKey">
     <template v-for="(group, index) in groups" :key="group.heading ?? index">
-      <h3 v-if="group.heading" :class="cn('text-muted-foreground px-3 pb-1 text-xs font-semibold tracking-wider uppercase', index > 0 && 'pt-4')">{{ group.heading }}</h3>
+      <h3 v-if="group.heading" :class="cn('text-muted-foreground px-3 pb-1 text-xs font-semibold tracking-wider uppercase', index > 0 && 'pt-4', props.headingClass)">{{ group.heading }}</h3>
       <button
         v-for="item in group.items"
         :key="item.id"
@@ -58,9 +58,9 @@ function onKey(event: KeyboardEvent) {
         "
         @click="pick(item.id)"
       >
-        <component :is="item.icon" v-if="item.icon" :class="cn('size-4 flex-none transition-colors', item.id === modelValue ? 'text-primary' : 'group-hover:text-primary/80')" :stroke-width="1.75" aria-hidden="true" />
+        <component :is="item.icon" v-if="item.icon" :class="cn('size-4 flex-none transition-colors', item.id === modelValue ? 'text-primary' : 'group-hover:text-primary/80', props.iconClass)" :stroke-width="1.75" aria-hidden="true" />
         <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
-        <span v-if="item.badge !== undefined" :class="cn('text-xs tabular-nums', item.badgeAccent ? 'bg-primary text-primary-foreground rounded-sm px-1.5' : item.id === modelValue ? 'text-primary' : 'text-muted-foreground')">{{ item.badge }}</span>
+        <span v-if="item.badge !== undefined" :data-testid="item.badgeTestid" :class="cn('text-xs tabular-nums', item.badgeAccent ? 'bg-primary text-primary-foreground rounded-sm px-1.5' : item.id === modelValue ? 'text-primary' : 'text-muted-foreground')">{{ item.badge }}</span>
       </button>
     </template>
   </nav>
