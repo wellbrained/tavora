@@ -980,7 +980,12 @@ export class Host {
     const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
     this.library.developmentFolders = this.library.developmentFolders.filter((item) => key(item) !== key(folder));
     this.saveLibrary();
+    const projects = [...this.modules.values()].filter((module) => module.developmentProject !== undefined);
     await this.reloadModules();
+    // A module of that folder that is gone now takes its game overlays with it, as a removed module does.
+    for (const module of projects) {
+      if (this.modules.get(module.manifest.id)?.developmentProject !== module.developmentProject) this.gameOverlays.forgetModule(module.manifest.id, module.owner);
+    }
   }
 
   /**
@@ -1839,8 +1844,8 @@ export class Host {
         this.syncGameWatcher();
       }),
       "set-game-overlay": (action) => {
-        const { owner, moduleId, gameId, key, mode, opacity, showOnStream } = action;
-        this.gameOverlays.update({ owner, moduleId, gameId, key }, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(showOnStream !== undefined ? { showOnStream } : {}) });
+        const { owner, moduleId, gameId, key, mode, opacity, hideFromCapture } = action;
+        this.gameOverlays.update({ owner, moduleId, gameId, key }, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
       },
       "remove-game-overlay": (action) => this.gameOverlays.remove(action),
       "set-overlay-key": (action) => {
@@ -3793,6 +3798,7 @@ export class Host {
         new GameOverlayWindow({
           preload: path.join(path.dirname(options.modulePreload), "game-overlay.cjs"),
           hidden: !!options.hidden,
+          id: request.id,
           source: { page: request.page, state: request.state, watch: request.watch },
           gameBounds: request.gameBounds,
           moved: request.moved,

@@ -20,36 +20,6 @@
       "if": {
         "type": "object",
         "required": [
-          "overlay"
-        ],
-        "properties": {
-          "overlay": {}
-        }
-      },
-      "then": {
-        "type": "object",
-        "properties": {
-          "permissions": {
-            "type": "object",
-            "required": [
-              "connectors"
-            ],
-            "properties": {
-              "connectors": {
-                "type": "array",
-                "contains": {
-                  "const": "stream-overlay"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "type": "object",
-        "required": [
           "permissions"
         ],
         "properties": {
@@ -186,8 +156,12 @@
       "type": "string",
       "maxLength": 300,
       "anyOf": [
-        { "pattern": "^https://[^\\s\\u0000-\\u001f/?#@\\\\]+(?:[/?#][^\\s\\u0000-\\u001f\\\\]*)?$" },
-        { "pattern": "^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$" }
+        {
+          "pattern": "^https://[^\\s\\u0000-\\u001f/?#@\\\\]+(?:[/?#][^\\s\\u0000-\\u001f\\\\]*)?$"
+        },
+        {
+          "pattern": "^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
+        }
       ],
       "description": "Where players send feedback: an https address or an email address. The module's page has a Send feedback button that opens it. Needs Tavora 0.20.39 or newer.",
       "examples": [
@@ -331,7 +305,7 @@
           "pattern": "\\.html$"
         }
       ],
-      "description": "The page streaming software such as OBS shows as a Browser Source. Tavora serves it on this PC only, with the files next to it, and gives it live data from the module. Needs \"stream-overlay\" in permissions.connectors, and that connector needs this page.",
+      "description": "The page streaming software such as OBS shows as a Browser Source, and the page game overlays show over the player's game. Tavora serves it on this PC only, with the files next to it, and gives it live data from the module. Needs no connector, but the \"stream-overlay\" connector needs this page. Without that connector, a minTavora newer than 0.20.42 is needed (except Tavora's own modules); the TypeScript validator checks that.",
       "examples": [
         "dist/overlay.html"
       ]

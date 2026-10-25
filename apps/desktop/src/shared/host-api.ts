@@ -662,7 +662,7 @@ export interface GameOverlaysView {
       name: string;
       mode: "always" | "toggle";
       opacity: 100 | 75 | 50 | 25;
-      showOnStream: boolean;
+      hideFromCapture: boolean;
       hotkey: OverlayKeyView | null;
     }[];
   }[];

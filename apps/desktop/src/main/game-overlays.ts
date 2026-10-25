@@ -49,15 +49,15 @@ export interface GameOverlaySubject {
 export interface GameOverlay extends GameOverlaySubject {
   mode: OverlayMode;
   opacity: Opacity;
-  /** Whether stream capture may see it (off: the window is hidden from screen capture). */
-  showOnStream: boolean;
+  /** Whether the window is hidden from screen capture (opt-in; off by default, as some anti-cheats flag it). */
+  hideFromCapture: boolean;
   rect: RelativeRect;
 }
 
 type GameOverlayFile = { version: 1; exclusiveHintShown?: boolean; overlays: GameOverlay[] };
 
 /** What the player can change on an existing overlay. */
-export type GameOverlayChange = Partial<Pick<GameOverlay, "mode" | "opacity" | "showOnStream" | "rect">>;
+export type GameOverlayChange = Partial<Pick<GameOverlay, "mode" | "opacity" | "hideFromCapture" | "rect">>;
 
 export const sameOverlay = (a: GameOverlaySubject, b: GameOverlaySubject) => a.owner === b.owner && a.moduleId === b.moduleId && a.gameId === b.gameId && a.key === b.key;
 
@@ -176,7 +176,7 @@ export class GameOverlayStore {
     const overlays: GameOverlay[] = [];
     for (const entry of Array.isArray(raw?.overlays) ? raw.overlays : []) {
       if (typeof entry !== "object" || entry === null) continue;
-      const { owner, moduleId, gameId, key, mode, opacity, showOnStream, rect } = entry as Partial<Record<keyof GameOverlay, unknown>>;
+      const { owner, moduleId, gameId, key, mode, opacity, hideFromCapture, rect } = entry as Partial<Record<keyof GameOverlay, unknown>>;
       const fields = [owner, moduleId, gameId].every((value) => typeof value === "string" && value.length > 0 && value.length <= 128);
       const relative = normalizeRelative(rect);
       if (!fields || typeof key !== "string" || !OVERLAY_KEY.test(key) || !relative) continue;
@@ -187,7 +187,7 @@ export class GameOverlayStore {
         key,
         mode: mode === "toggle" ? "toggle" : "always",
         opacity: OPACITIES.find((value) => value === opacity) ?? 100,
-        showOnStream: showOnStream === true,
+        hideFromCapture: hideFromCapture === true,
         rect: relative,
       };
       if (overlays.some((item) => sameOverlay(item, overlay)) || overlays.filter((item) => item.gameId === overlay.gameId).length >= LIMITS.maxGameOverlays) continue;
@@ -215,7 +215,7 @@ export class GameOverlayStore {
     // Overlays of one game start below each other, so a second one doesn't hide the first.
     const row = this.of(subject.gameId).length % 4;
     const rect = { ...DEFAULT_RELATIVE_RECT, y: Math.min(DEFAULT_RELATIVE_RECT.y + row * (DEFAULT_RELATIVE_RECT.height + 0.02), 1 - DEFAULT_RELATIVE_RECT.height) };
-    this.overlays.push({ ...subject, mode: "always", opacity: 100, showOnStream: false, rect });
+    this.overlays.push({ ...subject, mode: "always", opacity: 100, hideFromCapture: false, rect });
     this.saveSoon();
     return "added";
   }
@@ -226,7 +226,7 @@ export class GameOverlayStore {
     if (!overlay) return false;
     if (change.mode) overlay.mode = change.mode;
     if (change.opacity !== undefined && OPACITIES.includes(change.opacity)) overlay.opacity = change.opacity;
-    if (change.showOnStream !== undefined) overlay.showOnStream = change.showOnStream;
+    if (change.hideFromCapture !== undefined) overlay.hideFromCapture = change.hideFromCapture;
     if (change.rect) overlay.rect = normalizeRelative(change.rect) ?? overlay.rect;
     this.saveSoon();
     return true;

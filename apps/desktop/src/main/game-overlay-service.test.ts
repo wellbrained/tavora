@@ -1,7 +1,8 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LIMITS } from "@tavora/sdk/protocol";
 import type { Foreground, ForegroundProbe } from "./foreground";
 import { GameOverlays, arrangeBinding, isOverlayAction, toggleBinding, type OverlayWindow, type OverlayWindowRequest } from "./game-overlay-service";
 import { OVERLAY_ARRANGE_ACTION, OVERLAY_TOGGLE_ACTION, type Rect } from "./game-overlays";
@@ -34,7 +35,7 @@ class FakeWindow implements OverlayWindow {
   rect: Rect | null = null;
   shown = false;
   arranging = false;
-  showOnStream = false;
+  hideFromCapture = false;
   opacity = 100;
   dragging = false;
   destroyed = false;
@@ -48,8 +49,8 @@ class FakeWindow implements OverlayWindow {
   setArranging(arranging: boolean) {
     this.arranging = arranging;
   }
-  setShowOnStream(show: boolean) {
-    this.showOnStream = show;
+  setHideFromCapture(show: boolean) {
+    this.hideFromCapture = show;
   }
   setOpacity(opacity: 100 | 75 | 50 | 25) {
     this.opacity = opacity;
@@ -129,7 +130,7 @@ describe("showOverGame", () => {
     const { service, live } = await setup();
     expect(show(service)).toBe("shown");
     expect(live()).toHaveLength(1);
-    expect(live()[0]).toMatchObject({ shown: true, arranging: false, showOnStream: false, opacity: 100 });
+    expect(live()[0]).toMatchObject({ shown: true, arranging: false, hideFromCapture: false, opacity: 100 });
     expect(live()[0]!.rect).toMatchObject({ width: expect.any(Number) });
   });
 
@@ -267,11 +268,11 @@ describe("modes and settings", () => {
     expect(service.wants(key(arrangeBinding("elden")))).toBe(false);
   });
 
-  it("applies opacity and Show on stream to the window", async () => {
+  it("applies opacity and Hide from capture to the window", async () => {
     const { service, live } = await setup();
     show(service);
-    service.update({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" }, { opacity: 50, showOnStream: true });
-    expect(live()[0]).toMatchObject({ opacity: 50, showOnStream: true });
+    service.update({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" }, { opacity: 50, hideFromCapture: true });
+    expect(live()[0]).toMatchObject({ opacity: 50, hideFromCapture: true });
   });
 
   it("removes an overlay with its window and its key", async () => {
@@ -321,7 +322,7 @@ describe("arranging", () => {
     expect(world.focused).toBe(2);
   });
 
-  it("ends when the game leaves the front", async () => {
+  it("ends when the game leaves the front, without giving the game the keyboard", async () => {
     const { service, world, live, key } = await setup();
     show(service);
     service.pressed(key(arrangeBinding("elden")));
@@ -329,6 +330,7 @@ describe("arranging", () => {
     service.tick();
     expect(live()[0]).toMatchObject({ shown: false, arranging: false });
     expect(world.registered.has("Escape")).toBe(false);
+    expect(world.focused).toBe(0);
   });
 
   it("saves where the player left an overlay, relative to the game, and leaves a window being dragged alone", async () => {
@@ -413,7 +415,7 @@ describe("what the page is given", () => {
     overlays.publish({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" }, { value: 7 });
     expect(state()).toEqual({ value: 7 });
     expect(heard).toEqual([{ value: 7 }]);
-    stop();
+    stop!();
     overlays.publish({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" }, { value: 8 });
     expect(heard).toHaveLength(1);
   });
@@ -425,6 +427,142 @@ describe("what the page is given", () => {
     live()[0]!.request.watch((next) => void heard.push(next));
     overlays.resetAll();
     expect(heard).toEqual([undefined]);
+  });
+
+  it("has nothing to listen to without a link, so the page's stream ends and it asks again", async () => {
+    const { service, live, overlays } = await setup();
+    show(service);
+    overlays.forget(() => true);
+    expect(live()[0]!.request.watch(() => {})).toBeNull();
+  });
+});
+
+describe("a page that crashes", () => {
+  const crash = (live: () => FakeWindow[]) => live()[0]!.request.ended();
+
+  it("is made again with the same name, until it crashes three times in a few minutes", async () => {
+    const { service, world, live } = await setup();
+    show(service);
+    const id = live()[0]!.request.id;
+    for (let i = 0; i < 2; i++) {
+      crash(live);
+      expect(live()).toHaveLength(0);
+      service.tick();
+      expect(live()).toHaveLength(1);
+      expect(live()[0]!.request.id).toBe(id);
+    }
+    expect(world.notices).toEqual([]);
+    crash(live);
+    for (let i = 0; i < 3; i++) service.tick();
+    expect(live()).toHaveLength(0);
+    // Told once, in the player's words.
+    expect(world.notices).toEqual(["This overlay stopped working."]);
+  });
+
+  it("gets another chance when the player shows it again, or toggles it", async () => {
+    const { service, world, live, key } = await setup();
+    show(service);
+    for (let i = 0; i < 3; i++) {
+      crash(live);
+      service.tick();
+    }
+    expect(live()).toHaveLength(0);
+    expect(show(service)).toBe("shown");
+    expect(live()).toHaveLength(1);
+
+    const subject = { owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" };
+    service.update(subject, { mode: "toggle" });
+    const toggle = key(toggleBinding(subject));
+    service.pressed(toggle);
+    for (let i = 0; i < 3; i++) {
+      crash(live);
+      service.tick();
+    }
+    expect(live()).toHaveLength(0);
+    service.pressed(toggle);
+    service.pressed(toggle);
+    expect(live()).toHaveLength(1);
+    expect(world.notices).toHaveLength(2);
+  });
+
+  it("forgets old crashes after a few minutes", async () => {
+    const { service, world, live } = await setup();
+    show(service);
+    const now = vi.spyOn(Date, "now");
+    try {
+      const start = Date.now();
+      for (let i = 0; i < 4; i++) {
+        now.mockReturnValue(start + i * 10 * 60_000);
+        crash(live);
+        service.tick();
+      }
+      expect(live()).toHaveLength(1);
+      expect(world.notices).toEqual([]);
+    } finally {
+      now.mockRestore();
+    }
+  });
+});
+
+describe("leftovers", () => {
+  it("leaves no overlay behind when its link can't be made", async () => {
+    const { service, overlays, world } = await setup();
+    const subject = (key: string) => ({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key });
+    for (let i = 0; i < LIMITS.maxOverlays; i++) overlays.link(subject("k" + i));
+    expect(() => show(service)).toThrowError(expect.objectContaining({ code: "QUOTA_EXCEEDED" }));
+    expect(service.has(subject("item-1"))).toBe(false);
+    expect(service.view().games).toEqual([]);
+    expect(world.windows).toHaveLength(0);
+  });
+
+  it("removes a game's arrange key when its last overlay goes, not before", async () => {
+    const { service, world, key } = await setup();
+    show(service);
+    show(service, CLOCK, "elden", "item-2");
+    key(arrangeBinding("elden"));
+    service.remove({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" });
+    expect(world.removedKeys).toEqual([]);
+    service.remove({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-2" });
+    expect(world.removedKeys.map((record) => record.action)).toEqual([OVERLAY_ARRANGE_ACTION]);
+  });
+
+  it("closes the window of a game that stays out of the front for 30 seconds, and makes it again when it is back", async () => {
+    const { service, world, live } = await setup();
+    show(service);
+    const now = vi.spyOn(Date, "now");
+    try {
+      const start = Date.now();
+      now.mockReturnValue(start);
+      world.foreground = null;
+      service.tick();
+      expect(world.windows[0]).toMatchObject({ shown: false, destroyed: false });
+      now.mockReturnValue(start + 29_000);
+      service.tick();
+      expect(live()).toHaveLength(1);
+      now.mockReturnValue(start + 31_000);
+      service.tick();
+      expect(live()).toHaveLength(0);
+      world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0 };
+      service.tick();
+      expect(live()).toHaveLength(1);
+      expect(live()[0]!.shown).toBe(true);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("keeps the window of a toggled-off overlay while its game is in front", async () => {
+    const { service, live } = await setup();
+    show(service);
+    service.update({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" }, { mode: "toggle" });
+    const now = vi.spyOn(Date, "now");
+    try {
+      now.mockReturnValue(Date.now() + 10 * 60_000);
+      service.tick();
+      expect(live()).toHaveLength(1);
+    } finally {
+      now.mockRestore();
+    }
   });
 });
 

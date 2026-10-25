@@ -22,8 +22,11 @@ export interface GameOverlaySource {
   page(): OverlayPage | null;
   /** What the module published for the overlay, null for nothing. */
   state(): JsonValue | null;
-  /** Calls `fn` with each new state, or with undefined when the overlay's link goes away. Returns a function that stops it. */
-  watch(fn: (state: JsonValue | null | undefined) => void): () => void;
+  /**
+   * Calls `fn` with each new state, or with undefined when the overlay's link goes away. Returns a function that stops it,
+   * or null when the overlay has no link: the stream then ends, and the page asks again.
+   */
+  watch(fn: (state: JsonValue | null | undefined) => void): (() => void) | null;
 }
 
 const plain = (status: number, text: string) => new Response(text, { status, headers: { ...HEADERS, "Content-Type": "text/plain; charset=utf-8" } });
@@ -67,7 +70,9 @@ function eventStream(request: Request, source: GameOverlaySource): Response {
       };
       controller.enqueue(text.encode("retry: 2000\n\n"));
       send(source.state());
-      stop = source.watch((next) => (next === undefined ? end() : send(next)));
+      const watching = source.watch((next) => (next === undefined ? end() : send(next)));
+      if (!watching) return end();
+      stop = watching;
       request.signal.addEventListener("abort", end, { once: true });
     },
     cancel() {
