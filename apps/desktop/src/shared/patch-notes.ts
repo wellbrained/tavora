@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.44",
+    date: "2026-10-25",
+    title: "Discord module polish",
+    notes: [
+      "Clearer messages when Discord can't be reached or the module isn't allowed.",
+      "Shorter texts, and a spinner while Discord connects.",
+    ],
+  },
+  {
     version: "0.20.43",
     date: "2026-10-25",
     title: "Tidier Settings",
