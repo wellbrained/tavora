@@ -301,6 +301,15 @@ export interface SystemSnapshot {
     peak: number;
     /** Video memory in use in bytes, or null when Windows doesn't say. */
     vramUsedBytes: number | null;
+    /**
+     * Temperature of the graphics chip in whole degrees Celsius. Only NVIDIA cards report it (Tavora 0.21.8 and
+     * newer); null for other cards or when the card doesn't say. Missing on older Tavora.
+     */
+    temperatureC?: number | null;
+    /** Graphics clock in whole MHz; the same cards and rules as `temperatureC`. */
+    clockMhz?: number | null;
+    /** Power the card draws in watts, with one decimal; the same cards and rules as `temperatureC`. */
+    powerW?: number | null;
   }[];
   ram?: { usedBytes: number; totalBytes: number };
   drives?: {

@@ -64,3 +64,28 @@ export function usedPercent(freeBytes: number | null, totalBytes: number | null)
   if (freeBytes === null || totalBytes === null || totalBytes <= 0) return 0;
   return clamp(100 - (freeBytes / totalBytes) * 100, 0, 100);
 }
+
+/** "72": whole degrees Celsius for the temperature next to the usage. */
+export function degrees(celsius: number, language = "en"): string {
+  return num(Math.round(celsius), 0, language);
+}
+
+export type TemperatureTone = "ok" | "warning" | "danger";
+
+/** Yellow from 80 °C, red from 90 °C. */
+export function temperatureTone(celsius: number | null): TemperatureTone {
+  if (celsius === null) return "ok";
+  if (celsius >= 90) return "danger";
+  if (celsius >= 80) return "warning";
+  return "ok";
+}
+
+/** "310 W": whole watts. */
+export function watts(value: number, language = "en"): string {
+  return `${num(Math.round(value), 0, language)} W`;
+}
+
+/** "1905 MHz". */
+export function megahertz(value: number, language = "en"): string {
+  return `${num(Math.round(value), 0, language)} MHz`;
+}

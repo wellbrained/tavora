@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { driveTone, memory, num, percent, size, speed, usedPercent } from "./format";
+import { degrees, driveTone, megahertz, memory, num, percent, size, speed, temperatureTone, usedPercent, watts } from "./format";
 
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
@@ -66,5 +66,28 @@ describe("usedPercent", () => {
   it("is the share used", () => {
     expect(usedPercent(250, 1000)).toBe(75);
     expect(usedPercent(null, 1000)).toBe(0);
+  });
+});
+
+describe("temperature", () => {
+  it("is written in whole degrees", () => {
+    expect(degrees(64)).toBe("64");
+    expect(degrees(64.6)).toBe("65");
+  });
+  it("turns yellow from 80 and red from 90 degrees, and has no colour without a reading", () => {
+    expect(temperatureTone(null)).toBe("ok");
+    expect(temperatureTone(79)).toBe("ok");
+    expect(temperatureTone(80)).toBe("warning");
+    expect(temperatureTone(89)).toBe("warning");
+    expect(temperatureTone(90)).toBe("danger");
+  });
+});
+
+describe("power and clock", () => {
+  it("write whole watts and megahertz", () => {
+    expect(watts(310.4)).toBe("310 W");
+    expect(watts(309.6, "de")).toBe("310 W");
+    expect(watts(0.4)).toBe("0 W");
+    expect(megahertz(1905.2)).toBe("1905 MHz");
   });
 });
