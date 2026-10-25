@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { SteamGameView } from "../../shared/host-api";
 import { act, api, dialog, showToast, state } from "../host";
@@ -105,7 +106,7 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
         {{ t("steamImport.profileHelp") }}
       </p>
       <label class="flex items-center gap-2 text-sm">
-        <input v-model="remember" type="checkbox" class="accent-primary size-4" data-testid="steam-remember" />
+        <Checkbox v-model="remember" data-testid="steam-remember" />
         {{ t("steamImport.remember") }}
       </label>
       <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="steam-import-error">{{ error }}</p>
@@ -133,13 +134,11 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
               class="flex items-center gap-3 rounded-md px-2 py-2"
               :class="game.status === 'new' ? 'hover:bg-accent cursor-pointer' : 'text-muted-foreground'"
             >
-              <input
-                type="checkbox"
-                class="accent-primary size-4"
-                :checked="game.status === 'new' && ticked.has(game.appid)"
+              <Checkbox
+                :model-value="game.status === 'new' && ticked.has(game.appid)"
                 :disabled="busy || game.status !== 'new'"
                 :data-testid="`steam-game-${game.appid}`"
-                @change="toggle(game.appid, ($event.target as HTMLInputElement).checked)"
+                @update:model-value="(checked) => toggle(game.appid, checked === true)"
               />
               <span class="min-w-0 flex-1 truncate">{{ game.name }}</span>
               <span v-if="game.status !== 'new'" class="flex-none text-xs">{{ status(game) }}</span>

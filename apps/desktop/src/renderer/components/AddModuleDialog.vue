@@ -10,6 +10,7 @@
 import { computed, ref } from "vue";
 import { useEventListener } from "@vueuse/core";
 import { account, act, addModule, dialog, openSettings, publishModule, saveModuleZip, state, type AddModuleRequest, type MenuItem } from "../host";
+import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -194,7 +195,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
       @escape-key-down="closeMenuFirst"
     >
       <aside class="bg-background flex shrink-0 flex-col gap-4 border-b p-4 sm:w-64 sm:gap-5 sm:border-r sm:border-b-0">
-        <DialogTitle class="hidden px-2 pt-1 text-xl font-semibold sm:block">{{ t("addModule.title") }}</DialogTitle>
+        <DialogTitle class="sr-only px-2 pt-1 text-xl font-semibold sm:not-sr-only">{{ t("addModule.title") }}</DialogTitle>
         <form class="relative" @submit.prevent="submit">
           <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" aria-hidden="true" />
           <label class="sr-only" for="module-search">{{ t("addModule.search") }}</label>
@@ -311,10 +312,11 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                       <button type="button" class="hover:text-primary focus-visible:ring-ring truncate rounded-sm text-left font-medium outline-none focus-visible:ring-2" :title="module.name"
                         :aria-label="t('catalog.infoLabel', { name: module.name })" :data-testid="`module-name-${module.id}`" @click="openInfo(module)"
                       >{{ module.name }}</button>
-                      <span
-                        :class="cn('shrink-0 rounded-sm border px-1.5 text-xs', module.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
+                      <Badge
+                        variant="outline"
+                        :class="cn('py-0 font-normal', module.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
                         :data-testid="`provenance-${module.id}`"
-                        >{{ provenanceLabel(module) }}</span
+                        >{{ provenanceLabel(module) }}</Badge
                       >
                       <MenuButton
                         v-if="module.project && accounts"
