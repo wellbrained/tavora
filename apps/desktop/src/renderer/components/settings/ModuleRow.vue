@@ -2,10 +2,10 @@
 // One module in a Settings list: icon, name, version, who made it, what it
 // does and where it was found (the Official badge says it for Tavora's own; a list
 // that already says it, like a project folder's, hides it). The buttons for it go in the slot.
-import { FolderCode, Package } from "@lucide/vue";
+import { FolderCode, Package, Upload } from "@lucide/vue";
 import { computed } from "vue";
 import { cn } from "@/lib/utils";
-import { state } from "../../host";
+import { releaseStatus, state } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 
@@ -16,6 +16,11 @@ const props = defineProps<{ module: NonNullable<typeof state.value>["modules"][n
 const kind = computed(() =>
   props.module.provenance === "official" ? "official" : props.module.origin.kind === "dev" && !props.module.id.startsWith("local.") ? "release" : "local",
 );
+// A release copy that the catalog does not have yet, or has only in an older version, says so; unknown (offline) says nothing.
+const pending = computed(() => {
+  const status = kind.value === "release" ? releaseStatus.value?.[props.module.id] : undefined;
+  return status === "new-version" || status === "not-published" ? status : null;
+});
 const tag = computed(() => t(`common.${kind.value}`));
 const tagClass = {
   official: "border-primary/40 text-primary",
@@ -38,6 +43,13 @@ const tagClass = {
           :data-testid="`module-tag-${module.id}`"
           :data-kind="kind"
           ><Package v-if="kind === 'release'" class="size-3" aria-hidden="true" /><FolderCode v-else-if="kind === 'local'" class="size-3" aria-hidden="true" />{{ tag }}</span
+        >
+        <span
+          v-if="pending"
+          class="border-warning/40 bg-warning/15 text-warning inline-flex flex-none items-center gap-1 rounded-sm border px-1.5 text-xs font-medium"
+          :data-testid="`module-pending-${module.id}`"
+          :data-status="pending"
+          ><Upload class="size-3" aria-hidden="true" />{{ pending === "new-version" ? t("release.newVersion") : t("release.notPublished") }}</span
         >
         <span
           v-if="module.publisher && module.publisherName"

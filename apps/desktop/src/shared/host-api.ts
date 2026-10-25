@@ -822,6 +822,15 @@ export interface CatalogReviews {
   installedVersion: string | null;
 }
 
+/** What a release copy still needs: a first publish, a newer version, or nothing. */
+export type ReleaseStatus = "not-published" | "new-version" | "current";
+
+/** A release copy loaded from a development folder: its id and the version in its manifest. */
+export interface ReleaseCopy {
+  id: string;
+  version: string;
+}
+
 export type CatalogReviewsResult = ({ status: "ok" } & CatalogReviews) | { status: "off" | "unavailable" | "busy" | "unreachable" | "gone" };
 
 /** One block of a catalog module's readme, as plain text (catalog-readme.ts). */
@@ -871,6 +880,8 @@ export interface TavoraHostApi {
   catalogIcon(moduleId: string): Promise<string | null>;
   /** A catalog module's ratings and reviews, and the player's own rating. Never rejects. */
   catalogReviews(moduleId: string): Promise<CatalogReviewsResult>;
+  /** Of these release copies, which still need publishing, from one look at the catalog; null when it can't be reached. Never rejects. */
+  releaseStatuses(copies: ReleaseCopy[]): Promise<Record<string, ReleaseStatus> | null>;
   /** Where the visible panels are. Panels not listed are hidden. */
   setPanelBounds(bounds: PanelBounds[]): void;
   /**
