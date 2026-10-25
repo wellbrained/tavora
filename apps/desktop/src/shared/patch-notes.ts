@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.39",
+    date: "2026-10-25",
+    title: "Send feedback to a module's developer",
+    notes: [
+      "A module's page has a Send feedback button when the developer added a link. It opens a web page or your mail app, only after you press it.",
+      "Report is now called Report to Tavora, with a short note about when to use it.",
+    ],
+  },
+  {
     version: "0.20.38",
     date: "2026-10-25",
     title: "Module updates wait for you",
