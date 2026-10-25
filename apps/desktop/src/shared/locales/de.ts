@@ -417,7 +417,6 @@ export const de: Record<keyof typeof en, string> = {
   "publish.useId": "Übernehmen",
   "publish.newPrefix": "Beim Veröffentlichen sicherst du dir das Präfix {prefix}. Danach kannst nur du Module damit veröffentlichen.",
   "publish.notBuilt": "Es gibt noch nichts Gebautes zum Veröffentlichen. Führ npm run build in deinem Projekt aus und drück dann auf Nochmal prüfen.",
-  "publish.checkAgain": "Nochmal prüfen",
   "publish.publish": "Veröffentlichen",
   "publish.publishing": "Wird veröffentlicht …",
   "publish.done": "{version} ist veröffentlicht!",
