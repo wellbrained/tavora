@@ -20,17 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.21.8",
+    version: "0.21.9",
     date: "2026-10-25",
-    title: "Smoother game switching",
+    title: "System info is lighter on games",
     notes: [
-      "When you switch games, all panels now show up together, with no empty panels for a moment.",
-      "The loading fire only shows when a game takes a while to open.",
-      "After you close a dialog, like Add module, big panels like a skill tree don't go blank for a moment anymore.",
+      "NVIDIA graphics cards are now read directly, so watching them can't cause small hitches in a game anymore.",
+      "System Monitor shows your NVIDIA card's temperature and power use.",
     ],
   },
   {
-    version: "0.21.7",
+    version: "0.21.8",
     date: "2026-10-25",
     title: "Tavora in your game, and a tidier Tavora",
     notes: [
@@ -41,6 +40,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "Module updates wait for you: a button next to Layouts shows what is new. Prefer the old way? Turn on Update modules automatically in Settings > Modules.",
       "Module pages show every version with its date, mark the ones you missed and have a Send feedback button when the developer added a link.",
       "Saving a file or an image opens Tavora's save dialog with the name filled in, in the folder you used last.",
+      "Switching games is smoother: panels show up together, and the loading fire only shows when a game takes a while.",
       "Fold a column into a narrow strip, open another panel of a module you already use, and maximized panels stay maximized.",
       "Fewer antivirus alarms, and a download that is about 10 MB smaller.",
       "Calculator has new keys like √, x² and ans, plus a toolbar for Basic, Plus and your history.",

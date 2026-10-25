@@ -238,6 +238,13 @@ export function hostActionTable(c: HostChecks) {
       opacity: optional(check<100 | 75 | 50 | 25>((value) => value === 100 || value === 75 || value === 50 || value === 25)),
       hideFromCapture: optional(bool),
     },
+    /** Changes the live view of a panel in game (mode, opacity, Hide from capture). */
+    "set-panel-view": {
+      instanceId: c.uuid,
+      mode: optional(oneOf("always", "toggle")),
+      opacity: optional(check<100 | 75 | 50 | 25>((value) => value === 100 || value === 75 || value === 50 || value === 25)),
+      hideFromCapture: optional(bool),
+    },
     /** Removes one game overlay, and its key. */
     "remove-game-overlay": { owner: c.ownerId, moduleId: c.moduleId, gameId: c.gameId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     /** Opens the hotkey dialog for the layer key (without gameId, owner, moduleId and key) or for one overlay's toggle key. */

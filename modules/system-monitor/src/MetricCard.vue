@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // A card for CPU or the graphics card: label and name on top, the usage big and centred, the graph, and one small
 // line with the peak on the left and a detail on the right. Plain text, so a snapshot touches only what changed.
+import { cn } from "@tavora/official-ui";
 import UsageGraph from "./UsageGraph.vue";
 
 withDefaults(defineProps<{
@@ -10,13 +11,15 @@ withDefaults(defineProps<{
   usage: string;
   /** Already written ("72"), in degrees Celsius; empty until Tavora reports it (it sits centred next to the %). */
   temperature?: string;
+  /** A text colour class for the temperature (yellow, red when it runs hot); empty for the normal colour. */
+  temperatureClass?: string;
   /** False for a block that has no temperature (memory): the usage is then centred alone. */
   hasTemperature?: boolean;
   /** Hover text for the dash shown while there is no temperature. */
   temperatureHint?: string;
   /** Already written ("max 90 %"); empty when not shown. */
   peak: string;
-  /** Already written ("VRAM 9.4 / 9.8 GB"). */
+  /** Already written ("VRAM 9.4 / 9.8 GB · 310 W"). */
   detail: string;
   /** Shown on hover. */
   hint: string;
@@ -36,7 +39,7 @@ withDefaults(defineProps<{
     <div class="flex items-baseline justify-center gap-3 whitespace-nowrap" data-testid="usage">
       <span class="text-[2.125rem] leading-none font-semibold tabular-nums">{{ usage }}<span v-if="usage" class="text-muted-foreground ml-0.5 text-base font-normal">%</span></span>
       <template v-if="hasTemperature">
-      <span v-if="temperature" class="text-[2.125rem] leading-none font-semibold tabular-nums" data-testid="temperature">{{ temperature }}<span class="text-muted-foreground ml-0.5 text-base font-normal">°C</span></span>
+      <span v-if="temperature" :class="cn('text-[2.125rem] leading-none font-semibold tabular-nums', temperatureClass)" data-testid="temperature">{{ temperature }}<span class="text-muted-foreground ml-0.5 text-base font-normal">°C</span></span>
       <span v-else class="text-muted-foreground text-[2.125rem] leading-none font-semibold tabular-nums" :title="temperatureHint" :tabindex="temperatureHint ? 0 : undefined" data-testid="temperature-none">–<span class="ml-0.5 text-base font-normal">°C</span></span>
       </template>
     </div>

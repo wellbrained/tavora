@@ -301,6 +301,15 @@ export interface SystemSnapshot {
     peak: number;
     /** Video memory in use in bytes, or null when Windows doesn't say. */
     vramUsedBytes: number | null;
+    /**
+     * Temperature of the graphics chip in whole degrees Celsius. Only NVIDIA cards report it (Tavora 0.21.8 and
+     * newer); null for other cards or when the card doesn't say. Missing on older Tavora.
+     */
+    temperatureC?: number | null;
+    /** Graphics clock in whole MHz; the same cards and rules as `temperatureC`. */
+    clockMhz?: number | null;
+    /** Power the card draws in watts, with one decimal; the same cards and rules as `temperatureC`. */
+    powerW?: number | null;
   }[];
   ram?: { usedBytes: number; totalBytes: number };
   drives?: {
@@ -477,7 +486,7 @@ export interface Methods {
    * only right after a click or key press in the panel. Tavora 0.20.20 and newer.
    */
   "panel.setMaximized": { params: { maximized: boolean }; result: null };
-  /** What this panel's live view (the overlay page shown in its spot over the game) shows; null shows nothing. At most LIMITS.maxOverlayStateBytes. Tavora 0.21.9 and newer. */
+  /** What this panel's live view (the overlay page shown in its spot over the game) shows; null shows nothing. At most LIMITS.maxOverlayStateBytes. Tavora 0.21.10 and newer. */
   "panel.setLive": { params: { state: JsonValue | null }; result: null };
   /**
    * Opens one of this module's own panel types in the current game, optionally on some content. Only right after a

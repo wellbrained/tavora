@@ -1508,7 +1508,7 @@ export const de: Record<keyof typeof en, string> = {
   "settings.game-panels.label": "Panels im Spiel",
   "settings.game-panels.search": "Panels, die über deinem Spiel zu sehen sind, solange die Ebene offen ist.",
   "settings.game-panels.keywords": "panel, im spiel, ebene, nicht mehr zeigen",
-  "settings.game-panels.description": "Sie sind über deinem Spiel zu sehen, solange die Ebene offen ist.",
+  "settings.game-panels.description": "Öffne die Ebene, um sie zu verschieben. Ist sie zu, kann ein Panel an seiner Stelle eine Live-Ansicht zeigen.",
   "overlays.group.overlays": "Overlays",
   "overlays.group.list": "Deine Overlays",
   "overlays.group.panels": "Panels im Spiel",

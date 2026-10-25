@@ -93,7 +93,7 @@ A module's **patch notes** also show outside its panel, in Settings > Modules. T
 A module granted the `system-info` connector can read this PC's hardware and how busy it is: processor, memory, graphics cards, drives and Tavora's own use. The consent dialog says so.
 
 - **Read only while a panel shows it.** Tavora reads the PC only while at least one panel that is shown watches something. A hidden, minimized or covered panel counts for nothing, and with no watching panel there is no timer and no open counter. All panels share one reader, which looks at most once a second.
-- **Windows' own numbers, read in Tavora's process.** The values are the performance counters Task Manager shows, plus the drive list and the names of the graphics cards. Tavora starts no helper program, installs and loads no driver, reads no hardware sensor and sends nothing anywhere.
+- **Windows' own numbers, read in Tavora's process.** The values are the performance counters Task Manager shows, plus the drive list and the names of the graphics cards. For NVIDIA cards, usage, video memory, temperature, clock speed and power come from NVIDIA's own library that ships with the driver (`nvml.dll`), loaded and read inside Tavora's process. Tavora starts no helper program, installs no driver and sends nothing anywhere.
 - **Numbers and names only.** A module gets the processor and graphics card names, sizes, percentages and drive letters with their labels. It never gets a file name, a path, a serial number, a user name or what other programs are running.
 - **Network drives are not asked.** A network drive that doesn't answer could hold Tavora up, so its name and size are left out.
 - **It ends with the panel and with the grant.** Closing the panel ends its watch at once. Taking the connector back removes the module's panels (see Revoking above), and a snapshot is never sent to a module without the grant.
@@ -145,6 +145,13 @@ A panel type can set `inGame: true` in the manifest. Only for those types, the p
 - **Input only while the layer is open.** A click or key press counts as the player's (what links and files need) only while the layer is open; at any other time none is counted. Tavora's own shortcuts leave the keys to the panel. While a panel has the keyboard, Windows reports one of Tavora's own windows as the one in front; Tavora reads only that it is its own and keeps the game as the one in front.
 - **It goes when the panel goes.** Closing the panel, removing its module or game, a module replaced by another publisher's, turning Game overlays off, closing Tavora's window or quitting closes the overlay window, and the player can't close it any other way (Alt+F4 is ignored; the layer closing is how it leaves). A panel that crashes shows its usual crash screen in its slot.
 - **Live badge.** A panel's tab shows a small **Live** badge when the panel is in game, or when its module has an overlay that shows over the game. It is only a label; clicking it opens Settings > Overlays.
+
+### Live views
+
+A panel in game can also have a **live view**: while the layer is closed, Tavora shows the panel's module overlay page (the manifest's `overlay`) in the panel's spot over the game. It is the same kind of window as a game overlay, so everything under [Overlays](#overlays) holds: it is click-through, never takes the keyboard, has no bridge and no network, and shows only while its game is in front and Game overlays are on.
+
+- **`panel.setLive(state)`** sets what that page shows: plain JSON, at most 16 KB, kept in memory only and forgotten when the panel closes. It needs no click or permission, and it is what makes the live window appear over the game: for a panel the player already put in game (Show in game, which is the consent), the module decides when its page shows, by setting or clearing the state. The player can set per panel whether the view is always there or toggled by a key, its opacity and Hide from capture (off at first), or stop showing the panel in game.
+- **It reaches nothing else.** The page can read only the state its own panel passed. A module without an overlay page gets no live view.
 
 ### Overlay previews
 
