@@ -65,7 +65,6 @@ export const en = {
   "overlay.denied": "Not allowed. Press Copy OBS link to try again.",
   "overlay.gameOff": "Game overlays are off. Turn them on in Settings > Overlays.",
   "overlay.gameFull": "This game has no room for another overlay. Remove one in Settings > Overlays.",
-  "overlay.removeHint": "Turn it off in Settings > Overlays.",
 
   "action.joinFailed": "Discord would not let you join that channel. Check that you are allowed to.",
   "action.notConnected": "Connect to Discord first.",
@@ -144,7 +143,6 @@ export const de: Record<keyof typeof en, string> = {
   "overlay.denied": "Nicht erlaubt. Drücke OBS-Link kopieren, um es noch einmal zu versuchen.",
   "overlay.gameOff": "Spiel-Overlays sind aus. Schalte sie in Einstellungen > Overlays ein.",
   "overlay.gameFull": "Für dieses Spiel ist kein Platz für ein weiteres Overlay. Entferne eins in Einstellungen > Overlays.",
-  "overlay.removeHint": "Schalte es in Einstellungen > Overlays aus.",
 
   "action.joinFailed": "Discord lässt dich diesem Kanal nicht beitreten. Prüfe, ob du das darfst.",
   "action.notConnected": "Verbinde dich zuerst mit Discord.",

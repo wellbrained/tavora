@@ -22,6 +22,7 @@ function fakeSdk() {
     delete: async (key: string) => void map.delete(key),
     keys: async () => [...map.keys()],
   });
+  let inCall = true;
   let onState: (state: DiscordState) => void = () => {};
   let onEvent: (event: DiscordEvent) => void = () => {};
   const discord = {
@@ -29,6 +30,7 @@ function fakeSdk() {
     onStateChange: (fn: typeof onState) => ((onState = fn), () => {}),
     onEvent: (fn: typeof onEvent) => ((onEvent = fn), () => {}),
     command: async (command: DiscordCommand, args: Record<string, unknown>): Promise<DiscordResult> => {
+      if (command === "GET_SELECTED_VOICE_CHANNEL" && !inCall) return ok(null);
       if (command === "GET_SELECTED_VOICE_CHANNEL") return ok({ id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Robin"), person("2", "Lena", { self_mute: true })] });
       if (command === "GET_GUILD") return ok({ id: args.guild_id, name: "Crew" });
       return ok({});
@@ -37,6 +39,9 @@ function fakeSdk() {
     unsubscribe: async () => {},
     image: vi.fn(async (url: string) => `data:image/png;base64,${url.length}`),
   };
+  const overGame = new Set<string>();
+  let suspend: () => void = () => {};
+  let resume: () => void = () => {};
   const published: { key: string; state: any }[] = [];
   const removed: string[] = [];
   const overlay = {
@@ -44,10 +49,19 @@ function fakeSdk() {
     remove: vi.fn(async (key: string) => void removed.push(key)),
     preview: vi.fn(async () => {}),
     copyLink: vi.fn(async () => "copied" as string),
-    showOverGame: vi.fn(async () => "shown" as string),
+    showOverGame: vi.fn(async () => {
+      overGame.add("voice");
+      return "shown" as string;
+    }),
+    hideOverGame: vi.fn(async (key: string) => void overGame.delete(key)),
+    overGame: vi.fn(async () => [...overGame]),
   };
-  const sdk = { storage: { ...store(game), app: store(app) }, connectors: { discord }, overlay } as unknown as TavoraSDK;
-  return { sdk, overlay, published, removed, setState: (next: DiscordState) => onState(next), dispatch: (event: DiscordEvent["event"], data: unknown) => onEvent({ event, data: data as JsonValue }) };
+  const lifecycle = {
+    onSuspend: (fn: () => void) => (suspend = fn, () => {}),
+    onResume: (fn: () => void) => (resume = fn, () => {}),
+  };
+  const sdk = { storage: { ...store(game), app: store(app) }, connectors: { discord }, overlay, lifecycle } as unknown as TavoraSDK;
+  return { sdk, overlay, discordNotInCall: () => void (inCall = false), suspend: () => suspend(), resume: () => resume(), overGame, published, removed, setState: (next: DiscordState) => onState(next), dispatch: (event: DiscordEvent["event"], data: unknown) => onEvent({ event, data: data as JsonValue }) };
 }
 
 const settle = async () => {
@@ -126,12 +140,14 @@ describe("Discord voice overlay", () => {
     expect(panel.overlay.value.names).toBe(false);
   });
 
-  it("handles Over game: shown, off and full, and turning it off", async () => {
-    const { panel, overlay } = await started();
+  it("handles Over game: shown, off and full, and turning it off, reading the switch from Tavora", async () => {
+    const { panel, overlay, overGame } = await started();
+    expect(panel.overlay.value.overGame).toBe(false);
     expect(await panel.setOverGame(true)).toBe("shown");
     expect(overlay.showOverGame).toHaveBeenCalledWith("voice");
     expect(panel.overlay.value.overGame).toBe(true);
     expect(await panel.setOverGame(false)).toBe("removed");
+    expect(overlay.hideOverGame).toHaveBeenCalledWith("voice");
     expect(panel.overlay.value.overGame).toBe(false);
     overlay.showOverGame.mockResolvedValueOnce("off");
     expect(await panel.setOverGame(true)).toBe("off");
@@ -139,6 +155,76 @@ describe("Discord voice overlay", () => {
     overlay.showOverGame.mockResolvedValueOnce("full");
     expect(await panel.setOverGame(true)).toBe("full");
     expect(panel.overlay.value.overGame).toBe(false);
+  });
+
+  it("reads the Over game switch again on resume", async () => {
+    const { panel, overGame, resume } = await started();
+    overGame.add("voice");
+    resume();
+    await settle();
+    expect(panel.overlay.value.overGame).toBe(true);
+    overGame.clear();
+    resume();
+    await settle();
+    expect(panel.overlay.value.overGame).toBe(false);
+  });
+
+  it("clears every talking flag when the panel suspends, and talks again on resume", async () => {
+    const { published, flush, dispatch, suspend, resume } = await started();
+    dispatch("SPEAKING_START", { channel_id: "10", user_id: "2" });
+    await settle();
+    flush();
+    expect(published.at(-1)!.state.people[1].s).toBe(1);
+    suspend();
+    expect(published.at(-1)!.state.people.some((p: any) => p.s)).toBe(false);
+    resume();
+    await settle();
+    flush();
+    expect(published.at(-1)!.state.people[1].s).toBe(1);
+  });
+
+  it("previews a sample when in no voice channel, until you join or 30 seconds pass", async () => {
+    const fake = fakeSdk();
+    const timers: (() => void)[] = [];
+    const later: (() => void)[] = [];
+    const panel = createPanel(fake.sdk, {
+      setTimer: (fn) => (later.push(fn), 0 as unknown as ReturnType<typeof setTimeout>),
+      clearTimer: () => undefined,
+      publishTimer: (fn) => (timers.push(fn), 0 as unknown as ReturnType<typeof setTimeout>),
+      shrink: async () => null,
+      now: () => 1_000_000,
+    });
+    const flush = () => {
+      while (timers.length) timers.shift()!();
+    };
+    fake.discordNotInCall();
+    await panel.start();
+    await settle();
+    flush();
+    expect(fake.published).toEqual([]);
+    await panel.previewOverlay();
+    flush();
+    const sample = fake.published.at(-1)!.state;
+    expect(sample.people.map((p: any) => [p.n, p.i, p.s === 1, p.m === 1])).toEqual([["Alex", "AL", true, false], ["Sam", "SA", false, true]]);
+    // The 30 seconds run out: the sample goes.
+    later.at(-1)!();
+    flush();
+    expect(fake.removed).toEqual(["voice"]);
+  });
+
+  it("replaces the sample with the real state when you join a channel", async () => {
+    const { published, flush, panel, setState } = await started();
+    flush();
+    setState({ status: "not-running", error: null, user: null, canControl: false, canSaveSignIn: false } as DiscordState);
+    await settle();
+    flush();
+    await panel.previewOverlay();
+    flush();
+    expect(published.at(-1)!.state.people[0].n).toBe("Alex");
+    setState(CONNECTED);
+    await settle();
+    flush();
+    expect(published.at(-1)!.state.people[0].n).toBe("Robin");
   });
 
   it("previews, copies the link, and says when the player did not allow it", async () => {

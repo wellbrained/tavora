@@ -72,7 +72,7 @@ const overlay = computed(() => panel.value?.overlay.value ?? { names: true, over
 const overlayNote = ref<string | null>(null);
 async function overGame(on: boolean) {
   const result = await panel.value?.setOverGame(on);
-  overlayNote.value = result === "removed" ? t("overlay.removeHint") : result === "off" ? t("overlay.gameOff") : result === "full" ? t("overlay.gameFull") : null;
+  overlayNote.value = result === "off" ? t("overlay.gameOff") : result === "full" ? t("overlay.gameFull") : null;
 }
 async function copyLink() {
   const result = await panel.value?.copyOverlayLink();

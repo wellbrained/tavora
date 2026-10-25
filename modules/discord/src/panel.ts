@@ -35,10 +35,17 @@ const VOICE_EVENTS = ["VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_D
 const MAX_PICTURES = 300;
 
 /** Keys of the module's settings: `last` is shared by every game, `server` belongs to the game. */
-export const KEYS = { last: "last", server: "server", names: "overlayNames", overGame: "overlayOverGame" } as const;
+export const KEYS = { last: "last", server: "server", names: "overlayNames" } as const;
 
 /** The voice overlay is published at most this often (5 times a second), because talking can flicker. */
 export const PUBLISH_MS = 200;
+/** The sample shown by Preview when the player is in no voice channel lasts this long (30 seconds). */
+export const SAMPLE_MS = 30_000;
+/** Two made-up people for the Preview sample: one talking, one muted. Only used while `sampleActive` is set. */
+const SAMPLE_MEMBERS: OverlayMember[] = [
+  { id: "1", name: "Alex", tiny: null, speaking: true, muted: false, deafened: false },
+  { id: "2", name: "Sam", tiny: null, speaking: false, muted: true, deafened: false },
+];
 
 /** Someone in a voice channel, as the panel shows them. Names come from Discord and are shown as text only. */
 export interface Member {
@@ -134,9 +141,13 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
   const avatars = new Map<string, string | null>();
   /** The same pictures shrunk for the overlay, with the address they were made from. */
   const tinies = new Map<string, { from: string; tiny: string | null }>();
-  /** The voice overlay's settings: names on it, and whether the player turned it on over the game (what the switch shows). */
+  /** The voice overlay's settings: names on it. */
   let overlayNames = true;
-  let overlayOverGame = false;
+  /** True while the panel isn't running (suspended or closing): the overlay then shows nobody talking. */
+  let suspended = false;
+  /** True while Preview's sample is shown (not in a voice channel); it ends on joining or after SAMPLE_MS. */
+  let sampleActive = false;
+  let sampleTimer: ReturnType<typeof setTimeout> | undefined;
   let published = "";
   let lastPublish = 0;
   let publishPending: ReturnType<typeof setTimeout> | undefined;
@@ -209,6 +220,9 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
 
   /** The state the overlay shows now; null when the player is in no voice channel. */
   function overlayState(): OverlayState | null {
+    if (connected() && call) sampleActive = false;
+    const clear = (built: OverlayState): OverlayState => (suspended ? { ...built, people: built.people.map(({ s: _s, ...rest }) => rest) } : built);
+    if (sampleActive) return clear(buildOverlayState(SAMPLE_MEMBERS, { names: overlayNames }));
     if (!connected() || !call) return null;
     const members: OverlayMember[] = call.people.map((person) => {
       const picture = avatars.get(person.id) ?? null;
@@ -216,7 +230,7 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
       const tiny = picture && made?.from === picture ? made.tiny : null;
       return { id: person.id, name: person.name, tiny, speaking: speaking.has(person.id), muted: person.selfMute || person.serverMute, deafened: person.selfDeaf || person.serverDeaf };
     });
-    return buildOverlayState(members, { names: overlayNames });
+    return clear(buildOverlayState(members, { names: overlayNames }));
   }
 
   /** Sends the overlay what it shows if that changed, at most every PUBLISH_MS; the last change always goes out. */
@@ -227,17 +241,47 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
     const wait = Math.max(0, lastPublish + PUBLISH_MS - now());
     publishPending = publishTimer(() => {
       publishPending = undefined;
-      const state = overlayState();
-      const text = JSON.stringify(state);
-      if (text === published) return;
-      published = text;
-      lastPublish = now();
-      const sent = state ? sdk.overlay.publish(OVERLAY_KEY, state as unknown as JsonValue) : sdk.overlay.remove(OVERLAY_KEY);
-      sent.catch(() => {
-        // Not sent (no grant yet, say): the next change tries again.
-        published = "";
-      });
+      publishNow();
     }, wait);
+  }
+
+  /** Sends the overlay what it shows now, if that changed. */
+  function publishNow(): void {
+    if (!sdk.overlay) return;
+    const state = overlayState();
+    const text = JSON.stringify(state);
+    if (text === published) return;
+    published = text;
+    lastPublish = now();
+    const sent = state ? sdk.overlay.publish(OVERLAY_KEY, state as unknown as JsonValue) : sdk.overlay.remove(OVERLAY_KEY);
+    sent.catch(() => {
+      // Not sent (no grant yet, say): the next change tries again.
+      published = "";
+    });
+  }
+
+  /** The panel stops running: the overlay gets the state with nobody talking, right away (a timer may never fire). */
+  function freeze(): void {
+    suspended = true;
+    if (publishPending) clearTimer(publishPending);
+    publishPending = undefined;
+    publishNow();
+  }
+
+  /** Reads from Tavora whether the voice overlay is over the game, which is what the switch shows. */
+  async function refreshOverGame(): Promise<void> {
+    try {
+      const keys = await sdk.overlay.overGame();
+      overlay.value = { ...overlay.value, overGame: keys.includes(OVERLAY_KEY) };
+    } catch {
+      // Keep what the switch shows.
+    }
+  }
+
+  function resume(): void {
+    suspended = false;
+    void refreshOverGame();
+    schedulePublish(true);
   }
 
   /** Makes the tiny overlay picture of someone whose Discord picture just arrived. */
@@ -265,12 +309,17 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
     last = parseLast(await sdk.storage.app.get(KEYS.last));
     game = parseGameServer(await sdk.storage.get(KEYS.server));
     overlayNames = (await sdk.storage.app.get(KEYS.names)) !== false;
-    overlayOverGame = (await sdk.storage.app.get(KEYS.overGame)) === true;
-    overlay.value = { names: overlayNames, overGame: overlayOverGame };
+    overlay.value = { names: overlayNames, overGame: false };
+    await refreshOverGame();
     cleanup.push(
       discord.onStateChange((next) => onState(next)),
       discord.onEvent((event) => onEvent(event)),
     );
+    if (sdk.lifecycle) cleanup.push(sdk.lifecycle.onSuspend(freeze), sdk.lifecycle.onResume(resume));
+    if (typeof window !== "undefined") {
+      window.addEventListener("pagehide", freeze);
+      cleanup.push(() => window.removeEventListener("pagehide", freeze));
+    }
     try {
       onState(await discord.state());
     } catch (error) {
@@ -289,6 +338,8 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
     publishPending = undefined;
     if (othersTimer) clearTimer(othersTimer);
     othersTimer = undefined;
+    if (sampleTimer) clearTimer(sampleTimer);
+    sampleTimer = undefined;
     epoch++;
   }
 
@@ -585,21 +636,17 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
   }
 
   /**
-   * Over game: puts the voice overlay over the game. "off" means Game overlays are off in Tavora (which then opens
-   * that setting), "full" that the game has no room for another. The SDK can't take an overlay away again, so turning
-   * the switch off only forgets it here; the player removes the overlay in Settings > Overlays.
+   * Over game: puts the voice overlay over the game, or takes it away. "off" means Game overlays are off in Tavora
+   * (which then opens that setting), "full" that the game has no room for another.
    */
   async function setOverGame(on: boolean): Promise<GameOverlayResult | "removed"> {
     if (!on) {
-      overlayOverGame = false;
-      overlay.value = { ...overlay.value, overGame: false };
-      await sdk.storage.app.set(KEYS.overGame, false);
+      await sdk.overlay.hideOverGame(OVERLAY_KEY);
+      await refreshOverGame();
       return "removed";
     }
     const result = await sdk.overlay.showOverGame(OVERLAY_KEY);
-    overlayOverGame = result === "shown";
-    overlay.value = { ...overlay.value, overGame: overlayOverGame };
-    await sdk.storage.app.set(KEYS.overGame, overlayOverGame);
+    await refreshOverGame();
     // The overlay shows what is going on from the start, before the next change.
     if (result === "shown") schedulePublish(true);
     return result;
@@ -607,6 +654,16 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
 
   /** Preview: a small Tavora window with the overlay. */
   async function previewOverlay(): Promise<void> {
+    // Not in a voice channel: a short sample, so there is something to see.
+    if (!(connected() && call)) {
+      sampleActive = true;
+      if (sampleTimer) clearTimer(sampleTimer);
+      sampleTimer = setTimer(() => {
+        sampleTimer = undefined;
+        sampleActive = false;
+        schedulePublish();
+      }, SAMPLE_MS);
+    }
     schedulePublish(true);
     await sdk.overlay.preview(OVERLAY_KEY);
   }
