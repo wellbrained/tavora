@@ -7,6 +7,7 @@ import type { ActionResult, HotkeyRequestView, StreamingView } from "../shared/h
 import { isHotkey } from "../shared/hotkey-keys";
 import { translate, type Language } from "../shared/i18n";
 import { HostError } from "./errors";
+import { isOverlayAction } from "./game-overlay-service";
 import { HotkeyRegistrar, HotkeyStore, sameBinding, type HotkeyRecord, type ShortcutRegistry } from "./hotkeys";
 import { OverlayServer, OverlayStore, overlayUrl, type OverlayLink, type OverlaySubject } from "./overlays";
 
@@ -49,9 +50,19 @@ export interface StreamingOptions {
   changed(): void;
 }
 
+/** What game overlays need of the hotkeys: which of their keys work now, and what a press does (game-overlay-service.ts). */
+export interface OverlayKeys {
+  /** The game in front; the keys of game overlays work only there. */
+  frontGame(): string | null;
+  wants(record: HotkeyRecord): boolean;
+  pressed(record: HotkeyRecord): void;
+}
+
 interface PendingHotkey {
   id: number;
   binding: Omit<HotkeyRecord, "label" | "accelerator">;
+  /** For a key of game overlays: the words the dialog uses; the dialog stays open when the game changes. */
+  overlay?: { module: string; action: string };
   label: string;
   error: string | null;
   resolve(result: HotkeySetResult): void;
@@ -60,8 +71,14 @@ interface PendingHotkey {
 export class Streaming {
   private readonly server: OverlayServer;
   private readonly registrar: HotkeyRegistrar;
+  /** The overlay states and links, which game overlays read the same way (game-overlay-service.ts). */
+  get overlayStore(): OverlayStore {
+    return this.overlays;
+  }
+
   private pending: PendingHotkey | null = null;
   private nextRequest = 1;
+  private overlayKeys: OverlayKeys | null = null;
 
   private constructor(
     private readonly options: StreamingOptions,
@@ -85,11 +102,17 @@ export class Streaming {
     return { root: module.root, entry: module.manifest.overlay };
   }
 
+  /** Lets game overlays have keys (game-overlay-service.ts); made after Streaming, which it needs. */
+  useOverlayKeys(keys: OverlayKeys): void {
+    this.overlayKeys = keys;
+  }
+
   // ── What a module panel gets ─────────────────────────────────────────
 
   /**
-   * overlay.* for a panel of `module` in `gameId`; the bridge checked the keys, and the capability for all but copyLink:
-   * a module that asks for the connector on request gets Tavora's consent dialog there the first time.
+   * overlay.* for a panel of `module` in `gameId`; the bridge checked the keys, and the capability for resetLink.
+   * copyLink needs the connector too: a module that asks for it on request gets Tavora's consent dialog there the first
+   * time. publish and remove need no capability: they only set what a link or a game overlay shows.
    */
   overlayFor(module: StreamingModule, gameId: string) {
     const subject = (key: string): OverlaySubject => ({ owner: module.owner, moduleId: module.manifest.id, gameId, key });
@@ -133,16 +156,32 @@ export class Streaming {
   // ── The hotkey dialog ────────────────────────────────────────────────
 
   /** Opens Tavora's hotkey dialog; resolves with what the player did there. Only for the game shown now. */
-  private ask(binding: PendingHotkey["binding"], label: string): Promise<HotkeySetResult> {
-    if (this.options.gameId() !== binding.gameId) throw new HostError("PERMISSION_DENIED", "hotkeys.set works only in the game shown now");
+  private ask(binding: PendingHotkey["binding"], label: string, overlay?: PendingHotkey["overlay"]): Promise<HotkeySetResult> {
+    if (!overlay && this.options.gameId() !== binding.gameId) throw new HostError("PERMISSION_DENIED", "hotkeys.set works only in the game shown now");
     this.pending?.resolve("cancelled");
     // Every key goes free while the dialog is open, so it can catch keys set already.
     this.registrar.pause();
     return new Promise<HotkeySetResult>((resolve) => {
-      this.pending = { id: this.nextRequest++, binding, label, error: null, resolve };
+      this.pending = { id: this.nextRequest++, binding, label, error: null, resolve, ...(overlay ? { overlay } : {}) };
       this.options.focus();
       this.changed();
     });
+  }
+
+  /** Opens the hotkey dialog for a key of game overlays (Settings > Overlays), which is set for any game, not only the one shown. */
+  askOverlayKey(binding: PendingHotkey["binding"], label: string, words: { module: string; action: string }): Promise<HotkeySetResult> {
+    return this.ask(binding, label, words);
+  }
+
+  /** The key set for a binding, and whether another program holds it. */
+  keyOf(binding: Omit<HotkeyRecord, "label" | "accelerator">): { accelerator: string; taken: boolean } | null {
+    const record = this.hotkeys.find(binding);
+    return record ? { accelerator: record.accelerator, taken: this.registrar.taken.has(record.accelerator) } : null;
+  }
+
+  /** Takes away the hotkeys matching `test`. */
+  removeKeys(test: (record: HotkeyRecord) => boolean): void {
+    if (this.hotkeys.remove(test)) this.changed();
   }
 
   /** The player's answer in the hotkey dialog. A refused key keeps the dialog open with the reason. */
@@ -190,7 +229,7 @@ export class Streaming {
   /** The game changed or its panel went away while the dialog was open: it closes. */
   private dropStalePending(): void {
     const pending = this.pending;
-    if (pending && (this.options.gameId() !== pending.binding.gameId || !this.options.panels().some((panel) => panel.moduleId === pending.binding.moduleId))) this.close("cancelled");
+    if (pending && !pending.overlay && (this.options.gameId() !== pending.binding.gameId || !this.options.panels().some((panel) => panel.moduleId === pending.binding.moduleId))) this.close("cancelled");
   }
 
   // ── Keys registered with the system ──────────────────────────────────
@@ -203,12 +242,16 @@ export class Streaming {
     this.dropStalePending();
     const gameId = this.options.gameId();
     const open = new Set(this.options.panels().map((panel) => panel.moduleId));
-    const wanted = gameId === null ? [] : this.hotkeys.all().filter((record) => record.gameId === gameId && open.has(record.moduleId) && this.options.module(record.moduleId)?.owner === record.owner);
+    const wanted = gameId === null ? [] : this.hotkeys.all().filter((record) => record.gameId === gameId && !isOverlayAction(record.action) && open.has(record.moduleId) && this.options.module(record.moduleId)?.owner === record.owner);
+    // The keys of game overlays follow the game in front instead, so they take no key from other programs.
+    const front = this.overlayKeys?.frontGame() ?? null;
+    if (front !== null) wanted.push(...this.hotkeys.all().filter((record) => record.gameId === front && isOverlayAction(record.action) && this.overlayKeys!.wants(record)));
     this.registrar.apply(wanted);
   }
 
   /** One press is one action: it goes to one panel of the module, the one used last, so several panels don't each act on it. */
   private pressed(record: HotkeyRecord): void {
+    if (isOverlayAction(record.action)) return this.overlayKeys?.pressed(record);
     if (this.options.gameId() !== record.gameId) return;
     const panel = this.options.panels().filter((item) => item.moduleId === record.moduleId).sort((a, b) => b.usedAt - a.usedAt)[0];
     panel?.hotkeyPressed({ action: record.action, target: record.target });
@@ -253,6 +296,7 @@ export class Streaming {
   }
 
   private actionName(record: Pick<HotkeyRecord, "moduleId" | "action">): string {
+    if (isOverlayAction(record.action)) return translate(this.options.language(), record.action === "$arrange" ? "overlays.arrangeAction" : "overlays.toggleAction");
     return this.options.module(record.moduleId)?.manifest.actions?.find((action) => action.id === record.action)?.name ?? record.action;
   }
 
@@ -260,7 +304,7 @@ export class Streaming {
     const settings = this.options.settings();
     return {
       overlays: { enabled: settings.streamOverlays, port: settings.overlayPort, status: this.server.status },
-      hotkeys: this.hotkeys.all().map((record) => ({
+      hotkeys: this.hotkeys.all().filter((record) => !isOverlayAction(record.action)).map((record) => ({
           owner: record.owner,
           gameId: record.gameId,
           gameName: this.options.gameName(record.gameId) ?? record.gameId,
@@ -282,8 +326,8 @@ export class Streaming {
     const current = this.hotkeys.find(pending.binding)?.accelerator ?? null;
     return {
       id: pending.id,
-      moduleName: this.options.module(pending.binding.moduleId)?.manifest.name ?? pending.binding.moduleId,
-      actionName: this.actionName(pending.binding),
+      moduleName: pending.overlay?.module ?? this.options.module(pending.binding.moduleId)?.manifest.name ?? pending.binding.moduleId,
+      actionName: pending.overlay?.action ?? this.actionName(pending.binding),
       label: pending.label,
       current,
       error: pending.error,

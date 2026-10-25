@@ -18,6 +18,7 @@ import {
   type HotkeySetResult,
   type JsonValue,
   type NetworkResponse,
+  type GameOverlayResult,
   type OverlayLinkResult,
   type PageResponse,
   type PanelContent,
@@ -111,13 +112,15 @@ export interface BridgeContext {
     move(anchor:TooltipAnchor):void;
     close(id:string,hoverOnly:boolean):void;
   };
-  /** Stream overlays of this module in this game (overlays.ts); only reached with the `overlay` capability, keys already checked. */
+  /** Overlays of this module in this game (overlays.ts, game-overlays.ts); keys already checked, and the `overlay` capability for copyLink and resetLink. */
   overlay: {
     publish(key: string, state: JsonValue): void;
     remove(key: string): void;
     /** Throws PERMISSION_DENIED unless the panel just got a click or key press. */
     copyLink(key: string): Promise<OverlayLinkResult>;
     resetLink(key: string): void;
+    /** Throws PERMISSION_DENIED unless the panel just got a click or key press. */
+    showOverGame(key: string): Promise<GameOverlayResult>;
   };
   /** Hotkeys of this module in this game (hotkeys.ts); actions and targets already checked. */
   hotkeys: {
@@ -331,8 +334,8 @@ const handlers = new Map<string, Handler>([
 
   [
     "overlay.publish",
+    // Needs no capability: it only sets what a link or a game overlay shows. Copying a link does.
     (s, params) => {
-      needs(s, "overlay", "overlay.publish");
       const p = object(params);
       const key = moduleKey(p, "key");
       const state = required(p, "state");
@@ -341,7 +344,9 @@ const handlers = new Map<string, Handler>([
       return null;
     },
   ],
-  ["overlay.remove", (s, params) => (needs(s, "overlay", "overlay.remove"), s.context.overlay.remove(moduleKey(object(params), "key")), null)],
+  ["overlay.remove", (s, params) => (s.context.overlay.remove(moduleKey(object(params), "key")), null)],
+  // Needs no capability either: a window of Tavora's own shows the page, only after a click, and the player can turn it off.
+  ["overlay.showOverGame", (s, params) => s.context.overlay.showOverGame(moduleKey(object(params), "key"))],
   // A module that asks for the connector on request may call it without the grant: Tavora asks the player then.
   ["overlay.copyLink", (s, params) => s.context.overlay.copyLink(moduleKey(object(params), "key"))],
   ["overlay.resetLink", (s, params) => (needs(s, "overlay", "overlay.resetLink"), s.context.overlay.resetLink(moduleKey(object(params), "key")), null)],

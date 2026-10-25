@@ -226,6 +226,22 @@ export function hostActionTable(c: HostChecks) {
       choice: oneOf("set", "remove", "cancel"),
       accelerator: optional(text(40)),
     },
+    /** Settings > Overlays: the Game overlays switch. */
+    "set-game-overlays": { enabled: bool },
+    /** Changes what the player set for one game overlay (mode, opacity, Show on stream). */
+    "set-game-overlay": {
+      owner: c.ownerId,
+      moduleId: c.moduleId,
+      gameId: c.gameId,
+      key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/),
+      mode: optional(oneOf("always", "toggle")),
+      opacity: optional(check<100 | 75 | 50 | 25>((value) => value === 100 || value === 75 || value === 50 || value === 25)),
+      showOnStream: optional(bool),
+    },
+    /** Removes one game overlay, and its key. */
+    "remove-game-overlay": { owner: c.ownerId, moduleId: c.moduleId, gameId: c.gameId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
+    /** Opens the hotkey dialog for a game's arrange key (without owner, moduleId and key) or for one overlay's toggle key. */
+    "set-overlay-key": { gameId: c.gameId, owner: optional(c.ownerId), moduleId: optional(c.moduleId), key: optional(matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/)) },
     /** The answer in the consent dialog for a connector a module asks for on request (HostViewState.pendingConnector). */
     "connector-answer": { id: check<number>((value) => Number.isSafeInteger(value)), allow: bool },
     /** Removes one hotkey from Settings > Streaming. */

@@ -64,7 +64,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     openLink: () => {},
     showMenu: () => Promise.resolve(null),
     tooltip:{show:async()=>false,move:()=>{},close:()=>{}},
-    overlay: { publish: () => {}, remove: () => {}, copyLink: () => Promise.resolve("copied"), resetLink: () => {} },
+    overlay: { publish: () => {}, remove: () => {}, copyLink: () => Promise.resolve("copied"), resetLink: () => {}, showOverGame: () => Promise.resolve("shown") },
     hotkeys: { list: () => [], set: () => Promise.resolve("cancelled"), remove: () => {} },
     fetch: () => Promise.reject(new Error("no network in this test")),
     readPage: () => Promise.reject(new Error("no pages in this test")),
@@ -280,6 +280,40 @@ describe("documents", () => {
     await call(port, "documents.put", { id: "x", title: "x", data: 1 });
     expect(sibling.sent.filter((m) => "event" in (m as object))).toEqual([]);
     expect(context.data.documents.listenerCount("change")).toBe(1);
+  });
+});
+
+describe("overlay methods", () => {
+  it("lets a module without the overlay capability publish, remove and show over the game", async () => {
+    const seen: string[] = [];
+    const p = await connected({
+      ...makeContext(),
+      overlay: {
+        publish: (key, state) => void seen.push(`publish ${key} ${JSON.stringify(state)}`),
+        remove: (key) => void seen.push(`remove ${key}`),
+        copyLink: () => Promise.resolve("copied"),
+        resetLink: () => {},
+        showOverGame: async (key) => (seen.push(`show ${key}`), "full"),
+      },
+    });
+    expect(await call(p, "overlay.publish", { key: "item-1", state: { n: 1 } })).toMatchObject({ ok: true });
+    expect(await call(p, "overlay.remove", { key: "item-1" })).toMatchObject({ ok: true });
+    expect(await call(p, "overlay.showOverGame", { key: "item-1" })).toMatchObject({ ok: true, result: "full" });
+    expect(seen).toEqual(['publish item-1 {"n":1}', "remove item-1", "show item-1"]);
+  });
+
+  it("still needs the overlay capability to reset a link", async () => {
+    expect(await call(port, "overlay.resetLink", { key: "item-1" })).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "overlay" } });
+  });
+
+  it("refuses a bad key for showOverGame", async () => {
+    expect(await call(port, "overlay.showOverGame", { key: "no spaces" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(await call(port, "overlay.showOverGame", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+
+  it("passes on the refusal when the panel had no click", async () => {
+    const p = await connected({ ...makeContext(), overlay: { ...makeContext().overlay, showOverGame: () => Promise.reject(new HostError("PERMISSION_DENIED", "no click")) } });
+    expect(await call(p, "overlay.showOverGame", { key: "item-1" })).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED" } });
   });
 });
 

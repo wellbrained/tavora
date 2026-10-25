@@ -4,7 +4,7 @@ import { READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
-import type { Capability, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
+import type { Capability, GameOverlayResult, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./gamedata";
 import { moduleThemeCss } from "./module-style";
@@ -89,8 +89,14 @@ export interface ModuleViewOptions {
   aiUsage: BridgeContext["aiUsage"];
   /** The discord connector, shared by every panel; this view uses it under its own instance id. */
   discord: Pick<DiscordConnector, "use" | "release" | "state" | "connectNow" | "allowControl" | "command" | "subscribe" | "unsubscribe" | "image">;
-  /** Stream overlays of this module in this game, for a module granted the stream-overlay connector. */
-  overlay: { publish(key: string, state: JsonValue): void; remove(key: string): void; copyLink(key: string): Promise<OverlayLinkResult>; resetLink(key: string): void };
+  /** Overlays of this module in this game: Stream overlay links (granted the stream-overlay connector) and game overlays. */
+  overlay: {
+    publish(key: string, state: JsonValue): void;
+    remove(key: string): void;
+    copyLink(key: string): Promise<OverlayLinkResult>;
+    resetLink(key: string): void;
+    showOverGame(key: string): GameOverlayResult;
+  };
   /** Hotkeys of this module in this game; `set` opens Tavora's hotkey dialog. */
   hotkeys: { list(): HotkeyBinding[]; set(action: string, target: string, label: string): Promise<HotkeySetResult>; remove(target: string, action: string | null): void };
   /** Test runs only: hosts mapped to a local server (network.ts). */
@@ -552,6 +558,11 @@ export class ModuleView {
             return this.options.overlay.copyLink(key);
           },
           resetLink: (key) => this.options.overlay.resetLink(key),
+          showOverGame: async (key) => {
+            // One click shows one overlay, so a page cannot keep opening windows over the game.
+            await this.takeGesture("overlay.showOverGame");
+            return this.options.overlay.showOverGame(key);
+          },
         },
         hotkeys: {
           list: () => this.options.hotkeys.list(),
