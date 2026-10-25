@@ -20,6 +20,26 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.53",
+    date: "2026-10-25",
+    title: "Calculator keyboard",
+    notes: [
+      "Enter works on the key you tabbed to, instead of acting on the sum.",
+      "Clear history asks first.",
+    ],
+  },
+  {
+    version: "0.20.52",
+    date: "2026-10-25",
+    title: "AI Usage fits better",
+    notes: [
+      "AI Usage opens wide enough to show every reset time.",
+      "Long labels and reset times show in full when you hover them.",
+      "Last known readings are easier to read.",
+      "Some error texts are shorter.",
+    ],
+  },
+  {
     version: "0.20.51",
     date: "2026-10-25",
     title: "Overlays over your game",
