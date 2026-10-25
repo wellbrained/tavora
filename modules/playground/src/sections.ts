@@ -23,15 +23,9 @@ export const SECTIONS = [
   { id: "ratings", group: "inputs", title: "Star rating", keywords: "stars rating review score" },
   { id: "colors", group: "inputs", title: "Colour picker", keywords: "color colour swatch custom palette" },
   { id: "status", group: "display", title: "Badges and status", keywords: "badge chip tag status dot kbd shortcut" },
-<<<<<<< HEAD
-  { id: "progress", group: "display", title: "Progress and loading", keywords: "progress spinner skeleton loading" },
+  { id: "progress", group: "display", title: "Progress, charts and loading", keywords: "progress spinner skeleton loading sparkline chart graph line" },
   { id: "notices", group: "display", title: "Notices", keywords: "notice alert callout info warning error success inline message" },
   { id: "empty", group: "display", title: "Empty state", keywords: "empty state nothing placeholder no items" },
-=======
-  { id: "progress", group: "display", title: "Progress, charts and loading", keywords: "progress spinner skeleton loading sparkline chart graph line" },
-  { id: "notices", group: "display", title: "Notices", keywords: "alert callout info warning error success" },
-  { id: "empty", group: "display", title: "Empty state", keywords: "empty nothing placeholder" },
->>>>>>> a8edfd3a (System Monitor: cards in a width-following grid with big numbers; kit Sparkline)
   { id: "expandable", group: "display", title: "Show more", keywords: "expand collapse more less long text read clamp" },
   { id: "collapsible", group: "display", title: "Collapsible sections", keywords: "collapsible disclosure accordion details summary open close fold section notes" },
   { id: "tabs", group: "display", title: "Tabs", keywords: "tabs views" },
