@@ -156,9 +156,20 @@ async function copyLink() {
   linkNote.value = t(result === "copied" ? "edit.copied" : result === "off" ? "edit.overlaysOff" : "edit.noOverlay");
 }
 
-async function showOverGame() {
+const overGame = computed(() => panel.overGame.value.has(props.item.id));
+
+async function setOverGame(on: boolean) {
+  if (!on) {
+    await panel.hideOverGame(props.item);
+    linkNote.value = null;
+    return;
+  }
   const result = await panel.showOverGame(props.item);
   linkNote.value = result === "shown" ? t("edit.shownOverGame") : result === "full" ? t("edit.overGameFull") : null;
+}
+
+async function previewOverlay() {
+  await panel.preview(props.item);
 }
 
 async function resetLink() {
@@ -272,9 +283,13 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
       <h3 class="font-medium">{{ t("edit.stream") }}</h3>
       <div class="flex flex-wrap gap-2">
         <Button size="sm" :data-testid="`copy-link-${item.id}`" @click="copyLink">{{ t("edit.copyLink") }}</Button>
-        <Button size="sm" variant="secondary" :data-testid="`show-over-game-${item.id}`" @click="showOverGame">{{ t("edit.showOverGame") }}</Button>
+        <Button size="sm" variant="secondary" :data-testid="`preview-${item.id}`" @click="previewOverlay">{{ t("edit.previewOverlay") }}</Button>
         <Button v-if="panel.store.overlays.value" variant="ghost" size="sm" @click="resetLink">{{ t("edit.resetLink") }}</Button>
       </div>
+      <Label class="justify-between font-normal">
+        {{ t("edit.overGame") }}
+        <Switch :model-value="overGame" :data-testid="`over-game-${item.id}`" @update:model-value="setOverGame" />
+      </Label>
       <p v-if="linkNote" class="text-muted-foreground text-xs" role="status">{{ linkNote }}</p>
       <Label class="justify-between font-normal">
         {{ t("edit.showLabel") }}
