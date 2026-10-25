@@ -57,17 +57,16 @@ test('hover crosses panel bounds without freezing; pin survives unrelated input,
     }
 });
 
-test('a pinned tooltip closes on app focus loss or a hidden source',async()=>{
+test('a pinned tooltip stays on app focus loss and closes with a hidden source',async()=>{
  const {app,page}=await launch(undefined,[await fixture()]);try{
   await openModule(page,ID);await waitForShown(app,ID);
   await expect.poll(()=>inModule(app,ID,"document.querySelector('#result').textContent")).toBe('ready');
   await input(app,'mouseMove');await input(app,'mouseDown');await input(app,'mouseUp');
   await expect.poll(()=>inModule(app,ID,"document.querySelector('#result').textContent")).toBe('pinned');
   await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>!w.webContents.getURL().startsWith('data:text/html'))!;w.blur();w.emit('blur');});
-  await expect.poll(async()=> (await tooltip(app))?.visible).toBe(false);
-  await expect.poll(()=>inModule(app,ID,"document.querySelector('#result').textContent")).toBe('closed');
-  await input(app,'mouseMove',250,300);await input(app,'mouseMove');await input(app,'mouseDown');await input(app,'mouseUp');
-  await expect.poll(()=>inModule(app,ID,"document.querySelector('#result').textContent")).toBe('pinned');
+  await new Promise(r=>setTimeout(r,300));
+  expect((await tooltip(app))?.visible).toBe(true);
+  expect(await inModule(app,ID,"document.querySelector('#result').textContent")).toBe('pinned');
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>!w.webContents.getURL().startsWith('data:text/html'))!.hide());
   await expect.poll(async()=> (await tooltip(app))?.visible).toBe(false);
  }finally{await app.close();}
