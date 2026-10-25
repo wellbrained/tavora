@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { isGameId, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
@@ -329,6 +329,8 @@ export class CatalogStore {
     // The listing icon ({ sha256, type, size }) and the readme's text; null without one.
     if (!columns.includes("icon")) this.db.exec("alter table versions add column icon text");
     if (!columns.includes("readme")) this.db.exec("alter table versions add column readme text");
+    // When an older version's zip was deleted to make room (prune); the row stays for its notes and the signed lists.
+    if (!columns.includes("zip_removed")) this.db.exec("alter table versions add column zip_removed text");
   }
 
   close(): void {
@@ -399,12 +401,44 @@ export class CatalogStore {
     return (this.db.prepare("select count(*) as n from versions where account_id = ? and published_at >= ?").get(accountId, since.toISOString()) as { n: number }).n;
   }
 
-  /** The bytes of every zip an account uploaded, or of the whole catalog. */
+  /** The bytes of every zip an account uploaded, or of the whole catalog, that is still stored. */
   storedBytes(accountId?: string): number {
     const row = (accountId === undefined
-      ? this.db.prepare("select coalesce(sum(size), 0) as n from versions").get()
-      : this.db.prepare("select coalesce(sum(size), 0) as n from versions where account_id = ?").get(accountId)) as { n: number };
+      ? this.db.prepare("select coalesce(sum(size), 0) as n from versions where zip_removed is null").get()
+      : this.db.prepare("select coalesce(sum(size), 0) as n from versions where account_id = ? and zip_removed is null").get(accountId)) as { n: number };
     return row.n;
+  }
+
+  /** A module's versions that still have their zip, past its newest `keep`, newest first. */
+  private storedBeyond(moduleId: string, keep: number): { sha256: string; size: number; account_id: string | null }[] {
+    return this.db
+      .prepare("select sha256, size, account_id from versions where module_id = ? and zip_removed is null order by seq desc limit -1 offset ?")
+      .all(moduleId, Math.max(0, keep)) as unknown as { sha256: string; size: number; account_id: string | null }[];
+  }
+
+  /**
+   * The bytes a module's next version frees when only its newest `keep` versions keep their zips: the zips past
+   * its newest `keep - 1` now. Only the account's own uploads count when `accountId` is given.
+   */
+  freedByNextVersion(moduleId: string, keep: number, accountId?: string): number {
+    return this.storedBeyond(moduleId, keep - 1)
+      .filter((version) => accountId === undefined || version.account_id === accountId)
+      .reduce((sum, version) => sum + version.size, 0);
+  }
+
+  /**
+   * Deletes the zips of a module's versions past its newest `keep`, so the catalog doesn't only grow. Their rows
+   * stay (notes, signed lists, reports); the zips are gone for good and no longer handed out. Returns how many.
+   */
+  prune(moduleId: string, keep: number, now: Date = new Date()): number {
+    const old = this.storedBeyond(moduleId, keep);
+    const mark = this.db.prepare("update versions set zip_removed = ? where sha256 = ?");
+    for (const version of old) {
+      // The row first: a zip that is not counted any more is never handed out, even if deleting the file fails.
+      mark.run(now.toISOString(), version.sha256);
+      rmSync(path.join(this.zips, `${version.sha256}.zip`), { force: true });
+    }
+    return old.length;
   }
 
   /** The zips (SHA-256) a key signed that the catalog took before a moment, oldest first. */
@@ -599,7 +633,7 @@ export class CatalogStore {
   /** A zip of a listed module by its hash, or null. A delisted module's zips are not handed out. */
   zip(sha256: string): Buffer | null {
     if (!SHA256.test(sha256)) return null;
-    const listed = this.db.prepare("select 1 from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.listed = 1").get(sha256);
+    const listed = this.db.prepare("select 1 from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.listed = 1 and v.zip_removed is null").get(sha256);
     if (!listed) return null;
     try {
       const bytes = readFileSync(path.join(this.zips, `${sha256}.zip`));

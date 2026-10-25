@@ -27,12 +27,15 @@ export interface PublishLimits {
   accountBytes: number;
   /** Bytes of zips in the whole catalog; past it uploads answer 507. */
   catalogBytes: number;
+  /** Versions of a module that keep their zip; a new version deletes the zips of older ones. */
+  keepVersions: number;
 }
 
 export const PUBLISH_LIMITS: Readonly<PublishLimits> = {
   uploadsPerDay: 10,
   accountBytes: 200 * 1024 * 1024,
   catalogBytes: 20 * 1024 * 1024 * 1024,
+  keepVersions: 3,
 };
 
 export interface PublishOptions {
@@ -69,7 +72,7 @@ export function catalogFullMail(to: string, usedBytes: number, catalogBytes: num
 /** The middleware and handler for POST /v1/catalog/publish. */
 export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, maintainer, mail }: PublishOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
-  const { uploadsPerDay, accountBytes, catalogBytes } = { ...PUBLISH_LIMITS, ...limits };
+  const { uploadsPerDay, accountBytes, catalogBytes, keepVersions } = { ...PUBLISH_LIMITS, ...limits };
   const refuse = (context: Context, status: 400 | 401 | 403 | 409 | 413 | 415 | 429 | 503 | 507, reason: string, error: string) => context.json({ error, reason }, status);
 
   const limit = bodyLimit({
@@ -172,11 +175,13 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (!isMaintainer && catalog.uploadsSince(key.accountId, new Date(at - 86_400_000)) >= uploadsPerDay) {
       return refuse(context, 429, "daily-limit", `An account can publish ${uploadsPerDay} versions a day. Try again tomorrow.`);
     }
-    if (catalog.storedBytes(key.accountId) + checked.size > accountBytes) {
+    // Only a module's newest versions keep their zips, so what this version pushes out doesn't count against it.
+    const id = checked.manifest.id;
+    if (catalog.storedBytes(key.accountId) - catalog.freedByNextVersion(id, keepVersions, key.accountId) + checked.size > accountBytes) {
       return refuse(context, 413, "account-full", `Your modules may take at most ${accountBytes / 1024 / 1024} MB in the catalog.`);
     }
     const usedBytes = catalog.storedBytes();
-    if (usedBytes + checked.size > catalogBytes) {
+    if (usedBytes - catalog.freedByNextVersion(id, keepVersions) + checked.size > catalogBytes) {
       console.warn("[tavora-api] The module catalog is full: uploads are refused until there is room.");
       await tellFull(catalog, store, at, usedBytes);
       return refuse(context, 507, "catalog-full", "The catalog has no room right now. Tavora has been told.");
@@ -188,6 +193,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
       if (error instanceof CatalogError) return refuse(context, 409, "conflict", error.message);
       throw error;
     }
+    catalog.prune(id, keepVersions, new Date(at));
     catalog.clearFull();
     if (held === "free") store.reservePrefix(key.accountId, prefix, at);
     await tellPublished(store, context, key.accountId, checked, by.token, at);
