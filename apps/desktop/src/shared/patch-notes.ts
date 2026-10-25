@@ -22,21 +22,12 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.21.9",
     date: "2026-10-25",
-    title: "System info is lighter on games",
-    notes: [
-      "NVIDIA graphics cards are now read directly, so watching them can't cause small hitches in a game anymore.",
-      "System Monitor shows your NVIDIA card's temperature and power use.",
-    ],
-  },
-  {
-    version: "0.21.8",
-    date: "2026-10-25",
     title: "Tavora in your game, and a tidier Tavora",
     notes: [
       "One key, Tavora over game, opens your overlays and panels over the game. Set it in Settings > Overlays, and press it again or Esc when you are done.",
       "Clock & Counter, To-Dos and Discord work in your game: a clock or counter, your to-dos to tick off, and who is in your voice channel, with a ring around whoever is talking.",
       "Preview shows an overlay in a small window first. Hide all for now in Settings > Overlays hides everything over your game until you show it again.",
-      "The new System Monitor module shows how busy your PC is: CPU, graphics card, memory and drives. Tavora asks you first.",
+      "The new System Monitor module shows how busy your PC is: CPU, graphics card, memory and drives, plus temperature and power for NVIDIA cards. Tavora asks you first.",
       "Module updates wait for you: a button next to Layouts shows what is new. Prefer the old way? Turn on Update modules automatically in Settings > Modules.",
       "Module pages show every version with its date, mark the ones you missed and have a Send feedback button when the developer added a link.",
       "Saving a file or an image opens Tavora's save dialog with the name filled in, in the folder you used last.",
