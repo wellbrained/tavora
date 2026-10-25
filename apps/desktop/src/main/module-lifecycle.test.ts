@@ -43,6 +43,7 @@ function listing(version: string, zip: Buffer, owner: string): CatalogEntry {
     zip: { sha256: createHash("sha256").update(zip).digest("hex"), size: zip.length },
     notes: [],
     homepage: null,
+    support: null,
     shots: [],
     rating: null,
     icon: null,

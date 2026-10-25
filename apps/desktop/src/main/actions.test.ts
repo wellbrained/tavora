@@ -170,6 +170,8 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "install-catalog-module", moduleId: "wellbrained.tracker" }],
   [{ type: "check-module-updates" }],
   [{ type: "open-catalog-homepage", moduleId: "wellbrained.tracker" }],
+  [{ type: "open-module-support", moduleId: "wellbrained.tracker", source: "catalog" }],
+  [{ type: "open-module-support", moduleId: "wellbrained.tracker", source: "installed" }],
   [{ type: "open-readme-link", moduleId: "wellbrained.tracker", url: "https://example.com/guide" }],
   [{ type: "rate-catalog-module", moduleId: "wellbrained.tracker", stars: 4, text: "Handy." }],
   [{ type: "rate-catalog-module", moduleId: "wellbrained.tracker", stars: 5, text: null }],

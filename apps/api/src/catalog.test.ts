@@ -25,6 +25,7 @@ interface Options {
   key?: KeyObject | null;
   changelog?: unknown;
   homepage?: string;
+  support?: string;
   translations?: Record<string, unknown>;
   readme?: Buffer;
   icon?: ZipFile;
@@ -34,7 +35,7 @@ interface Options {
 }
 
 /** A module zip as tavora-pack makes it: manifest, page, optional changelog, and the signature. */
-function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], workspaces, key = publisher, changelog, homepage, translations, readme, icon, screenshots = [], extra = [] }: Options = {}): Buffer {
+function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], workspaces, key = publisher, changelog, homepage, support, translations, readme, icon, screenshots = [], extra = [] }: Options = {}): Buffer {
   const manifest = {
     id,
     name: "Timer",
@@ -46,6 +47,7 @@ function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], wo
     ...(workspaces === undefined ? {} : { workspaces }),
     ...(changelog === undefined ? {} : { changelog: "changelog.json" }),
     ...(homepage === undefined ? {} : { homepage }),
+    ...(support === undefined ? {} : { support }),
     ...(translations === undefined ? {} : { minTavora: "0.21.0", translations }),
     ...(readme === undefined ? {} : { readme: "README.md" }),
     ...(icon === undefined ? {} : { icon: icon.name }),
@@ -108,6 +110,7 @@ describe("adding to the catalog", () => {
         publishedAt: "2026-10-18T10:00:00.000Z",
         notes: ["First version."],
         homepage: null,
+        support: null,
         translations: {},
         screenshots: [],
         icon: null,
@@ -119,6 +122,16 @@ describe("adding to the catalog", () => {
     const catalog = store();
     catalog.add(moduleZip({ translations: { de: { name: "Zeitmesser", description: "Zählt runter." }, fr: { name: "Minuteur" }, nl: { description: "Telt af." } } }));
     expect(catalog.index()[0]?.translations).toEqual({ de: { name: "Zeitmesser", description: "Zählt runter." }, fr: { name: "Minuteur" }, nl: { description: "Telt af." } });
+  });
+
+  it("lists the support link, an https address or an email address, and refuses any other", () => {
+    const catalog = store();
+    catalog.add(moduleZip({ support: "feedback@example.com" }));
+    expect(catalog.index()[0]?.support).toBe("feedback@example.com");
+    catalog.add(moduleZip({ version: "1.0.1", support: "https://example.com/feedback" }));
+    expect(catalog.index()[0]?.support).toBe("https://example.com/feedback");
+    expect(() => catalog.add(moduleZip({ version: "1.0.2", support: "http://example.com" }))).toThrow(CatalogError);
+    expect(() => catalog.add(moduleZip({ version: "1.0.2", support: "javascript:alert(1)" }))).toThrow(CatalogError);
   });
 
   it("lists the homepage and checked screenshots, and serves only the newest version's", () => {

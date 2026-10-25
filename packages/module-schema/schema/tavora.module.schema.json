@@ -182,6 +182,19 @@
         "https://example.com/campaign-companion"
       ]
     },
+    "support": {
+      "type": "string",
+      "maxLength": 300,
+      "anyOf": [
+        { "pattern": "^https://[^\\s\\u0000-\\u001f/?#@\\\\]+(?:[/?#][^\\s\\u0000-\\u001f\\\\]*)?$" },
+        { "pattern": "^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$" }
+      ],
+      "description": "Where players send feedback: an https address or an email address. The module's page has a Send feedback button that opens it. Needs Tavora 0.20.39 or newer.",
+      "examples": [
+        "https://example.com/campaign-companion/feedback",
+        "feedback@example.com"
+      ]
+    },
     "readme": {
       "type": "string",
       "allOf": [

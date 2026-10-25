@@ -116,6 +116,7 @@ import { freeFileName } from "./picture-save-http";
 import { HostError } from "./errors";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { isWebUrl, siteOfUrl } from "./browser-url";
+import { supportTarget } from "./module-support";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
@@ -1126,6 +1127,24 @@ export class Host {
   }
 
   /**
+   * Opens a module's support link after a click. The link is read again here, from the installed module's own
+   * manifest or the catalog listing, never taken from the page: a web address opens like the homepage, an
+   * email address in the player's mail app.
+   */
+  private async openModuleSupport(moduleId: string, source: "catalog" | "installed"): Promise<void> {
+    let link: string | null | undefined;
+    if (source === "installed") link = this.modules.get(moduleId)?.manifest.support;
+    else {
+      if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+      link = (await this.catalog.module(moduleId)).support;
+    }
+    const target = link ? supportTarget(link) : null;
+    if (!target) return;
+    if (target.kind === "web") this.openLinkFromModule(target.url);
+    else if (!this.options.hidden) void shell.openExternal(target.url).catch((error: unknown) => console.error("[tavora]", error));
+  }
+
+  /**
    * Opens a link from a catalog module's readme in a Browser panel. The readme is read again here and
    * the address must be one of its http or https links, so the page can't ask for any other address.
    */
@@ -1825,6 +1844,7 @@ export class Host {
       },
       "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId),
       "open-catalog-homepage": (action) => this.openCatalogHomepage(action.moduleId),
+      "open-module-support": (action) => this.openModuleSupport(action.moduleId, action.source),
       "open-readme-link": (action) => this.openReadmeLink(action.moduleId, action.url),
       "rate-catalog-module": (action) => this.rateCatalogModule(action.moduleId, action.stars, action.text),
       "unrate-catalog-module": (action) => this.catalogReviewAction((token) => this.catalog.unrate(action.moduleId, token)),
@@ -3324,6 +3344,7 @@ export class Host {
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
         fromCatalog: this.catalogModules.has(module.manifest.id),
+        support: module.manifest.support ?? null,
         publisher: this.publisherOf(module),
         publisherName: ((key) => (key ? this.publisherNames.name(key) : null))(this.publisherOf(module)),
         localDataWaiting: this.localDataWaiting(module),

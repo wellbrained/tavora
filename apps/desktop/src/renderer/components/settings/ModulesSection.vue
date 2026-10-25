@@ -223,6 +223,7 @@ function remove(module: ModuleView) {
             v-if="module.fromCatalog && state!.library.onlineSearch"
             variant="ghost"
             :aria-label="t('settings.modules.reportLabel', { name: module.name })"
+            :title="t('catalog.reportHint')"
             :data-testid="`report-module-${module.id}`"
             @click="report(module)"
           >

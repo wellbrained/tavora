@@ -43,7 +43,7 @@ async function showFiles() {
   const own = await api.modulePage(props.module.id);
   const screenshots = own.status === "ok" ? own.screenshots : [];
   fromFiles.value = true;
-  page.value = { status: "ok", module: { ...props.module, screenshots: screenshots.length }, screenshots, readme: own.status === "ok" ? own.readme : [], versions: [] };
+  page.value = { status: "ok", module: { ...props.module, support: props.local ? props.local.support : props.module.support, screenshots: screenshots.length }, screenshots, readme: own.status === "ok" ? own.readme : [], versions: [] };
 }
 
 onMounted(async () => {
@@ -73,6 +73,18 @@ const notHere = computed(() => {
   if (module.value.fits) return null;
   return module.value.forGames.length ? t("catalog.onlyFor", { games: module.value.forGames.join(", ") }) : t("catalog.notInWorkspaces");
 });
+
+/** Opens the support link after a click: the main process reads it again from the module's manifest or the listing. */
+async function openSupport() {
+  opening.value = true;
+  homepageError.value = null;
+  const library = dialog.value;
+  const outcome = await act({ type: "open-module-support", moduleId: module.value.id, source: fromFiles.value ? "installed" : "catalog" }, { quiet: true });
+  opening.value = false;
+  if (!outcome.ok) homepageError.value = outcome.error;
+  // A web address opens in a Browser panel, so close the library; an email address opens the mail app and the page stays.
+  else if (module.value.support?.startsWith("https://") && dialog.value === library) dialog.value = null;
+}
 
 async function openHomepage() {
   opening.value = true;
@@ -181,6 +193,11 @@ async function openHomepage() {
               <p v-else>{{ t("catalog.accessNone") }}</p>
             </section>
 
+            <section v-if="module.support" data-testid="catalog-info-support">
+              <Button size="sm" variant="outline" :disabled="opening" :aria-label="t('catalog.supportLabel', { name: module.name })" data-testid="catalog-info-support-button" @click="openSupport">{{ t("catalog.support") }}</Button>
+              <p class="text-muted-foreground mt-1.5">{{ t("catalog.supportHint") }}</p>
+            </section>
+
             <section v-if="catalogParts" data-testid="catalog-info-report">
               <p v-if="reported" class="text-muted-foreground" role="status" :data-testid="`catalog-reported-${module.id}`">{{ t("catalog.reported") }}</p>
               <div v-else-if="reportAsk" class="bg-muted/40 flex flex-wrap items-center gap-2 rounded-md p-3" :data-testid="`catalog-report-ask-${module.id}`">
@@ -193,6 +210,7 @@ async function openHomepage() {
               <Button v-else size="sm" variant="ghost" class="text-muted-foreground -ml-2" :data-testid="`catalog-report-${module.id}`"
                 :aria-label="t('catalog.reportLabel', { name: module.name })" @click="reportAsk = true"
               >{{ t("catalog.report") }}</Button>
+              <p v-if="!reported && !reportAsk" class="text-muted-foreground mt-0.5">{{ t("catalog.reportHint") }}</p>
             </section>
           </aside>
         </div>

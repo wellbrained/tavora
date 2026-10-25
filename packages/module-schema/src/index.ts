@@ -64,6 +64,8 @@ export interface ModuleManifest {
   changelog?: string;
   /** The module's web page, `http` or `https`, shown in the catalog. Tavora opens it like a module link. */
   homepage?: string;
+  /** Where players send feedback: an https address or an email address. A click opens the web page or the mail app. */
+  support?: string;
   /**
    * A `.md` or `.txt` file inside the package introducing the module, at most MAX_README_BYTES, shown in the catalog.
    * Tavora shows its headings, paragraphs and lists as plain text: no links, pictures or HTML.
@@ -118,7 +120,7 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "overlay", "actions", "translations", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "overlay", "actions", "translations", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
 
 /** Most screenshots a manifest may name, and the longest homepage address. */
@@ -130,6 +132,22 @@ export const MAX_SCREENSHOT_BYTES = 1024 * 1024;
 export const MAX_HOMEPAGE_LENGTH = 300;
 // http or https, a host without a user name or password, and no spaces or control characters.
 const HOMEPAGE = /^https?:\/\/[^\s\u0000-\u001f/?#@\\]+(?:[/?#][^\s\u0000-\u001f\\]*)?$/;
+
+/** Longest support link, web address or email address. */
+export const MAX_SUPPORT_LENGTH = 300;
+const SUPPORT_EMAIL = /^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+
+/** Whether a support link is an https address with a host (without a sign-in) or a plain email address, at most MAX_SUPPORT_LENGTH characters. */
+export function isSupportLink(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > MAX_SUPPORT_LENGTH) return false;
+  if (SUPPORT_EMAIL.test(value)) return true;
+  return value.startsWith("https://") && isHomepage(value);
+}
+
+/** Whether a support link is an email address (otherwise it is an https address). */
+export function isSupportEmail(value: string): boolean {
+  return SUPPORT_EMAIL.test(value);
+}
 
 /** Whether a homepage is an address Tavora opens: `http` or `https` with a host, at most MAX_HOMEPAGE_LENGTH characters. */
 export function isHomepage(value: unknown): value is string {
@@ -523,6 +541,9 @@ export function validateManifest(input: unknown): ManifestResult {
 
   if (input.homepage !== undefined && !isHomepage(input.homepage)) {
     errors.push(`homepage must be an http or https address of at most ${MAX_HOMEPAGE_LENGTH} characters`);
+  }
+  if (input.support !== undefined && !isSupportLink(input.support)) {
+    errors.push(`support must be an https address or an email address of at most ${MAX_SUPPORT_LENGTH} characters`);
   }
   if (input.readme !== undefined) {
     if (!isPackagePath(input.readme)) errors.push("readme must be a relative path inside the package");
