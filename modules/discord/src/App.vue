@@ -4,9 +4,10 @@
 // the voice channels of the server this game remembers (or of the call's server), with who is in
 // them. The player can join a channel, leave, and mute or deafen. Everything comes from the Discord
 // app on this PC through Tavora's discord connector, which keeps the sign-in (panel.ts).
-import { Check, ChevronDown, Headphones, HeadphoneOff, Info, Loader2, Mic, MicOff, Phone, PhoneOff, RefreshCw, Search, Volume2, X } from "@lucide/vue";
+import { Check, ChevronDown, Headphones, HeadphoneOff, Loader2, Mic, MicOff, Phone, PhoneOff, RefreshCw, Search, Volume2, X } from "@lucide/vue";
 import { cn, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import MemberRow from "./MemberRow.vue";
@@ -250,10 +251,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", closeOutside))
       </div>
 
       <div v-if="!call" class="flex-none px-2 pb-2">
-        <div role="status" class="bg-info/10 flex items-start gap-2 rounded-md p-3 text-sm" data-testid="discord-no-call">
-          <Info class="text-info mt-0.5 size-4 flex-none" :stroke-width="1.5" />
-          <span>{{ t(channels.length ? "panel.noCall" : "panel.noCallEmpty") }}</span>
-        </div>
+        <Notice data-testid="discord-no-call">{{ t(channels.length ? "panel.noCall" : "panel.noCallEmpty") }}</Notice>
       </div>
 
       <footer class="flex flex-none flex-col gap-1.5 border-t px-3 py-2" data-testid="discord-game">

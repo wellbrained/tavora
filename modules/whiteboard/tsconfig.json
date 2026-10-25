@@ -1,10 +1,17 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // The React part (Excalidraw's host) is the only .tsx; everything else is Vue.
     "jsx": "react-jsx",
     "noEmit": true,
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    // shadcn-vue component sources in @tavora/official-ui are written without it.
+    "exactOptionalPropertyTypes": false,
+    // Libraries such as reka-ui also publish a "source" export; type-check
+    // them from their builds and only the SDK from its sources.
+    "customConditions": [],
+    "paths": { "@tavora/sdk": ["../../packages/sdk/src/index.ts"] }
   },
-  "include": ["src", "stubs", "vite.config.ts"]
+  "include": ["src", "stubs", "vite.config.ts", "../shared/src/env.d.ts"]
 }

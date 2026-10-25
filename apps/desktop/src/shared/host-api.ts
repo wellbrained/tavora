@@ -83,6 +83,8 @@ export interface PanelView {
   content: string | null;
   /** Set for Browser panels: what their toolbar shows. */
   browser?: BrowserState;
+  /** The panel is over its game (Show over game in its menu); its slot says so and offers Bring back. */
+  overGame?: boolean;
   /** A Browser tab opened from another one: docked beside it, and left in the background when asked. */
   openedFrom?: { instanceId: string; background: boolean };
 }
@@ -663,6 +665,8 @@ export interface GameOverlaysView {
       mode: "always" | "toggle";
       opacity: 100 | 75 | 50 | 25;
       hideFromCapture: boolean;
+      /** A whole panel moved over the game (Show over game in its menu), not a module's overlay page; Settings offers Bring back. */
+      panel: boolean;
       hotkey: OverlayKeyView | null;
     }[];
   }[];

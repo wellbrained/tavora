@@ -20,6 +20,39 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.56",
+    date: "2026-10-25",
+    title: "Whiteboard looks like the rest of Tavora",
+    notes: [
+      "The Whiteboard's header, board menu, notices and Undo now look like the other modules.",
+      "The board menu works with the arrow keys, Home and End.",
+      "Your boards and pictures are untouched.",
+    ],
+  },
+  {
+    version: "0.20.55",
+    date: "2026-10-25",
+    title: "Tidier lists and colour pickers",
+    notes: [
+      "Add module and Settings have the same side list, with arrow keys, Home and End to move through it.",
+      "The clock and counter colour swatches can be picked with the arrow keys.",
+      "To-dos, Discord and AI Usage use the shared empty-state and notice boxes.",
+      "Undo messages in Notes and To-Dos look the same as other messages.",
+    ],
+  },
+  {
+    version: "0.20.54",
+    date: "2026-10-25",
+    title: "Panels over your game",
+    notes: [
+      "Pick Show over game in a panel's menu to put the whole panel over your game, like To-Dos or Notes.",
+      "Its slot says Shown over game. Press Bring back there, in the overlay's frame or in Settings > Overlays to return it.",
+      "It follows your overlay settings: when it shows, how see-through it is, and the Arrange key. While you arrange you can click and type in it.",
+      "Panels over your game come back into their workspace when Tavora starts.",
+      "To-Dos fits small panels better.",
+    ],
+  },
+  {
     version: "0.20.53",
     date: "2026-10-25",
     title: "Calculator keyboard",

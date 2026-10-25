@@ -3,11 +3,11 @@
 // is narrow. Every Notes panel of a game shows the same notes; which note a
 // panel shows is that panel's own state.
 import { connectModule, errorMessage } from "@tavora/official-ui";
+import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import NoteEditor from "./NoteEditor.vue";
 import NoteList from "./NoteList.vue";
-import UndoToast from "./UndoToast.vue";
 import { setLanguage, t } from "./i18n";
 import { emptyContent, nudged, ORDER_ID, reordered, SCRATCHPAD_ID, sections, UNTITLED, type NoteEntry } from "./notes";
 import { createNotesStore, type NotesStore } from "./store";
@@ -34,12 +34,14 @@ const width = ref(window.innerWidth);
 const narrow = computed(() => width.value < NARROW_PX);
 /** In a narrow panel: whether the list or the editor is showing. */
 const showList = ref(false);
-/** A short message to the player, such as a picture that could not be added. */
-const notice = ref<{ id: number; message: string } | null>(null);
-let noticeCount = 0;
+/** How long a notice or the Undo offer stays when left alone. */
+const TOAST_MS = 10_000;
 /** The last delete or clear, which the player can still undo for a few seconds. */
-const undo = ref<{ id: number; message: string; run: () => Promise<void> } | null>(null);
-let undoCount = 0;
+let undoToast: { dismiss: () => void } | null = null;
+/** A short message to the player, such as a picture that could not be added. */
+function showNotice(message: string) {
+  toast({ title: message, duration: TOAST_MS, testid: "undo-toast" });
+}
 const editor = ref<InstanceType<typeof NoteEditor> | null>(null);
 /** A note made with New note that has no text yet; it is dropped if left empty. */
 let freshId: string | null = null;
@@ -191,13 +193,14 @@ async function togglePin(id: string) {
 }
 
 function offerUndo(message: string, run: () => Promise<void>) {
-  undo.value = { id: ++undoCount, message, run };
-}
-
-async function runUndo() {
-  const offer = undo.value;
-  undo.value = null;
-  await offer?.run().catch(() => undefined);
+  undoToast?.dismiss();
+  undoToast = toast({
+    title: message,
+    duration: TOAST_MS,
+    testid: "undo-toast",
+    actionTestid: "undo",
+    action: { label: t("undo.undo"), onClick: () => void run().catch(() => undefined) },
+  });
 }
 
 /** Deletes a note, or clears the scratchpad, at once; the player can undo it for a few seconds. */
@@ -229,7 +232,7 @@ async function removeNote(entry: NoteEntry) {
 
 /** Opens a link in the Browser; the host only allows it right after the click that asked. */
 function openLink(href: string) {
-  void sdk.value?.links.open(href).catch(() => (notice.value = { id: ++noticeCount, message: t("link.openFailed") }));
+  void sdk.value?.links.open(href).catch(() => showNotice(t("link.openFailed")));
 }
 
 async function reorder(id: string, target: string, after: boolean) {
@@ -305,10 +308,9 @@ async function move(id: string, delta: -1 | 1) {
         @clear="removeNote(entries.get(SCRATCHPAD_ID) ?? scratchpadEntry)"
         @save-as-note="saveAsNote"
         @open-link="openLink"
-        @notice="(message) => (notice = { id: ++noticeCount, message })"
+        @notice="showNotice"
       />
     </main>
-    <UndoToast v-if="notice && !undo" :key="`n${notice.id}`" plain :message="notice.message" @dismiss="notice = null" />
-    <UndoToast v-if="undo" :key="undo.id" :message="undo.message" @undo="runUndo" @dismiss="undo = null" />
+    <Toaster />
   </div>
 </template>

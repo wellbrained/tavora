@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampPlace, DEFAULT_PALETTE, palettePlace } from "./Palette";
+import { clampPlace, DEFAULT_PALETTE, palettePlace } from "./palette";
 
 const board = { left: 0, top: 40, right: 800, bottom: 600 };
 const home = { left: 16, top: 100, right: 216, bottom: 500 };
