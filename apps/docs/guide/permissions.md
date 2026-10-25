@@ -65,6 +65,7 @@ Some calls need no grant but only work right after the player clicked or pressed
 - `tavora.pictures.save(png, name)`: saves a PNG where the player picks in Tavora's save dialog.
 - `tavora.ui.showMenu(...)`: a menu Tavora draws above every panel.
 - `tavora.overlay.copyLink(key)`: copies an overlay's link for OBS.
+- `tavora.overlay.showOverGame(key)`: shows an overlay over the player's game. It needs no permission, only the click.
 - `tavora.hotkeys.set(action, target, label)`: opens Tavora's hotkey dialog.
 - `discord.connect`, `discord.allowControl`, joining a voice channel, muting and unmuting.
 

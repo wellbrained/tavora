@@ -46,6 +46,7 @@ import {
   type NetworkRequest,
   type NetworkResponse,
   type OverlayLinkResult,
+  type GameOverlayResult,
   type PageResponse,
   type PanelContent,
   type PanelLaunch,
@@ -62,6 +63,7 @@ export type {
   HotkeyBinding,
   HotkeySetResult,
   OverlayLinkResult,
+  GameOverlayResult,
   AiUsageAccountInfo,
   AiUsageReading,
   BlobInfo,
@@ -367,6 +369,13 @@ export interface TavoraSDK {
     copyLink(key: string): Promise<OverlayLinkResult>;
     /** Gives the overlay a new link; the old one stops working. */
     resetLink(key: string): Promise<void>;
+    /**
+     * Shows the overlay for `key` over the player's game, in a Tavora window above it, only while that game is in
+     * front. Call it from the click or key press that asked for it; it needs no permission. Resolves with `"off"` when
+     * Game overlays are off in Tavora (Tavora then opens that setting) and `"full"` when the game has no room for
+     * another. Tavora 0.20.51 and newer.
+     */
+    showOverGame(key: string): Promise<GameOverlayResult>;
   };
   /**
    * Hotkeys for the manifest's `actions`. The player picks the keys in a Tavora dialog, for this game; the module
@@ -771,6 +780,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         await call("overlay.remove", { key });
       },
       copyLink: (key) => call("overlay.copyLink", { key }),
+      showOverGame: (key) => call("overlay.showOverGame", { key }),
       resetLink: async (key) => {
         await call("overlay.resetLink", { key });
       },

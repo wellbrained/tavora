@@ -2,7 +2,7 @@
   "$schema": "../../packages/module-schema/schema/tavora.module.schema.json",
   "id": "tavora.clock-counter",
   "name": "Clock & Counter",
-  "description": "Countdowns, stopwatches and counters for this game, with hotkeys and overlays for your stream.",
+  "description": "Countdowns, stopwatches and counters for this game, with hotkeys and overlays for your stream or over your game.",
   "version": "0.1.0",
   "apiVersion": "1",
   "entry": "dist/index.html",
@@ -19,7 +19,7 @@
   ],
   "translations": {
     "de": {
-      "description": "Countdowns, Stoppuhren und Zähler für dieses Spiel, mit Hotkeys und Overlays für deinen Stream.",
+      "description": "Countdowns, Stoppuhren und Zähler für dieses Spiel, mit Hotkeys und Overlays für deinen Stream oder über deinem Spiel.",
       "actions": {
         "reset": "Zurücksetzen",
         "lap": "Runde",

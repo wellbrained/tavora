@@ -45,6 +45,8 @@ export interface ModuleLifecycleOptions {
   /** The first key of a key's account by its successions (safety-lists.ts). */
   firstKey(key: string): string;
   panels: ModulePanels;
+  /** A module was removed from the player's modules folder: whatever Tavora keeps only while it is installed (game overlays) goes. */
+  removed?(owner: string, moduleId: string): void;
   /** Moves a module's folder to the recycle bin. */
   trash(dir: string): Promise<void>;
   /** Looks for modules again, so `modules()` and `blocked()` say what is on disk now. */
@@ -129,6 +131,7 @@ export class ModuleLifecycle {
       throw new LibraryError("error.removeFailed");
     }
     this.options.panels.close(moduleId);
+    this.options.removed?.(module.owner, moduleId);
     // Its data stays under its owner, so the same publisher's module finds it again. Its grants go:
     // whatever is installed next under this id is asked again.
     await forgetOwner(this.options.userData, path.basename(module.root));

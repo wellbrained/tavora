@@ -616,6 +616,8 @@ export interface HostViewState {
   language: { setting: LanguageSetting; resolved: Language };
   /** Settings > Streaming: Stream overlays and the hotkeys set for module actions. */
   streaming: StreamingView;
+  /** Settings > Overlays: Game overlays over the player's games. */
+  gameOverlays: GameOverlaysView;
   /** Tavora's hotkey dialog, opened by a module's hotkeys.set; null while it is closed. */
   hotkeyRequest: HotkeyRequestView | null;
   /**
@@ -633,6 +635,37 @@ export interface StreamingView {
   overlays: { enabled: boolean; port: number; status: "off" | "running" | "in-use" | "failed" };
   /** Every hotkey set for a module action, in every game (main/hotkeys.ts). `taken`: another program holds the key right now. */
   hotkeys: HotkeyView[];
+}
+
+/** A key set for game overlays (a game's arrange key, an overlay's toggle key), and whether another program holds it right now. */
+export interface OverlayKeyView {
+  accelerator: string;
+  taken: boolean;
+}
+
+/**
+ * Settings > Overlays (main/game-overlays.ts): the master switch and, per game, its arrange key and its game overlays.
+ * `supported` is false where Tavora can't draw over a game (not Windows); Settings then hides the section.
+ */
+export interface GameOverlaysView {
+  supported: boolean;
+  enabled: boolean;
+  games: {
+    id: string;
+    name: string;
+    arrange: OverlayKeyView | null;
+    overlays: {
+      owner: string;
+      moduleId: string;
+      key: string;
+      /** The module's name, and the overlay's key when the module has several in this game. */
+      name: string;
+      mode: "always" | "toggle";
+      opacity: 100 | 75 | 50 | 25;
+      hideFromCapture: boolean;
+      hotkey: OverlayKeyView | null;
+    }[];
+  }[];
 }
 
 export interface HotkeyView {

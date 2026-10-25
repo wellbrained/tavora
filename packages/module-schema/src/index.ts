@@ -84,7 +84,10 @@ export interface ModuleManifest {
   panels?: ModulePanelType[];
   /**
    * The page streaming software such as OBS shows as a Browser Source (overlay.copyLink). Tavora serves it on this PC
-   * only, with the files next to it, and gives it live data from the module. Needs the `stream-overlay` connector.
+   * only, with the files next to it, and gives it live data from the module. Game overlays (overlay.showOverGame) show the
+   * same page over the player's game and need no connector; the `stream-overlay` connector is only for OBS links, and
+   * needs this page. A module with an overlay and no connector needs a `minTavora` newer than
+   * LAST_TAVORA_WITHOUT_GAME_OVERLAYS, because older Tavoras refuse that.
    */
   overlay?: string;
   /** What the module can do on a key press (hotkeys.set). Up to MAX_ACTIONS. */
@@ -326,6 +329,8 @@ export function isNetworkHost(value: unknown): value is string {
 
 /** Most languages one manifest may translate into. */
 export const MAX_TRANSLATIONS = 32;
+/** The last Tavora that refuses an `overlay` without the `stream-overlay` connector. */
+export const LAST_TAVORA_WITHOUT_GAME_OVERLAYS = "0.20.50";
 /** The last Tavora that refuses `translations`; a manifest with them needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_TRANSLATIONS = "0.20.12";
 const LANGUAGE_CODE = /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/;
@@ -386,6 +391,10 @@ export function needsNewerTavora(manifest: Pick<ModuleManifest, "minTavora">, ta
     if ((have[i] ?? 0) !== (need[i] ?? 0)) return (have[i] ?? 0) < (need[i] ?? 0);
   }
   return false;
+}
+
+function officialId(input: Record<string, unknown>): boolean {
+  return typeof input.id === "string" && input.id.startsWith(OFFICIAL_ID_PREFIX);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -604,7 +613,10 @@ export function validateManifest(input: unknown): ManifestResult {
       else if (!later.every((name) => listed.includes(name))) errors.push("permissions.onRequest may only list connectors that permissions.connectors lists");
     }
     const overlayConnector = Array.isArray(permissions.connectors) && permissions.connectors.includes("stream-overlay");
-    if (input.overlay !== undefined && !overlayConnector) errors.push('overlay needs "stream-overlay" in permissions.connectors');
+    // Without the connector the page serves game overlays only, which older Tavoras refuse: the manifest says so by minTavora.
+    if (input.overlay !== undefined && !overlayConnector && !officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_GAME_OVERLAYS)) {
+      errors.push(`overlay without the "stream-overlay" connector needs a minTavora newer than ${LAST_TAVORA_WITHOUT_GAME_OVERLAYS}, because older Tavoras refuse it`);
+    }
     if (overlayConnector && input.overlay === undefined) errors.push('the "stream-overlay" connector needs an overlay page');
   }
 

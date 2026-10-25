@@ -20,7 +20,7 @@ const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
 const HKEY_CURRENT_USER = -0x7fffffff;
 const RRF_RT_REG_DWORD = 0x10;
 
-interface Windows {
+export interface Windows {
   enumProcesses: (pids: Uint32Array, bytes: number, needed: number[]) => number;
   openProcess: (access: number, inherit: number, pid: number) => bigint | null;
   queryFullProcessImageName: (process: bigint, flags: number, name: Uint16Array, size: number[]) => number;
@@ -28,7 +28,7 @@ interface Windows {
   regGetValue: (key: number, subKey: string, value: string, flags: number, type: null, data: number[], size: number[]) => number;
 }
 
-function loadWindows(): Windows {
+export function loadWindows(): Windows {
   // Outside the bundle (scripts/targets.mjs): koffi loads a native file next to it in node_modules.
   const koffi = require("koffi") as typeof import("koffi");
   const kernel32 = koffi.load("kernel32.dll");
@@ -54,7 +54,7 @@ function processIds(windows: Windows): Uint32Array {
   }
 }
 
-function programPath(windows: Windows, pid: number, name: Uint16Array): string | null {
+export function programPath(windows: Windows, pid: number, name: Uint16Array): string | null {
   const process = windows.openProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
   if (!process) return null;
   try {

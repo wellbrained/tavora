@@ -14,6 +14,7 @@ import {
   dialog,
   globalShortcut,
   ipcMain,
+  Notification,
   nativeImage,
   nativeTheme,
   protocol,
@@ -106,6 +107,9 @@ import { syncIcons } from "./icon-sync";
 import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus, steamLibraryView } from "./steam-import";
 import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, steamShareGames, submitIcon } from "./share-icons";
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
+import { windowsForegroundProbe } from "./foreground";
+import { GameOverlayWindow } from "./game-overlay-window";
+import { arrangeBinding, GameOverlays, toggleBinding } from "./game-overlay-service";
 import { GameWatcher } from "./game-watch";
 import { Streaming } from "./streaming";
 import { findInstalledGames } from "./launcher-games";
@@ -349,6 +353,8 @@ export class Host {
   private safetyLists!: SafetyLists;
   /** Stream overlays and hotkeys for module actions (streaming.ts); made before any module panel opens. */
   private streaming!: Streaming;
+  /** Module overlay pages shown over the game in front (game-overlay-service.ts); made right after streaming. */
+  private gameOverlays!: GameOverlays;
   /** Modules in the player's folder whose zip Tavora blocked: not loaded, data kept. */
   private blockedModules = new Map<string, InstalledModule>();
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
@@ -457,6 +463,7 @@ export class Host {
       autoUpdateModules: () => this.library.autoUpdateModules,
       firstKey: (key) => this.safetyLists.firstKey(key),
       panels: { reload: (moduleId) => this.reloadModuleViews(moduleId), close: (moduleId) => this.removeModulePanels(moduleId) },
+      removed: (owner, moduleId) => this.gameOverlays.forgetModule(moduleId, owner),
       // Test runs keep the window hidden and have no recycle bin to rely on.
       trash: (dir) => (options.hidden ? rm(dir, { recursive: true, force: true }) : shell.trashItem(dir)),
       reload: () => this.reloadModules(),
@@ -599,6 +606,7 @@ export class Host {
     host.moduleData = await listModuleData(userData, host.files.root());
     host.grants = await GrantStore.load(userData);
     host.streaming = await Host.streamingService(host);
+    host.gameOverlays = await Host.gameOverlayService(host);
     host.safetyLists = safetyLists;
     host.blockedModules = blockedModules;
     await host.moveAiUsagePanelData();
@@ -636,7 +644,8 @@ export class Host {
     // The last game's pages start loading with the window, and its first look already has the one loading cover.
     if (host.screen === "game") host.openCurrentGame();
     await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
-    if (library.gameStart !== "off") host.gameWatcher.start();
+    host.syncGameWatcher();
+    host.gameOverlays.start();
     void host.files.check();
     // Icons of games that have none yet are looked for quietly in the background.
     host.fetchIconsSoon();
@@ -971,7 +980,12 @@ export class Host {
     const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
     this.library.developmentFolders = this.library.developmentFolders.filter((item) => key(item) !== key(folder));
     this.saveLibrary();
+    const projects = [...this.modules.values()].filter((module) => module.developmentProject !== undefined);
     await this.reloadModules();
+    // A module of that folder that is gone now takes its game overlays with it, as a removed module does.
+    for (const module of projects) {
+      if (this.modules.get(module.manifest.id)?.developmentProject !== module.developmentProject) this.gameOverlays.forgetModule(module.manifest.id, module.owner);
+    }
   }
 
   /**
@@ -983,6 +997,7 @@ export class Host {
     if (this.modules.get(moduleId)?.owner === owner) throw new LibraryError("error.dataInUse");
     this.data.forgetModule(owner, moduleId);
     this.streaming.forgetModule(owner, moduleId);
+    this.gameOverlays.forgetModule(moduleId, owner);
     for (const partition of await deleteModuleDataOf(this.options.userData, owner, moduleId, this.files.root())) {
       const ses = session.fromPartition(partition);
       await ses.clearStorageData();
@@ -1789,8 +1804,7 @@ export class Host {
       "set-game-start": saved((action) => {
         this.library.gameStart = action.gameStart;
         if (action.gameStart !== "ask") this.pendingGameSwitch = null;
-        if (action.gameStart === "off") this.gameWatcher.stop();
-        else this.gameWatcher.start();
+        this.syncGameWatcher();
       }),
       "set-game-end": saved((action) => {
         if (action.workspaceId !== null && !(isLive(this.library, action.workspaceId) && this.library.games[action.workspaceId]!.kind === "workspace")) {
@@ -1824,6 +1838,25 @@ export class Host {
         this.library.moduleIcons = action.enabled;
       }),
       "set-stream-overlays": (action) => this.streaming.setOverlays(action.enabled),
+      "set-game-overlays": saved((action) => {
+        this.library.gameOverlays = action.enabled;
+        this.gameOverlays.tick();
+        this.syncGameWatcher();
+      }),
+      "set-game-overlay": (action) => {
+        const { owner, moduleId, gameId, key, mode, opacity, hideFromCapture } = action;
+        this.gameOverlays.update({ owner, moduleId, gameId, key }, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
+      },
+      "remove-game-overlay": (action) => this.gameOverlays.remove(action),
+      "set-overlay-key": (action) => {
+        const { gameId, owner, moduleId, key } = action;
+        const overlay = owner !== undefined && moduleId !== undefined && key !== undefined ? { owner, moduleId, gameId, key } : null;
+        if (overlay && !this.gameOverlays.has(overlay)) return;
+        const binding = overlay ? toggleBinding(overlay) : arrangeBinding(gameId);
+        const names = this.gameOverlays.dialogNames(binding);
+        // The dialog is answered by hotkey-answer; this action only opens it.
+        void this.streaming.askOverlayKey(binding, names.label, { module: names.module, action: names.action });
+      },
       "set-overlay-port": (action) => this.streaming.setPort(action.port),
       "reset-overlay-links": () => this.streaming.resetLinks(),
       "hotkey-answer": (action) => this.streaming.answer(action.id, action.choice, action.accelerator),
@@ -2446,6 +2479,7 @@ export class Host {
     await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
     this.data.forgetGame(game.id);
     this.streaming.forgetGame(game.id);
+    this.gameOverlays.forgetGame(game.id);
     // A folder the player chose can be gone (an unplugged drive): the game still goes, and they are told where its pictures may remain.
     await this.files.noteGameDeleted(game.name, (root) => deleteModuleData(this.options.userData, game.id, root));
     await this.dropIconFile(game.icon);
@@ -2549,6 +2583,12 @@ export class Host {
   private gamesRunning(running: ReadonlySet<string>, initial: boolean): void {
     // The watcher stops when the window closes and reports every game as closed: there is nothing left to switch.
     if (this.windowClosed) return;
+    // With "When a game starts" off the watcher only serves game overlays, which look at the window in front themselves.
+    if (this.library.gameStart === "off") {
+      this.running = [];
+      this.pushState();
+      return;
+    }
     const before = this.running;
     const started = [...running].filter((id) => !before.includes(id));
     this.running = [...before.filter((id) => running.has(id)), ...started];
@@ -2963,7 +3003,7 @@ export class Host {
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
       aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
       discord: this.discord,
-      overlay: this.streaming.overlayFor(module, game.id),
+      overlay: { ...this.streaming.overlayFor(module, game.id), showOverGame: (key) => this.gameOverlays.show(module, game.id, key) },
       hotkeys: this.streaming.hotkeysFor(module, game.id),
       ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
       onStatus: (status) => {
@@ -3498,6 +3538,7 @@ export class Host {
       runningGameId: this.running.filter((id) => id !== this.gameId && isLive(this.library, id)).at(-1) ?? null,
       pendingGameSwitch: this.pendingGameSwitch && isLive(this.library, this.pendingGameSwitch) ? this.pendingGameSwitch : null,
       streaming: this.streaming.view(),
+      gameOverlays: this.gameOverlays.view(),
       pendingConnector: this.pendingConnector && { id: this.pendingConnector.id, moduleId: this.pendingConnector.moduleId, connectors: [this.pendingConnector.connector] },
       hotkeyRequest: this.streaming.request(),
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
@@ -3728,8 +3769,63 @@ export class Host {
 
   /** Resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
   async flush(): Promise<void> {
+    await this.gameOverlays?.shutdown();
     await this.streaming?.shutdown();
     return this.savedData.flush();
+  }
+
+  /** Looks at the running programs while "When a game starts" or game overlays need it. */
+  private syncGameWatcher(): void {
+    if (this.library.gameStart !== "off" || this.gameOverlays?.needsWatcher()) this.gameWatcher.start();
+    else this.gameWatcher.stop();
+  }
+
+  /** Game overlays over the game in front, lent what they need of the host. */
+  private static async gameOverlayService(host: Host): Promise<GameOverlays> {
+    const options = host.options;
+    const overlays = await GameOverlays.create({
+      userData: options.userData,
+      overlays: host.streaming.overlayStore,
+      supported: process.platform === "win32",
+      enabled: () => host.library.gameOverlays,
+      module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
+      gameName: (gameId) => host.library.games[gameId]?.name ?? null,
+      gamesOf: (program) => host.gameWatcher.gamesOf(program),
+      probe: () => windowsForegroundProbe(),
+      // Windows reports pixels; windows are placed in DIPs.
+      toDip: (rect) => screen.screenToDipRect(null, rect),
+      openWindow: (request) =>
+        new GameOverlayWindow({
+          preload: path.join(path.dirname(options.modulePreload), "game-overlay.cjs"),
+          hidden: !!options.hidden,
+          id: request.id,
+          source: { page: request.page, state: request.state, watch: request.watch },
+          gameBounds: request.gameBounds,
+          moved: request.moved,
+          closeRequested: request.closeRequested,
+          ended: request.ended,
+          frameText: request.frameText,
+        }),
+      shortcuts: globalShortcut,
+      openSetting: (setting) => {
+        host.bringToFront();
+        host.window.webContents.send("host:shortcut", `setting:${setting}`);
+      },
+      notify: (message) => {
+        host.notice = message;
+        if (!options.hidden && Notification.isSupported()) new Notification({ title: "Tavora", body: message, silent: true }).show();
+        host.pushStateSoon();
+      },
+      removeKeys: (test) => host.streaming.removeKeys(test),
+      keyOf: (binding) => host.streaming.keyOf(binding),
+      language: () => host.language,
+      changed: () => {
+        host.syncGameWatcher();
+        host.pushStateSoon();
+      },
+    });
+    host.streaming.useOverlayKeys(overlays);
+    return overlays;
   }
 
   /** Stream overlays and hotkeys, lent what they need of the host. */
