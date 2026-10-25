@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.34",
+    date: "2026-10-25",
+    title: "Tavora starts again",
+    notes: [
+      "Tavora no longer opens to a black window.",
+    ],
+  },
+  {
     version: "0.20.33",
     date: "2026-10-25",
     title: "Clearer module tags",
