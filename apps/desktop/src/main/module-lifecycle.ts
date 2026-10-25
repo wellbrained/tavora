@@ -40,6 +40,8 @@ export interface ModuleLifecycleOptions {
   catalog: Pick<CatalogClient, "index" | "details" | "download" | "module" | "installed">;
   /** Whether online features are on; the catalog is not asked otherwise. */
   online(): boolean;
+  /** Whether catalog updates that ask for nothing new install by themselves. */
+  autoUpdateModules(): boolean;
   /** The first key of a key's account by its successions (safety-lists.ts). */
   firstKey(key: string): string;
   panels: ModulePanels;
@@ -60,6 +62,7 @@ export class ModuleLifecycle {
     this.updates = new CatalogUpdater({
       client: options.catalog,
       installed: () => this.catalogInstalled(),
+      autoInstall: () => options.autoUpdateModules(),
       tavoraVersion: options.tavoraVersion,
       firstKey: (key) => options.firstKey(key),
       check: async (zip, expect) => checkZipData(zip, { ...(await this.installOptions()), expect }),

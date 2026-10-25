@@ -210,6 +210,7 @@ export function hostActionTable(c: HostChecks) {
     "set-grayscale-text": { enabled: bool },
     "set-online-search": { enabled: bool },
     "set-auto-update": { enabled: bool },
+    "set-auto-update-modules": { enabled: bool },
     "set-steam-icons": { enabled: bool },
     "set-module-icons": { enabled: bool },
 

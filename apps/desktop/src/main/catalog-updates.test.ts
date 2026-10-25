@@ -66,7 +66,10 @@ async function setup(key: KeyObject, network: string[] = [], safety?: SafetyChec
     catalog.index = [entry];
     catalog.zips.set(entry.zip.sha256, zip);
   };
+  // The player's setting "Update modules automatically"; on here, so most tests see updates install.
+  const auto = { on: true };
   const updater = new CatalogUpdater({
+    autoInstall: () => auto.on,
     client: {
       index: async () => catalog.index,
       details: async () => ({ entry: catalog.index[0]!, versions: catalog.versions, readme: null }),
@@ -87,7 +90,7 @@ async function setup(key: KeyObject, network: string[] = [], safety?: SafetyChec
     },
   });
   const page = () => readFile(path.join(userModules, ID, "dist", "index.html"), "utf8");
-  return { userData, userModules, modules, updater, publish, catalog, page };
+  return { userData, userModules, modules, updater, publish, catalog, page, auto };
 }
 
 describe("findUpdates", () => {
@@ -152,6 +155,57 @@ describe("CatalogUpdater", () => {
     expect(outcome.waiting).toEqual([]);
     expect(await page()).toBe("<p>1.1.0</p>");
     expect((await readOwnerRecords(userData))[ID]).toEqual({ id: ID, owner: fingerprint(key), sha256: createHash("sha256").update(zip).digest("hex"), catalog: true });
+  });
+
+  it("only finds an update that asks for nothing new while the setting is off, and installs it once the setting is on", async () => {
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const { updater, publish, catalog, page, auto } = await setup(key, ["api.example.com"]);
+    const zip = zipOf("1.1.0", key, ["api.example.com"]);
+    publish(listing("1.1.0", zip, fingerprint(key), { notes: ["Faster."] }), zip);
+    catalog.versions = [{ version: "1.1.0", publishedAt: "", notes: ["Faster."] }];
+    auto.on = false;
+
+    const outcome = await updater.check();
+    expect(outcome.updated).toEqual([]);
+    expect(outcome.waiting.map(({ version, from, asks, notes }) => ({ version, from, asks, notes }))).toEqual([
+      { version: "1.1.0", from: "1.0.0", asks: { network: [], connectors: [] }, notes: [{ version: "1.1.0", notes: ["Faster."] }] },
+    ]);
+    expect(await page()).toBe("<p>1.0.0</p>");
+    expect(catalog.downloads).toHaveLength(1);
+
+    // Turned on: the update that was found installs from the zip already checked.
+    auto.on = true;
+    const next = await updater.check();
+    expect(next.updated.map((item) => item.manifest.version)).toEqual(["1.1.0"]);
+    expect(next.waiting).toEqual([]);
+    expect(catalog.downloads).toHaveLength(1);
+    expect(await page()).toBe("<p>1.1.0</p>");
+    expect(updater.pending(ID)).toBeUndefined();
+  });
+
+  it("applies a waiting update that asks for nothing new when the player presses Update", async () => {
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const { updater, publish, page, auto } = await setup(key);
+    auto.on = false;
+    const zip = zipOf("1.1.0", key);
+    publish(listing("1.1.0", zip, fingerprint(key)), zip);
+    await updater.check();
+    const { installed, asks } = await updater.apply(ID, "1.1.0");
+    expect(installed.manifest.version).toBe("1.1.0");
+    expect(asks).toEqual({ network: [], connectors: [] });
+    expect(await page()).toBe("<p>1.1.0</p>");
+  });
+
+  it("keeps an update that asks for something new waiting even when the setting is on", async () => {
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const { updater, publish, page, auto } = await setup(key);
+    expect(auto.on).toBe(true);
+    const zip = zipOf("1.1.0", key, ["api.example.com"]);
+    publish(listing("1.1.0", zip, fingerprint(key)), zip);
+    const outcome = await updater.check();
+    expect(outcome.updated).toEqual([]);
+    expect(outcome.waiting.map((item) => item.version)).toEqual(["1.1.0"]);
+    expect(await page()).toBe("<p>1.0.0</p>");
   });
 
   it("refuses an older, the same and another key's version, and leaves the installed one as it is (C3)", async () => {

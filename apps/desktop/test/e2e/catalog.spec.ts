@@ -368,7 +368,7 @@ test("the catalog asks for a personal workspace's modules, and stays offline wit
   }
 });
 
-test("a catalog module updates without a restart, and an update adding a network host waits for consent while the old version keeps working", async () => {
+test("catalog module updates wait for the player, install from the Updates view without a restart, and one adding a network host waits for consent while the old version keeps working", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
   const id = "wellbrained.tracker";
@@ -397,12 +397,24 @@ test("a catalog module updates without a restart, and an update adding a network
     await expect(panels(page, id)).toHaveCount(1);
     await expectModuleText(app, id, "version", "1.0.0");
 
-    // An update that asks for nothing new installs at once, and the open panel reloads with it.
+    // Modules do not update by themselves unless the player turns that on: an update that asks for
+    // nothing new is only found, and the old version keeps running.
     modules[0] = await release("1.1.0", [], ["Faster."]);
-    await checkForUpdates("Updated: 1. Waiting for you: 0.");
+    await checkForUpdates("Found 1 update. It is ready when you are.");
     await page.getByTestId("settings-close").click();
+    await expectModuleText(app, id, "version", "1.0.0");
+    await expect(page.getByTestId("module-updates-button")).toHaveText("1 update");
+
+    // The header button opens the library on Updates: versions, what is new, and Update.
+    await page.getByTestId("module-updates-button").click();
+    await expect(page.getByTestId("module-view-title")).toHaveText("Updates");
+    await expect(page.getByTestId(`update-versions-${id}`)).toHaveText("1.0.0 → 1.1.0");
+    await expect(page.getByTestId(`update-notes-${id}`)).toContainText("Faster.");
+    await page.getByTestId(`update-module-${id}`).click();
+    await expect(page.getByTestId("module-updates-empty")).toBeVisible();
     await expectModuleText(app, id, "version", "1.1.0");
-    await expect(page.getByTestId("notice")).toHaveText("Tracker was updated to 1.1.0. What's new is in Settings > Modules.");
+    await expect(page.getByTestId("module-updates-button")).toHaveCount(0);
+    await page.keyboard.press("Escape");
     // The update check asked for the whole catalog, never for the modules this player has (C11).
     expect(asked.filter((request) => request.startsWith("/v1/catalog?") || request === "/v1/catalog")).toContain("/v1/catalog");
     expect(asked.some((request) => request.startsWith("/v1/catalog?") && request.includes(id))).toBe(false);
@@ -415,7 +427,7 @@ test("a catalog module updates without a restart, and an update adding a network
         { version: "1.1.0", publishedAt: "2026-10-18T11:00:00.000Z", notes: ["Faster."] },
       ],
     };
-    await checkForUpdates("Updated: 0. Waiting for you: 1.");
+    await checkForUpdates("Found 1 update. It is ready when you are.");
     await expect(page.getByTestId(`module-update-${id}`)).toHaveText("Update to 1.2.0");
     await page.getByTestId("settings-close").click();
     const review = page.locator('[data-testid^="update-review-open-"]');
@@ -440,6 +452,32 @@ test("a catalog module updates without a restart, and an update adding a network
     await expect(page.locator('[data-testid^="grant-review-open-"]')).toHaveCount(0);
     const grants = JSON.parse(await readFile(path.join(userData, "grants.json"), "utf8"));
     expect(grants.owners[owner][id].network).toEqual(["api.example.com"]);
+
+    // An update that asks for more also goes through the consent dialog from the Updates view,
+    // which it returns to; not now leaves it waiting.
+    modules[0] = await release("1.3.0", ["api.example.com", "api.other.example.com"], ["More sites."]);
+    await checkForUpdates("Found 1 update. It is ready when you are.");
+    await page.getByTestId("settings-close").click();
+    await page.getByTestId("module-updates-button").click();
+    await expect(page.getByTestId(`update-${id}`)).toContainText("Asks for new access first.");
+    await page.getByTestId("update-all-modules").click();
+    await expect(page.getByTestId("grant-hosts")).toHaveText("api.other.example.com");
+    await page.getByTestId("grant-cancel").click();
+    await expect(page.getByTestId("module-view-title")).toHaveText("Updates");
+    await expectModuleText(app, id, "version", "1.2.0");
+    await page.getByTestId(`update-module-${id}`).click();
+    await page.getByTestId("grant-allow").click();
+    await expect(page.getByTestId("module-updates-empty")).toBeVisible();
+    await expectModuleText(app, id, "version", "1.3.0");
+    await page.keyboard.press("Escape");
+
+    // With "Update modules automatically" on, an update that asks for nothing new installs by itself.
+    modules[0] = await release("1.4.0", ["api.example.com", "api.other.example.com"], ["Quicker."]);
+    await settings();
+    await page.getByTestId("auto-update-modules").click();
+    await expectModuleText(app, id, "version", "1.4.0");
+    await page.getByTestId("settings-close").click();
+    await expect(page.getByTestId("notice")).toHaveText("Tracker was updated to 1.4.0. What's new is in Settings > Modules.");
   } finally {
     await app.close();
     server.close();

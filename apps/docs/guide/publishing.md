@@ -1,6 +1,6 @@
 # Publishing to the catalog
 
-Tavora's module catalog is where players find community modules: under **Browse** in the module library. Browse lists every module, those for the game they have open (or for a personal workspace) first; the others show which game they are for and can't be installed there. Publishing puts your module there, and every player who installs it from the catalog gets your updates on their own.
+Tavora's module catalog is where players find community modules: under **Browse** in the module library. Browse lists every module, those for the game they have open (or for a personal workspace) first; the others show which game they are for and can't be installed there. Publishing puts your module there, and every player who installs it from the catalog is told when you publish an update.
 
 ## Before the first upload
 
@@ -64,8 +64,9 @@ Build, then press **Publish** again. If you haven't raised `version` yet, the re
 
 While online features are on, players' Tavora looks for updates a little after start, every few hours after that, and when they press **Check for updates** in Settings > Modules:
 
-- An update that asks for nothing new installs at once. Open panels reload with it, and players get a notice pointing to your patch notes.
-- An update that asks for a network host or connector the installed version didn't ask for waits for the player's yes. The installed version keeps running until they allow it, and the patch notes show in the dialog.
+- Updates wait for the player. A button in the game header (for example "2 updates") opens the module library on **Updates**, with your patch notes for each new version and an **Update** button. Open panels reload when they update.
+- Players who turn on **Update modules automatically** in Settings > Modules get an update that asks for nothing new at once, with a notice pointing to your patch notes.
+- An update that asks for a network host or connector the installed version didn't ask for always waits for the player's yes, even with that setting on. The installed version keeps running until they allow it, and the patch notes show in the dialog.
 - Every player gets the latest version. There's no way to pin an older one, and an older or equal version can't be published.
 
 A zip a player installed by hand with Install from zip isn't updated from the catalog. Once they install your module from Browse, it is.

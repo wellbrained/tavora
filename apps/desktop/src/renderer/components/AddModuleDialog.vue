@@ -14,19 +14,20 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
 import { t } from "../i18n";
-import { Blocks, ChevronDown, Code, Download, Gamepad2, Search, Settings2, ShieldCheck, Store, X } from "@lucide/vue";
+import { Blocks, ChevronDown, CloudDownload, Code, Download, Gamepad2, Search, Settings2, ShieldCheck, Store, X } from "@lucide/vue";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import ModuleIcon from "./ModuleIcon.vue";
 import CatalogBrowse from "./CatalogBrowse.vue";
 import CatalogModuleDialog from "./CatalogModuleDialog.vue";
 import { pageModule } from "../module-page";
+import ModuleUpdates from "./ModuleUpdates.vue";
 import MenuButton from "./menus/MenuButton.vue";
 import { MODULE_TAG_TEXT, moduleTag, type TaggedModule } from "../../shared/module-tag";
 
 type ModuleView = NonNullable<typeof state.value>["modules"][number];
 type Kind = "official" | "local" | "development";
 /** What the library shows: installed modules (all, the ones in this game, or one kind), or the catalog. */
-type View = "all" | "inGame" | Kind | "catalog";
+type View = "all" | "inGame" | Kind | "catalog" | "updates";
 
 const KINDS: Kind[] = ["official", "local", "development"];
 const VIEWS = [
@@ -49,6 +50,8 @@ function kindOf(module: ModuleView): Kind {
 /** A module whose catalog page to open, such as one just published: the library starts in the catalog. */
 const browse = (dialog.value as AddModuleRequest).browse;
 const view = ref<View>(browse ? "catalog" : ((dialog.value as AddModuleRequest).view ?? "all"));
+/** How many modules have an update waiting. The Updates entry is listed while there are some (and while it is open, so it can say all is done). */
+const updateCount = computed(() => state.value!.modules.filter((module) => module.update).length);
 const query = ref("");
 /** How many modules the catalog lists for the search, once it has loaded. */
 const catalogCount = ref<number | null>(null);
@@ -91,8 +94,8 @@ const showHeadings = computed(() => view.value === "all" || view.value === "inGa
 
 const title = computed(() => (view.value === "catalog" ? t("addModule.tab.browse") : t(`addModule.category.${view.value}`)));
 /** The header's icon: the chosen view's own from the list on the left. */
-const viewIcon = computed(() => (view.value === "catalog" ? Store : (VIEWS.find((item) => item.id === view.value)?.icon ?? Blocks)));
-const shownCount = computed(() => (view.value === "catalog" ? catalogCount.value : resultCount.value));
+const viewIcon = computed(() => (view.value === "catalog" ? Store : view.value === "updates" ? CloudDownload : (VIEWS.find((item) => item.id === view.value)?.icon ?? Blocks)));
+const shownCount = computed(() => (view.value === "catalog" ? catalogCount.value : view.value === "updates" ? updateCount.value : resultCount.value));
 
 /** How many panels of a module (of one of its panel types, if given) are already open in this game. */
 function openCount(moduleId: string, panelType?: string): number {
@@ -145,7 +148,7 @@ function reset() {
 
 /** Enter opens the first module listed. */
 function submit() {
-  if (view.value === "catalog") return;
+  if (view.value === "catalog" || view.value === "updates") return;
   const first = groups.value[0]?.items[0];
   if (first) add(first.id);
 }
@@ -220,6 +223,24 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
           </button>
           <h3 class="text-muted-foreground hidden px-3 pt-4 pb-1 text-xs font-semibold tracking-wider uppercase sm:block">{{ t("addModule.more") }}</h3>
           <button
+            v-if="updateCount || view === 'updates'"
+            type="button"
+            :class="
+              cn(
+                'text-muted-foreground hover:bg-accent hover:text-foreground group flex h-9 shrink-0 items-center gap-3 rounded-lg px-3 text-left font-medium whitespace-nowrap',
+                view === 'updates' && 'bg-primary/10 text-foreground hover:bg-primary/15',
+              )
+            "
+            :aria-pressed="view === 'updates'"
+            :title="t('addModule.about.updates')"
+            data-testid="module-category-updates"
+            @click="view = 'updates'"
+          >
+            <CloudDownload :class="cn('hidden size-4 flex-none transition-colors sm:block', view === 'updates' ? 'text-primary' : 'text-primary/80')" :stroke-width="1.75" />
+            <span class="flex-1 truncate">{{ t("addModule.category.updates") }}</span>
+            <span class="bg-primary text-primary-foreground rounded-sm px-1.5 text-xs tabular-nums" data-testid="module-updates-count">{{ updateCount }}</span>
+          </button>
+          <button
             type="button"
             :class="
               cn(
@@ -261,6 +282,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
         </header>
 
         <CatalogBrowse v-if="view === 'catalog'" :query="query" :open="browse" @count="catalogCount = $event" />
+        <ModuleUpdates v-else-if="view === 'updates'" :query="query" />
         <div v-else class="min-h-0 flex-1 overflow-y-auto px-5 pb-8 sm:px-8" data-testid="module-results">
           <section v-for="group in groups" :key="group.id" :aria-label="group.label" class="pt-6">
             <h3 v-if="showHeadings" class="text-primary flex items-center gap-2 pb-3 text-xs font-semibold tracking-wider uppercase">

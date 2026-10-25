@@ -1,9 +1,10 @@
 // Keeps modules installed from the catalog up to date (catalog threat model, C3, C4, C11). The whole
 // index is downloaded and compared on the PC, so the service never learns what a player has. An
 // update goes through every installer rule before anything else: the zip must be the listed one,
-// from the module's owner and newer than what is installed. One that asks for nothing new installs
-// at once and its panels reload; one that asks for new network hosts or connectors waits, fully
-// checked, until the player says yes, and the installed version keeps running until then.
+// from the module's owner and newer than what is installed. Only when the player turned on
+// "Update modules automatically" does one that asks for nothing new install at once (its panels
+// reload); every other update waits, fully checked, until the player says yes, and the installed
+// version keeps running until then. One that asks for new network hosts or connectors always waits.
 import { connectorsAtAdd, type Connector, type ModuleManifest } from "@tavora/module-schema";
 import type { ModuleNote } from "../shared/host-api";
 import type { CatalogClient, CatalogEntry, CatalogVersion } from "./catalog-client";
@@ -98,6 +99,8 @@ export function notesSince(versions: readonly CatalogVersion[], from: string, to
 }
 
 export interface CatalogUpdaterOptions {
+  /** Whether updates that ask for nothing new install by themselves (a setting, off unless the player turned it on). */
+  autoInstall?(): boolean;
   client: Pick<CatalogClient, "index" | "details" | "download">;
   /** The modules installed from the catalog, as they are now. */
   installed(): CatalogInstalled[];
@@ -160,6 +163,16 @@ export class CatalogUpdater {
       const module = installed.find((item) => item.id === entry.id)!;
       const waiting = this.pendingUpdates.get(entry.id);
       if (waiting?.sha256 === entry.zip.sha256) {
+        // Found while the setting was off, and nothing new is asked: turned on since, it installs now.
+        if (asksNothing(waiting.asks) && this.options.autoInstall?.()) {
+          try {
+            outcome.updated.push(await this.options.install(waiting.zip, { id: entry.id, owner: waiting.signer }));
+            this.pendingUpdates.delete(entry.id);
+            continue;
+          } catch (error) {
+            this.options.log?.(`catalog update of ${entry.id} to ${entry.version} not installed: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
         outcome.waiting.push(waiting);
         continue;
       }
@@ -169,7 +182,7 @@ export class CatalogUpdater {
         const expect = { id: entry.id, owner: entry.owner };
         const checked = await this.options.check(zip, expect);
         const asks = newAsks(module.asks, checked.manifest.permissions);
-        if (asksNothing(asks)) {
+        if (asksNothing(asks) && this.options.autoInstall?.()) {
           outcome.updated.push(await this.options.install(zip, expect));
           this.pendingUpdates.delete(entry.id);
           continue;

@@ -89,6 +89,7 @@ async function setup() {
       installed: async () => undefined,
     },
     online: () => state.online,
+    autoUpdateModules: () => true,
     firstKey: (key) => key,
     panels: {
       reload: (moduleId) => steps.push(`reload panels ${moduleId}`),

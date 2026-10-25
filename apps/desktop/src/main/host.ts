@@ -432,6 +432,7 @@ export class Host {
       grants: () => this.grants,
       catalog: this.catalog,
       online: () => this.library.onlineSearch,
+      autoUpdateModules: () => this.library.autoUpdateModules,
       firstKey: (key) => this.safetyLists.firstKey(key),
       panels: { reload: (moduleId) => this.reloadModuleViews(moduleId), close: (moduleId) => this.removeModulePanels(moduleId) },
       // Test runs keep the window hidden and have no recycle bin to rely on.
@@ -1730,6 +1731,11 @@ export class Host {
       "set-auto-update": saved((action) => {
         this.library.autoUpdate = action.enabled;
         this.updates?.setAutoDownload(action.enabled);
+      }),
+      "set-auto-update-modules": saved((action) => {
+        this.library.autoUpdateModules = action.enabled;
+        // Turned on: updates that were only found so far install now.
+        if (action.enabled) void this.checkCatalogUpdates();
       }),
       "set-steam-icons": saved((action) => {
         this.library.steamIcons = action.enabled;
@@ -3289,6 +3295,7 @@ export class Host {
         grayscaleText: library.grayscaleText,
         onlineSearch: library.onlineSearch,
         autoUpdate: library.autoUpdate,
+        autoUpdateModules: library.autoUpdateModules,
         steamIcons: library.steamIcons,
         moduleIcons: library.moduleIcons,
         steamProfile: library.steamProfile,

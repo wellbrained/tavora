@@ -10,7 +10,7 @@
 import { Gauge, Globe, Headphones, Radio } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { act, aiUsage, dialog, discord, openPanels, openSettings, state, type GrantRequest } from "../host";
+import { act, aiUsage, dialog, discord, nextUpdateAsk, openPanels, openSettings, state, stopUpdateAsks, type GrantRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 import ModuleIcon from "./ModuleIcon.vue";
@@ -32,6 +32,7 @@ const discordUser = computed(() => discord.value?.user ?? null);
 
 /** Cancel goes back to the module library when the request came from there and it stays open. */
 function close() {
+  if (props.request.backToUpdates) return stopUpdateAsks();
   if (props.request.onRequest) void act({ type: "connector-answer", id: props.request.onRequest.id, allow: false }, { quiet: true });
   dialog.value = props.request.backToLibrary ? { kind: "add-module" } : null;
 }
@@ -78,7 +79,8 @@ async function allow() {
       error.value = result.error;
       return;
     }
-    dialog.value = null;
+    if (props.request.backToUpdates) nextUpdateAsk();
+    else dialog.value = null;
     return;
   }
   // Exactly what this dialog shows: the main process grants only what the module still asks for.

@@ -79,6 +79,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["diagnostics", "about"],
   ["installed-modules", "modules"],
   ["own-modules", "modules"],
+  ["auto-update-modules", "modules"],
   ["module-grants", "modules"],
   ["module-files", "modules"],
   ["discord-connection", "integrations"],
