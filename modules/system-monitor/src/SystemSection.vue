@@ -5,7 +5,7 @@
 import { cn } from "@tavora/official-ui";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { computed } from "vue";
-import { driveTone, percent, size, speedNumber, usedPercent, type DriveTone } from "./format";
+import { driveTone, percent, size, speed, usedPercent, type DriveTone } from "./format";
 import { language, t } from "./i18n";
 import MetricCard from "./MetricCard.vue";
 import type { Monitor } from "./monitor";
@@ -76,16 +76,23 @@ const drives = computed(() => {
     const live = snapshot.value?.drives?.find((drive) => drive.id === id);
     const total = live?.totalBytes ?? known?.totalBytes ?? null;
     const free = live?.freeBytes ?? null;
-    const speeds = live ? { read: speedNumber(live.readBytesPerSec, lang.value), write: speedNumber(live.writeBytesPerSec, lang.value) } : null;
+    const missing = live ? !live.connected : known === undefined;
     return {
       id,
       label: known?.label ?? "",
-      missing: live ? !live.connected : known === undefined,
+      missing,
       loaded: live !== undefined,
+      total,
+      free,
       tone: driveTone(free, total),
       used: usedPercent(free, total),
-      free: free === null ? "" : size(free, lang.value),
-      line: speeds ? (total ? t("drive.line", { total: size(total, lang.value), ...speeds }) : t("drive.lineNoSize", speeds)) : "",
+      text:
+        free === null
+          ? ""
+          : total
+            ? t("drive.free", { free: size(free, lang.value), total: size(total, lang.value) })
+            : t("drive.freeOnly", { free: size(free, lang.value) }),
+      io: live && live.connected ? `${t("drive.read", { speed: speed(live.readBytesPerSec, lang.value) })} · ${t("drive.write", { speed: speed(live.writeBytesPerSec, lang.value) })}` : "",
     };
   });
 });
@@ -110,6 +117,7 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
       :title="t('cpu.title')"
       :name="info?.cpu.model ?? ''"
       :usage="cpu.usage"
+      :temperature-hint="t('temp.hint')"
       :peak="cpu.peak"
       :detail="cpu.detail"
       :hint="cpu.hint"
@@ -123,6 +131,7 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
       :title="t('gpu.title')"
       :name="gpuInfo.name"
       :usage="gpu.usage"
+      :temperature-hint="t('temp.hint')"
       :peak="gpu.peak"
       :detail="gpu.detail"
       hint=""
@@ -139,21 +148,20 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
       <p class="text-muted-foreground text-xs tabular-nums" data-testid="ram-text">{{ ram.line }}</p>
     </section>
 
-    <p v-if="blocks.drives && drives.length === 0" class="text-muted-foreground text-xs" data-testid="no-drives">{{ t("drive.none") }}</p>
-    <template v-if="blocks.drives">
-      <section v-for="drive in drives" :key="drive.id" :class="CARD" :data-testid="`drive-${drive.id}`">
-        <header class="flex items-baseline justify-between gap-2">
-          <span class="min-w-0 truncate"><span :class="LABEL">{{ drive.id }}</span> <span class="text-xs">{{ drive.label }}</span></span>
+    <section v-if="blocks.drives" class="bg-card text-card-foreground col-span-full flex flex-col gap-1.5 rounded-lg border px-3 py-2" data-testid="block-drives">
+      <p v-if="drives.length === 0" class="text-muted-foreground text-xs">{{ t("drive.none") }}</p>
+      <div v-for="drive in drives" :key="drive.id" class="flex flex-col gap-1" :data-testid="`drive-${drive.id}`">
+        <div class="flex items-baseline gap-2">
+          <span class="text-muted-foreground w-14 flex-none text-xs font-medium">{{ drive.id }}</span>
+          <span class="min-w-0 flex-1 truncate">{{ drive.label }}</span>
           <span v-if="drive.missing" class="text-muted-foreground flex-none text-xs" data-testid="drive-missing">{{ t("drive.missing") }}</span>
-          <span v-else-if="drive.free" :class="cn('flex-none text-2xl leading-none font-semibold tabular-nums', TEXT_TONE[drive.tone])" data-testid="drive-free">
-            {{ drive.free }}<span class="text-muted-foreground ml-1 text-xs font-normal">{{ t("drive.freeWord") }}</span>
-          </span>
-        </header>
+          <span v-else :class="cn('flex-none text-xs tabular-nums', TEXT_TONE[drive.tone])" data-testid="drive-free">{{ drive.text }}</span>
+        </div>
         <template v-if="!drive.missing && drive.loaded">
-          <Progress :model-value="drive.used" :class="cn(BAR, BAR_TONE[drive.tone])" :aria-label="`${drive.id} ${drive.free}`" />
-          <p class="text-muted-foreground text-xs tabular-nums" data-testid="drive-io">{{ drive.line }}</p>
+          <Progress :model-value="drive.used" :class="cn('ml-16 w-auto', BAR, BAR_TONE[drive.tone])" :aria-label="`${drive.id} ${drive.text}`" />
+          <p class="text-muted-foreground pl-16 text-xs tabular-nums" data-testid="drive-io">{{ drive.io }}</p>
         </template>
-      </section>
-    </template>
+      </div>
+    </section>
   </div>
 </template>
