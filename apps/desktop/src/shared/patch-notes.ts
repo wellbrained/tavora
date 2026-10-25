@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.8",
+    date: "2026-10-25",
+    title: "Smoother game switching",
+    notes: [
+      "When you switch games, all panels now show up together, with no empty panels for a moment.",
+      "The loading fire only shows when a game takes a while to open.",
+      "After you close a dialog, like Add module, big panels like a skill tree don't go blank for a moment anymore.",
+    ],
+  },
+  {
     version: "0.21.7",
     date: "2026-10-25",
     title: "Tavora in your game, and a tidier Tavora",
