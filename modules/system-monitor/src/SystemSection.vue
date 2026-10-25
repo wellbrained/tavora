@@ -96,7 +96,7 @@ const BAR_TONE: Record<DriveTone, string> = {
 };
 const TEXT_TONE: Record<DriveTone, string> = { ok: "", warning: "text-warning", danger: "text-destructive" };
 // No animation on values: a bar jumps to its new place.
-const BAR = "[&>[data-slot=progress-indicator]]:transition-none";
+const BAR = "[&>[data-slot=progress-indicator]]:transition-none [&>[data-slot=progress-indicator]]:bg-muted-foreground";
 
 </script>
 
