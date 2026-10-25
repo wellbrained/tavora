@@ -5,6 +5,7 @@
 import path from "node:path";
 import { LIMITS } from "@tavora/sdk/protocol";
 import { isHotkey } from "../shared/hotkey-keys";
+import { ALL_GAMES } from "./game-overlays";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
 
@@ -67,9 +68,14 @@ export class HotkeyStore {
     return this.records.find((record) => sameBinding(record, binding));
   }
 
-  /** The other hotkey of a game that uses this key, if any. */
-  conflict(binding: Omit<HotkeyRecord, "label" | "accelerator">, accelerator: string): HotkeyRecord | undefined {
-    return this.records.find((record) => record.gameId === binding.gameId && record.accelerator === accelerator && !sameBinding(record, binding));
+  /**
+   * The other hotkey of a game that uses this key, if any. A key that works over every game (the layer key, or the key
+   * of a general overlay; `general` tells) conflicts with any game's keys.
+   */
+  conflict(binding: Omit<HotkeyRecord, "label" | "accelerator">, accelerator: string, general: (key: Omit<HotkeyRecord, "label" | "accelerator">) => boolean = () => false): HotkeyRecord | undefined {
+    const all = (key: Omit<HotkeyRecord, "label" | "accelerator">) => key.gameId === ALL_GAMES || general(key);
+    const bindingAll = all(binding);
+    return this.records.find((record) => (record.gameId === binding.gameId || bindingAll || all(record)) && record.accelerator === accelerator && !sameBinding(record, binding));
   }
 
   /** Sets (or changes) the key of a binding; false when the module already has the most hotkeys in this game. */

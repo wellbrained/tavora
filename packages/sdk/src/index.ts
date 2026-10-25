@@ -402,6 +402,17 @@ export interface TavoraSDK {
      * another. Tavora 0.20.51 and newer.
      */
     showOverGame(key: string): Promise<GameOverlayResult>;
+    /** Takes this module's game overlay for `key` away in the panel's workspace scope. No click or permission needed; nothing happens when there is none. Tavora 0.21.2 and newer. */
+    hideOverGame(key: string): Promise<void>;
+    /** The keys of this module's game overlays in the panel's workspace scope. Tavora 0.21.2 and newer. */
+    overGame(): Promise<string[]>;
+    /**
+     * Opens a small Tavora window with the overlay for `key` at its real size, on a dark, light or checkered background,
+     * so the player can see what it looks like. Call it from the click or key press that asked for it; it needs no
+     * permission, but the module needs an `overlay` in its manifest. It works whether or not Game overlays and Stream
+     * overlays are on. Tavora 0.21.2 and newer.
+     */
+    preview(key: string): Promise<void>;
   };
   /**
    * Hotkeys for the manifest's `actions`. The player picks the keys in a Tavora dialog, for this game; the module
@@ -815,6 +826,13 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       },
       copyLink: (key) => call("overlay.copyLink", { key }),
       showOverGame: (key) => call("overlay.showOverGame", { key }),
+      hideOverGame: async (key) => {
+        await call("overlay.hideOverGame", { key });
+      },
+      overGame: () => call("overlay.overGame", undefined),
+      preview: async (key) => {
+        await call("overlay.preview", { key });
+      },
       resetLink: async (key) => {
         await call("overlay.resetLink", { key });
       },

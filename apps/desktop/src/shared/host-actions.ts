@@ -240,8 +240,12 @@ export function hostActionTable(c: HostChecks) {
     },
     /** Removes one game overlay, and its key. */
     "remove-game-overlay": { owner: c.ownerId, moduleId: c.moduleId, gameId: c.gameId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
-    /** Opens the hotkey dialog for a game's arrange key (without owner, moduleId and key) or for one overlay's toggle key. */
-    "set-overlay-key": { gameId: c.gameId, owner: optional(c.ownerId), moduleId: optional(c.moduleId), key: optional(matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/)) },
+    /** Opens the hotkey dialog for the layer key (without gameId, owner, moduleId and key) or for one overlay's toggle key. */
+    "set-overlay-key": { gameId: optional(c.gameId), owner: optional(c.ownerId), moduleId: optional(c.moduleId), key: optional(matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/)) },
+    /** "Hide all for now" in Settings > Overlays, and "Show again": until Tavora starts again. */
+    "set-game-overlays-hidden": { hidden: bool },
+    /** Opens the preview window of an overlay (Settings > Overlays, Settings > Streaming). */
+    "preview-overlay": { owner: c.ownerId, moduleId: c.moduleId, gameId: c.gameId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     /** The answer in the consent dialog for a connector a module asks for on request (HostViewState.pendingConnector). */
     "connector-answer": { id: check<number>((value) => Number.isSafeInteger(value)), allow: bool },
     /** Removes one hotkey from Settings > Streaming. */
@@ -349,10 +353,10 @@ export function hostActionTable(c: HostChecks) {
     "remove-module-from-game": { moduleId: c.moduleId },
     "reload-panel": { instanceId: c.uuid },
     "stop-panel": { instanceId: c.uuid },
-    /** Panel menu > Show over game: the panel moves over its game (Settings > Overlays > Game overlays). */
-    "show-panel-over-game": { instanceId: c.uuid },
-    /** A panel over its game returns to its workspace slot. */
-    "bring-panel-back": { instanceId: c.uuid },
+    /** Panel menu > Show in game: the panel appears over the game while the in-game layer is open (Settings > Overlays). */
+    "show-panel-in-game": { instanceId: c.uuid },
+    /** Panel menu or Settings > Overlays > Stop showing in game. */
+    "stop-panel-in-game": { instanceId: c.uuid },
     /** Null when nothing is docked any more. */
     "save-layout": { layout: nullable(c.layout) },
     /** Rearranges the workspace into empty slots of a layout template; open panels fill the first ones. */

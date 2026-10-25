@@ -26,6 +26,11 @@ export interface ModulePanelType {
   viewport?: ModuleViewport;
   /** Panels opened before the module had panel types become this type. At most one type says so; without one, the first type. */
   continues?: boolean;
+  /**
+   * The player may show this panel in their game: its menu offers Show in game, and the panel appears over the game only
+   * while the player holds Tavora's in-game layer open. Needs a `minTavora` newer than LAST_TAVORA_WITHOUT_IN_GAME_PANELS.
+   */
+  inGame?: boolean;
 }
 
 /** Something a module can do on a key press (manifest `actions`). The player binds the key in Tavora; the module only hears which action fired. */
@@ -167,7 +172,7 @@ export function isHomepage(value: unknown): value is string {
 export const MAX_PANEL_TYPES = 16;
 export const MAX_PANEL_NAME = 24;
 const PANEL_TYPE_ID = /^[a-z][a-z0-9-]{0,31}$/;
-const PANEL_FIELDS = ["id", "name", "entry", "icon", "viewport", "continues"];
+const PANEL_FIELDS = ["id", "name", "entry", "icon", "viewport", "continues", "inGame"];
 
 /** Most hotkey actions one module may declare, and the longest name Tavora shows for one. */
 export const MAX_ACTIONS = 16;
@@ -189,6 +194,8 @@ export interface ResolvedPanelType {
   entry: string;
   icon: string | undefined;
   viewport: ModuleViewport;
+  /** The player may show this panel in their game (the type's `inGame`). */
+  inGame?: true;
 }
 
 /** The module's panel types, resolved; empty for a module with one panel and no types. */
@@ -199,6 +206,7 @@ export function panelTypes(manifest: ModuleManifest): ResolvedPanelType[] {
     entry: type.entry ?? manifest.entry,
     icon: type.icon ?? manifest.icon,
     viewport: type.viewport ?? manifest.viewport,
+    ...(type.inGame === true ? { inGame: true as const } : {}),
   }));
 }
 
@@ -332,6 +340,8 @@ export function isNetworkHost(value: unknown): value is string {
 export const MAX_TRANSLATIONS = 32;
 /** The last Tavora that refuses an `overlay` without the `stream-overlay` connector. */
 export const LAST_TAVORA_WITHOUT_GAME_OVERLAYS = "0.20.50";
+/** The last Tavora that refuses a panel type's `inGame`; a manifest with it needs a newer `minTavora`. */
+export const LAST_TAVORA_WITHOUT_IN_GAME_PANELS = "0.21.1";
 /** The last Tavora that refuses `translations`; a manifest with them needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_TRANSLATIONS = "0.20.12";
 const LANGUAGE_CODE = /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/;
@@ -433,7 +443,7 @@ function checkViewport(viewport: unknown, at: string, errors: string[]): void {
   if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
 }
 
-function checkPanels(panels: unknown, errors: string[]): void {
+function checkPanels(panels: unknown, errors: string[], inGameAllowed = true): void {
   if (!Array.isArray(panels) || panels.length === 0 || panels.length > MAX_PANEL_TYPES) {
     errors.push(`panels must be an array of 1 to ${MAX_PANEL_TYPES} panel types`);
     return;
@@ -461,6 +471,8 @@ function checkPanels(panels: unknown, errors: string[]): void {
     if (type.viewport !== undefined) checkViewport(type.viewport, `${at}.viewport`, errors);
     if (type.continues !== undefined && typeof type.continues !== "boolean") errors.push(`${at}.continues must be true or false`);
     if (type.continues === true) continuing++;
+    if (type.inGame !== undefined && typeof type.inGame !== "boolean") errors.push(`${at}.inGame must be true or false`);
+    else if (type.inGame === true && !inGameAllowed) errors.push(`${at}.inGame needs a minTavora newer than ${LAST_TAVORA_WITHOUT_IN_GAME_PANELS}, because older Tavoras refuse it`);
     const unknown = Object.keys(type).filter((key) => !PANEL_FIELDS.includes(key));
     if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
   });
@@ -575,7 +587,10 @@ export function validateManifest(input: unknown): ManifestResult {
   }
 
   checkViewport(input.viewport, "viewport", errors);
-  if (input.panels !== undefined) checkPanels(input.panels, errors);
+  if (input.panels !== undefined) {
+    const minTavora = { minTavora: typeof input.minTavora === "string" ? input.minTavora : "" };
+    checkPanels(input.panels, errors, officialId(input) || needsNewerTavora(minTavora, LAST_TAVORA_WITHOUT_IN_GAME_PANELS));
+  }
   if (input.actions !== undefined) checkActions(input.actions, errors);
   if (input.translations !== undefined) checkTranslations(input, errors);
   if (input.overlay !== undefined) {

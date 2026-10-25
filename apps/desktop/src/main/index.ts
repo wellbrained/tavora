@@ -120,6 +120,24 @@ if (!app.requestSingleInstanceLock()) {
     process.on("SIGTERM", () => app.quit());
   }
 
+  // Windows Tavora drew over a game must never outlive Tavora: they go on every way out, before anything else waits.
+  const closeOverlays = () => {
+    try {
+      host?.closeOverlayWindows();
+    } catch (error) {
+      console.error("[tavora] closing overlay windows failed", error);
+    }
+  };
+  app.on("before-quit", closeOverlays);
+  app.on("will-quit", closeOverlays);
+  process.on("exit", closeOverlays);
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => {
+      closeOverlays();
+      app.quit();
+    });
+  }
+
   app.on("second-instance", () => {
     if (host?.window.isMinimized()) host.window.restore();
     host?.window.focus();

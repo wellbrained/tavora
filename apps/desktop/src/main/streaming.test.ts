@@ -220,7 +220,7 @@ describe("publishing without the connector", () => {
   it("keeps state for a key that has a game overlay, or a link already", async () => {
     const { streaming, overlay, world } = await setup();
     world.granted = false;
-    streaming.useOverlayKeys({ frontGame: () => null, wants: () => false, has: (subject) => subject.key === "item-2", pressed: () => {} });
+    streaming.useOverlayKeys({ frontGame: () => null, wants: () => false, has: (subject) => subject.key === "item-2", pressed: () => {}, general: () => false });
     overlay.publish("item-2", { value: 2 });
     expect(stored(streaming, "item-2")?.state).toEqual({ value: 2 });
     streaming.overlayStore.link({ owner: "official", moduleId: MODULE.manifest.id, gameId: "poe2", key: "item-3" });
@@ -231,7 +231,7 @@ describe("publishing without the connector", () => {
   it("removes what was published for a game overlay, with or without the connector", async () => {
     const { streaming, overlay, world } = await setup();
     world.granted = false;
-    streaming.useOverlayKeys({ frontGame: () => null, wants: () => false, has: () => true, pressed: () => {} });
+    streaming.useOverlayKeys({ frontGame: () => null, wants: () => false, has: () => true, pressed: () => {}, general: () => false });
     overlay.publish("item-1", { value: 4 });
     expect(stored(streaming, "item-1")?.state).toEqual({ value: 4 });
     overlay.remove("item-1");
@@ -247,14 +247,15 @@ describe("publishing without the connector", () => {
 
 describe("keys of game overlays", () => {
   const toggle = { owner: "official", moduleId: MODULE.manifest.id, gameId: "elden", action: "$overlay", target: "item-1" };
-  const arrange = { owner: "tavora", moduleId: "tavora", gameId: "elden", action: "$arrange", target: "arrange" };
+  const layer = { owner: "tavora", moduleId: "tavora", gameId: "$all", action: "$layer", target: "layer" };
   const words = { module: "Elden Ring", action: "Show or hide" };
 
   async function withKeys() {
     const made = await setup();
     const heard: string[] = [];
     let front: string | null = null;
-    made.streaming.useOverlayKeys({ frontGame: () => front, wants: () => true, has: () => false, pressed: (record) => void heard.push(`${record.action}:${record.target}`) });
+    // As the service decides: the layer key works over any game in front, a toggle key over its own.
+    made.streaming.useOverlayKeys({ frontGame: () => front, wants: (record) => record.gameId === "$all" || record.gameId === front, has: () => false, pressed: (record) => void heard.push(`${record.action}:${record.target}`), general: (binding) => binding.gameId === "$all" });
     return { ...made, heard, front: (id: string | null) => (front = id) };
   }
 
@@ -269,7 +270,7 @@ describe("keys of game overlays", () => {
 
   it("stays open when the game shown changes, unlike a module's own dialog", async () => {
     const { streaming, world } = await withKeys();
-    void streaming.askOverlayKey(arrange, "Overlays", words);
+    void streaming.askOverlayKey(layer, "Tavora over game", words);
     world.gameId = "elsewhere";
     world.panels.length = 0;
     streaming.sync();
@@ -295,14 +296,49 @@ describe("keys of game overlays", () => {
   it("shares the game's keys with module hotkeys, so one key can't do both", async () => {
     const { streaming, world } = await withKeys();
     world.gameId = "elden";
-    const asked = streaming.askOverlayKey(arrange, "Overlays", { module: "Elden Ring", action: "Arrange overlays" });
+    const asked = streaming.askOverlayKey(layer, "Tavora over game", { module: "Tavora", action: "Open or close" });
     streaming.answer(streaming.request()!.id, "set", "F9");
     await asked;
     const other = streaming.askOverlayKey(toggle, "Clock & Counter", words);
     streaming.answer(streaming.request()!.id, "set", "F9");
-    expect(streaming.request()!.error).toContain("Arrange overlays");
+    expect(streaming.request()!.error).toContain("Open or close");
     streaming.answer(streaming.request()!.id, "cancel");
     expect(await other).toBe("cancelled");
+  });
+
+  it("lets a general overlay's key collide with the keys of every game", async () => {
+    const made = await setup();
+    made.streaming.useOverlayKeys({ frontGame: () => null, wants: () => false, has: () => false, pressed: () => {}, general: (binding) => binding.gameId === "personal" || binding.gameId === "$all" });
+    const wide = { ...toggle, gameId: "personal" };
+    const asked = made.streaming.askOverlayKey(wide, "Clock", words);
+    made.streaming.answer(made.streaming.request()!.id, "set", "F6");
+    await asked;
+    const other = made.streaming.askOverlayKey(toggle, "Clock & Counter", words);
+    made.streaming.answer(made.streaming.request()!.id, "set", "F6");
+    expect(made.streaming.request()!.error).toBeTruthy();
+    made.streaming.answer(made.streaming.request()!.id, "cancel");
+    expect(await other).toBe("cancelled");
+  });
+
+  it("moves the key set last to the layer key, and drops the rest", async () => {
+    const { streaming } = await withKeys();
+    const arrange = (gameId: string) => ({ owner: "tavora", moduleId: "tavora", gameId, action: "$arrange", target: "arrange" });
+    for (const [gameId, accelerator] of [["elden", "F3"], ["other", "F4"]] as const) {
+      const asked = streaming.askOverlayKey(arrange(gameId), "Arrange", words);
+      streaming.answer(streaming.request()!.id, "set", accelerator);
+      await asked;
+    }
+    streaming.moveKey((record) => record.action === "$arrange", layer);
+    expect(streaming.keyOf(layer)).toEqual({ accelerator: "F4", taken: false });
+    expect(streaming.keyOf(arrange("elden"))).toBeNull();
+    expect(streaming.keyOf(arrange("other"))).toBeNull();
+    // With a layer key already, the old ones just go.
+    const asked = streaming.askOverlayKey(arrange("elden"), "Arrange", words);
+    streaming.answer(streaming.request()!.id, "set", "F5");
+    await asked;
+    streaming.moveKey((record) => record.action === "$arrange", layer);
+    expect(streaming.keyOf(layer)).toEqual({ accelerator: "F4", taken: false });
+    expect(streaming.keyOf(arrange("elden"))).toBeNull();
   });
 
   it("leaves them out of the hotkeys Settings > Streaming lists, and takes them away on request", async () => {
@@ -315,13 +351,32 @@ describe("keys of game overlays", () => {
     expect(streaming.keyOf(toggle)).toBeNull();
   });
 
-  it("go with their game", async () => {
+  it("go with their game, but the layer key (for every game) stays", async () => {
     const { streaming } = await withKeys();
-    const asked = streaming.askOverlayKey(arrange, "Overlays", words);
-    streaming.answer(streaming.request()!.id, "set", "F8");
-    await asked;
+    for (const binding of [toggle, layer]) {
+      const asked = streaming.askOverlayKey(binding, "Overlays", words);
+      streaming.answer(streaming.request()!.id, "set", binding === layer ? "F7" : "F8");
+      await asked;
+    }
     streaming.forgetGame("elden");
-    expect(streaming.keyOf(arrange)).toBeNull();
+    expect(streaming.keyOf(toggle)).toBeNull();
+    expect(streaming.keyOf(layer)).toEqual({ accelerator: "F7", taken: false });
+  });
+
+  it("registers the layer key for whichever game is in front", async () => {
+    const { streaming, registered, heard, front } = await withKeys();
+    const asked = streaming.askOverlayKey(layer, "Tavora over game", words);
+    streaming.answer(streaming.request()!.id, "set", "F7");
+    await asked;
+    streaming.sync();
+    expect(registered.has("F7")).toBe(false);
+    front("elden");
+    streaming.sync();
+    registered.get("F7")!();
+    front("other");
+    streaming.sync();
+    expect(registered.has("F7")).toBe(true);
+    expect(heard).toEqual(["$layer:layer"]);
   });
 });
 

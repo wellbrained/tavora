@@ -44,6 +44,10 @@ describe("HotkeyStore", () => {
     expect(store.conflict(record({ target: "item-2" }), "Ctrl+Alt+1")).toEqual(record());
     expect(store.conflict(record(), "Ctrl+Alt+1")).toBeUndefined();
     expect(store.conflict(record({ gameId: "elden-ring" }), "Ctrl+Alt+1")).toBeUndefined();
+    // A key that works over every game (a general overlay's) collides with any game's key, in either direction.
+    const general = (key: { target: string }) => key.target === "wide";
+    expect(store.conflict(record({ gameId: "elden-ring", target: "wide" }), "Ctrl+Alt+1", general)).toEqual(record());
+    expect(store.conflict(record({ gameId: "elden-ring", target: "narrow" }), "Ctrl+Alt+1", general)).toBeUndefined();
   });
 
   it("limits the hotkeys of one module in one game", async () => {

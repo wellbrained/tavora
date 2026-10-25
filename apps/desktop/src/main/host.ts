@@ -109,7 +109,11 @@ import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, sha
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
 import { windowsForegroundProbe } from "./foreground";
 import { GameOverlayWindow } from "./game-overlay-window";
-import { arrangeBinding, GameOverlays, toggleBinding, type OverlayWindowRequest } from "./game-overlay-service";
+import { GameVeilWindow } from "./game-veil-window";
+import { GameOverlays, layerBinding, toggleBinding, type OverlayWindowRequest } from "./game-overlay-service";
+import { scopeForKind } from "./game-overlays";
+import { OverlayPreviews } from "./overlay-previews";
+import { OverlayPreviewWindow } from "./overlay-preview-window";
 import { GameWatcher } from "./game-watch";
 import { Streaming } from "./streaming";
 import { findInstalledGames } from "./launcher-games";
@@ -367,6 +371,8 @@ export class Host {
   private streaming!: Streaming;
   /** Module overlay pages shown over the game in front (game-overlay-service.ts); made right after streaming. */
   private gameOverlays!: GameOverlays;
+  /** The preview windows of overlays (overlay-previews.ts). */
+  private previews!: OverlayPreviews;
   /** Modules in the player's folder whose zip Tavora blocked: not loaded, data kept. */
   private blockedModules = new Map<string, InstalledModule>();
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
@@ -475,7 +481,10 @@ export class Host {
       autoUpdateModules: () => this.library.autoUpdateModules,
       firstKey: (key) => this.safetyLists.firstKey(key),
       panels: { reload: (moduleId) => this.reloadModuleViews(moduleId), close: (moduleId) => this.removeModulePanels(moduleId) },
-      removed: (owner, moduleId) => this.gameOverlays.forgetModule(moduleId, owner),
+      removed: (owner, moduleId) => {
+        this.gameOverlays.forgetModule(moduleId, owner);
+        this.previews.closeModule(moduleId, owner);
+      },
       // Test runs keep the window hidden and have no recycle bin to rely on.
       trash: (dir) => (options.hidden ? rm(dir, { recursive: true, force: true }) : shell.trashItem(dir)),
       reload: () => this.reloadModules(),
@@ -619,6 +628,7 @@ export class Host {
     host.grants = await GrantStore.load(userData);
     host.streaming = await Host.streamingService(host);
     host.gameOverlays = await Host.gameOverlayService(host);
+    host.previews = Host.previewService(host);
     host.safetyLists = safetyLists;
     host.blockedModules = blockedModules;
     await host.moveAiUsagePanelData();
@@ -1598,6 +1608,7 @@ export class Host {
     this.window.on("closed", () => {
       this.windowClosed = true;
       // The overlay windows (and the keys for arranging) go with the main window; they would keep Tavora running.
+      this.closeOverlayWindows();
       void this.gameOverlays.shutdown().catch((error: unknown) => console.error("[tavora]", error));
       for (const view of this.views.values()) view.dispose();
       this.views.clear();
@@ -1855,9 +1866,21 @@ export class Host {
       "set-stream-overlays": (action) => this.streaming.setOverlays(action.enabled),
       "set-game-overlays": saved((action) => {
         this.library.gameOverlays = action.enabled;
+        // Off closes every overlay, the veil and the panels in the layer at once.
         this.gameOverlays.tick();
         this.syncGameWatcher();
       }),
+      "set-game-overlays-hidden": (action) => {
+        this.gameOverlays.setHidden(action.hidden);
+        this.syncGameWatcher();
+      },
+      "preview-overlay": (action) => {
+        const { owner, moduleId, gameId, key } = action;
+        // Only an overlay the player has: a game overlay, or an OBS link.
+        const subject = { owner, moduleId, gameId, key };
+        if (!this.gameOverlays.has(subject) && !this.streaming.overlayStore.peek(subject)) return;
+        this.previews.show(subject);
+      },
       "set-game-overlay": (action) => {
         const { owner, moduleId, gameId, key, mode, opacity, hideFromCapture } = action;
         this.gameOverlays.update({ owner, moduleId, gameId, key }, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
@@ -1865,9 +1888,9 @@ export class Host {
       "remove-game-overlay": (action) => this.gameOverlays.remove(action),
       "set-overlay-key": (action) => {
         const { gameId, owner, moduleId, key } = action;
-        const overlay = owner !== undefined && moduleId !== undefined && key !== undefined ? { owner, moduleId, gameId, key } : null;
+        const overlay = owner !== undefined && moduleId !== undefined && gameId !== undefined && key !== undefined ? { owner, moduleId, gameId, key } : null;
         if (overlay && !this.gameOverlays.has(overlay)) return;
-        const binding = overlay ? toggleBinding(overlay) : arrangeBinding(gameId);
+        const binding = overlay ? toggleBinding(overlay) : layerBinding();
         const names = this.gameOverlays.dialogNames(binding);
         // The dialog is answered by hotkey-answer; this action only opens it.
         void this.streaming.askOverlayKey(binding, names.label, { module: names.module, action: names.action });
@@ -1979,8 +2002,8 @@ export class Host {
       "remove-module-from-game": (action) => this.removeModuleFromGame(action.moduleId),
       "reload-panel": (action) => this.views.get(action.instanceId)?.reload(),
       "stop-panel": (action) => this.views.get(action.instanceId)?.stop(),
-      "show-panel-over-game": (action) => this.showPanelOverGame(action.instanceId),
-      "bring-panel-back": (action) => this.gameOverlays.bringBack(action.instanceId),
+      "show-panel-in-game": (action) => this.showPanelInGame(action.instanceId),
+      "stop-panel-in-game": (action) => this.gameOverlays.stopPanel(action.instanceId),
       "save-layout": (action) => this.workspaces.saveLayout(this.currentGameId(), action.layout),
       "apply-layout-template": (action) => this.workspaces.applyTemplate(this.currentGameId(), layoutTemplate(action.templateId)),
       "apply-layout-grid": (action) => this.workspaces.applyTemplate(this.currentGameId(), gridTemplate(action.columns, action.rows)),
@@ -2979,7 +3002,7 @@ export class Host {
 
   /** openedAt is when the player asked for the panel; its time to a loaded page is measured from there. */
   private createView(record: InstanceRecord, game: TavoraGame, openedAt?: number): void {
-    // Its panel is over the game and kept running there while another game was shown: it comes back with Bring back.
+    // Its panel is in the in-game layer and kept running there while another game was shown: it comes back when the layer closes.
     if (this.views.has(record.instanceId)) return;
     if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, game);
     const panelType = this.panelTypeOf(record);
@@ -3031,12 +3054,16 @@ export class Host {
       aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
       discord: this.discord,
       systemInfo: this.systemInfo,
-      overlay: { ...this.streaming.overlayFor(module, game.id), showOverGame: (key) => this.gameOverlays.show(module, game.id, key) },
+      overlay: {
+        ...this.streaming.overlayFor(module, game.id),
+        showOverGame: (key) => this.gameOverlays.show(module, game.id, key),
+        hideOverGame: (key) => this.gameOverlays.hide(module, game.id, key),
+        overGame: () => this.gameOverlays.keysOf(module, game.id),
+        preview: async (key) => this.previews.show({ owner: module.owner, moduleId: module.manifest.id, gameId: game.id, key }),
+      },
       hotkeys: this.streaming.hotkeysFor(module, game.id),
       ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
       onStatus: (status) => {
-        // A panel over the game that crashed goes back to its slot, where the crash screen is.
-        if (status === "crashed" && this.floating(record.instanceId)) this.gameOverlays.bringBack(record.instanceId);
         if (!measured && status === "ready") {
           measured = true;
           timings.record("panel-open", performance.now() - openedAt!);
@@ -3266,7 +3293,8 @@ export class Host {
     }
   }
 
-  private destroyView(instanceId: string): void {
+  /** `forget`: the panel is closing for good, so it is no longer shown in the game; not when only its workspace is left. */
+  private destroyView(instanceId: string, forget = true): void {
     this.tooltips.close(instanceId);
     this.closeModuleMenu(instanceId);
     const view = this.views.get(instanceId);
@@ -3274,31 +3302,35 @@ export class Host {
     this.views.delete(instanceId);
     this.viewsByContents.delete(view.webContentsId);
     this.browsersByContents.delete(view.webContentsId);
-    // A panel over its game is let go of by its window first (the window never closes the page, this does).
-    if (view instanceof ModuleView && this.gameOverlays?.hasPanel(instanceId)) this.gameOverlays.bringBack(instanceId);
+    // A panel in the layer is let go of by its window first (the window never closes the page, this does).
+    if (forget && view instanceof ModuleView && this.gameOverlays?.hasPanel(instanceId)) this.gameOverlays.stopPanel(instanceId);
     this.window.contentView.removeChildView(view.view);
     view.dispose();
   }
 
-  /** Whether a panel is over its game now: its view is in an overlay window and the workspace slot only says so. */
+  /** Whether a panel is over the game now (the layer is open): its view is in an overlay window and the workspace slot only says so. */
   private floating(instanceId: string): boolean {
-    return this.gameOverlays?.hasPanel(instanceId) ?? false;
+    return this.gameOverlays?.panelOpen(instanceId) ?? false;
   }
 
   private closeAllViews(): void {
     this.endOpening();
-    // A panel over its game goes on running there, also while another game or the library is shown.
-    for (const instanceId of [...this.views.keys()]) if (!this.floating(instanceId)) this.destroyView(instanceId);
+    // A panel in the layer goes on running there, also while another game or the library is shown.
+    for (const instanceId of [...this.views.keys()]) if (!this.floating(instanceId)) this.destroyView(instanceId, false);
     this.panelBounds.clear();
   }
 
-  /** Panel menu > Show over game. The click is the player's consent; the panel must be one of the game shown now. */
-  private showPanelOverGame(instanceId: string): void {
+  /**
+   * Panel menu > Show in game. The click is the player's consent; the panel must be one of the game shown now, and of a
+   * type the module marked `inGame`. It is over the game only while the player holds the in-game layer open.
+   */
+  private showPanelInGame(instanceId: string): void {
     const game = this.game;
     const record = game && this.records(game.id).find((item) => item.instanceId === instanceId);
     const view = this.views.get(instanceId);
     const module = record && this.modules.get(record.moduleId);
     if (!game || !record || !module || !(view instanceof ModuleView)) throw new WorkspaceError("error.panelClosed");
+    if (this.panelTypeOf(record)?.inGame !== true) throw new WorkspaceError("error.panelNotInGame");
     const result = this.gameOverlays.showPanel({ owner: module.owner, moduleId: module.manifest.id, gameId: game.id, instanceId });
     if (result === "full") this.notice = translate(this.language, "overlays.full");
   }
@@ -3306,15 +3338,42 @@ export class Host {
   /** The name a panel's tab shows, for Settings > Overlays; null once the panel is gone. */
   private panelName(instanceId: string): string | null {
     const view = this.views.get(instanceId);
-    if (!(view instanceof ModuleView)) return null;
-    const module = this.modules.get(view.moduleId);
-    return view.typeName ?? (module ? this.shown(module.manifest).name : null);
+    if (view instanceof ModuleView) {
+      const module = this.modules.get(view.moduleId);
+      return view.typeName ?? (module ? this.shown(module.manifest).name : null);
+    }
+    // Its workspace is not the one shown: named from its record.
+    const record = this.recordOf(instanceId);
+    const module = record && this.modules.get(record.moduleId);
+    if (!record || !module) return null;
+    return this.panelTypeOf(record)?.name ?? this.shown(module.manifest).name;
+  }
+
+  /** A panel's record, in whichever workspace it is. */
+  private recordOf(instanceId: string, gameId?: string): InstanceRecord | undefined {
+    for (const id of gameId ? [gameId] : Object.keys(this.library.games)) {
+      const record = this.records(id).find((item) => item.instanceId === instanceId);
+      if (record) return record;
+    }
+    return undefined;
+  }
+
+  /** The view of a panel to put in a window: its own when its workspace is shown, else one made for the layer and closed when it comes back. */
+  private panelViewForLayer(instanceId: string, gameId: string): ModuleView | null {
+    const existing = this.views.get(instanceId);
+    if (existing) return existing instanceof ModuleView ? existing : null;
+    const record = this.recordOf(instanceId, gameId);
+    const entry = this.library.games[gameId];
+    if (!record || !entry || record.moduleId === BROWSER_MODULE_ID) return null;
+    this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+    const made = this.views.get(instanceId);
+    return made instanceof ModuleView ? made : null;
   }
 
   /** The overlay window for a panel that moves over its game: the panel's own view goes into it, and no copy is made. */
   private openPanelWindow(request: OverlayWindowRequest & { instanceId: string; gameId: string }): GameOverlayWindow | null {
-    const view = this.views.get(request.instanceId);
-    if (!(view instanceof ModuleView) || view.view.webContents.isDestroyed() || this.window.isDestroyed()) return null;
+    const view = this.window.isDestroyed() ? null : this.panelViewForLayer(request.instanceId, request.gameId);
+    if (!view || view.view.webContents.isDestroyed()) return null;
     this.tooltips.close(request.instanceId);
     this.closeModuleMenu(request.instanceId);
     this.window.contentView.removeChildView(view.view);
@@ -3333,15 +3392,18 @@ export class Host {
     });
   }
 
-  /** A panel's overlay window let go of it (Bring back, overlays turned off, the game gone): back into its workspace slot. */
+  /** A panel's overlay window let go of it (the layer closed, Stop showing in game, overlays turned off): back into its workspace slot. */
   private panelReturned(instanceId: string, gameId: string): void {
     const view = this.views.get(instanceId);
     // Not here any more: the panel itself is closing (destroyView), or Tavora is.
     if (!(view instanceof ModuleView) || this.windowClosed || this.window.isDestroyed() || view.view.webContents.isDestroyed()) return;
     // The slot it comes back to is not on screen: the panel closes like any panel of a game that is left, and opens again with its game.
-    if (this.gameId !== gameId) return this.destroyView(instanceId);
+    if (this.gameId !== gameId) return this.destroyView(instanceId, false);
     this.window.contentView.addChildView(view.view);
     view.setVisible(false);
+    // Laid out right now: its overlay window still counts as holding it while this runs, so applyBounds would skip it
+    // and it would wait for the next bounds push from the workspace.
+    this.layOut(instanceId, view);
     this.applyBounds();
     this.pushStateSoon();
   }
@@ -3382,14 +3444,19 @@ export class Host {
     for (const [instanceId, view] of this.views) {
       // A panel over the game is placed, shown and paused by its overlay window (game-overlay-window.ts), not by this slot.
       if (this.floating(instanceId)) continue;
-      const rect = this.panelBounds.get(instanceId);
-      if (rect) view.setBounds(rect);
-      // A module page stays hidden until it has its data, so switching games does not show it building itself;
-      // while a game opens, every panel waits for the others.
-      view.setVisible(rect !== undefined && !this.overlay && !this.opening && (!(view instanceof ModuleView) || view.revealed));
-      if (rect && !this.windowHidden) view.resume();
-      else view.suspend();
+      this.layOut(instanceId, view);
     }
+  }
+
+  /** Puts one panel's view where the workspace last said it goes, and shows, pauses or resumes it accordingly. */
+  private layOut(instanceId: string, view: ModuleView | BrowserPanel): void {
+    const rect = this.panelBounds.get(instanceId);
+    if (rect) view.setBounds(rect);
+    // A module page stays hidden until it has its data, so switching games does not show it building itself;
+    // while a game opens, every panel waits for the others.
+    view.setVisible(rect !== undefined && !this.overlay && !this.opening && (!(view instanceof ModuleView) || view.revealed));
+    if (rect && !this.windowHidden) view.resume();
+    else view.suspend();
   }
 
   /**
@@ -3621,7 +3688,21 @@ export class Host {
           // Hidden until its page has its data.
           const overGame = this.floating(record.instanceId);
           const waiting = !overGame && (status === "loading" || status === "ready") && !view?.revealed;
-          return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name, status, waiting, content, ...(overGame ? { overGame } : {}) };
+          const inGame = this.gameOverlays.hasPanel(record.instanceId);
+          const live = this.gameOverlays.liveFor(record.instanceId, this.modules.get(record.moduleId)?.owner ?? "", record.moduleId, game?.id ?? "");
+          return {
+            instanceId: record.instanceId,
+            moduleId: record.moduleId,
+            panelType,
+            name,
+            status,
+            waiting,
+            content,
+            ...(overGame ? { overGame } : {}),
+            ...(type?.inGame === true ? { canInGame: true } : {}),
+            ...(inGame ? { inGame } : {}),
+            ...(live ? { live } : {}),
+          };
         }
         const browser = view.state;
         // A Browser tab is named after its page, like a browser tab.
@@ -3877,6 +3958,25 @@ export class Host {
     else this.gameWatcher.stop();
   }
 
+  /** Overlay previews (overlay-previews.ts): small normal windows, whatever the Game overlays and Stream overlays switches say. */
+  private static previewService(host: Host): OverlayPreviews {
+    return new OverlayPreviews({
+      overlays: host.streaming.overlayStore,
+      module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
+      openWindow: (request) =>
+        new OverlayPreviewWindow(request, {
+          hidden: !!host.options.hidden,
+          labels: { dark: translate(host.language, "preview.dark"), light: translate(host.language, "preview.light"), checker: translate(host.language, "preview.checker") },
+        }),
+    });
+  }
+
+  /** Closes every window Tavora drew over a game and every preview, at once (quitting, a signal, the process exiting). */
+  closeOverlayWindows(): void {
+    this.gameOverlays?.closeNow();
+    this.previews?.closeAll();
+  }
+
   /** Game overlays over the game in front, lent what they need of the host. */
   private static async gameOverlayService(host: Host): Promise<GameOverlays> {
     const options = host.options;
@@ -3888,7 +3988,23 @@ export class Host {
       module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
       gameName: (gameId) => host.library.games[gameId]?.name ?? null,
       gamesOf: (program) => host.gameWatcher.gamesOf(program),
-      panels: { name: (instanceId) => host.panelName(instanceId), openWindow: (request) => host.openPanelWindow(request) },
+      scopeOf: (gameId) => ((entry) => (entry ? scopeForKind(entry.kind) : "game"))(host.library.games[gameId]),
+      openVeil: () => new GameVeilWindow({ hidden: !!options.hidden }),
+      panels: {
+        name: (instanceId) => host.panelName(instanceId),
+        exists: (gameId, instanceId) => host.recordOf(instanceId, gameId) !== undefined,
+        // Unknown (module not loaded yet) counts as allowed: a panel is dropped only when its type is known to say no.
+        allowed: (gameId, instanceId) => {
+          const record = host.recordOf(instanceId, gameId);
+          const type = record ? host.panelTypeOf(record) : undefined;
+          return type === undefined || type?.inGame === true;
+        },
+        usedAt: (instanceId) => {
+          const view = host.views.get(instanceId);
+          return view instanceof ModuleView ? view.usedAt : 0;
+        },
+        openWindow: (request) => host.openPanelWindow(request),
+      },
       probe: () => windowsForegroundProbe(),
       // Windows reports pixels; windows are placed in DIPs.
       toDip: (rect) => screen.screenToDipRect(null, rect),
@@ -3915,6 +4031,7 @@ export class Host {
         host.pushStateSoon();
       },
       removeKeys: (test) => host.streaming.removeKeys(test),
+      moveKey: (test, to) => host.streaming.moveKey(test, to),
       keyOf: (binding) => host.streaming.keyOf(binding),
       language: () => host.language,
       changed: () => {
