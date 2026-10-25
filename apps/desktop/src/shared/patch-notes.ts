@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.41",
+    date: "2026-10-25",
+    title: "Smaller download",
+    notes: [
+      "The Tavora installer is about 10 MB smaller: it leaves out Chromium's language files for languages Tavora doesn't offer.",
+    ],
+  },
+  {
     version: "0.20.40",
     date: "2026-10-25",
     title: "Module updates on your terms",
