@@ -28,11 +28,12 @@ body {
 
 .bar {
   display: flex;
-  height: 40px;
+  min-height: 40px;
+  flex-wrap: wrap;
   flex: none;
   align-items: center;
   gap: 8px;
-  padding: 0 8px;
+  padding: 4px 8px;
   border-bottom: 1px solid color-mix(in oklab, var(--primary) 25%, transparent);
   background: color-mix(in oklab, var(--primary) 5%, transparent);
   font-size: 13px;
@@ -443,4 +444,16 @@ body {
 }
 .excalidraw .App-menu__left .palette-more-toggle {
   padding: 4px;
+}
+
+.empty-hint {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  color: var(--muted-foreground);
+  pointer-events: none;
 }
