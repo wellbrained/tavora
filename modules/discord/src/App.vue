@@ -4,9 +4,10 @@
 // the voice channels of the server this game remembers (or of the call's server), with who is in
 // them. The player can join a channel, leave, and mute or deafen. Everything comes from the Discord
 // app on this PC through Tavora's discord connector, which keeps the sign-in (panel.ts).
-import { Check, ChevronDown, Headphones, HeadphoneOff, Info, Mic, MicOff, Phone, PhoneOff, RefreshCw, Search, Volume2, X } from "@lucide/vue";
+import { Check, ChevronDown, Headphones, HeadphoneOff, Info, Loader2, Mic, MicOff, Phone, PhoneOff, RefreshCw, Search, Volume2, X } from "@lucide/vue";
 import { cn, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import MemberRow from "./MemberRow.vue";
 import { setLanguage, t } from "./i18n";
@@ -34,7 +35,7 @@ const view = computed(() => panel.value?.view.value ?? null);
 const problem = ref<string | null>(null);
 let problemTimer: ReturnType<typeof setTimeout> | undefined;
 function report(reason: unknown) {
-  problem.value = reason instanceof PanelError ? t(`action.${reason.key}`) : t("action.failed", { error: errorMessage(reason) });
+  problem.value = reason instanceof PanelError ? t(`action.${reason.key}`) : t("action.failed");
   if (problemTimer) clearTimeout(problemTimer);
   problemTimer = setTimeout(() => (problem.value = null), 6000);
 }
@@ -49,17 +50,17 @@ const notice = computed(() => {
   const state = view.value?.state;
   switch (state?.status ?? "connecting") {
     case "signed-out":
-      return { title: t("status.signedOutTitle"), text: t("status.signedOutText"), action: true };
+      return { title: t("status.signedOutTitle"), text: t("status.signedOutText"), action: true, busy: false };
     case "approving":
-      return { title: t("status.approveTitle"), text: t("status.approveText"), action: false };
+      return { title: t("status.approveTitle"), text: t("status.approveText"), action: false, busy: true };
     case "not-running":
-      return { title: t("status.notRunningTitle"), text: t("status.notRunningText"), action: false };
+      return { title: t("status.notRunningTitle"), text: t("status.notRunningText"), action: false, busy: false };
     case "error":
-      return { title: t("status.errorTitle"), text: t(`signIn.${state?.error ?? "failed"}`), action: true };
+      return { title: t("status.errorTitle"), text: t(`signIn.${state?.error ?? "failed"}`), action: true, busy: false };
     case "connected":
       return null;
     default:
-      return { title: t("status.connectingTitle"), text: "", action: false };
+      return { title: t("status.connectingTitle"), text: "", action: false, busy: true };
   }
 });
 
@@ -123,11 +124,18 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", closeOutside))
 
 <template>
   <div class="bg-background text-foreground flex size-full flex-col overflow-hidden text-sm" data-testid="discord-panel">
-    <div v-if="failed" class="text-destructive p-4" role="alert">{{ t("connectError", { error: failed }) }}</div>
+    <div v-if="failed" class="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center" role="alert" data-testid="discord-failed">
+      <p class="font-medium">{{ t("status.errorTitle") }}</p>
+      <p class="text-muted-foreground max-w-xs">{{ t("connectError") }}</p>
+    </div>
 
-    <div v-else-if="view?.denied" class="text-muted-foreground flex flex-1 items-center justify-center p-4 text-center" data-testid="discord-denied">{{ t("denied") }}</div>
+    <div v-else-if="view?.denied" class="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center" data-testid="discord-denied">
+      <p class="font-medium">{{ t("status.deniedTitle") }}</p>
+      <p class="text-muted-foreground max-w-xs">{{ t("denied") }}</p>
+    </div>
 
-    <div v-else-if="notice" class="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center">
+    <div v-else-if="notice" class="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center" role="status">
+      <Loader2 v-if="notice.busy" class="text-muted-foreground size-4 animate-spin" :stroke-width="1.5" />
       <p class="font-medium">{{ notice.title }}</p>
       <p v-if="notice.text" class="text-muted-foreground max-w-xs">{{ notice.text }}</p>
       <Button v-if="notice.action" class="mt-2" size="sm" data-testid="discord-connect" @click="act((current) => current.connect())">{{ t("status.connect") }}</Button>
@@ -249,19 +257,15 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", closeOutside))
       </div>
 
       <footer class="flex flex-none flex-col gap-1.5 border-t px-3 py-2" data-testid="discord-game">
-        <label class="flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
-            class="accent-primary size-4"
-            :checked="view.game.remember"
-            data-testid="discord-remember"
-            @change="act((current) => current.rememberGame(($event.target as HTMLInputElement).checked))"
-          />
-          <span class="min-w-0 flex-1">{{ t("game.remember") }}</span>
-          <Button variant="ghost" size="icon-xs" :title="t('game.refresh')" :aria-label="t('game.refresh')" data-testid="discord-refresh" @click.prevent="act((current) => current.reload())">
+        <div class="flex items-center gap-2">
+          <label for="discord-remember" class="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+            <Checkbox id="discord-remember" :model-value="view.game.remember" data-testid="discord-remember" @update:model-value="(value) => act((current) => current.rememberGame(value === true))" />
+            <span class="min-w-0 flex-1">{{ t("game.remember") }}</span>
+          </label>
+          <Button variant="ghost" size="icon-xs" :title="t('game.refresh')" :aria-label="t('game.refresh')" data-testid="discord-refresh" @click="act((current) => current.reload())">
             <RefreshCw :stroke-width="1.75" />
           </Button>
-        </label>
+        </div>
         <div v-if="view.game.remember" ref="picker" class="relative">
           <button
             type="button"

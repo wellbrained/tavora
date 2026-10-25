@@ -1,7 +1,7 @@
 // Discord's texts in English and German. Keys are flat.
 export const en = {
-  connectError: "Could not connect: {error}",
-  denied: "Discord may not use Tavora's Discord sign-in. Review its access with the bar above, or add it again.",
+  connectError: "Tavora can't reach Discord right now.",
+  denied: "This module isn't allowed to use your Discord connection. Allow it in the bar above.",
   dismiss: "Dismiss",
 
   "status.signedOutTitle": "See who is in your voice channel",
@@ -10,11 +10,12 @@ export const en = {
   "status.approveText": "Discord shows a window asking to let Tavora see your voice channels. Press Authorize there.",
   "status.notRunningTitle": "Discord isn't running",
   "status.notRunningText": "Start the Discord app on this PC. Tavora keeps looking for it.",
+  "status.deniedTitle": "No access yet",
   "status.errorTitle": "Not connected",
   "status.connectingTitle": "Connecting to Discord…",
   "status.connect": "Connect",
 
-  "signIn.not-approved": "Discord did not let Tavora connect. Press Connect to try again. Discord currently allows only approved testers of Tavora.",
+  "signIn.not-approved": "Discord did not let Tavora connect. Press Connect to try again.",
   "signIn.no-code": "Discord did not approve Tavora.",
   "signIn.offline": "Discord could not be reached. Check your internet connection.",
   "signIn.no-sign-in": "Discord did not sign Tavora in. Press Connect to try again.",
@@ -22,7 +23,7 @@ export const en = {
 
   "panel.call": "Call",
   "panel.noCall": "You're in no voice channel. Click on any channel to join it.",
-  "panel.noCallEmpty": "You're not in a voice channel yet. Join one in Discord, or tick \"Remember the server on this game\" below and choose a server to see its channels here.",
+  "panel.noCallEmpty": "You're not in a voice channel yet. Join one in Discord, or remember a server for this game below to see its channels.",
   "panel.rejoin": "Rejoin {name}",
   "panel.join": "Join {name}",
   "panel.mute": "Mute",
@@ -62,12 +63,12 @@ export const en = {
   "action.voiceFailed": "Discord would not change that.",
   "action.serverUnknown": "That server is not available any more.",
   "action.personGone": "That person is not in your channel any more.",
-  "action.failed": "That did not work: {error}",
+  "action.failed": "That did not work.",
 };
 
 export const de: Record<keyof typeof en, string> = {
-  connectError: "Verbindung fehlgeschlagen: {error}",
-  denied: "Discord darf Tavoras Discord-Anmeldung nicht nutzen. Prüfe den Zugriff über die Leiste oben oder füge es neu hinzu.",
+  connectError: "Tavora erreicht Discord gerade nicht.",
+  denied: "Dieses Modul darf deine Discord-Verbindung nicht nutzen. Erlaube es in der Leiste oben.",
   dismiss: "Schließen",
 
   "status.signedOutTitle": "Sieh, wer in deinem Sprachkanal ist",
@@ -76,11 +77,12 @@ export const de: Record<keyof typeof en, string> = {
   "status.approveText": "Discord zeigt ein Fenster, in dem Tavora deine Sprachkanäle sehen darf. Drücke dort auf Autorisieren.",
   "status.notRunningTitle": "Discord läuft nicht",
   "status.notRunningText": "Starte die Discord-App auf diesem PC. Tavora sucht weiter danach.",
+  "status.deniedTitle": "Noch kein Zugriff",
   "status.errorTitle": "Nicht verbunden",
   "status.connectingTitle": "Verbinde mit Discord …",
   "status.connect": "Verbinden",
 
-  "signIn.not-approved": "Discord hat Tavora die Verbindung nicht erlaubt. Drücke Verbinden, um es noch einmal zu versuchen. Discord erlaubt das derzeit nur zugelassenen Testern von Tavora.",
+  "signIn.not-approved": "Discord hat Tavora die Verbindung nicht erlaubt. Drücke Verbinden, um es noch einmal zu versuchen.",
   "signIn.no-code": "Discord hat Tavora nicht zugelassen.",
   "signIn.offline": "Discord ist nicht erreichbar. Prüfe deine Internetverbindung.",
   "signIn.no-sign-in": "Discord hat Tavora nicht angemeldet. Drücke Verbinden, um es noch einmal zu versuchen.",
@@ -88,20 +90,20 @@ export const de: Record<keyof typeof en, string> = {
 
   "panel.call": "Anruf",
   "panel.noCall": "Du bist in keinem Sprachkanal. Klicke auf einen Kanal, um beizutreten.",
-  "panel.noCallEmpty": "Du bist noch in keinem Sprachkanal. Tritt in Discord einem bei, oder hake unten \"Server für dieses Spiel merken\" an und wähle einen Server, dann siehst du seine Kanäle hier.",
+  "panel.noCallEmpty": "Du bist noch in keinem Sprachkanal. Tritt in Discord einem bei, oder merke dir unten einen Server für dieses Spiel, um seine Kanäle zu sehen.",
   "panel.rejoin": "{name} wieder beitreten",
   "panel.join": "{name} beitreten",
   "panel.mute": "Stummschalten",
   "panel.unmute": "Stummschaltung aufheben",
-  "panel.deafen": "Ton ausschalten",
-  "panel.undeafen": "Ton einschalten",
+  "panel.deafen": "Taubschalten",
+  "panel.undeafen": "Taubschaltung aufheben",
   "panel.leave": "Verlassen",
   "panel.allowControl": "Stummschalten erlauben",
   "panel.allowControlHint": "Discord fragt dich einmal, ob Tavora dich stumm- und taubschalten darf.",
 
   "member.talking": "spricht",
   "member.muted": "stummgeschaltet",
-  "member.deafened": "Ton aus",
+  "member.deafened": "taubgeschaltet",
   "member.mutedByMod": "Von einem Moderator stummgeschaltet",
   "member.deafenedByMod": "Von einem Moderator taubgeschaltet",
   "member.mutedForYou": "Für dich stummgeschaltet",
@@ -128,5 +130,5 @@ export const de: Record<keyof typeof en, string> = {
   "action.voiceFailed": "Discord hat das nicht geändert.",
   "action.serverUnknown": "Dieser Server ist nicht mehr verfügbar.",
   "action.personGone": "Diese Person ist nicht mehr in deinem Kanal.",
-  "action.failed": "Das hat nicht geklappt: {error}",
+  "action.failed": "Das hat nicht geklappt.",
 };
