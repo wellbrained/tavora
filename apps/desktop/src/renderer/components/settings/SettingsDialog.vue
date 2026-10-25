@@ -23,6 +23,7 @@ import ModulesSection from "./ModulesSection.vue";
 import OnlineSection from "./OnlineSection.vue";
 import PatchNotesSection from "./PatchNotesSection.vue";
 import ShortcutsSection from "./ShortcutsSection.vue";
+import OverlaysSection from "./OverlaysSection.vue";
 import StreamingSection from "./StreamingSection.vue";
 import TrashSection from "./TrashSection.vue";
 import { GROUPS, groupLabel, sectionLabel, settingEntries, type SettingsSection } from "./settings-index";
@@ -226,6 +227,7 @@ function onSearchKey(event: KeyboardEvent) {
             <ModulesSection v-else-if="section === 'modules'" :highlight="highlight" />
             <IntegrationsSection v-else-if="section === 'integrations'" :highlight="highlight" />
             <StreamingSection v-else-if="section === 'streaming'" :highlight="highlight" />
+            <OverlaysSection v-else-if="section === 'overlays'" :highlight="highlight" />
             <BrowserSection v-else-if="section === 'browser'" :highlight="highlight" />
             <DevelopmentSection v-else-if="section === 'development'" :highlight="highlight" />
             <GamesSection v-else-if="section === 'games'" :highlight="highlight" />
