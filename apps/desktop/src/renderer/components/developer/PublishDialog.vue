@@ -14,7 +14,9 @@ import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import type { HostAction, PublishProblem } from "../../../shared/host-api";
 import { account, act, dialog, publish, settingsOpen, showToast } from "../../host";
 import { formatAgo, t } from "../../i18n";
+import { missingSections } from "../../../shared/readme-sections";
 import ModalDialog from "../ModalDialog.vue";
+import ModuleDescription from "../ModuleDescription.vue";
 
 const view = computed(() => publish.value);
 const module = computed(() => view.value?.module ?? null);
@@ -37,6 +39,8 @@ const notBuilt = computed(() => problem("not-built"));
 const invalid = computed(() => problem("invalid"));
 
 const title = computed(() => (view.value?.status === "published" ? t("publish.done", { version: view.value.published?.version ?? "" }) : module.value ? t("publish.title", { name: module.value.name }) : t("publish.publish")));
+// The description as the module's page will show it, with a soft tip for what a page usually has. Never blocks.
+const readmeMissing = computed(() => (view.value?.readme?.length ? missingSections(view.value.readme) : []));
 const catalogLine = computed(() => {
   const catalog = view.value?.catalog;
   if (!catalog) return "";
@@ -186,6 +190,16 @@ function browse() {
               <span class="text-muted-foreground text-xs">{{ t("publish.saveHint") }}</span>
             </div>
           </form>
+        </div>
+
+        <!-- The description as it will appear. -->
+        <div v-if="module" class="flex flex-col gap-2" data-testid="publish-readme">
+          <span class="text-sm font-medium">{{ t("publish.readme") }}</span>
+          <ModuleDescription v-if="view.readme?.length" :blocks="view.readme" :heading="false" />
+          <p v-else class="text-muted-foreground text-sm" data-testid="publish-readme-none">{{ t("publish.readmeNone") }}</p>
+          <p v-for="id in readmeMissing" :key="id" class="text-muted-foreground text-sm" :data-testid="`publish-readme-hint-${id}`">
+            {{ id === "overview" ? t("publish.readmeNoOverview") : t("publish.readmeNoFeatures") }}
+          </p>
         </div>
 
         <!-- What stops it, each with its fix. -->

@@ -55,6 +55,7 @@ for (const parent of ["Settings", "Add module"] as const) {
       status: "ready",
       module: { id: "example.layout", name: "Layout test", version: "1.0.0", icon: null },
       notes: Array.from({ length: 40 }, (_, index) => `Change ${index + 1}: a long release note for checking the review's scrolling.`),
+      readme: null,
       asks: { network: [], connectors: [] },
       size: 1024,
       builtAt: null,

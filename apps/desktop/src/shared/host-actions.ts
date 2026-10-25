@@ -292,6 +292,11 @@ export function hostActionTable(c: HostChecks) {
     "report-catalog-module": { moduleId: c.moduleId },
     /** Opens a catalog module's homepage like a module link: the address is the one the main process reads from the listing again. */
     "open-catalog-homepage": { moduleId: c.moduleId },
+    /**
+     * Opens a link from a catalog module's readme like the homepage. The main process reads the readme
+     * again and opens the address only when it is one of the readme's http or https links.
+     */
+    "open-readme-link": { moduleId: c.moduleId, url: filled(2000) },
     /** Rates an installed catalog module with the account, on the installed version; `text` is the review, null for stars only. */
     "rate-catalog-module": { moduleId: c.moduleId, stars: count(5), text: reviewText },
     /** Deletes the account's rating of a catalog module. */

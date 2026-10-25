@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.9
+
+- New projects have a `README.md` that is the module's description in the catalog, with the headings players expect (Features, How to use, Settings, Requirements, Known issues), and the manifest names it as `readme`. The notes for developing the module moved to `DEVELOP.md`.
+
 ## 0.1.8
 
 - New projects have no `zip` script any more: publish from Tavora with **Settings > Development > Publish**, or save a zip there. They start on `@tavora/pack` 0.3.0, for publishing from CI.

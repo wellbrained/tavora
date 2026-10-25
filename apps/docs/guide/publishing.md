@@ -7,15 +7,33 @@ Tavora's module catalog is where players find community modules: under **Browse*
 1. **Set up once.** Under **Settings > Development**, the **Want to make modules?** card walks you through signing in (email or Discord) and choosing a developer name. Saving the name makes your publisher key, links it to your account and claims your name as your prefix. Players see your name as "by *your name*" next to your module. Pressing Publish before that opens the same steps.
 2. **Use an id with your own prefix.** The part of your module id before the first dot is your prefix, such as `wellbrained` in `wellbrained.timer`. Once it's yours, nobody else can publish under it. An account holds up to 3 prefixes: **Add another** under Module developer checks one and claims it. Words a developer name couldn't be are refused, such as `tavora`, `official` and `local`, so an id from the starter (`local.…`) needs your prefix; the review screen lets you change the id before the first publish. Prefixes stay taken when an account is deleted.
 3. **Say where the module belongs.** `games` lists the games it is made for, or stays empty for any game. A module for any game is offered in personal workspaces too, unless you set `workspaces` to `false`. See the [manifest reference](../reference/manifest.md).
-4. **Write a description and patch notes.** The listing shows your manifest's `name`, `description`, `version` and what it asks for (`permissions.network` and `connectors`) and the zip's size. Each version's lines from [`changelog.json`](./getting-started.md#patch-notes) show up as its patch notes. All of it is shown as plain text, never HTML or Markdown.
-5. **Fill your module's page** if you like. `readme` names a `README.md` (or `.txt`) introducing your module, `screenshots` up to 5 PNG or WebP pictures, and `homepage` your module's web page. Your `icon` shows on the catalog card. Players see all of it when they open your module in the catalog. Set `minTavora` to at least `0.18.19` when you use `readme`, and `0.18.17` for the others.
+4. **Write a description and patch notes.** The listing shows your manifest's `name`, `description`, `version` and what it asks for (`permissions.network` and `connectors`) and the zip's size. Each version's lines from [`changelog.json`](./getting-started.md#patch-notes) show up as its patch notes. It is shown as plain text, never HTML.
+5. **Fill your module's page** if you like. `readme` names a `README.md` (or `.txt`) that becomes the module's description (see [Writing the description](#writing-the-description)), `screenshots` up to 5 PNG or WebP pictures, and `homepage` your module's web page. Your `icon` shows on the catalog card. Players see all of it when they open your module in the catalog. Set `minTavora` to at least `0.18.19` when you use `readme`, and `0.18.17` for the others.
 6. **Set `minTavora`** if the module uses something from a newer SDK. The [SDK changelog](../reference/changelog.md) says which Tavora each feature needs.
+
+## Writing the description
+
+The page sorts your readme into the same sections every module has, so pages read alike. The text before the first heading is the **Overview**. After it, Tavora looks for these headings (any capitalisation; German names work too) and always shows them in this order, whatever order you wrote them in:
+
+| Heading | German | What goes in it |
+| --- | --- | --- |
+| *(no heading)* | | Overview: one or two sentences on what the module does |
+| `## Features` | Funktionen | What it can do |
+| `## How to use` | Bedienung | The first steps |
+| `## Settings` | Einstellungen | What players can change |
+| `## Requirements` | Voraussetzungen | A game, an account, the internet |
+| `## Known issues` | Bekannte Probleme | What doesn't work yet |
+
+Any other heading goes at the end under **More**. A readme without these headings still shows fine. A title on the very first line (`# My module`) is left out, since the page already shows the name. `npm create @tavora/module` writes a `README.md` in this shape. Bold, italic, `code` and links (`[words](https://…)`, `http` or `https` only) work, and a list item can have one level of items under it.
+
+The **Publish** review shows the description as it will appear, with a tip when it has no Overview or Features. Tips never stop a publish.
 
 ## Publish
 
 Build the module (`npm run dev` keeps `dist/` up to date), then press **Publish** next to it in **Settings > Development**, or in its menu in Add module. Tavora packs the folder as it is and opens a review screen:
 
 - the name, icon, version and this version's patch notes
+- your description as the catalog page will show it
 - what the module asks for: network hosts and connectors
 - when it was built, with a warning when you changed files after the last build
 - whether it's the first version or an update, and from which version
@@ -35,7 +53,7 @@ The service checks the zip the way Tavora's installer does: the size and compres
 ## What players see
 
 - **Browse** lists your module with its name, version, "by *your name*", its description, whether it works where the player is, how many times it was installed from Browse, and its rating: the average, stars and how many rated, with a New badge by its name below 3 ratings. Players can sort by name, rating or newest. Installs are counted per module only, with nothing about who installed it; updates don't count.
-- **Your module's page** opens from its card: your icon, readme, screenshots and homepage, this version's patch notes, when it was updated and what it can reach. The readme shows headings, paragraphs, lists and code as plain text; links show only their words. The page also shows the network hosts and connectors it wants, so players see them before they install.
+- **Your module's page** opens from its card: your icon, readme, screenshots and homepage, this version's patch notes, when it was updated and what it can reach. The description shows your readme as text: headings, paragraphs, lists, code, bold, italic and links to web pages (a click opens them in a Browser panel); pictures and HTML are never shown. Below it are this version's patch notes and a collapsed list of every version. The page also shows the network hosts and connectors it wants, so players see them before they install.
 - **Ratings and reviews** are on your module's page: 1 to 5 stars from signed-in players who installed it, with an optional review of up to 500 characters. Every version's ratings count, and each review shows the version it was given on. You can't rate your own module, but you can post one reply under each review (Reply, signed in with the account that publishes the module). Reviews with slurs, links or email addresses are refused; players can report a review, and Tavora can hide its text. Its stars still count.
 - **Install** downloads the zip, checks it against the listing and your key's signature, and installs it like Install from zip. Installing grants nothing: players are asked for your network hosts and connectors when they add the module, as with any zip.
 - Their data and permissions belong to your module id and your key, as [Your publisher key](./publisher-key.md#what-the-key-decides) explains.
