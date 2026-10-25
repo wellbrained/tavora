@@ -34,3 +34,9 @@ export function copyScale(width: number, height: number, limit = { side: MAX_SID
   if (!(width > 0) || !(height > 0)) return 1;
   return Math.min(SHARP_SCALE, limit.side / Math.max(width, height), Math.sqrt(limit.pixels / (width * height)));
 }
+
+/** A file name for a saved picture: the board's name and when it was saved, such as "Board 1 2026-10-17 21-47". */
+export function pictureName(board: string, now = new Date()): string {
+  const two = (value: number) => String(value).padStart(2, "0");
+  return `${board} ${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())} ${two(now.getHours())}-${two(now.getMinutes())}`;
+}

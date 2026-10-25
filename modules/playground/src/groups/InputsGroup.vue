@@ -4,6 +4,7 @@ import { SegmentedControl } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { CodeInput, codeDigits } from "@tavora/official-ui/components/ui/code-input";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
+import { ColorPicker } from "@tavora/official-ui/components/ui/color-picker";
 import { Combobox, ComboboxAnchor, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@tavora/official-ui/components/ui/combobox";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
@@ -21,6 +22,9 @@ import { type SectionId, sectionTitle as title } from "../sections";
 
 defineProps<{ visible: Set<SectionId>; off: boolean }>();
 
+const SWATCHES = ["#ffffff", "#facc15", "#fb923c", "#f87171", "#60a5fa", "#4ade80", "#111111"];
+const SWATCH_NAMES = ["White", "Yellow", "Orange", "Red", "Blue", "Green", "Black"];
+const swatchColor = ref("#60a5fa");
 const checked = ref(true);
 const unchecked = ref(false);
 const mixed = ref<boolean | "indeterminate">("indeterminate");
@@ -214,6 +218,16 @@ const name = ref("Waystone");
         <Specimen label="Pick a rating (arrow keys work too)">
           <StarRating v-model="stars" editable size="lg" label="Your rating" :star-label="(n) => (n === 1 ? '1 star' : `${n} stars`)" :disabled="off" />
           <span class="text-muted-foreground text-xs tabular-nums">{{ stars ? `${stars} of 5` : "Not rated" }}</span>
+        </Specimen>
+      </DemoSection>
+
+<DemoSection v-if="visible.has('colors')" id="colors" :title="title('colors')" description="Pick one colour from a few. Each swatch has a name for screen readers; arrow keys move between them.">
+        <Specimen label="Swatches" column>
+          <ColorPicker v-model="swatchColor" label="Colour" :colors="SWATCHES" :labels="SWATCH_NAMES" :disabled="off" />
+        </Specimen>
+        <Specimen label="With a custom colour" column>
+          <ColorPicker v-model="swatchColor" label="Colour" :colors="SWATCHES" :labels="SWATCH_NAMES" allow-custom :disabled="off" />
+          <span class="text-muted-foreground text-xs tabular-nums">{{ swatchColor }}</span>
         </Specimen>
       </DemoSection>
 </template>

@@ -1,8 +1,6 @@
-// A small lock on the corner of every picture, to lock or unlock just that one. Excalidraw cannot put buttons on its
-// elements, so the locks lie over the board and follow the pictures as they move and as the board is panned and zoomed.
-// A locked picture cannot be clicked in Excalidraw at all, so its lock is the way to free it again.
-
-import { t } from "./i18n";
+// A small lock on the corner of every picture, to lock or unlock just that one (PictureLocks.vue). Excalidraw cannot
+// put buttons on its elements, so the locks lie over the board and follow the pictures as they move and as the board
+// is panned and zoomed. A locked picture cannot be clicked in Excalidraw at all, so its lock is the way to free it again.
 
 export interface LockSpot {
   id: string;
@@ -63,40 +61,4 @@ export function lockSpots(elements: readonly Picture[], view: Viewport): LockSpo
 /** A stable description of the spots, so the page only redraws the locks when one moved or changed. */
 export function spotsKey(spots: readonly LockSpot[]): string {
   return spots.map((spot) => `${spot.id}:${spot.locked ? 1 : 0}:${spot.x}:${spot.y}`).join("|");
-}
-
-interface Props {
-  spots: readonly LockSpot[];
-  onToggle(id: string, locked: boolean): void;
-}
-
-export default function PictureLocks({ spots, onToggle }: Props) {
-  if (spots.length === 0) return null;
-  return (
-    <div className="picture-locks">
-      {spots.map((spot) => {
-        const label = t(spot.locked ? "image.unlockOne" : "image.lockOne");
-        return (
-          <button
-            key={spot.id}
-            type="button"
-            className="picture-lock-one"
-            style={{ left: spot.x, top: spot.y }}
-            data-locked={spot.locked}
-            data-testid="picture-lock-one"
-            aria-label={label}
-            title={label}
-            // Excalidraw must not take this press as the start of a drag on the board.
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => onToggle(spot.id, !spot.locked)}
-          >
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="5" y="11" width="14" height="10" rx="2" />
-              <path d={spot.locked ? "M8 11V7a4 4 0 0 1 8 0v4" : "M8 11V7a4 4 0 0 1 7.5-2"} />
-            </svg>
-          </button>
-        );
-      })}
-    </div>
-  );
 }
