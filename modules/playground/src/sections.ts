@@ -24,6 +24,7 @@ export const SECTIONS = [
   { id: "notices", group: "display", title: "Notices", keywords: "alert callout info warning error success" },
   { id: "empty", group: "display", title: "Empty state", keywords: "empty nothing placeholder" },
   { id: "expandable", group: "display", title: "Show more", keywords: "expand collapse more less long text read clamp" },
+  { id: "collapsible", group: "display", title: "Collapsible sections", keywords: "collapsible disclosure accordion details summary open close fold section notes" },
   { id: "tabs", group: "display", title: "Tabs", keywords: "tabs views" },
   { id: "lists", group: "display", title: "Lists and rows", keywords: "list row hover selected settings divider card" },
   { id: "zoom", group: "canvas", title: "Pan and zoom", keywords: "zoom pan drag pinch fit width scroll graph tree map canvas viewport" },
