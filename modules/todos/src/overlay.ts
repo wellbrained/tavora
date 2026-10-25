@@ -9,9 +9,10 @@ let state: LiveState | null = null;
 
 function line(row: LiveState["rows"][number]): HTMLLIElement {
   const item = document.createElement("li");
+  if (row.depth) item.style.paddingLeft = `${row.depth * 1.2}em`;
   const mark = document.createElement("span");
   mark.className = "mark";
-  mark.textContent = row.pinned ? "\u{1F4CC}" : "•";
+  mark.textContent = row.pinned ? "\u{1F4CC}" : row.depth ? "◦" : "•";
   const text = document.createElement("span");
   text.className = "text";
   text.textContent = row.text;

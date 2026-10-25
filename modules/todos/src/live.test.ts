@@ -37,16 +37,31 @@ describe("buildLiveState", () => {
     expect(build(data, ["a"]).rows.map((r) => r.text)).toEqual(["a2", "b1"]);
   });
 
-  it("shows steps as progress on their parent, not as rows", () => {
+  it("shows open steps indented under their parent, with its progress", () => {
     const data = list(
       group("a", [task("p"), task("s1", { parentId: "p", done: true }), task("s2", { parentId: "p" }), task("s3", { parentId: "p", done: true })]),
     );
-    expect(build(data).rows).toEqual([{ text: "p", pinned: false, progress: "2/3" }]);
+    expect(build(data).rows).toEqual([
+      { text: "p", pinned: false, progress: "2/3", depth: 0 },
+      { text: "s2", pinned: false, progress: null, depth: 1 },
+    ]);
   });
 
-  it("gives a pinned step its own row", () => {
+  it("shows every level and hides what sits under a finished to-do", () => {
+    const data = list(
+      group("a", [task("p"), task("s", { parentId: "p" }), task("ss", { parentId: "s" }), task("d", { parentId: "p", done: true }), task("dd", { parentId: "d" })]),
+    );
+    expect(build(data).rows.map((r) => [r.text, r.depth])).toEqual([["p", 0], ["s", 1], ["ss", 2]]);
+  });
+
+  it("keeps steps of a folded group out, but shows its pinned step", () => {
+    const data = list(group("a", [task("p"), task("s", { parentId: "p" }), task("q", { parentId: "p", pinned: true })]));
+    expect(build(data, ["a"]).rows.map((r) => r.text)).toEqual(["q"]);
+  });
+
+  it("gives a pinned step its own row at the top, not repeated below", () => {
     const data = list(group("a", [task("p"), task("s", { parentId: "p", pinned: true })]));
-    expect(build(data).rows.map((r) => r.text)).toEqual(["s", "p"]);
+    expect(build(data).rows.map((r) => [r.text, r.depth])).toEqual([["s", 0], ["p", 0]]);
   });
 
   it("shortens long and multi-line text", () => {

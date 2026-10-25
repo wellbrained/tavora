@@ -1,7 +1,7 @@
 // The live view: what the panel hands to Tavora (panel.setLive) so the overlay page can show the list read-only
 // over the game while the full panel is closed. Pure functions, so the rules are easy to test.
 import type { JsonValue } from "@tavora/sdk";
-import type { TodoList } from "./todos";
+import { depths, type TodoList } from "./todos";
 
 /** How the plate behind the list looks; stored per panel. */
 export interface LiveLook {
@@ -23,6 +23,8 @@ export interface LiveRow {
   pinned: boolean;
   /** "2/5" for a to-do with steps, else null. */
   progress: string | null;
+  /** How far it is indented: 0 for a to-do of its own, 1 for a step, and so on. Pinned rows are never indented. */
+  depth: number;
 }
 
 export interface LiveState {
@@ -56,26 +58,28 @@ export function shorten(text: string): string {
 
 /**
  * The live state for a panel: open to-dos of the groups this panel shows (not folded away), pinned first, then in
- * list order. Pinned ones count wherever they are, as in the panel's objectives. Finished to-dos and sub-to-dos are
- * left out; a to-do with steps shows how many are done.
+ * list order with open sub-to-dos indented under their parent. Pinned ones count wherever they are, as in the panel's
+ * objectives, and are not repeated below. Finished to-dos are left out, and so is everything under them; a to-do with
+ * steps shows how many are done.
  */
 export function buildLiveState(list: TodoList, collapsed: readonly string[], look: LiveLook, moreText: string): LiveState {
   const pinned: LiveRow[] = [];
   const rest: LiveRow[] = [];
   for (const group of list.groups) {
     const shown = !collapsed.includes(group.id);
+    const depth = depths(group.tasks);
+    // Tasks under a finished or folded-away one are hidden with it (tasks come parent first).
+    const hidden = new Set<string>();
     for (const task of group.tasks) {
-      if (task.done || (!shown && !task.pinned)) continue;
-      // A sub-to-do is part of its parent's progress; it gets its own row only when pinned.
-      if (task.parentId && !task.pinned) continue;
+      const under = task.parentId !== null && hidden.has(task.parentId);
+      if (task.done || under) hidden.add(task.id);
+      if (task.done || (!task.pinned && (!shown || under))) continue;
       const steps = group.tasks.filter((other) => other.parentId === task.id);
       const text = shorten(task.title);
       if (!text) continue;
-      (task.pinned ? pinned : rest).push({
-        text,
-        pinned: task.pinned,
-        progress: steps.length ? `${steps.filter((step) => step.done).length}/${steps.length}` : null,
-      });
+      const row = { text, pinned: task.pinned, progress: steps.length ? `${steps.filter((step) => step.done).length}/${steps.length}` : null };
+      if (task.pinned) pinned.push({ ...row, depth: 0 });
+      else rest.push({ ...row, depth: depth.get(task.id) ?? 0 });
     }
   }
   const all = [...pinned, ...rest];
