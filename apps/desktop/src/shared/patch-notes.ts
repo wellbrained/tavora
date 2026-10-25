@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.7",
+    date: "2026-10-25",
+    title: "Show in game for To-Dos",
+    notes: [
+      "Show in game in the To-Dos menu works now. It used to forget the panel right away.",
+    ],
+  },
+  {
     version: "0.21.6",
     date: "2026-10-25",
     title: "Tavora in your game, and a tidier Tavora",
