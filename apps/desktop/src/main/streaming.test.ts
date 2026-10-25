@@ -205,3 +205,94 @@ describe("overlay links", () => {
     }
   });
 });
+
+describe("keys of game overlays", () => {
+  const toggle = { owner: "official", moduleId: MODULE.manifest.id, gameId: "elden", action: "$overlay", target: "item-1" };
+  const arrange = { owner: "tavora", moduleId: "tavora", gameId: "elden", action: "$arrange", target: "arrange" };
+  const words = { module: "Elden Ring", action: "Show or hide" };
+
+  async function withKeys() {
+    const made = await setup();
+    const heard: string[] = [];
+    let front: string | null = null;
+    made.streaming.useOverlayKeys({ frontGame: () => front, wants: () => true, pressed: (record) => void heard.push(`${record.action}:${record.target}`) });
+    return { ...made, heard, front: (id: string | null) => (front = id) };
+  }
+
+  it("opens the dialog for a game that isn't the one shown, with the words of overlays", async () => {
+    const { streaming } = await withKeys();
+    const asked = streaming.askOverlayKey(toggle, "Clock & Counter", words);
+    expect(streaming.request()).toMatchObject({ moduleName: "Elden Ring", actionName: "Show or hide", label: "Clock & Counter", current: null });
+    streaming.answer(streaming.request()!.id, "set", "F8");
+    expect(await asked).toBe("set");
+    expect(streaming.keyOf(toggle)).toEqual({ accelerator: "F8", taken: false });
+  });
+
+  it("stays open when the game shown changes, unlike a module's own dialog", async () => {
+    const { streaming, world } = await withKeys();
+    void streaming.askOverlayKey(arrange, "Overlays", words);
+    world.gameId = "elsewhere";
+    world.panels.length = 0;
+    streaming.sync();
+    expect(streaming.request()).not.toBeNull();
+  });
+
+  it("registers a key only while its game is in front, and a press goes to game overlays", async () => {
+    const { streaming, registered, heard, front } = await withKeys();
+    const asked = streaming.askOverlayKey(toggle, "Clock & Counter", words);
+    streaming.answer(streaming.request()!.id, "set", "F8");
+    await asked;
+    streaming.sync();
+    expect(registered.has("F8")).toBe(false);
+    front("elden");
+    streaming.sync();
+    registered.get("F8")!();
+    expect(heard).toEqual(["$overlay:item-1"]);
+    front("other");
+    streaming.sync();
+    expect(registered.has("F8")).toBe(false);
+  });
+
+  it("shares the game's keys with module hotkeys, so one key can't do both", async () => {
+    const { streaming, world } = await withKeys();
+    world.gameId = "elden";
+    const asked = streaming.askOverlayKey(arrange, "Overlays", { module: "Elden Ring", action: "Arrange overlays" });
+    streaming.answer(streaming.request()!.id, "set", "F9");
+    await asked;
+    const other = streaming.askOverlayKey(toggle, "Clock & Counter", words);
+    streaming.answer(streaming.request()!.id, "set", "F9");
+    expect(streaming.request()!.error).toContain("Arrange overlays");
+    streaming.answer(streaming.request()!.id, "cancel");
+    expect(await other).toBe("cancelled");
+  });
+
+  it("leaves them out of the hotkeys Settings > Streaming lists, and takes them away on request", async () => {
+    const { streaming } = await withKeys();
+    const asked = streaming.askOverlayKey(toggle, "Clock & Counter", words);
+    streaming.answer(streaming.request()!.id, "set", "F8");
+    await asked;
+    expect(streaming.view().hotkeys).toEqual([]);
+    streaming.removeKeys((record) => record.action === "$overlay");
+    expect(streaming.keyOf(toggle)).toBeNull();
+  });
+
+  it("go with their game", async () => {
+    const { streaming } = await withKeys();
+    const asked = streaming.askOverlayKey(arrange, "Overlays", words);
+    streaming.answer(streaming.request()!.id, "set", "F8");
+    await asked;
+    streaming.forgetGame("elden");
+    expect(streaming.keyOf(arrange)).toBeNull();
+  });
+});
+
+describe("publishing without the connector", () => {
+  it("keeps what a module publishes for a game overlay, whether or not the connector was granted", async () => {
+    const { streaming, world, overlay } = await setup();
+    world.granted = false;
+    overlay.publish("item-1", { value: 4 });
+    expect(streaming.overlayStore.peek({ owner: "official", moduleId: MODULE.manifest.id, gameId: "poe2", key: "item-1" })?.state).toEqual({ value: 4 });
+    overlay.remove("item-1");
+    expect(streaming.overlayStore.peek({ owner: "official", moduleId: MODULE.manifest.id, gameId: "poe2", key: "item-1" })?.state).toBeNull();
+  });
+});
