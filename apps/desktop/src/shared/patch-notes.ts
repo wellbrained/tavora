@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.10",
+    date: "2026-10-25",
+    title: "Pinned tooltips stay for screenshots",
+    notes: [
+      "A pinned tooltip stays open when you switch to the snipping tool (Win+Shift+S), so you can capture it.",
+      "Item pictures in tooltips fill their column and line up with the requirements below them.",
+      "Long tooltip lines wrap under their own text instead of under the bullet.",
+    ],
+  },
+  {
     version: "0.21.9",
     date: "2026-10-25",
     title: "Tavora in your game, and a tidier Tavora",
