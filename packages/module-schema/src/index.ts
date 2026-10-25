@@ -88,6 +88,11 @@ export interface ModuleManifest {
   /** Named panel types. Without them the module has one panel, made from `entry`, `icon` and `viewport`. */
   panels?: ModulePanelType[];
   /**
+   * For a module without panel types: the player may show its panel in their game, like a type's `inGame`. Needs a
+   * `minTavora` newer than LAST_TAVORA_WITHOUT_IN_GAME_PANELS; a module with `panels` sets it per type instead.
+   */
+  inGame?: boolean;
+  /**
    * The page streaming software such as OBS shows as a Browser Source (overlay.copyLink). Tavora serves it on this PC
    * only, with the files next to it, and gives it live data from the module. Game overlays (overlay.showOverGame) show the
    * same page over the player's game and need no connector; the `stream-overlay` connector is only for OBS links, and
@@ -128,7 +133,7 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "overlay", "actions", "translations", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "inGame", "overlay", "actions", "translations", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
 
 /** Most screenshots a manifest may name, and the longest homepage address. */
@@ -590,6 +595,11 @@ export function validateManifest(input: unknown): ManifestResult {
   if (input.panels !== undefined) {
     const minTavora = { minTavora: typeof input.minTavora === "string" ? input.minTavora : "" };
     checkPanels(input.panels, errors, officialId(input) || needsNewerTavora(minTavora, LAST_TAVORA_WITHOUT_IN_GAME_PANELS));
+  }
+  if (input.inGame !== undefined) {
+    if (typeof input.inGame !== "boolean") errors.push("inGame must be true or false");
+    else if (input.inGame && input.panels !== undefined) errors.push("inGame is for a module without panel types; set it on the panel types instead");
+    else if (input.inGame && !officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_IN_GAME_PANELS)) errors.push(`inGame needs a minTavora newer than ${LAST_TAVORA_WITHOUT_IN_GAME_PANELS}, because older Tavoras refuse it`);
   }
   if (input.actions !== undefined) checkActions(input.actions, errors);
   if (input.translations !== undefined) checkTranslations(input, errors);

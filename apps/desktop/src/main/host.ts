@@ -801,6 +801,14 @@ export class Host {
    * The panel type a panel shows, with the module's entry, icon and sizes filled in; null for a module
    * without types, undefined when the module no longer offers the panel's type.
    */
+  /** The panel may be shown in the game: its type says `inGame`, or the module without types does. */
+  private canShowInGame(record: InstanceRecord): boolean {
+    const type = this.panelTypeOf(record);
+    if (type) return type.inGame === true;
+    const module = this.modules.get(record.moduleId);
+    return type === null && module !== undefined && this.shown(module.manifest).inGame === true;
+  }
+
   private panelTypeOf(record: InstanceRecord): ResolvedPanelType | null | undefined {
     const module = this.modules.get(record.moduleId);
     if (!module) return undefined;
@@ -3330,7 +3338,7 @@ export class Host {
     const view = this.views.get(instanceId);
     const module = record && this.modules.get(record.moduleId);
     if (!game || !record || !module || !(view instanceof ModuleView)) throw new WorkspaceError("error.panelClosed");
-    if (this.panelTypeOf(record)?.inGame !== true) throw new WorkspaceError("error.panelNotInGame");
+    if (!this.canShowInGame(record)) throw new WorkspaceError("error.panelNotInGame");
     const result = this.gameOverlays.showPanel({ owner: module.owner, moduleId: module.manifest.id, gameId: game.id, instanceId });
     if (result === "full") this.notice = translate(this.language, "overlays.full");
   }
@@ -3699,7 +3707,7 @@ export class Host {
             waiting,
             content,
             ...(overGame ? { overGame } : {}),
-            ...(type?.inGame === true ? { canInGame: true } : {}),
+            ...(this.canShowInGame(record) ? { canInGame: true } : {}),
             ...(inGame ? { inGame } : {}),
             ...(live ? { live } : {}),
           };
