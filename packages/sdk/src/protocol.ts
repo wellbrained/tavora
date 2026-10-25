@@ -486,6 +486,8 @@ export interface Methods {
    * only right after a click or key press in the panel. Tavora 0.20.20 and newer.
    */
   "panel.setMaximized": { params: { maximized: boolean }; result: null };
+  /** What this panel's live view (the overlay page shown in its spot over the game) shows; null shows nothing. At most LIMITS.maxOverlayStateBytes. Tavora 0.21.11 and newer. */
+  "panel.setLive": { params: { state: JsonValue | null }; result: null };
   /**
    * Opens one of this module's own panel types in the current game, optionally on some content. Only right after a
    * click or key press in the panel, once per click. Tavora 0.17.18 and newer.

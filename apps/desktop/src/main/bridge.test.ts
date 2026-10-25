@@ -50,6 +50,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     navigated: () => {},
     isMaximized: () => false,
     setMaximized: () => Promise.resolve(),
+    setLive: () => {},
     game: { id: "poe2", displayName: "Path of Exile 2" },
     data: registry.get("local", moduleId, "poe2"),
     appSettings: registry.appSettings("local", moduleId),
@@ -230,6 +231,18 @@ describe("panel content", () => {
       expect(await call(p, "panel.setMaximized", params)).toMatchObject({ error: { code: "INVALID_PARAMS" } });
     }
     expect(asked).toEqual([true, false]);
+  });
+
+  it("passes on a live view's state when it is small enough, and refuses a big or missing one", async () => {
+    const states: unknown[] = [];
+    const p = await connected({ ...makeContext(), setLive: (state) => states.push(state) });
+    expect(await call(p, "panel.setLive", { state: { hp: 3 } })).toMatchObject({ ok: true, result: null });
+    expect(await call(p, "panel.setLive", { state: null })).toMatchObject({ ok: true, result: null });
+    expect(await call(p, "panel.setLive", { state: "x".repeat(LIMITS.maxOverlayStateBytes) })).toMatchObject({ error: { code: "QUOTA_EXCEEDED" } });
+    // The limit counts bytes, not characters.
+    expect(await call(p, "panel.setLive", { state: "é".repeat(LIMITS.maxOverlayStateBytes / 2) })).toMatchObject({ error: { code: "QUOTA_EXCEEDED" } });
+    expect(await call(p, "panel.setLive", {})).toMatchObject({ error: { code: "INVALID_PARAMS" } });
+    expect(states).toEqual([{ hp: 3 }, null]);
   });
 
   it("passes on the page's answer to panel.navigate", async () => {

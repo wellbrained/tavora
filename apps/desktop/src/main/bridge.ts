@@ -77,6 +77,8 @@ export interface BridgeContext {
   isMaximized(): boolean;
   /** panel.setMaximized: true throws PERMISSION_DENIED unless the panel just got a click or key press. */
   setMaximized(maximized: boolean): Promise<void>;
+  /** panel.setLive: what the panel's live view shows over the game (already size-checked); null shows nothing. Needs no click. */
+  setLive(state: JsonValue | null): void;
   game: TavoraGame;
   data: ModuleData;
   /** The module's settings shared by every game (storage.app). */
@@ -362,7 +364,7 @@ const handlers = new Map<string, Handler>([
       const p = object(params);
       const key = moduleKey(p, "key");
       const state = required(p, "state");
-      if (serializeJson(state, "params.state").length > LIMITS.maxOverlayStateBytes) throw new HostError("QUOTA_EXCEEDED", `an overlay's state may be at most ${LIMITS.maxOverlayStateBytes} bytes`);
+      if (Buffer.byteLength(serializeJson(state, "params.state"), "utf8") > LIMITS.maxOverlayStateBytes) throw new HostError("QUOTA_EXCEEDED", `an overlay's state may be at most ${LIMITS.maxOverlayStateBytes} bytes`);
       s.context.overlay.publish(key, state as JsonValue);
       return null;
     },
@@ -436,6 +438,16 @@ const handlers = new Map<string, Handler>([
       const maximized = required(object(params), "maximized");
       if (typeof maximized !== "boolean") throw new HostError("INVALID_PARAMS", "params.maximized must be a boolean");
       await s.context.setMaximized(maximized);
+      return null;
+    },
+  ],
+
+  [
+    "panel.setLive",
+    (s, params) => {
+      const state = required(object(params), "state");
+      if (Buffer.byteLength(serializeJson(state, "params.state"), "utf8") > LIMITS.maxOverlayStateBytes) throw new HostError("QUOTA_EXCEEDED", `a live view's state may be at most ${LIMITS.maxOverlayStateBytes} bytes`);
+      s.context.setLive(state as JsonValue | null);
       return null;
     },
   ],

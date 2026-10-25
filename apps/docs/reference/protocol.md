@@ -67,6 +67,7 @@ Methods without params must be sent with `params` left out.
 | `panel.setContent` | `{ content }` | `null`; `content` is `{ id, title }` or `null`: what the panel shows now. `id` is your own, 1 to 200 characters; `title` is its full name, 1 to 200 characters, kept on one line. `INVALID_PARAMS` otherwise (Tavora 0.17.17 and newer) |
 | `panel.isMaximized` | none | `true` while the panel fills the workspace (Maximize in its menu, or `panel.setMaximized`) (Tavora 0.20.20 and newer) |
 | `panel.setMaximized` | `{ maximized }` | `null`; `true` makes the panel fill the workspace, as Maximize in its menu does, `false` puts it back. Nothing happens while the panel is the only one, as it fills the workspace already. `true` only right after a real click or key press in the panel (`PERMISSION_DENIED` otherwise) (Tavora 0.20.20 and newer) |
+| `panel.setLive` | `{ state }` | `null`; `state` is any JSON up to 16 KB, or `null`. What this panel's [live view](#live-views) shows; `null` shows nothing. `QUOTA_EXCEEDED` when too big. Needs no click and no permission (Tavora 0.21.11 and newer) |
 | `workspace.getViewport` | none | `{ width, height }` of the panel in CSS pixels |
 | `ui.getLanguage` | none | the language of Tavora's own texts as a code, `"en"` or `"de"` for now; show your module in it, or in English when you have no translation |
 | `ui.showMenu` | `{ items, at, side?, align? }` | the chosen item's `id`, or `null` when the player closed the menu; see [Menus](#menus) |
@@ -239,6 +240,15 @@ The same [`overlay`](./manifest.md#overlay) page can also be shown over the play
 - The page has no bridge and runs under the same policy as a Stream overlay page, with no network. Clicks go through it to the game, so it can't take input.
 - Theme and language don't reach the page, and its size is the player's choice, so lay it out for any size and keep its background transparent.
 - A panel type that sets [`inGame: true`](./manifest.md#panel-types) in the manifest gets **Show in game** in its menu. The panel is then over the game only while the player holds the in-game layer open (their "Tavora over game" key), and goes back into its workspace slot when the layer closes. Your panel isn't told and calls nothing different: it keeps its bridge, and hears `workspace.resize` for the new size, `lifecycle.suspend` and `lifecycle.resume` as it moves. Clicks and key presses reach it only while the layer is open. While it is in the layer, calls that need Tavora's own window (`pictures.save`, `files.saveJson`, `files.openJson`, `files.pickReadOnly`, `overlay.copyLink` when it needs the consent dialog or a setting, `overlay.showOverGame`, `overlay.preview`, `hotkeys.set`, `ui.showMenu`, `panels.open`, `panel.setMaximized` and `links.open`) are refused with `PERMISSION_DENIED`; Tavora tells the player to close the layer first.
+
+### Live views
+
+When the player shows a panel in game (the [`inGame`](./manifest.md#panel-types) item in its menu) and its module has an [`overlay`](./manifest.md#overlay) page, Tavora shows that page over the game even while the in-game layer is closed: read-only, click-through, in exactly the panel's spot and size. Feed it with `panel.setLive(state)` (or `tavora.panel.setLive` in the SDK): any JSON up to `LIMITS.maxOverlayStateBytes` (16 KB), or `null` to show nothing. Tavora keeps the last state in memory and keeps showing it while the panel isn't running, for example while the player looks at another game in Tavora; it forgets it when the panel closes for good. After a restart nothing shows until the panel runs again and calls `setLive`.
+
+- The page reads the state with `watchOverlay`, like any overlay page (no key to pick: it gets the state of its own panel). It has no bridge and no network, and can't take input.
+- Nothing shows until the panel passes a state. While the layer is open the full panel is there instead, and the view returns in the new spot and size when the layer closes.
+- The player picks per panel whether the view is always there or toggled by a key, its opacity, and Hide from capture, in Settings > Overlays.
+- Needs no click and no permission. Tavora 0.21.11 and newer, so set `minTavora` to at least `0.21.11` if you rely on it.
 
 ### Overlay preview
 

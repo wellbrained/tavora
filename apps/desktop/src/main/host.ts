@@ -1916,11 +1916,15 @@ export class Host {
         const { owner, moduleId, gameId, key, mode, opacity, hideFromCapture } = action;
         this.gameOverlays.update({ owner, moduleId, gameId, key }, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
       },
+      "set-panel-view": (action) => {
+        const { instanceId, mode, opacity, hideFromCapture } = action;
+        this.gameOverlays.updatePanelView(instanceId, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
+      },
       "remove-game-overlay": (action) => this.gameOverlays.remove(action),
       "set-overlay-key": (action) => {
         const { gameId, owner, moduleId, key } = action;
         const overlay = owner !== undefined && moduleId !== undefined && gameId !== undefined && key !== undefined ? { owner, moduleId, gameId, key } : null;
-        if (overlay && !this.gameOverlays.has(overlay)) return;
+        if (overlay && !this.gameOverlays.hasKey(overlay)) return;
         const binding = overlay ? toggleBinding(overlay) : layerBinding();
         const names = this.gameOverlays.dialogNames(binding);
         // The dialog is answered by hotkey-answer; this action only opens it.
@@ -3094,6 +3098,7 @@ export class Host {
       launch: () => this.launchOf(record),
       setContent: (content) => this.setPanelContent(record, content),
       openPanel: (type, content) => this.openRelatedPanel(record, type, content),
+      setLive: (state) => this.gameOverlays.setLive(record.instanceId, module.owner, state),
       setMaximized: (maximized) => this.window.webContents.send("host:shortcut", `${maximized ? "maximize" : "restore"}:${record.instanceId}`),
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
@@ -3344,6 +3349,8 @@ export class Host {
   private destroyView(instanceId: string, forget = true): void {
     this.tooltips.close(instanceId);
     this.closeModuleMenu(instanceId);
+    // The panel is closing for good: its live state goes, whether or not it was running.
+    if (forget) this.gameOverlays?.forgetLive(instanceId);
     const view = this.views.get(instanceId);
     if (!view) return;
     this.views.delete(instanceId);
