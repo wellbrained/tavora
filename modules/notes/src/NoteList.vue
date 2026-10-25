@@ -3,6 +3,7 @@
 import { NotebookPen, PanelLeftClose, PanelLeftOpen, Pin, Plus, Search, X } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import { computed, nextTick, ref } from "vue";
 import { t } from "./i18n";
 import NoteRow from "./NoteRow.vue";
@@ -139,7 +140,7 @@ function onSearchKey(event: KeyboardEvent) {
           data-testid="search"
           :placeholder="t('list.search')"
           :aria-label="t('list.search')"
-          class="placeholder:text-muted-foreground focus-visible:border-ring h-7 w-full min-w-0 rounded-md border border-transparent bg-transparent pr-7 pl-7 text-sm outline-none"
+          class="h-7 pr-7 pl-7 text-sm shadow-none"
           @keydown="onSearchKey"
         />
         <button
