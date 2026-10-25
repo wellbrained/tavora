@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.46",
+    date: "2026-10-25",
+    title: "Clock & Counter is easier to use",
+    notes: [
+      "Hotkey buttons now say which action they set.",
+      "A format that does not work now tells you so.",
+    ],
+  },
+  {
     version: "0.20.45",
     date: "2026-10-25",
     title: "Notes polish",
