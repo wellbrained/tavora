@@ -187,6 +187,8 @@ export interface CatalogEntry {
   notes: string[];
   /** The module's web page from its manifest, http or https; the app shows it as plain text and opens it like a module link. */
   homepage: string | null;
+  /** Where players send feedback, from its manifest: an https address or an email address; the app opens it only after a click. */
+  support: string | null;
   /** The name and description in other languages, from the manifest's `translations`, keyed by language code. */
   translations: Record<string, { name?: string; description?: string }>;
   screenshots: CatalogScreenshot[];
@@ -264,6 +266,7 @@ function entryOf(row: VersionSql): CatalogEntry {
     publishedAt: row.published_at,
     notes: JSON.parse(row.notes) as string[],
     homepage: manifest.homepage ?? null,
+    support: manifest.support ?? null,
     translations: listedTranslations(manifest),
     screenshots: row.screenshots === null ? [] : (JSON.parse(row.screenshots) as CatalogScreenshot[]),
     icon: row.icon === null ? null : (JSON.parse(row.icon) as CatalogScreenshot),

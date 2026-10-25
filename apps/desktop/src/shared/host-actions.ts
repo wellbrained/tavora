@@ -297,6 +297,11 @@ export function hostActionTable(c: HostChecks) {
      * Opens a link from a catalog module's readme like the homepage. The main process reads the readme
      * again and opens the address only when it is one of the readme's http or https links.
      */
+    /**
+     * Opens a module's support link after a click: a web address like the homepage, an email address in the mail app.
+     * The main process reads the link again, from the installed module's manifest (`installed`) or the catalog listing.
+     */
+    "open-module-support": { moduleId: c.moduleId, source: oneOf("catalog", "installed") },
     "open-readme-link": { moduleId: c.moduleId, url: filled(2000) },
     /** Rates an installed catalog module with the account, on the installed version; `text` is the review, null for stars only. */
     "rate-catalog-module": { moduleId: c.moduleId, stars: count(5), text: reviewText },

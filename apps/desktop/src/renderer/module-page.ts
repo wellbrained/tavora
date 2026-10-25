@@ -21,6 +21,7 @@ export function pageModule(module: InstalledModule): CatalogModuleView {
     forGames: [],
     publishedAt: "",
     homepage: null,
+    support: module.support,
     screenshots: 0,
     icon: module.icon !== null,
     rating: null,

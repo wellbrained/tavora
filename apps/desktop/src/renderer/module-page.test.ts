@@ -11,6 +11,7 @@ const module = {
   publisher: "abcdef0123456789",
   publisherName: "Sam",
   icon: "data:image/png;base64,AAAA",
+  support: "feedback@example.com",
   permissions: { asks: { network: ["api.example.com"], connectors: [] }, granted: { network: [], connectors: [] }, missing: { network: [], connectors: [] } },
 } as unknown as InstalledModule;
 
@@ -28,8 +29,13 @@ describe("pageModule", () => {
       size: 0,
       screenshots: 0,
       homepage: null,
+      support: "feedback@example.com",
       rating: null,
     });
+  });
+
+  it("has no support link when the manifest names none", () => {
+    expect(pageModule({ ...module, support: null }).support).toBeNull();
   });
 
   it("has no publisher line for a module without a key", () => {

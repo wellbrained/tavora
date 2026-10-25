@@ -169,6 +169,7 @@ test("a player opens a module's page with its readme, screenshots, access and ho
     {
       entry: listing("wellbrained.tracker", "Tracker", tracker, owner, {
         homepage: "https://example.com/tracker",
+        support: "https://example.com/tracker/feedback",
         permissions: { network: ["api.example.com"], connectors: [] },
         icon: { sha256: hash(picture), type: "png", size: picture.length },
         screenshots: [
@@ -213,10 +214,21 @@ test("a player opens a module's page with its readme, screenshots, access and ho
     await info.getByTestId("catalog-info-homepage").click();
     await expect(page.getByTestId("link-choice-url")).toHaveText("https://example.com/tracker");
     await page.getByTestId("link-choice-cancel").click();
+    const reopen = async () => {
+      await page.getByTestId("add-module").click();
+      await page.getByTestId("module-tab-browse").click();
+      await page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-name").click();
+    };
+    await reopen();
 
-    await page.getByTestId("add-module").click();
-    await page.getByTestId("module-tab-browse").click();
-    await page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-name").click();
+    // One Send feedback button with its hint; the address comes from the listing again, so the page can't pick it.
+    const support = info.getByTestId("catalog-info-support");
+    await expect(support.getByRole("button")).toHaveText("Send feedback");
+    await expect(support).toContainText("Bugs, ideas or questions go to the developer.");
+    await support.getByRole("button").click();
+    await expect(page.getByTestId("link-choice-url")).toHaveText("https://example.com/tracker/feedback");
+    await page.getByTestId("link-choice-cancel").click();
+    await reopen();
     await page.getByTestId("catalog-info-install").click();
     await expect(page.getByTestId("catalog-info-add")).toBeVisible();
     expect(await readdir(path.join(userData, "modules"))).toEqual(["wellbrained.tracker"]);
@@ -500,6 +512,10 @@ test("a player reports a module from Browse and from Settings, and only its id, 
     // Report is only on the module's page, not on its card.
     await expect(page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-report-wellbrained.tracker")).toHaveCount(0);
     await page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-name").click();
+    // No support link in this listing, so no Send feedback button.
+    await expect(page.getByTestId("catalog-info-support")).toHaveCount(0);
+    await expect(page.getByTestId("catalog-report-wellbrained.tracker")).toHaveText("Report to Tavora");
+    await expect(page.getByTestId("catalog-info-report")).toContainText("Harmful, or breaks the rules.");
     await page.getByTestId("catalog-report-wellbrained.tracker").click();
     await expect(page.getByTestId("catalog-report-ask-wellbrained.tracker")).toContainText("nothing about you");
     expect(reports).toEqual([]);
@@ -514,6 +530,7 @@ test("a player reports a module from Browse and from Settings, and only its id, 
     await page.keyboard.press("Escape");
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-modules").click();
+    await expect(page.getByTestId("report-module-wellbrained.tracker")).toHaveText("Report to Tavora");
     await page.getByTestId("report-module-wellbrained.tracker").click();
     await page.getByTestId("confirm-submit").click();
     await expect(page.getByTestId("toast")).toHaveText("Reported Tracker. Thanks!");

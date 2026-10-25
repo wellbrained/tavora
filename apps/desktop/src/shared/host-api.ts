@@ -538,6 +538,8 @@ export interface HostViewState {
     removable: boolean;
     /** Installed from Tavora's module catalog, so it can be reported from Settings. */
     fromCatalog: boolean;
+    /** The support link from the module's manifest (an https address or an email address), or null. */
+    support: string | null;
     /** The fingerprint of the key that signed it, for a module installed from a signed zip; null otherwise. */
     publisher: string | null;
     /** The developer name the publisher key is linked to, as Tavora's service said ("by <name>"); null when unknown or unlinked. */
@@ -769,6 +771,8 @@ export interface CatalogModuleView {
   publishedAt: string;
   /** The module's web page, http or https, shown as plain text; open-catalog-homepage opens it. */
   homepage: string | null;
+  /** Where players send feedback: an https address or an email address, shown only as a Send feedback button; open-module-support opens it. */
+  support: string | null;
   /** How many screenshots the listing has; catalogPage fetches them. */
   screenshots: number;
   /** Whether the listing has an icon; catalogIcon fetches it. */

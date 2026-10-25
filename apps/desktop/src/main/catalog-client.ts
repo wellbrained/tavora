@@ -5,7 +5,7 @@
 // matches the listing. After that the zip goes through the same installer as Install from zip, which
 // checks the publisher signature itself.
 import { createHash } from "node:crypto";
-import { isConnector, isGameId, isHomepage, isLanguageCode, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, translationsFor, type Connector } from "@tavora/module-schema";
+import { isConnector, isGameId, isHomepage, isLanguageCode, isSupportEmail, isSupportLink, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, translationsFor, type Connector } from "@tavora/module-schema";
 import { ZIP_LIMITS } from "@tavora/pack";
 import type { CatalogListResult, CatalogModuleView, CatalogOwnReview, CatalogRating } from "../shared/host-api";
 import { isWebUrl } from "./browser-url";
@@ -246,6 +246,8 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
     notes: plainNotes(entry.notes),
     // Opened only like a module link (http or https), and shown as plain text.
     homepage: isHomepage(entry.homepage) && isWebUrl(entry.homepage) ? entry.homepage : null,
+    // An https address or an email address; opened only after a click, and checked again from the listing.
+    support: isSupportLink(entry.support) && (isSupportEmail(entry.support) || isWebUrl(entry.support)) ? entry.support : null,
     shots: parseScreenshots(entry.screenshots),
     icon: parsePicture(entry.icon, MAX_MODULE_ICON),
     translations: parseTranslations(entry.translations),

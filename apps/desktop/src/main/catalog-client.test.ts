@@ -62,6 +62,15 @@ describe("parseCatalogEntry", () => {
     expect(parseCatalogEntry(entry({ screenshots: "nope" }))?.shots).toEqual([]);
   });
 
+  it("keeps an https address or an email address as the support link, and nothing else", () => {
+    expect(parseCatalogEntry(entry({ support: "https://example.com/feedback" }))?.support).toBe("https://example.com/feedback");
+    expect(parseCatalogEntry(entry({ support: "feedback@example.com" }))?.support).toBe("feedback@example.com");
+    expect(parseCatalogEntry(entry())?.support).toBeNull();
+    for (const bad of ["http://example.com", "javascript:alert(1)", "data:text/html,hi", "mailto:a@example.com", "a?cc=x@example.com", "https://u:p@example.com", "", "hi there", 42, `https://example.com/${"a".repeat(300)}`]) {
+      expect(parseCatalogEntry(entry({ support: bad }))?.support, String(bad)).toBeNull();
+    }
+  });
+
   it("shows only a developer name the service form allows, never another claim (C13)", () => {
     expect(parseCatalogEntry(entry({ publisher: "Tavora​ Official" }))?.publisher).toBeNull();
     expect(parseCatalogEntry(entry({ publisher: null }))?.publisher).toBeNull();
