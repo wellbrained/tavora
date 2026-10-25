@@ -349,6 +349,10 @@ export function hostActionTable(c: HostChecks) {
     "remove-module-from-game": { moduleId: c.moduleId },
     "reload-panel": { instanceId: c.uuid },
     "stop-panel": { instanceId: c.uuid },
+    /** Panel menu > Show over game: the panel moves over its game (Settings > Overlays > Game overlays). */
+    "show-panel-over-game": { instanceId: c.uuid },
+    /** A panel over its game returns to its workspace slot. */
+    "bring-panel-back": { instanceId: c.uuid },
     /** Null when nothing is docked any more. */
     "save-layout": { layout: nullable(c.layout) },
     /** Rearranges the workspace into empty slots of a layout template; open panels fill the first ones. */
