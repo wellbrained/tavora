@@ -183,6 +183,7 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
           <Input :id="`${prefix}-format`" v-model="format" class="font-mono" :maxlength="MAX_FORMAT" :aria-invalid="!formatValid" @blur="saveFormat()" @keydown.enter="saveFormat()" />
           <Button variant="secondary" size="sm" class="h-8" :aria-label="t('edit.formatPresets')" :title="t('edit.formatPresets')" @click="pickFormat">···</Button>
         </div>
+        <p v-if="!formatValid" class="text-destructive text-xs" role="alert">{{ t("edit.formatInvalid") }}</p>
         <p class="text-muted-foreground text-xs">{{ t("edit.preview", { text: preview }) }} · {{ t("edit.formatHint") }}</p>
       </div>
 
@@ -312,7 +313,7 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
         <li v-for="action in actions" :key="action" class="flex min-h-8 items-center gap-2">
           <span class="min-w-0 flex-1 truncate">{{ t(`action.${action}`) }}</span>
           <span class="text-muted-foreground text-xs" :data-testid="`hotkey-${action}-${item.id}`">{{ hasKey(action) ? t("edit.hotkeyOn") : t("edit.hotkeyNone") }}</span>
-          <Button variant="secondary" size="sm" @click="panel.setHotkey(action, item)">{{ hasKey(action) ? t("edit.hotkeyChange") : t("edit.hotkeySet") }}</Button>
+          <Button variant="secondary" size="sm" :aria-label="`${t(`action.${action}`)}: ${hasKey(action) ? t('edit.hotkeyChange') : t('edit.hotkeySet')}`" @click="panel.setHotkey(action, item)">{{ hasKey(action) ? t("edit.hotkeyChange") : t("edit.hotkeySet") }}</Button>
         </li>
       </ul>
     </section>
