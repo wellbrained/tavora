@@ -224,7 +224,7 @@ const cases: [string, unknown, boolean][] = [
   ["overlay asked for on request", { ...valid, overlay: "dist/overlay.html", permissions: { network: [], connectors: ["stream-overlay"], onRequest: ["stream-overlay"] } }, true],
   ["on request: a connector that can't be", { ...valid, permissions: { network: [], connectors: ["discord"], onRequest: ["discord"] } }, false],
   ["on request: not a list", { ...valid, overlay: "dist/overlay.html", permissions: { network: [], connectors: ["stream-overlay"], onRequest: "stream-overlay" } }, false],
-  ["overlay without its connector, for game overlays", { ...valid, minTavora: "0.20.44", overlay: "dist/overlay.html" }, true],
+  ["overlay without its connector, for game overlays", { ...valid, minTavora: "0.20.49", overlay: "dist/overlay.html" }, true],
   ["overlay without its connector, from Tavora itself", { ...valid, id: "tavora.clock-counter", overlay: "dist/overlay.html" }, true],
   ["overlay with its connector needs no minTavora", { ...valid, overlay: "dist/overlay.html", permissions: { network: [], connectors: ["stream-overlay"] } }, true],
   ["overlay connector without a page", { ...valid, permissions: { network: [], connectors: ["stream-overlay"] } }, false],
@@ -376,7 +376,7 @@ describe("overlay without the stream-overlay connector", () => {
     const error = { ok: false, errors: [`overlay without the "stream-overlay" connector needs a minTavora newer than ${LAST_TAVORA_WITHOUT_GAME_OVERLAYS}, because older Tavoras refuse it`] };
     expect(validateManifest(overlay)).toEqual(error);
     expect(validateManifest({ ...overlay, minTavora: LAST_TAVORA_WITHOUT_GAME_OVERLAYS })).toEqual(error);
-    expect(validateManifest({ ...overlay, minTavora: "0.20.44" }).ok).toBe(true);
+    expect(validateManifest({ ...overlay, minTavora: "0.20.49" }).ok).toBe(true);
   });
 });
 

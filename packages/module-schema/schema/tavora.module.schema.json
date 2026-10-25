@@ -305,7 +305,7 @@
           "pattern": "\\.html$"
         }
       ],
-      "description": "The page streaming software such as OBS shows as a Browser Source, and the page game overlays show over the player's game. Tavora serves it on this PC only, with the files next to it, and gives it live data from the module. Needs no connector, but the \"stream-overlay\" connector needs this page. Without that connector, a minTavora newer than 0.20.43 is needed (except Tavora's own modules); the TypeScript validator checks that.",
+      "description": "The page streaming software such as OBS shows as a Browser Source, and the page game overlays show over the player's game. Tavora serves it on this PC only, with the files next to it, and gives it live data from the module. Needs no connector, but the \"stream-overlay\" connector needs this page. Without that connector, a minTavora newer than 0.20.48 is needed (except Tavora's own modules); the TypeScript validator checks that.",
       "examples": [
         "dist/overlay.html"
       ]

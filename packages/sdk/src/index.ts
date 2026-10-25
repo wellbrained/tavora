@@ -373,7 +373,7 @@ export interface TavoraSDK {
      * Shows the overlay for `key` over the player's game, in a Tavora window above it, only while that game is in
      * front. Call it from the click or key press that asked for it; it needs no permission. Resolves with `"off"` when
      * Game overlays are off in Tavora (Tavora then opens that setting) and `"full"` when the game has no room for
-     * another. Tavora 0.20.44 and newer.
+     * another. Tavora 0.20.49 and newer.
      */
     showOverGame(key: string): Promise<GameOverlayResult>;
   };
