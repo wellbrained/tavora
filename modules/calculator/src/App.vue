@@ -7,9 +7,8 @@
 // The history lives in the game's module storage, so every panel of the game shares it; a panel reads it again
 // when it shows or gets focus, since storage has no change events.
 import { Check, Copy, Delete, History, Trash2 } from "@lucide/vue";
-import { connectModule, errorMessage, serial } from "@tavora/official-ui";
+import { ConfirmDialog, connectModule, errorMessage, SegmentedControl, serial } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { copyText, EMPTY, evaluate, format, insert, press, pretty, type Entry } from "./calc";
@@ -67,6 +66,8 @@ const VARIANT = { digit: "secondary", op: "outline", clear: "outline", equals: "
 const sdk = shallowRef<TavoraSDK | null>(null);
 const error = ref<string | null>(null);
 const saveError = ref<string | null>(null);
+/** Clear history asked, waiting for the player to confirm. */
+const clearing = ref(false);
 const entry = ref<Entry>(EMPTY);
 /** Why the last Equals did not work, until the next key. */
 const problem = ref<string | null>(null);
@@ -77,14 +78,23 @@ let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 const settings = ref<Settings>(DEFAULT_SETTINGS);
 const queue = serial();
 
+const modes = computed(() => [
+  { value: "basic" as Mode, label: t("mode.basic"), testid: "mode-basic" },
+  { value: "plus" as Mode, label: t("mode.plus"), testid: "mode-plus" },
+]);
+const mode = computed({ get: () => settings.value.mode, set: (value: Mode) => choose({ mode: value }) });
+
 const keys = computed(() => (settings.value.mode === "basic" ? BASIC : PLUS));
 
 /** Changes a toolbar choice and keeps it for every game. */
 function choose(change: Partial<Settings>): void {
   settings.value = { ...settings.value, ...change };
-  void sdk.value?.storage.app.set(SETTINGS_KEY, { ...settings.value }).catch((reason: unknown) => {
-    saveError.value = t("settingsError", { error: errorMessage(reason) });
-  });
+  void sdk.value?.storage.app
+    .set(SETTINGS_KEY, { ...settings.value })
+    .then(() => void (saveError.value = null))
+    .catch((reason: unknown) => {
+      saveError.value = t("settingsError", { error: errorMessage(reason) });
+    });
 }
 
 const comma = computed(() => language.value.toLowerCase().startsWith("de"));
@@ -160,6 +170,11 @@ function save(change: (items: Calculation[]) => Calculation[]): void {
   });
 }
 
+function confirmClear(): void {
+  clearing.value = false;
+  save(() => []);
+}
+
 function reload(): void {
   void queue(async () => {
     const stored = await sdk.value?.storage.get(HISTORY_KEY).catch(() => undefined);
@@ -192,6 +207,9 @@ function onKeydown(event: KeyboardEvent): void {
     return void copy();
   }
   if (event.ctrlKey || event.metaKey || event.altKey) return;
+  // A focused button or option keeps its own Enter, so the keyboard can still press it; a dialog keeps its keys.
+  const focused = event.target instanceof HTMLElement && event.target.closest("button, [role='radio'], [role='dialog']");
+  if (focused && (event.key === "Enter" || event.key === "Escape" || event.key === "Backspace" || event.key === "Delete")) return;
   const name = KEYBOARD[event.key] ?? (/^[\d.+\-*/%()]$/.test(event.key) ? event.key : null);
   if (!name) return;
   event.preventDefault();
@@ -242,12 +260,7 @@ onBeforeUnmount(() => {
   </p>
   <div v-else class="@container flex h-full min-h-0 flex-col" data-testid="calculator-app">
     <div class="flex flex-none items-center gap-2 px-3 pt-2">
-      <Tabs :model-value="settings.mode" @update:model-value="choose({ mode: $event as Mode })">
-        <TabsList :aria-label="t('mode.label')">
-          <TabsTrigger value="basic" data-testid="mode-basic">{{ t("mode.basic") }}</TabsTrigger>
-          <TabsTrigger value="plus" data-testid="mode-plus">{{ t("mode.plus") }}</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <SegmentedControl v-model="mode" :label="t('mode.label')" :options="modes" />
       <span class="flex-1" />
       <Button
         variant="ghost"
@@ -269,9 +282,9 @@ onBeforeUnmount(() => {
     >
       <section class="flex w-full max-w-sm flex-[0_1_26rem] flex-col gap-2 @min-[36rem]:h-full @min-[36rem]:max-h-[26rem] @min-[36rem]:min-h-min @min-[36rem]:w-80 @min-[36rem]:flex-none">
         <div class="bg-muted/40 flex flex-none items-start gap-1 rounded-lg border px-3 py-2">
-          <div class="min-w-0 flex-1 text-right" role="status" aria-live="polite" :aria-label="t('calc.display')">
-            <p class="truncate font-mono text-3xl tabular-nums" data-testid="display">{{ show(entry.text) || "0" }}</p>
-            <p class="h-5 truncate text-sm" :class="problem ? 'text-destructive' : 'text-muted-foreground'" data-testid="preview">
+          <div class="min-w-0 flex-1 text-right">
+            <p class="truncate font-mono text-3xl tabular-nums" role="group" :aria-label="t('calc.display')" data-testid="display">{{ show(entry.text) || "0" }}</p>
+            <p class="h-5 truncate text-sm" :class="problem ? 'text-destructive' : 'text-muted-foreground'" role="status" aria-live="polite" data-testid="preview">
               {{ problem ?? (preview ? `= ${show(preview)}` : "") }}
             </p>
           </div>
@@ -331,7 +344,7 @@ onBeforeUnmount(() => {
             :aria-label="t('history.clear')"
             :title="t('history.clear')"
             data-testid="clear-history"
-            @click="save(() => [])"
+            @click="clearing = true"
           >
             <Trash2 :stroke-width="1.5" />
           </Button>
@@ -353,5 +366,14 @@ onBeforeUnmount(() => {
         </ol>
       </section>
     </div>
+    <ConfirmDialog
+      v-if="clearing"
+      :title="t('history.clearTitle')"
+      :description="t('history.clearText')"
+      :confirm="t('history.clear')"
+      :cancel="t('cancel')"
+      @confirm="confirmClear"
+      @cancel="clearing = false"
+    />
   </div>
 </template>
