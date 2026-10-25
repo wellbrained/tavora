@@ -10,7 +10,7 @@ import { hotkeyKeys } from "../../../shared/hotkey-keys";
 import type { GameOverlaysView, OverlayKeyView } from "../../../shared/host-api";
 import { act, state } from "../../host";
 import { t } from "../../i18n";
-import SegmentedControl from "./SegmentedControl.vue";
+import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
