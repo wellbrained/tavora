@@ -156,16 +156,15 @@ async function copyLink() {
   linkNote.value = t(result === "copied" ? "edit.copied" : result === "off" ? "edit.overlaysOff" : "edit.noOverlay");
 }
 
-// Tavora has no call to take a game overlay away again, so the switch only turns on; Settings > Overlays turns it off.
-const overGame = ref(false);
+const overGame = computed(() => panel.overGame.value.has(props.item.id));
 
 async function setOverGame(on: boolean) {
   if (!on) {
-    linkNote.value = t("edit.overGameOffHint");
+    await panel.hideOverGame(props.item);
+    linkNote.value = null;
     return;
   }
   const result = await panel.showOverGame(props.item);
-  overGame.value = result === "shown";
   linkNote.value = result === "shown" ? t("edit.shownOverGame") : result === "full" ? t("edit.overGameFull") : null;
 }
 

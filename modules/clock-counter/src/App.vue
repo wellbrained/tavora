@@ -98,6 +98,7 @@ function removeItem(item: Item): void {
   }
   // Counters linked to it lose the link; Undo brings back the item, not their links.
   void store.value?.apply([item.id], (data) => remove(data, item.id));
+  void hideOverGame(item).catch(() => undefined);
   if (editing.value === item.id) editing.value = null;
   undo.value = { item: structuredClone(item), index, timer: setTimeout(() => dismissUndo(), UNDO_MS) };
 }
@@ -127,6 +128,8 @@ async function refreshHotkeys(): Promise<void> {
   if (set) hotkeys.value = new Set(set.map((binding) => `${binding.action}:${binding.target}`));
 }
 
+const overGame = ref<ReadonlySet<string>>(new Set());
+
 async function setHotkey(action: string, item: Item): Promise<void> {
   try {
     await sdk.value?.hotkeys.set(action, item.id, item.label || t(`kind.${item.kind}`));
@@ -154,8 +157,24 @@ async function copyLink(item: Item): Promise<"copied" | "off" | "denied"> {
 async function showOverGame(item: Item): Promise<GameOverlayResult> {
   const result = (await sdk.value?.overlay.showOverGame(item.id)) ?? "off";
   // The overlay shows the item from the start, before its first change.
-  if (result === "shown") store.value?.publish([item.id], list.value);
+  if (result === "shown") {
+    store.value?.publish([item.id], list.value);
+    overGame.value = new Set(overGame.value).add(item.id);
+  }
   return result;
+}
+
+async function hideOverGame(item: Item): Promise<void> {
+  await sdk.value?.overlay.hideOverGame(item.id);
+  const next = new Set(overGame.value);
+  next.delete(item.id);
+  overGame.value = next;
+}
+
+/** Which items are over the game is Tavora's to know; the switches show that. */
+async function refreshOverGame(): Promise<void> {
+  const keys = await sdk.value?.overlay.overGame().catch(() => null);
+  if (keys) overGame.value = new Set(keys);
 }
 
 async function preview(item: Item): Promise<void> {
@@ -179,7 +198,9 @@ provide(PANEL, {
   act,
   setHotkey,
   copyLink,
+  overGame,
   showOverGame,
+  hideOverGame,
   preview,
   resetLink,
   remove: removeItem,
@@ -197,11 +218,15 @@ onMounted(async () => {
       connected.documents.onChange((change) => change.id === LIST_ID && void items.reload()),
       connected.hotkeys.onPress(({ action, target }) => act(action, target)),
       connected.lifecycle.onSuspend(() => (suspended.value = true)),
-      connected.lifecycle.onResume(() => (suspended.value = false)),
+      connected.lifecycle.onResume(() => {
+        suspended.value = false;
+        void refreshOverGame();
+      }),
     );
     sdk.value = connected;
     store.value = items;
     await refreshHotkeys();
+    await refreshOverGame();
   } catch (reason) {
     error.value = errorMessage(reason);
   }
