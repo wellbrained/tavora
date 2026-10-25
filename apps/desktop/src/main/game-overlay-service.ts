@@ -25,6 +25,7 @@ import {
   appliesTo,
   gameInFront,
   isLive,
+  liveWindowId,
   looksExclusive,
   overlayId,
   overlayVisible,
@@ -36,6 +37,7 @@ import {
   type GameOverlayChange,
   type GameOverlaySubject,
   type InGamePanel,
+  type InGamePanelChange,
   type Opacity,
   type OverlayScope,
   type Rect,
@@ -130,7 +132,8 @@ export const toggleBinding = (overlay: GameOverlaySubject) => ({ owner: overlay.
 export const isOverlayAction = (action: string) => action === OVERLAY_TOGGLE_ACTION || action === OVERLAY_LAYER_ACTION;
 
 interface Open {
-  kind: "overlay" | "panel";
+  /** `live`: the overlay page of a panel in game, shown read-only in the panel's spot while the layer is closed. */
+  kind: "overlay" | "panel" | "live";
   window: OverlayWindow;
   opacity: Opacity;
   hideFromCapture: boolean;
@@ -165,6 +168,9 @@ export class GameOverlays {
   /** When each overlay's page crashed lately, and the overlays whose page crashed so often they are left alone. */
   private readonly crashes = new Map<string, number[]>();
   private readonly stopped = new Set<string>();
+  /** What each panel passes to panel.setLive, and who listens (live view windows); kept while the panel exists, in memory only. */
+  private readonly liveStates = new Map<string, JsonValue>();
+  private readonly liveWatchers = new Map<string, Set<(state: JsonValue | null | undefined) => void>>();
 
   private constructor(
     private readonly options: GameOverlayServiceOptions,
@@ -259,6 +265,41 @@ export class GameOverlays {
     return this.open.has(panelWindowId(instanceId));
   }
 
+  /** panel.setLive: what the panel's live view shows (already size-checked); null shows nothing. */
+  setLive(instanceId: string, state: JsonValue | null): void {
+    const had = this.liveStates.has(instanceId);
+    if (state === null) this.liveStates.delete(instanceId);
+    else this.liveStates.set(instanceId, state);
+    for (const fn of this.liveWatchers.get(instanceId) ?? []) fn(state);
+    // The view appears or goes when there is something to show or not; a changed state is just passed on.
+    if (had !== (state !== null) && this.hasPanel(instanceId)) this.tick();
+  }
+
+  /** The panel is closing for good: its live state goes. */
+  forgetLive(instanceId: string): void {
+    if (!this.liveStates.delete(instanceId)) return;
+    for (const fn of this.liveWatchers.get(instanceId) ?? []) fn(null);
+    if (this.hasPanel(instanceId)) this.tick();
+  }
+
+  /** Settings > Overlays: the live view's mode, opacity and Hide from capture of a panel in the game. */
+  updatePanelView(instanceId: string, change: InGamePanelChange): void {
+    if (this.store.updatePanelView(instanceId, change)) this.tick();
+    this.options.changed();
+  }
+
+  /** The overlay subject a panel's toggle key is kept under (its instance id is the key), or null when the panel isn't in the game. */
+  panelSubject(instanceId: string): GameOverlaySubject | null {
+    const panel = this.store.panelOf(instanceId);
+    return panel ? { owner: panel.owner, moduleId: panel.moduleId, gameId: panel.gameId, key: panel.instanceId } : null;
+  }
+
+  /** The panel in game a toggle key belongs to. */
+  private panelOfKey(record: Pick<HotkeyRecord, "owner" | "moduleId" | "gameId" | "target">): InGamePanel | undefined {
+    const panel = this.store.panelOf(record.target);
+    return panel && panel.owner === record.owner && panel.moduleId === record.moduleId && panel.gameId === record.gameId ? panel : undefined;
+  }
+
   /** Stop showing in game (or the panel is closing): the panel stays in its workspace slot. */
   stopPanel(instanceId: string): void {
     this.forgetPanels((panel) => panel.instanceId === instanceId);
@@ -319,9 +360,21 @@ export class GameOverlays {
   }
 
   private forgetPanels(test: (panel: InGamePanel) => boolean): void {
-    if (!this.store.forgetPanels(test)) return;
+    if (!this.dropPanels(test)) return;
     this.tick();
     this.options.changed();
+  }
+
+  /** Forgets the panels matching `test` with their live view's key; whether any went. */
+  private dropPanels(test: (panel: InGamePanel) => boolean): boolean {
+    const gone = this.store.panels().filter(test);
+    if (!this.store.forgetPanels(test)) return false;
+    for (const panel of gone) {
+      this.options.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.owner === panel.owner && record.moduleId === panel.moduleId && record.gameId === panel.gameId && record.target === panel.instanceId);
+      this.toggled.delete(liveWindowId(panel.instanceId));
+      this.revive(liveWindowId(panel.instanceId));
+    }
+    return true;
   }
 
   /** Forgets the overlays matching `test` with their keys; whether any went. */
@@ -352,15 +405,16 @@ export class GameOverlays {
   wants(record: HotkeyRecord): boolean {
     if (!this.active() || this.front === null) return false;
     if (record.action === OVERLAY_LAYER_ACTION) return true;
-    const overlay = this.store.find({ owner: record.owner, moduleId: record.moduleId, gameId: record.gameId, key: record.target });
-    return record.action === OVERLAY_TOGGLE_ACTION && overlay?.mode === "toggle" && appliesTo(overlay, this.front);
+    if (record.action !== OVERLAY_TOGGLE_ACTION) return false;
+    const item = this.store.find({ owner: record.owner, moduleId: record.moduleId, gameId: record.gameId, key: record.target }) ?? this.panelOfKey(record);
+    return item?.mode === "toggle" && appliesTo(item, this.front);
   }
 
   /** Whether a key works over every game (the layer key, and the toggle key of a general overlay): it collides with any game's keys. */
   general(record: Pick<HotkeyRecord, "owner" | "moduleId" | "gameId" | "action" | "target">): boolean {
     if (record.action === OVERLAY_LAYER_ACTION) return true;
     if (record.action !== OVERLAY_TOGGLE_ACTION) return false;
-    return this.store.find({ owner: record.owner, moduleId: record.moduleId, gameId: record.gameId, key: record.target })?.scope === "all";
+    return (this.store.find({ owner: record.owner, moduleId: record.moduleId, gameId: record.gameId, key: record.target }) ?? this.panelOfKey(record))?.scope === "all";
   }
 
   pressed(record: HotkeyRecord): void {
@@ -374,8 +428,10 @@ export class GameOverlays {
       return;
     }
     const overlay = this.store.find({ owner: record.owner, moduleId: record.moduleId, gameId: record.gameId, key: record.target });
-    if (!overlay || overlay.mode !== "toggle" || !appliesTo(overlay, this.front)) return;
-    const id = overlayId(overlay);
+    const panel = overlay ? undefined : this.panelOfKey(record);
+    const item = overlay ?? panel;
+    if (!item || item.mode !== "toggle" || !appliesTo(item, this.front)) return;
+    const id = panel ? liveWindowId(panel.instanceId) : overlayId(overlay!);
     if (!this.toggled.delete(id)) this.toggled.add(id);
     // Toggling is the player asking for it, also for a page that crashed too often.
     this.revive(id);
@@ -549,8 +605,39 @@ export class GameOverlays {
         }
       }
     }
+    // Live views: a panel in game shows its module's overlay page read-only in its own spot while the layer is closed.
+    // With the layer open the full panel is there instead, so the view goes quiet (and comes back in the new spot).
+    for (const panel of this.store.panels()) {
+      const id = liveWindowId(panel.instanceId);
+      live.add(id);
+      const module = this.options.module(panel.moduleId);
+      const usable = module !== undefined && module.owner === panel.owner && !!module.manifest.overlay;
+      const inFront = front !== null && appliesTo(panel, front);
+      const visible = usable && this.liveStates.has(panel.instanceId) && !this.stopped.has(id) && this.game !== null && !layerOpen && overlayVisible({ enabled: active, gameInFront: inFront, mode: panel.mode, toggledOn: this.toggled.has(id), layerOpen: false });
+      let entry = this.open.get(id);
+      if (!visible) {
+        if (entry?.shown) {
+          entry.window.setShown(false);
+          entry.shown = false;
+        }
+        if (entry) {
+          entry.idleSince = inFront ? null : (entry.idleSince ?? now);
+          if (entry.idleSince !== null && now - entry.idleSince >= IDLE_CLOSE_MS) this.dropWindow(id);
+        }
+        continue;
+      }
+      entry ??= this.createLive(panel, id);
+      entry.idleSince = null;
+      if (entry.opacity !== panel.opacity) entry.window.setOpacity((entry.opacity = panel.opacity));
+      if (entry.hideFromCapture !== panel.hideFromCapture) entry.window.setHideFromCapture((entry.hideFromCapture = panel.hideFromCapture));
+      entry.window.setRect(placeRelative(panel.rect, this.game!));
+      if (!entry.shown) {
+        entry.window.setShown((entry.shown = true));
+        entry.shownOrder = ++this.shownCount;
+      }
+    }
     for (const [id, entry] of this.open) {
-      if (live.has(id) && (entry.kind === "overlay" || layerOpen)) continue;
+      if (live.has(id) && (entry.kind !== "panel" || layerOpen)) continue;
       entry.window.destroy();
       this.open.delete(id);
     }
@@ -572,11 +659,7 @@ export class GameOverlays {
     const store = this.options.overlays;
     return {
       id,
-      // Looked up at every request: a module that was removed or replaced by another publisher's stops being served.
-      page: () => {
-        const now = this.options.module(subject.moduleId);
-        return now && now.owner === subject.owner && now.manifest.overlay ? { root: now.root, entry: now.manifest.overlay } : null;
-      },
+      page: () => this.pageOf(subject),
       state: () => store.peek(subject)?.state ?? null,
       watch: (fn) => {
         const link = store.peek(subject)?.link;
@@ -588,6 +671,39 @@ export class GameOverlays {
       ended: () => this.crashed(id),
       frameText,
     };
+  }
+
+  /** The overlay page of a module, looked up at every request: a module that was removed or replaced by another publisher's stops being served. */
+  private pageOf(subject: Pick<OverlaySubject, "owner" | "moduleId">): OverlayPage | null {
+    const now = this.options.module(subject.moduleId);
+    return now && now.owner === subject.owner && now.manifest.overlay ? { root: now.root, entry: now.manifest.overlay } : null;
+  }
+
+  /** The window of a panel's live view: the module's overlay page, fed by what the panel passes to panel.setLive. */
+  private createLive(panel: InGamePanel, id: string): Open {
+    const instanceId = panel.instanceId;
+    const window = this.options.openWindow({
+      id,
+      page: () => this.pageOf(panel),
+      state: () => this.liveStates.get(instanceId) ?? null,
+      watch: (fn) => {
+        const watchers = this.liveWatchers.get(instanceId) ?? new Set();
+        this.liveWatchers.set(instanceId, watchers);
+        watchers.add(fn);
+        return () => {
+          watchers.delete(fn);
+          if (watchers.size === 0) this.liveWatchers.delete(instanceId);
+        };
+      },
+      gameBounds: () => this.game,
+      moved: () => {},
+      closeRequested: () => {},
+      ended: () => this.crashed(id),
+      frameText: () => ({ name: this.options.panels?.name(instanceId) ?? panel.moduleId, closeLabel: translate(this.options.language(), "overlays.stopShowingLabel") }),
+    });
+    const entry: Open = { kind: "live", window, opacity: 100, hideFromCapture: false, arranging: false, shown: false, shownOrder: 0, idleSince: null, instanceId };
+    this.open.set(id, entry);
+    return entry;
   }
 
   private create(overlay: GameOverlay, id: string): Open | null {
@@ -727,6 +843,13 @@ export class GameOverlays {
         moduleId: panel.moduleId,
         name: this.options.panels?.name(panel.instanceId) ?? panel.moduleId,
         gameName: panel.scope === "all" ? null : (this.options.gameName(panel.gameId) ?? panel.gameId),
+        owner: panel.owner,
+        gameId: panel.gameId,
+        mode: panel.mode,
+        opacity: panel.opacity,
+        hideFromCapture: panel.hideFromCapture,
+        hotkey: this.options.keyOf(toggleBinding({ owner: panel.owner, moduleId: panel.moduleId, gameId: panel.gameId, key: panel.instanceId })),
+        live: this.options.module(panel.moduleId)?.manifest.overlay !== undefined,
       })),
     };
   }
@@ -736,13 +859,18 @@ export class GameOverlays {
     const language = this.options.language();
     if (binding.action === OVERLAY_LAYER_ACTION) return { label: translate(language, "overlays.layerLabel"), module: "Tavora", action: translate(language, "overlays.layerAction") };
     const overlay = this.store.find({ owner: binding.owner, moduleId: binding.moduleId, gameId: binding.gameId, key: binding.target });
+    const panel = overlay ? undefined : this.panelOfKey(binding);
+    if (panel) {
+      const where = panel.scope === "all" ? translate(language, "overlays.allGames") : (this.options.gameName(panel.gameId) ?? panel.gameId);
+      return { label: this.options.panels?.name(panel.instanceId) ?? panel.moduleId, module: where, action: translate(language, "overlays.toggleAction") };
+    }
     const game = overlay?.scope === "all" ? translate(language, "overlays.allGames") : (this.options.gameName(binding.gameId) ?? binding.gameId);
     return { label: overlay ? this.nameOf(overlay) : binding.target, module: game, action: translate(language, "overlays.toggleAction") };
   }
 
   /** Whether the player has this overlay (a key can be set only for one that exists). */
   has(subject: GameOverlaySubject): boolean {
-    return this.store.find(subject) !== undefined;
+    return this.store.find(subject) !== undefined || this.panelOfKey({ ...subject, target: subject.key }) !== undefined;
   }
 
   /** Quitting: every window closes and the last changes are written. */

@@ -987,7 +987,9 @@ describe("a panel in the game", () => {
   it("is over any library game in front when it comes from a workspace that is no game", async () => {
     const { service, world, key } = await setup();
     add(service, PANEL, "personal");
-    expect(service.view().panels).toEqual([{ instanceId: PANEL, moduleId: TODOS.manifest.id, name: "To-Dos", gameName: null }]);
+    expect(service.view().panels).toEqual([
+      { instanceId: PANEL, owner: "official", moduleId: TODOS.manifest.id, gameId: "personal", name: "To-Dos", gameName: null, mode: "always", opacity: 100, hideFromCapture: false, hotkey: null, live: false },
+    ]);
     world.foreground = { program: "D:\\Games\\Other\\other.exe", bounds: { ...SCREEN }, notification: 0 };
     service.tick();
     service.pressed(layerKey(key));
@@ -1116,5 +1118,148 @@ describe("a panel in the game", () => {
     await service.shutdown();
     const again = await GameOverlayStore.load(dir);
     expect(again.panelOf(PANEL)).toMatchObject({ instanceId: PANEL, gameId: "elden", scope: "game" });
+  });
+});
+
+describe("a panel's live view", () => {
+  // A panel of a module with an overlay page, shown in the game.
+  const add = (service: GameOverlays, module = CLOCK, instanceId = PANEL) => service.showPanel({ owner: module.owner, moduleId: module.manifest.id, gameId: "elden", instanceId });
+  const liveWindows = (world: { windows: FakeWindow[] }) => world.windows.filter((window) => window.request.id.startsWith("live\n") && !window.destroyed);
+  const panelWindows = (world: { windows: FakeWindow[] }) => world.windows.filter((window) => window.request.instanceId !== undefined);
+
+  it("shows nothing until the panel passes a state, then the overlay page in the panel's spot with that state", async () => {
+    const { service, world } = await setup();
+    add(service);
+    expect(liveWindows(world)).toHaveLength(0);
+    service.setLive(PANEL, { hp: 3 });
+    const [window] = liveWindows(world);
+    expect(window).toMatchObject({ shown: true, arranging: false, opacity: 100, hideFromCapture: false });
+    expect(window!.rect).toEqual({ x: expect.any(Number), y: expect.any(Number), width: expect.any(Number), height: expect.any(Number) });
+    expect(window!.request.page()).toEqual({ root: "/nowhere", entry: "dist/overlay.html" });
+    expect(window!.request.state()).toEqual({ hp: 3 });
+    expect(window!.request.gameBounds()).toEqual(SCREEN);
+  });
+
+  it("feeds the page every new state, and hides the view when the state goes", async () => {
+    const { service, world } = await setup();
+    add(service);
+    service.setLive(PANEL, 1);
+    const [window] = liveWindows(world);
+    const heard: unknown[] = [];
+    const stop = window!.request.watch((state) => heard.push(state));
+    service.setLive(PANEL, 2);
+    expect(heard).toEqual([2]);
+    expect(window!.request.state()).toBe(2);
+    stop?.();
+    service.setLive(PANEL, 3);
+    expect(heard).toEqual([2]);
+    service.setLive(PANEL, null);
+    expect(window!.shown).toBe(false);
+    service.setLive(PANEL, 4);
+    expect(window!.shown).toBe(true);
+  });
+
+  it("gives way to the full panel while the layer is open, and returns in the new spot", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.setLive(PANEL, "x");
+    const [view] = liveWindows(world);
+    service.pressed(layerKey(key));
+    expect(view!.shown).toBe(false);
+    expect(panelWindows(world)).toHaveLength(1);
+    panelWindows(world)[0]!.request.moved({ x: 960, y: 540, width: 480, height: 270 });
+    world.registered.get("Escape")!();
+    expect(liveWindows(world)).toEqual([view]);
+    expect(view!.shown).toBe(true);
+    expect(view!.rect).toEqual({ x: 960, y: 540, width: 480, height: 270 });
+  });
+
+  it("is click-through and read-only: it is never arranged and has no frame actions", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.setLive(PANEL, "x");
+    const [view] = liveWindows(world);
+    service.pressed(layerKey(key));
+    world.registered.get("Escape")!();
+    expect(view!.log).not.toContain("arrange");
+    view!.request.closeRequested();
+    view!.request.moved({ x: 1, y: 1, width: 10, height: 10 });
+    expect(service.hasPanel(PANEL)).toBe(true);
+    expect(view!.rect).not.toEqual({ x: 1, y: 1, width: 10, height: 10 });
+  });
+
+  it("shows only with the toggle key in toggle mode, and the key belongs to the panel", async () => {
+    const { service, world } = await setup();
+    add(service);
+    service.setLive(PANEL, "x");
+    service.updatePanelView(PANEL, { mode: "toggle" });
+    expect(liveWindows(world).every((window) => !window.shown)).toBe(true);
+    const subject = service.panelSubject(PANEL)!;
+    expect(subject).toEqual({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: PANEL });
+    expect(service.has(subject)).toBe(true);
+    const record: HotkeyRecord = { ...toggleBinding(subject), label: "x", accelerator: "F8" };
+    expect(service.wants(record)).toBe(true);
+    expect(service.general(record)).toBe(false);
+    expect(service.dialogNames(toggleBinding(subject))).toEqual({ label: "To-Dos", module: "Elden Ring", action: "Show or hide" });
+    service.pressed(record);
+    expect(liveWindows(world)[0]!.shown).toBe(true);
+    service.pressed(record);
+    expect(liveWindows(world)[0]!.shown).toBe(false);
+    service.updatePanelView(PANEL, { mode: "always" });
+    expect(liveWindows(world)[0]!.shown).toBe(true);
+    expect(service.wants(record)).toBe(false);
+  });
+
+  it("applies opacity and Hide from capture, and lists them in the settings view", async () => {
+    const { service, world } = await setup();
+    add(service);
+    service.setLive(PANEL, "x");
+    service.updatePanelView(PANEL, { opacity: 50, hideFromCapture: true });
+    expect(liveWindows(world)[0]).toMatchObject({ opacity: 50, hideFromCapture: true });
+    expect(service.view().panels).toEqual([
+      { instanceId: PANEL, owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", name: "To-Dos", gameName: "Elden Ring", mode: "always", opacity: 50, hideFromCapture: true, hotkey: null, live: true },
+    ]);
+  });
+
+  it("is not there for a module without an overlay page", async () => {
+    const { service, world } = await setup();
+    world.modules.set(NO_OVERLAY.manifest.id, NO_OVERLAY);
+    add(service, NO_OVERLAY);
+    service.setLive(PANEL, "x");
+    expect(liveWindows(world)).toHaveLength(0);
+    expect(service.view().panels[0]!.live).toBe(false);
+  });
+
+  it("is not there when the game is not in front, or Game overlays are off", async () => {
+    const { service, world } = await setup();
+    add(service);
+    service.setLive(PANEL, "x");
+    world.enabled = false;
+    service.tick();
+    expect(liveWindows(world)).toHaveLength(0);
+    world.enabled = true;
+    service.tick();
+    expect(liveWindows(world)).toHaveLength(1);
+    world.foreground = { program: "D:\\Games\\Other\\other.exe", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(liveWindows(world).every((window) => !window.shown)).toBe(true);
+  });
+
+  it("goes with the panel: stop showing or closing for good, with its key and its state", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.setLive(PANEL, "x");
+    key(toggleBinding(service.panelSubject(PANEL)!));
+    service.stopPanel(PANEL);
+    expect(liveWindows(world)).toHaveLength(0);
+    expect(world.removedKeys.map((record) => record.target)).toEqual([PANEL]);
+    // Shown in the game again later: nothing until the panel passes a state again.
+    service.forgetLive(PANEL);
+    add(service);
+    expect(liveWindows(world)).toHaveLength(0);
+    service.setLive(PANEL, "y");
+    expect(liveWindows(world)).toHaveLength(1);
+    service.forgetLive(PANEL);
+    expect(liveWindows(world).every((window) => !window.shown)).toBe(true);
   });
 });

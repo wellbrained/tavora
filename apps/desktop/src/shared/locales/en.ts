@@ -1506,7 +1506,7 @@ export const en = {
   "settings.game-panels.label": "Panels in game",
   "settings.game-panels.search": "Panels that show over your game while the layer is open.",
   "settings.game-panels.keywords": "panel, in game, layer, stop showing",
-  "settings.game-panels.description": "They show over your game while the layer is open.",
+  "settings.game-panels.description": "Open the layer to move them. When it's closed, a panel can show a live view in its spot.",
   "overlays.group.overlays": "Overlays",
   "overlays.group.list": "Your overlays",
   "overlays.group.panels": "Panels in game",

@@ -1916,6 +1916,10 @@ export class Host {
         const { owner, moduleId, gameId, key, mode, opacity, hideFromCapture } = action;
         this.gameOverlays.update({ owner, moduleId, gameId, key }, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
       },
+      "set-panel-view": (action) => {
+        const { instanceId, mode, opacity, hideFromCapture } = action;
+        this.gameOverlays.updatePanelView(instanceId, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
+      },
       "remove-game-overlay": (action) => this.gameOverlays.remove(action),
       "set-overlay-key": (action) => {
         const { gameId, owner, moduleId, key } = action;
@@ -3094,6 +3098,7 @@ export class Host {
       launch: () => this.launchOf(record),
       setContent: (content) => this.setPanelContent(record, content),
       openPanel: (type, content) => this.openRelatedPanel(record, type, content),
+      setLive: (state) => this.gameOverlays.setLive(record.instanceId, state),
       setMaximized: (maximized) => this.window.webContents.send("host:shortcut", `${maximized ? "maximize" : "restore"}:${record.instanceId}`),
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
@@ -3350,7 +3355,10 @@ export class Host {
     this.viewsByContents.delete(view.webContentsId);
     this.browsersByContents.delete(view.webContentsId);
     // A panel in the layer is let go of by its window first (the window never closes the page, this does).
-    if (forget && view instanceof ModuleView && this.gameOverlays?.hasPanel(instanceId)) this.gameOverlays.stopPanel(instanceId);
+    if (forget && view instanceof ModuleView) {
+      this.gameOverlays?.forgetLive(instanceId);
+      if (this.gameOverlays?.hasPanel(instanceId)) this.gameOverlays.stopPanel(instanceId);
+    }
     this.window.contentView.removeChildView(view.view);
     view.dispose();
   }

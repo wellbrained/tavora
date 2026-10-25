@@ -681,7 +681,23 @@ export interface GameOverlaysView {
       hotkey: OverlayKeyView | null;
     }[];
   }[];
-  panels: { instanceId: string; moduleId: string; name: string; /** Null for a general panel (made in a workspace that is no game). */ gameName: string | null }[];
+  panels: {
+    instanceId: string;
+    owner: string;
+    moduleId: string;
+    /** The workspace the panel was made in. */
+    gameId: string;
+    name: string;
+    /** Null for a general panel (made in a workspace that is no game). */
+    gameName: string | null;
+    /** Its live view (the module's overlay page over the game while the layer is closed): always there, or with a key. */
+    mode: "always" | "toggle";
+    opacity: 100 | 75 | 50 | 25;
+    hideFromCapture: boolean;
+    hotkey: OverlayKeyView | null;
+    /** The module has an overlay page, so the panel can have a live view at all. */
+    live: boolean;
+  }[];
 }
 
 export interface HotkeyView {
