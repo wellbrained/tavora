@@ -20,6 +20,26 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.50",
+    date: "2026-10-25",
+    title: "Clearer focus and a tidier Playground",
+    notes: [
+      "Checkboxes, switches and sliders now show where the keyboard is.",
+      "The delete dialog's Cancel button speaks German.",
+      "The Playground groups its controls into tabs.",
+    ],
+  },
+  {
+    version: "0.20.49",
+    date: "2026-10-25",
+    title: "Whiteboard polish",
+    notes: [
+      "The Whiteboard's top bar wraps on narrow panels, so no button gets cut off.",
+      "Empty boards say how to start, and a failed connection has a Try again button.",
+      "\"Pictures\" are now \"images\" everywhere, and the hints are shorter.",
+    ],
+  },
+  {
     version: "0.20.48",
     date: "2026-10-25",
     title: "Whiteboard polish",
