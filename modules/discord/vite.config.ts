@@ -1,6 +1,9 @@
 import tailwindcss from "@tailwindcss/vite";
 import vue from "@vitejs/plugin-vue";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
+
+const page = (name: string) => fileURLToPath(new URL(`./src/${name}.html`, import.meta.url));
 
 // Modules ship as self-contained bundles: relative asset paths, no remote code.
 export default defineConfig({

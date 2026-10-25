@@ -4,8 +4,10 @@
 // this module only ever sees what Discord answers. The channel to rejoin is kept in the settings
 // shared by every game (storage.app), the server a game remembers in that game's settings.
 
-import { TavoraError, type DiscordCommand, type DiscordCommands, type DiscordEvent, type DiscordEventName, type DiscordState, type JsonValue, type TavoraSDK } from "@tavora/sdk";
+import { TavoraError, type DiscordCommand, type DiscordCommands, type DiscordEvent, type DiscordEventName, type DiscordState, type GameOverlayResult, type JsonValue, type OverlayLinkResult, type TavoraSDK } from "@tavora/sdk";
 import { shallowRef } from "vue";
+import { shrinkAvatar } from "./avatar";
+import { buildOverlayState, OVERLAY_KEY, type OverlayMember, type OverlayState } from "./overlay-state";
 import {
   avatarUrl,
   eventChannel,
@@ -33,7 +35,10 @@ const VOICE_EVENTS = ["VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_D
 const MAX_PICTURES = 300;
 
 /** Keys of the module's settings: `last` is shared by every game, `server` belongs to the game. */
-export const KEYS = { last: "last", server: "server" } as const;
+export const KEYS = { last: "last", server: "server", names: "overlayNames", overGame: "overlayOverGame" } as const;
+
+/** The voice overlay is published at most this often (5 times a second), because talking can flicker. */
+export const PUBLISH_MS = 200;
 
 /** Someone in a voice channel, as the panel shows them. Names come from Discord and are shown as text only. */
 export interface Member {
@@ -104,12 +109,20 @@ export class PanelError extends Error {
 export interface PanelOptions {
   setTimer?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
   clearTimer?: (timer: ReturnType<typeof setTimeout>) => void;
+  /** Timer for the throttled overlay publishing, apart from the others. */
+  publishTimer?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
+  /** Makes the tiny picture the overlay carries from a Discord picture. */
+  shrink?: (source: string) => Promise<string | null>;
+  now?: () => number;
 }
 
 export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
   const discord = sdk.connectors.discord;
   const setTimer = options.setTimer ?? setTimeout;
   const clearTimer = options.clearTimer ?? clearTimeout;
+  const publishTimer = options.publishTimer ?? setTimeout;
+  const shrink = options.shrink ?? shrinkAvatar;
+  const now = options.now ?? Date.now;
 
   let state: DiscordState | null = null;
   let denied = false;
@@ -119,6 +132,14 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
   const guilds = new Map<string, Guild>();
   const guildIcons = new Map<string, string | null>();
   const avatars = new Map<string, string | null>();
+  /** The same pictures shrunk for the overlay, with the address they were made from. */
+  const tinies = new Map<string, { from: string; tiny: string | null }>();
+  /** The voice overlay's settings: names on it, and whether the player turned it on over the game (what the switch shows). */
+  let overlayNames = true;
+  let overlayOverGame = false;
+  let published = "";
+  let lastPublish = 0;
+  let publishPending: ReturnType<typeof setTimeout> | undefined;
   const speaking = new Set<string>();
   let call: VoiceChannel | null = null;
   let browse: VoiceChannel[] = [];
@@ -129,6 +150,8 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
   const cleanup: (() => void)[] = [];
 
   const view = shallowRef<PanelView>(build());
+  /** What the settings for the voice overlay show. */
+  const overlay = shallowRef({ names: true, overGame: false });
   let queued = false;
 
   function build(): PanelView {
@@ -178,7 +201,54 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
     queueMicrotask(() => {
       queued = false;
       view.value = build();
+      schedulePublish();
     });
+  }
+
+  // ── The voice overlay ────────────────────────────────────────────────
+
+  /** The state the overlay shows now; null when the player is in no voice channel. */
+  function overlayState(): OverlayState | null {
+    if (!connected() || !call) return null;
+    const members: OverlayMember[] = call.people.map((person) => {
+      const picture = avatars.get(person.id) ?? null;
+      const made = tinies.get(person.id);
+      const tiny = picture && made?.from === picture ? made.tiny : null;
+      return { id: person.id, name: person.name, tiny, speaking: speaking.has(person.id), muted: person.selfMute || person.serverMute, deafened: person.selfDeaf || person.serverDeaf };
+    });
+    return buildOverlayState(members, { names: overlayNames });
+  }
+
+  /** Sends the overlay what it shows if that changed, at most every PUBLISH_MS; the last change always goes out. */
+  function schedulePublish(force = false): void {
+    if (!sdk.overlay) return;
+    if (force) published = "";
+    if (publishPending) return;
+    const wait = Math.max(0, lastPublish + PUBLISH_MS - now());
+    publishPending = publishTimer(() => {
+      publishPending = undefined;
+      const state = overlayState();
+      const text = JSON.stringify(state);
+      if (text === published) return;
+      published = text;
+      lastPublish = now();
+      const sent = state ? sdk.overlay.publish(OVERLAY_KEY, state as unknown as JsonValue) : sdk.overlay.remove(OVERLAY_KEY);
+      sent.catch(() => {
+        // Not sent (no grant yet, say): the next change tries again.
+        published = "";
+      });
+    }, wait);
+  }
+
+  /** Makes the tiny overlay picture of someone whose Discord picture just arrived. */
+  function makeTiny(id: string, picture: string): void {
+    void shrink(picture).then(
+      (tiny) => {
+        tinies.set(id, { from: picture, tiny });
+        if (tiny) emit();
+      },
+      () => undefined,
+    );
   }
 
   const connected = () => state?.status === "connected";
@@ -194,6 +264,9 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
   async function start(): Promise<void> {
     last = parseLast(await sdk.storage.app.get(KEYS.last));
     game = parseGameServer(await sdk.storage.get(KEYS.server));
+    overlayNames = (await sdk.storage.app.get(KEYS.names)) !== false;
+    overlayOverGame = (await sdk.storage.app.get(KEYS.overGame)) === true;
+    overlay.value = { names: overlayNames, overGame: overlayOverGame };
     cleanup.push(
       discord.onStateChange((next) => onState(next)),
       discord.onEvent((event) => onEvent(event)),
@@ -212,6 +285,8 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
 
   function stop(): void {
     cleanup.splice(0).forEach((fn) => fn());
+    if (publishPending) clearTimer(publishPending);
+    publishPending = undefined;
     if (othersTimer) clearTimer(othersTimer);
     othersTimer = undefined;
     epoch++;
@@ -392,6 +467,7 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
         (image) => {
           if (!avatars.has(person.id) || !image) return;
           avatars.set(person.id, image);
+          makeTiny(person.id, image);
           emit();
         },
         () => undefined,
@@ -498,5 +574,54 @@ export function createPanel(sdk: TavoraSDK, options: PanelOptions = {}) {
     await loadBrowse();
   }
 
-  return { view, start, stop, connect, allowControl, join, leave, setVoice, setUserVoice, rememberGame, setGameServer, reload };
+  // ── The voice overlay's settings (from clicks) ───────────────────────
+
+  /** Names on the overlay, on or off. */
+  async function setOverlayNames(on: boolean): Promise<void> {
+    overlayNames = on;
+    overlay.value = { ...overlay.value, names: on };
+    await sdk.storage.app.set(KEYS.names, on);
+    schedulePublish();
+  }
+
+  /**
+   * Over game: puts the voice overlay over the game. "off" means Game overlays are off in Tavora (which then opens
+   * that setting), "full" that the game has no room for another. The SDK can't take an overlay away again, so turning
+   * the switch off only forgets it here; the player removes the overlay in Settings > Overlays.
+   */
+  async function setOverGame(on: boolean): Promise<GameOverlayResult | "removed"> {
+    if (!on) {
+      overlayOverGame = false;
+      overlay.value = { ...overlay.value, overGame: false };
+      await sdk.storage.app.set(KEYS.overGame, false);
+      return "removed";
+    }
+    const result = await sdk.overlay.showOverGame(OVERLAY_KEY);
+    overlayOverGame = result === "shown";
+    overlay.value = { ...overlay.value, overGame: overlayOverGame };
+    await sdk.storage.app.set(KEYS.overGame, overlayOverGame);
+    // The overlay shows what is going on from the start, before the next change.
+    if (result === "shown") schedulePublish(true);
+    return result;
+  }
+
+  /** Preview: a small Tavora window with the overlay. */
+  async function previewOverlay(): Promise<void> {
+    schedulePublish(true);
+    await sdk.overlay.preview(OVERLAY_KEY);
+  }
+
+  /** Copy OBS link: "off" when Stream overlays are off in Tavora, "denied" when the player didn't allow it. */
+  async function copyOverlayLink(): Promise<OverlayLinkResult> {
+    try {
+      const result = await sdk.overlay.copyLink(OVERLAY_KEY);
+      if (result === "copied") schedulePublish(true);
+      return result;
+    } catch (reason) {
+      if (reason instanceof TavoraError && reason.code === "PERMISSION_DENIED") return "denied";
+      throw reason;
+    }
+  }
+
+  return { view, overlay, start, stop, connect, allowControl, join, leave, setVoice, setUserVoice, rememberGame, setGameServer, reload, setOverlayNames, setOverGame, previewOverlay, copyOverlayLink };
 }

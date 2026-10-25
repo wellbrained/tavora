@@ -1,0 +1,93 @@
+/* The voice overlay over the game or in OBS: fully transparent, a subtle dark plate behind each row. The size follows
+   the font size set from the height of the source (overlay.ts); everything else is in em. */
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+main {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.12em;
+  height: 100%;
+  padding: 0.1em;
+  color: #fff;
+  font-family: system-ui, "Segoe UI", sans-serif;
+  line-height: 1;
+}
+
+main[hidden] {
+  display: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.18em;
+  max-width: 100%;
+  padding: 0.08em 0.22em 0.08em 0.08em;
+  border-radius: 999px;
+  background: rgba(10, 10, 14, 0.55);
+}
+
+.row[data-names="false"] {
+  padding-right: 0.08em;
+}
+
+.avatar {
+  flex: none;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 0.9em;
+  height: 0.9em;
+  border-radius: 50%;
+  object-fit: cover;
+  font-weight: 700;
+  color: #fff;
+  background: var(--colour, #5865f2);
+  /* Quiet unless talking: the ring and glow show who speaks. */
+  box-shadow: 0 0 0 0.07em transparent;
+  transition: box-shadow 120ms;
+}
+
+div.avatar > span {
+  font-size: 0.36em;
+}
+
+.row[data-talking="true"] .avatar {
+  box-shadow:
+    0 0 0 0.2em #3ba55d,
+    0 0 0.9em 0.3em rgba(59, 165, 93, 0.7);
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.42em;
+  font-weight: 600;
+  text-shadow: 0 0 0.3em rgba(0, 0, 0, 0.9);
+}
+
+.icon {
+  flex: none;
+  width: 0.4em;
+  height: 0.4em;
+  color: #ed4245;
+  filter: drop-shadow(0 0 0.05em rgba(0, 0, 0, 0.8));
+}
+
+.more {
+  padding: 0.08em 0.3em;
+  border-radius: 999px;
+  background: rgba(10, 10, 14, 0.55);
+  font-size: 0.4em;
+  font-weight: 600;
+}
