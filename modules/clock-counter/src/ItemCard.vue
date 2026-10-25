@@ -64,7 +64,7 @@ const startLabel = computed(() => {
         <span class="min-w-0 flex-1 text-center">
           <span class="block truncate text-3xl font-semibold tabular-nums" data-testid="value">{{ display }}</span>
           <span v-if="item.goal !== null" class="text-muted-foreground text-xs tabular-nums" :class="goalReached(item) && 'text-success'">
-            {{ goalReached(item) ? t("item.goalDone") : "" }} {{ item.value }} / {{ item.goal }}
+            <template v-if="goalReached(item)">{{ t("item.goalDone") }}&nbsp;</template>{{ item.value }} / {{ item.goal }}
           </span>
         </span>
         <Button variant="secondary" size="icon" :aria-label="t('item.up')" :title="t('item.up')" data-testid="up" @click="panel.act('up', item.id)">
