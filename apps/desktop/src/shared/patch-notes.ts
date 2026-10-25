@@ -20,6 +20,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.51",
+    date: "2026-10-25",
+    title: "Overlays over your game",
+    notes: [
+      "Modules can now show an overlay over your game. Turn it on in Settings > Overlays.",
+      "Overlays show only while the game is in front, and hide when you switch away.",
+      "Set an Arrange overlays key per game to move and resize them right in the game.",
+      "Pick for each overlay when it shows, how see-through it is, and whether to hide it from screen capture.",
+      "In Clock & Counter, press Show over game in a clock or counter's settings.",
+    ],
+  },
+  {
     version: "0.20.50",
     date: "2026-10-25",
     title: "Clearer focus and a tidier Playground",
