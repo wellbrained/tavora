@@ -45,6 +45,8 @@ describe("a library saved by 0.1.0", () => {
 
   it("gives settings that did not exist yet their defaults, and does not show the welcome again", () => {
     expect(library.autoUpdate).toBe(true);
+    // Modules never update by themselves for a profile saved before the setting existed.
+    expect(library.autoUpdateModules).toBe(false);
     expect(library.steamIcons).toBe(true);
     expect(library.onboarded).toBe(true);
     // Nobody had chosen light or dark before, so the theme follows the system.

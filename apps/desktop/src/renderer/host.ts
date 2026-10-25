@@ -222,7 +222,7 @@ export interface ShareIconsRequest {
 export interface AddModuleRequest {
   kind: "add-module";
   slot?: string;
-  view?: "catalog";
+  view?: "catalog" | "updates";
   /** Opens the catalog with this module's page, such as one just published. */
   browse?: string;
 }
@@ -262,6 +262,8 @@ export interface GrantRequest {
   review: boolean;
   /** A catalog update that asks for more (ModuleState.update): allowing it installs the update. */
   update?: boolean;
+  /** Back to the library's Updates view when answered, going on with the ones queued by Update all. */
+  backToUpdates?: boolean;
   /** A connector the module asks for on request, now that it needs it (HostViewState.pendingConnector). */
   onRequest?: { id: number; connectors: ModuleConnector[] };
 }
@@ -423,6 +425,28 @@ export function confirmAction(request: Omit<ConfirmRequest, "kind" | "danger"> &
 }
 
 type ModuleState = HostViewState["modules"][number];
+
+/** Update all: modules whose update asks for new access, still to answer one after another. */
+export const updateQueue = ref<string[]>([]);
+
+/** Opens the consent dialog for a waiting update; answering it returns to the library's Updates view. */
+export function askForUpdate(moduleId: string): void {
+  dialog.value = { kind: "grant", moduleId, slot: null, review: true, update: true, backToUpdates: true };
+}
+
+/** After an update was answered: the next one queued by Update all, or back to the Updates view. */
+export function nextUpdateAsk(): void {
+  let next = updateQueue.value.shift();
+  while (next !== undefined && !state.value?.modules.find((item) => item.id === next)?.update) next = updateQueue.value.shift();
+  if (next !== undefined) askForUpdate(next);
+  else dialog.value = { kind: "add-module", view: "updates" };
+}
+
+/** "Not now" on an update from the Updates view: the rest of the queue is dropped. */
+export function stopUpdateAsks(): void {
+  updateQueue.value = [];
+  dialog.value = { kind: "add-module", view: "updates" };
+}
 
 /** Whether the module asks for something the player has not granted yet. */
 export function needsGrant(module: ModuleState): boolean {

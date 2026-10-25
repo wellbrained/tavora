@@ -11,6 +11,7 @@
 import { ArrowRightLeft, CircleAlert, CloudDownload, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Store, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { act, confirmAction, dialog, gamesUsing, listOf, settingsOpen, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";
@@ -61,6 +62,11 @@ async function install() {
   );
 }
 
+const autoUpdateModules = computed({
+  get: () => state.value!.library.autoUpdateModules,
+  set: (enabled: boolean) => void act({ type: "set-auto-update-modules", enabled }),
+});
+
 /** Asks the catalog for updates of the modules installed from it now. */
 const checking = ref(false);
 async function checkUpdates() {
@@ -70,7 +76,10 @@ async function checkUpdates() {
   if (!result.ok) return;
   const updated = result.updated ?? 0;
   const waiting = result.waiting ?? 0;
-  showToast(updated + waiting === 0 ? t("settings.modules.updatesNone") : t("settings.modules.updatesFound", { updated: String(updated), waiting: String(waiting) }));
+  if (updated + waiting === 0) showToast(t("settings.modules.updatesNone"));
+  // Nothing installed: they were only found, and wait for the player.
+  else if (updated === 0) showToast(t("settings.modules.updatesWaiting", { count: waiting }));
+  else showToast(t("settings.modules.updatesFound", { updated: String(updated), waiting: String(waiting) }));
 }
 
 function moveLocal(module: ModuleView) {
@@ -170,6 +179,14 @@ function remove(module: ModuleView) {
           <RefreshCw :stroke-width="1.5" />
         </Button>
       </span>
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.auto-update-modules.label')"
+      :description="t('settings.auto-update-modules.description')"
+      setting="auto-update-modules"
+      :highlighted="highlight === 'auto-update-modules'"
+    >
+      <Switch v-model="autoUpdateModules" :aria-label="t('settings.auto-update-modules.label')" data-testid="auto-update-modules" />
     </SettingRow>
     <div :class="cn('-mx-5 px-5 transition-colors duration-500', highlight === 'installed-modules' && 'bg-primary/10')" data-setting="installed-modules">
       <ul class="flex flex-col" :aria-label="t('settings.installed-modules.label')" data-testid="module-list">

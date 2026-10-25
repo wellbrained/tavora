@@ -115,6 +115,9 @@ describe("adding games", () => {
 
   it("has automatic updates on by default and keeps only a real setting", () => {
     expect(emptyLibrary().autoUpdate).toBe(true);
+    expect(emptyLibrary().autoUpdateModules).toBe(false);
+    expect(sanitizeLibrary({ autoUpdateModules: true }).autoUpdateModules).toBe(true);
+    expect(sanitizeLibrary({ autoUpdateModules: "yes" }).autoUpdateModules).toBe(false);
     expect(sanitizeLibrary({ autoUpdate: false }).autoUpdate).toBe(false);
     expect(sanitizeLibrary({ autoUpdate: "no" }).autoUpdate).toBe(true);
   });

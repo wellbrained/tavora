@@ -86,6 +86,8 @@ export interface Library {
   onlineSearch: boolean;
   /** New versions of Tavora download by themselves. Off means the player starts the download. */
   autoUpdate: boolean;
+  /** Updates of catalog modules that ask for nothing new install by themselves; off, they wait for the player. */
+  autoUpdateModules: boolean;
   /** Game icons may be taken from Steam on this PC. Off means the generated badge. */
   steamIcons: boolean;
   /** The panel tabs show an icon before the module name. */
@@ -175,6 +177,7 @@ export function emptyLibrary(): Library {
     grayscaleText: false,
     onlineSearch: true,
     autoUpdate: true,
+    autoUpdateModules: false,
     steamIcons: true,
     moduleIcons: true,
     streamOverlays: false,
@@ -700,6 +703,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.grayscaleText === "boolean") library.grayscaleText = saved.grayscaleText;
   if (typeof saved.onlineSearch === "boolean") library.onlineSearch = saved.onlineSearch;
   if (typeof saved.autoUpdate === "boolean") library.autoUpdate = saved.autoUpdate;
+  if (typeof saved.autoUpdateModules === "boolean") library.autoUpdateModules = saved.autoUpdateModules;
   if (typeof saved.steamIcons === "boolean") library.steamIcons = saved.steamIcons;
   if (typeof saved.moduleIcons === "boolean") library.moduleIcons = saved.moduleIcons;
   if (typeof saved.streamOverlays === "boolean") library.streamOverlays = saved.streamOverlays;

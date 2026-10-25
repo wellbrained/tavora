@@ -501,6 +501,8 @@ export interface HostViewState {
     onlineSearch: boolean;
     /** New versions of Tavora download by themselves (installed builds only). */
     autoUpdate: boolean;
+    /** Catalog module updates that ask for nothing new install by themselves. */
+    autoUpdateModules: boolean;
     /** Whether game icons may be taken from Steam on this PC. */
     steamIcons: boolean;
     /** Whether panel tabs show an icon before the module name. */
