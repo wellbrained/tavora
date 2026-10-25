@@ -34,7 +34,7 @@ const tagClass = {
 <template>
   <li class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b py-4 last:border-b-0" :data-testid="`module-${module.id}`">
     <span class="bg-primary/10 border-primary/20 text-primary flex size-10 flex-none items-center justify-center rounded-lg border" aria-hidden="true">
-      <ModuleIcon :module-id="module.id" size="size-5" />
+      <ModuleIcon :module-id="module.id" size="size-[34px]" />
     </span>
     <div class="flex min-w-0 flex-1 basis-48 flex-col gap-0.5">
       <span class="flex min-w-0 items-center gap-2">
