@@ -98,3 +98,26 @@ test("a crashed module reloads with its saved data intact", async () => {
   expect(await inModule(app, VANILLA, `document.querySelector('[data-testid="note"]').value`)).toBe("before the crash");
   await app.close();
 });
+
+test("the Tavora window loads again after a crash, and shows why after a second one", async () => {
+  const { app } = await launch();
+  // Playwright gives up on a page once it crashed, so these look in through the main process.
+  const host = <T>(method: "forcefullyCrashRenderer" | "executeJavaScript", script?: string) =>
+    app.evaluate(({ BrowserWindow }, call) => {
+      const contents = BrowserWindow.getAllWindows()[0]!.webContents;
+      if (call.method === "forcefullyCrashRenderer") return contents.forcefullyCrashRenderer();
+      // A script sent to a page that is crashing or loading may never answer.
+      if (contents.isCrashed() || contents.isLoading()) return "";
+      return Promise.race([contents.executeJavaScript(call.script!), new Promise((resolve) => setTimeout(() => resolve(""), 1000))]);
+    }, { method, script }) as Promise<T>;
+  const shows = () =>
+    host<string>("executeJavaScript", `document.querySelector("[data-testid=startup-error] h1")?.textContent?.trim() ?? (document.getElementById("app")?.childElementCount ? "app" : "")`).catch(() => "");
+
+  await host("forcefullyCrashRenderer");
+  await expect.poll(shows, { timeout: 20_000 }).toBe("app");
+  await host("forcefullyCrashRenderer");
+  await expect.poll(shows, { timeout: 20_000 }).toBe("Tavora crashed");
+  await host("executeJavaScript", `document.querySelector("[data-testid=startup-error-reload]").click()`);
+  await expect.poll(shows, { timeout: 20_000 }).toBe("app");
+  await app.close();
+});
