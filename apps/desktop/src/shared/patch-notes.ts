@@ -22,53 +22,20 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.21.13",
     date: "2026-10-25",
-    title: "To-Dos while you play",
-    notes: [
-      "To-Dos in your game stay visible as a read-only list. Set its background and padding in To-Dos.",
-    ],
-  },
-  {
-    version: "0.21.12",
-    date: "2026-10-25",
-    title: "Panels stay put",
-    notes: [
-      "A module that can't start right now no longer takes its panels out of your workspace. They come back once it starts again.",
-    ],
-  },
-  {
-    version: "0.21.11",
-    date: "2026-10-25",
-    title: "Live views for panels in game",
-    notes: [
-      "A panel you show in game can now keep a live view over the game, even when the layer is closed.",
-      "Open the layer to move or resize it, then close it and the live view is back in its new spot.",
-      "Pick Always or With a key, how see-through it is, and Hide from capture for each one in Settings > Overlays.",
-    ],
-  },
-  {
-    version: "0.21.10",
-    date: "2026-10-25",
-    title: "Pinned tooltips stay for screenshots",
-    notes: [
-      "A pinned tooltip stays open when you switch to the snipping tool (Win+Shift+S), so you can capture it.",
-      "Item pictures in tooltips fill their column and line up with the requirements below them.",
-      "Long tooltip lines wrap under their own text instead of under the bullet.",
-    ],
-  },
-  {
-    version: "0.21.9",
-    date: "2026-10-25",
     title: "Tavora in your game, and a tidier Tavora",
     notes: [
       "One key, Tavora over game, opens your overlays and panels over the game. Set it in Settings > Overlays, and press it again or Esc when you are done.",
       "Clock & Counter, To-Dos and Discord work in your game: a clock or counter, your to-dos to tick off, and who is in your voice channel, with a ring around whoever is talking.",
       "Preview shows an overlay in a small window first. Hide all for now in Settings > Overlays hides everything over your game until you show it again.",
+      "A panel you show in game can keep a live view over the game, even when the layer is closed, like your to-dos as a list. Pick when and how see-through in Settings > Overlays.",
       "The new System Monitor module shows how busy your PC is: CPU, graphics card, memory and drives, plus temperature and power for NVIDIA cards. Tavora asks you first.",
       "Module updates wait for you: a button next to Layouts shows what is new. Prefer the old way? Turn on Update modules automatically in Settings > Modules.",
       "Module pages show every version with its date, mark the ones you missed and have a Send feedback button when the developer added a link.",
       "Saving a file or an image opens Tavora's save dialog with the name filled in, in the folder you used last.",
       "Switching games is smoother: panels show up together, and the loading fire only shows when a game takes a while.",
+      "A module that can't start right now keeps its panels in your workspace. They come back once it starts again.",
       "Fold a column into a narrow strip, open another panel of a module you already use, and maximized panels stay maximized.",
+      "Pinned tooltips stay open for screenshots (Win+Shift+S), and item pictures in them line up neatly.",
       "Fewer antivirus alarms, and a download that is about 10 MB smaller.",
       "Calculator has new keys like √, x² and ans, plus a toolbar for Basic, Plus and your history.",
       "Settings, the rail, the Whiteboard and every other module look alike, work better with the keyboard and ask before removing things.",
