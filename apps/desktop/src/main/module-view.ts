@@ -7,6 +7,7 @@ import { app, clipboard, ClipboardItem, MessageChannelMain, session, WebContents
 import type { Capability, GameOverlayResult, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./gamedata";
+import { gestureCounts, type Opacity } from "./game-overlays";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH, JSON_EXPORT_PATH, JSON_SAVE_PATH, JSON_OPEN_PATH } from "@tavora/sdk/protocol";
@@ -331,6 +332,9 @@ export class ModuleView {
     // A user stylesheet: every rule the module writes still wins over it.
     // The theme's colours go in a second one, replaced when the theme changes.
     contents.on("dom-ready", () => {
+      // A new document starts without the style of Tavora's own that fades it over the game.
+      if (this.overGame) this.overGame.css = undefined;
+      if (this.overGame) void this.applyGameOpacity();
       this.themeCssQueue = this.themeCssQueue.then(() => void (this.themeCssKey = undefined));
       contents.insertCSS(options.baseCss, { cssOrigin: "user" }).catch(() => {
         // The page went away before the styles landed.
@@ -391,6 +395,8 @@ export class ModuleView {
   private readonly gestureWaiters = new Set<() => void>();
 
   noteGesture(): void {
+    // Over the game the window takes input only while arranging; any report at another time is not the player's.
+    if (!gestureCounts(this.overGame !== null, this.overGame?.arranging() ?? false)) return;
     this.gestureAt = Date.now();
     this.usedAt = this.gestureAt;
     gestureOf(this.view.webContents.session).at = this.gestureAt;
@@ -428,6 +434,8 @@ export class ModuleView {
   /** Starts counting for a new page: it is hidden until it settles or the cap runs out. */
   private hideUntilSettled(): void {
     this.revealed = false;
+    // Over the game nothing else shows the view again (the host leaves such a panel alone), so it hides and shows itself.
+    if (this.overGame) this.view.setVisible(false);
     this.clearRevealTimers();
     this.later(REVEAL_CAP_MS, () => this.reveal());
   }
@@ -453,7 +461,13 @@ export class ModuleView {
     if (this.revealed) return;
     this.revealed = true;
     this.clearRevealTimers();
+    if (this.overGame) this.view.setVisible(true);
     this.options.onReveal?.();
+  }
+
+  /** The name of the panel's type, or null for a module without types. */
+  get typeName(): string | null {
+    return this.options.panelType?.name ?? null;
   }
 
   get webContentsId(): number {
@@ -665,6 +679,56 @@ export class ModuleView {
     this.view.setVisible(visible);
   }
 
+  /**
+   * The panel is over its game, in a window of Tavora's own (game-overlay-window.ts). It is this same view and page,
+   * with the same bridge; only the look changes (see through, as the player set it) and clicks and keys count as the
+   * player's while `arranging()` is true.
+   */
+  private overGame: { arranging(): boolean; opacity: Opacity; css: string | undefined } | null = null;
+
+  get isOverGame(): boolean {
+    return this.overGame !== null;
+  }
+
+  enterGame(arranging: () => boolean): void {
+    this.overGame = { arranging, opacity: 100, css: undefined };
+    // Without a colour of its own, so the opacity the player chose lets the game show through.
+    this.view.setBackgroundColor("#00000000");
+  }
+
+  leaveGame(): void {
+    const away = this.overGame;
+    if (!away) return;
+    this.overGame = null;
+    this.view.setBackgroundColor(this.options.getTheme().tokens.background);
+    if (away.css && !this.view.webContents.isDestroyed()) this.view.webContents.removeInsertedCSS(away.css).catch(() => undefined);
+  }
+
+  /** How much of the panel shows through over the game: a style of Tavora's own on the page, as for overlay pages. */
+  setGameOpacity(opacity: Opacity): void {
+    const away = this.overGame;
+    if (!away) return;
+    away.opacity = opacity;
+    void this.applyGameOpacity();
+  }
+
+  private gameOpacityQueue: Promise<void> = Promise.resolve();
+
+  private applyGameOpacity(): Promise<void> {
+    const contents = this.view.webContents;
+    this.gameOpacityQueue = this.gameOpacityQueue.then(async () => {
+      const away = this.overGame;
+      if (contents.isDestroyed() || !away) return;
+      try {
+        if (away.css) await contents.removeInsertedCSS(away.css);
+        away.css = away.opacity === 100 ? undefined : await contents.insertCSS(`html{opacity:${away.opacity / 100} !important}`, { cssOrigin: "user" });
+      } catch {
+        // The page went away; the next load sets it again.
+      }
+    });
+    return this.gameOpacityQueue;
+  }
+
   /** Whether the panel's group fills the workspace, as the host UI last reported it. */
   private maximized = false;
 
@@ -677,7 +741,7 @@ export class ModuleView {
 
   /** Recolours the page and tells the module, which may restyle itself through ui.onThemeChange. */
   applyTheme(theme: TavoraTheme): void {
-    this.view.setBackgroundColor(theme.tokens.background);
+    if (!this.overGame) this.view.setBackgroundColor(theme.tokens.background);
     void this.insertThemeCss(theme);
     this.bridge?.emit("ui.theme", theme);
   }

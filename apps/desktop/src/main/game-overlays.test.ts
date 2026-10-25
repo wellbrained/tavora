@@ -4,15 +4,22 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LIMITS } from "@tavora/sdk/protocol";
 import {
+  DEFAULT_PANEL_RECT,
   DEFAULT_RELATIVE_RECT,
   GAME_OVERLAYS_FILE,
   GameOverlayStore,
   MIN_OVERLAY_SIZE,
+  PANEL_ARRANGE_INSET,
   dragRect,
   gameInFront,
+  gestureCounts,
+  isPanelKey,
   looksExclusive,
   normalizeRelative,
   overlayVisible,
+  panelBounds,
+  panelInstanceOf,
+  panelKey,
   placeRelative,
   relativeTo,
   type GameOverlaySubject,
@@ -223,5 +230,51 @@ describe("the game in front", () => {
     expect(looksExclusive(2)).toBe(false);
     expect(looksExclusive(4)).toBe(false);
     expect(looksExclusive(null)).toBe(false);
+  });
+});
+
+describe("panels over the game", () => {
+  const ID = "0a1b2c3d-0000-4000-8000-000000000001";
+
+  it("names a panel's overlay by its id, and finds the id again", () => {
+    expect(panelKey(ID)).toBe(`panel-${ID}`);
+    expect(isPanelKey(panelKey(ID))).toBe(true);
+    expect(isPanelKey("item-1")).toBe(false);
+    expect(panelInstanceOf(panelKey(ID))).toBe(ID);
+  });
+
+  it("counts toward the game's eight and starts taller than an overlay page", async () => {
+    const store = await GameOverlayStore.load(dir);
+    for (let i = 0; i < LIMITS.maxGameOverlays - 1; i++) expect(store.add(subject(`item-${i}`))).toBe("added");
+    expect(store.add(subject(panelKey(ID)))).toBe("added");
+    expect(store.add(subject(panelKey("0a1b2c3d-0000-4000-8000-000000000002")))).toBe("full");
+    expect(store.find(subject(panelKey(ID)))!.rect.height).toBeGreaterThanOrEqual(DEFAULT_PANEL_RECT.height);
+  });
+
+  it("is not kept across a restart: the panel is in its slot again", async () => {
+    const store = await GameOverlayStore.load(dir);
+    store.add(subject("item-1"));
+    store.add(subject(panelKey(ID)));
+    await store.save();
+    expect(JSON.parse(await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8")).overlays.map((overlay: { key: string }) => overlay.key)).toEqual(["item-1"]);
+    // Also when an older or hand-edited file has one.
+    const body = JSON.parse(await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8"));
+    body.overlays.push({ ...body.overlays[0], key: panelKey(ID) });
+    await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify(body));
+    const again = await GameOverlayStore.load(dir);
+    expect(again.all().map((overlay) => overlay.key)).toEqual(["item-1"]);
+  });
+
+  it("takes the keyboard and the player's clicks only while arranging", () => {
+    expect(gestureCounts(false, false)).toBe(true);
+    expect(gestureCounts(true, false)).toBe(false);
+    expect(gestureCounts(true, true)).toBe(true);
+  });
+
+  it("fills its window, and sits inside the arrange frame while arranging", () => {
+    expect(panelBounds({ width: 300, height: 200 }, false)).toEqual({ x: 0, y: 0, width: 300, height: 200 });
+    const { top, side } = PANEL_ARRANGE_INSET;
+    expect(panelBounds({ width: 300, height: 200 }, true)).toEqual({ x: side, y: top, width: 300 - 2 * side, height: 200 - top - side });
+    expect(panelBounds({ width: 4, height: 4 }, true)).toMatchObject({ width: 1, height: 1 });
   });
 });
