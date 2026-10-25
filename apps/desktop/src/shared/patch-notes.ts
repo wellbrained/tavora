@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.15",
+    date: "2026-10-26",
+    title: "Right version on a module's page",
+    notes: [
+      "A module's page shows the version you have, and the newest one when an update is out.",
+    ],
+  },
+  {
     version: "0.21.14",
     date: "2026-10-26",
     title: "System Monitor without the freeze",
