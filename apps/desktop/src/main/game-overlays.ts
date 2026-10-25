@@ -84,6 +84,10 @@ export interface InGamePanel {
   scope: OverlayScope;
   instanceId: string;
   rect: RelativeRect;
+  /** Its live view (the module's overlay page over the game while the layer is closed): always there, or with a key of its own. */
+  mode: OverlayMode;
+  opacity: Opacity;
+  hideFromCapture: boolean;
 }
 
 type GameOverlayFile = { version?: number; exclusiveHintShown?: boolean; overlays: GameOverlay[]; panels: InGamePanel[] };
@@ -98,6 +102,12 @@ export const overlayId = (subject: GameOverlaySubject) => [subject.owner, subjec
 
 /** One text for an in-game panel's window. */
 export const panelWindowId = (instanceId: string) => `panel\n${instanceId}`;
+
+/** One text for an in-game panel's live view window. */
+export const liveWindowId = (instanceId: string) => `live\n${instanceId}`;
+
+/** What the player can change on an in-game panel's live view. */
+export type InGamePanelChange = Partial<Pick<InGamePanel, "mode" | "opacity" | "hideFromCapture">>;
 
 /** Whether something (an overlay or an in-game panel) shows over `gameId`: its own game, or any game for a general one. */
 export const appliesTo = (item: { scope: OverlayScope; gameId: string }, gameId: string) => item.scope === "all" || item.gameId === gameId;
@@ -271,7 +281,7 @@ export class GameOverlayStore {
     }
     for (const entry of Array.isArray(raw?.panels) ? raw.panels : []) {
       if (typeof entry !== "object" || entry === null) continue;
-      const { owner, moduleId, gameId, scope, instanceId, rect } = entry as Partial<Record<keyof InGamePanel, unknown>>;
+      const { owner, moduleId, gameId, scope, instanceId, rect, mode, opacity, hideFromCapture } = entry as Partial<Record<keyof InGamePanel, unknown>>;
       const relative = normalizeRelative(rect);
       if (![owner, moduleId, gameId].every(validField) || typeof instanceId !== "string" || !INSTANCE_ID.test(instanceId) || !relative) continue;
       const panel: InGamePanel = {
@@ -281,6 +291,9 @@ export class GameOverlayStore {
         scope: scope === "all" || scope === "game" ? scope : scopeOf(gameId as string),
         instanceId,
         rect: relative,
+        mode: mode === "toggle" ? "toggle" : "always",
+        opacity: OPACITIES.find((value) => value === opacity) ?? 100,
+        hideFromCapture: hideFromCapture === true,
       };
       if (store.panelOf(instanceId) || store.count(bucketOf(panel)) >= LIMITS.maxGameOverlays) continue;
       store.inGame.push(panel);
@@ -335,11 +348,11 @@ export class GameOverlayStore {
   }
 
   /** Marks a panel as shown in the game; it counts toward the same limit as overlays. */
-  addPanel(panel: Omit<InGamePanel, "rect">): AddResult {
+  addPanel(panel: Omit<InGamePanel, "rect" | "mode" | "opacity" | "hideFromCapture">): AddResult {
     if (this.panelOf(panel.instanceId)) return "exists";
     const bucket = bucketOf(panel);
     if (this.count(bucket) >= LIMITS.maxGameOverlays) return "full";
-    this.inGame.push({ ...panel, rect: this.startRect(DEFAULT_PANEL_RECT, bucket) });
+    this.inGame.push({ ...panel, rect: this.startRect(DEFAULT_PANEL_RECT, bucket), mode: "always", opacity: 100, hideFromCapture: false });
     this.saveSoon();
     return "added";
   }
@@ -360,6 +373,17 @@ export class GameOverlayStore {
     const panel = this.panelOf(instanceId);
     if (!panel) return false;
     panel.rect = normalizeRelative(rect) ?? panel.rect;
+    this.saveSoon();
+    return true;
+  }
+
+  /** Changes the live view's settings of a panel in the game; false when the panel isn't in the game. */
+  updatePanelView(instanceId: string, change: InGamePanelChange): boolean {
+    const panel = this.panelOf(instanceId);
+    if (!panel) return false;
+    if (change.mode) panel.mode = change.mode;
+    if (change.opacity !== undefined && OPACITIES.includes(change.opacity)) panel.opacity = change.opacity;
+    if (change.hideFromCapture !== undefined) panel.hideFromCapture = change.hideFromCapture;
     this.saveSoon();
     return true;
   }

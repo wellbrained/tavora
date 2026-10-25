@@ -2,17 +2,20 @@
 // To-Dos: a toolbar, current objectives, then the player's own groups. Every
 // To-Dos panel of a game shows the same list; what is folded, hidden or being
 // edited is each panel's own state.
-import { Check, ChevronsDownUp, ChevronsUpDown, ListChecks } from "@lucide/vue";
+import { Check, ChevronsDownUp, ChevronsUpDown, Eye, ListChecks } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
+import { Popover, PopoverContent, PopoverTrigger } from "@tavora/official-ui/components/ui/popover";
+import { Slider } from "@tavora/official-ui/components/ui/slider";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import type { MenuRequest, TavoraSDK } from "@tavora/sdk";
-import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import AddInput from "./AddInput.vue";
 import GroupSection, { type DropTarget } from "./GroupSection.vue";
 import { plural, setLanguage, t } from "./i18n";
+import { buildLiveState, LIVE_DEFAULTS, LIVE_RANGE, parseLook, throttle } from "./live";
 import { collapse, LINGER_MS, PANEL, UNDO_MS, type FinishedMode } from "./panel";
 import { createTodoStore, type TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
@@ -25,6 +28,9 @@ interface PanelState {
   finished: FinishedMode;
   collapsed: string[];
   folded: string[];
+  /** Live view: plate opacity in percent and padding in px. */
+  liveBackground: number;
+  livePadding: number;
 }
 
 const sdk = shallowRef<TavoraSDK | null>(null);
@@ -33,6 +39,8 @@ const error = ref<string | null>(null);
 const finished = ref<FinishedMode>("stay");
 const collapsed = ref<string[]>([]);
 const folded = ref<string[]>([]);
+const liveBackground = ref(LIVE_DEFAULTS.background);
+const livePadding = ref(LIVE_DEFAULTS.padding);
 const editing = ref<string | null>(null);
 const pendingGroup = shallowRef<Group | null>(null);
 const dragging = ref<string | null>(null);
@@ -75,8 +83,34 @@ function offerUndo(message: string, run: () => void) {
 
 function savePanel() {
   // Plain values only: a Vue proxy cannot be sent to the host.
-  void sdk.value?.panel.setState({ finished: finished.value, collapsed: [...collapsed.value], folded: [...folded.value] } satisfies PanelState);
+  void sdk.value?.panel.setState({ finished: finished.value, collapsed: [...collapsed.value], folded: [...folded.value], liveBackground: liveBackground.value, livePadding: livePadding.value } satisfies PanelState);
 }
+
+function setLook(key: "liveBackground" | "livePadding", value: number | undefined) {
+  if (value === undefined) return;
+  (key === "liveBackground" ? liveBackground : livePadding).value = value;
+  savePanel();
+}
+
+function resetLook() {
+  liveBackground.value = LIVE_DEFAULTS.background;
+  livePadding.value = LIVE_DEFAULTS.padding;
+  savePanel();
+}
+
+// ── Live view: what Tavora shows over the game while this panel is closed ──
+
+const sendLive = throttle((state: ReturnType<typeof buildLiveState>) => void sdk.value?.panel.setLive(state).catch(() => {}), 250);
+
+watch(
+  [() => list.value, collapsed, liveBackground, livePadding, sdk],
+  () => {
+    if (!sdk.value || !store.value) return;
+    const look = parseLook({ background: liveBackground.value, padding: livePadding.value });
+    sendLive(buildLiveState(list.value, collapsed.value, look, t("live.more", { count: "{count}" })));
+  },
+  { deep: true },
+);
 
 function setFinished(mode: FinishedMode) {
   finished.value = mode;
@@ -111,6 +145,9 @@ onMounted(async () => {
     finished.value = state?.finished === "vanish" || (state?.finished === undefined && state?.hideDone === true) ? "vanish" : "stay";
     collapsed.value = ids(state?.collapsed);
     folded.value = ids(state?.folded);
+    const look = parseLook({ background: state?.liveBackground, padding: state?.livePadding });
+    liveBackground.value = look.background;
+    livePadding.value = look.padding;
     cleanup.push(connected.documents.onChange((change) => change.id === LIST_ID && void todos.reload()));
     sdk.value = connected;
     store.value = todos;
@@ -122,6 +159,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   cleanup.forEach((fn) => fn());
   clearTimeout(lingerTimer);
+  sendLive.cancel();
   undoToast?.dismiss();
 });
 
@@ -218,6 +256,45 @@ function dropTask() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <Popover>
+        <PopoverTrigger as-child>
+          <Button variant="ghost" size="icon-sm" :aria-label="t('live.menu')" :title="t('live.menu')" data-testid="live-settings">
+            <Eye :stroke-width="1.5" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" class="w-64" data-testid="live-popover">
+          <p class="text-sm font-medium">{{ t("live.menu") }}</p>
+          <div class="mt-3 flex items-center justify-between text-xs">
+            <span>{{ t("live.background") }}</span>
+            <span class="text-muted-foreground tabular-nums" data-testid="live-background-value">{{ liveBackground }}%</span>
+          </div>
+          <Slider
+            :model-value="[liveBackground]"
+            :min="LIVE_RANGE.background[0]"
+            :max="LIVE_RANGE.background[1]"
+            :step="1"
+            class="mt-2"
+            :aria-label="t('live.background')"
+            data-testid="live-background"
+            @update:model-value="setLook('liveBackground', $event?.[0])"
+          />
+          <div class="mt-4 flex items-center justify-between text-xs">
+            <span>{{ t("live.padding") }}</span>
+            <span class="text-muted-foreground tabular-nums" data-testid="live-padding-value">{{ livePadding }} px</span>
+          </div>
+          <Slider
+            :model-value="[livePadding]"
+            :min="LIVE_RANGE.padding[0]"
+            :max="LIVE_RANGE.padding[1]"
+            :step="1"
+            class="mt-2"
+            :aria-label="t('live.padding')"
+            data-testid="live-padding"
+            @update:model-value="setLook('livePadding', $event?.[0])"
+          />
+          <Button variant="ghost" size="sm" class="mt-3" data-testid="live-reset" @click="resetLook">{{ t("live.reset") }}</Button>
+        </PopoverContent>
+      </Popover>
     </header>
 
     <div class="min-h-0 flex-1 overflow-y-auto p-2" @dragend="dragEnd">

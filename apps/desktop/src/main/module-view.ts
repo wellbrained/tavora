@@ -87,6 +87,8 @@ export interface ModuleViewOptions {
   openPanel(type: string, content: PanelContent | null): Promise<PanelOpenResult>;
   /** panel.setMaximized from this panel (after its click was taken to maximize): asks the host UI to do it. */
   setMaximized(maximized: boolean): void;
+  /** panel.setLive from this panel (size already checked): what its live view over the game shows; null shows nothing. */
+  setLive(state: JsonValue | null): void;
   /** Hosts the player granted this module for network.fetch, as installed now; asked on every call and redirect. */
   networkHosts(): ReadonlySet<string>;
   /** Connectors the player granted this module, as installed now; asked on every call. */
@@ -575,6 +577,7 @@ export class ModuleView {
           }
           this.options.setMaximized(maximized);
         },
+        setLive: (state) => this.options.setLive(state),
         game,
         data,
         panelState,

@@ -76,15 +76,18 @@ export interface ModuleProblem {
   kind?: "not-built" | "no-module" | "missing";
   /** The name and version its manifest gives, when it has them, so Settings can name the module; its id too, when it has one. */
   about?: { name: string; version: string | null; id?: string };
+  /** One of Tavora's own modules: kept only so its panels wait, never shown in Settings. */
+  official?: true;
 }
 
 /**
- * Modules in a development folder whose manifest names them but that cannot load right now, most often because they
- * are not built or a build watcher is rebuilding them. Their panels wait for them instead of being forgotten.
+ * Modules whose folder is there and whose manifest names them, but that cannot load right now: not built, being
+ * rebuilt, invalid, or needing a newer Tavora. Their panels wait for them instead of being forgotten; only a module
+ * that is gone loses its panels.
  */
-export function waitingDevelopmentModules(problems: readonly ModuleProblem[]): Map<string, string> {
+export function waitingModules(problems: readonly ModuleProblem[]): Map<string, string> {
   const waiting = new Map<string, string>();
-  for (const problem of problems) if (problem.developmentFolder && problem.about?.id) waiting.set(problem.about.id, problem.about.name);
+  for (const problem of problems) if (problem.about?.id) waiting.set(problem.about.id, problem.about.name);
   return waiting;
 }
 
@@ -135,9 +138,11 @@ export async function discoverModules(
           ...(fromProject ? { developmentFolder: dir, developmentProject: candidate } : {}),
           ...(kind ? { kind } : {}),
           ...(about ? { about } : {}),
+          ...(provenance === "official" ? { official: true as const } : {}),
         });
       const installed = await loadModule(candidate, provenance, tavoraVersion, (message, kind, about) => {
-        if (provenance === "local") report(message, kind, about);
+        // Tavora's own modules show no problems in Settings, but one that can't load keeps its panels waiting.
+        if (provenance === "local" || about?.id) report(message, kind, about);
       });
       if (!installed) continue;
       if (fromProject) {

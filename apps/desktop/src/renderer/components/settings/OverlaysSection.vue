@@ -20,6 +20,7 @@ defineProps<{ highlight: string | null }>();
 
 type Group = GameOverlaysView["groups"][number];
 type Overlay = Group["overlays"][number];
+type InGamePanel = GameOverlaysView["panels"][number];
 
 const overlays = computed(() => state.value!.gameOverlays);
 const mac = navigator.platform.startsWith("Mac");
@@ -52,6 +53,14 @@ function preview(overlay: Overlay) {
 
 function askKey(overlay?: Overlay) {
   void act({ type: "set-overlay-key", ...(overlay ? target(overlay) : {}) });
+}
+
+function changePanel(panel: InGamePanel, change: { mode?: "always" | "toggle"; opacity?: 100 | 75 | 50 | 25; hideFromCapture?: boolean }) {
+  void act({ type: "set-panel-view", instanceId: panel.instanceId, ...change });
+}
+
+function askPanelKey(panel: InGamePanel) {
+  void act({ type: "set-overlay-key", owner: panel.owner, moduleId: panel.moduleId, gameId: panel.gameId, key: panel.instanceId });
 }
 
 function stopShowing(instanceId: string) {
@@ -149,14 +158,46 @@ function stopShowing(instanceId: string) {
     >
       <p v-if="!overlays.panels.length" class="text-muted-foreground py-4 text-sm" data-testid="game-panels-empty">{{ t("overlays.panels.none") }}</p>
       <ul v-else class="flex flex-col">
-        <li v-for="panel in overlays.panels" :key="panel.instanceId" class="flex min-h-12 items-center gap-3 border-b py-2 last:border-b-0" :data-testid="`game-panel-${panel.instanceId}`">
-          <span class="flex min-w-0 flex-1 flex-col">
-            <span class="truncate font-medium">{{ panel.name }}</span>
-            <span class="text-muted-foreground truncate text-xs">{{ panel.gameName ?? t("overlays.allGames") }}</span>
-          </span>
-          <Button variant="secondary" size="sm" :aria-label="t('overlays.stopShowingNamed', { name: panel.name })" :data-testid="`panel-stop-showing-${panel.instanceId}`" @click="stopShowing(panel.instanceId)">
-            {{ t("overlays.stopShowing") }}
-          </Button>
+        <li v-for="panel in overlays.panels" :key="panel.instanceId" class="flex flex-col gap-2 border-b py-3 last:border-b-0" :data-testid="`game-panel-${panel.instanceId}`">
+          <div class="flex min-h-9 items-center gap-3">
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="truncate font-medium">{{ panel.name }}</span>
+              <span class="text-muted-foreground truncate text-xs">{{ panel.gameName ?? t("overlays.allGames") }}</span>
+            </span>
+            <Button variant="secondary" size="sm" :aria-label="t('overlays.stopShowingNamed', { name: panel.name })" :data-testid="`panel-stop-showing-${panel.instanceId}`" @click="stopShowing(panel.instanceId)">
+              {{ t("overlays.stopShowing") }}
+            </Button>
+          </div>
+          <template v-if="panel.live">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span class="text-muted-foreground w-24 flex-none text-sm">{{ t("overlays.mode.label") }}</span>
+              <SegmentedControl :model-value="panel.mode" :options="modes" :label="t('overlays.mode.label')" @update:model-value="changePanel(panel, { mode: $event })" />
+              <template v-if="panel.mode === 'toggle'">
+                <span v-if="panel.hotkey" class="flex flex-none items-center gap-1">
+                  <Kbd v-for="key in hotkeyKeys(panel.hotkey.accelerator, mac)" :key="key">{{ key }}</Kbd>
+                </span>
+                <span v-else class="text-muted-foreground text-xs">{{ t("overlays.key.none") }}</span>
+                <span v-if="panel.hotkey?.taken" class="text-destructive text-xs">{{ t("overlays.key.taken") }}</span>
+                <Button variant="secondary" size="sm" :aria-label="t(panel.hotkey ? 'overlays.key.changeLabel' : 'overlays.key.setLabel', { name: panel.name })" @click="askPanelKey(panel)">
+                  {{ panel.hotkey ? t("overlays.key.change") : t("overlays.key.set") }}
+                </Button>
+              </template>
+            </div>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span class="text-muted-foreground w-24 flex-none text-sm">{{ t("overlays.opacity.label") }}</span>
+              <SegmentedControl
+                :model-value="String(panel.opacity) as '100' | '75' | '50' | '25'"
+                :options="opacities"
+                :label="t('overlays.opacity.label')"
+                @update:model-value="changePanel(panel, { opacity: Number($event) as 100 | 75 | 50 | 25 })"
+              />
+            </div>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span class="text-muted-foreground w-24 flex-none text-sm">{{ t("overlays.capture.label") }}</span>
+              <Switch :model-value="panel.hideFromCapture" :aria-label="t('overlays.capture.label')" @update:model-value="changePanel(panel, { hideFromCapture: $event })" />
+              <span class="text-muted-foreground text-xs">{{ t("overlays.capture.hint") }}</span>
+            </div>
+          </template>
         </li>
       </ul>
     </div>

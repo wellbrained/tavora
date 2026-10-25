@@ -299,9 +299,27 @@ describe("panels in the game", () => {
     store.updatePanel(ID, { x: 0.5, y: 0.25, width: 0.2, height: 0.3 });
     await store.save();
     const again = await GameOverlayStore.load(dir);
-    expect(again.panels()).toEqual([{ ...panel(), rect: { x: 0.5, y: 0.25, width: 0.2, height: 0.3 } }]);
+    expect(again.panels()).toEqual([{ ...panel(), mode: "always", opacity: 100, hideFromCapture: false, rect: { x: 0.5, y: 0.25, width: 0.2, height: 0.3 } }]);
     expect(again.panelsOf("poe2")).toHaveLength(1);
     expect(again.panelsOf("elden")).toHaveLength(0);
+  });
+
+  it("keeps the live view's mode, opacity and Hide from capture, and gives old records the defaults", async () => {
+    const store = await GameOverlayStore.load(dir);
+    store.addPanel(panel());
+    expect(store.panelOf(ID)).toMatchObject({ mode: "always", opacity: 100, hideFromCapture: false });
+    expect(store.updatePanelView(ID, { mode: "toggle", opacity: 25, hideFromCapture: true })).toBe(true);
+    expect(store.updatePanelView(ID, { opacity: 33 as never })).toBe(true);
+    expect(store.updatePanelView(ID2, { mode: "toggle" })).toBe(false);
+    await store.save();
+    expect((await GameOverlayStore.load(dir)).panelOf(ID)).toMatchObject({ mode: "toggle", opacity: 25, hideFromCapture: true });
+    const rect = { x: 0.1, y: 0.1, width: 0.2, height: 0.2 };
+    await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version: 2, overlays: [], panels: [{ ...panel(), rect }, { ...panel(ID2), rect, mode: "hold", opacity: 12, hideFromCapture: "yes" }] }));
+    const old = await GameOverlayStore.load(dir);
+    expect(old.panels().map(({ mode, opacity, hideFromCapture }) => ({ mode, opacity, hideFromCapture }))).toEqual([
+      { mode: "always", opacity: 100, hideFromCapture: false },
+      { mode: "always", opacity: 100, hideFromCapture: false },
+    ]);
   });
 
   it("forgets the ones that match", async () => {

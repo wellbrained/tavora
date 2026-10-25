@@ -129,7 +129,7 @@ import { supportTarget } from "./module-support";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, developmentProjects, discoverModules, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, waitingDevelopmentModules, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, developmentProjects, discoverModules, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, waitingModules, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
@@ -594,7 +594,7 @@ export class Host {
       console.error("[tavora] moving module data under its owner failed", error),
     );
     const expired = purgeExpired(library, new Date());
-    const waiting = waitingDevelopmentModules(moduleProblems);
+    const waiting = waitingModules(moduleProblems);
     const workspace = await savedData.loadWorkspace(Object.keys(library.games), (id) => modules.has(id) || waiting.has(id));
     settlePanelTypes(workspace, panelTypesOf(modules));
     const { profile, saved: profileSaved } = await savedData.loadProfile();
@@ -1128,11 +1128,11 @@ export class Host {
 
   /**
    * Closes and forgets every panel whose module is not installed any more, in every game. Module data stays. A module
-   * in a development folder that cannot load right now (being rebuilt, not built) keeps its panels; they start again
-   * once it loads (syncPanelTypes).
+   * that is there but cannot load right now (being rebuilt, not built, needing a newer Tavora) keeps its panels; they
+   * start again once it loads (syncPanelTypes).
    */
   private dropPanelsOfMissingModules(): void {
-    const waiting = waitingDevelopmentModules(this.moduleProblems);
+    const waiting = waitingModules(this.moduleProblems);
     for (const instanceId of this.workspaces.dropMissingModules((moduleId) => this.modules.has(moduleId) || waiting.has(moduleId))) this.closeView(instanceId);
   }
 
@@ -1927,11 +1927,15 @@ export class Host {
         const { owner, moduleId, gameId, key, mode, opacity, hideFromCapture } = action;
         this.gameOverlays.update({ owner, moduleId, gameId, key }, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
       },
+      "set-panel-view": (action) => {
+        const { instanceId, mode, opacity, hideFromCapture } = action;
+        this.gameOverlays.updatePanelView(instanceId, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
+      },
       "remove-game-overlay": (action) => this.gameOverlays.remove(action),
       "set-overlay-key": (action) => {
         const { gameId, owner, moduleId, key } = action;
         const overlay = owner !== undefined && moduleId !== undefined && gameId !== undefined && key !== undefined ? { owner, moduleId, gameId, key } : null;
-        if (overlay && !this.gameOverlays.has(overlay)) return;
+        if (overlay && !this.gameOverlays.hasKey(overlay)) return;
         const binding = overlay ? toggleBinding(overlay) : layerBinding();
         const names = this.gameOverlays.dialogNames(binding);
         // The dialog is answered by hotkey-answer; this action only opens it.
@@ -3105,6 +3109,7 @@ export class Host {
       launch: () => this.launchOf(record),
       setContent: (content) => this.setPanelContent(record, content),
       openPanel: (type, content) => this.openRelatedPanel(record, type, content),
+      setLive: (state) => this.gameOverlays.setLive(record.instanceId, module.owner, state),
       setMaximized: (maximized) => this.window.webContents.send("host:shortcut", `${maximized ? "maximize" : "restore"}:${record.instanceId}`),
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
@@ -3356,6 +3361,8 @@ export class Host {
   private destroyView(instanceId: string, forget = true): void {
     this.tooltips.close(instanceId);
     this.closeModuleMenu(instanceId);
+    // The panel is closing for good: its live state goes, whether or not it was running.
+    if (forget) this.gameOverlays?.forgetLive(instanceId);
     const view = this.views.get(instanceId);
     if (!view) return;
     this.views.delete(instanceId);
@@ -3758,7 +3765,7 @@ export class Host {
           this.lifecycle.updates.pending(module.manifest.id),
         ),
       })),
-      moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder).map(({ folder, path: full, message, kind }) => ({ folder, path: full, message, ...(kind ? { kind } : {}) })),
+      moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder && !problem.official).map(({ folder, path: full, message, kind }) => ({ folder, path: full, message, ...(kind ? { kind } : {}) })),
       developmentFolders: this.library.developmentFolders.map((folder) => {
         const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
         const projects = new Map<string, HostViewState["developmentFolders"][number]["projects"][number]>();
@@ -3793,7 +3800,7 @@ export class Host {
         const type = this.panelTypeOf(record);
         const module = this.modules.get(record.moduleId);
         // A development module that cannot load right now is named from its manifest until it loads.
-        const name = type?.name ?? (module ? this.shown(module.manifest).name : (waitingDevelopmentModules(this.moduleProblems).get(record.moduleId) ?? record.moduleId));
+        const name = type?.name ?? (module ? this.shown(module.manifest).name : (waitingModules(this.moduleProblems).get(record.moduleId) ?? record.moduleId));
         const panelType = record.panelType ?? null;
         const openedFrom = this.openedFrom.get(record.instanceId);
         if (type === undefined) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: record.panelType ?? name, status: "unavailable" as const, waiting: false, content: null };

@@ -30,7 +30,9 @@ export class TooltipWindow {
     private window: BrowserWindow | undefined;
     private ready = false;
     private size = { width: 520, height: 2000 };
-    private onParentBlur = () => { setImmediate(() => { if (!this.options.parent.isDestroyed() && !this.options.parent.isFocused() && !this.window?.isFocused())
+    // A pinned tooltip stays when Tavora loses focus, so a screen capture (Win+Shift+S) can still take it. It belongs to the
+    // Tavora window, so it never floats above other apps; a hover tooltip still closes.
+    private onParentBlur = () => { setImmediate(() => { if (!this.state.current?.request.pinned && !this.options.parent.isDestroyed() && !this.options.parent.isFocused() && !this.window?.isFocused())
         this.close(); }); };
     constructor(private options: Options) {
         const p = options.parent;

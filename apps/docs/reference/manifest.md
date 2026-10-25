@@ -51,7 +51,7 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 
 | `panels` | no | Named [panel types](#panel-types) the module offers, 1 to 16. Without it the module has one panel, made from `entry`, `icon` and `viewport`. |
 | `inGame` | no | For a module without `panels`: `true` when the player may show its panel in their game, as a panel type's `inGame` does (see below). Not together with `panels`. Needs a `minTavora` newer than `0.21.2` (except Tavora's own modules). |
-| `overlay` | no | The page for streaming software, see [Overlay](#overlay). The `"stream-overlay"` connector (for OBS links) needs this page, but the page needs no connector: without it the page serves game overlays only, and `minTavora` must be newer than `0.20.50`, because older Tavoras refuse it. Needs Tavora 0.19.26 or newer. |
+| `overlay` | no | The page for streaming software, see [Overlay](#overlay). The `"stream-overlay"` connector (for OBS links) needs this page, but the page needs no connector: without it the page serves game overlays only, and `minTavora` must be newer than `0.20.50`, because older Tavoras refuse it. Needs Tavora 0.19.26 or newer. The same page is the [live view](./protocol.md#live-views) of a panel the player shows in game. |
 | `actions` | no | What the module can do on a key press, 1 to 16, see [Actions](#actions). Needs Tavora 0.19.26 or newer. |
 | `translations` | no | The name, description, panel and action names in other languages, see [Translations](#translations). Needs a `minTavora` newer than `0.20.12`. |
 
