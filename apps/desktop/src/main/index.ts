@@ -1,7 +1,8 @@
 import { readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { app, protocol } from "electron";
-import { HOST_SCHEME, MODULE_SCHEME } from "./assets";
+import { GAME_OVERLAY_SCHEME, HOST_SCHEME, MODULE_SCHEME } from "./assets";
+import { parseWindowStart } from "./background-window";
 import { errorLog } from "./diagnostics";
 import { Host } from "./host";
 import { parseTestHosts } from "./network";
@@ -34,6 +35,7 @@ if (unsafe) {
 protocol.registerSchemesAsPrivileged([
   { scheme: MODULE_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
   { scheme: HOST_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  { scheme: GAME_OVERLAY_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ]);
 
 // Every renderer is sandboxed, including any created by accident.
@@ -57,12 +59,10 @@ app.on("web-contents-created", (_event, contents) => {
 // `pnpm dev` serves the host UI with hot reload and restarts Tavora when
 // main code changes. Packaged builds always use the built files.
 const devServer = !app.isPackaged ? process.env.TAVORA_DEV_SERVER : undefined;
-// The dev script asks Tavora to quit before restarting it; quit properly so
-// unsaved layouts and window bounds are written first.
-if (devServer) {
-  process.on("message", (message) => message === "quit" && app.quit());
-  process.on("SIGTERM", () => app.quit());
-}
+// How the window comes back after the dev script restarts Tavora (background-window.ts).
+const windowStart = devServer ? parseWindowStart(process.env.TAVORA_DEV_WINDOW) : undefined;
+// Set once the dev script asked Tavora to quit: a start it cut short is no failure worth a message box.
+let quitAsked = false;
 
 // Quitting saves layouts and window bounds first (see window-all-closed).
 // Under `pnpm dev` the dev script restarts Tavora, so it keeps hot reload.
@@ -103,6 +103,23 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   let host: Host | undefined;
 
+  // The dev script asks Tavora to quit before restarting it; quit properly so unsaved layouts and window bounds
+  // are written first, and say how the window looks, so the next start matches it. A rebuilt repo module only
+  // reloads its panels.
+  if (devServer) {
+    process.on("message", (message: unknown) => {
+      if (message === "quit") {
+        quitAsked = true;
+        // Quits once the answer is out, or the next start would not know.
+        if (host && process.send) process.send({ window: host.windowLook() }, () => app.quit());
+        else app.quit();
+      } else if (typeof message === "object" && message !== null && "moduleBuilt" in message && typeof message.moduleBuilt === "string") {
+        void host?.moduleBuilt(message.moduleBuilt).catch((error: unknown) => console.error("[tavora] reloading a rebuilt module failed", error));
+      }
+    });
+    process.on("SIGTERM", () => app.quit());
+  }
+
   app.on("second-instance", () => {
     if (host?.window.isMinimized()) host.window.restore();
     host?.window.focus();
@@ -133,6 +150,7 @@ if (!app.requestSingleInstanceLock()) {
         grayscaleText,
         restart,
         hidden: !app.isPackaged && process.env.TAVORA_HIDDEN === "1",
+        windowStart,
         moduleStorageLimit: !app.isPackaged && process.env.TAVORA_MODULE_STORAGE_LIMIT_MB ? Number(process.env.TAVORA_MODULE_STORAGE_LIMIT_MB) * 1024 * 1024 : undefined,
         // Tests only: network.fetch reaches these names on a local server over plain http; a packaged app never does.
         testNetworkHosts: !app.isPackaged && process.env.TAVORA_TEST_NETWORK_HOSTS ? parseTestHosts(process.env.TAVORA_TEST_NETWORK_HOSTS) : undefined,
@@ -161,7 +179,13 @@ if (!app.requestSingleInstanceLock()) {
       });
     })
     .catch((error: unknown) => {
-      reportStartupFailure(userData, "Something went wrong while Tavora was starting.", error instanceof Error ? (error.stack ?? error.message) : String(error));
+      if (quitAsked) return app.exit(0);
+      reportStartupFailure(
+        userData,
+        "Something went wrong while Tavora was starting.",
+        error instanceof Error ? (error.stack ?? error.message) : String(error),
+        windowStart === "behind" || windowStart === "minimized",
+      );
       app.exit(1);
     });
 }

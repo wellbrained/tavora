@@ -141,7 +141,9 @@ export const copyQuestion = computed<"closing" | "conflict" | "newer" | null>(()
 });
 
 /** Settings sections not shown on this run: Account until accounts are on. */
-export const hiddenSettings = computed<ReadonlySet<SettingsSection>>(() => new Set(account.value?.enabled ? [] : ["account"]));
+export const hiddenSettings = computed<ReadonlySet<SettingsSection>>(
+  () => new Set<SettingsSection>([...(account.value?.enabled ? [] : (["account"] as const)), ...(state.value?.gameOverlays.supported ? [] : (["overlays"] as const))]),
+);
 
 export const toast = ref<string | null>(null);
 let toastTimer: ReturnType<typeof setTimeout> | undefined;

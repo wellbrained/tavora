@@ -23,9 +23,8 @@ export function createItemStore(sdk: TavoraSDK) {
     list.value = stored.data;
   }
 
-  /** Tells the overlays of these items what they show now; an item that is gone shows nothing. */
+  /** Tells the overlays of these items (OBS or over the game) what they show now; an item that is gone shows nothing. */
   function publish(ids: string[], data: ItemList): void {
-    if (!overlays.value) return;
     for (const id of ids) {
       const item = find(data, id);
       const sent = item ? sdk.overlay.publish(id, overlayState(item)) : sdk.overlay.remove(id);

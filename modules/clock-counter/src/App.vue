@@ -5,7 +5,7 @@
 import { Plus, X } from "@lucide/vue";
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { TavoraError, type MenuRequest, type TavoraSDK } from "@tavora/sdk";
+import { TavoraError, type GameOverlayResult, type MenuRequest, type TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import { plural, setLanguage, t } from "./i18n";
 import ItemCard from "./ItemCard.vue";
@@ -151,6 +151,13 @@ async function copyLink(item: Item): Promise<"copied" | "off" | "denied"> {
   }
 }
 
+async function showOverGame(item: Item): Promise<GameOverlayResult> {
+  const result = (await sdk.value?.overlay.showOverGame(item.id)) ?? "off";
+  // The overlay shows the item from the start, before its first change.
+  if (result === "shown") store.value?.publish([item.id], list.value);
+  return result;
+}
+
 async function resetLink(item: Item): Promise<void> {
   await sdk.value?.overlay.resetLink(item.id);
 }
@@ -168,6 +175,7 @@ provide(PANEL, {
   act,
   setHotkey,
   copyLink,
+  showOverGame,
   resetLink,
   remove: removeItem,
   showMenu,

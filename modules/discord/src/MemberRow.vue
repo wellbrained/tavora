@@ -7,6 +7,7 @@ import { Ellipsis, HeadphoneOff, MicOff, Volume1, VolumeX } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { Slider } from "@tavora/official-ui/components/ui/slider";
 import { computed, ref } from "vue";
 import { t } from "./i18n";
 import type { Member } from "./panel";
@@ -48,8 +49,9 @@ function send(value: number) {
   emit("voice", { volume: value });
 }
 /** Sends the value at once, then at most every 100 ms while the slider keeps moving. */
-function onInput(event: Event) {
-  latest = Number((event.target as HTMLInputElement).value);
+function onInput(value: number | undefined) {
+  if (value === undefined) return;
+  latest = value;
   dragging.value = latest;
   if (timer) return;
   send(latest);
@@ -128,20 +130,19 @@ function onContextMenu(event: MouseEvent) {
         <DropdownMenuLabel class="text-muted-foreground truncate text-xs font-normal">{{ member.name }}</DropdownMenuLabel>
         <div class="px-2 pt-1 pb-2">
           <div class="flex items-center justify-between text-sm">
-            <label :for="`discord-volume-${member.id}`">{{ t("menu.volume") }}</label>
+            <span>{{ t("menu.volume") }}</span>
             <span class="text-muted-foreground tabular-nums" data-testid="discord-user-volume-value">{{ volume }}%</span>
           </div>
-          <input
-            :id="`discord-volume-${member.id}`"
-            type="range"
-            min="0"
-            max="200"
-            step="5"
-            class="accent-primary mt-2 w-full"
-            :value="volume"
+          <Slider
+            :model-value="[volume]"
+            :min="0"
+            :max="200"
+            :step="5"
+            class="mt-2"
+            :aria-label="t('menu.volume')"
             data-testid="discord-user-volume"
-            @input="onInput"
-            @change="onChange"
+            @update:model-value="onInput($event?.[0])"
+            @value-commit="onChange"
             @keydown.stop
           />
         </div>

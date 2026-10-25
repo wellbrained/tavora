@@ -341,14 +341,14 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
       </PopoverRoot>
 
       <span v-if="task.pinned && !compact" class="flex h-8 flex-none items-center">
-        <Pin class="text-primary size-3.5" :stroke-width="1.5" aria-label="Pinned" />
+        <Pin class="text-primary size-3.5" :stroke-width="1.5" :aria-label="t('task.pinned')" />
       </span>
       <span class="flex h-8 flex-none items-center">
         <DropdownMenu v-model:open="menuOpen">
           <DropdownMenuTrigger
             :class="
               cn(
-                'text-muted-foreground hover:text-foreground flex size-7 items-center justify-center rounded-md opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100',
+                'text-muted-foreground hover:text-foreground flex size-7 items-center justify-center rounded-md opacity-40 group-hover/task:opacity-100 focus-visible:opacity-100',
                 (menuOpen || editing) && 'opacity-100',
               )
             "

@@ -322,6 +322,13 @@ export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "files"
  */
 export type OverlayLinkResult = "copied" | "off" | "denied";
 
+/**
+ * What overlay.showOverGame did. `shown`: the overlay is over the game now (or already was). `off`: Game overlays are
+ * off in Tavora; Tavora opened the setting so the player can turn them on. `full`: this game already has the most game
+ * overlays it may have (LIMITS.maxGameOverlays); the player can remove one in Settings > Overlays.
+ */
+export type GameOverlayResult = "shown" | "off" | "full";
+
 /** A hotkey the player set for this module in the current game: which action, for what. Never the key itself. */
 export interface HotkeyBinding {
   /** One of the manifest's `actions` ids. */
@@ -426,6 +433,11 @@ export interface Methods {
   "overlay.copyLink": { params: { key: string }; result: OverlayLinkResult };
   /** Gives the overlay for `key` a new link; the old one stops working (capability `overlay`). */
   "overlay.resetLink": { params: { key: string }; result: null };
+  /**
+   * Shows the overlay page for `key` over the player's game, in a Tavora window above it. Only right after a click or
+   * key press in the panel; needs no capability. Tavora 0.20.51 and newer.
+   */
+  "overlay.showOverGame": { params: { key: string }; result: GameOverlayResult };
   /** The hotkeys the player set for this module in the current game. Tavora 0.19.26 and newer. */
   "hotkeys.list": { params: undefined; result: HotkeyBinding[] };
   /**
@@ -587,6 +599,8 @@ export const LIMITS = {
   maxOverlayStateBytes: 16 * 1024,
   /** Overlays one module may have in one game; publishing more fails with QUOTA_EXCEEDED. */
   maxOverlays: 200,
+  /** Game overlays (overlay.showOverGame) one game may have at once. */
+  maxGameOverlays: 8,
   /** Hotkeys one module may have in one game. */
   maxHotkeys: 100,
   /** Characters of the label hotkeys.set shows for its target. */

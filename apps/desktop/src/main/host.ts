@@ -1,4 +1,5 @@
 import { ReadOnlyFiles } from './read-only-files';
+import { showInBackground, windowLook, type WindowStart } from "./background-window";
 import { saveDialogDirectory } from './save-dialog-folder';
 import { randomUUID } from "node:crypto";
 import { existsSync, watch, type FSWatcher } from "node:fs";
@@ -13,6 +14,7 @@ import {
   dialog,
   globalShortcut,
   ipcMain,
+  Notification,
   nativeImage,
   nativeTheme,
   protocol,
@@ -105,6 +107,9 @@ import { syncIcons } from "./icon-sync";
 import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus, steamLibraryView } from "./steam-import";
 import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, steamShareGames, submitIcon } from "./share-icons";
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
+import { windowsForegroundProbe } from "./foreground";
+import { GameOverlayWindow } from "./game-overlay-window";
+import { arrangeBinding, GameOverlays, toggleBinding } from "./game-overlay-service";
 import { GameWatcher } from "./game-watch";
 import { Streaming } from "./streaming";
 import { findInstalledGames } from "./launcher-games";
@@ -258,6 +263,8 @@ export interface HostOptions {
   discordAuthorizeUrl?: string | undefined;
   /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
   hidden?: boolean;
+  /** Development only: how the window comes back after `pnpm dev` restarts Tavora (background-window.ts). */
+  windowStart?: WindowStart | undefined;
   /** Tests only: pretend the system is in this mode, so a test does not depend on the PC it runs on. */
   systemTheme?: "dark" | "light" | undefined;
   /** Development and tests only: what the system's language is taken to be, instead of the real one. */
@@ -277,6 +284,22 @@ export interface HostOptions {
 
 /** Built on first use; it carries the module font, so it is not small. */
 let moduleCss: string | undefined;
+
+/**
+ * Writes `data` to the file a save dialog gave, adding `.extension` when the name lacks it. The dialog asked before
+ * replacing the file the player chose; a name with the extension added was never asked about, so that one is not replaced.
+ */
+async function writeWithExtension(picked: string, extension: string, data: Buffer | string, mode?: number): Promise<string> {
+  const chosen = path.resolve(picked);
+  const file = chosen.toLowerCase().endsWith(`.${extension}`) ? chosen : `${chosen}.${extension}`;
+  try {
+    await writeFile(file, data, { flag: file === chosen ? "w" : "wx", ...(mode === undefined ? {} : { mode }) });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new PlayerError("error.file.taken", { name: path.basename(file) });
+    throw error;
+  }
+  return file;
+}
 
 const ICON_URL = `${HOST_SCHEME}://app/game-icons/`;
 /** A saved icon as a 32 px bitmap (blue, green, red, alpha), or null when it cannot be read. */
@@ -330,6 +353,8 @@ export class Host {
   private safetyLists!: SafetyLists;
   /** Stream overlays and hotkeys for module actions (streaming.ts); made before any module panel opens. */
   private streaming!: Streaming;
+  /** Module overlay pages shown over the game in front (game-overlay-service.ts); made right after streaming. */
+  private gameOverlays!: GameOverlays;
   /** Modules in the player's folder whose zip Tavora blocked: not loaded, data kept. */
   private blockedModules = new Map<string, InstalledModule>();
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
@@ -359,6 +384,8 @@ export class Host {
   private overlayChanges = 0;
   /** True while a dialog backdrop dims the host page, so the window buttons are dimmed too. */
   private dimmed = false;
+  /** True once the window has closed. */
+  private windowClosed = false;
   /** True while the window is minimized or hidden. */
   private windowHidden = false;
   /**
@@ -436,6 +463,7 @@ export class Host {
       autoUpdateModules: () => this.library.autoUpdateModules,
       firstKey: (key) => this.safetyLists.firstKey(key),
       panels: { reload: (moduleId) => this.reloadModuleViews(moduleId), close: (moduleId) => this.removeModulePanels(moduleId) },
+      removed: (owner, moduleId) => this.gameOverlays.forgetModule(moduleId, owner),
       // Test runs keep the window hidden and have no recycle bin to rely on.
       trash: (dir) => (options.hidden ? rm(dir, { recursive: true, force: true }) : shell.trashItem(dir)),
       reload: () => this.reloadModules(),
@@ -482,7 +510,8 @@ export class Host {
       },
     });
     this.window.removeMenu();
-    if (windowState.maximized) this.window.maximize();
+    const start = options.windowStart ?? "front";
+    if (windowState.maximized && (options.hidden || start === "front")) this.window.maximize();
     if (options.hidden) {
       // A truly hidden window never resizes its panels, so tests get one that
       // is shown but transparent, click-through, unfocused and off the taskbar.
@@ -490,6 +519,10 @@ export class Host {
       this.window.setIgnoreMouseEvents(true);
       this.window.setSkipTaskbar(true);
       this.window.once("ready-to-show", () => this.window.showInactive());
+    } else if (start !== "front") {
+      this.window.once("ready-to-show", () =>
+        showInBackground(this.window, start, windowState.maximized, () => screen.dipToScreenRect(this.window, screen.getDisplayMatching(windowState.bounds).workArea)),
+      );
     } else {
       this.window.once("ready-to-show", () => this.window.show());
     }
@@ -573,6 +606,7 @@ export class Host {
     host.moduleData = await listModuleData(userData, host.files.root());
     host.grants = await GrantStore.load(userData);
     host.streaming = await Host.streamingService(host);
+    host.gameOverlays = await Host.gameOverlayService(host);
     host.safetyLists = safetyLists;
     host.blockedModules = blockedModules;
     await host.moveAiUsagePanelData();
@@ -610,7 +644,8 @@ export class Host {
     // The last game's pages start loading with the window, and its first look already has the one loading cover.
     if (host.screen === "game") host.openCurrentGame();
     await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
-    if (library.gameStart !== "off") host.gameWatcher.start();
+    host.syncGameWatcher();
+    host.gameOverlays.start();
     void host.files.check();
     // Icons of games that have none yet are looked for quietly in the background.
     host.fetchIconsSoon();
@@ -945,7 +980,12 @@ export class Host {
     const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
     this.library.developmentFolders = this.library.developmentFolders.filter((item) => key(item) !== key(folder));
     this.saveLibrary();
+    const projects = [...this.modules.values()].filter((module) => module.developmentProject !== undefined);
     await this.reloadModules();
+    // A module of that folder that is gone now takes its game overlays with it, as a removed module does.
+    for (const module of projects) {
+      if (this.modules.get(module.manifest.id)?.developmentProject !== module.developmentProject) this.gameOverlays.forgetModule(module.manifest.id, module.owner);
+    }
   }
 
   /**
@@ -957,6 +997,7 @@ export class Host {
     if (this.modules.get(moduleId)?.owner === owner) throw new LibraryError("error.dataInUse");
     this.data.forgetModule(owner, moduleId);
     this.streaming.forgetModule(owner, moduleId);
+    this.gameOverlays.forgetModule(moduleId, owner);
     for (const partition of await deleteModuleDataOf(this.options.userData, owner, moduleId, this.files.root())) {
       const ses = session.fromPartition(partition);
       await ses.clearStorageData();
@@ -1543,6 +1584,7 @@ export class Host {
     this.window.on("restore", hidden(false));
     this.window.on("show", hidden(false));
     this.window.on("closed", () => {
+      this.windowClosed = true;
       for (const view of this.views.values()) view.dispose();
       this.views.clear();
       this.viewsByContents.clear();
@@ -1594,12 +1636,45 @@ export class Host {
   }
 
   /** Packs a dev module signed with a kept key and saves the zip where the developer picks. */
+  /**
+   * The system's save dialog with the zip's name suggested (numbered when taken), opening where the player last
+   * saved a module zip while that folder is still there, else Documents\Tavora.
+   */
   private async saveModuleZip(moduleId: string): Promise<string | undefined> {
     const { manifest, zip } = await this.publisher.pack(this.projectOf(moduleId));
-    const picked = await dialog.showSaveDialog(this.window, { defaultPath: `${manifest.id}-${manifest.version}.zip`, filters: [{ name: "Zip", extensions: ["zip"] }] });
+    const folder = await this.ownFileFolder("module-zip");
+    const german = this.language.startsWith("de");
+    const picked = await dialog.showSaveDialog(this.window, {
+      title: german ? "Modul als ZIP speichern" : "Save module as zip",
+      defaultPath: path.join(folder, freeFileName(`${manifest.id}-${manifest.version}`, (fileName) => existsSync(path.join(folder, fileName)), "zip")),
+      filters: [{ name: german ? "ZIP-Dateien" : "Zip files", extensions: ["zip"] }],
+      properties: ["showOverwriteConfirmation"],
+    });
     if (picked.canceled || !picked.filePath) return undefined;
-    await writeFile(picked.filePath, zip);
-    return path.basename(picked.filePath);
+    const file = await writeWithExtension(picked.filePath, "zip", zip);
+    this.rememberPicked("module-zip", file);
+    return path.basename(file);
+  }
+
+  /** How the window is now, so a restart under `pnpm dev` brings it back the same way. */
+  windowLook(): WindowStart {
+    return windowLook(this.window);
+  }
+
+  /**
+   * `pnpm dev` rebuilt a module in the repo (modules/, examples/): its open panels load the new build, the way a
+   * development folder's do, instead of Tavora restarting. A module that had not loaded is looked for again.
+   */
+  async moduleBuilt(dir: string): Promise<void> {
+    const real = await realpath(dir).catch(() => dir);
+    const same = (root: string) => path.relative(root, real) === "";
+    let module = [...this.modules.values()].find((item) => same(item.root));
+    if (!module) {
+      await this.reloadModules();
+      this.pushState();
+      module = [...this.modules.values()].find((item) => same(item.root));
+    }
+    if (module) this.reloadModuleViews(module.manifest.id);
   }
 
   /** Shows the window in front, for a question that came from outside it (the pack command's sign request). */
@@ -1729,8 +1804,7 @@ export class Host {
       "set-game-start": saved((action) => {
         this.library.gameStart = action.gameStart;
         if (action.gameStart !== "ask") this.pendingGameSwitch = null;
-        if (action.gameStart === "off") this.gameWatcher.stop();
-        else this.gameWatcher.start();
+        this.syncGameWatcher();
       }),
       "set-game-end": saved((action) => {
         if (action.workspaceId !== null && !(isLive(this.library, action.workspaceId) && this.library.games[action.workspaceId]!.kind === "workspace")) {
@@ -1764,6 +1838,25 @@ export class Host {
         this.library.moduleIcons = action.enabled;
       }),
       "set-stream-overlays": (action) => this.streaming.setOverlays(action.enabled),
+      "set-game-overlays": saved((action) => {
+        this.library.gameOverlays = action.enabled;
+        this.gameOverlays.tick();
+        this.syncGameWatcher();
+      }),
+      "set-game-overlay": (action) => {
+        const { owner, moduleId, gameId, key, mode, opacity, hideFromCapture } = action;
+        this.gameOverlays.update({ owner, moduleId, gameId, key }, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
+      },
+      "remove-game-overlay": (action) => this.gameOverlays.remove(action),
+      "set-overlay-key": (action) => {
+        const { gameId, owner, moduleId, key } = action;
+        const overlay = owner !== undefined && moduleId !== undefined && key !== undefined ? { owner, moduleId, gameId, key } : null;
+        if (overlay && !this.gameOverlays.has(overlay)) return;
+        const binding = overlay ? toggleBinding(overlay) : arrangeBinding(gameId);
+        const names = this.gameOverlays.dialogNames(binding);
+        // The dialog is answered by hotkey-answer; this action only opens it.
+        void this.streaming.askOverlayKey(binding, names.label, { module: names.module, action: names.action });
+      },
       "set-overlay-port": (action) => this.streaming.setPort(action.port),
       "reset-overlay-links": () => this.streaming.resetLinks(),
       "hotkey-answer": (action) => this.streaming.answer(action.id, action.choice, action.accelerator),
@@ -1979,18 +2072,36 @@ export class Host {
         await this.developerKeys.create();
       },
       "developer-key-add": async () => {
-        const picked = await dialog.showOpenDialog(this.window, { properties: ["openFile"], filters: [{ name: "PEM", extensions: ["pem", "key"] }, { name: "*", extensions: ["*"] }] });
+        const german = this.language.startsWith("de");
+        const picked = await dialog.showOpenDialog(this.window, {
+          title: german ? "Schlüsseldatei öffnen" : "Open key file",
+          defaultPath: await this.ownFileFolder("publisher-key"),
+          properties: ["openFile"],
+          filters: [
+            { name: german ? "Schlüsseldateien" : "Key files", extensions: ["pem", "key"] },
+            { name: "*", extensions: ["*"] },
+          ],
+        });
         const file = picked.filePaths[0];
         if (picked.canceled || !file) return;
         const text = await readFile(file, "utf8").catch(() => null);
         if (text === null || text.length > 10_000) throw new PlayerError("developerKeys.error.notKey");
         await this.developerKeys.add(text);
+        this.rememberPicked("publisher-key", file);
       },
       "developer-key-export": async (action) => {
         const pem = this.developerKeys.exportKey(action.fingerprint);
-        const picked = await dialog.showSaveDialog(this.window, { defaultPath: `publisher-key-${action.fingerprint.slice(0, 8)}.pem` });
+        const folder = await this.ownFileFolder("publisher-key");
+        const german = this.language.startsWith("de");
+        const picked = await dialog.showSaveDialog(this.window, {
+          title: german ? "Schlüsseldatei speichern" : "Save key file",
+          defaultPath: path.join(folder, freeFileName(`publisher-key-${action.fingerprint.slice(0, 8)}`, (fileName) => existsSync(path.join(folder, fileName)), "pem")),
+          filters: [{ name: german ? "Schlüsseldateien" : "Key files", extensions: ["pem"] }],
+          properties: ["showOverwriteConfirmation"],
+        });
         if (picked.canceled || !picked.filePath) return;
-        await writeFile(picked.filePath, pem, { mode: 0o600 });
+        const file = await writeWithExtension(picked.filePath, "pem", pem, 0o600);
+        this.rememberPicked("publisher-key", file);
       },
       "developer-key-link": (action) => this.developerKeys.link(action.fingerprint),
       "developer-recovery-key": (action) => this.developerKeys.enterKey(action.key),
@@ -2368,6 +2479,7 @@ export class Host {
     await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
     this.data.forgetGame(game.id);
     this.streaming.forgetGame(game.id);
+    this.gameOverlays.forgetGame(game.id);
     // A folder the player chose can be gone (an unplugged drive): the game still goes, and they are told where its pictures may remain.
     await this.files.noteGameDeleted(game.name, (root) => deleteModuleData(this.options.userData, game.id, root));
     await this.dropIconFile(game.icon);
@@ -2469,6 +2581,14 @@ export class Host {
 
   /** The running games changed (game-watch.ts). Games already running when the watch began start nothing. */
   private gamesRunning(running: ReadonlySet<string>, initial: boolean): void {
+    // The watcher stops when the window closes and reports every game as closed: there is nothing left to switch.
+    if (this.windowClosed) return;
+    // With "When a game starts" off the watcher only serves game overlays, which look at the window in front themselves.
+    if (this.library.gameStart === "off") {
+      this.running = [];
+      this.pushState();
+      return;
+    }
     const before = this.running;
     const started = [...running].filter((id) => !before.includes(id));
     this.running = [...before.filter((id) => running.has(id)), ...started];
@@ -2883,7 +3003,7 @@ export class Host {
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
       aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
       discord: this.discord,
-      overlay: this.streaming.overlayFor(module, game.id),
+      overlay: { ...this.streaming.overlayFor(module, game.id), showOverGame: (key) => this.gameOverlays.show(module, game.id, key) },
       hotkeys: this.streaming.hotkeysFor(module, game.id),
       ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
       onStatus: (status) => {
@@ -3418,6 +3538,7 @@ export class Host {
       runningGameId: this.running.filter((id) => id !== this.gameId && isLive(this.library, id)).at(-1) ?? null,
       pendingGameSwitch: this.pendingGameSwitch && isLive(this.library, this.pendingGameSwitch) ? this.pendingGameSwitch : null,
       streaming: this.streaming.view(),
+      gameOverlays: this.gameOverlays.view(),
       pendingConnector: this.pendingConnector && { id: this.pendingConnector.id, moduleId: this.pendingConnector.moduleId, connectors: [this.pendingConnector.connector] },
       hotkeyRequest: this.streaming.request(),
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
@@ -3588,6 +3709,14 @@ export class Host {
     return { fileName: path.basename(file), text };
   }
 
+  /** Where the dialog for one of Tavora's own files (a module zip, a key file) opens: the folder last used for `place` while it is still there, else Documents\Tavora. */
+  private async ownFileFolder(place: DialogPlace): Promise<string> {
+    const last = this.library.dialogFolders[place];
+    const folder = last && existsSync(last) ? last : documentsFolder();
+    await mkdir(folder, { recursive: true });
+    return folder;
+  }
+
   /** The dialog for `place` opens next time in the folder `picked` is in (for a picked folder, its parent), and the library is saved. */
   private rememberPicked(place: DialogPlace, picked: string): void {
     this.library.dialogFolders[place] = path.dirname(path.resolve(picked));
@@ -3640,8 +3769,63 @@ export class Host {
 
   /** Resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
   async flush(): Promise<void> {
+    await this.gameOverlays?.shutdown();
     await this.streaming?.shutdown();
     return this.savedData.flush();
+  }
+
+  /** Looks at the running programs while "When a game starts" or game overlays need it. */
+  private syncGameWatcher(): void {
+    if (this.library.gameStart !== "off" || this.gameOverlays?.needsWatcher()) this.gameWatcher.start();
+    else this.gameWatcher.stop();
+  }
+
+  /** Game overlays over the game in front, lent what they need of the host. */
+  private static async gameOverlayService(host: Host): Promise<GameOverlays> {
+    const options = host.options;
+    const overlays = await GameOverlays.create({
+      userData: options.userData,
+      overlays: host.streaming.overlayStore,
+      supported: process.platform === "win32",
+      enabled: () => host.library.gameOverlays,
+      module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
+      gameName: (gameId) => host.library.games[gameId]?.name ?? null,
+      gamesOf: (program) => host.gameWatcher.gamesOf(program),
+      probe: () => windowsForegroundProbe(),
+      // Windows reports pixels; windows are placed in DIPs.
+      toDip: (rect) => screen.screenToDipRect(null, rect),
+      openWindow: (request) =>
+        new GameOverlayWindow({
+          preload: path.join(path.dirname(options.modulePreload), "game-overlay.cjs"),
+          hidden: !!options.hidden,
+          id: request.id,
+          source: { page: request.page, state: request.state, watch: request.watch },
+          gameBounds: request.gameBounds,
+          moved: request.moved,
+          closeRequested: request.closeRequested,
+          ended: request.ended,
+          frameText: request.frameText,
+        }),
+      shortcuts: globalShortcut,
+      openSetting: (setting) => {
+        host.bringToFront();
+        host.window.webContents.send("host:shortcut", `setting:${setting}`);
+      },
+      notify: (message) => {
+        host.notice = message;
+        if (!options.hidden && Notification.isSupported()) new Notification({ title: "Tavora", body: message, silent: true }).show();
+        host.pushStateSoon();
+      },
+      removeKeys: (test) => host.streaming.removeKeys(test),
+      keyOf: (binding) => host.streaming.keyOf(binding),
+      language: () => host.language,
+      changed: () => {
+        host.syncGameWatcher();
+        host.pushStateSoon();
+      },
+    });
+    host.streaming.useOverlayKeys(overlays);
+    return overlays;
   }
 
   /** Stream overlays and hotkeys, lent what they need of the host. */

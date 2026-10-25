@@ -3,6 +3,8 @@
 // yes to an account. Settings > Account shows it while signed out, and so does the developer onboarding.
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
+import { CodeInput, codeDigits } from "@tavora/official-ui/components/ui/code-input";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { HostAction } from "../../../shared/host-api";
 import { account, act } from "../../host";
@@ -37,7 +39,7 @@ async function run(action: HostAction): Promise<boolean> {
   }
 }
 
-const cleanCode = computed(() => code.value.replace(/\D/g, "").slice(0, 6));
+const cleanCode = computed(() => codeDigits(code.value));
 const codeReady = computed(() => cleanCode.value.length === 6);
 
 async function discordSignIn() {
@@ -56,12 +58,12 @@ async function discordSignIn() {
     <span v-if="pending?.kind === 'discord-create'" class="text-muted-foreground">{{ t("account.create.descriptionDiscord", { name: pending.name }) }}</span>
     <span v-else-if="pending?.kind === 'sign-in'" class="text-muted-foreground">{{ t("account.create.description", { email: pending.email }) }}</span>
     <label class="flex items-start gap-3">
-      <input v-model="ageConfirmed" type="checkbox" class="accent-primary mt-1 size-4 flex-none" data-testid="account-age" />
+      <Checkbox v-model="ageConfirmed" class="mt-1 flex-none" data-testid="account-age" />
       <span>{{ t("account.create.age") }}</span>
     </label>
     <div class="flex gap-2">
       <Button :disabled="busy || !ageConfirmed" data-testid="account-create" @click="run({ type: 'account-create', ageConfirmed })">{{ t("account.create.confirm") }}</Button>
-      <Button variant="ghost" :disabled="busy" data-testid="account-cancel" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
+      <Button variant="secondary" :disabled="busy" data-testid="account-cancel" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
     </div>
   </div>
 
@@ -73,7 +75,7 @@ async function discordSignIn() {
   >
     <span class="text-muted-foreground" data-testid="account-code-sent">{{ t("account.code.sent", { email: pending.email }) }}</span>
     <div class="flex gap-2">
-      <Input v-model="code" class="w-40 tracking-widest tabular-nums" inputmode="numeric" autocomplete="one-time-code" maxlength="7" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
+      <CodeInput v-model="code" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
       <Button type="submit" :disabled="busy || !codeReady" data-testid="account-verify">{{ t("account.signIn") }}</Button>
     </div>
     <div class="flex gap-2">

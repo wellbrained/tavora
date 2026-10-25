@@ -4,6 +4,7 @@
 import { computed } from "vue";
 import { PATCH_NOTES } from "../../../shared/patch-notes";
 import { state } from "../../host";
+import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { formatDate, t } from "../../i18n";
 
 const version = computed(() => state.value!.appVersion);
@@ -15,7 +16,7 @@ const version = computed(() => state.value!.appVersion);
     <article v-for="entry in PATCH_NOTES" :key="entry.version" :data-testid="`patch-notes-${entry.version}`">
       <header class="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 class="text-lg font-semibold tabular-nums">{{ entry.version }}</h3>
-        <span v-if="entry.version === version" class="bg-secondary text-foreground rounded-sm px-1.5 py-0.5 text-xs">{{ t("settings.patchNotes.installed") }}</span>
+        <Badge v-if="entry.version === version" variant="secondary" class="font-normal">{{ t("settings.patchNotes.installed") }}</Badge>
         <span class="text-muted-foreground text-sm">{{ formatDate(entry.date) }}</span>
       </header>
       <p class="mb-2 font-medium">{{ entry.title }}</p>

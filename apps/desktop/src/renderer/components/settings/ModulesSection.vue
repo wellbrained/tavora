@@ -10,6 +10,7 @@
 // Settings > Development instead.
 import { ArrowRightLeft, CircleAlert, CloudDownload, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Store, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
+import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -207,9 +208,9 @@ function remove(module: ModuleView) {
             @click="notesOpen = module.id"
           >
             <NotebookText :stroke-width="1.5" /> {{ t("settings.modules.notes") }}
-            <span v-if="module.notes.unseen" class="bg-primary text-primary-foreground rounded-sm px-1.5 text-xs" :data-testid="`module-notes-new-${module.id}`">{{
+            <Badge v-if="module.notes.unseen" class="py-0 font-normal" :data-testid="`module-notes-new-${module.id}`">{{
               t("settings.modules.notesNew")
-            }}</span>
+            }}</Badge>
           </Button>
           <Button
             v-if="module.localDataWaiting"
@@ -283,9 +284,9 @@ function remove(module: ModuleView) {
         >
           <span class="flex min-w-0 flex-1 items-center gap-2">
             <span class="truncate font-mono text-sm">{{ entry.moduleId }}</span>
-            <span class="text-muted-foreground flex-none rounded-sm border px-1.5 text-xs" :class="entry.publisher && 'font-mono'" :title="entry.publisher ? t('settings.modules.publisherHint', { key: entry.publisher }) : undefined">
+            <Badge variant="outline" :class="cn('text-muted-foreground py-0 font-normal', entry.publisher && 'font-mono')" :title="entry.publisher ? t('settings.modules.publisherHint', { key: entry.publisher }) : undefined">
               {{ entry.publisher ? t("settings.modules.publisher", { short: entry.publisher.slice(0, 8) }) : t(`settings.modules.leftoverOwner.${entry.owner as "local" | "official"}`) }}
-            </span>
+            </Badge>
           </span>
           <Button variant="danger" :aria-label="t('settings.modules.deleteDataLabel', { id: entry.moduleId })" :data-testid="`delete-data-${entry.owner}-${entry.moduleId}`" @click="deleteData(entry)">
             <Trash2 :stroke-width="1.5" /> {{ t("settings.modules.deleteData") }}

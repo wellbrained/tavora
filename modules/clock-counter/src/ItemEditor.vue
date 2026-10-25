@@ -155,6 +155,11 @@ async function copyLink() {
   linkNote.value = t(result === "copied" ? "edit.copied" : result === "off" ? "edit.overlaysOff" : "edit.noOverlay");
 }
 
+async function showOverGame() {
+  const result = await panel.showOverGame(props.item);
+  linkNote.value = result === "shown" ? t("edit.shownOverGame") : result === "full" ? t("edit.overGameFull") : null;
+}
+
 async function resetLink() {
   await panel.resetLink(props.item);
   linkNote.value = t("edit.resetLinkDone");
@@ -183,6 +188,7 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
           <Input :id="`${prefix}-format`" v-model="format" class="font-mono" :maxlength="MAX_FORMAT" :aria-invalid="!formatValid" @blur="saveFormat()" @keydown.enter="saveFormat()" />
           <Button variant="secondary" size="sm" class="h-8" :aria-label="t('edit.formatPresets')" :title="t('edit.formatPresets')" @click="pickFormat">···</Button>
         </div>
+        <p v-if="!formatValid" class="text-destructive text-xs" role="alert">{{ t("edit.formatInvalid") }}</p>
         <p class="text-muted-foreground text-xs">{{ t("edit.preview", { text: preview }) }} · {{ t("edit.formatHint") }}</p>
       </div>
 
@@ -265,6 +271,7 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
       <h3 class="font-medium">{{ t("edit.stream") }}</h3>
       <div class="flex flex-wrap gap-2">
         <Button size="sm" :data-testid="`copy-link-${item.id}`" @click="copyLink">{{ t("edit.copyLink") }}</Button>
+        <Button size="sm" variant="secondary" :data-testid="`show-over-game-${item.id}`" @click="showOverGame">{{ t("edit.showOverGame") }}</Button>
         <Button v-if="panel.store.overlays.value" variant="ghost" size="sm" @click="resetLink">{{ t("edit.resetLink") }}</Button>
       </div>
       <p v-if="linkNote" class="text-muted-foreground text-xs" role="status">{{ linkNote }}</p>
@@ -312,7 +319,7 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
         <li v-for="action in actions" :key="action" class="flex min-h-8 items-center gap-2">
           <span class="min-w-0 flex-1 truncate">{{ t(`action.${action}`) }}</span>
           <span class="text-muted-foreground text-xs" :data-testid="`hotkey-${action}-${item.id}`">{{ hasKey(action) ? t("edit.hotkeyOn") : t("edit.hotkeyNone") }}</span>
-          <Button variant="secondary" size="sm" @click="panel.setHotkey(action, item)">{{ hasKey(action) ? t("edit.hotkeyChange") : t("edit.hotkeySet") }}</Button>
+          <Button variant="secondary" size="sm" :aria-label="`${t(`action.${action}`)}: ${hasKey(action) ? t('edit.hotkeyChange') : t('edit.hotkeySet')}`" @click="panel.setHotkey(action, item)">{{ hasKey(action) ? t("edit.hotkeyChange") : t("edit.hotkeySet") }}</Button>
         </li>
       </ul>
     </section>

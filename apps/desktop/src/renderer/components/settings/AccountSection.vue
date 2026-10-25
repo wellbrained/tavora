@@ -6,6 +6,7 @@
 // Settings > Development (ModuleDeveloperSettings.vue).
 import { computed, onMounted, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { CodeInput, codeDigits } from "@tavora/official-ui/components/ui/code-input";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { AccountDevice, HostAction } from "../../../shared/host-api";
 import { account, act, confirmAction, prompt, submitAction } from "../../host";
@@ -54,7 +55,7 @@ async function run(action: HostAction): Promise<boolean> {
   }
 }
 
-const cleanCode = computed(() => code.value.replace(/\D/g, "").slice(0, 6));
+const cleanCode = computed(() => codeDigits(code.value));
 const codeReady = computed(() => cleanCode.value.length === 6);
 
 /** A Discord step: the browser opens, and the page says Tavora is waiting for it. */
@@ -171,7 +172,7 @@ function startDelete() {
         <div class="flex gap-2">
           <Input v-model="newEmail" type="email" class="max-w-80" autocomplete="email" maxlength="254" :placeholder="t('account.email.placeholder')" :aria-label="t('account.email.new')" data-testid="account-new-email" />
           <Button type="submit" :disabled="busy || !newEmail.trim()" data-testid="account-email-code">{{ t("account.code.send") }}</Button>
-          <Button type="button" variant="ghost" @click="changing = false">{{ t("common.cancel") }}</Button>
+          <Button type="button" variant="secondary" @click="changing = false">{{ t("common.cancel") }}</Button>
         </div>
       </form>
 
@@ -182,9 +183,9 @@ function startDelete() {
       >
         <span class="text-muted-foreground">{{ t("account.code.sent", { email: pending.email }) }}</span>
         <div class="flex gap-2">
-          <Input v-model="code" class="w-40 tracking-widest tabular-nums" inputmode="numeric" autocomplete="one-time-code" maxlength="7" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
+          <CodeInput v-model="code" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
           <Button type="submit" :disabled="busy || !codeReady" data-testid="account-confirm-email">{{ t("account.email.confirm") }}</Button>
-          <Button type="button" variant="ghost" :disabled="busy" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
+          <Button type="button" variant="secondary" :disabled="busy" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
         </div>
       </form>
 
@@ -196,9 +197,9 @@ function startDelete() {
       >
         <span class="text-muted-foreground">{{ t("account.email.removeCodeSent", { email: signedIn.email ?? "" }) }}</span>
         <div class="flex gap-2">
-          <Input v-model="code" class="w-40 tracking-widest tabular-nums" inputmode="numeric" autocomplete="one-time-code" maxlength="7" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
+          <CodeInput v-model="code" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
           <Button type="submit" variant="destructive" :disabled="busy || !codeReady" data-testid="account-confirm-remove-email">{{ t("account.email.removeConfirm") }}</Button>
-          <Button type="button" variant="ghost" :disabled="busy" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
+          <Button type="button" variant="secondary" :disabled="busy" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
         </div>
       </form>
 
@@ -222,9 +223,9 @@ function startDelete() {
       >
         <span class="text-muted-foreground">{{ t(pending.kind === "connect-discord" ? "account.discord.connectCodeSent" : "account.discord.disconnectCodeSent", { email: signedIn.email ?? "" }) }}</span>
         <div class="flex gap-2">
-          <Input v-model="code" class="w-40 tracking-widest tabular-nums" inputmode="numeric" autocomplete="one-time-code" maxlength="7" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
+          <CodeInput v-model="code" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
           <Button type="submit" :disabled="busy || !codeReady" data-testid="account-confirm-discord">{{ t(pending.kind === "connect-discord" ? "account.discord.connectConfirm" : "account.discord.disconnectConfirm") }}</Button>
-          <Button type="button" variant="ghost" :disabled="busy" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
+          <Button type="button" variant="secondary" :disabled="busy" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
         </div>
       </form>
 
@@ -269,9 +270,9 @@ function startDelete() {
       >
         <span class="text-muted-foreground">{{ t("account.delete.codeSent", { email: signedIn.email ?? "" }) }}</span>
         <div class="flex gap-2">
-          <Input v-model="code" class="w-40 tracking-widest tabular-nums" inputmode="numeric" autocomplete="one-time-code" maxlength="7" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
+          <CodeInput v-model="code" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
           <Button type="submit" variant="destructive" :disabled="busy || !codeReady" data-testid="account-delete">{{ t("account.delete.confirm") }}</Button>
-          <Button type="button" variant="ghost" :disabled="busy" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
+          <Button type="button" variant="secondary" :disabled="busy" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
         </div>
       </form>
       <SettingRow v-else :label="t('account.delete.label')" :description="t('account.delete.description')">

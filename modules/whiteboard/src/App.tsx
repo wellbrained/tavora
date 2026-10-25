@@ -350,7 +350,15 @@ export default function App() {
     [boards, refreshList, show, createBoard],
   );
 
-  if (error) return <p className="status">{t("connectError", { error })}</p>;
+  if (error)
+    return (
+      <div className="status">
+        <p>{t("connectError", { error })}</p>
+        <button type="button" className="button action" onClick={() => location.reload()}>
+          {t("retry")}
+        </button>
+      </div>
+    );
   if (!sdk || !shown) return <p className="status">{t("loading")}</p>;
 
   const level = sizeLevel(bytes);
@@ -433,6 +441,11 @@ export default function App() {
             onToolbar={placeToolbar}
           />
         </Suspense>
+        {empty ? (
+          <p className="empty-hint" data-testid="empty-hint">
+            {t("empty.hint")}
+          </p>
+        ) : null}
         <Toolbar board={boardElement} place={toolbar} />
         <Palette board={boardElement} place={palette} onPlace={placePalette} />
       </main>

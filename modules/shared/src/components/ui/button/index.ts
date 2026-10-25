@@ -13,7 +13,7 @@ export const buttonVariants = cva(
         default:
           "bg-primary text-primary-foreground hover:bg-primary-hover",
         destructive:
-          "bg-destructive text-white hover:bg-[color-mix(in_srgb,black_15%,var(--destructive))]focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60 dark:hover:bg-destructive/85",
+          "bg-destructive text-white hover:bg-[color-mix(in_srgb,black_15%,var(--destructive))] focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60 dark:hover:bg-destructive/85",
         // Remove, delete and take-back buttons: always red, quieter than a confirm dialog's destructive one.
         danger:
           "bg-destructive/10 text-destructive hover:bg-destructive/25 hover:text-destructive dark:bg-destructive/15 dark:hover:bg-destructive/30",

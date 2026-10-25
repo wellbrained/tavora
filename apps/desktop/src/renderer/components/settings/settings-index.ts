@@ -1,4 +1,4 @@
-import { Blocks, Cloud, FolderCode, Gamepad2, Globe, Info, Keyboard, Palette, Plug, Radio, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
+import { Blocks, Cloud, FolderCode, Gamepad2, Globe, Info, Keyboard, Palette, PictureInPicture2, Plug, Radio, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
 import type { MessageKey } from "../../../shared/i18n";
 import { t } from "../../i18n";
 
@@ -23,6 +23,7 @@ export const GROUPS = [
       { id: "modules", icon: Blocks },
       { id: "integrations", icon: Plug },
       { id: "streaming", icon: Radio },
+      { id: "overlays", icon: PictureInPicture2 },
       { id: "browser", icon: Globe },
       { id: "development", icon: FolderCode },
     ],
@@ -89,6 +90,8 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["overlay-port", "streaming"],
   ["overlay-links", "streaming"],
   ["hotkeys", "streaming"],
+  ["game-overlays", "overlays"],
+  ["game-overlay-list", "overlays"],
   ["browser-shared-sites", "browser"],
   ["browser-adblock-off", "browser"],
   ["browser-clear-game", "browser"],

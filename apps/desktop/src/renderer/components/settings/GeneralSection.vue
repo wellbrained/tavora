@@ -1,15 +1,14 @@
 <script setup lang="ts">
 // Settings > General: the language, where Tavora starts, what happens when a game starts or closes,
 // the rail's order and the welcome tour.
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
+import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Picker } from "@tavora/official-ui/components/ui/picker";
 import type { GameStart, RootSort, Startup } from "../../../shared/host-api";
-import type { LanguageSetting } from "../../../shared/i18n";
-import { act, settingsOpen, state } from "../../host";
+import { LANGUAGES, type LanguageSetting } from "../../../shared/i18n";
+import { act, settingsOpen, state, useFloating } from "../../host";
 import { t } from "../../i18n";
-import ChoicePicker from "./ChoicePicker.vue";
-import LanguagePicker from "./LanguagePicker.vue";
-import SegmentedControl from "./SegmentedControl.vue";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
@@ -45,6 +44,19 @@ const languageSetting = computed({
   get: () => state.value!.language.setting,
   set: (value: LanguageSetting) => void act({ type: "set-language", language: value }),
 });
+/** Follow System first, then the languages in their own names. */
+const languageOptions = computed(() => [
+  { value: "system" as LanguageSetting, label: t("settings.language.system"), keywords: "system follow auto automatic" },
+  ...LANGUAGES.map((item) => ({ value: item.id as LanguageSetting, label: item.name, keywords: `${item.id} ${item.search}` })),
+]);
+
+// An open list floats over the panels, like a menu.
+const languageOpen = ref(false);
+const gameEndOpen = ref(false);
+const trackLanguage = useFloating();
+const trackGameEnd = useFloating();
+watch(languageOpen, trackLanguage);
+watch(gameEndOpen, trackGameEnd);
 
 /** Leaves Settings and Home shows the first-run welcome again. */
 async function showWelcomeAgain() {
@@ -58,7 +70,17 @@ async function showWelcomeAgain() {
 <template>
   <SettingGroup>
     <SettingRow :label="t('settings.language.label')" :description="t('settings.language.description')" setting="language" :highlighted="highlight === 'language'">
-      <LanguagePicker v-model="languageSetting" />
+      <Picker
+        v-model="languageSetting"
+        v-model:open="languageOpen"
+        :options="languageOptions"
+        :label="t('settings.language.label')"
+        :search="t('settings.language.searchPlaceholder')"
+        :empty="t('settings.language.none')"
+        class="max-w-none"
+        testid="language"
+        data-testid="language-picker"
+      />
     </SettingRow>
     <SettingRow :label="t('settings.startup.label')" :description="t('settings.startup.description')" setting="startup" :highlighted="highlight === 'startup'">
       <SegmentedControl
@@ -89,7 +111,7 @@ async function showWelcomeAgain() {
       setting="game-end"
       :highlighted="highlight === 'game-end'"
     >
-      <ChoicePicker v-model="gameEnd" :label="t('settings.game-end.label')" :options="gameEndOptions" testid="game-end" />
+      <Picker v-model="gameEnd" v-model:open="gameEndOpen" :options="gameEndOptions" :label="t('settings.game-end.label')" testid="game-end" data-testid="game-end" />
     </SettingRow>
     <SettingRow :label="t('settings.sort.label')" :description="t('settings.sort.description')" setting="sort" :highlighted="highlight === 'sort'">
       <SegmentedControl

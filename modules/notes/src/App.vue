@@ -245,7 +245,7 @@ async function move(id: string, delta: -1 | 1) {
 
 <template>
   <p v-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">
-    {{ error ? t("connectError", { error }) : t("loading") }}
+    {{ error ? t("connectError") : t("loading") }}
   </p>
   <div v-else class="flex h-full min-h-0" data-testid="notes-app" :data-narrow="narrow">
     <aside

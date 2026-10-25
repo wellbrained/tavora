@@ -20,6 +20,109 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.51",
+    date: "2026-10-25",
+    title: "Overlays over your game",
+    notes: [
+      "Modules can now show an overlay over your game. Turn it on in Settings > Overlays.",
+      "Overlays show only while the game is in front, and hide when you switch away.",
+      "Set an Arrange overlays key per game to move and resize them right in the game.",
+      "Pick for each overlay when it shows, how see-through it is, and whether to hide it from screen capture.",
+      "In Clock & Counter, press Show over game in a clock or counter's settings.",
+    ],
+  },
+  {
+    version: "0.20.50",
+    date: "2026-10-25",
+    title: "Clearer focus and a tidier Playground",
+    notes: [
+      "Checkboxes, switches and sliders now show where the keyboard is.",
+      "The delete dialog's Cancel button speaks German.",
+      "The Playground groups its controls into tabs.",
+    ],
+  },
+  {
+    version: "0.20.49",
+    date: "2026-10-25",
+    title: "Whiteboard polish",
+    notes: [
+      "The Whiteboard's top bar wraps on narrow panels, so no button gets cut off.",
+      "Empty boards say how to start, and a failed connection has a Try again button.",
+      "\"Pictures\" are now \"images\" everywhere, and the hints are shorter.",
+    ],
+  },
+  {
+    version: "0.20.48",
+    date: "2026-10-25",
+    title: "Whiteboard polish",
+    notes: [
+      "The Whiteboard's top bar wraps on narrow panels, so no button gets cut off.",
+      "Empty boards say how to start, and a failed connection has a Try again button.",
+      "\"Pictures\" are now \"images\" everywhere, and the hints are shorter.",
+    ],
+  },
+  {
+    version: "0.20.47",
+    date: "2026-10-25",
+    title: "To-Dos polish",
+    notes: [
+      "Row and group menus are easier to spot.",
+      "Save problems are easier to read.",
+      "Clearer German texts.",
+    ],
+  },
+  {
+    version: "0.20.46",
+    date: "2026-10-25",
+    title: "Clock & Counter is easier to use",
+    notes: [
+      "Hotkey buttons now say which action they set.",
+      "A format that does not work now tells you so.",
+    ],
+  },
+  {
+    version: "0.20.45",
+    date: "2026-10-25",
+    title: "Notes polish",
+    notes: [
+      "Notes tells you plainly when it can't open.",
+      "Clearer texts for links, images and unsaved changes.",
+      "The big picture view is easier to use with the keyboard.",
+    ],
+  },
+  {
+    version: "0.20.44",
+    date: "2026-10-25",
+    title: "Discord module polish",
+    notes: [
+      "Clearer messages when Discord can't be reached or the module isn't allowed.",
+      "Shorter texts, and a spinner while Discord connects.",
+    ],
+  },
+  {
+    version: "0.20.43",
+    date: "2026-10-25",
+    title: "Tidier Settings",
+    notes: [
+      "Tick boxes, tags and key caps in Settings look the same everywhere, and the Language and game-end lists work with the arrow keys.",
+      "Themes show at least two side by side, and up to four when there's room.",
+      "Games and Trash sit in the same boxes as the rest of Settings.",
+      "Removing an AI account or a development folder asks first.",
+      "Saving a module zip or a key file opens where you saved one last, at first in Documents\\Tavora.",
+      "A module's patch notes say when they're loading or can't be read.",
+    ],
+  },
+  {
+    version: "0.20.42",
+    date: "2026-10-25",
+    title: "Small tidy-ups",
+    notes: [
+      "The Steam import and Share icons lists use Tavora's own checkboxes.",
+      "The rail's resize edge lights up clearly when you reach it with the keyboard.",
+      "Shorter tips on an empty game and in the Steam import.",
+    ],
+  },
+  {
     version: "0.20.41",
     date: "2026-10-25",
     title: "Smaller download",

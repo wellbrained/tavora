@@ -4,13 +4,13 @@
 // revocable (decision log, module grants row of 2026-10-16). Logins stay in those folders; the main
 // process reads them and none of it comes to this page or to a module.
 import { computed, ref } from "vue";
+import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { AiProvider, AiUsageAccount } from "../../../shared/host-api";
 import { act, aiUsage, confirmAction, gamesUsing, listOf, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
-import SegmentedControl from "./SegmentedControl.vue";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
@@ -34,6 +34,7 @@ function startAdd() {
 }
 function startEdit(account: AiUsageAccount) {
   editing.value = account.id;
+  provider.value = account.provider;
   name.value = account.label;
   folder.value = account.directory;
 }
@@ -49,6 +50,22 @@ async function save() {
   } finally {
     busy.value = false;
   }
+}
+
+/** Where such a folder usually is on this system, as a hint in the empty field. */
+const folderExample = computed(() => {
+  const own = provider.value === "codex" ? ".codex" : ".claude";
+  return navigator.platform.startsWith("Win") ? `C:\\Users\\…\\${own}` : `~/${own}`;
+});
+
+function removeAccount(account: AiUsageAccount) {
+  confirmAction({
+    title: t("aiUsage.settings.removeTitle", { name: account.label }),
+    message: t("aiUsage.settings.removeNote"),
+    confirm: t("aiUsage.settings.remove"),
+    danger: true,
+    run: () => submitAction({ type: "ai-usage-remove", accountId: account.id }),
+  });
 }
 
 type ModuleView = NonNullable<typeof state.value>["modules"][number];
@@ -84,7 +101,7 @@ function revoke(module: ModuleView) {
             <span class="text-muted-foreground truncate font-mono text-xs" :title="account.directory">{{ account.directory }}</span>
           </div>
           <Button variant="ghost" size="sm" data-testid="ai-usage-edit" @click="startEdit(account)">{{ t("aiUsage.settings.edit") }}</Button>
-          <Button variant="danger" size="sm" data-testid="ai-usage-remove" @click="act({ type: 'ai-usage-remove', accountId: account.id })">{{ t("aiUsage.settings.remove") }}</Button>
+          <Button variant="danger" size="sm" data-testid="ai-usage-remove" @click="removeAccount(account)">{{ t("aiUsage.settings.remove") }}</Button>
         </div>
       </li>
       <li v-if="view && accounts.length === 0 && editing !== 'new'" class="text-muted-foreground py-3 text-sm" data-testid="ai-usage-none">{{ t("aiUsage.settings.empty") }}</li>
@@ -106,11 +123,11 @@ function revoke(module: ModuleView) {
       </label>
       <label class="flex flex-col gap-1 text-sm">
         <span class="font-medium">{{ t("aiUsage.settings.folder") }}</span>
-        <Input v-model="folder" maxlength="500" autocomplete="off" spellcheck="false" placeholder="C:\Users\you\.claude" data-testid="ai-usage-folder" />
+        <Input v-model="folder" maxlength="500" autocomplete="off" spellcheck="false" :placeholder="folderExample" data-testid="ai-usage-folder" />
       </label>
       <p class="text-muted-foreground text-xs">{{ t("aiUsage.settings.removeNote") }}</p>
       <div class="flex justify-end gap-2">
-        <Button type="button" variant="ghost" @click="editing = null">{{ t("aiUsage.settings.cancel") }}</Button>
+        <Button type="button" variant="secondary" @click="editing = null">{{ t("aiUsage.settings.cancel") }}</Button>
         <Button type="submit" :disabled="busy || name.trim() === '' || folder.trim() === ''" data-testid="ai-usage-save">{{ t("aiUsage.settings.save") }}</Button>
       </div>
     </form>

@@ -62,7 +62,7 @@ function clear(scope: "game" | "shared") {
         <span class="font-medium">{{ list.label() }}</span>
         <span class="text-muted-foreground text-sm">{{ list.description() }}</span>
       </div>
-      <p v-if="!list.sites().length" class="text-muted-foreground/80 mt-3 text-sm">{{ list.empty() }}</p>
+      <p v-if="!list.sites().length" class="text-muted-foreground mt-3 text-sm">{{ list.empty() }}</p>
       <ul v-else class="mt-3 flex flex-wrap gap-2" :data-testid="list.setting">
         <li v-for="site in list.sites()" :key="site" class="bg-secondary flex h-8 items-center gap-1 rounded-md pr-1 pl-3 text-sm">
           {{ site }}

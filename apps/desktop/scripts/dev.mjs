@@ -1,5 +1,8 @@
 // Development mode: the host UI is served by Vite with hot reload, and
-// Tavora restarts by itself when the main process or a preload changes.
+// Tavora restarts by itself when the main process or a preload changes. A
+// rebuilt module in the repo only reloads its panels. Tavora always starts in
+// the background: minimized if it was, in front only if it was the active
+// window, else behind the active one (src/main/background-window.ts).
 // Release builds never use this; see TAVORA_DEV_SERVER in src/main/index.ts.
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
@@ -30,6 +33,10 @@ console.log(`[dev] host UI at ${url} (hot reload)`);
 let app;
 let restartTimer;
 let stopping = false;
+// How the last Tavora said its window looked when it quit; the next start matches it.
+let windowLook;
+// Tavora stopped by itself (a crash, or main code that fails to start): it starts again after the next good build.
+let stopped = false;
 
 function start() {
   app = spawn(electron, [root], {
@@ -37,25 +44,47 @@ function start() {
     // signals cannot do on Windows.
     stdio: ["inherit", "inherit", "inherit", "ipc"],
     // Without ELECTRON_RUN_AS_NODE, which some shells (an agent's in T3 Code) set: Electron would start as plain Node.
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, TAVORA_DEV_SERVER: url, TAVORA_DEVTOOLS: process.env.TAVORA_DEVTOOLS ?? "1" },
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: undefined,
+      TAVORA_DEV_SERVER: url,
+      TAVORA_DEVTOOLS: process.env.TAVORA_DEVTOOLS ?? "1",
+      TAVORA_DEV_WINDOW: windowLook ?? "behind",
+    },
   });
+  windowLook = undefined;
+  stopped = false;
   const current = app;
-  // Closing Tavora ends the dev session; a restart replaces the process.
+  // Closing Tavora ends the dev session; a restart replaces the process. A
+  // Tavora that stops with an error waits for the next build instead.
   current.on("exit", (code) => {
-    if (app === current) void stop(code ?? 0);
+    if (app !== current) return;
+    if (code === 0 || code === null) return void stop(code ?? 0);
+    console.log(`[dev] Tavora stopped (exit code ${code}); it starts again after the next successful build`);
+    app = undefined;
+    stopped = true;
   });
-  // Settings > Restart now asks this script, so Tavora stays under it.
   current.on("message", (message) => {
-    if (message === "restart" && app === current) {
+    // Sent while quitting, when a restart has already let go of this process.
+    if (typeof message === "object" && message !== null && typeof message.window === "string") windowLook = message.window;
+    // Settings > Restart now asks this script, so Tavora stays under it.
+    else if (message === "restart" && app === current) {
       console.log("[dev] restart requested by Tavora");
       restart();
     }
   });
 }
 
+/** A module in the repo was rebuilt: its open panels load the new build, without restarting Tavora. */
+function moduleBuilt(dir) {
+  if (stopped) return restart();
+  if (app?.connected) app.send({ moduleBuilt: dir });
+}
+
 function restart() {
   clearTimeout(restartTimer);
   restartTimer = setTimeout(() => {
+    if (stopped) return start();
     const previous = app;
     if (!previous) return; // still restarting; the new start picks up this build
     app = undefined;
@@ -87,8 +116,7 @@ const reload = {
 // The official modules (repo modules/) and the examples (repo examples/) are
 // loaded from their built bundles, so they are built in watch mode too; an
 // example left unbuilt showed up as a broken module in Settings. A rebuild
-// restarts Tavora like a main process change, which reloads every panel with
-// the new bundle.
+// reloads that module's panels with the new bundle.
 const moduleProjects = ["../../modules", "../../examples"].flatMap((folder) => {
   const dir = path.resolve(root, folder);
   return readdirSync(dir, { withFileTypes: true })
@@ -114,8 +142,8 @@ const watchers = await Promise.all(
         first = false;
         if (--pending === 0) start();
       } else if (pending === 0) {
-        console.log(`[dev] module ${name} changed, restarting Tavora`);
-        restart();
+        console.log(`[dev] module ${name} changed, reloading its panels`);
+        moduleBuilt(dir);
       }
     });
     return watcher;

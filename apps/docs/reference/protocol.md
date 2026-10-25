@@ -84,10 +84,11 @@ Methods without params must be sent with `params` left out.
 | `discord.command` | `{ command, args }` | `DiscordResult`; one of `DISCORD_COMMANDS` |
 | `discord.subscribe`, `discord.unsubscribe` | `{ event, channelId? }` | `null`; one of `DISCORD_EVENTS` |
 | `discord.image` | `{ url }` | a small PNG as a `data:` address, or `null` |
-| `overlay.publish` | `{ key, state }` | `null`; what the overlay for `key` shows now. Needs the `overlay` capability, see [Stream overlays](#stream-overlays) (Tavora 0.19.26 and newer) |
-| `overlay.remove` | `{ key }` | `null`; the overlay shows nothing until it is published again, and keeps its link |
+| `overlay.publish` | `{ key, state }` | `null`; what the overlay for `key` shows now, on its stream link and over the game. Needs no capability since Tavora 0.20.51; before that it needed `overlay`. See [Stream overlays](#stream-overlays) (Tavora 0.19.26 and newer) |
+| `overlay.remove` | `{ key }` | `null`; the overlay shows nothing until it is published again, and keeps its link. Needs no capability since Tavora 0.20.51 |
 | `overlay.copyLink` | `{ key }` | `"copied"`: the link is on the clipboard; `"off"`: Stream overlays are off, and Tavora opened that setting. `"denied"`: the module asks for the connector on request and the player said no in Tavora's dialog (Tavora 0.19.32 and newer). Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise) |
-| `overlay.resetLink` | `{ key }` | `null`; the overlay gets a new link and the old one stops working |
+| `overlay.resetLink` | `{ key }` | `null`; the overlay gets a new link and the old one stops working. Needs the `overlay` capability |
+| `overlay.showOverGame` | `{ key }` | `"shown"`: the overlay is over the game now, or already was; `"off"`: Game overlays are off, and Tavora opened Settings > Overlays; `"full"`: the game already has 8. Needs no capability. Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for a module without an `overlay` page. See [Game overlays](#game-overlays) (Tavora 0.20.51 and newer) |
 | `hotkeys.list` | none | `{ action, target }[]`: the hotkeys the player set for this module in the current game, never the keys. See [Hotkeys](#hotkeys) (Tavora 0.19.26 and newer) |
 | `hotkeys.set` | `{ action, target, label }` | `"set"`, `"removed"` or `"cancelled"`: what the player did in Tavora's hotkey dialog. Only right after a real click or key press in the panel (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for an action the manifest does not list |
 | `hotkeys.remove` | `{ target, action? }` | `null`; removes the target's hotkeys, or only the one for `action` |
@@ -206,12 +207,22 @@ A connector is a part of Tavora that reaches outside the module's panel, such as
 A module that lists an [`overlay`](./manifest.md#overlay) page and the `stream-overlay` connector can show it in OBS or other streaming software on the player's PC, as a Browser Source. It works with keys: one overlay per key, such as an item id, each with its own link.
 
 - `overlay.publish` sets what the overlay for a key shows: any JSON, at most 16 KB. Tavora keeps it, so the overlay goes on showing it while none of the module's panels runs, and after a restart. Publish when something changes, not on every frame: a running clock publishes when it starts or stops, and its overlay counts the time itself.
-- `overlay.copyLink` puts the overlay's link on the clipboard after a click. A module that lists the connector in [`permissions.onRequest`](./manifest.md) is not asked for it when it is added; Tavora shows its consent dialog on the first `copyLink` instead, and the call gives `"denied"` if the player says no. The player turns Stream overlays on in Settings > Streaming; while they are off, the call gives `"off"` and Tavora opens that setting.
+- `overlay.copyLink` puts the overlay's link on the clipboard after a click. It and `overlay.resetLink` are the calls that need the connector. A module that lists the connector in [`permissions.onRequest`](./manifest.md) is not asked for it when it is added; Tavora shows its consent dialog on the first `copyLink` instead, and the call gives `"denied"` if the player says no. The player turns Stream overlays on in Settings > Streaming; while they are off, the call gives `"off"` and Tavora opens that setting.
 - `overlay.remove` empties an overlay (an item was deleted) and `overlay.resetLink` gives it a new link. The player can also reset every link in Settings.
 
 The overlay page runs in the streaming software, not in Tavora, so it has no bridge. It reads what the module published from `_state` next to it as server-sent events, each message `{ "state": <JSON or null> }`, the first one right away; `watchOverlay(fn)` in the SDK does it for you and reconnects when Tavora restarts. `null` means there is nothing to show.
 
 Tavora serves the page and the files next to it from `127.0.0.1` only, under a random link per overlay, with a policy that loads nothing from anywhere else and talks only to Tavora. The link works while Stream overlays are on, the module is installed under the same publisher and the player still grants the connector; otherwise it gives `404`. Theme and language don't reach the overlay: give it what it needs in the state.
+
+### Game overlays
+
+The same [`overlay`](./manifest.md#overlay) page can also be shown over the player's game, in a window of Tavora's own, with `overlay.showOverGame(key)`. Call it from the click or key press that asked for it, for example a Show over game button. The page and what it publishes work exactly as for Stream overlays (one page per key, `overlay.publish`, `watchOverlay`), and it needs no connector and no permission: the player decides in Settings > Overlays.
+
+- The call gives `"off"` while the player has Game overlays off (they are off at first); Tavora then opens Settings > Overlays. It gives `"full"` when the game already has 8 game overlays; the player can remove one there. Otherwise it gives `"shown"`, also when the overlay was already added.
+- The overlay shows only while its game is running and in front, and hides when the player switches to another window, Tavora included. The player picks per overlay whether it is always shown or toggled by a key, how see-through it is, and whether it shows on stream (it is hidden from screen capture at first). They place and resize it in the game with the Arrange overlays key.
+- Tavora draws its own window above the game. It does not touch the game: nothing is injected into it or drawn by it. Games that run in exclusive full screen hide it; the player is told to switch the game to borderless. Windows only; elsewhere the call gives `"off"`.
+- The page has no bridge and runs under the same policy as a Stream overlay page, with no network. Clicks go through it to the game, so it can't take input.
+- Theme and language don't reach the page, and its size is the player's choice, so lay it out for any size and keep its background transparent.
 
 ### Hotkeys
 
@@ -323,7 +334,7 @@ Some methods need a capability the player grants. A module asks for it in its ma
 | `network.readPage` | `network` | the same exact-host grant; fresh isolated session |
 | `aiUsage.accounts`, `aiUsage.read` | `aiUsage` | granted for the `ai-usage` connector, see [Connectors](#connectors) |
 | `discord.*` | `discord` | granted for the `discord` connector, see [Connectors](#connectors) |
-| `overlay.*` | `overlay` | granted for the `stream-overlay` connector, see [Stream overlays](#stream-overlays) |
+| `overlay.copyLink`, `overlay.resetLink` | `overlay` | granted for the `stream-overlay` connector, see [Stream overlays](#stream-overlays). `overlay.publish`, `overlay.remove` and `overlay.showOverGame` need none |
 | `files.open`, `files.save` | `files` | reserved |
 | `clipboard.writeText`, `clipboard.readText` | `clipboard` | reserved |
 | `sharedData.publish`, `sharedData.read`, `sharedData.subscribe` | `sharedData` | reserved |
