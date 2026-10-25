@@ -1,10 +1,11 @@
 import type { KeyObject } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { manifestFiles, validateChangelog, validateManifest, type ChangelogEntry, type ModuleManifest } from "@tavora/module-schema";
+import { manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ChangelogEntry, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, packModule, PackError, type Published } from "@tavora/pack";
-import type { AccountView, PrefixState, PublishProblem, PublishView } from "../shared/host-api";
+import type { AccountView, PrefixState, PublishProblem, PublishView, ReadmeBlock } from "../shared/host-api";
 import { suggestPrefix } from "../shared/id-prefix";
+import { parseReadme } from "./catalog-readme";
 import { writeFileAtomic } from "./fsutil";
 import { compareModuleVersions } from "./installer";
 import { PlayerError } from "./messages";
@@ -157,6 +158,7 @@ export class ModulePublisher {
     const { id, name, version } = manifest;
     view.module = { id, name, version, icon: this.options.icon(id) };
     view.asks = { network: [...manifest.permissions.network], connectors: [...(manifest.permissions.connectors ?? [])] };
+    view.readme = await readReadme(project, manifest);
     view.notes = (await readChangelog(project, manifest)).find((entry) => entry.version === version)?.notes ?? [];
 
     const [built, listed, prefixState] = await Promise.all([
@@ -212,6 +214,7 @@ function emptyView(project: string): PublishView {
     status: "checking",
     module: null,
     notes: [],
+    readme: null,
     asks: { network: [], connectors: [] },
     size: null,
     builtAt: null,
@@ -244,6 +247,19 @@ async function readManifest(project: string): Promise<ModuleManifest | { problem
   }
   const result = validateManifest(raw);
   return result.ok ? result.manifest : { problem: { kind: "invalid", message: result.errors.slice(0, 3).join("; ") } };
+}
+
+/** The readme the manifest names, as the module's page will show it; null without one or when it can't be read. */
+async function readReadme(project: string, manifest: ModuleManifest): Promise<ReadmeBlock[] | null> {
+  if (manifest.readme === undefined) return null;
+  try {
+    const file = path.join(project, manifest.readme);
+    const info = await lstat(file);
+    if (!info.isFile() || info.size > MAX_README_BYTES) return null;
+    return parseReadme(await readFile(file, "utf8"));
+  } catch {
+    return null;
+  }
 }
 
 async function readChangelog(project: string, manifest: ModuleManifest): Promise<ChangelogEntry[]> {

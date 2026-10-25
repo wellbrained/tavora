@@ -193,10 +193,13 @@ test("a player opens a module's page with its readme, screenshots, access and ho
     await expect(info).toBeVisible();
     await expect(info.getByTestId("catalog-info-screenshot")).toHaveAttribute("src", `data:image/png;base64,${picture.toString("base64")}`);
     await expect(info.getByRole("button", { name: /Screenshot \d of/ })).toHaveCount(0);
-    // The readme is plain text: no links, pictures or HTML.
+    // The readme is plain text: links are buttons that ask the host, never anchors; no pictures or HTML.
+    // The title heading is left out, and the text before the first heading is the Overview.
     const readme = info.getByTestId("catalog-info-readme");
-    await expect(readme.locator("h4")).toHaveText("Tracker");
+    await expect(readme.locator("h4")).toHaveCount(0);
     await expect(readme.locator("p")).toHaveText("Tracks your runs. See the wiki.");
+    await expect(readme.locator("strong")).toHaveText("runs");
+    await expect(readme.getByRole("button", { name: "the wiki" })).toHaveAttribute("title", "https://example.com/wiki");
     await expect(readme.locator("li")).toHaveText(["Splits by act", "<img src=x onerror=alert(1)>"]);
     await expect(readme.locator("a, img")).toHaveCount(0);
     await expect(info.getByTestId("catalog-info-notes")).toContainText("First version.");

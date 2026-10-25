@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { isGameId, isModuleId } from "@tavora/module-schema";
 import { VERSIONS } from "./versions.ts";
 
-// Makes a new module project from a template: the shared files (manifest, README, styles,
+// Makes a new module project from a template: the shared files (manifest, README and DEVELOP, styles,
 // .gitignore) and the template's own (package.json, build config, page and code). Only the
 // placeholders listed here are filled in; anything else in braces (such as Vue's own {{ }}) is
 // left as it is.
@@ -22,7 +22,7 @@ export interface ModuleOptions {
   template: Template;
   /** The game the module is made for (its id, such as poe2), or none for any game. */
   game?: string;
-  /** The package manager the commands in the README use. */
+  /** The package manager the commands in DEVELOP.md use. */
   packageManager?: "npm" | "pnpm" | "yarn";
 }
 

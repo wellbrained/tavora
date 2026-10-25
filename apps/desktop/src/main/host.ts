@@ -92,7 +92,7 @@ import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir } from "./backup";
 import { loadLibrary, SavedData } from "./saved-data";
 import { CatalogClient, catalogView, type CatalogScope } from "./catalog-client";
-import { parseReadme } from "./catalog-readme";
+import { parseReadme, readmeAllowsLink } from "./catalog-readme";
 import { CHECK_INTERVAL_MS } from "./catalog-updates";
 import { isReleaseCopies, releaseStatuses } from "./release-pending";
 import { DEFAULT_API_URL, OnlineSearch } from "./online";
@@ -1125,6 +1125,17 @@ export class Host {
   }
 
   /**
+   * Opens a link from a catalog module's readme in a Browser panel. The readme is read again here and
+   * the address must be one of its http or https links, so the page can't ask for any other address.
+   */
+  private async openReadmeLink(moduleId: string, url: string): Promise<void> {
+    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    const { readme } = await this.catalog.details(moduleId);
+    if (!readmeAllowsLink(readme, url)) throw new PlayerError("error.readmeLink");
+    this.openLinkFromModule(url);
+  }
+
+  /**
    * A catalog module's page: the listing asked for again, its readme as plain text blocks and its
    * screenshots, each checked on its own (catalog-client.ts); a screenshot that fails is left out.
    */
@@ -1797,6 +1808,7 @@ export class Host {
       },
       "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId),
       "open-catalog-homepage": (action) => this.openCatalogHomepage(action.moduleId),
+      "open-readme-link": (action) => this.openReadmeLink(action.moduleId, action.url),
       "rate-catalog-module": (action) => this.rateCatalogModule(action.moduleId, action.stars, action.text),
       "unrate-catalog-module": (action) => this.catalogReviewAction((token) => this.catalog.unrate(action.moduleId, token)),
       "reply-catalog-review": (action) => this.catalogReviewAction((token) => this.catalog.reply(action.reviewId, token, action.text?.trim() || null)),

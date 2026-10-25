@@ -23,7 +23,7 @@ describe("createModule", () => {
   it.each(TEMPLATES)("makes a %s project with a valid manifest and every placeholder filled", async (template) => {
     const dir = path.join(root, "My Cool Module");
     const files = await createModule({ dir, id: "example.cool-module", name: "Cool \"Module\" <1>", template, packageManager: "pnpm" });
-    expect(files).toEqual(expect.arrayContaining([".gitignore", "README.md", "package.json", "tavora.module.json", "tsconfig.json", "vite.config.ts", "src/index.html", "src/style.css"]));
+    expect(files).toEqual(expect.arrayContaining([".gitignore", "README.md", "DEVELOP.md", "package.json", "tavora.module.json", "tsconfig.json", "vite.config.ts", "src/index.html", "src/style.css"]));
 
     const manifest = validateManifest(await json(path.join(dir, "tavora.module.json")));
     expect(manifest.ok).toBe(true);
@@ -36,9 +36,15 @@ describe("createModule", () => {
     expect(pkg.scripts).not.toHaveProperty("zip");
 
     expect(await readFile(path.join(dir, "src/index.html"), "utf8")).toContain("<title>Cool &quot;Module&quot; &lt;1&gt;</title>");
+    const develop = await readFile(path.join(dir, "DEVELOP.md"), "utf8");
+    expect(develop).toContain("pnpm dev");
+    expect(develop).toContain("pnpm exec tavora-pack . --key");
+    // README.md is the catalog description, in the page template's order, and the manifest names it.
     const readme = await readFile(path.join(dir, "README.md"), "utf8");
-    expect(readme).toContain("pnpm dev");
-    expect(readme).toContain("pnpm exec tavora-pack . --key");
+    expect(readme).toContain("# Cool \"Module\" <1>");
+    const headings = [...readme.matchAll(/^## (.+)$/gm)].map((match) => match[1]);
+    expect(headings).toEqual(["Features", "How to use", "Settings", "Requirements", "Known issues"]);
+    expect(manifest.ok && manifest.manifest.readme).toBe("README.md");
     for (const file of files) {
       const text = await readFile(path.join(dir, file), "utf8");
       // Vue templates use {{ name }} with spaces; ours never have them.
@@ -46,9 +52,9 @@ describe("createModule", () => {
     }
   });
 
-  it("writes npm commands into the README unless another manager ran it", async () => {
+  it("writes npm commands into DEVELOP.md unless another manager ran it", async () => {
     await createModule({ dir: root, id: "example.notes", name: "Notes", template: "vanilla" });
-    const readme = await readFile(path.join(root, "README.md"), "utf8");
+    const readme = await readFile(path.join(root, "DEVELOP.md"), "utf8");
     expect(readme).toContain("npm run dev");
     expect(readme).toContain("npx tavora-pack . --key");
   });

@@ -267,6 +267,8 @@ export interface PublishView {
   sourceNewer: boolean;
   /** What the catalog lists: nothing yet, an older version, or unknown (offline). */
   catalog: { kind: "first" } | { kind: "update"; version: string } | { kind: "unknown" };
+  /** The module's readme as its page will show it; null when the manifest names none or it can't be read. */
+  readme: ReadmeBlock[] | null;
   /** What stops publishing, each with its fix on the screen. Publish works when this is empty. */
   problems: PublishProblem[];
   /** The id prefix becomes the account's with this publish (it may also be claimed right away). */
@@ -833,11 +835,29 @@ export interface ReleaseCopy {
 
 export type CatalogReviewsResult = ({ status: "ok" } & CatalogReviews) | { status: "off" | "unavailable" | "busy" | "unreachable" | "gone" };
 
-/** One block of a catalog module's readme, as plain text (catalog-readme.ts). */
+/**
+ * One piece of inline text in a readme: its words, and how they are marked. Only the words are ever
+ * shown, as text. A `url` is an http or https address a click may open (open-readme-link).
+ */
+export interface ReadmeSpan {
+  text: string;
+  bold?: true;
+  italic?: true;
+  code?: true;
+  url?: string;
+}
+
+/** A list item: its words, and the items nested under it (one level). */
+export interface ReadmeItem {
+  spans: ReadmeSpan[];
+  children?: ReadmeSpan[][];
+}
+
+/** One block of a module's readme, as plain text with typed spans (catalog-readme.ts). */
 export type ReadmeBlock =
-  | { kind: "heading"; level: 2 | 3; text: string }
-  | { kind: "paragraph"; text: string }
-  | { kind: "list"; ordered: boolean; items: string[] }
+  | { kind: "heading"; level: 1 | 2 | 3; text: string }
+  | { kind: "paragraph"; spans: ReadmeSpan[] }
+  | { kind: "list"; ordered: boolean; items: ReadmeItem[] }
   | { kind: "code"; text: string };
 
 /** What a catalog module's page shows beyond its card, checked by the main process. Every text is plain text. */
