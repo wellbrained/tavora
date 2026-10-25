@@ -435,7 +435,7 @@ export interface Methods {
   "overlay.resetLink": { params: { key: string }; result: null };
   /**
    * Shows the overlay page for `key` over the player's game, in a Tavora window above it. Only right after a click or
-   * key press in the panel; needs no capability. Tavora 0.20.42 and newer.
+   * key press in the panel; needs no capability. Tavora 0.20.44 and newer.
    */
   "overlay.showOverGame": { params: { key: string }; result: GameOverlayResult };
   /** The hotkeys the player set for this module in the current game. Tavora 0.19.26 and newer. */
