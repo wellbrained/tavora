@@ -2,7 +2,9 @@ import { cpSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import vue from "@vitejs/plugin-vue";
 import { defaultClientConditions, defineConfig, type Plugin } from "vite";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -16,7 +18,7 @@ const SKIPPED_FONT_FOLDERS = new Set(["Xiaolai"]);
 
 /**
  * Keeps Excalidraw small and offline: other translations become empty, and the fonts it fetches by address
- * are copied into dist/fonts (main.tsx points EXCALIDRAW_ASSET_PATH there).
+ * are copied into dist/fonts (main.ts points EXCALIDRAW_ASSET_PATH there).
  */
 function trimExcalidraw(): Plugin {
   return {
@@ -45,10 +47,11 @@ function trimExcalidraw(): Plugin {
 export default defineConfig({
   root: "src",
   base: "./",
-  plugins: [react(), trimExcalidraw()],
+  plugins: [vue(), react({ include: /\.tsx$/ }), tailwindcss(), trimExcalidraw()],
   resolve: {
     // The SDK from its source, like the other official modules, so a stale packages/sdk/dist never breaks the build.
     conditions: ["source", ...defaultClientConditions],
+    dedupe: ["vue"],
     alias: { "@excalidraw/mermaid-to-excalidraw": path.join(here, "stubs", "mermaid.ts") },
   },
   // React must match the JSX the plugin writes: `pnpm dev` runs this build with NODE_ENV=development (its Vite

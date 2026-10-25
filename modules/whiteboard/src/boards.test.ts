@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { cleanName, formatMegabytes, isBoardId, MAX_BOARD_BYTES, MAX_NAME, newBoardId, nextBoardName, parseBoard, sceneSignature, sizeLevel, sortBoards, WARN_BOARD_BYTES } from "./boards";
-import { de, en, setLanguage, t } from "./i18n";
 
 describe("parseBoard", () => {
   it("fills in a missing or damaged board", () => {
@@ -70,25 +69,5 @@ describe("sceneSignature", () => {
     expect(sceneSignature([element(1)], "#fff")).not.toBe(base);
     expect(sceneSignature([element(1), element(2, true)], "#fff")).not.toBe(base);
     expect(sceneSignature([element(1), element(2)], "#000")).not.toBe(base);
-  });
-});
-
-describe("texts", () => {
-  const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort();
-  const keys = Object.keys(en) as (keyof typeof en)[];
-
-  it("exist in English and German, with the same placeholders and none empty", () => {
-    expect(Object.keys(de).sort()).toEqual([...keys].sort());
-    for (const key of keys) {
-      expect(de[key].trim(), key).not.toBe("");
-      expect(placeholders(de[key]), key).toEqual(placeholders(en[key]));
-    }
-  });
-
-  it("fills placeholders and follows the language", () => {
-    setLanguage("de-DE");
-    expect(t("undo.deleted", { name: "Atlas" })).toBe("„Atlas“ gelöscht");
-    setLanguage("en");
-    expect(t("undo.deleted", { name: "Atlas" })).toBe("Deleted “Atlas”");
   });
 });

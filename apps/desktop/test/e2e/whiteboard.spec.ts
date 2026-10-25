@@ -5,6 +5,10 @@ import { expect, test, type ElectronApplication } from "@playwright/test";
 import { inModule, launch, openModule, panels, shootPanels, WHITEBOARD } from "./harness";
 
 const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
+// The shared kit shows notices and the Undo offer as toasts, newest last.
+const NEWEST_TOAST = `[...document.querySelectorAll('[data-slot="toast"]')].at(-1)`;
+const DISMISS_TOASTS = `document.querySelectorAll('[data-slot="toast"] button[title="Dismiss"]').forEach((button) => button.click())`;
+const UNDO_BUTTON = `[...document.querySelectorAll('[data-slot="toast"] button')].find((button) => button.textContent.trim() === "Undo")`;
 
 /** Runs a mouse gesture in the module's page as real input, the way a player draws. */
 async function drag(app: ElectronApplication, from: { x: number; y: number }, to: { x: number; y: number }) {
@@ -102,9 +106,9 @@ test("whiteboard: draw on a board, keep it, switch boards, delete one and bring 
   await inModule(app, WHITEBOARD, `${q("board-menu")}.click()`);
   await inModule(app, WHITEBOARD, `${q("board-delete")}.click()`);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`)).toBe("Board 1");
-  await expect.poll(() => inModule(app, WHITEBOARD, `${q("undo-toast")}?.innerText ?? ""`)).toContain("Atlas map");
+  await expect.poll(() => inModule(app, WHITEBOARD, `${NEWEST_TOAST}?.innerText ?? ""`)).toContain("Atlas map");
   await expect.poll(async () => Object.keys(await storedBoards(userData))).toEqual(["Board 1"]);
-  await inModule(app, WHITEBOARD, `${q("undo")}.click()`);
+  await inModule(app, WHITEBOARD, `${UNDO_BUTTON}.click()`);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`)).toBe("Atlas map");
   await expect.poll(async () => Object.keys(await storedBoards(userData)).sort()).toEqual(["Atlas map", "Board 1"]);
   await app.close();
@@ -258,11 +262,11 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
 
   /** Copies with a real click and returns the notice and the size of the picture on the clipboard. */
   const copy = async () => {
-    await inModule(app, WHITEBOARD, `${q("notice-toast")}?.querySelector("button")?.click()`);
+    await inModule(app, WHITEBOARD, `${DISMISS_TOASTS}`);
     await app.evaluate(({ clipboard }) => clipboard.clear());
     const started = Date.now();
     await click(app, "copy-picture");
-    await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Copied");
+    await expect.poll(() => inModule(app, WHITEBOARD, `${NEWEST_TOAST}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Copied");
     // The host takes the copy only within 2 s of the click, so making the picture must be quick.
     expect(Date.now() - started).toBeLessThan(2000);
     // The PNG's size from its header (width and height follow the signature and the header chunk's length and type).
@@ -272,7 +276,7 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
       const header = new DataView(await (await item.getType("image/png")).arrayBuffer());
       return { width: header.getUint32(16), height: header.getUint32(20) };
     });
-    return { notice: await inModule<string>(app, WHITEBOARD, `${q("notice-toast")}.textContent`), size };
+    return { notice: await inModule<string>(app, WHITEBOARD, `${NEWEST_TOAST}.textContent`), size };
   };
 
   // The rectangle just drawn is selected, so only it is copied, twice its size.
@@ -289,7 +293,7 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
   expect(Math.max(board.size.width, board.size.height)).toBeLessThanOrEqual(8192);
 
   // Excalidraw's own shortcut for copying as PNG copies through Tavora too.
-  await inModule(app, WHITEBOARD, `${q("notice-toast")}?.querySelector("button")?.click()`);
+  await inModule(app, WHITEBOARD, `${DISMISS_TOASTS}`);
   await app.evaluate(({ clipboard }) => clipboard.clear());
   await app.evaluate(
     async ({ webContents }, moduleId) => {
@@ -300,7 +304,7 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
     },
     WHITEBOARD,
   );
-  await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Copied the board as an image");
+  await expect.poll(() => inModule(app, WHITEBOARD, `${NEWEST_TOAST}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Copied the board as an image");
   expect(await app.evaluate(async ({ clipboard }) => (await clipboard.read()).flatMap((item) => item.types))).toContain("image/png");
 
   // Save as picture opens the save dialog in Pictures\Tavora with the board's name filled in (numbered when taken);
@@ -314,16 +318,16 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
       return state.saveAnswer === "close" ? { canceled: true, filePath: "" } : { canceled: false, filePath: options.defaultPath! };
     }) as unknown as typeof dialog.showSaveDialog;
   });
-  await inModule(app, WHITEBOARD, `${q("notice-toast")}?.querySelector("button")?.click()`);
+  await inModule(app, WHITEBOARD, `${DISMISS_TOASTS}`);
   await click(app, "save-picture");
   await expect.poll(() => app.evaluate(() => (globalThis as { savedIn?: string[] }).savedIn!.length)).toBe(1);
   expect(await app.evaluate(() => (globalThis as { savedIn?: string[] }).savedIn![0])).toMatch(/[\\/]Pictures[\\/]Tavora[\\/]Board 1 [^\\/]+\.png$/);
   await app.evaluate(() => void ((globalThis as { saveAnswer?: string }).saveAnswer = "save"));
   for (const expected of [/^Board 1 \d{4}-\d\d-\d\d \d\d-\d\d\.png$/, /^Board 1 \d{4}-\d\d-\d\d \d\d-\d\d( \(2\))?\.png$/]) {
-    await inModule(app, WHITEBOARD, `${q("notice-toast")}?.querySelector("button")?.click()`);
+    await inModule(app, WHITEBOARD, `${DISMISS_TOASTS}`);
     await click(app, "save-picture");
-    await expect.poll(() => inModule(app, WHITEBOARD, `${q("notice-toast")}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Saved the board as");
-    const notice = await inModule<string>(app, WHITEBOARD, `${q("notice-toast")}.textContent`);
+    await expect.poll(() => inModule(app, WHITEBOARD, `${NEWEST_TOAST}?.textContent ?? ""`), { timeout: 15_000 }).toContain("Saved the board as");
+    const notice = await inModule<string>(app, WHITEBOARD, `${NEWEST_TOAST}.textContent`);
     expect(notice.match(/“(.+)”/)?.[1]).toMatch(expected);
   }
   const saved = await readdir(path.join(userData, "Pictures", "Tavora"));
@@ -335,10 +339,10 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
   expect(refused).toBe(403);
 
   // Clear board takes everything off; Undo in the notice brings it back.
-  await inModule(app, WHITEBOARD, `${q("notice-toast")}?.querySelector("button")?.click()`);
+  await inModule(app, WHITEBOARD, `${DISMISS_TOASTS}`);
   await inModule(app, WHITEBOARD, `${q("clear-board")}.click()`);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(true);
-  await inModule(app, WHITEBOARD, `${q("undo")}.click()`);
+  await inModule(app, WHITEBOARD, `${UNDO_BUTTON}.click()`);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(false);
   expect(await inModule(app, WHITEBOARD, `${q("picture-lock")} !== null`)).toBe(true);
   await app.close();
