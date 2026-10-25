@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.11",
+    date: "2026-10-25",
+    title: "Live views for panels in game",
+    notes: [
+      "A panel you show in game can now keep a live view over the game, even when the layer is closed.",
+      "Open the layer to move or resize it, then close it and the live view is back in its new spot.",
+      "Pick Always or With a key, how see-through it is, and Hide from capture for each one in Settings > Overlays.",
+    ],
+  },
+  {
     version: "0.21.10",
     date: "2026-10-25",
     title: "Pinned tooltips stay for screenshots",
