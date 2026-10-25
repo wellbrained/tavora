@@ -75,6 +75,7 @@ Some calls change something outside the module's panel. They work only within 2 
 - **`files.saveJson` and `files.openJson`** save and open a JSON file through Tavora's own save and open dialogs, which start in the folder you last used for that module (at first `Documents\Tavora`). The module only suggests a name, which Tavora cleans, and gets back the file name (and, for open, the parsed content of the one file you picked). It never gets a path, cannot pick a file or folder, and cannot replace a file unless you confirm it in the dialog. Each needs a real click or key press and works once per press; files are at most 8 MiB.
 - **`ui.showMenu`** shows a menu that Tavora draws above every panel, so it can lie outside the module's panel. Tavora checks the menu first and draws only plain text, separators, headings, check marks and colour dots from plain CSS colour values (nothing that loads or runs), in its own style. One menu shows at a time, it closes with Esc, a click elsewhere or a game switch, and the module learns only which of its own items the player chose, or that none was.
 - **`overlay.copyLink`** puts the link of one of the module's own overlays on the clipboard, and nothing else. There is no call to read the clipboard.
+- **`overlay.showOverGame`** adds one of the module's own overlays to the player's game overlays, see [Game overlays](#game-overlays). One press adds one, and the player can turn all game overlays off.
 - **`hotkeys.set`** opens Tavora's own hotkey dialog. The module names the action and the target; the player picks the key, or cancels.
 - **`panels.open`** opens, brings forward or switches a panel of the same module, in the game shown now, so it changes the workspace outside the module's panel. A module can open only its own panel types, never another module's panels, and one press opens or switches one panel. The panel asked to switch is the module's own page and may refuse; then nothing changes, and only the player can open the content in a new panel. The module learns only what Tavora did: shown, switched, opened or failed.
 - **`panel.setMaximized(true)`** makes the module's own panel fill the workspace, as Maximize in its menu does, so it covers the other panels and they pause. It never reaches past the workspace: not the rest of the window, not fullscreen, not a new window. One press maximizes once. Putting the panel back needs no press, and the player can always do it with Restore in the panel's menu. The module learns only whether its own panel fills the workspace.
@@ -87,7 +88,7 @@ A module's **patch notes** also show outside its panel, in Settings > Modules. T
 
 ## Stream overlays
 
-A module granted the `stream-overlay` connector can have Tavora serve its overlay page to streaming software such as OBS, which shows it as a Browser Source. This is the only way a module page is reachable from outside Tavora.
+A module granted the `stream-overlay` connector can have Tavora serve its overlay page to streaming software such as OBS, which shows it as a Browser Source. This is the only way a module page is reachable from outside Tavora. The connector is what lets the module copy and reset a link. `overlay.publish` and `overlay.remove` only set what an overlay shows, which a link or a [game overlay](#game-overlays) then displays, so they need no grant; without the connector a published state still can't be reached from outside Tavora.
 
 - **Off until the player turns it on** in Settings > Streaming. Tavora then listens on `127.0.0.1` only, on one port the player can change, so nothing on the network can reach it.
 - **Only the links the player copies work.** Each overlay has a random link (128 bits), made by Tavora. Anything that asks without one gets nothing. The player can give every overlay a new link at once, and the old ones stop working.
@@ -95,6 +96,18 @@ A module granted the `stream-overlay` connector can have Tavora serve its overla
 - **The page is locked down like a panel.** Tavora serves only files from the module's package (the same path checks as G6), only for `GET`, with a policy that loads no code from anywhere else and lets the page talk only to Tavora. It has no bridge: it can only read what the module published for that overlay, at most 16 KB of plain JSON.
 - **A link works only for its module.** It belongs to one module, under its publisher, in one game. When the module is removed, replaced by another publisher's module with the same id, or loses the grant, the link stops working and open overlays stop getting data.
 - **What an overlay shows goes on stream.** Whatever the module publishes for it is visible to viewers. The consent dialog says what the connector does; a module still decides what it shows.
+
+## Game overlays
+
+A module with an overlay page can ask, after a real click in its panel, to have that page shown over the player's game. This is not the connector above and reaches nothing outside Tavora: the page is shown in a window of Tavora's own on the player's screen.
+
+- **Off until the player turns it on** in Settings > Overlays. While it is off, the call only opens that setting.
+- **Only the player's own game, only the player's own overlays.** The window is shown while a game of the player's library is the window in front, found by reading which program owns it (the same look the game watcher takes, with the same limited access). It hides when anything else is in front, Tavora included. A game can have at most 8, the player removes them in Settings > Overlays, and removing the module, a game, or a module replaced by another publisher's with the same id removes them too.
+- **Nothing is put into the game.** Tavora does not inject code, read the game's memory, hook its graphics or draw into its window. The overlay is an ordinary window above it. The only calls to Windows are reading which window is in front, where its client area is and whether Windows thinks a full-screen game owns the screen, and, after arranging, giving the game the focus back.
+- **The window can't take input.** It is transparent to the mouse and never takes the keyboard. Only while the player arranges overlays with their own key does it take the mouse, with a frame Tavora draws (the page is below it), so the player can move, resize or close it. Esc or the key ends that.
+- **The page is locked down like a Stream overlay page.** It has no bridge, loads only files from the module's package (the same path checks as G6) from a Tavora-internal address, under the same policy, and can reach nothing else; it can only read what the module published for that overlay, at most 16 KB of plain JSON. It needs neither the Stream overlays server nor the connector.
+- **Hidden from capture at first.** The window is excluded from screen capture and recording, so it doesn't show up on stream. The player can turn on Show on stream per overlay.
+- **Keys are the player's.** The key that toggles an overlay and the key that arranges them are set in Tavora's hotkey dialog and work only while the game is in front. The module never learns them.
 
 ## Hotkeys
 
