@@ -20,6 +20,26 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.48",
+    date: "2026-10-25",
+    title: "Whiteboard polish",
+    notes: [
+      "The Whiteboard's top bar wraps on narrow panels, so no button gets cut off.",
+      "Empty boards say how to start, and a failed connection has a Try again button.",
+      "\"Pictures\" are now \"images\" everywhere, and the hints are shorter.",
+    ],
+  },
+  {
+    version: "0.20.47",
+    date: "2026-10-25",
+    title: "To-Dos polish",
+    notes: [
+      "Row and group menus are easier to spot.",
+      "Save problems are easier to read.",
+      "Clearer German texts.",
+    ],
+  },
+  {
     version: "0.20.46",
     date: "2026-10-25",
     title: "Clock & Counter is easier to use",
