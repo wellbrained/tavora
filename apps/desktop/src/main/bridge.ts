@@ -89,7 +89,7 @@ export interface BridgeContext {
    * The system-info connector (system-info.ts) for this panel; only reached with the `systemInfo` capability. `watch`
    * gets the request already checked (system-info-parse.ts); it replaces what this panel watched before.
    */
-  systemInfo: { info(): SystemInfo; watch(request: WatchRequest): void };
+  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; watch(request: WatchRequest): void };
   /**
    * The discord connector (discord.ts) for this panel; only reached with the `discord` capability. Commands
    * and subscriptions arrive checked (discord-commands.ts); connect, allowControl, SELECT_VOICE_CHANNEL and

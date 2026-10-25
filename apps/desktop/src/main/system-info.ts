@@ -1,10 +1,11 @@
 /**
  * The system-info connector: this PC's hardware and how busy it is, for modules the player granted it. One
- * SystemMonitor in the main process serves every panel. It reads the PC only while at least one panel that is
- * shown watches something; with none there is no timer and no open counter, so it costs nothing. Counters are
- * opened only for the parts somebody watches. The reading itself is a SystemProbe (system-info-windows.ts reads
- * Windows' own counters and NVIDIA's nvml.dll inside this process; tests use a fake one). Nothing is run, nothing leaves the PC, and a
- * module gets numbers and names only.
+ * SystemMonitor serves every panel, in a worker thread of its own (system-info-thread.ts) so a slow look never holds
+ * up Tavora. It reads the PC only while at least one panel that is shown watches something; with none there is no
+ * timer and no open counter, so it costs nothing. Counters are opened only for the parts somebody watches. The
+ * reading itself is a SystemProbe (system-info-windows.ts reads Windows' own counters and NVIDIA's nvml.dll inside
+ * Tavora's process; tests use a fake one). Nothing is run, nothing leaves the PC, and a module gets numbers and
+ * names only.
  */
 import os from "node:os";
 import type { SystemInfo, SystemSnapshot } from "@tavora/sdk/protocol";

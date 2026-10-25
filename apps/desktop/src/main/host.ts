@@ -6,6 +6,7 @@ import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { Worker } from "node:worker_threads";
 import { continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, translateManifest, type Connector, type ModuleManifest, type ResolvedPanelType } from "@tavora/module-schema";
 import {
   app,
@@ -134,8 +135,7 @@ import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
 import { AiUsageConnector } from "./ai-usage";
-import { SystemMonitor } from "./system-info";
-import { systemProbe } from "./system-info-windows";
+import { SystemMonitorThread } from "./system-info-thread";
 import { readClaudeEmail } from "./ai-usage-claude";
 import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
@@ -341,9 +341,9 @@ export class Host {
   private readonly discord: DiscordConnector;
   /** The AI Usage connector: the AI accounts, read for modules granted it. */
   private readonly aiUsage: AiUsageConnector;
-  /** The System info connector: this PC's hardware and usage, read only while a shown panel of a granted module watches. */
-  private readonly systemInfo = new SystemMonitor({
-    probe: systemProbe(),
+  /** The System info connector: this PC's hardware and usage, read in a worker thread only while a shown panel of a granted module watches. */
+  private readonly systemInfo = new SystemMonitorThread({
+    start: () => new Worker(path.join(__dirname, "system-info-worker.cjs")),
     // Electron's CPU figure is already a share of the whole PC; its memory is in kilobytes.
     tavora: () => {
       const metrics = app.getAppMetrics();
