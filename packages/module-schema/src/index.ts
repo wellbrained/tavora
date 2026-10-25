@@ -26,6 +26,11 @@ export interface ModulePanelType {
   viewport?: ModuleViewport;
   /** Panels opened before the module had panel types become this type. At most one type says so; without one, the first type. */
   continues?: boolean;
+  /**
+   * The player may show this panel in their game: its menu offers Show in game, and the panel appears over the game only
+   * while the player holds Tavora's in-game layer open. Needs a `minTavora` newer than LAST_TAVORA_WITHOUT_IN_GAME_PANELS.
+   */
+  inGame?: boolean;
 }
 
 /** Something a module can do on a key press (manifest `actions`). The player binds the key in Tavora; the module only hears which action fired. */
@@ -83,6 +88,11 @@ export interface ModuleManifest {
   /** Named panel types. Without them the module has one panel, made from `entry`, `icon` and `viewport`. */
   panels?: ModulePanelType[];
   /**
+   * For a module without panel types: the player may show its panel in their game, like a type's `inGame`. Needs a
+   * `minTavora` newer than LAST_TAVORA_WITHOUT_IN_GAME_PANELS; a module with `panels` sets it per type instead.
+   */
+  inGame?: boolean;
+  /**
    * The page streaming software such as OBS shows as a Browser Source (overlay.copyLink). Tavora serves it on this PC
    * only, with the files next to it, and gives it live data from the module. Game overlays (overlay.showOverGame) show the
    * same page over the player's game and need no connector; the `stream-overlay` connector is only for OBS links, and
@@ -123,7 +133,7 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "overlay", "actions", "translations", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "inGame", "overlay", "actions", "translations", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
 
 /** Most screenshots a manifest may name, and the longest homepage address. */
@@ -167,7 +177,7 @@ export function isHomepage(value: unknown): value is string {
 export const MAX_PANEL_TYPES = 16;
 export const MAX_PANEL_NAME = 24;
 const PANEL_TYPE_ID = /^[a-z][a-z0-9-]{0,31}$/;
-const PANEL_FIELDS = ["id", "name", "entry", "icon", "viewport", "continues"];
+const PANEL_FIELDS = ["id", "name", "entry", "icon", "viewport", "continues", "inGame"];
 
 /** Most hotkey actions one module may declare, and the longest name Tavora shows for one. */
 export const MAX_ACTIONS = 16;
@@ -189,6 +199,8 @@ export interface ResolvedPanelType {
   entry: string;
   icon: string | undefined;
   viewport: ModuleViewport;
+  /** The player may show this panel in their game (the type's `inGame`). */
+  inGame?: true;
 }
 
 /** The module's panel types, resolved; empty for a module with one panel and no types. */
@@ -199,6 +211,7 @@ export function panelTypes(manifest: ModuleManifest): ResolvedPanelType[] {
     entry: type.entry ?? manifest.entry,
     icon: type.icon ?? manifest.icon,
     viewport: type.viewport ?? manifest.viewport,
+    ...(type.inGame === true ? { inGame: true as const } : {}),
   }));
 }
 
@@ -291,9 +304,10 @@ export function isGameId(value: unknown): value is string {
  * Connectors (glossary): parts of Tavora that reach outside the module's panel and let a granted module use them
  * without seeing what is behind them. `ai-usage` reads the usage of the player's Claude and Codex accounts with their
  * sign-ins; `discord` talks to the Discord app on this PC with Tavora's Discord sign-in (voice channels, who is
- * talking, joining and muting); `stream-overlay` shows the module's `overlay` page in streaming software on this PC.
+ * talking, joining and muting); `stream-overlay` shows the module's `overlay` page in streaming software on this PC;
+ * `system-info` reads this PC's hardware and how busy it is (CPU, graphics card, memory, drives).
  */
-export const CONNECTORS = ["ai-usage", "discord", "stream-overlay"] as const;
+export const CONNECTORS = ["ai-usage", "discord", "stream-overlay", "system-info"] as const;
 export type Connector = (typeof CONNECTORS)[number];
 
 /** Connectors a module may have Tavora ask for on first use (permissions.onRequest) instead of when it is added. */
@@ -331,6 +345,8 @@ export function isNetworkHost(value: unknown): value is string {
 export const MAX_TRANSLATIONS = 32;
 /** The last Tavora that refuses an `overlay` without the `stream-overlay` connector. */
 export const LAST_TAVORA_WITHOUT_GAME_OVERLAYS = "0.20.50";
+/** The last Tavora that refuses a panel type's `inGame`; a manifest with it needs a newer `minTavora`. */
+export const LAST_TAVORA_WITHOUT_IN_GAME_PANELS = "0.21.2";
 /** The last Tavora that refuses `translations`; a manifest with them needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_TRANSLATIONS = "0.20.12";
 const LANGUAGE_CODE = /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/;
@@ -432,7 +448,7 @@ function checkViewport(viewport: unknown, at: string, errors: string[]): void {
   if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
 }
 
-function checkPanels(panels: unknown, errors: string[]): void {
+function checkPanels(panels: unknown, errors: string[], inGameAllowed = true): void {
   if (!Array.isArray(panels) || panels.length === 0 || panels.length > MAX_PANEL_TYPES) {
     errors.push(`panels must be an array of 1 to ${MAX_PANEL_TYPES} panel types`);
     return;
@@ -460,6 +476,8 @@ function checkPanels(panels: unknown, errors: string[]): void {
     if (type.viewport !== undefined) checkViewport(type.viewport, `${at}.viewport`, errors);
     if (type.continues !== undefined && typeof type.continues !== "boolean") errors.push(`${at}.continues must be true or false`);
     if (type.continues === true) continuing++;
+    if (type.inGame !== undefined && typeof type.inGame !== "boolean") errors.push(`${at}.inGame must be true or false`);
+    else if (type.inGame === true && !inGameAllowed) errors.push(`${at}.inGame needs a minTavora newer than ${LAST_TAVORA_WITHOUT_IN_GAME_PANELS}, because older Tavoras refuse it`);
     const unknown = Object.keys(type).filter((key) => !PANEL_FIELDS.includes(key));
     if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
   });
@@ -574,7 +592,15 @@ export function validateManifest(input: unknown): ManifestResult {
   }
 
   checkViewport(input.viewport, "viewport", errors);
-  if (input.panels !== undefined) checkPanels(input.panels, errors);
+  if (input.panels !== undefined) {
+    const minTavora = { minTavora: typeof input.minTavora === "string" ? input.minTavora : "" };
+    checkPanels(input.panels, errors, officialId(input) || needsNewerTavora(minTavora, LAST_TAVORA_WITHOUT_IN_GAME_PANELS));
+  }
+  if (input.inGame !== undefined) {
+    if (typeof input.inGame !== "boolean") errors.push("inGame must be true or false");
+    else if (input.inGame && input.panels !== undefined) errors.push("inGame is for a module without panel types; set it on the panel types instead");
+    else if (input.inGame && !officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_IN_GAME_PANELS)) errors.push(`inGame needs a minTavora newer than ${LAST_TAVORA_WITHOUT_IN_GAME_PANELS}, because older Tavoras refuse it`);
+  }
   if (input.actions !== undefined) checkActions(input.actions, errors);
   if (input.translations !== undefined) checkTranslations(input, errors);
   if (input.overlay !== undefined) {

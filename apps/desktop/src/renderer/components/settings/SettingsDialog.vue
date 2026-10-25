@@ -7,6 +7,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import { act, hiddenSettings, refreshReleaseStatuses, releasePendingCount, settingsOpen, settingsTarget, state } from "../../host";
@@ -72,6 +73,23 @@ async function show(target: SettingsSection, setting?: string) {
 }
 
 const library = computed(() => state.value!.library);
+
+/** The categories on the left, in their groups; a counter shows where something is waiting. */
+const navGroups = computed<NavGroup[]>(() =>
+  GROUPS.map((group) => ({
+    heading: groupLabel(group.id),
+    items: group.sections
+      .filter((entry) => !hiddenSettings.value.has(entry.id))
+      .map((item) => ({
+        id: item.id,
+        label: sectionLabel(item.id),
+        icon: item.icon,
+        badge: item.id === "trash" && library.value.trash.length ? library.value.trash.length : item.id === "development" && releasePendingCount.value ? releasePendingCount.value : undefined,
+        badgeTestid: item.id === "development" ? "settings-nav-development-count" : undefined,
+        testid: `settings-nav-${item.id}`,
+      })),
+  })),
+);
 const version = computed(() => state.value!.appVersion);
 
 interface Result {
@@ -124,7 +142,7 @@ function onSearchKey(event: KeyboardEvent) {
       :show-close-button="false"
       :aria-describedby="undefined"
     >
-      <nav class="bg-background flex w-56 flex-none flex-col gap-5 overflow-y-auto border-r p-4 lg:w-64" :aria-label="t('settings.sections')">
+      <div class="bg-background flex w-56 flex-none flex-col gap-5 overflow-y-auto border-r p-4 lg:w-64">
         <DialogTitle class="px-2 pt-1 text-xl font-semibold">{{ t("settings.title") }}</DialogTitle>
         <div class="relative">
           <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" aria-hidden="true" />
@@ -140,28 +158,7 @@ function onSearchKey(event: KeyboardEvent) {
             @keydown="onSearchKey"
           />
         </div>
-        <div v-for="group in GROUPS" :key="group.id" class="flex flex-col gap-0.5">
-          <h3 class="text-muted-foreground px-3 pb-1 text-xs font-semibold tracking-wider uppercase">{{ groupLabel(group.id) }}</h3>
-          <button
-            v-for="item in group.sections.filter((entry) => !hiddenSettings.has(entry.id))"
-            :key="item.id"
-            type="button"
-            :class="
-              cn(
-                'text-muted-foreground hover:bg-accent hover:text-foreground group flex h-9 items-center gap-3 rounded-lg px-3 text-left font-medium',
-                !query && section === item.id && 'bg-primary/10 text-foreground hover:bg-primary/15',
-              )
-            "
-            :data-testid="`settings-nav-${item.id}`"
-            :aria-current="!query && section === item.id ? 'page' : undefined"
-            @click="show(item.id)"
-          >
-            <component :is="item.icon" :class="cn('size-4 flex-none transition-colors', !query && section === item.id ? 'text-primary' : 'group-hover:text-primary/80')" :stroke-width="1.75" />
-            <span class="flex-1">{{ sectionLabel(item.id) }}</span>
-            <span v-if="item.id === 'trash' && library.trash.length" class="text-muted-foreground text-xs tabular-nums">{{ library.trash.length }}</span>
-            <span v-else-if="item.id === 'development' && releasePendingCount" class="text-muted-foreground text-xs tabular-nums" data-testid="settings-nav-development-count">{{ releasePendingCount }}</span>
-          </button>
-        </div>
+        <NavList :model-value="query ? null : section" :label="t('settings.sections')" :groups="navGroups" @select="(id: string) => show(id as SettingsSection)" />
         <button
           type="button"
           :class="
@@ -177,7 +174,7 @@ function onSearchKey(event: KeyboardEvent) {
         >
           Tavora {{ version }}
         </button>
-      </nav>
+      </div>
 
       <div class="flex min-w-0 flex-1 flex-col">
         <header

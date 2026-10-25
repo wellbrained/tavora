@@ -21,6 +21,8 @@ import {
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@tavora/official-ui/components/ui/popover";
+import { toast } from "@tavora/official-ui/components/ui/toast";
 import { ref } from "vue";
 import DemoSection from "../DemoSection.vue";
 import Specimen from "../Specimen.vue";
@@ -152,6 +154,43 @@ const renaming = ref(false);
               <ContextMenuItem variant="destructive"><Trash2 :stroke-width="1.5" /> Delete</ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>
+        </Specimen>
+      </DemoSection>
+
+<DemoSection v-if="visible.has('popovers')" id="popovers" :title="title('popovers')" description="A small panel next to a button for a quick edit. Escape or a click outside closes it.">
+        <Specimen label="Popover with a field">
+          <Popover>
+            <PopoverTrigger as-child>
+              <Button variant="secondary" :disabled="off">Rename</Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" class="flex flex-col gap-2">
+              <Input v-model="name" aria-label="Name" />
+              <div class="flex justify-end">
+                <PopoverClose as-child><Button size="sm">Done</Button></PopoverClose>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </Specimen>
+      </DemoSection>
+
+<DemoSection v-if="visible.has('toasts')" id="toasts" :title="title('toasts')" description="A short message at the bottom that goes away on its own. It waits while you hover it, and may carry one button.">
+        <Specimen label="Show a toast">
+          <Button variant="secondary" :disabled="off" @click="toast({ title: 'Saved' })">Plain</Button>
+          <Button
+            variant="secondary"
+            :disabled="off"
+            @click="toast({ title: 'To-do deleted', description: 'It is gone from this group.', action: { label: 'Undo', onClick: () => toast({ title: 'Brought back' }) } })"
+          >
+            With Undo
+          </Button>
+          <Button
+            variant="secondary"
+            :disabled="off"
+            @click="toast({ title: 'Deleted “Shopping”', duration: 10000, action: { label: 'Undo', onClick: () => toast({ title: 'Brought back' }) } })"
+          >
+            Long Undo (10 s)
+          </Button>
+          <Button variant="secondary" :disabled="off" @click="toast({ title: 'Could not save', description: 'Try again in a moment.', variant: 'error' })">Error</Button>
         </Specimen>
       </DemoSection>
 

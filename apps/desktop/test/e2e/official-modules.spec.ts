@@ -428,12 +428,15 @@ test("to-dos: two panels share one list and both keep their changes", async () =
 test("ui playground: shows every section, filters them and disables the controls", async () => {
   const { app, page } = await launch();
   await openModule(page, PLAYGROUND);
-  await ready(app, PLAYGROUND, "section-empty");
+  await ready(app, PLAYGROUND, "section-colours");
   const sections = () => inModule<string[]>(app, PLAYGROUND, `[...document.querySelectorAll('[data-testid^="section-"]')].map((el) => el.id)`);
-  await expect.poll(sections).toEqual(["colours", "type", "buttons", "tooltips", "fields", "choices", "ratings", "expandable", "collapsible", "tabs", "zoom", "status", "progress", "menus", "dialogs", "lists", "notices", "empty"]);
-
-  // The swatches show the host's theme, not only the built-in default.
+  // The swatches show the host's theme, not only the built-in default (also: the panel is connected).
   await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
+
+  // Each tab shows its own sections; Basics is open first.
+  await expect.poll(sections).toEqual(["colours", "type"]);
+  await inModule(app, PLAYGROUND, `${q("tab-display")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  await expect.poll(sections).toEqual(["status", "progress", "notices", "empty", "expandable", "collapsible", "tabs", "lists", "navlist"]);
 
   await inModule(
     app,

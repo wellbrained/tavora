@@ -4,7 +4,7 @@
 // the background: minimized if it was, in front only if it was the active
 // window, else behind the active one (src/main/background-window.ts).
 // Release builds never use this; see TAVORA_DEV_SERVER in src/main/index.ts.
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -156,10 +156,20 @@ await buildFilterEngine();
 const contexts = await Promise.all(targets.map((options) => context({ ...options, plugins: [reload] })));
 await Promise.all(contexts.map((ctx) => ctx.watch()));
 
-/** Asks Tavora to quit, saving its state; kills it if it does not. */
+/**
+ * Ends a Tavora and everything it started. On Windows `child.kill()` ends only the main process, and a restart must
+ * leave no window of the old one behind (overlays over a game), so the whole tree goes.
+ */
+function kill(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (process.platform === "win32" && child.pid) spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+  else child.kill("SIGKILL");
+}
+
+/** Asks Tavora to quit, saving its state; ends it for good if it does not. */
 function quit(child) {
   if (child.exitCode !== null || child.signalCode !== null) return;
-  const timer = setTimeout(() => child.kill(), 3000);
+  const timer = setTimeout(() => kill(child), 3000);
   child.once("exit", () => clearTimeout(timer));
   if (child.connected) child.send("quit");
   else child.kill();
@@ -180,5 +190,9 @@ async function stop(code) {
   process.exit(code);
 }
 
+// Whatever ends this script, the Tavora under it goes too.
+process.on("exit", () => {
+  if (app) kill(app);
+});
 process.on("SIGINT", () => void stop(0));
 process.on("SIGTERM", () => void stop(0));

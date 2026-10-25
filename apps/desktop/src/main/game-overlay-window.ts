@@ -5,9 +5,10 @@
 // the player arranges overlays a second view of Tavora's own, with an outline, edges and a close button, sits on top
 // and the window takes the mouse, but still never the keyboard.
 //
-// The same window also holds a whole panel the player moved over its game (`panel`). It is the panel's own view, moved
-// here from the workspace and moved back when the window goes; nothing about the panel changes. While arranging, that
-// window takes the mouse and the keyboard too, and the frame sits around the panel instead of over it.
+// The same window also holds a whole panel the player shows in their game (`panel`), while the in-game layer is open.
+// It is the panel's own view, moved here from the workspace and moved back when the window goes; nothing about the
+// panel changes. While the layer is open that window takes the mouse and the keyboard too, and the frame sits around
+// the panel instead of over it.
 import { BrowserWindow, WebContentsView, app, screen, session, type Session } from "electron";
 import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
@@ -127,7 +128,7 @@ export class GameOverlayWindow {
     contents.on("did-finish-load", () => void this.applyOpacity());
     contents.once("render-process-gone", () => this.end());
     // A window holding a panel is never closed by the player (Alt+F4 while arranging): that would strand the panel.
-    // Bring back is how it leaves. Tavora's own destroy() does not go through this.
+    // Closing the layer (or Stop showing in game) is how it leaves. Tavora's own destroy() does not go through this.
     window.on("close", (event) => {
       if (options.panel && !this.destroyed && !this.quitting) event.preventDefault();
     });
@@ -221,6 +222,11 @@ export class GameOverlayWindow {
       this.window.hide();
       this.options.panel?.suspend();
     }
+  }
+
+  /** Puts the window above the other windows of its level (the veil is shown first, and everything above it is raised after). */
+  raise(): void {
+    if (!this.isDestroyed) this.window.moveTop();
   }
 
   /** Gives the keyboard to the panel (the service does so for one panel window only). */

@@ -54,6 +54,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     data: registry.get("local", moduleId, "poe2"),
     appSettings: registry.appSettings("local", moduleId),
     aiUsage: { accounts: () => Promise.reject(new Error("no AI accounts in this test")), read: () => Promise.reject(new Error("no AI accounts in this test")) },
+    systemInfo: { info: () => { throw new Error("no system info in this test"); }, watch: () => { throw new Error("no system info in this test"); } },
     discord: noDiscord,
     panelState: registry.panelState,
     capabilities: () => new Set(),
@@ -64,7 +65,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     openLink: () => {},
     showMenu: () => Promise.resolve(null),
     tooltip:{show:async()=>false,move:()=>{},close:()=>{}},
-    overlay: { publish: () => {}, remove: () => {}, copyLink: () => Promise.resolve("copied"), resetLink: () => {}, showOverGame: () => Promise.resolve("shown") },
+    overlay: { publish: () => {}, remove: () => {}, copyLink: () => Promise.resolve("copied"), resetLink: () => {}, showOverGame: () => Promise.resolve("shown"), hideOverGame: () => {}, overGame: () => [], preview: () => Promise.resolve() },
     hotkeys: { list: () => [], set: () => Promise.resolve("cancelled"), remove: () => {} },
     fetch: () => Promise.reject(new Error("no network in this test")),
     readPage: () => Promise.reject(new Error("no pages in this test")),
@@ -294,12 +295,19 @@ describe("overlay methods", () => {
         copyLink: () => Promise.resolve("copied"),
         resetLink: () => {},
         showOverGame: async (key) => (seen.push(`show ${key}`), "full"),
+        hideOverGame: (key) => void seen.push(`hide ${key}`),
+        overGame: () => ["a", "b"],
+        preview: async (key) => void seen.push(`preview ${key}`),
       },
     });
     expect(await call(p, "overlay.publish", { key: "item-1", state: { n: 1 } })).toMatchObject({ ok: true });
     expect(await call(p, "overlay.remove", { key: "item-1" })).toMatchObject({ ok: true });
     expect(await call(p, "overlay.showOverGame", { key: "item-1" })).toMatchObject({ ok: true, result: "full" });
-    expect(seen).toEqual(['publish item-1 {"n":1}', "remove item-1", "show item-1"]);
+    expect(await call(p, "overlay.preview", { key: "item-1" })).toMatchObject({ ok: true, result: null });
+    expect(await call(p, "overlay.hideOverGame", { key: "item-1" })).toMatchObject({ ok: true, result: null });
+    expect(await call(p, "overlay.overGame", undefined)).toMatchObject({ ok: true, result: ["a", "b"] });
+    expect(await call(port, "overlay.hideOverGame", { key: "no spaces" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(seen).toEqual(['publish item-1 {"n":1}', "remove item-1", "show item-1", "preview item-1", "hide item-1"]);
   });
 
   it("still needs the overlay capability to reset a link", async () => {
@@ -309,6 +317,12 @@ describe("overlay methods", () => {
   it("refuses a bad key for showOverGame", async () => {
     expect(await call(port, "overlay.showOverGame", { key: "no spaces" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
     expect(await call(port, "overlay.showOverGame", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+
+  it("refuses a bad key for preview, and passes on a refusal", async () => {
+    expect(await call(port, "overlay.preview", { key: "no spaces" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    const p = await connected({ ...makeContext(), overlay: { ...makeContext().overlay, preview: () => Promise.reject(new HostError("PERMISSION_DENIED", "no click")) } });
+    expect(await call(p, "overlay.preview", { key: "item-1" })).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED" } });
   });
 
   it("passes on the refusal when the panel had no click", async () => {
@@ -548,6 +562,62 @@ describe("aiUsage", () => {
   it("passes on that an account does not exist", async () => {
     const p = await granted({ aiUsage: { accounts: async () => [], read: async () => Promise.reject(new HostError("INVALID_PARAMS", "there is no AI account with that id")) } });
     expect(await call(p, "aiUsage.read", { accountId: "gone" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+});
+
+describe("systemInfo", () => {
+  const INFO = { cpu: { model: "Test CPU", threads: 8 }, ramBytes: 16e9, gpus: [], drives: [{ id: "C:", label: "", kind: "internal" as const, totalBytes: 1e12 }] };
+  const watching: unknown[] = [];
+  const granted = (extra: Partial<BridgeContext> = {}) =>
+    connected({ ...makeContext(), capabilities: () => new Set(["systemInfo"] as const), systemInfo: { info: () => INFO, watch: (request) => void watching.push(request) }, ...extra });
+  const request = { blocks: { cpu: true, drives: ["C:", "D:"] }, intervalMs: 1000 };
+
+  it.each([
+    ["systemInfo.info", undefined],
+    ["systemInfo.watch", request],
+  ])("denies %s without the system-info connector", async (method, params) => {
+    expect(await call(port, method, params)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "systemInfo" } });
+  });
+
+  it("answers info and passes on a checked watch", async () => {
+    watching.length = 0;
+    const p = await granted();
+    expect(await call(p, "systemInfo.info")).toMatchObject({ ok: true, result: INFO });
+    expect(await call(p, "systemInfo.watch", request)).toMatchObject({ ok: true, result: null });
+    expect(watching).toEqual([{ blocks: { cpu: true, gpu: false, ram: false, drives: ["C:", "D:"], tavora: false }, intervalMs: 1000 }]);
+  });
+
+  it("takes no params for info", async () => {
+    const p = await granted();
+    expect(await call(p, "systemInfo.info", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+
+  it.each([
+    [undefined],
+    [{}],
+    [{ blocks: {}, intervalMs: 3000 }],
+    [{ blocks: { cpu: true } }],
+    [{ blocks: { cpu: true }, intervalMs: "1000" }],
+    [{ blocks: { cpu: 1 }, intervalMs: 1000 }],
+    [{ blocks: { temperature: true }, intervalMs: 1000 }],
+    [{ blocks: { drives: "C:" }, intervalMs: 1000 }],
+    [{ blocks: { drives: ["c:"] }, intervalMs: 1000 }],
+    [{ blocks: { drives: ["C:\\"] }, intervalMs: 1000 }],
+    [{ blocks: { drives: Array.from({ length: 27 }, () => "C:") }, intervalMs: 1000 }],
+    [{ blocks: { cpu: true }, intervalMs: 1000, extra: 1 }],
+    [{ blocks: [], intervalMs: 1000 }],
+  ])("refuses %j as a watch", async (params) => {
+    watching.length = 0;
+    const p = await granted();
+    expect(await call(p, "systemInfo.watch", params)).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(watching).toEqual([]);
+  });
+
+  it("takes empty blocks as stopping", async () => {
+    watching.length = 0;
+    const p = await granted();
+    expect(await call(p, "systemInfo.watch", { blocks: {}, intervalMs: 60000 })).toMatchObject({ ok: true });
+    expect(watching).toEqual([{ blocks: { cpu: false, gpu: false, ram: false, drives: [], tavora: false }, intervalMs: 60000 }]);
   });
 });
 

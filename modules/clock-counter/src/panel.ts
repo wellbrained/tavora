@@ -24,7 +24,11 @@ export interface PanelContext {
   act(action: string, itemId: string): void;
   setHotkey(action: string, item: Item): Promise<void>;
   copyLink(item: Item): Promise<"copied" | "off" | "denied">;
+  /** Ids of the items shown over the game now. */
+  overGame: Ref<ReadonlySet<string>>;
   showOverGame(item: Item): Promise<GameOverlayResult>;
+  hideOverGame(item: Item): Promise<void>;
+  preview(item: Item): Promise<void>;
   resetLink(item: Item): Promise<void>;
   remove(item: Item): void;
   showMenu(request: MenuRequest): Promise<string | null>;

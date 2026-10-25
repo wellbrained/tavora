@@ -8,6 +8,7 @@ import { Search } from "@lucide/vue";
 import { connectModule } from "@tavora/official-ui";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
+import { Toaster } from "@tavora/official-ui/components/ui/toast";
 import { Tabs, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import { THEME_TOKENS, type TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
@@ -111,5 +112,6 @@ function setPanel(patch: Partial<PanelState>) {
       <DisplayGroup :visible="visible" :off="off" />
       <CanvasGroup :visible="visible" :off="off" />
     </main>
+    <Toaster />
   </div>
 </template>

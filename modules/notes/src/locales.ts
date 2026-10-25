@@ -9,7 +9,6 @@ export const en = {
   "undo.deleted": "Deleted “{title}”",
   "undo.cleared": "Scratchpad cleared",
   "undo.undo": "Undo",
-  "undo.dismiss": "Dismiss",
 
   "list.label": "Notes",
   "list.search": "Search notes",
@@ -129,7 +128,6 @@ export const de: Record<keyof typeof en, string> = {
   "undo.deleted": "„{title}“ gelöscht",
   "undo.cleared": "Notizblock geleert",
   "undo.undo": "Rückgängig",
-  "undo.dismiss": "Schließen",
 
   "list.label": "Notizen",
   "list.search": "Notizen durchsuchen",

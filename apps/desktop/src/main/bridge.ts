@@ -20,6 +20,7 @@ import {
   type NetworkResponse,
   type GameOverlayResult,
   type OverlayLinkResult,
+  type SystemInfo,
   type PageResponse,
   type PanelContent,
   type PanelLaunch,
@@ -36,6 +37,7 @@ import { checkMenu, type CheckedMenu } from "./module-menu";
 import {checkTooltip,checkTooltipAnchor,tooltipId} from "./tooltip-content";
 import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
 import { checkPanelContent } from "./panel-content";
+import { parseWatch, type WatchRequest } from "./system-info-parse";
 import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
 
 /** The parts of Electron's MessagePortMain the bridge uses. */
@@ -82,6 +84,11 @@ export interface BridgeContext {
   /** The ai-usage connector (ai-usage.ts); only reached with the `aiUsage` capability. */
   aiUsage: { accounts(): Promise<AiUsageAccountInfo[]>; read(accountId: string): Promise<AiUsageReading> };
   /**
+   * The system-info connector (system-info.ts) for this panel; only reached with the `systemInfo` capability. `watch`
+   * gets the request already checked (system-info-parse.ts); it replaces what this panel watched before.
+   */
+  systemInfo: { info(): SystemInfo; watch(request: WatchRequest): void };
+  /**
    * The discord connector (discord.ts) for this panel; only reached with the `discord` capability. Commands
    * and subscriptions arrive checked (discord-commands.ts); connect, allowControl, SELECT_VOICE_CHANNEL and
    * SET_VOICE_SETTINGS throw PERMISSION_DENIED unless the panel just got a click or key press.
@@ -121,6 +128,12 @@ export interface BridgeContext {
     resetLink(key: string): void;
     /** Throws PERMISSION_DENIED unless the panel just got a click or key press. */
     showOverGame(key: string): Promise<GameOverlayResult>;
+    /** Removes this module's game overlay for `key` in the panel's workspace scope; no error when there is none. */
+    hideOverGame(key: string): void;
+    /** The keys of this module's game overlays in the panel's workspace scope. */
+    overGame(): string[];
+    /** Throws PERMISSION_DENIED unless the panel just got a click or key press, and INVALID_PARAMS without an overlay in the manifest. */
+    preview(key: string): Promise<void>;
   };
   /** Hotkeys of this module in this game (hotkeys.ts); actions and targets already checked. */
   hotkeys: {
@@ -293,6 +306,16 @@ const handlers = new Map<string, Handler>([
     },
   ],
 
+  ["systemInfo.info", (s, params) => (needs(s, "systemInfo", "systemInfo.info"), noParams(params), s.context.systemInfo.info())],
+  [
+    "systemInfo.watch",
+    (s, params) => {
+      needs(s, "systemInfo", "systemInfo.watch");
+      s.context.systemInfo.watch(parseWatch(params));
+      return null;
+    },
+  ],
+
   ["discord.state", (s, params) => (needs(s, "discord", "discord.state"), noParams(params), s.context.discord.state())],
   ["discord.connect", async (s, params) => (needs(s, "discord", "discord.connect"), noParams(params), await s.context.discord.connect(), null)],
   ["discord.allowControl", async (s, params) => (needs(s, "discord", "discord.allowControl"), noParams(params), await s.context.discord.allowControl(), null)],
@@ -347,6 +370,11 @@ const handlers = new Map<string, Handler>([
   ["overlay.remove", (s, params) => (s.context.overlay.remove(moduleKey(object(params), "key")), null)],
   // Needs no capability either: a window of Tavora's own shows the page, only after a click, and the player can turn it off.
   ["overlay.showOverGame", (s, params) => s.context.overlay.showOverGame(moduleKey(object(params), "key"))],
+  // Needs neither a capability nor a click: it only takes this module's own overlay away, or lists it.
+  ["overlay.hideOverGame", (s, params) => (s.context.overlay.hideOverGame(moduleKey(object(params), "key")), null)],
+  ["overlay.overGame", (s) => s.context.overlay.overGame()],
+  // Needs no capability: a window of Tavora's own shows the page, only after a click.
+  ["overlay.preview", async (s, params) => (await s.context.overlay.preview(moduleKey(object(params), "key")), null)],
   // A module that asks for the connector on request may call it without the grant: Tavora asks the player then.
   ["overlay.copyLink", (s, params) => s.context.overlay.copyLink(moduleKey(object(params), "key"))],
   ["overlay.resetLink", (s, params) => (needs(s, "overlay", "overlay.resetLink"), s.context.overlay.resetLink(moduleKey(object(params), "key")), null)],

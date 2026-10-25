@@ -6,7 +6,6 @@ export const en = {
   moreFor: "More for {name}",
   more: "More",
   undo: "Undo",
-  dismiss: "Dismiss",
 
   "app.toolbar": "To-do controls",
   "app.open.one": "{count} open",
@@ -89,7 +88,6 @@ export const de: Record<keyof typeof en, string> = {
   moreFor: "Mehr zu {name}",
   more: "Mehr",
   undo: "Rückgängig",
-  dismiss: "Schließen",
 
   "app.toolbar": "To-Do-Steuerung",
   "app.open.one": "{count} offen",

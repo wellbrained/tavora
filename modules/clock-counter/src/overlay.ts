@@ -19,13 +19,13 @@ function fit(): void {
   const lines = [label, value, lap].filter((line) => line.textContent !== "");
   const share = { label: 0.28, value: 1, lap: 0.32 };
   const total = lines.reduce((sum, line) => sum + (line === value ? share.value : line === label ? share.label : share.lap), 0);
-  const height = (innerHeight * 0.88) / Math.max(total, 1) / 1.05;
+  const height = (innerHeight * 0.96) / Math.max(total, 1) / 1.05;
   value.style.fontSize = `${height}px`;
   label.style.fontSize = `${height * share.label}px`;
   lap.style.fontSize = `${height * share.lap}px`;
   // Too wide for the source: shrink everything together.
-  const widest = Math.max(...lines.map((line) => line.scrollWidth));
-  const room = innerWidth * 0.94;
+  const widest = Math.max(...lines.map((line) => line.offsetWidth));
+  const room = innerWidth * 0.98;
   if (widest > room) {
     const scale = room / widest;
     for (const line of [label, value, lap]) line.style.fontSize = `${parseFloat(line.style.fontSize) * scale}px`;

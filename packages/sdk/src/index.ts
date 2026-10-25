@@ -20,6 +20,10 @@ import {
   PROTOCOL_VERSION,
   type AiUsageAccountInfo,
   type AiUsageReading,
+  type SystemInfo,
+  type SystemSnapshot,
+  type SystemWatchBlocks,
+  type SystemInterval,
   type BlobInfo,
   type BlobUsage,
   type Capability,
@@ -66,6 +70,11 @@ export type {
   GameOverlayResult,
   AiUsageAccountInfo,
   AiUsageReading,
+  SystemInfo,
+  SystemSnapshot,
+  SystemWatchBlocks,
+  SystemInterval,
+  SystemDriveKind,
   BlobInfo,
   BlobType,
   BlobUsage,
@@ -96,7 +105,7 @@ export type {
   TavoraViewport,
   ThemeToken,
 } from "./protocol.js";
-export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, THEME_TOKENS } from "./protocol.js";
+export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, THEME_TOKENS } from "./protocol.js";
 
 /** How long a menu may stay open; the host closes it itself when its panel goes. */
 const MENU_TIMEOUT_MS = 60 * 60_000;
@@ -330,6 +339,23 @@ export interface TavoraSDK {
       onAccountsChange(fn: () => void): Unsubscribe;
     };
     /**
+     * `system-info`: this PC's hardware and how busy it is, read by Tavora while a panel shows it. Nothing is read
+     * while no panel watches, and a hidden panel gets no snapshots. Names and numbers only, never paths or serial numbers.
+     */
+    systemInfo: {
+      /** The processor, memory, graphics cards and drives. Read once and kept; ask again after onDrivesChange. */
+      info(): Promise<SystemInfo>;
+      /**
+       * Sets what this panel watches, replacing what it watched before; empty `blocks` stop it. A first snapshot comes
+       * at once, then one every `intervalMs` (1000, 2000, 5000, 15000 or 60000). The panel's watch ends with the page.
+       */
+      watch(options: { blocks: SystemWatchBlocks; intervalMs: SystemInterval }): Promise<void>;
+      /** Fires with each snapshot of what the panel watches. */
+      onSnapshot(fn: (snapshot: SystemSnapshot) => void): Unsubscribe;
+      /** Fires when a drive is plugged in or removed; ask info() again. */
+      onDrivesChange(fn: () => void): Unsubscribe;
+    };
+    /**
      * `discord`: the Discord app on this PC, through Tavora's Discord sign-in. The connection runs while a
      * panel has asked for state(); Tavora keeps the sign-in and sends only the commands in DISCORD_COMMANDS.
      */
@@ -376,6 +402,17 @@ export interface TavoraSDK {
      * another. Tavora 0.20.51 and newer.
      */
     showOverGame(key: string): Promise<GameOverlayResult>;
+    /** Takes this module's game overlay for `key` away in the panel's workspace scope. No click or permission needed; nothing happens when there is none. Tavora 0.21.3 and newer. */
+    hideOverGame(key: string): Promise<void>;
+    /** The keys of this module's game overlays in the panel's workspace scope. Tavora 0.21.3 and newer. */
+    overGame(): Promise<string[]>;
+    /**
+     * Opens a small Tavora window with the overlay for `key` at its real size, on a dark, light or checkered background,
+     * so the player can see what it looks like. Call it from the click or key press that asked for it; it needs no
+     * permission, but the module needs an `overlay` in its manifest. It works whether or not Game overlays and Stream
+     * overlays are on. Tavora 0.21.3 and newer.
+     */
+    preview(key: string): Promise<void>;
   };
   /**
    * Hotkeys for the manifest's `actions`. The player picks the keys in a Tavora dialog, for this game; the module
@@ -752,6 +789,14 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         read: (accountId) => call("aiUsage.read", { accountId }, LIMITS.aiUsageTimeoutMs + 5000),
         onAccountsChange: (fn) => on("aiUsage.accountsChanged", () => fn()),
       },
+      systemInfo: {
+        info: () => call("systemInfo.info"),
+        watch: async (options) => {
+          await call("systemInfo.watch", options);
+        },
+        onSnapshot: (fn) => on("systemInfo.snapshot", fn),
+        onDrivesChange: (fn) => on("systemInfo.drivesChanged", () => fn()),
+      },
       discord: {
         state: () => call("discord.state"),
         onStateChange: (fn) => on("discord.state", fn),
@@ -781,6 +826,13 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       },
       copyLink: (key) => call("overlay.copyLink", { key }),
       showOverGame: (key) => call("overlay.showOverGame", { key }),
+      hideOverGame: async (key) => {
+        await call("overlay.hideOverGame", { key });
+      },
+      overGame: () => call("overlay.overGame", undefined),
+      preview: async (key) => {
+        await call("overlay.preview", { key });
+      },
       resetLink: async (key) => {
         await call("overlay.resetLink", { key });
       },

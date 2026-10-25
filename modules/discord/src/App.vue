@@ -4,10 +4,13 @@
 // the voice channels of the server this game remembers (or of the call's server), with who is in
 // them. The player can join a channel, leave, and mute or deafen. Everything comes from the Discord
 // app on this PC through Tavora's discord connector, which keeps the sign-in (panel.ts).
-import { Check, ChevronDown, Headphones, HeadphoneOff, Info, Loader2, Mic, MicOff, Phone, PhoneOff, RefreshCw, Search, Volume2, X } from "@lucide/vue";
+import { Check, ChevronDown, Headphones, HeadphoneOff, Loader2, Mic, MicOff, Phone, PhoneOff, RefreshCw, Search, Volume2, X } from "@lucide/vue";
 import { cn, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
+import { Label } from "@tavora/official-ui/components/ui/label";
+import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import MemberRow from "./MemberRow.vue";
 import { setLanguage, t } from "./i18n";
@@ -63,6 +66,18 @@ const notice = computed(() => {
       return { title: t("status.connectingTitle"), text: "", action: false, busy: true };
   }
 });
+
+// The voice overlay's settings: over the game, a preview, a link for OBS, and names on it.
+const overlay = computed(() => panel.value?.overlay.value ?? { names: true, overGame: false });
+const overlayNote = ref<string | null>(null);
+async function overGame(on: boolean) {
+  const result = await panel.value?.setOverGame(on);
+  overlayNote.value = result === "off" ? t("overlay.gameOff") : result === "full" ? t("overlay.gameFull") : null;
+}
+async function copyLink() {
+  const result = await panel.value?.copyOverlayLink();
+  overlayNote.value = result === "copied" ? t("overlay.copied") : result === "off" ? t("overlay.streamOff") : result === "denied" ? t("overlay.denied") : null;
+}
 
 const server = computed(() => view.value?.server ?? null);
 const browseServer = computed(() => view.value?.browseServer ?? null);
@@ -250,13 +265,26 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", closeOutside))
       </div>
 
       <div v-if="!call" class="flex-none px-2 pb-2">
-        <div role="status" class="bg-info/10 flex items-start gap-2 rounded-md p-3 text-sm" data-testid="discord-no-call">
-          <Info class="text-info mt-0.5 size-4 flex-none" :stroke-width="1.5" />
-          <span>{{ t(channels.length ? "panel.noCall" : "panel.noCallEmpty") }}</span>
-        </div>
+        <Notice data-testid="discord-no-call">{{ t(channels.length ? "panel.noCall" : "panel.noCallEmpty") }}</Notice>
       </div>
 
       <footer class="flex flex-none flex-col gap-1.5 border-t px-3 py-2" data-testid="discord-game">
+        <section class="flex flex-col gap-1.5 pb-1" :aria-label="t('overlay.title')" data-testid="discord-overlay">
+          <h3 class="font-medium">{{ t("overlay.title") }}</h3>
+          <Label class="justify-between font-normal">
+            {{ t("overlay.overGame") }}
+            <Switch :model-value="overlay.overGame" data-testid="discord-over-game" @update:model-value="(on: boolean) => act(() => overGame(on))" />
+          </Label>
+          <Label class="justify-between font-normal">
+            {{ t("overlay.names") }}
+            <Switch :model-value="overlay.names" data-testid="discord-overlay-names" @update:model-value="(on: boolean) => act((current) => current.setOverlayNames(on))" />
+          </Label>
+          <div class="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" data-testid="discord-preview" @click="act((current) => current.previewOverlay())">{{ t("overlay.preview") }}</Button>
+            <Button variant="secondary" size="sm" data-testid="discord-copy-link" @click="act(() => copyLink())">{{ t("overlay.copyLink") }}</Button>
+          </div>
+          <p v-if="overlayNote" class="text-muted-foreground text-xs" role="status" data-testid="discord-overlay-note">{{ overlayNote }}</p>
+        </section>
         <div class="flex items-center gap-2">
           <label for="discord-remember" class="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
             <Checkbox id="discord-remember" :model-value="view.game.remember" data-testid="discord-remember" @update:model-value="(value) => act((current) => current.rememberGame(value === true))" />

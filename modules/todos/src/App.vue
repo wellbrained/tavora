@@ -2,9 +2,11 @@
 // To-Dos: a toolbar, current objectives, then the player's own groups. Every
 // To-Dos panel of a game shows the same list; what is folded, hidden or being
 // edited is each panel's own state.
-import { Check, ChevronsDownUp, ChevronsUpDown, ListChecks, X } from "@lucide/vue";
+import { Check, ChevronsDownUp, ChevronsUpDown, ListChecks } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
+import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import type { MenuRequest, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef } from "vue";
@@ -62,21 +64,11 @@ const objectives = computed(() =>
 
 // ── Undo ─────────────────────────────────────────────────────────────
 
-const undo = shallowRef<{ id: number; message: string; run: () => void } | null>(null);
-let undoCount = 0;
-let undoTimer: ReturnType<typeof setTimeout> | undefined;
+let undoToast: { dismiss: () => void } | null = null;
 
 function offerUndo(message: string, run: () => void) {
-  undo.value = { id: ++undoCount, message, run };
-  clearTimeout(undoTimer);
-  undoTimer = setTimeout(() => (undo.value = null), UNDO_MS);
-}
-
-function runUndo() {
-  const offer = undo.value;
-  undo.value = null;
-  clearTimeout(undoTimer);
-  offer?.run();
+  undoToast?.dismiss();
+  undoToast = toast({ title: message, duration: UNDO_MS, testid: "undo-toast", actionTestid: "undo", action: { label: t("undo"), onClick: run } });
 }
 
 // ── Panel state ──────────────────────────────────────────────────────
@@ -130,7 +122,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   cleanup.forEach((fn) => fn());
   clearTimeout(lingerTimer);
-  clearTimeout(undoTimer);
+  undoToast?.dismiss();
 });
 
 function createGroup(name: string) {
@@ -229,10 +221,9 @@ function dropTask() {
     </header>
 
     <div class="min-h-0 flex-1 overflow-y-auto p-2" @dragend="dragEnd">
-      <div v-if="!list.groups.length" class="flex flex-col items-center gap-3 px-4 py-10 text-center" data-testid="empty">
-        <p class="text-muted-foreground text-sm">{{ t("app.empty") }}</p>
-        <AddInput class="w-full max-w-80" outlined :placeholder="t('app.addTodo')" :maxlength="MAX.title" data-testid="first-task" @add="firstTask" />
-      </div>
+      <EmptyState v-if="!list.groups.length" class="border-0" :title="t('app.empty')" data-testid="empty">
+        <template #action><AddInput class="w-full max-w-80" outlined :placeholder="t('app.addTodo')" :maxlength="MAX.title" data-testid="first-task" @add="firstTask" /></template>
+      </EmptyState>
 
       <section v-if="objectives.length" class="mb-3" :aria-label="t('app.objectives')" data-testid="objectives">
         <h2 class="text-muted-foreground px-2 pt-1 pb-1 text-xs font-medium">{{ t("app.objectives") }}</h2>
@@ -285,19 +276,7 @@ function dropTask() {
       />
     </div>
 
-    <div
-      v-if="undo"
-      :key="undo.id"
-      class="bg-popover text-popover-foreground absolute bottom-3 left-1/2 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-lg border py-1.5 pr-1.5 pl-3 text-sm shadow-lg"
-      role="status"
-      data-testid="undo-toast"
-    >
-      <span class="min-w-0 truncate">{{ undo.message }}</span>
-      <Button variant="outline" size="sm" data-testid="undo" @click="runUndo">{{ t("undo") }}</Button>
-      <Button variant="ghost" size="icon-sm" :aria-label="t('dismiss')" :title="t('dismiss')" @click="undo = null">
-        <X :stroke-width="1.5" />
-      </Button>
-    </div>
+    <Toaster />
 
     <ConfirmDialog
       v-if="pendingGroup"

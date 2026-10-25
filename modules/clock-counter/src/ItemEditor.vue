@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // An item's settings, below its card: name and how it counts, how it looks on stream with its OBS link, and its
 // hotkeys. Text and number fields save when they lose focus or on Enter, not on every key.
-import { ArrowDown, ArrowUp, Check, Link, Plus, Trash2, X } from "@lucide/vue";
-import { cn, SegmentedControl } from "@tavora/official-ui";
+import { ArrowDown, ArrowUp, Link, Plus, Trash2, X } from "@lucide/vue";
+import { SegmentedControl } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
+import { ColorPicker } from "@tavora/official-ui/components/ui/color-picker";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { computed, inject, ref, watch } from "vue";
 import { t } from "./i18n";
@@ -155,9 +156,20 @@ async function copyLink() {
   linkNote.value = t(result === "copied" ? "edit.copied" : result === "off" ? "edit.overlaysOff" : "edit.noOverlay");
 }
 
-async function showOverGame() {
+const overGame = computed(() => panel.overGame.value.has(props.item.id));
+
+async function setOverGame(on: boolean) {
+  if (!on) {
+    await panel.hideOverGame(props.item);
+    linkNote.value = null;
+    return;
+  }
   const result = await panel.showOverGame(props.item);
   linkNote.value = result === "shown" ? t("edit.shownOverGame") : result === "full" ? t("edit.overGameFull") : null;
+}
+
+async function previewOverlay() {
+  await panel.preview(props.item);
 }
 
 async function resetLink() {
@@ -271,9 +283,13 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
       <h3 class="font-medium">{{ t("edit.stream") }}</h3>
       <div class="flex flex-wrap gap-2">
         <Button size="sm" :data-testid="`copy-link-${item.id}`" @click="copyLink">{{ t("edit.copyLink") }}</Button>
-        <Button size="sm" variant="secondary" :data-testid="`show-over-game-${item.id}`" @click="showOverGame">{{ t("edit.showOverGame") }}</Button>
+        <Button size="sm" variant="secondary" :data-testid="`preview-${item.id}`" @click="previewOverlay">{{ t("edit.previewOverlay") }}</Button>
         <Button v-if="panel.store.overlays.value" variant="ghost" size="sm" @click="resetLink">{{ t("edit.resetLink") }}</Button>
       </div>
+      <Label class="justify-between font-normal">
+        {{ t("edit.overGame") }}
+        <Switch :model-value="overGame" :data-testid="`over-game-${item.id}`" @update:model-value="setOverGame" />
+      </Label>
       <p v-if="linkNote" class="text-muted-foreground text-xs" role="status">{{ linkNote }}</p>
       <Label class="justify-between font-normal">
         {{ t("edit.showLabel") }}
@@ -285,22 +301,7 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
       </Label>
       <div class="flex flex-col gap-1.5">
         <span class="font-medium">{{ t("edit.color") }}</span>
-        <div class="flex flex-wrap gap-1.5" role="radiogroup" :aria-label="t('edit.color')">
-          <button
-            v-for="(color, index) in COLORS"
-            :key="color"
-            type="button"
-            role="radio"
-            :aria-checked="item.look.color === color"
-            :aria-label="t(`color.${COLOR_NAMES[index]!}`)"
-            :title="t(`color.${COLOR_NAMES[index]!}`)"
-            :class="cn('grid size-6 place-items-center rounded-full border', item.look.color === color && 'ring-ring ring-2 ring-offset-1 ring-offset-[var(--card)]')"
-            :style="{ background: color }"
-            @click="updateLook((look) => (look.color = color))"
-          >
-            <Check v-if="item.look.color === color" class="size-3.5" :stroke-width="2.5" :style="{ color: index === COLORS.length - 1 ? '#fff' : '#111' }" />
-          </button>
-        </div>
+        <ColorPicker :model-value="item.look.color" :label="t('edit.color')" :colors="[...COLORS]" :labels="COLOR_NAMES.map((name) => t(`color.${name}`))" @update:model-value="(color: string) => updateLook((look) => (look.color = color))" />
       </div>
       <div class="flex flex-wrap items-center justify-between gap-2">
         <span class="font-medium">{{ t("edit.font") }}</span>

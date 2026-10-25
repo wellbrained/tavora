@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lockSpots, spotsKey } from "./PictureLocks";
+import { lockSpots, spotsKey } from "./locks";
 
 const picture = (extra: Partial<{ id: string; type: string; isDeleted: boolean; locked: boolean; x: number; y: number; width: number; height: number; angle: number }> = {}) => ({
   id: "p",

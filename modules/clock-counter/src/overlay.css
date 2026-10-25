@@ -16,7 +16,8 @@ main {
   flex-direction: column;
   justify-content: center;
   height: 100%;
-  padding: 4vh 3vw;
+  padding: 0;
+  background: transparent;
   color: var(--color, #fff);
   font-family: "Inter Variable", system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
@@ -68,6 +69,13 @@ main[data-outline="true"] {
 .lap {
   font-weight: 500;
   opacity: 0.85;
+}
+
+.label,
+.value,
+.lap {
+  width: max-content;
+  max-width: none;
 }
 
 .label:empty,
