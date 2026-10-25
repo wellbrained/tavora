@@ -5,7 +5,7 @@
 import { cn } from "@tavora/official-ui";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { computed } from "vue";
-import { driveTone, percent, size, speed, usedPercent, type DriveTone } from "./format";
+import { degrees, driveTone, megahertz, percent, size, speed, temperatureTone, usedPercent, watts, type DriveTone } from "./format";
 import { language, t } from "./i18n";
 import MetricCard from "./MetricCard.vue";
 import type { Monitor } from "./monitor";
@@ -48,10 +48,20 @@ const gpu = computed(() => {
   const now = snapshot.value?.gpus?.find((entry) => entry.id === gpuInfo.value?.id);
   const total = gpuInfo.value?.vramBytes ?? null;
   const used = now?.vramUsedBytes ?? null;
+  const celsius = now?.temperatureC ?? null;
+  const power = now?.powerW ?? null;
+  const clock = now?.clockMhz ?? null;
+  const vram = used !== null && total ? t("vram", { used: size(used, lang.value).replace(/ GB$/, ""), total: size(total, lang.value) }) : "";
   return {
     usage: now ? percent(now.usage, lang.value) : "",
+    // Only NVIDIA cards report these (Tavora 0.21.8 and newer); the dash stays for the rest.
+    temperature: celsius !== null ? degrees(celsius, lang.value) : "",
+    temperatureClass: TEXT_TONE[temperatureTone(celsius)],
     peak: peakText(now?.peak),
-    detail: used !== null && total ? t("vram", { used: size(used, lang.value).replace(/ GB$/, ""), total: size(total, lang.value) }) : "",
+    // The power joins the memory only while there is no peak next to it: both together would not fit a card at 620 px.
+    detail: vram && power !== null && !showPeak.value ? t("vram.power", { vram, power: watts(power, lang.value) }) : vram,
+    // Clock and power for the hover, one line each.
+    hint: [clock !== null ? t("clock", { value: megahertz(clock, lang.value) }) : "", power !== null ? t("power", { value: watts(power, lang.value) }) : ""].filter(Boolean).join("\n"),
   };
 });
 
@@ -133,10 +143,12 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
       :title="t('gpu.title')"
       :name="gpuInfo.name"
       :usage="gpu.usage"
+      :temperature="gpu.temperature"
+      :temperature-class="gpu.temperatureClass"
       :temperature-hint="t('temp.hint')"
       :peak="gpu.peak"
       :detail="gpu.detail"
-      hint=""
+      :hint="gpu.hint"
       :values="gpuValues"
       :graph-label="t('gpu.title')"
     />

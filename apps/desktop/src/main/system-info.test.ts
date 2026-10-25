@@ -31,6 +31,7 @@ class FakeProbe implements SystemProbe {
   cores = [10, 20, 30, 40];
   gpu = new Map([["0x00000000_0x0000000a", 55]]);
   vram = new Map([["0x00000000_0x0000000a", 3e9]]);
+  sensors: ProbeSample["gpuSensors"] = new Map([["0x00000000_0x0000000a", { temperatureC: 61, clockMhz: 1815, powerW: 212.4 }]]);
   io = new Map([["C:", { read: 1000.4, write: 2000.6 }]]);
   spaceReads: string[] = [];
   private cpuAt = 0;
@@ -55,7 +56,10 @@ class FakeProbe implements SystemProbe {
     if (parts.cpuTotal) sample.cpuTotal = this.cpu[Math.min(this.cpuAt++, this.cpu.length - 1)]!;
     if (parts.cpuCores) sample.cpuCores = this.cores;
     if (parts.gpuUsage) sample.gpuUsage = this.gpu;
-    if (parts.gpuMemory) sample.gpuMemory = this.vram;
+    if (parts.gpuMemory) {
+      sample.gpuMemory = this.vram;
+      if (this.sensors) sample.gpuSensors = this.sensors;
+    }
     if (parts.driveIo) sample.driveIo = this.io;
     return sample;
   }
@@ -177,8 +181,8 @@ describe("snapshots", () => {
     const w = watching({ gpu: true });
     vi.advanceTimersByTime(WARM_UP_MS);
     expect(w.snapshots[0]!.gpus).toEqual([
-      { id: "0x00000000_0x0000000a", usage: 55, peak: 55, vramUsedBytes: 3e9 },
-      { id: "0x00000000_0x0000000b", usage: 0, peak: 0, vramUsedBytes: null },
+      { id: "0x00000000_0x0000000a", usage: 55, peak: 55, vramUsedBytes: 3e9, temperatureC: 61, clockMhz: 1815, powerW: 212.4 },
+      { id: "0x00000000_0x0000000b", usage: 0, peak: 0, vramUsedBytes: null, temperatureC: null, clockMhz: null, powerW: null },
     ]);
   });
 
