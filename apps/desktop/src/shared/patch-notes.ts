@@ -22,85 +22,16 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.20.40",
     date: "2026-10-25",
-    title: "Bigger module icons",
+    title: "Module updates on your terms",
     notes: [
-      "Module icons fill their tile in Add module, Settings > Modules and module updates, so they're easier to tell apart.",
-    ],
-  },
-  {
-    version: "0.20.39",
-    date: "2026-10-25",
-    title: "Send feedback to a module's developer",
-    notes: [
-      "A module's page has a Send feedback button when the developer added a link. It opens a web page or your mail app, only after you press it.",
-      "Report is now called Report to Tavora, with a short note about when to use it.",
-    ],
-  },
-  {
-    version: "0.20.38",
-    date: "2026-10-25",
-    title: "Module updates wait for you",
-    notes: [
-      "Updates for your modules no longer install by themselves. A button next to Layouts, like \"2 updates\", opens the module library on Updates.",
-      "Each update shows what's new and has its own Update button, or press Update all.",
-      "Prefer the old way? Turn on Update modules automatically in Settings > Modules.",
-    ],
-  },
-  {
-    version: "0.20.37",
-    date: "2026-10-25",
-    title: "Clearer module pages",
-    notes: [
-      "A module's page now has a Description, sorted into the same sections for every module: Features, How to use, Settings and more.",
-      "Bold, italic and links in a description work. A link opens in a Browser panel when you click it.",
-      "Under What's new, All versions lists every version with its date. If you're a few versions behind, the ones you missed say New for you.",
-      "Publishing shows your description as it will appear, with a tip when something's missing.",
-    ],
-  },
-  {
-    version: "0.20.36",
-    date: "2026-10-25",
-    title: "See why Tavora didn't start",
-    notes: [
-      "If Tavora breaks while loading, you now see what went wrong instead of a black window.",
-      "If the window crashes, it opens again by itself. Twice in a row, and it tells you why.",
-      "Try again from there, or copy the details to send them on.",
-    ],
-  },
-  {
-    version: "0.20.35",
-    date: "2026-10-25",
-    title: "Module pages for what you have",
-    notes: [
-      "Click an installed module's icon or name in the module library to see its page.",
-      "Modules you added from the catalog open their catalog page. All others show their readme, screenshots and what they can reach, even offline.",
-    ],
-  },
-  {
-    version: "0.20.34",
-    date: "2026-10-25",
-    title: "Tavora starts again",
-    notes: [
-      "Tavora no longer opens to a black window.",
-    ],
-  },
-  {
-    version: "0.20.33",
-    date: "2026-10-25",
-    title: "Clearer module tags",
-    notes: [
-      "Modules you installed from the catalog say \"Catalog\" in Add module and Settings, ones added from a zip file \"From file\". \"Local\" is now only for modules in your development folders.",
-      "The examples that ship with Tavora say \"Example\".",
-    ],
-  },
-  {
-    version: "0.20.32",
-    date: "2026-10-25",
-    title: "See what is left to publish",
-    notes: [
-      "A Release copy in Settings > Development now says \"New version\" or \"Not published yet\" when the catalog is behind it.",
-      "The Development entry in Settings shows how many Release copies are waiting to be published.",
-      "Tavora checks when Settings opens and again after you publish.",
+      "Updates for your modules no longer install by themselves. A button next to Layouts, like \"2 updates\", shows what's new; update them one by one or all at once. Prefer the old way? Turn on Update modules automatically in Settings > Modules.",
+      "Click an installed module's icon or name in the module library to see its page, also offline.",
+      "Module pages have a Description in the same sections for every module, and All versions lists every version with its date. The ones you missed say New for you.",
+      "A module's page has a Send feedback button when its developer added a link. Report is now called Report to Tavora.",
+      "Modules from the catalog say \"Catalog\", ones from a zip file \"From file\" and the examples \"Example\". \"Local\" is now only for your development folders.",
+      "Module icons fill their tile, so they're easier to tell apart.",
+      "If Tavora breaks while loading, you see what went wrong instead of a black window, and can try again or copy the details.",
+      "For module developers: Settings > Development shows which Release copies still wait to be published, and Publish previews your description.",
     ],
   },
   {
