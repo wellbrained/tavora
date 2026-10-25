@@ -18,5 +18,7 @@ export default defineConfig({
     modulePreload: { polyfill: false },
     // Loaded from disk, never over a network, so one bundle is fine.
     chunkSizeWarningLimit: 1500,
+    // Two pages: the panel, and the overlay that the game or OBS shows.
+    rollupOptions: { input: { index: page("index"), overlay: page("overlay") } },
   },
 });
