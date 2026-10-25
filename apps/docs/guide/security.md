@@ -109,6 +109,16 @@ A module with an overlay page can ask, after a real click in its panel, to have 
 - **Capture hiding is opt-in.** By default the window shows in screen capture and recording like any other window. The player can turn on Hide from capture per overlay, which excludes it from capture. It is off by default because some anti-cheats flag windows that are hidden from capture over a game.
 - **Keys are the player's.** The key that toggles an overlay and the key that arranges them are set in Tavora's hotkey dialog and work only while the game is in front. The module never learns them.
 
+### A panel over the game
+
+The player can also move a whole panel over its game, from **Show over game** in the panel's own menu, which Tavora draws. That click is the consent: no module call is involved, a module can't ask for it or tell that it happened, and the module's keys for overlay pages can't start with `panel-`, which Tavora keeps for this.
+
+- **The same panel, the same rights.** Tavora moves the panel's own view into the overlay window; it does not start a second copy. The page keeps its bridge, session, storage, grants and identity, and what the module may call does not change. Nothing new can reach the page or leave it. The workspace slot says "Shown over game" until the player brings the panel back, from the slot, the arrange frame or Settings > Overlays.
+- **Same rules as other overlays.** It counts toward the 8 overlays per game, shows only while its game is in front, follows Always or With a key, the opacity and Hide from capture the player set, and is off until Game overlays is on (until then the menu item only opens that setting). The panel is paused while hidden and goes on running while its game is out of the front, also when Tavora shows another game or is minimized.
+- **Input only while arranging.** The window ignores the mouse and never takes the keyboard, like any overlay, except while the player arranges with their own key. Then it takes the mouse and the keyboard so a to-do can be ticked or typed in, and Tavora's own shortcuts leave the keys to the panel. The frame sits around the panel, and Esc or the key ends it and gives the game the focus back. A click or key press counts as the player's (what links and files need) only while arranging; at any other time none is counted. While arranging, Windows reports one of Tavora's own windows as the one in front; Tavora reads only that it is its own and keeps the game as the one in front.
+- **It goes when the panel goes.** Closing the panel, removing its module or game, a module replaced by another publisher's, turning Game overlays off or quitting closes the overlay window; the page is closed only when the panel itself closes. A panel over the game is not kept across a restart: it is back in its slot the next time Tavora starts.
+- **Nothing more is done to the game.** It uses the same reads of which window is in front as the other overlays and nothing else.
+
 ## Hotkeys
 
 Modules can name actions in their manifest, and the player can bind a key to each in Tavora's own dialog. The module never learns the key, only which action fired for which of its targets.

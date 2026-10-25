@@ -223,6 +223,8 @@ The same [`overlay`](./manifest.md#overlay) page can also be shown over the play
 - Tavora draws its own window above the game. It does not touch the game: nothing is injected into it or drawn by it. Games that run in exclusive full screen hide it; the player is told to switch the game to borderless. Windows only; elsewhere the call gives `"off"`.
 - The page has no bridge and runs under the same policy as a Stream overlay page, with no network. Clicks go through it to the game, so it can't take input.
 - Theme and language don't reach the page, and its size is the player's choice, so lay it out for any size and keep its background transparent.
+- Keys that start with `panel-` are Tavora's: `overlay.showOverGame` refuses them with `INVALID_PARAMS`.
+- The player can also move a whole panel over the game from its menu. Your panel isn't told and calls nothing different: it keeps its bridge, and hears `workspace.resize` for the new size, `lifecycle.suspend` while it is hidden (its game isn't in front) and `lifecycle.resume` when it shows again. It sits on a see-through background, so keep it readable at any size. Clicks and key presses reach it only while the player arranges overlays.
 
 ### Hotkeys
 
