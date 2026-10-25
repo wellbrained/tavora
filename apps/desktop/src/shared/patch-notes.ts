@@ -20,6 +20,27 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.56",
+    date: "2026-10-25",
+    title: "Whiteboard looks like the rest of Tavora",
+    notes: [
+      "The Whiteboard's header, board menu, notices and Undo now look like the other modules.",
+      "The board menu works with the arrow keys, Home and End.",
+      "Your boards and pictures are untouched.",
+    ],
+  },
+  {
+    version: "0.20.55",
+    date: "2026-10-25",
+    title: "Tidier lists and colour pickers",
+    notes: [
+      "Add module and Settings have the same side list, with arrow keys, Home and End to move through it.",
+      "The clock and counter colour swatches can be picked with the arrow keys.",
+      "To-dos, Discord and AI Usage use the shared empty-state and notice boxes.",
+      "Undo messages in Notes and To-Dos look the same as other messages.",
+    ],
+  },
+  {
     version: "0.20.54",
     date: "2026-10-25",
     title: "Panels over your game",
