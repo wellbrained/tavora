@@ -20,7 +20,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
-import { PopoverAnchor, PopoverContent, PopoverPortal, PopoverRoot } from "reka-ui";
+import { Popover, PopoverAnchor, PopoverContent } from "@tavora/official-ui/components/ui/popover";
 import { computed, inject, nextTick, ref } from "vue";
 import { t } from "./i18n";
 import { PANEL } from "./panel";
@@ -275,7 +275,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
         />
       </span>
 
-      <PopoverRoot :open="describing" @update:open="setDescribing">
+      <Popover :open="describing" @update:open="setDescribing">
         <PopoverAnchor as-child>
           <div class="flex min-w-0 flex-1 flex-col">
             <!-- The title and its editor have the same box, font and wrapping, so switching between them moves nothing. -->
@@ -314,31 +314,29 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
             </div>
           </div>
         </PopoverAnchor>
-        <PopoverPortal>
-          <PopoverContent
-            side="bottom"
-            align="start"
-            :side-offset="4"
-            :collision-padding="8"
-            class="bg-popover text-popover-foreground z-50 w-72 max-w-[calc(100vw-16px)] rounded-md border p-2 shadow-md"
-            data-testid="description-popover"
-            @open-auto-focus="focusDescription"
-            @escape-key-down="cancelDescription"
-          >
-            <textarea
-              ref="descriptionInput"
-              v-model="description"
-              :maxlength="MAX.details"
-              :placeholder="t('task.description')"
-              :aria-label="t('task.description')"
-              data-testid="description-input"
-              class="placeholder:text-muted-foreground border-input focus-visible:border-ring field-sizing-content block max-h-60 min-h-20 w-full resize-none rounded-md border bg-transparent px-2 py-1.5 text-sm outline-none"
-              @keydown="onDescriptionKey"
-            />
-            <p class="text-muted-foreground mt-1.5 px-0.5 text-[11px]">{{ t("task.descriptionHint") }}</p>
-          </PopoverContent>
-        </PopoverPortal>
-      </PopoverRoot>
+        <PopoverContent
+          side="bottom"
+          align="start"
+          :side-offset="4"
+          :collision-padding="8"
+          class="p-2"
+          data-testid="description-popover"
+          @open-auto-focus="focusDescription"
+          @escape-key-down="cancelDescription"
+        >
+          <textarea
+            ref="descriptionInput"
+            v-model="description"
+            :maxlength="MAX.details"
+            :placeholder="t('task.description')"
+            :aria-label="t('task.description')"
+            data-testid="description-input"
+            class="placeholder:text-muted-foreground border-input focus-visible:border-ring field-sizing-content block max-h-60 min-h-20 w-full resize-none rounded-md border bg-transparent px-2 py-1.5 text-sm outline-none"
+            @keydown="onDescriptionKey"
+          />
+          <p class="text-muted-foreground mt-1.5 px-0.5 text-[11px]">{{ t("task.descriptionHint") }}</p>
+        </PopoverContent>
+      </Popover>
 
       <span v-if="task.pinned && !compact" class="flex h-8 flex-none items-center">
         <Pin class="text-primary size-3.5" :stroke-width="1.5" :aria-label="t('task.pinned')" />
