@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.32",
+    date: "2026-10-25",
+    title: "See what is left to publish",
+    notes: [
+      "A Release copy in Settings > Development now says \"New version\" or \"Not published yet\" when the catalog is behind it.",
+      "The Development entry in Settings shows how many Release copies are waiting to be published.",
+      "Tavora checks when Settings opens and again after you publish.",
+    ],
+  },
+  {
     version: "0.20.31",
     date: "2026-10-25",
     title: "Save and open files, your way",
