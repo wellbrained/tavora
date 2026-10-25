@@ -104,7 +104,7 @@ const intervalOptions = computed(() => INTERVALS.map((minutes) => ({ value: Stri
 </script>
 
 <template>
-  <p v-if="!monitor" class="text-muted-foreground p-4 text-sm" data-testid="status">
+  <p v-if="!monitor" class="text-muted-foreground p-4 text-sm" :role="error ? 'alert' : 'status'" data-testid="status">
     {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
   <div v-else class="bg-background flex size-full flex-col overflow-hidden text-sm" data-testid="ai-usage-panel">
@@ -173,33 +173,34 @@ const intervalOptions = computed(() => INTERVALS.map((minutes) => ({ value: Stri
       <section v-for="account in accounts" :key="account.info.id" class="flex flex-col gap-1" :data-testid="`ai-usage-account-${account.info.id}`">
         <header class="flex items-center gap-2">
           <span class="bg-secondary text-secondary-foreground flex-none rounded-sm px-1.5 py-px text-xs font-medium">{{ t(`provider.${account.info.provider}`) }}</span>
-          <span class="min-w-0 truncate font-medium" :title="identity(account)" data-testid="ai-usage-name">{{ account.info.label }}</span>
+          <span class="min-w-0 truncate font-medium" :title="identity(account)" :tabindex="account.email ? 0 : undefined" data-testid="ai-usage-name">{{ account.info.label }}</span>
           <span v-if="account.info.plan" class="text-muted-foreground flex-none text-xs" data-testid="ai-usage-plan">{{ account.info.plan }}</span>
-          <span v-if="account.resets" class="bg-secondary text-secondary-foreground flex-none rounded-sm px-1.5 py-px text-xs" :title="resetsHint(account)" data-testid="ai-usage-resets">
+          <span v-if="account.resets" class="bg-secondary text-secondary-foreground flex-none rounded-sm px-1.5 py-px text-xs" :title="resetsHint(account)" tabindex="0" data-testid="ai-usage-resets">
             {{ plural("panel.resets", account.resets.available) }}
           </span>
           <span class="flex-1" />
-          <span v-if="stale(account)" class="text-warning flex flex-none items-center gap-1 text-xs" :title="t('panel.staleHint')" data-testid="ai-usage-stale">
+          <span v-if="stale(account)" class="text-warning flex flex-none items-center gap-1 text-xs" :title="t('panel.staleHint')" tabindex="0" data-testid="ai-usage-stale">
             <Info class="size-3.5" :stroke-width="1.75" />{{ t("panel.stale") }}
           </span>
           <span class="text-muted-foreground flex-none text-xs">{{ updatedText(account) }}</span>
         </header>
 
-        <ul v-if="account.reading?.windows.length" :class="cn('flex flex-col gap-1', stale(account) && 'opacity-70')">
+        <ul v-if="account.reading?.windows.length" :class="cn('flex flex-col gap-1', stale(account) && 'text-muted-foreground')">
           <li
             v-for="(window, position) in account.reading.windows"
             :key="position"
-            class="grid grid-cols-[4.5rem_minmax(2rem,1fr)_5.5rem_7.5rem] items-center gap-x-2"
+            class="grid grid-cols-[4.5rem_minmax(2rem,1fr)_5.5rem_8.5rem] items-center gap-x-2"
             :title="window.resetsAt ? t('panel.resetHint', { date: dateTime(window.resetsAt) }) : undefined"
+            :tabindex="window.resetsAt ? 0 : undefined"
             data-testid="ai-usage-window"
           >
-            <span class="min-w-0 truncate">{{ windowLabel(window, t) }}</span>
-            <div class="bg-muted h-1.5 overflow-hidden rounded-full" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="shown(window)" :aria-label="windowLabel(window, t)">
+            <span class="min-w-0 truncate" :title="windowLabel(window, t)">{{ windowLabel(window, t) }}</span>
+            <div class="bg-muted h-1.5 overflow-hidden rounded-full" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="shown(window)" :aria-valuetext="t(settings.style === 'used' ? 'panel.used' : 'panel.left', { percent: shown(window) })" :aria-label="windowLabel(window, t)">
               <!-- The bar follows the chosen style; its colour always follows what is left. -->
               <div :class="cn('h-full rounded-full', TONE[barTone(leftPercent(window))])" :style="{ width: `${shown(window)}%` }" />
             </div>
             <span class="whitespace-nowrap tabular-nums">{{ t(settings.style === "used" ? "panel.used" : "panel.left", { percent: shown(window) }) }}</span>
-            <span class="text-muted-foreground truncate whitespace-nowrap tabular-nums">{{ resetText(window.resetsAt) }}</span>
+            <span class="text-muted-foreground truncate whitespace-nowrap tabular-nums" :title="resetText(window.resetsAt)">{{ resetText(window.resetsAt) }}</span>
           </li>
         </ul>
         <p v-if="account.status !== 'ok'" class="text-muted-foreground text-xs" data-testid="ai-usage-state">{{ t(STATE_TEXT[account.status]) }}</p>
