@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.36",
+    date: "2026-10-25",
+    title: "See why Tavora didn't start",
+    notes: [
+      "If Tavora breaks while loading, you now see what went wrong instead of a black window.",
+      "If the window crashes, it opens again by itself. Twice in a row, and it tells you why.",
+      "Try again from there, or copy the details to send them on.",
+    ],
+  },
+  {
     version: "0.20.35",
     date: "2026-10-25",
     title: "Module pages for what you have",
