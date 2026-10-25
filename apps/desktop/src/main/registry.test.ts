@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildFolderName, describeModules, developmentProjects, discoverModules, projectEntry, type ModuleProblem, waitingDevelopmentModules } from "./registry";
+import { buildFolderName, describeModules, developmentProjects, discoverModules, projectEntry, type ModuleProblem, waitingModules } from "./registry";
 
 async function makeModule(root: string, folder: string, id: string, name = id, permissions: Record<string, unknown> = { network: [] }): Promise<string> {
   const dir = path.join(root, folder);
@@ -194,16 +194,26 @@ describe("development folders", () => {
     ]);
   });
 
-  it("name the development modules that cannot load right now, so their panels wait for them", async () => {
+  it("name the modules that are there but cannot load right now, so their panels wait for them", async () => {
     const projects = await mkdtemp(path.join(tmpdir(), "tavora-projects-"));
     const unbuilt = await makeModule(projects, "unbuilt", "example.unbuilt");
     await rm(path.join(unbuilt, "index.html"));
     const elsewhere = await makeModule(await mkdtemp(path.join(tmpdir(), "tavora-own-")), "own", "example.own");
     await rm(path.join(elsewhere, "index.html"));
+    const officialRoot = await mkdtemp(path.join(tmpdir(), "tavora-official-"));
+    const newer = await makeModule(officialRoot, "todos", "tavora.todos", "To-Dos");
+    const manifest = JSON.parse(await readFile(path.join(newer, "tavora.module.json"), "utf8"));
+    await writeFile(path.join(newer, "tavora.module.json"), JSON.stringify({ ...manifest, minTavora: "9.0.0" }));
     const problems: ModuleProblem[] = [];
-    await discoverModules({ development: [unbuilt, path.join(projects, "gone")], local: [path.dirname(elsewhere)] }, problems);
-    // Only a development module whose manifest names it waits; a missing folder or another module folder does not.
-    expect(waitingDevelopmentModules(problems)).toEqual(new Map([["example.unbuilt", "example.unbuilt"]]));
+    await discoverModules({ official: [officialRoot], development: [unbuilt, path.join(projects, "gone")], local: [path.dirname(elsewhere)], tavoraVersion: "1.0.0" }, problems);
+    // An unbuilt module and an official one needing a newer Tavora wait; a folder that is gone does not.
+    expect(waitingModules(problems)).toEqual(
+      new Map([
+        ["tavora.todos", "To-Dos"],
+        ["example.unbuilt", "example.unbuilt"],
+        ["example.own", "example.own"],
+      ]),
+    );
   });
 
   it("find the folder a project builds into, even before its manifest is valid", async () => {
