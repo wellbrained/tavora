@@ -192,7 +192,7 @@ function dropTask() {
       :aria-label="t('app.toolbar')"
       data-testid="todos-toolbar"
     >
-      <p class="min-w-0 flex-1 truncate px-1 text-xs" role="status" data-testid="todos-status">
+      <p :class="['min-w-0 flex-1 px-1 text-xs', !store.error.value && 'truncate']" :role="store.error.value ? 'alert' : 'status'" data-testid="todos-status">
         <span v-if="store.error.value" class="text-destructive">{{ store.error.value }}</span>
         <span v-else-if="list.groups.some((group) => group.tasks.length)" class="text-muted-foreground tabular-nums">
           {{ openTotal ? plural("app.open", openTotal) : t("app.allDone") }}

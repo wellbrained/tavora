@@ -294,7 +294,7 @@ function dropMark(position: number): "before" | "after" | null {
       />
       <button
         type="button"
-        :class="cn('text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md opacity-0 group-hover/header:opacity-100 focus-visible:opacity-100', menuOpen && 'opacity-100')"
+        :class="cn('text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md opacity-40 group-hover/header:opacity-100 focus-visible:opacity-100', menuOpen && 'opacity-100')"
         :aria-label="t('moreFor', { name: group.name })"
         :title="t('more')"
         aria-haspopup="menu"
