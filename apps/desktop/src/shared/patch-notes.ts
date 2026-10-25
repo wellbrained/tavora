@@ -20,23 +20,24 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    version: "0.21.9",
+    version: "0.21.10",
     date: "2026-10-25",
-    title: "System info is lighter on games",
+    title: "Pinned tooltips stay for screenshots",
     notes: [
-      "NVIDIA graphics cards are now read directly, so watching them can't cause small hitches in a game anymore.",
-      "System Monitor shows your NVIDIA card's temperature and power use.",
+      "A pinned tooltip stays open when you switch to the snipping tool (Win+Shift+S), so you can capture it.",
+      "Item pictures in tooltips fill their column and line up with the requirements below them.",
+      "Long tooltip lines wrap under their own text instead of under the bullet.",
     ],
   },
   {
-    version: "0.21.8",
+    version: "0.21.9",
     date: "2026-10-25",
     title: "Tavora in your game, and a tidier Tavora",
     notes: [
       "One key, Tavora over game, opens your overlays and panels over the game. Set it in Settings > Overlays, and press it again or Esc when you are done.",
       "Clock & Counter, To-Dos and Discord work in your game: a clock or counter, your to-dos to tick off, and who is in your voice channel, with a ring around whoever is talking.",
       "Preview shows an overlay in a small window first. Hide all for now in Settings > Overlays hides everything over your game until you show it again.",
-      "The new System Monitor module shows how busy your PC is: CPU, graphics card, memory and drives. Tavora asks you first.",
+      "The new System Monitor module shows how busy your PC is: CPU, graphics card, memory and drives, plus temperature and power for NVIDIA cards. Tavora asks you first.",
       "Module updates wait for you: a button next to Layouts shows what is new. Prefer the old way? Turn on Update modules automatically in Settings > Modules.",
       "Module pages show every version with its date, mark the ones you missed and have a Send feedback button when the developer added a link.",
       "Saving a file or an image opens Tavora's save dialog with the name filled in, in the folder you used last.",

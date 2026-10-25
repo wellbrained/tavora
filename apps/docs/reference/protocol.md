@@ -67,7 +67,7 @@ Methods without params must be sent with `params` left out.
 | `panel.setContent` | `{ content }` | `null`; `content` is `{ id, title }` or `null`: what the panel shows now. `id` is your own, 1 to 200 characters; `title` is its full name, 1 to 200 characters, kept on one line. `INVALID_PARAMS` otherwise (Tavora 0.17.17 and newer) |
 | `panel.isMaximized` | none | `true` while the panel fills the workspace (Maximize in its menu, or `panel.setMaximized`) (Tavora 0.20.20 and newer) |
 | `panel.setMaximized` | `{ maximized }` | `null`; `true` makes the panel fill the workspace, as Maximize in its menu does, `false` puts it back. Nothing happens while the panel is the only one, as it fills the workspace already. `true` only right after a real click or key press in the panel (`PERMISSION_DENIED` otherwise) (Tavora 0.20.20 and newer) |
-| `panel.setLive` | `{ state }` | `null`; `state` is any JSON up to 16 KB, or `null`. What this panel's [live view](#live-views) shows; `null` shows nothing. `QUOTA_EXCEEDED` when too big. Needs no click and no permission (Tavora 0.21.10 and newer) |
+| `panel.setLive` | `{ state }` | `null`; `state` is any JSON up to 16 KB, or `null`. What this panel's [live view](#live-views) shows; `null` shows nothing. `QUOTA_EXCEEDED` when too big. Needs no click and no permission (Tavora 0.21.11 and newer) |
 | `workspace.getViewport` | none | `{ width, height }` of the panel in CSS pixels |
 | `ui.getLanguage` | none | the language of Tavora's own texts as a code, `"en"` or `"de"` for now; show your module in it, or in English when you have no translation |
 | `ui.showMenu` | `{ items, at, side?, align? }` | the chosen item's `id`, or `null` when the player closed the menu; see [Menus](#menus) |
@@ -248,7 +248,7 @@ When the player shows a panel in game (the [`inGame`](./manifest.md#panel-types)
 - The page reads the state with `watchOverlay`, like any overlay page (no key to pick: it gets the state of its own panel). It has no bridge and no network, and can't take input.
 - Nothing shows until the panel passes a state. While the layer is open the full panel is there instead, and the view returns in the new spot and size when the layer closes.
 - The player picks per panel whether the view is always there or toggled by a key, its opacity, and Hide from capture, in Settings > Overlays.
-- Needs no click and no permission. Tavora 0.21.10 and newer, so set `minTavora` to at least `0.21.10` if you rely on it.
+- Needs no click and no permission. Tavora 0.21.11 and newer, so set `minTavora` to at least `0.21.11` if you rely on it.
 
 ### Overlay preview
 
