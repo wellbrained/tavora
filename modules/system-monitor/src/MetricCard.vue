@@ -31,7 +31,7 @@ defineProps<{
       <span class="min-w-0 flex-1 truncate text-xs">{{ name }}</span>
     </header>
     <!-- The usage and the temperature are one pair, centred together; until Tavora reports one, a muted dash holds its place so the usage does not move later. -->
-    <div class="flex items-baseline justify-center gap-3" data-testid="usage">
+    <div class="flex items-baseline justify-center gap-3 whitespace-nowrap" data-testid="usage">
       <span class="text-[2.125rem] leading-none font-semibold tabular-nums">{{ usage }}<span v-if="usage" class="text-muted-foreground ml-0.5 text-base font-normal">%</span></span>
       <span v-if="temperature" class="text-[2.125rem] leading-none font-semibold tabular-nums" data-testid="temperature">{{ temperature }}<span class="text-muted-foreground ml-0.5 text-base font-normal">°C</span></span>
       <span v-else class="text-muted-foreground text-[2.125rem] leading-none font-semibold tabular-nums" :title="temperatureHint" :tabindex="temperatureHint ? 0 : undefined" data-testid="temperature-none">–<span class="ml-0.5 text-base font-normal">°C</span></span>

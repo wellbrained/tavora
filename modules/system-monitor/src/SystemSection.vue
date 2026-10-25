@@ -110,7 +110,7 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
 </script>
 
 <template>
-  <div class="grid grid-cols-1 items-start gap-2 p-2 @min-[420px]:grid-cols-2 @min-[720px]:grid-cols-3" data-testid="system-section">
+  <div class="grid grid-cols-1 items-start gap-2 p-2 @min-[620px]:grid-cols-3" data-testid="system-section">
     <MetricCard
       v-if="blocks.cpu"
       testid="block-cpu"
@@ -149,7 +149,8 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
     </section>
 
     <p v-if="blocks.drives && drives.length === 0" class="text-muted-foreground col-span-full text-xs" data-testid="no-drives">{{ t("drive.none") }}</p>
-    <template v-if="blocks.drives">
+    <!-- Drives flow in their own grid under the cards: one per row in one column, else as many as stay readable (about 250 px each). -->
+    <div v-if="blocks.drives && drives.length" class="col-span-full grid grid-cols-1 items-start gap-2 @min-[620px]:grid-cols-[repeat(auto-fill,minmax(250px,1fr))]">
       <section v-for="drive in drives" :key="drive.id" class="bg-card text-card-foreground flex flex-col gap-1 rounded-lg border px-2.5 py-2" :data-testid="`drive-${drive.id}`">
         <div class="flex items-baseline gap-2">
           <span class="text-muted-foreground flex-none text-xs font-medium">{{ drive.id }}</span>
@@ -162,6 +163,6 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
           <p class="text-muted-foreground text-xs tabular-nums" data-testid="drive-io">{{ drive.io }}</p>
         </template>
       </section>
-    </template>
+    </div>
   </div>
 </template>
