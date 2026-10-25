@@ -1,7 +1,7 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import type { AccountView, ActionResult, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PublishView } from "../shared/host-api";
+import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
 import { SETTING_SECTIONS, type SettingsSection } from "./components/settings/settings-index";
 import { numberedGames } from "./shortcuts";
@@ -21,6 +21,50 @@ watch(state, (next) => {
   applyTheme(next.appearance);
   setLanguage(next.language.resolved);
 });
+
+/**
+ * What each release copy loaded from a development folder still needs, by module id, as the catalog says;
+ * null while unknown (not asked yet, offline). Asked when Settings opens, when a copy changes while it is
+ * open and after a Publish; nothing runs in the background otherwise.
+ */
+export const releaseStatus = shallowRef<Record<string, ReleaseStatus> | null>(null);
+let releaseAsk = 0;
+
+/** The release copies loaded now: development-folder modules with a publishable id (not local.…). */
+function releaseCopies(): ReleaseCopy[] {
+  return (state.value?.modules ?? []).filter((module) => module.origin.kind === "dev" && !module.id.startsWith("local.")).map((module) => ({ id: module.id, version: module.version }));
+}
+
+/** One look at the catalog for the release copies; a newer ask makes an older answer not count. */
+export async function refreshReleaseStatuses(): Promise<void> {
+  const ask = ++releaseAsk;
+  const copies = releaseCopies();
+  const answer = copies.length ? await api.releaseStatuses(copies) : null;
+  if (ask === releaseAsk) releaseStatus.value = answer;
+}
+
+/** How many release copies need publishing; 0 while unknown. */
+export const releasePendingCount = computed(() => {
+  const known = releaseStatus.value;
+  if (!known) return 0;
+  return releaseCopies().filter((copy) => known[copy.id] === "new-version" || known[copy.id] === "not-published").length;
+});
+
+// A copy added, removed or built to another version while Settings is open: ask again.
+watch(
+  () => releaseCopies().map((copy) => `${copy.id}@${copy.version}`).join(","),
+  () => {
+    if (settingsOpen.value) void refreshReleaseStatuses();
+  },
+);
+
+// A Publish that went through: ask again, so the badge goes once the new version is listed.
+watch(
+  () => publish.value?.status,
+  (status) => {
+    if (status === "published") void refreshReleaseStatuses();
+  },
+);
 
 /** Settings > Integrations > Discord: the Discord connector's sign-in. */
 export const discord = shallowRef<DiscordView | null>(null);

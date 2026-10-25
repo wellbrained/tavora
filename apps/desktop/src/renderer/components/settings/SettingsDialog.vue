@@ -9,7 +9,7 @@ import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/officia
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
-import { act, hiddenSettings, settingsOpen, settingsTarget, state } from "../../host";
+import { act, hiddenSettings, refreshReleaseStatuses, releasePendingCount, settingsOpen, settingsTarget, state } from "../../host";
 import { formatDate, t } from "../../i18n";
 import AboutSection from "./AboutSection.vue";
 import AccountSection from "./AccountSection.vue";
@@ -49,6 +49,7 @@ watch(settingsOpen, (open) => {
   if (!open) return;
   query.value = "";
   void show(settingsTarget.value.section, settingsTarget.value.setting);
+  void refreshReleaseStatuses();
 });
 // Asked again while open (e.g. Ctrl+/ over Settings): go there.
 watch(settingsTarget, (target) => {
@@ -157,6 +158,7 @@ function onSearchKey(event: KeyboardEvent) {
             <component :is="item.icon" :class="cn('size-4 flex-none transition-colors', !query && section === item.id ? 'text-primary' : 'group-hover:text-primary/80')" :stroke-width="1.75" />
             <span class="flex-1">{{ sectionLabel(item.id) }}</span>
             <span v-if="item.id === 'trash' && library.trash.length" class="text-muted-foreground text-xs tabular-nums">{{ library.trash.length }}</span>
+            <span v-else-if="item.id === 'development' && releasePendingCount" class="text-muted-foreground text-xs tabular-nums" data-testid="settings-nav-development-count">{{ releasePendingCount }}</span>
           </button>
         </div>
         <button

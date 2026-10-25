@@ -149,6 +149,8 @@ export const en = {
   "common.official": "Official",
   "common.local": "Local",
   "common.release": "Release",
+  "release.newVersion": "New version",
+  "release.notPublished": "Not published yet",
   "common.followSystem": "Follow System",
   "common.dark": "Dark",
   "common.light": "Light",

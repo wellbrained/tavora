@@ -27,7 +27,7 @@ import {
 } from "electron";
 import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, GameView, HostViewState, ModuleMenu, OnlineSearchResult, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, GameView, HostViewState, ModuleMenu, OnlineSearchResult, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { PlayerError } from "./messages";
@@ -93,6 +93,7 @@ import { loadLibrary, SavedData } from "./saved-data";
 import { CatalogClient, catalogView, type CatalogScope } from "./catalog-client";
 import { parseReadme } from "./catalog-readme";
 import { CHECK_INTERVAL_MS } from "./catalog-updates";
+import { isReleaseCopies, releaseStatuses } from "./release-pending";
 import { DEFAULT_API_URL, OnlineSearch } from "./online";
 import { PublisherNames } from "./publisher-names";
 import { UpdateManager, type UpdaterLike } from "./updates";
@@ -1432,6 +1433,10 @@ export class Host {
     ipcMain.handle("host:catalog-reviews", async (event, moduleId: unknown): Promise<CatalogReviewsResult> =>
       fromHost(event) && isModuleId(moduleId) ? this.catalogReviews(moduleId) : { status: "gone" },
     );
+    ipcMain.handle("host:release-statuses", async (event, copies: unknown): Promise<Record<string, ReleaseStatus> | null> => {
+      if (!fromHost(event) || !this.library.onlineSearch || !isReleaseCopies(copies)) return null;
+      return releaseStatuses(await this.catalog.index(), copies);
+    });
     ipcMain.handle("host:catalog-icon", async (event, moduleId: unknown): Promise<string | null> =>
       fromHost(event) && isModuleId(moduleId) && this.library.onlineSearch ? this.catalog.icon(moduleId) : null,
     );
