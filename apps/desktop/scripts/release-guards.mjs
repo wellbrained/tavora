@@ -74,13 +74,18 @@ export function checkInstalled(installed, version) {
   return undefined;
 }
 
-/** The by-hand checks before an installer goes out, asked one by one. */
+/** The by-hand checks before an installer goes out, asked one by one, each with what already checks it automatically. */
 export const CHECKLIST = [
-  "The installed build starts (run the new installer from the release folder).",
-  "A game can be added and removed.",
-  "A module opens in a game.",
-  "Settings opens.",
+  { check: "The installed build starts (run the new installer from the release folder).", coveredBy: "CI installs it and starts it (packaged-start), and the start check above" },
+  { check: "A game can be added and removed.", coveredBy: "e2e: library.spec" },
+  { check: "A module opens in a game.", coveredBy: "e2e: workspace.spec, official-modules.spec" },
+  { check: "Settings opens.", coveredBy: "e2e: search.spec, nested-dialogs.spec" },
 ];
+
+/** Before 1.0 the by-hand checks are only listed, not asked: what covers each one ran before. From 1.0.0 on they are asked again. */
+export function asksHandChecks(version) {
+  return compareVersions(version, "1.0.0") >= 0;
+}
 
 /** Said after the upload: it can only be checked once the new version is public. */
 export const AFTER_RELEASE =
