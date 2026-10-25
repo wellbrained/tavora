@@ -504,7 +504,7 @@ export interface Methods {
   "aiUsage.accounts": { params: undefined; result: AiUsageAccountInfo[] };
   /** Reads one account's usage (capability `aiUsage`). */
   "aiUsage.read": { params: { accountId: string }; result: AiUsageReading };
-  /** What this PC is: processor, memory, graphics cards and drives. Read once and kept (capability `systemInfo`). Tavora 0.20.52 and newer. */
+  /** What this PC is: processor, memory, graphics cards and drives. Read once and kept (capability `systemInfo`). Tavora 0.20.54 and newer. */
   "systemInfo.info": { params: undefined; result: SystemInfo };
   /**
    * Sets what this panel watches, replacing what it watched before; nothing in `blocks` stops it (capability
