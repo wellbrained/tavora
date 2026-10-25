@@ -5,6 +5,7 @@
 import { Check, ChevronsDownUp, ChevronsUpDown, ListChecks, X } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import type { MenuRequest, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef } from "vue";
@@ -228,10 +229,9 @@ function dropTask() {
     </header>
 
     <div class="min-h-0 flex-1 overflow-y-auto p-2" @dragend="dragEnd">
-      <div v-if="!list.groups.length" class="flex flex-col items-center gap-3 px-4 py-10 text-center" data-testid="empty">
-        <p class="text-muted-foreground text-sm">{{ t("app.empty") }}</p>
-        <AddInput class="w-full max-w-80" outlined :placeholder="t('app.addTodo')" :maxlength="MAX.title" data-testid="first-task" @add="firstTask" />
-      </div>
+      <EmptyState v-if="!list.groups.length" class="border-0" :title="t('app.empty')" data-testid="empty">
+        <template #action><AddInput class="w-full max-w-80" outlined :placeholder="t('app.addTodo')" :maxlength="MAX.title" data-testid="first-task" @add="firstTask" /></template>
+      </EmptyState>
 
       <section v-if="objectives.length" class="mb-3" :aria-label="t('app.objectives')" data-testid="objectives">
         <h2 class="text-muted-foreground px-2 pt-1 pb-1 text-xs font-medium">{{ t("app.objectives") }}</h2>

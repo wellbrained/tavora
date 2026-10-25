@@ -13,6 +13,6 @@ defineProps<{ title: string; description?: string; class?: HTMLAttributes["class
       <p class="text-sm font-medium">{{ title }}</p>
       <p v-if="description" class="text-muted-foreground text-sm">{{ description }}</p>
     </div>
-    <div v-if="$slots.action"><slot name="action" /></div>
+    <div v-if="$slots.action" class="flex w-full justify-center"><slot name="action" /></div>
   </div>
 </template>

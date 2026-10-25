@@ -6,6 +6,7 @@
 import { ArrowDown, ArrowUp, Info, RefreshCw, Settings as SettingsIcon } from "@lucide/vue";
 import { cn, connectModule, errorMessage, SegmentedControl } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { locale, plural, setLanguage, t } from "./i18n";
 import { createMonitor, TICK_MS, type AccountStatus, type AccountView, type Monitor } from "./monitor";
@@ -164,10 +165,7 @@ const intervalOptions = computed(() => INTERVALS.map((minutes) => ({ value: Stri
       </div>
     </div>
 
-    <div v-else-if="accounts.length === 0" class="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center" data-testid="ai-usage-empty">
-      <p class="font-medium">{{ t("empty.title") }}</p>
-      <p class="text-muted-foreground max-w-xs">{{ t("empty.text") }}</p>
-    </div>
+    <EmptyState v-else-if="accounts.length === 0" class="m-3 flex-1 justify-center" :title="t('empty.title')" :description="t('empty.text')" data-testid="ai-usage-empty" />
 
     <div v-else class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-2">
       <section v-for="account in accounts" :key="account.info.id" class="flex flex-col gap-1" :data-testid="`ai-usage-account-${account.info.id}`">
