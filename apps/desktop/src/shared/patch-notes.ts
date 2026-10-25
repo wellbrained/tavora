@@ -20,6 +20,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.37",
+    date: "2026-10-25",
+    title: "Clearer module pages",
+    notes: [
+      "A module's page now has a Description, sorted into the same sections for every module: Features, How to use, Settings and more.",
+      "Bold, italic and links in a description work. A link opens in a Browser panel when you click it.",
+      "Under What's new, All versions lists every version with its date. If you're a few versions behind, the ones you missed say New for you.",
+      "Publishing shows your description as it will appear, with a tip when something's missing.",
+    ],
+  },
+  {
     version: "0.20.36",
     date: "2026-10-25",
     title: "See why Tavora didn't start",
