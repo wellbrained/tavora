@@ -136,7 +136,7 @@ async function openHomepage() {
 
         <div class="grid gap-8 md:grid-cols-[minmax(0,1fr)_240px]">
           <div class="min-w-0 space-y-6">
-            <ModuleDescription :blocks="loaded?.readme ?? []" :fallback="module.description" :module-id="module.id">
+            <ModuleDescription :blocks="loaded?.readme ?? []" :fallback="module.description" :module-id="catalogParts ? module.id : undefined">
               <p v-if="page && page.status !== 'ok'" class="text-muted-foreground mt-2 text-sm" role="status" data-testid="catalog-info-missing">
                 {{ page.status === "gone" ? t("catalog.pageGone") : t("catalog.pageMissing") }}
               </p>

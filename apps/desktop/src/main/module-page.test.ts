@@ -14,9 +14,9 @@ describe("readModuleReadme", () => {
     const root = await folder();
     await writeFile(path.join(root, "README.md"), "# Tracker\n\nTracks **runs** [here](https://example.com).\n\n<script>alert(1)</script>\n");
     expect(await readModuleReadme(root, undefined)).toEqual([
-      { kind: "heading", level: 2, text: "Tracker" },
-      { kind: "paragraph", text: "Tracks runs here." },
-      { kind: "paragraph", text: "<script>alert(1)</script>" },
+      { kind: "heading", level: 1, text: "Tracker" },
+      { kind: "paragraph", spans: [{ text: "Tracks " }, { text: "runs", bold: true }, { text: " " }, { text: "here", url: "https://example.com" }, { text: "." }] },
+      { kind: "paragraph", spans: [{ text: "<script>alert(1)</script>" }] },
     ]);
   });
 
@@ -24,7 +24,7 @@ describe("readModuleReadme", () => {
     const root = await folder();
     await mkdir(path.join(root, "docs"));
     await writeFile(path.join(root, "docs", "intro.txt"), "Hello there.");
-    expect(await readModuleReadme(root, "docs/intro.txt")).toEqual([{ kind: "paragraph", text: "Hello there." }]);
+    expect(await readModuleReadme(root, "docs/intro.txt")).toEqual([{ kind: "paragraph", spans: [{ text: "Hello there." }] }]);
   });
 
   it("gives nothing for a missing, empty or unreachable readme", async () => {
@@ -80,7 +80,7 @@ describe("readModulePage", () => {
     await writeFile(path.join(root, "README.md"), "Hi.");
     await writeFile(path.join(root, "a.png"), PNG);
     const page = await readModulePage(root, { screenshots: ["a.png"] });
-    expect(page.readme).toEqual([{ kind: "paragraph", text: "Hi." }]);
+    expect(page.readme).toEqual([{ kind: "paragraph", spans: [{ text: "Hi." }] }]);
     expect(page.screenshots).toHaveLength(1);
   });
 });
