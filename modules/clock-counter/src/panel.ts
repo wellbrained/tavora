@@ -25,6 +25,7 @@ export interface PanelContext {
   setHotkey(action: string, item: Item): Promise<void>;
   copyLink(item: Item): Promise<"copied" | "off" | "denied">;
   showOverGame(item: Item): Promise<GameOverlayResult>;
+  preview(item: Item): Promise<void>;
   resetLink(item: Item): Promise<void>;
   remove(item: Item): void;
   showMenu(request: MenuRequest): Promise<string | null>;

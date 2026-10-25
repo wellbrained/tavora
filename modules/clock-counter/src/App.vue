@@ -158,6 +158,10 @@ async function showOverGame(item: Item): Promise<GameOverlayResult> {
   return result;
 }
 
+async function preview(item: Item): Promise<void> {
+  await sdk.value?.overlay.preview(item.id);
+}
+
 async function resetLink(item: Item): Promise<void> {
   await sdk.value?.overlay.resetLink(item.id);
 }
@@ -176,6 +180,7 @@ provide(PANEL, {
   setHotkey,
   copyLink,
   showOverGame,
+  preview,
   resetLink,
   remove: removeItem,
   showMenu,
