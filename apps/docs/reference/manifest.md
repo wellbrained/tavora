@@ -84,6 +84,8 @@ When an update removes a panel type, its open panels keep their place and say th
 
 `overlay` names an `.html` page inside the package that OBS or other streaming software shows as a Browser Source, on top of the game on stream. The player copies its link from your panel (`overlay.copyLink`); Tavora serves it with the files next to it from this PC only, and passes on what your panels publish for it. It runs outside Tavora, so it has no bridge: it reads its data with `watchOverlay` from the SDK. See [Stream overlays](./protocol.md#stream-overlays).
 
+The same page is what `overlay.showOverGame` shows over the player's game, in a window of Tavora's own; see [Game overlays](./protocol.md#game-overlays). Today the manifest still wants the `stream-overlay` connector next to an `overlay`; with `onRequest` the player is asked for it only if they copy an OBS link.
+
 ```json
 "overlay": "dist/overlay.html",
 "permissions": { "network": [], "connectors": ["stream-overlay"] }
