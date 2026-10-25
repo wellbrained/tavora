@@ -1,13 +1,16 @@
 /**
  * Reads this PC for the system-info connector (system-info.ts), straight from Windows inside Tavora's own
  * process: the performance counters Task Manager uses (pdh.dll), the drive list (kernel32.dll) and the names of the
- * graphics cards (DXGI). No helper program, no WMI, no driver and no sensor is touched, and nothing is run: it is
- * a handful of calls into Windows' own libraries. Windows only: koffi is loaded on the first look, never elsewhere.
+ * graphics cards (DXGI). NVIDIA cards are read through NVIDIA's own library that ships with the driver (nvml.dll;
+ * system-info-gpu.ts), because the GPU counters are costly for a game running at the same time. No helper program,
+ * no WMI and no driver of ours is involved, and nothing is run: it is a handful of calls into the libraries already
+ * on the PC. Windows only: koffi is loaded on the first look, never elsewhere.
  */
 import os from "node:os";
 import type { SystemInfo } from "@tavora/sdk/protocol";
 import { coresInOrder, gpuMemoryByAdapter, gpuUsageByAdapter, luidId, percent } from "./system-info-parse";
 import { type ProbeParts, type ProbeSample, type SystemProbe } from "./system-info";
+import { GpuReader, type DxgiAdapter, type NvmlApi, type NvmlDevice } from "./system-info-gpu";
 
 const PDH_FMT_DOUBLE = 0x200;
 const PDH_MORE_DATA = 0x800007d2;
@@ -45,7 +48,7 @@ interface Native {
   getDriveType: (root: string) => number;
   getVolumeInformation: (root: string, label: Uint16Array, size: number, serial: null, maxName: null, flags: null, fs: null, fsSize: number) => number;
   getDiskFreeSpaceEx: (root: string, available: BigUint64Array, total: BigUint64Array, free: BigUint64Array) => number;
-  adapters: () => { name: string; flags: number; vendor: number; dedicatedBytes: number; high: number; low: number }[];
+  adapters: () => { name: string; flags: number; vendor: number; deviceId: number; subSysId: number; dedicatedBytes: number; high: number; low: number }[];
 }
 
 interface Query {
@@ -100,6 +103,8 @@ function loadNative(): Native {
               found.push({
                 name: desc.toString("utf16le", 0, 256).split("\0")[0]!.trim(),
                 vendor: desc.readUInt32LE(256),
+                deviceId: desc.readUInt32LE(260),
+                subSysId: desc.readUInt32LE(264),
                 dedicatedBytes: Number(desc.readBigUInt64LE(272)),
                 low: desc.readUInt32LE(296),
                 high: desc.readInt32LE(300),
@@ -118,12 +123,102 @@ function loadNative(): Native {
   };
 }
 
+/** Where NVIDIA's driver puts nvml.dll: Windows' own folder first, then the older driver folder. */
+function nvmlPaths(): string[] {
+  const windows = process.env.SystemRoot ?? process.env.windir ?? "C:\\Windows";
+  const programs = process.env.ProgramW6432 ?? process.env.ProgramFiles ?? "C:\\Program Files";
+  return [`${windows}\\System32\\nvml.dll`, `${programs}\\NVIDIA Corporation\\NVSMI\\nvml.dll`];
+}
+
+const NVML_SUCCESS = 0;
+const NVML_TEMPERATURE_GPU = 0;
+const NVML_CLOCK_GRAPHICS = 0;
+
+/**
+ * NVIDIA's library, started: null when there is no nvml.dll or it will not start. Structs as in nvml.h:
+ * nvmlUtilization_t is two uint (gpu, memory), nvmlMemory_t three uint64 (total, free, used), and nvmlPciInfo_t is
+ * busIdLegacy[16], domain, bus, device, pciDeviceId, pciSubSystemId (uint each, at 16, 20, 24, 28, 32) and busId[32].
+ * Throws when a function is missing; GpuReader then falls back to the counters.
+ */
+export function loadNvml(): NvmlApi | null {
+  const koffi = require("koffi") as typeof import("koffi");
+  for (const file of nvmlPaths()) {
+    let library: ReturnType<typeof koffi.load>;
+    try {
+      library = koffi.load(file);
+    } catch {
+      continue;
+    }
+    const init = library.func("int nvmlInit_v2()");
+    const shutdown = library.func("int nvmlShutdown()");
+    const getCount = library.func("int nvmlDeviceGetCount_v2(_Out_ uint8_t *count)");
+    const getHandle = library.func("int nvmlDeviceGetHandleByIndex_v2(uint32_t index, _Out_ void **device)");
+    const getPci = library.func("int nvmlDeviceGetPciInfo_v3(void *device, _Out_ uint8_t *pci)");
+    const getUtilization = library.func("int nvmlDeviceGetUtilizationRates(void *device, _Out_ uint8_t *utilization)");
+    const getMemory = library.func("int nvmlDeviceGetMemoryInfo(void *device, _Out_ uint8_t *memory)");
+    const getTemperature = library.func("int nvmlDeviceGetTemperature(void *device, int sensor, _Out_ uint8_t *degrees)");
+    const getClock = library.func("int nvmlDeviceGetClockInfo(void *device, int clock, _Out_ uint8_t *mhz)");
+    const getPower = library.func("int nvmlDeviceGetPowerUsage(void *device, _Out_ uint8_t *milliwatts)");
+    if ((init() as number) !== NVML_SUCCESS) continue;
+    const handles = new Map<number, unknown>();
+    const scratch = Buffer.alloc(128);
+    const handle = (index: number): unknown => {
+      let found = handles.get(index);
+      if (!found) {
+        const out = [null as unknown];
+        if ((getHandle(index, out) as number) !== NVML_SUCCESS || !out[0]) return null;
+        handles.set(index, (found = out[0]));
+      }
+      return found;
+    };
+    /** Runs one NVML call on a card and gives the buffer it filled, or null when it failed. */
+    const call = (index: number, run: (device: unknown, out: Buffer) => number): Buffer | null => {
+      const device = handle(index);
+      if (!device) return null;
+      scratch.fill(0);
+      try {
+        return run(device, scratch) === NVML_SUCCESS ? scratch : null;
+      } catch {
+        return null;
+      }
+    };
+    return {
+      devices() {
+        const count = Buffer.alloc(4);
+        if ((getCount(count) as number) !== NVML_SUCCESS) return [];
+        const devices: NvmlDevice[] = [];
+        for (let index = 0; index < count.readUInt32LE(0); index++) {
+          const pci = call(index, (device, out) => getPci(device, out) as number);
+          if (pci) devices.push({ index, bus: pci.readUInt32LE(20), pciDeviceId: pci.readUInt32LE(28), pciSubSystemId: pci.readUInt32LE(32) });
+        }
+        return devices;
+      },
+      utilization: (index) => call(index, (device, out) => getUtilization(device, out) as number)?.readUInt32LE(0) ?? null,
+      usedBytes: (index) => {
+        const memory = call(index, (device, out) => getMemory(device, out) as number);
+        return memory ? Number(memory.readBigUInt64LE(16)) : null;
+      },
+      temperatureC: (index) => call(index, (device, out) => getTemperature(device, NVML_TEMPERATURE_GPU, out) as number)?.readUInt32LE(0) ?? null,
+      clockMhz: (index) => call(index, (device, out) => getClock(device, NVML_CLOCK_GRAPHICS, out) as number)?.readUInt32LE(0) ?? null,
+      powerMilliwatts: (index) => call(index, (device, out) => getPower(device, out) as number)?.readUInt32LE(0) ?? null,
+      shutdown() {
+        handles.clear();
+        shutdown();
+      },
+    };
+  }
+  return null;
+}
+
 /** DXGI_ADAPTER_FLAG_SOFTWARE, and Microsoft's vendor id for its Basic Render Driver. */
 const SOFTWARE_FLAG = 2;
 const MICROSOFT_VENDOR = 0x1414;
 
+/** The probe, and which way each graphics card is read (for scripts/perf-system-info.mjs). */
+export type WindowsSystemProbe = SystemProbe & { describeGpus(): { id: string; via: "nvml" | "counters" }[] };
+
 /** A probe for this PC. Throws on the first look when Windows' functions can't be loaded. */
-export function windowsSystemProbe(): SystemProbe {
+export function windowsSystemProbe(): WindowsSystemProbe {
   let native: Native | null = null;
   const load = () => (native ??= loadNative());
   const queries = new Map<keyof ProbeParts, Query>();
@@ -192,6 +287,31 @@ export function windowsSystemProbe(): SystemProbe {
     return items;
   }
 
+  const gpu = new GpuReader({
+    nvml: loadNvml,
+    adapters: () =>
+      load()
+        .adapters()
+        .filter((adapter) => (adapter.flags & SOFTWARE_FLAG) === 0 && adapter.vendor !== MICROSOFT_VENDOR)
+        .map((adapter): DxgiAdapter => ({ id: luidId(adapter.high, adapter.low), vendor: adapter.vendor, deviceId: adapter.deviceId, subSysId: adapter.subSysId })),
+    counters: {
+      open: (part) => queries.set(part, openQuery(part)),
+      close: (part) => {
+        const open = queries.get(part);
+        if (open) load().pdhClose(open.handle);
+        queries.delete(part);
+      },
+      usage: () => {
+        const query = collect("gpuUsage");
+        return query ? gpuUsageByAdapter(instances(query.counters[0], "gpuUsage")) : null;
+      },
+      memory: () => {
+        const query = collect("gpuMemory");
+        return query ? gpuMemoryByAdapter(instances(query.counters[0], "gpuMemory")) : null;
+      },
+    },
+  });
+
   function collect(part: keyof ProbeParts): Query | null {
     const query = queries.get(part);
     if (!query) return null;
@@ -258,8 +378,10 @@ export function windowsSystemProbe(): SystemProbe {
     },
     driveMask: () => load().getLogicalDrives(),
     configure(parts) {
-      let fresh = false;
+      let fresh = gpu.configure(parts);
       for (const part of PART_NAMES) {
+        // The graphics card parts are the GpuReader's: NVIDIA cards need no counter at all.
+        if (part === "gpuUsage" || part === "gpuMemory") continue;
         const open = queries.get(part);
         if (parts[part] && !open) {
           queries.set(part, openQuery(part));
@@ -282,14 +404,7 @@ export function windowsSystemProbe(): SystemProbe {
         const query = collect("cpuCores");
         if (query) sample.cpuCores = coresInOrder(instances(query.counters[0], "cpuCores")).map(percent);
       }
-      if (parts.gpuUsage) {
-        const query = collect("gpuUsage");
-        if (query) sample.gpuUsage = gpuUsageByAdapter(instances(query.counters[0], "gpuUsage"));
-      }
-      if (parts.gpuMemory) {
-        const query = collect("gpuMemory");
-        if (query) sample.gpuMemory = gpuMemoryByAdapter(instances(query.counters[0], "gpuMemory"));
-      }
+      if (parts.gpuUsage || parts.gpuMemory) gpu.collect(parts, sample);
       if (parts.driveIo) {
         const query = collect("driveIo");
         if (query) {
@@ -307,7 +422,9 @@ export function windowsSystemProbe(): SystemProbe {
       return sample;
     },
     driveSpace: space,
+    describeGpus: () => gpu.describe(),
     close() {
+      gpu.close();
       for (const query of queries.values()) load().pdhClose(query.handle);
       queries.clear();
       buffers.clear();

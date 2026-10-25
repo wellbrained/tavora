@@ -3,6 +3,7 @@
 //
 //   pnpm perf:system-info                         one second, 60 seconds
 //   pnpm perf:system-info --interval 5000 --seconds 120
+//   pnpm perf:system-info --blocks gpu --seconds 30    only some parts: cpu,gpu,ram,drives,tavora (default all)
 //
 // It prints the time of one look at the PC (average, 95th percentile, worst), how much of the whole PC this process
 // used (CPU time over wall time over logical processors), and how much memory grew. The budget is 1 % of the PC on
@@ -22,6 +23,12 @@ function option(name, fallback) {
 }
 const intervalMs = option("interval", 1000);
 const seconds = option("seconds", 60);
+const blockNames = process.argv.includes("--blocks") ? process.argv[process.argv.indexOf("--blocks") + 1].split(",").map((name) => name.trim()).filter(Boolean) : ["cpu", "gpu", "ram", "drives", "tavora"];
+const unknownBlocks = blockNames.filter((name) => !["cpu", "gpu", "ram", "drives", "tavora"].includes(name));
+if (unknownBlocks.length) {
+  console.error(`Unknown block: ${unknownBlocks.join(", ")} (use cpu, gpu, ram, drives, tavora)`);
+  process.exit(1);
+}
 if (process.platform !== "win32") {
   console.log("This measures Windows' counters; nothing to do on this system.");
   process.exit(0);
@@ -73,7 +80,8 @@ const monitor = new SystemMonitor({
 
 const info = monitor.info();
 console.log(`CPU: ${info.cpu.model} (${info.cpu.threads} threads), RAM: ${(info.ramBytes / 2 ** 30).toFixed(1)} GB`);
-for (const gpu of info.gpus) console.log(`GPU: ${gpu.name} (${gpu.id}), ${gpu.dedicated ? "dedicated" : "shared"}, ${gpu.vramBytes === null ? "no own memory" : `${(gpu.vramBytes / 2 ** 30).toFixed(1)} GB`}`);
+const ways = new Map(probe.describeGpus().map((way) => [way.id, way.via]));
+for (const gpu of info.gpus) console.log(`GPU: ${gpu.name} (${gpu.id}), ${gpu.dedicated ? "dedicated" : "shared"}, ${gpu.vramBytes === null ? "no own memory" : `${(gpu.vramBytes / 2 ** 30).toFixed(1)} GB`}, read through ${ways.get(gpu.id) === "nvml" ? "NVML" : "the Windows counters (every 5 s)"}`);
 console.log(`Drives: ${info.drives.map((drive) => `${drive.id} ${drive.kind}${drive.label ? ` "${drive.label}"` : ""}`).join(", ") || "none"}`);
 
 let snapshots = 0;
@@ -96,8 +104,17 @@ const memoryTimer = realSetInterval(() => (rssMax = Math.max(rssMax, process.mem
 
 const cpuBefore = process.cpuUsage();
 const startedWatching = performance.now();
-subscription.watch(parseWatch({ blocks: { cpu: true, gpu: true, ram: true, drives: info.drives.map((drive) => drive.id), tavora: true }, intervalMs }));
-console.log(`Watching everything every ${intervalMs} ms for ${seconds} s ...`);
+subscription.watch(parseWatch({
+    blocks: {
+      cpu: blockNames.includes("cpu"),
+      gpu: blockNames.includes("gpu"),
+      ram: blockNames.includes("ram"),
+      drives: blockNames.includes("drives") ? info.drives.map((drive) => drive.id) : [],
+      tavora: blockNames.includes("tavora"),
+    },
+    intervalMs,
+  }));
+console.log(`Watching ${blockNames.join(", ")} every ${intervalMs} ms for ${seconds} s ...`);
 await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 const wall = performance.now() - startedWatching;
 const cpuUsed = process.cpuUsage(cpuBefore);

@@ -3,7 +3,7 @@
  * SystemMonitor in the main process serves every panel. It reads the PC only while at least one panel that is
  * shown watches something; with none there is no timer and no open counter, so it costs nothing. Counters are
  * opened only for the parts somebody watches. The reading itself is a SystemProbe (system-info-windows.ts reads
- * Windows' own counters inside this process; tests use a fake one). Nothing is run, nothing leaves the PC, and a
+ * Windows' own counters and NVIDIA's nvml.dll inside this process; tests use a fake one). Nothing is run, nothing leaves the PC, and a
  * module gets numbers and names only.
  */
 import os from "node:os";
@@ -31,6 +31,8 @@ export interface ProbeSample {
   gpuUsage?: Map<string, number>;
   /** Per graphics card id, bytes of its own video memory in use. */
   gpuMemory?: Map<string, number>;
+  /** Per graphics card id, what only NVIDIA's library tells (nvml.dll); a value is null when that call failed. */
+  gpuSensors?: Map<string, { temperatureC: number | null; clockMhz: number | null; powerW: number | null }>;
   /** Per drive id ("C:"), bytes per second. */
   driveIo?: Map<string, { read: number; write: number }>;
 }
@@ -407,7 +409,16 @@ export class SystemMonitor {
           const readings = subscription.gpu.get(gpu.id);
           const usage = readings && readings.count > 0 ? percent(readings.sum / readings.count) : 0;
           const used = sample.gpuMemory?.get(gpu.id);
-          return { id: gpu.id, usage, peak: withPeak && readings ? percent(readings.peak) : usage, vramUsedBytes: used ?? null };
+          const sensors = sample.gpuSensors?.get(gpu.id);
+          return {
+            id: gpu.id,
+            usage,
+            peak: withPeak && readings ? percent(readings.peak) : usage,
+            vramUsedBytes: used ?? null,
+            temperatureC: sensors?.temperatureC ?? null,
+            clockMhz: sensors?.clockMhz ?? null,
+            powerW: sensors?.powerW ?? null,
+          };
         });
       }
     }
