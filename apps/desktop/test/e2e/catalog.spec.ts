@@ -145,9 +145,10 @@ test("a player browses the catalog for a game, sees who publishes a module and i
     await expect(page.getByTestId("add-module-dialog")).toHaveCount(0);
     await expect(panels(page, "wellbrained.tracker")).toHaveCount(1);
 
-    // The installed module is listed among the installed ones, from its publisher.
+    // The installed module is listed among the installed ones, from its publisher, tagged as from the catalog.
     await page.getByTestId("add-module").click();
     await expect(page.getByTestId("module-wellbrained.tracker")).toBeVisible();
+    await expect(page.getByTestId("provenance-wellbrained.tracker")).toHaveText("Catalog");
   } finally {
     await app.close();
     server.close();
