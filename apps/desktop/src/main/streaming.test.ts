@@ -247,14 +247,15 @@ describe("publishing without the connector", () => {
 
 describe("keys of game overlays", () => {
   const toggle = { owner: "official", moduleId: MODULE.manifest.id, gameId: "elden", action: "$overlay", target: "item-1" };
-  const arrange = { owner: "tavora", moduleId: "tavora", gameId: "elden", action: "$arrange", target: "arrange" };
+  const layer = { owner: "tavora", moduleId: "tavora", gameId: "$all", action: "$layer", target: "layer" };
   const words = { module: "Elden Ring", action: "Show or hide" };
 
   async function withKeys() {
     const made = await setup();
     const heard: string[] = [];
     let front: string | null = null;
-    made.streaming.useOverlayKeys({ frontGame: () => front, wants: () => true, has: () => false, pressed: (record) => void heard.push(`${record.action}:${record.target}`) });
+    // As the service decides: the layer key works over any game in front, a toggle key over its own.
+    made.streaming.useOverlayKeys({ frontGame: () => front, wants: (record) => record.gameId === "$all" || record.gameId === front, has: () => false, pressed: (record) => void heard.push(`${record.action}:${record.target}`) });
     return { ...made, heard, front: (id: string | null) => (front = id) };
   }
 
@@ -269,7 +270,7 @@ describe("keys of game overlays", () => {
 
   it("stays open when the game shown changes, unlike a module's own dialog", async () => {
     const { streaming, world } = await withKeys();
-    void streaming.askOverlayKey(arrange, "Overlays", words);
+    void streaming.askOverlayKey(layer, "Tavora over game", words);
     world.gameId = "elsewhere";
     world.panels.length = 0;
     streaming.sync();
@@ -295,12 +296,12 @@ describe("keys of game overlays", () => {
   it("shares the game's keys with module hotkeys, so one key can't do both", async () => {
     const { streaming, world } = await withKeys();
     world.gameId = "elden";
-    const asked = streaming.askOverlayKey(arrange, "Overlays", { module: "Elden Ring", action: "Arrange overlays" });
+    const asked = streaming.askOverlayKey(layer, "Tavora over game", { module: "Tavora", action: "Open or close" });
     streaming.answer(streaming.request()!.id, "set", "F9");
     await asked;
     const other = streaming.askOverlayKey(toggle, "Clock & Counter", words);
     streaming.answer(streaming.request()!.id, "set", "F9");
-    expect(streaming.request()!.error).toContain("Arrange overlays");
+    expect(streaming.request()!.error).toContain("Open or close");
     streaming.answer(streaming.request()!.id, "cancel");
     expect(await other).toBe("cancelled");
   });
@@ -315,13 +316,32 @@ describe("keys of game overlays", () => {
     expect(streaming.keyOf(toggle)).toBeNull();
   });
 
-  it("go with their game", async () => {
+  it("go with their game, but the layer key (for every game) stays", async () => {
     const { streaming } = await withKeys();
-    const asked = streaming.askOverlayKey(arrange, "Overlays", words);
-    streaming.answer(streaming.request()!.id, "set", "F8");
-    await asked;
+    for (const binding of [toggle, layer]) {
+      const asked = streaming.askOverlayKey(binding, "Overlays", words);
+      streaming.answer(streaming.request()!.id, "set", binding === layer ? "F7" : "F8");
+      await asked;
+    }
     streaming.forgetGame("elden");
-    expect(streaming.keyOf(arrange)).toBeNull();
+    expect(streaming.keyOf(toggle)).toBeNull();
+    expect(streaming.keyOf(layer)).toEqual({ accelerator: "F7", taken: false });
+  });
+
+  it("registers the layer key for whichever game is in front", async () => {
+    const { streaming, registered, heard, front } = await withKeys();
+    const asked = streaming.askOverlayKey(layer, "Tavora over game", words);
+    streaming.answer(streaming.request()!.id, "set", "F7");
+    await asked;
+    streaming.sync();
+    expect(registered.has("F7")).toBe(false);
+    front("elden");
+    streaming.sync();
+    registered.get("F7")!();
+    front("other");
+    streaming.sync();
+    expect(registered.has("F7")).toBe(true);
+    expect(heard).toEqual(["$layer:layer"]);
   });
 });
 

@@ -134,6 +134,11 @@ export class OverlayStore {
     this.saveSoon();
   }
 
+  /** Every link there is (for Settings; the tokens are not passed on). */
+  all(): OverlayLink[] {
+    return [...this.links.values()];
+  }
+
   /** Forgets the links matching `test` (a deleted game, a module whose data was deleted). */
   forget(test: (link: OverlayLink) => boolean): void {
     let changed = false;

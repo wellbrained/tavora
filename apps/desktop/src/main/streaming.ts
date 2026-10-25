@@ -52,7 +52,7 @@ export interface StreamingOptions {
 
 /** What game overlays need of the hotkeys: which of their keys work now, and what a press does (game-overlay-service.ts). */
 export interface OverlayKeys {
-  /** The game in front; the keys of game overlays work only there. */
+  /** The game in front; the keys of game overlays work only while one is. */
   frontGame(): string | null;
   wants(record: HotkeyRecord): boolean;
   /** Whether the player has a game overlay for this key. */
@@ -254,8 +254,9 @@ export class Streaming {
     const open = new Set(this.options.panels().map((panel) => panel.moduleId));
     const wanted = gameId === null ? [] : this.hotkeys.all().filter((record) => record.gameId === gameId && !isOverlayAction(record.action) && open.has(record.moduleId) && this.options.module(record.moduleId)?.owner === record.owner);
     // The keys of game overlays follow the game in front instead, so they take no key from other programs.
+    // The layer key is for every game, an overlay's key for its own (or every game, for a general overlay).
     const front = this.overlayKeys?.frontGame() ?? null;
-    if (front !== null) wanted.push(...this.hotkeys.all().filter((record) => record.gameId === front && isOverlayAction(record.action) && this.overlayKeys!.wants(record)));
+    if (front !== null) wanted.push(...this.hotkeys.all().filter((record) => isOverlayAction(record.action) && this.overlayKeys!.wants(record)));
     this.registrar.apply(wanted);
   }
 
@@ -306,7 +307,7 @@ export class Streaming {
   }
 
   private actionName(record: Pick<HotkeyRecord, "moduleId" | "action">): string {
-    if (isOverlayAction(record.action)) return translate(this.options.language(), record.action === "$arrange" ? "overlays.arrangeAction" : "overlays.toggleAction");
+    if (isOverlayAction(record.action)) return translate(this.options.language(), record.action === "$layer" ? "overlays.layerAction" : "overlays.toggleAction");
     return this.options.module(record.moduleId)?.manifest.actions?.find((action) => action.id === record.action)?.name ?? record.action;
   }
 
@@ -314,6 +315,18 @@ export class Streaming {
     const settings = this.options.settings();
     return {
       overlays: { enabled: settings.streamOverlays, port: settings.overlayPort, status: this.server.status },
+      // The links OBS can use: of modules that may serve one, with the page they show.
+      links: this.overlays
+        .all()
+        .filter((link) => this.pageOf(link) !== null)
+        .map((link) => ({
+          owner: link.owner,
+          moduleId: link.moduleId,
+          moduleName: this.options.module(link.moduleId)?.manifest.name ?? link.moduleId,
+          gameId: link.gameId,
+          gameName: this.options.gameName(link.gameId) ?? link.gameId,
+          key: link.key,
+        })),
       hotkeys: this.hotkeys.all().filter((record) => !isOverlayAction(record.action)).map((record) => ({
           owner: record.owner,
           gameId: record.gameId,

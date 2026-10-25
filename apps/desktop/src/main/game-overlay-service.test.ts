@@ -4,8 +4,9 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LIMITS } from "@tavora/sdk/protocol";
 import type { Foreground, ForegroundProbe } from "./foreground";
-import { GameOverlays, arrangeBinding, isOverlayAction, toggleBinding, type OverlayWindow, type OverlayWindowRequest } from "./game-overlay-service";
-import { GameOverlayStore, OVERLAY_ARRANGE_ACTION, OVERLAY_TOGGLE_ACTION, panelKey, type Rect } from "./game-overlays";
+import { GameOverlays, isOverlayAction, layerBinding, toggleBinding, type OverlayWindow, type OverlayWindowRequest } from "./game-overlay-service";
+import type { VeilWindow } from "./game-veil-window";
+import { ALL_GAMES, GameOverlayStore, OVERLAY_LAYER_ACTION, OVERLAY_TOGGLE_ACTION, type OverlayScope, type Rect } from "./game-overlays";
 import type { HotkeyRecord, ShortcutRegistry } from "./hotkeys";
 import { OverlayStore } from "./overlays";
 import type { StreamingModule } from "./streaming";
@@ -68,6 +69,20 @@ class FakeWindow implements OverlayWindow {
   setOpacity(opacity: 100 | 75 | 50 | 25) {
     this.opacity = opacity;
   }
+  raise() {
+    this.log.push("raise");
+  }
+  destroy() {
+    this.destroyed = true;
+  }
+}
+
+class FakeVeil implements VeilWindow {
+  rect: Rect | null = null;
+  destroyed = false;
+  place(rect: Rect) {
+    this.rect = rect;
+  }
   destroy() {
     this.destroyed = true;
   }
@@ -85,6 +100,12 @@ async function setup({ supported = true, enabled = true } = {}) {
     focused: 0,
     registered: new Map<string, () => void>(),
     windows: [] as FakeWindow[],
+    veils: [] as FakeVeil[],
+    /** Which library entries are games; the rest are workspaces such as Personal. */
+    kinds: new Map<string, OverlayScope>([["personal", "all"]]),
+    panelUsed: new Map<string, number>(),
+    /** Panel instances that still exist. */
+    gone: new Set<string>(),
     probeCalls: 0,
     broken: false,
     /** The panels there are (instance id to the name of their tab). */
@@ -109,10 +130,13 @@ async function setup({ supported = true, enabled = true } = {}) {
     supported,
     enabled: () => world.enabled,
     module: (id) => world.modules.get(id),
-    gameName: (id) => (id === "elden" ? "Elden Ring" : null),
+    gameName: (id) => (id === "elden" ? "Elden Ring" : id === "personal" ? "Personal" : null),
+    scopeOf: (id) => world.kinds.get(id) ?? "game",
     gamesOf: (program) => new Set(program === GAME_EXE ? ["elden"] : program.startsWith("D:\\Games\\Other\\") ? ["other"] : []),
     panels: {
       name: (instanceId) => world.panelNames.get(instanceId) ?? null,
+      exists: (_gameId, instanceId) => !world.gone.has(instanceId),
+      usedAt: (instanceId) => world.panelUsed.get(instanceId) ?? 0,
       openWindow: (request) => {
         if (!world.panelNames.has(request.instanceId)) return null;
         const window = new FakeWindow(request);
@@ -127,6 +151,11 @@ async function setup({ supported = true, enabled = true } = {}) {
       world.windows.push(window);
       return window;
     },
+    openVeil: () => {
+      const veil = new FakeVeil();
+      world.veils.push(veil);
+      return veil;
+    },
     shortcuts,
     openSetting: (setting) => void world.opened.push(setting),
     notify: (message) => void world.notices.push(message),
@@ -138,7 +167,7 @@ async function setup({ supported = true, enabled = true } = {}) {
     changed: () => void world.changes++,
   });
   const keys: HotkeyRecord[] = [];
-  const key = (binding: ReturnType<typeof toggleBinding> | ReturnType<typeof arrangeBinding>): HotkeyRecord => {
+  const key = (binding: ReturnType<typeof toggleBinding> | ReturnType<typeof layerBinding>): HotkeyRecord => {
     const record = { ...binding, label: "x", accelerator: "F9" };
     keys.push(record);
     return record;
@@ -169,7 +198,7 @@ describe("showOverGame", () => {
     const { service, world } = await setup({ enabled: false });
     expect(show(service)).toBe("off");
     expect(world.opened).toEqual(["game-overlays"]);
-    expect(service.view().games).toEqual([]);
+    expect(service.view().groups).toEqual([]);
     expect(world.windows).toHaveLength(0);
   });
 
@@ -289,7 +318,7 @@ describe("modes and settings", () => {
     service.update({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" }, { mode: "toggle" });
     world.enabled = false;
     expect(service.wants(record)).toBe(false);
-    expect(service.wants(key(arrangeBinding("elden")))).toBe(false);
+    expect(service.wants(key(layerBinding()))).toBe(false);
   });
 
   it("applies opacity and Hide from capture to the window", async () => {
@@ -306,55 +335,94 @@ describe("modes and settings", () => {
     service.remove({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" });
     expect(live()).toHaveLength(0);
     expect(world.removedKeys).toEqual([record]);
-    expect(service.view().games).toEqual([]);
+    expect(service.view().groups).toEqual([]);
   });
 
-  it("lists games with their overlays for Settings", async () => {
+  it("lists overlays by game for Settings", async () => {
     const { service } = await setup();
     show(service);
     show(service, CLOCK, "elden", "item-2");
     expect(service.view()).toMatchObject({
       supported: true,
       enabled: true,
-      games: [{ id: "elden", name: "Elden Ring", overlays: [{ name: "Clock & Counter · item-1", mode: "always" }, { name: "Clock & Counter · item-2" }] }],
+      hidden: false,
+      panels: [],
+      groups: [{ id: "elden", name: "Elden Ring", overlays: [{ name: "Clock & Counter · item-1", mode: "always" }, { name: "Clock & Counter · item-2" }] }],
     });
   });
 });
 
-describe("arranging", () => {
-  it("makes every overlay of the game visible and interactive, and back again with the key or Esc", async () => {
+const layerKey = (key: (binding: ReturnType<typeof layerBinding>) => HotkeyRecord) => key(layerBinding());
+
+describe("the in-game layer", () => {
+  it("makes every overlay of the game visible with its frame, behind a veil, and back again with the key or Esc", async () => {
     const { service, world, live, key } = await setup();
     show(service);
     show(service, CLOCK, "elden", "item-2");
     service.update({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-2" }, { mode: "toggle" });
     expect(live().map((window) => window.shown)).toEqual([true, false]);
-    const arrange = key(arrangeBinding("elden"));
-    expect(service.wants(arrange)).toBe(true);
+    const layer = layerKey(key);
+    expect(service.wants(layer)).toBe(true);
+    expect(world.veils).toHaveLength(0);
 
-    service.pressed(arrange);
+    service.pressed(layer);
+    expect(service.layerOpen).toBe(true);
     expect(live().map((window) => [window.shown, window.arranging])).toEqual([[true, true], [true, true]]);
+    expect(world.veils).toHaveLength(1);
+    expect(world.veils[0]).toMatchObject({ rect: SCREEN, destroyed: false });
     expect(world.registered.has("Escape")).toBe(true);
 
     world.registered.get("Escape")!();
     expect(live().map((window) => [window.shown, window.arranging])).toEqual([[true, false], [false, false]]);
+    expect(world.veils[0]!.destroyed).toBe(true);
     expect(world.registered.has("Escape")).toBe(false);
     expect(world.focused).toBe(1);
 
-    service.pressed(arrange);
-    service.pressed(arrange);
+    service.pressed(layer);
+    service.pressed(layer);
     expect(live().every((window) => !window.arranging)).toBe(true);
+    expect(world.veils).toHaveLength(2);
+    expect(world.veils[1]!.destroyed).toBe(true);
     expect(world.focused).toBe(2);
   });
 
-  it("ends when the game leaves the front, without giving the game the keyboard", async () => {
+  it("puts the veil under everything else: overlays shown before it are raised after it", async () => {
+    const { service, live, key } = await setup();
+    show(service);
+    service.pressed(layerKey(key));
+    expect(live()[0]!.log).toContain("raise");
+  });
+
+  it("only opens for a game in front that has something to show, and ignores the key anywhere else", async () => {
+    const { service, world, key } = await setup();
+    show(service);
+    world.foreground = { program: "D:\\Games\\Other\\other.exe", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    service.pressed(layerKey(key));
+    expect(service.layerOpen).toBe(false);
+    expect(world.veils).toHaveLength(0);
+    expect(service.wants(layerKey(key))).toBe(false);
+  });
+
+  it("closes without giving the game the keyboard when the game leaves the front", async () => {
     const { service, world, live, key } = await setup();
     show(service);
-    service.pressed(key(arrangeBinding("elden")));
+    service.pressed(layerKey(key));
     world.foreground = null;
     service.tick();
     expect(live()[0]).toMatchObject({ shown: false, arranging: false });
+    expect(world.veils[0]!.destroyed).toBe(true);
     expect(world.registered.has("Escape")).toBe(false);
     expect(world.focused).toBe(0);
+  });
+
+  it("follows the game's window with the veil", async () => {
+    const { service, world, key } = await setup();
+    show(service);
+    service.pressed(layerKey(key));
+    world.foreground = { program: GAME_EXE, bounds: { x: 100, y: 50, width: 1280, height: 720 }, notification: 0 };
+    service.tick();
+    expect(world.veils[0]!.rect).toEqual({ x: 100, y: 50, width: 1280, height: 720 });
   });
 
   it("saves where the player left an overlay, relative to the game, and leaves a window being dragged alone", async () => {
@@ -362,7 +430,7 @@ describe("arranging", () => {
     show(service);
     const window = live()[0]!;
     window.request.moved({ x: 960, y: 540, width: 480, height: 270 });
-    expect(service.view().games[0]!.overlays).toHaveLength(1);
+    expect(service.view().groups[0]!.overlays).toHaveLength(1);
     window.dragging = true;
     window.rect = { x: 1, y: 2, width: 3, height: 4 };
     service.tick();
@@ -381,7 +449,116 @@ describe("arranging", () => {
     show(service);
     live()[0]!.request.closeRequested();
     expect(live()).toHaveLength(0);
-    expect(service.view().games).toEqual([]);
+    expect(service.view().groups).toEqual([]);
+  });
+});
+
+describe("general overlays", () => {
+  it("made in a workspace that is no game show over every library game in front", async () => {
+    const { service, world, live } = await setup();
+    show(service, CLOCK, "personal");
+    expect(service.view().groups).toMatchObject([{ id: ALL_GAMES, name: null, overlays: [{ gameId: "personal" }] }]);
+    expect(live()).toHaveLength(1);
+    expect(live()[0]!.shown).toBe(true);
+    expect(service.frontGame()).toBe("elden");
+    world.foreground = { program: "D:\\Games\\Other\\other.exe", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(service.frontGame()).toBe("other");
+    expect(live()[0]!.shown).toBe(true);
+    // Not over a program that is no library game.
+    world.foreground = { program: "C:\\Windows\\notepad.exe", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(live()[0]!.shown).toBe(false);
+  });
+
+  it("a game's own overlay stays over its own game only", async () => {
+    const { service, world, live } = await setup();
+    show(service, CLOCK, "elden");
+    world.foreground = { program: "D:\\Games\\Other\\other.exe", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(live()[0]!.shown).toBe(false);
+  });
+
+  it("have their toggle key over any game, and the layer key works over any game", async () => {
+    const { service, world, key } = await setup();
+    show(service, CLOCK, "personal");
+    service.update({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "personal", key: "item-1" }, { mode: "toggle" });
+    const toggle = key(toggleBinding({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "personal", key: "item-1" }));
+    expect(service.wants(toggle)).toBe(true);
+    expect(service.wants(layerKey(key))).toBe(true);
+    world.foreground = { program: "D:\\Games\\Other\\other.exe", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(service.wants(toggle)).toBe(true);
+    service.pressed(toggle);
+    service.pressed(layerKey(key));
+    expect(service.layerOpen).toBe(true);
+  });
+
+  it("count toward eight general ones, apart from a game's own eight", async () => {
+    const { service } = await setup();
+    for (let i = 0; i < LIMITS.maxGameOverlays; i++) expect(show(service, CLOCK, "personal", `item-${i}`)).toBe("shown");
+    expect(show(service, CLOCK, "personal", "one-more")).toBe("full");
+    expect(show(service, CLOCK, "elden", "item-0")).toBe("shown");
+  });
+});
+
+describe("hiding everything", () => {
+  it("closes every overlay, the veil and the panels at once when Game overlays are switched off", async () => {
+    const { service, world, live, key } = await setup();
+    service.showPanel({ owner: "official", moduleId: TODOS.manifest.id, gameId: "elden", instanceId: PANEL });
+    show(service);
+    service.pressed(layerKey(key));
+    const windows = [...world.windows];
+    expect(windows.length).toBeGreaterThan(1);
+    expect(world.veils[0]!.destroyed).toBe(false);
+    world.enabled = false;
+    service.tick();
+    expect(windows.every((window) => window.destroyed)).toBe(true);
+    expect(live()).toHaveLength(0);
+    expect(world.veils[0]!.destroyed).toBe(true);
+    expect(world.registered.has("Escape")).toBe(false);
+    expect(service.layerOpen).toBe(false);
+  });
+
+  it("hides all for now, takes no keys, and shows again when asked; it is not remembered", async () => {
+    const { service, world, live, key } = await setup();
+    show(service);
+    const layer = layerKey(key);
+    service.setHidden(true);
+    expect(live()).toHaveLength(0);
+    expect(service.view().hidden).toBe(true);
+    expect(service.wants(layer)).toBe(false);
+    expect(service.needsWatcher()).toBe(false);
+    service.pressed(layer);
+    expect(service.layerOpen).toBe(false);
+    expect(world.veils).toHaveLength(0);
+    service.setHidden(false);
+    expect(live()).toHaveLength(1);
+    expect(live()[0]!.shown).toBe(true);
+    expect(service.view().hidden).toBe(false);
+  });
+
+  it("hiding while the layer is open closes the layer", async () => {
+    const { service, world, key } = await setup();
+    show(service);
+    service.pressed(layerKey(key));
+    service.setHidden(true);
+    expect(service.layerOpen).toBe(false);
+    expect(world.veils[0]!.destroyed).toBe(true);
+  });
+
+  it("closeNow closes every window and the veil without waiting, and drops Esc", async () => {
+    const { service, world, key } = await setup();
+    service.start();
+    show(service);
+    service.pressed(layerKey(key));
+    const windows = [...world.windows];
+    service.closeNow();
+    expect(windows.every((window) => window.destroyed)).toBe(true);
+    expect(world.veils[0]!.destroyed).toBe(true);
+    expect(world.registered.has("Escape")).toBe(false);
+    // Safe to call again (a signal after quitting).
+    service.closeNow();
   });
 });
 
@@ -391,9 +568,9 @@ describe("what goes with a game or a module", () => {
     show(service);
     show(service, CLOCK, "other", "item-1");
     service.forgetGame("other");
-    expect(service.view().games.map((game) => game.id)).toEqual(["elden"]);
+    expect(service.view().groups.map((game) => game.id)).toEqual(["elden"]);
     service.forgetModule(CLOCK.manifest.id, "official");
-    expect(service.view().games).toEqual([]);
+    expect(service.view().groups).toEqual([]);
     expect(live()).toHaveLength(0);
   });
 
@@ -401,7 +578,7 @@ describe("what goes with a game or a module", () => {
     const { service } = await setup();
     show(service);
     service.forgetModule(CLOCK.manifest.id, "someone-else");
-    expect(service.view().games).toHaveLength(1);
+    expect(service.view().groups).toHaveLength(1);
   });
 
   it("forgets the overlays of a module another publisher's module replaced, and never serves its page", async () => {
@@ -412,7 +589,7 @@ describe("what goes with a game or a module", () => {
     world.modules.set(CLOCK.manifest.id, { ...CLOCK, owner: "someone-else" });
     expect(request.page()).toBeNull();
     service.tick();
-    expect(service.view().games).toEqual([]);
+    expect(service.view().groups).toEqual([]);
     expect(live()).toHaveLength(0);
   });
 
@@ -535,19 +712,19 @@ describe("leftovers", () => {
     for (let i = 0; i < LIMITS.maxOverlays; i++) overlays.link(subject("k" + i));
     expect(() => show(service)).toThrowError(expect.objectContaining({ code: "QUOTA_EXCEEDED" }));
     expect(service.has(subject("item-1"))).toBe(false);
-    expect(service.view().games).toEqual([]);
+    expect(service.view().groups).toEqual([]);
     expect(world.windows).toHaveLength(0);
   });
 
-  it("removes a game's arrange key when its last overlay goes, not before", async () => {
+  it("takes away the per-game arrange keys of 0.20.54 and the keys of panels over the game then, when it starts", async () => {
     const { service, world, key } = await setup();
-    show(service);
-    show(service, CLOCK, "elden", "item-2");
-    key(arrangeBinding("elden"));
-    service.remove({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" });
-    expect(world.removedKeys).toEqual([]);
-    service.remove({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-2" });
-    expect(world.removedKeys.map((record) => record.action)).toEqual([OVERLAY_ARRANGE_ACTION]);
+    const arrange = key({ owner: "tavora", moduleId: "tavora", gameId: "elden", action: "$arrange", target: "arrange" });
+    const panelToggle = key({ owner: "official", moduleId: TODOS.manifest.id, gameId: "elden", action: OVERLAY_TOGGLE_ACTION, target: `panel-${PANEL}` });
+    const keep = key(toggleBinding({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" }));
+    service.start();
+    expect(world.removedKeys).toEqual([arrange, panelToggle]);
+    expect(world.removedKeys).not.toContain(keep);
+    await service.shutdown();
   });
 
   it("closes the window of a game that stays out of the front for 30 seconds, and makes it again when it is back", async () => {
@@ -593,309 +770,246 @@ describe("leftovers", () => {
 describe("hotkey actions", () => {
   it("tells overlay actions from a module's", () => {
     expect(isOverlayAction(OVERLAY_TOGGLE_ACTION)).toBe(true);
-    expect(isOverlayAction(OVERLAY_ARRANGE_ACTION)).toBe(true);
+    expect(isOverlayAction(OVERLAY_LAYER_ACTION)).toBe(true);
     expect(isOverlayAction("start-pause")).toBe(false);
   });
 
   it("names them for the hotkey dialog", async () => {
     const { service } = await setup();
     show(service);
-    expect(service.dialogNames(arrangeBinding("elden"))).toEqual({ label: "Overlays", module: "Elden Ring", action: "Arrange overlays" });
+    show(service, CLOCK, "personal", "item-1");
+    expect(service.dialogNames(layerBinding())).toEqual({ label: "Tavora over game", module: "Tavora", action: "Open or close" });
     expect(service.dialogNames(toggleBinding({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" }))).toEqual({
       label: "Clock & Counter",
       module: "Elden Ring",
       action: "Show or hide",
     });
+    expect(service.dialogNames(toggleBinding({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "personal", key: "item-1" })).module).toBe("All games");
   });
 });
 
-describe("a panel over the game", () => {
-  const over = (service: GameOverlays, instanceId = PANEL, gameId = "elden") => service.showPanel({ owner: "official", moduleId: TODOS.manifest.id, gameId, instanceId });
-  const subjectOf = (instanceId = PANEL) => ({ owner: "official", moduleId: TODOS.manifest.id, gameId: "elden", key: panelKey(instanceId) });
+describe("a panel in the game", () => {
+  const add = (service: GameOverlays, instanceId = PANEL, gameId = "elden") => service.showPanel({ owner: "official", moduleId: TODOS.manifest.id, gameId, instanceId });
+  const panelWindows = (world: { windows: FakeWindow[] }) => world.windows.filter((window) => window.request.instanceId !== undefined);
+  const SECOND = "0a1b2c3d-0000-4000-8000-000000000002";
 
-  it("moves the panel into a window right away, shown while its game is in front", async () => {
-    const { service, live } = await setup();
-    expect(over(service)).toBe("shown");
+  it("is not over the game until the layer opens, and goes back to its slot when it closes", async () => {
+    const { service, world, key } = await setup();
+    expect(add(service)).toBe("shown");
     expect(service.hasPanel(PANEL)).toBe(true);
-    expect(live()).toHaveLength(1);
-    expect(live()[0]).toMatchObject({ shown: true, arranging: false });
-    expect(live()[0]!.request.instanceId).toBe(PANEL);
+    expect(panelWindows(world)).toHaveLength(0);
+    expect(service.panelOpen(PANEL)).toBe(false);
+
+    service.pressed(layerKey(key));
+    const [window] = panelWindows(world);
+    expect(window).toMatchObject({ shown: true, arranging: true, destroyed: false });
+    expect(service.panelOpen(PANEL)).toBe(true);
+    expect(window!.focusedPanel).toBe(1);
+
+    world.registered.get("Escape")!();
+    expect(window!.destroyed).toBe(true);
+    expect(service.panelOpen(PANEL)).toBe(false);
+    // Still one the player shows in the game: it comes up again with the next layer.
+    expect(service.hasPanel(PANEL)).toBe(true);
+    service.pressed(layerKey(key));
+    expect(panelWindows(world)).toHaveLength(2);
   });
 
-  it("is in its window but hidden while the game is not in front, and shown when it is", async () => {
-    const { service, world, live } = await setup();
-    world.foreground = { program: "C:\\Program Files\\Tavora\\Tavora.exe", bounds: { ...SCREEN }, notification: 0 };
-    over(service);
-    expect(live()).toHaveLength(1);
-    expect(live()[0]!.shown).toBe(false);
-    world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0 };
-    service.tick();
-    expect(live()[0]!.shown).toBe(true);
-    world.foreground = null;
-    service.tick();
-    expect(live()[0]!.shown).toBe(false);
-  });
-
-  it("is never closed for being out of the front for long, unlike an overlay page: the window holds the panel", async () => {
-    vi.useFakeTimers();
-    try {
-      const { service, world, live } = await setup();
-      over(service);
-      show(service);
-      world.foreground = null;
-      service.tick();
-      vi.advanceTimersByTime(60_000);
-      service.tick();
-      expect(live()).toHaveLength(1);
-      expect(live()[0]!.request.instanceId).toBe(PANEL);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("says off and opens Settings > Overlays while the switch is off, and keeps the panel where it is", async () => {
-    const { service, world, live } = await setup({ enabled: false });
-    expect(over(service)).toBe("off");
-    expect(world.opened).toEqual(["game-overlays"]);
-    expect(service.hasPanel(PANEL)).toBe(false);
-    expect(live()).toHaveLength(0);
-  });
-
-  it("says nothing of Settings and does nothing where overlays can't be drawn", async () => {
-    const { service, world } = await setup({ supported: false });
-    expect(over(service)).toBe("off");
-    expect(world.opened).toEqual([]);
-    expect(service.hasPanel(PANEL)).toBe(false);
-  });
-
-  it("counts toward the game's eight, with module overlays", async () => {
-    const { service, live } = await setup();
-    for (let i = 0; i < LIMITS.maxGameOverlays - 1; i++) show(service, CLOCK, "elden", `item-${i}`);
-    expect(over(service)).toBe("shown");
-    expect(over(service, "0a1b2c3d-0000-4000-8000-000000000002")).toBe("full");
-    expect(live()).toHaveLength(LIMITS.maxGameOverlays);
-    // Moving the same panel again is no new overlay.
-    expect(over(service)).toBe("shown");
-  });
-
-  it("keeps the keys a module can use apart: a module can't ask for a panel's overlay", async () => {
-    const { service } = await setup();
-    const clock = { ...CLOCK, manifest: { ...CLOCK.manifest, id: TODOS.manifest.id, name: "To-Dos" } };
-    expect(() => service.show(clock, "elden", panelKey(PANEL))).toThrow(/reserved/);
-  });
-
-  it("follows the modes, opacity and capture setting of any overlay", async () => {
-    const { service, world, live } = await setup();
-    over(service);
-    service.update(subjectOf(), { mode: "toggle", opacity: 50, hideFromCapture: true });
-    expect(live()[0]!.shown).toBe(false);
-    service.pressed({ ...toggleBinding(subjectOf()), label: "x", accelerator: "F8" });
-    expect(live()[0]).toMatchObject({ shown: true, opacity: 50, hideFromCapture: true });
-    expect(world.windows).toHaveLength(1);
-  });
-
-  it("names the panel in Settings by its tab, and marks it as a panel", async () => {
-    const { service } = await setup();
-    over(service);
+  it("opens the layer even with only a panel, and puts the panel above the veil and the frames", async () => {
+    const { service, world, key } = await setup();
+    add(service);
     show(service);
-    const game = service.view().games[0]!;
-    expect(game.overlays.map((overlay) => [overlay.name, overlay.panel])).toEqual([["To-Dos", true], ["Clock & Counter", false]]);
+    service.pressed(layerKey(key));
+    const [panel] = panelWindows(world);
+    const overlay = world.windows.find((window) => window.request.instanceId === undefined)!;
+    expect(world.veils).toHaveLength(1);
+    // Overlays are raised first, panels last.
+    expect(overlay.log).toContain("raise");
+    expect(panel!.log.at(-1)).toBe("focus");
+    expect(panel!.log.indexOf("raise")).toBeGreaterThan(-1);
   });
 
-  it("is brought back with its window closing, its overlay and key gone", async () => {
-    const { service, live, world, key } = await setup();
-    over(service);
-    const toggle = key(toggleBinding(subjectOf()));
-    service.bringBack(PANEL);
+  it("gives the keyboard to the panel used last, only once; a panel is placed and shown before it arranges and takes the keyboard", async () => {
+    const { service, world, key } = await setup();
+    world.panelNames.set(SECOND, "Notes");
+    add(service);
+    add(service, SECOND);
+    world.panelUsed.set(PANEL, 100);
+    world.panelUsed.set(SECOND, 50);
+    service.pressed(layerKey(key));
+    const [first, second] = panelWindows(world);
+    expect(first!.focusedPanel).toBe(1);
+    expect(second!.focusedPanel).toBe(0);
+    expect(first!.log.filter((step, at) => first!.log.indexOf(step) === at)).toEqual(["rect", "show", "arrange", "raise", "focus"]);
+  });
+
+  it("is kept where the player put it, relative to the game, and closing its frame stops showing it in game", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.pressed(layerKey(key));
+    const [window] = panelWindows(world);
+    window!.request.moved({ x: 960, y: 540, width: 480, height: 270 });
+    world.registered.get("Escape")!();
+    service.pressed(layerKey(key));
+    expect(panelWindows(world)[1]!.rect).toEqual({ x: 960, y: 540, width: 480, height: 270 });
+    panelWindows(world)[1]!.request.closeRequested();
     expect(service.hasPanel(PANEL)).toBe(false);
-    expect(live()).toHaveLength(0);
-    expect(world.windows[0]!.destroyed).toBe(true);
-    expect(world.removedKeys).toContain(toggle);
-    // And it can go over the game again.
-    expect(over(service)).toBe("shown");
-    expect(live()).toHaveLength(1);
+    expect(panelWindows(world)[1]!.destroyed).toBe(true);
   });
 
-  it("is brought back from the arrange frame's close button, as from Settings", async () => {
-    const { service, live, key } = await setup();
-    over(service);
-    service.pressed(key(arrangeBinding("elden")));
-    expect(live()[0]!.arranging).toBe(true);
-    live()[0]!.request.closeRequested();
+  it("says the right close label for the frame, and the panel's tab for its name", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.pressed(layerKey(key));
+    expect(panelWindows(world)[0]!.request.frameText()).toEqual({ name: "To-Dos", closeLabel: "Stop showing this panel in game" });
+  });
+
+  it("stopPanel keeps it in its slot, forgets it in the game", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.stopPanel(PANEL);
     expect(service.hasPanel(PANEL)).toBe(false);
-    expect(live()).toHaveLength(0);
-    // The arrange key goes with the game's last overlay.
+    service.pressed(layerKey(key));
+    expect(panelWindows(world)).toHaveLength(0);
   });
 
-  it("has the frame say Bring back, in the player's language, and the panel's tab for its name", async () => {
-    const { service, live } = await setup();
-    over(service);
-    expect(live()[0]!.request.frameText()).toEqual({ name: "To-Dos", closeLabel: "Bring this panel back" });
+  it("says off and opens Settings > Overlays while the switch is off, and where overlays can't be drawn says off and nothing else", async () => {
+    const off = await setup({ enabled: false });
+    expect(add(off.service)).toBe("off");
+    expect(off.world.opened).toEqual(["game-overlays"]);
+    expect(off.service.hasPanel(PANEL)).toBe(false);
+    const unsupported = await setup({ supported: false });
+    expect(add(unsupported.service)).toBe("off");
+    expect(unsupported.world.opened).toEqual([]);
   });
 
-  it("goes back to its slot when overlays are switched off, and is not over the game again when they are back on", async () => {
-    const { service, world, live } = await setup();
-    over(service);
-    world.enabled = false;
+  it("counts toward the game's eight with module overlays, and general panels toward the general eight", async () => {
+    const { service } = await setup();
+    for (let i = 0; i < LIMITS.maxGameOverlays - 1; i++) show(service, CLOCK, "elden", `item-${i}`);
+    expect(add(service)).toBe("shown");
+    expect(add(service, SECOND)).toBe("full");
+    expect(add(service, SECOND, "personal")).toBe("shown");
+  });
+
+  it("is over any library game in front when it comes from a workspace that is no game", async () => {
+    const { service, world, key } = await setup();
+    add(service, PANEL, "personal");
+    expect(service.view().panels).toEqual([{ instanceId: PANEL, moduleId: TODOS.manifest.id, name: "To-Dos", gameName: null }]);
+    world.foreground = { program: "D:\\Games\\Other\\other.exe", bounds: { ...SCREEN }, notification: 0 };
     service.tick();
-    expect(world.windows[0]!.destroyed).toBe(true);
-    expect(service.hasPanel(PANEL)).toBe(false);
-    world.enabled = true;
-    service.tick();
-    expect(live()).toHaveLength(0);
+    service.pressed(layerKey(key));
+    expect(panelWindows(world)).toHaveLength(1);
   });
 
-  it("goes back to its slot when Windows can't be asked", async () => {
-    const { service, world } = await setup();
-    over(service);
-    world.broken = true;
+  it("is a game's own panel only over its own game", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    show(service, CLOCK, "other");
+    world.foreground = { program: "D:\\Games\\Other\\other.exe", bounds: { ...SCREEN }, notification: 0 };
     service.tick();
-    expect(world.windows[0]!.destroyed).toBe(true);
-    expect(service.hasPanel(PANEL)).toBe(false);
+    service.pressed(layerKey(key));
+    expect(panelWindows(world)).toHaveLength(0);
   });
 
-  it("has no overlay when its window can't be made (the panel is gone)", async () => {
-    const { service, world, live } = await setup();
-    world.panelNames.clear();
-    expect(over(service)).toBe("shown");
+  it("is dropped when the panel is gone, and has no window when it can't be made", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    world.gone.add(PANEL);
+    service.tick();
     expect(service.hasPanel(PANEL)).toBe(false);
-    expect(live()).toHaveLength(0);
+    world.gone.delete(PANEL);
+    world.panelNames.delete(PANEL);
+    add(service);
+    service.pressed(layerKey(key));
+    expect(panelWindows(world)).toHaveLength(0);
+    expect(service.hasPanel(PANEL)).toBe(false);
   });
 
   it("goes with a removed module, a deleted game, and a module another publisher replaced", async () => {
-    const one = await setup();
-    over(one.service);
-    one.service.forgetModule(TODOS.manifest.id, "official");
-    expect(one.service.hasPanel(PANEL)).toBe(false);
-    expect(one.live()).toHaveLength(0);
-
-    const two = await setup();
-    over(two.service);
-    two.service.forgetGame("elden");
-    expect(two.service.hasPanel(PANEL)).toBe(false);
-    expect(two.live()).toHaveLength(0);
-
-    const three = await setup();
-    over(three.service);
-    three.world.modules.set(TODOS.manifest.id, { ...TODOS, owner: "someone-else" });
-    three.service.tick();
-    expect(three.service.hasPanel(PANEL)).toBe(false);
-    expect(three.live()).toHaveLength(0);
-  });
-
-  it("leaves no key behind from before a restart", async () => {
-    const { service, world, key } = await setup();
-    const stale = key(toggleBinding(subjectOf()));
-    const page = key(toggleBinding({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" }));
-    service.start();
-    expect(world.removedKeys).toEqual([stale]);
-    expect(world.removedKeys).not.toContain(page);
-    await service.shutdown();
-  });
-
-  it("closes cleanly when Tavora quits, with the panel handed back and nothing written about it", async () => {
     const { service, world } = await setup();
-    over(service);
-    await service.shutdown();
-    expect(world.windows[0]!.destroyed).toBe(true);
+    add(service);
+    service.forgetModule(TODOS.manifest.id, "official");
     expect(service.hasPanel(PANEL)).toBe(false);
-    const again = await GameOverlayStore.load(dir);
-    expect(again.all()).toHaveLength(0);
+    add(service);
+    service.forgetGame("elden");
+    expect(service.hasPanel(PANEL)).toBe(false);
+    add(service);
+    world.modules.set(TODOS.manifest.id, { ...TODOS, owner: "someone-else" });
+    service.tick();
+    expect(service.hasPanel(PANEL)).toBe(false);
   });
 
-  describe("arranging, with the keyboard", () => {
-    it("shows the panel for arranging and keeps the game in front when the panel's own window has the keyboard", async () => {
-      const { service, world, live, key } = await setup();
-      over(service);
-      show(service);
-      const arrange = key(arrangeBinding("elden"));
-      service.pressed(arrange);
-      expect(live().map((window) => window.arranging)).toEqual([true, true]);
+  it("shows the Live badge when it is in the game or its module has an overlay over the game", async () => {
+    const { service } = await setup();
+    expect(service.liveFor(PANEL, TODOS.manifest.id, "elden")).toBe(false);
+    add(service);
+    expect(service.liveFor(PANEL, TODOS.manifest.id, "elden")).toBe(true);
+    // A tab of the clock: no panel in the game, but the module has an overlay.
+    expect(service.liveFor(SECOND, CLOCK.manifest.id, "elden")).toBe(false);
+    show(service);
+    expect(service.liveFor(SECOND, CLOCK.manifest.id, "elden")).toBe(true);
+    // Another game's overlay doesn't count; a general one does.
+    expect(service.liveFor(SECOND, CLOCK.manifest.id, "other")).toBe(false);
+    show(service, CLOCK, "personal", "item-9");
+    expect(service.liveFor(SECOND, CLOCK.manifest.id, "other")).toBe(true);
+  });
 
-      // Clicking the panel gave its window the keyboard: Windows now says a window of Tavora's is in front.
-      live()[0]!.focused = true;
-      world.foreground = { program: "C:\\Program Files\\Tavora\\Tavora.exe", bounds: { x: 5, y: 5, width: 300, height: 200 }, notification: 0, own: true };
-      service.tick();
-      expect(service.frontGame()).toBe("elden");
-      expect(live().map((window) => [window.shown, window.arranging])).toEqual([[true, true], [true, true]]);
-      // The game's own place is not taken from that window.
-      expect(live()[0]!.rect).toMatchObject({ width: expect.any(Number) });
-      expect(live()[0]!.rect!.x).toBeLessThan(500);
-    });
+  it("keeps the game in front while its window has the keyboard, and ends the layer when Tavora's window is in front with no panel focused", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.pressed(layerKey(key));
+    panelWindows(world)[0]!.focused = true;
+    world.foreground = { program: "C:\\Program Files\\Tavora\\Tavora.exe", bounds: { x: 5, y: 5, width: 300, height: 200 }, notification: 0, own: true };
+    service.tick();
+    expect(service.frontGame()).toBe("elden");
+    expect(service.layerOpen).toBe(true);
+    panelWindows(world)[0]!.focused = false;
+    service.tick();
+    expect(service.layerOpen).toBe(false);
+    expect(panelWindows(world)[0]!.destroyed).toBe(true);
+  });
 
-    it("places and shows a window before it arranges and takes the keyboard, and only the newest panel window takes it", async () => {
-      const { service, world, live, key } = await setup();
-      const second = "0a1b2c3d-0000-4000-8000-000000000002";
-      over(service);
-      world.panelNames.set(second, "Notes");
-      over(service, second);
-      const [first, newest] = live();
-      service.pressed(key(arrangeBinding("elden")));
-      expect(first!.focusedPanel).toBe(0);
-      expect(newest!.focusedPanel).toBe(1);
-      expect(newest!.log.indexOf("focus")).toBeGreaterThan(newest!.log.indexOf("arrange"));
-      // A panel moved over the game while arranging is placed and shown first, then arranges, then takes the keyboard.
-      const third = "0a1b2c3d-0000-4000-8000-000000000003";
-      world.panelNames.set(third, "Clock");
-      over(service, third);
-      const made = live().at(-1)!;
-      expect(made.log.filter((step, at) => made.log.indexOf(step) === at)).toEqual(["rect", "show", "arrange", "focus"]);
-    });
+  it("closes the layer when the game exits while a panel has the keyboard", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.pressed(layerKey(key));
+    panelWindows(world)[0]!.focused = true;
+    world.foreground = null;
+    service.tick();
+    expect(service.layerOpen).toBe(false);
+    expect(world.registered.has("Escape")).toBe(false);
+  });
 
-    it("ends arranging when the game exits while a panel over it has the keyboard (nothing of Tavora's remembered is in front)", async () => {
-      const { service, world, live, key, } = await setup();
-      over(service);
-      service.pressed(key(arrangeBinding("elden")));
-      live()[0]!.focused = true;
-      // The probe finds no game window left to give the keyboard to and reports no window.
-      world.foreground = null;
-      service.tick();
-      expect(live()[0]).toMatchObject({ shown: false, arranging: false });
-      expect(world.registered.has("Escape")).toBe(false);
-    });
+  it("gives the game the keyboard back before the panels go, so the panel that had it doesn't hide for a moment", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.pressed(layerKey(key));
+    panelWindows(world)[0]!.focused = true;
+    world.focused = 0;
+    world.registered.get("Escape")!();
+    expect(world.focused).toBe(1);
+  });
 
-    it("closes every window, unregisters Escape and stops looking on shutdown", async () => {
-      const { service, world, live, key } = await setup();
-      service.start();
-      over(service);
-      show(service);
-      service.pressed(key(arrangeBinding("elden")));
-      expect(world.registered.has("Escape")).toBe(true);
-      const windows = [...world.windows];
-      await service.shutdown();
-      expect(windows.every((window) => window.destroyed)).toBe(true);
-      expect(live()).toHaveLength(0);
-      expect(world.registered.has("Escape")).toBe(false);
-      expect(service.frontGame()).toBe(null);
-    });
+  it("closes every window and the veil, unregisters Escape and stops looking on shutdown", async () => {
+    const { service, world, live, key } = await setup();
+    service.start();
+    add(service);
+    show(service);
+    service.pressed(layerKey(key));
+    const windows = [...world.windows];
+    await service.shutdown();
+    expect(windows.every((window) => window.destroyed)).toBe(true);
+    expect(world.veils[0]!.destroyed).toBe(true);
+    expect(live()).toHaveLength(0);
+    expect(world.registered.has("Escape")).toBe(false);
+    expect(service.frontGame()).toBe(null);
+  });
 
-    it("ends arranging when Tavora's own window is in front but no panel has the keyboard", async () => {
-      const { service, world, live, key } = await setup();
-      over(service);
-      service.pressed(key(arrangeBinding("elden")));
-      world.foreground = { program: "C:\\Program Files\\Tavora\\Tavora.exe", bounds: { ...SCREEN }, notification: 0, own: true };
-      service.tick();
-      expect(live()[0]).toMatchObject({ shown: false, arranging: false });
-    });
-
-    it("gives the game the keyboard back before looking again, so the panel that had it doesn't hide for a moment", async () => {
-      const { service, world, live, key } = await setup();
-      over(service);
-      const arrange = key(arrangeBinding("elden"));
-      service.pressed(arrange);
-      live()[0]!.focused = true;
-      const shown: boolean[] = [];
-      let focusedAt = -1;
-      const original = live()[0]!.setShown.bind(live()[0]!);
-      live()[0]!.setShown = (value: boolean) => (shown.push(value), original(value));
-      // What Windows says after the game has the keyboard again.
-      world.focused = 0;
-      const stop = world.registered.get("Escape")!;
-      stop();
-      focusedAt = world.focused;
-      expect(focusedAt).toBe(1);
-      expect(live()[0]).toMatchObject({ shown: true, arranging: false });
-      expect(shown).not.toContain(false);
-    });
+  it("is kept across a restart by its instance id", async () => {
+    const { service } = await setup();
+    add(service);
+    await service.shutdown();
+    const again = await GameOverlayStore.load(dir);
+    expect(again.panelOf(PANEL)).toMatchObject({ instanceId: PANEL, gameId: "elden", scope: "game" });
   });
 });

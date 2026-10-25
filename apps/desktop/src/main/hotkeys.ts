@@ -5,6 +5,7 @@
 import path from "node:path";
 import { LIMITS } from "@tavora/sdk/protocol";
 import { isHotkey } from "../shared/hotkey-keys";
+import { ALL_GAMES } from "./game-overlays";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
 
@@ -67,9 +68,10 @@ export class HotkeyStore {
     return this.records.find((record) => sameBinding(record, binding));
   }
 
-  /** The other hotkey of a game that uses this key, if any. */
+  /** The other hotkey of a game that uses this key, if any. The layer key (for every game) conflicts with any game's keys. */
   conflict(binding: Omit<HotkeyRecord, "label" | "accelerator">, accelerator: string): HotkeyRecord | undefined {
-    return this.records.find((record) => record.gameId === binding.gameId && record.accelerator === accelerator && !sameBinding(record, binding));
+    const all = (gameId: string) => gameId === ALL_GAMES;
+    return this.records.find((record) => (record.gameId === binding.gameId || all(record.gameId) || all(binding.gameId)) && record.accelerator === accelerator && !sameBinding(record, binding));
   }
 
   /** Sets (or changes) the key of a binding; false when the module already has the most hotkeys in this game. */

@@ -104,6 +104,8 @@ export interface ModuleViewOptions {
     copyNeedsWindow?(): boolean;
     resetLink(key: string): void;
     showOverGame(key: string): GameOverlayResult;
+    /** Opens the preview window of the overlay for `key`; throws INVALID_PARAMS for a module without an overlay page. */
+    preview(key: string): Promise<void>;
   };
   /** Hotkeys of this module in this game; `set` opens Tavora's hotkey dialog. */
   hotkeys: { list(): HotkeyBinding[]; set(action: string, target: string, label: string): Promise<HotkeySetResult>; remove(target: string, action: string | null): void };
@@ -422,7 +424,7 @@ export class ModuleView {
   private readonly gestureWaiters = new Set<() => void>();
 
   noteGesture(): void {
-    // Over the game the window takes input only while arranging; any report at another time is not the player's.
+    // Over the game the window takes input only while the layer is open; any report at another time is not the player's.
     if (!gestureCounts(this.overGame !== null, this.overGame?.arranging() ?? false)) return;
     this.gestureAt = Date.now();
     this.usedAt = this.gestureAt;
@@ -633,6 +635,12 @@ export class ModuleView {
             this.refuseOverGame("overlay.showOverGame");
             await this.takeGesture("overlay.showOverGame");
             return this.options.overlay.showOverGame(key);
+          },
+          preview: async (key) => {
+            // One click opens one window, so a page cannot keep opening windows.
+            this.refuseOverGame("overlay.preview");
+            await this.takeGesture("overlay.preview");
+            return this.options.overlay.preview(key);
           },
         },
         hotkeys: {

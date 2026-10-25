@@ -83,8 +83,14 @@ export interface PanelView {
   content: string | null;
   /** Set for Browser panels: what their toolbar shows. */
   browser?: BrowserState;
-  /** The panel is over its game (Show over game in its menu); its slot says so and offers Bring back. */
+  /** The panel is over the game right now (the in-game layer is open); its slot says so. */
   overGame?: boolean;
+  /** The panel's type may be shown in the game (the manifest's `inGame`); its menu offers Show in game. */
+  canInGame?: boolean;
+  /** The player shows this panel in their game (it appears when the in-game layer opens). */
+  inGame?: boolean;
+  /** The tab shows the Live badge: the panel is in the game, or its module has an overlay that shows over the game. */
+  live?: boolean;
   /** A Browser tab opened from another one: docked beside it, and left in the background when asked. */
   openedFrom?: { instanceId: string; background: boolean };
 }
@@ -635,41 +641,47 @@ export interface HostViewState {
  */
 export interface StreamingView {
   overlays: { enabled: boolean; port: number; status: "off" | "running" | "in-use" | "failed" };
+  /** The overlay links OBS can use, for the Preview buttons. */
+  links: { owner: string; moduleId: string; moduleName: string; gameId: string; gameName: string; key: string }[];
   /** Every hotkey set for a module action, in every game (main/hotkeys.ts). `taken`: another program holds the key right now. */
   hotkeys: HotkeyView[];
 }
 
-/** A key set for game overlays (a game's arrange key, an overlay's toggle key), and whether another program holds it right now. */
+/** A key set for game overlays (the layer key, an overlay's toggle key), and whether another program holds it right now. */
 export interface OverlayKeyView {
   accelerator: string;
   taken: boolean;
 }
 
 /**
- * Settings > Overlays (main/game-overlays.ts): the master switch and, per game, its arrange key and its game overlays.
+ * Settings > Overlays (main/game-overlays.ts): the master switch, the layer key, the overlays grouped by game (the group
+ * with `name` null is "All games": overlays made in a workspace that is no game) and the panels shown in the game.
  * `supported` is false where Tavora can't draw over a game (not Windows); Settings then hides the section.
  */
 export interface GameOverlaysView {
   supported: boolean;
   enabled: boolean;
-  games: {
+  /** "Hide all for now" is on: nothing shows until Tavora starts again or the player shows it again. */
+  hidden: boolean;
+  layerKey: OverlayKeyView | null;
+  groups: {
     id: string;
-    name: string;
-    arrange: OverlayKeyView | null;
+    name: string | null;
     overlays: {
       owner: string;
       moduleId: string;
+      /** The workspace the overlay was made in. */
+      gameId: string;
       key: string;
-      /** The module's name, and the overlay's key when the module has several in this game. */
+      /** The module's name, and the overlay's key when the module has several in this place. */
       name: string;
       mode: "always" | "toggle";
       opacity: 100 | 75 | 50 | 25;
       hideFromCapture: boolean;
-      /** A whole panel moved over the game (Show over game in its menu), not a module's overlay page; Settings offers Bring back. */
-      panel: boolean;
       hotkey: OverlayKeyView | null;
     }[];
   }[];
+  panels: { instanceId: string; moduleId: string; name: string; /** Null for a general panel (made in a workspace that is no game). */ gameName: string | null }[];
 }
 
 export interface HotkeyView {
