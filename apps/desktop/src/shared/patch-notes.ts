@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.12",
+    date: "2026-10-25",
+    title: "Panels stay put",
+    notes: [
+      "A module that can't start right now no longer takes its panels out of your workspace. They come back once it starts again.",
+    ],
+  },
+  {
     version: "0.21.11",
     date: "2026-10-25",
     title: "Live views for panels in game",
