@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copyScale, elementsToCopy, MAX_PIXELS, MAX_SIDE, SHARP_SCALE } from "./copy";
+import { copyScale, elementsToCopy, MAX_PIXELS, MAX_SIDE, SHARP_SCALE, pictureName } from "./copy";
 
 const element = (id: string, extra: { isDeleted?: boolean; containerId?: string; frameId?: string } = {}) => ({ id, isDeleted: false, ...extra });
 
@@ -44,5 +44,11 @@ describe("copyScale", () => {
   it("falls back to 1 for an empty size", () => {
     expect(copyScale(0, 100)).toBe(1);
     expect(copyScale(Number.NaN, 100)).toBe(1);
+  });
+});
+
+describe("pictureName", () => {
+  it("is the board's name and when it was saved", () => {
+    expect(pictureName("Board 1", new Date(2026, 9, 7, 9, 5))).toBe("Board 1 2026-10-07 09-05");
   });
 });
