@@ -219,6 +219,104 @@ export interface AiUsageReading {
   readAt: string;
 }
 
+/** Kinds of drive the system-info connector tells apart. */
+export type SystemDriveKind = "internal" | "removable" | "network" | "other";
+
+/**
+ * What this PC is, through the system-info connector: names and sizes only, never a path or a serial number.
+ * Read once and kept; asked again after a `systemInfo.drivesChanged` event, the only part that can change.
+ */
+export interface SystemInfo {
+  cpu: {
+    /** The processor's name as Windows gives it, such as "AMD Ryzen 9 5900X 12-Core Processor". */
+    model: string;
+    /** Logical processors (threads). */
+    threads: number;
+  };
+  /** Installed memory in bytes. */
+  ramBytes: number;
+  /** The graphics cards, without software adapters such as Microsoft Basic Render Driver. */
+  gpus: {
+    /** The adapter's LUID as text, such as "0x00000000_0x0001defc"; the same `id` as in snapshots. */
+    id: string;
+    name: string;
+    /** Has its own video memory (512 MB or more), as opposed to sharing the PC's memory. */
+    dedicated: boolean;
+    /** Its own video memory in bytes, or null when it has none. */
+    vramBytes: number | null;
+  }[];
+  /** The drives with a letter now: hard drives, USB sticks, network drives. No CD or DVD drives. */
+  drives: {
+    /** The drive letter with a colon, such as "C:". */
+    id: string;
+    /** The drive's name ("Games"), or an empty text when it has none or Tavora doesn't ask. */
+    label: string;
+    kind: SystemDriveKind;
+    /** Size in bytes, or null when unknown. Always null for network drives, which Tavora doesn't wait for. */
+    totalBytes: number | null;
+  }[];
+}
+
+/** The parts of this PC a panel can watch (systemInfo.watch). Leave a part out or false to not watch it. */
+export interface SystemWatchBlocks {
+  cpu?: boolean;
+  gpu?: boolean;
+  ram?: boolean;
+  /** Drive letters with a colon ("C:"), at most 26. */
+  drives?: string[];
+  /** Tavora's own CPU and memory use. */
+  tavora?: boolean;
+}
+
+/** How often a snapshot comes (SYSTEM_INTERVALS_MS). */
+export type SystemInterval = 1000 | 2000 | 5000 | 15000 | 60000;
+
+/** The intervals systemInfo.watch accepts, in milliseconds. */
+export const SYSTEM_INTERVALS_MS: readonly SystemInterval[] = [1000, 2000, 5000, 15000, 60000];
+
+/** The most drives one panel can watch at once. */
+export const SYSTEM_MAX_DRIVES = 26;
+
+/**
+ * How busy this PC is, as the system-info connector reports it. Only the parts the panel asked for in
+ * systemInfo.watch are there. Percentages run from 0 to 100 with one decimal.
+ */
+export interface SystemSnapshot {
+  /** When it was taken (milliseconds since 1970). */
+  at: number;
+  /** The interval it was asked for. */
+  intervalMs: number;
+  cpu?: {
+    /** The average since the last snapshot, as Task Manager shows it. */
+    usage: number;
+    /** The busiest second since the last snapshot. The same as `usage` for intervals under 5 seconds. */
+    peak: number;
+    /** The average of each logical processor, in order. */
+    cores: number[];
+  };
+  gpus?: {
+    /** The `id` from SystemInfo.gpus. */
+    id: string;
+    usage: number;
+    peak: number;
+    /** Video memory in use in bytes, or null when Windows doesn't say. */
+    vramUsedBytes: number | null;
+  }[];
+  ram?: { usedBytes: number; totalBytes: number };
+  drives?: {
+    /** One entry for each drive asked for, in that order. */
+    id: string;
+    /** False when the drive letter is gone, such as an unplugged USB stick; the rest is then null or 0. */
+    connected: boolean;
+    freeBytes: number | null;
+    totalBytes: number | null;
+    readBytesPerSec: number;
+    writeBytesPerSec: number;
+  }[];
+  /** Tavora's own use: `cpu` as a share of the whole PC, `memoryBytes` in working set. */
+  tavora?: { cpu: number; memoryBytes: number };
+}
+
 /**
  * The discord connector's connection to the Discord app on this PC, with Tavora's Discord sign-in.
  * The connection runs while a panel of a module granted the connector has asked for it.
@@ -310,10 +408,10 @@ export interface DocumentChange {
  * Capabilities gate methods beyond the always-available core. A module has a
  * capability once the player granted one of its permissions for it (`network`:
  * a host in `permissions.network`; `aiUsage`: the `ai-usage` connector; `discord`:
- * the `discord` connector; `overlay`: the `stream-overlay` connector); calling a gated method without it fails
+ * the `discord` connector; `overlay`: the `stream-overlay` connector; `systemInfo`: the `system-info` connector); calling a gated method without it fails
  * with PERMISSION_DENIED. The others cannot be granted yet.
  */
-export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "files" | "clipboard" | "sharedData";
+export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "systemInfo" | "files" | "clipboard" | "sharedData";
 
 /**
  * What overlay.copyLink did. `copied`: the link is on the clipboard, ready to paste into OBS as a Browser Source.
@@ -406,6 +504,14 @@ export interface Methods {
   "aiUsage.accounts": { params: undefined; result: AiUsageAccountInfo[] };
   /** Reads one account's usage (capability `aiUsage`). */
   "aiUsage.read": { params: { accountId: string }; result: AiUsageReading };
+  /** What this PC is: processor, memory, graphics cards and drives. Read once and kept (capability `systemInfo`). Tavora 0.21.1 and newer. */
+  "systemInfo.info": { params: undefined; result: SystemInfo };
+  /**
+   * Sets what this panel watches, replacing what it watched before; nothing in `blocks` stops it (capability
+   * `systemInfo`). Tavora reads the PC only while a panel that is shown watches, and sends a first
+   * `systemInfo.snapshot` at once, then one every `intervalMs`. A panel that is hidden gets none.
+   */
+  "systemInfo.watch": { params: { blocks: SystemWatchBlocks; intervalMs: SystemInterval }; result: null };
   /** The connection to the Discord app; starts it for this panel (capability `discord`). */
   "discord.state": { params: undefined; result: DiscordState };
   /** Signs in, asking for approval in Discord when needed. Only right after a click or key press (capability `discord`). */
@@ -469,6 +575,10 @@ export interface Events {
   "ui.theme": TavoraTheme;
   "ui.language": string;
   "documents.changed": DocumentChange;
+  /** How busy the PC is, for what this panel watches (systemInfo.watch). Only with capability `systemInfo`. */
+  "systemInfo.snapshot": SystemSnapshot;
+  /** A drive was plugged in or removed; ask systemInfo.info again. Only with capability `systemInfo`, while the panel watches. */
+  "systemInfo.drivesChanged": null;
   /** The player added, renamed or removed an AI account; ask aiUsage.accounts again. Only with capability `aiUsage`. */
   "aiUsage.accountsChanged": null;
   /** The connection to the Discord app changed. Only with capability `discord`, after discord.state. */

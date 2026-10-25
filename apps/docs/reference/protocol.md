@@ -79,6 +79,8 @@ Methods without params must be sent with `params` left out.
 | `network.readPage` | `{ url }` | `{ status, url, title, html }`; isolated public page capture, same `network` grant, Tavora 0.19.3+ |
 | `aiUsage.accounts` | none | `AiUsageAccountInfo[]` in the player's order; needs the `aiUsage` capability, see [Connectors](#connectors) |
 | `aiUsage.read` | `{ accountId }` | `AiUsageReading`; needs the `aiUsage` capability |
+| `systemInfo.info` | none | `SystemInfo`; this PC's processor, memory, graphics cards and drives. Needs the `systemInfo` capability, see [Connectors](#connectors). Tavora 0.21.1+ |
+| `systemInfo.watch` | `{ blocks, intervalMs }` | `null`; sets what this panel watches, see [Connectors](#connectors). Needs the `systemInfo` capability |
 | `discord.state` | none | `DiscordState`; starts the connection for this panel. Needs the `discord` capability, see [Connectors](#connectors) |
 | `discord.connect`, `discord.allowControl` | none | `null`; only right after a real click or key press in the panel (`PERMISSION_DENIED` otherwise) |
 | `discord.command` | `{ command, args }` | `DiscordResult`; one of `DISCORD_COMMANDS` |
@@ -193,6 +195,15 @@ A connector is a part of Tavora that reaches outside the module's panel, such as
 - `aiUsage.read` gives `{ status, retryAfterMs, answer, email, plan, readAt }`. `status` is `ok`, `sign-in` (no usable subscription login), `rate-limited` (wait `retryAfterMs`), `api-key` (the profile uses an API key, which has no subscription allowance), `cli-missing` (the Codex command line is not installed) or `unavailable`. For `ok`, `answer` is the provider's answer as it came: Claude's usage answer (undocumented, it may change) or the result of the Codex app-server's `account/rateLimits/read`. `email` is who is signed in, when the provider says; keep it in memory only. `readAt` is an ISO 8601 time.
 - Tavora reads each account at most once a minute for all modules together; asking sooner gives the last reading again, and a provider's wait applies to every module. One read can take up to 40 seconds while the Codex command starts. An unknown `accountId` is `INVALID_PARAMS`.
 
+**`system-info`** (capability `systemInfo`, `sdk.connectors.systemInfo`, Tavora 0.21.1+): this PC's hardware and how busy it is. Tavora reads Windows' own performance counters inside its process, the same numbers Task Manager shows. It starts no helper program, uses no driver and no sensor, and sends nothing anywhere. A module gets numbers and names only, never a path, a serial number or a file name.
+
+- `systemInfo.info` gives `{ cpu: { model, threads }, ramBytes, gpus, drives }`. `gpus` lists the graphics cards as `{ id, name, dedicated, vramBytes }` without software adapters; `id` is the card's LUID such as `"0x00000000_0x0001defc"`, `dedicated` means 512 MB or more of its own memory. `drives` lists the drives with a letter as `{ id: "C:", label, kind, totalBytes }`; `kind` is `internal`, `removable`, `network` or `other`, CD and DVD drives are left out, and a network drive has an empty `label` and no size, because asking it can hold everything up. Tavora reads it once and keeps it; ask again after `systemInfo.drivesChanged`.
+- `systemInfo.watch` takes `{ blocks, intervalMs }` and replaces what this panel watched before. `blocks` may hold `cpu`, `gpu`, `ram`, `tavora` (each `true` or `false`) and `drives` (up to 26 letters such as `"C:"`); anything else, or an `intervalMs` other than 1000, 2000, 5000, 15000 or 60000, is `INVALID_PARAMS`. Empty `blocks` stop watching. A first `systemInfo.snapshot` follows almost at once, then one every `intervalMs`.
+- Tavora reads the PC only while at least one panel that is shown watches something, and opens only the counters those panels need. A panel that is hidden, minimized or covered gets no snapshots and counts for nothing; when it is shown again it gets a snapshot at once. With no watching panel nothing runs at all. Panels share one reader, so more panels cost almost nothing.
+- A `systemInfo.snapshot` holds `at` (milliseconds since 1970), `intervalMs` and only the blocks the panel asked for. `cpu` is `{ usage, peak, cores }`, `gpus` is `{ id, usage, peak, vramUsedBytes }` for each graphics card, `ram` is `{ usedBytes, totalBytes }`, `drives` is `{ id, connected, freeBytes, totalBytes, readBytesPerSec, writeBytesPerSec }` for each drive asked for, in that order, and `tavora` is `{ cpu, memoryBytes }` for Tavora itself. Percentages run from 0 to 100 with one decimal. `usage` is the average since the last snapshot, as Task Manager counts (a graphics card is as busy as its busiest kind of work, such as 3D). `peak` is the busiest second since the last snapshot when `intervalMs` is 5000 or more, and the same as `usage` below that. A drive that is gone (an unplugged USB stick) has `connected: false`, `null` sizes and speeds of 0. A block Windows can't read right now is left out.
+- `systemInfo.drivesChanged` says a drive letter appeared or went away; ask `systemInfo.info` again. It comes only while the panel watches.
+- Outside Windows the connector answers with the processor and memory only: no graphics cards, no drives and no `cpu`, `gpus` or `drives` in snapshots.
+
 **`discord`** (capability `discord`, `sdk.connectors.discord`): the Discord app on this PC, through Tavora's own Discord sign-in (PKCE, no Client Secret). Tavora keeps the local connection, the sign-in and the token; a module sends a fixed list of RPC commands and gets Discord's answers as they came. Nothing goes through Tavora's service, and Tavora can't hear, talk or read messages.
 
 - `discord.state` gives `{ status, error, user, canControl, canSaveSignIn }` and makes the panel a user of the connection, which runs while at least one panel uses it and stops with the last one. `status` is `connecting`, `not-running` (no Discord app found; Tavora keeps looking), `signed-out`, `approving` (Discord shows its pop-up), `connected` or `error`; `error` is then `not-approved`, `no-code`, `offline`, `no-sign-in` or `failed`. `canControl` says the sign-in may mute and deafen; one made before Tavora 0.5.11 can't until the player presses a button that calls `discord.allowControl`. The `discord.state` event tells every change.
@@ -273,6 +284,8 @@ The Panel Types Example in Tavora's examples folder does all of this.
 | `ui.language` | language code, as `ui.getLanguage` | the player changed the language |
 | `documents.changed` | `{ id, revision, deleted }` | another panel of this module changed a document |
 | `aiUsage.accountsChanged` | `null` | the player added, renamed or removed an AI account; only with the `aiUsage` capability |
+| `systemInfo.snapshot` | `SystemSnapshot` | how busy the PC is, for what this panel watches; only with the `systemInfo` capability, while it watches and is shown |
+| `systemInfo.drivesChanged` | `null` | a drive letter appeared or went away; only with the `systemInfo` capability, while the panel watches |
 | `discord.state` | `DiscordState` | the connection to the Discord app changed; only with the `discord` capability, after `discord.state` was asked |
 | `discord.event` | `{ event, data }` | a Discord event the panel subscribed to; only with the `discord` capability |
 | `hotkeys.pressed` | `{ action, target }` | the player pressed a hotkey set for this module in the game shown now; sent to one panel of the module there, the one used last |
@@ -335,6 +348,7 @@ Some methods need a capability the player grants. A module asks for it in its ma
 | `network.fetch` | `network` | granted per host, see [Network](#network) |
 | `network.readPage` | `network` | the same exact-host grant; fresh isolated session |
 | `aiUsage.accounts`, `aiUsage.read` | `aiUsage` | granted for the `ai-usage` connector, see [Connectors](#connectors) |
+| `systemInfo.*` | `systemInfo` | granted for the `system-info` connector, see [Connectors](#connectors) |
 | `discord.*` | `discord` | granted for the `discord` connector, see [Connectors](#connectors) |
 | `overlay.copyLink`, `overlay.resetLink` | `overlay` | granted for the `stream-overlay` connector, see [Stream overlays](#stream-overlays). `overlay.publish`, `overlay.remove` and `overlay.showOverGame` need none |
 | `files.open`, `files.save` | `files` | reserved |
@@ -366,6 +380,7 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | `network.fetch` answer | 5 MB of body, 15 s, 5 redirects, 6 requests at once per panel |
 | `network.readPage` answer | 5 MiB of HTML, 30 s, 5 redirects, one active import per module |
 | `aiUsage.read` | one reading per account and minute for all modules, 40 s, answers up to 256 KB |
+| `systemInfo.watch` | one watch per panel, 26 drives; Tavora reads at most once a second, for all panels together |
 | `discord.command` | 15 s, answers and events up to 512 KB; 32 subscriptions per panel |
 | `ui.showMenu` | one menu per click or key press, 100 entries, labels 80 characters, hints 30 |
 | `overlay.publish` | 16 KB of state per overlay, 200 overlays per module and game; keys up to 64 letters, digits, `-` and `_` |

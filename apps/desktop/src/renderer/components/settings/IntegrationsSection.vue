@@ -5,6 +5,7 @@
 // Tavora's own and not a module's, is in Settings > Games.
 import AiUsageSection from "./AiUsageSection.vue";
 import DiscordSection from "./DiscordSection.vue";
+import SystemInfoSection from "./SystemInfoSection.vue";
 
 defineProps<{ highlight: string | null }>();
 </script>
@@ -12,4 +13,5 @@ defineProps<{ highlight: string | null }>();
 <template>
   <DiscordSection :highlight="highlight" />
   <AiUsageSection :highlight="highlight" />
+  <SystemInfoSection />
 </template>

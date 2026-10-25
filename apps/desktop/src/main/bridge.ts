@@ -20,6 +20,7 @@ import {
   type NetworkResponse,
   type GameOverlayResult,
   type OverlayLinkResult,
+  type SystemInfo,
   type PageResponse,
   type PanelContent,
   type PanelLaunch,
@@ -36,6 +37,7 @@ import { checkMenu, type CheckedMenu } from "./module-menu";
 import {checkTooltip,checkTooltipAnchor,tooltipId} from "./tooltip-content";
 import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
 import { checkPanelContent } from "./panel-content";
+import { parseWatch, type WatchRequest } from "./system-info-parse";
 import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
 
 /** The parts of Electron's MessagePortMain the bridge uses. */
@@ -81,6 +83,11 @@ export interface BridgeContext {
   appSettings: ModuleStore;
   /** The ai-usage connector (ai-usage.ts); only reached with the `aiUsage` capability. */
   aiUsage: { accounts(): Promise<AiUsageAccountInfo[]>; read(accountId: string): Promise<AiUsageReading> };
+  /**
+   * The system-info connector (system-info.ts) for this panel; only reached with the `systemInfo` capability. `watch`
+   * gets the request already checked (system-info-parse.ts); it replaces what this panel watched before.
+   */
+  systemInfo: { info(): SystemInfo; watch(request: WatchRequest): void };
   /**
    * The discord connector (discord.ts) for this panel; only reached with the `discord` capability. Commands
    * and subscriptions arrive checked (discord-commands.ts); connect, allowControl, SELECT_VOICE_CHANNEL and
@@ -290,6 +297,16 @@ const handlers = new Map<string, Handler>([
       const accountId = required(object(params), "accountId");
       if (typeof accountId !== "string" || accountId.length === 0 || accountId.length > 64) throw new HostError("INVALID_PARAMS", "params.accountId must be an account id");
       return s.context.aiUsage.read(accountId);
+    },
+  ],
+
+  ["systemInfo.info", (s, params) => (needs(s, "systemInfo", "systemInfo.info"), noParams(params), s.context.systemInfo.info())],
+  [
+    "systemInfo.watch",
+    (s, params) => {
+      needs(s, "systemInfo", "systemInfo.watch");
+      s.context.systemInfo.watch(parseWatch(params));
+      return null;
     },
   ],
 

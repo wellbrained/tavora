@@ -35,7 +35,7 @@ A module lists what it needs in its [manifest](../reference/manifest.md). Nothin
 - **The player is asked when they add a module.** Tavora draws the consent dialog itself, from the manifest as the main process read it, along with who made the module (Tavora, a publisher key or an unsigned folder). A module cannot draw or hide that dialog. Preinstalled modules get no pre-approved grants. A connector the module lists in `permissions.onRequest` (only stream overlays) is asked for in the same dialog, but only right after a click in the module's panel that needs it, such as Copy OBS link; until then the module runs without it.
 - **The player grants exactly what they saw.** If an update asks for more while the dialog is open, it gets nothing it did not show.
 - **Grants are kept by the host**, outside every module folder, for the module's publisher and id. Another publisher's module with the same id gets nothing.
-- **Revoking takes effect at once.** Settings > Modules > Website access lists every module allowed to reach websites, Settings > Integrations every module allowed to use Discord or AI usage, and Settings > Streaming every module allowed to show stream overlays. Taking a grant back shows the games the module is used in and removes its panels there; its data is kept. Data a module already received cannot be recalled.
+- **Revoking takes effect at once.** Settings > Modules > Website access lists every module allowed to reach websites, Settings > Integrations every module allowed to use Discord, AI usage or System info, and Settings > Streaming every module allowed to show stream overlays. Taking a grant back shows the games the module is used in and removes its panels there; its data is kept. Data a module already received cannot be recalled.
 
 ### Network
 
@@ -54,6 +54,7 @@ Connectors are capabilities built for one purpose. The host holds the connection
 
 - **Discord** shows and controls the player's own voice state through the Discord app on the same PC. A module sends only fixed commands with fixed fields, and never sees a token. Joining or leaving a channel, muting and unmuting need a real click in the module's panel. A granted module does see the player's voice channels, servers and who is in them, and the consent dialog says so.
 - **AI Usage** reads usage limits of AI subscriptions signed in on the PC. A module gets account names, plans and readings, never a login, a token or where it is stored. Each account is read at most once a minute for all modules together.
+- **System info** lets a module read this PC's hardware and how busy it is: processor, memory, graphics cards, drives and Tavora's own use, see [System info](#system-info).
 - **Stream overlay** shows the module's overlay page in streaming software on the same PC, see [Stream overlays](#stream-overlays).
 
 ## Remembered read-only files
@@ -85,6 +86,16 @@ A module can still label a button misleadingly and get the player to click it. T
 A module can name its panel content without a click: **`panel.setContent`** names what the panel shows, and Tavora shows that name when the player hovers the panel's own tab. Tavora checks it first and shows only one line of plain text, at most 200 characters, below the panel's and the module's names, on that tab and nowhere else. The module learns nothing back.
 
 A module's **patch notes** also show outside its panel, in Settings > Modules. They come from the changelog file in its package, not from the running page. Tavora reads at most 64 KB, checks the file first and shows only plain text lines (never HTML, Markdown or links), only for versions up to the installed one, and only when the player opens them.
+
+## System info
+
+A module granted the `system-info` connector can read this PC's hardware and how busy it is: processor, memory, graphics cards, drives and Tavora's own use. The consent dialog says so.
+
+- **Read only while a panel shows it.** Tavora reads the PC only while at least one panel that is shown watches something. A hidden, minimized or covered panel counts for nothing, and with no watching panel there is no timer and no open counter. All panels share one reader, which looks at most once a second.
+- **Windows' own numbers, read in Tavora's process.** The values are the performance counters Task Manager shows, plus the drive list and the names of the graphics cards. Tavora starts no helper program, installs and loads no driver, reads no hardware sensor and sends nothing anywhere.
+- **Numbers and names only.** A module gets the processor and graphics card names, sizes, percentages and drive letters with their labels. It never gets a file name, a path, a serial number, a user name or what other programs are running.
+- **Network drives are not asked.** A network drive that doesn't answer could hold Tavora up, so its name and size are left out.
+- **It ends with the panel and with the grant.** Closing the panel ends its watch at once. Taking the connector back removes the module's panels (see Revoking above), and a snapshot is never sent to a module without the grant.
 
 ## Stream overlays
 

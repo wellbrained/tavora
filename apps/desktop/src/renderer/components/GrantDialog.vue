@@ -7,7 +7,7 @@
 // asks for more (`request.update`), it shows what the update asks for that the installed version did
 // not, and the update's patch notes; allowing installs the update, and until then the installed
 // version keeps running (catalog threat model, C4).
-import { Gauge, Globe, Headphones, Radio } from "@lucide/vue";
+import { Cpu, Gauge, Globe, Headphones, Radio } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, aiUsage, dialog, discord, nextUpdateAsk, openPanels, openSettings, state, stopUpdateAsks, type GrantRequest } from "../host";
@@ -125,6 +125,10 @@ async function allow() {
         {{ t("grant.aiUsageNote") }}
         <Button type="button" variant="link" class="text-foreground inline h-auto p-0 align-baseline font-[inherit] text-[inherit] whitespace-normal underline underline-offset-2" @click="editAccounts">{{ t("grant.aiUsageAccounts") }}</Button>
       </p>
+    </section>
+    <section v-if="connectors.includes('system-info')" class="flex flex-col gap-2" :aria-label="t('grant.systemInfo')" data-testid="grant-system-info">
+      <h3 class="flex items-center gap-2 font-medium"><Cpu :stroke-width="1.5" class="size-4" /> {{ t("grant.systemInfo") }}</h3>
+      <p class="text-muted-foreground text-sm">{{ t("grant.systemInfoNote") }}</p>
     </section>
     <section v-if="connectors.includes('discord')" class="flex flex-col gap-2" :aria-label="t('grant.discord')" data-testid="grant-discord">
       <h3 class="flex items-center gap-2 font-medium"><Headphones :stroke-width="1.5" class="size-4" /> {{ t("grant.discord") }}</h3>
