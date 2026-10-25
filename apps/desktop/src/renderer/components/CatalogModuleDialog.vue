@@ -4,8 +4,13 @@
 // plain text (C10): the main process asks for the listing again, turns the readme into plain text
 // blocks, fetches each screenshot by its hash and checks it is a PNG or WebP before it gets here, and
 // opens the homepage like a module link. Ratings and reviews have their own section (CatalogReviews.vue).
+// The library also opens it for an installed module (`local`): a catalog one shows its catalog page; any other,
+// and a catalog one the catalog can't give right now, shows the same page built from the module's own files
+// (module-page.ts): readme, screenshots and what it can reach, without reviews, ratings, installs or Report.
 import { computed, nextTick, onMounted, ref } from "vue";
 import type { CatalogModuleView, CatalogPageResult } from "../../shared/host-api";
+import type { InstalledModule } from "../module-page";
+import { formatSize } from "../catalog-size";
 import { act, api, dialog } from "../host";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
@@ -14,8 +19,9 @@ import { formatDate, t } from "../i18n";
 import { ExternalLink, X } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
 import CatalogReviews from "./CatalogReviews.vue";
+import ModuleIcon from "./ModuleIcon.vue";
 
-const props = defineProps<{ module: CatalogModuleView; installed: boolean; installing: boolean; size: string; error?: string; reporting: boolean; reported: boolean; atReviews?: boolean }>();
+const props = defineProps<{ module: CatalogModuleView; installed: boolean; installing: boolean; size?: string; error?: string; reporting: boolean; reported: boolean; atReviews?: boolean; local?: InstalledModule }>();
 const emit = defineEmits<{ close: []; install: []; add: []; report: [] }>();
 /** Report asks once more before anything is sent. */
 const reportAsk = ref(false);
@@ -26,15 +32,30 @@ const opening = ref(false);
 const homepageError = ref<string | null>(null);
 
 const reviews = ref<HTMLElement | null>(null);
+/** The page is built from the module's own files, so what only the catalog knows is left out. */
+const fromFiles = ref(false);
+/** Whether to show what only the catalog has (reviews, Report): not for a module that isn't from it. */
+const catalogParts = computed(() => !fromFiles.value && !(props.local && !props.local.fromCatalog));
+
+/** The page from the module's own folder: its readme and pictures, offline. */
+async function showFiles() {
+  const own = await api.modulePage(props.module.id);
+  const screenshots = own.status === "ok" ? own.screenshots : [];
+  fromFiles.value = true;
+  page.value = { status: "ok", module: { ...props.module, screenshots: screenshots.length }, screenshots, readme: own.status === "ok" ? own.readme : [], versions: [] };
+}
 
 onMounted(async () => {
   // Opened from the card's rating: start at the reviews.
   if (props.atReviews) void nextTick(() => reviews.value?.scrollIntoView({ block: "start" }));
+  if (props.local && !props.local.fromCatalog) return showFiles();
   page.value = await api.catalogPage(props.module.id);
+  if (props.local && page.value.status !== "ok") await showFiles();
 });
 
 /** The listing as the main process read it for this page, or the card's until then. */
 const module = computed(() => (page.value?.status === "ok" ? page.value.module : props.module));
+const sizeText = computed(() => props.size ?? formatSize(module.value.size));
 const loaded = computed(() => (page.value?.status === "ok" ? page.value : null));
 const latest = computed(() => loaded.value?.versions.find((version) => version.version === module.value.version) ?? null);
 const updated = computed(() => {
@@ -72,10 +93,11 @@ async function openHomepage() {
       :show-close-button="false"
     >
       <header class="flex items-start gap-4 border-b p-6">
-        <CatalogIcon :module-id="module.id" :has="module.icon" size="size-16" />
+        <span v-if="local" class="bg-muted/60 grid size-16 flex-none place-items-center overflow-hidden rounded-xl" aria-hidden="true"><ModuleIcon :module-id="module.id" size="size-10" /></span>
+        <CatalogIcon v-else :module-id="module.id" :has="module.icon" size="size-16" />
         <div class="min-w-0 flex-1">
           <DialogTitle class="truncate text-xl font-semibold">{{ module.name }}</DialogTitle>
-          <p class="text-muted-foreground truncate text-sm" :title="module.owner">{{ module.publisher ? t("catalog.by", { name: module.publisher }) : t("catalog.byKey", { key: module.owner.slice(0, 8) }) }}</p>
+          <p v-if="module.publisher || module.owner" class="text-muted-foreground truncate text-sm" :title="module.owner">{{ module.publisher ? t("catalog.by", { name: module.publisher }) : t("catalog.byKey", { key: module.owner.slice(0, 8) }) }}</p>
           <DialogDescription v-if="module.description" class="text-muted-foreground mt-1 line-clamp-2 text-sm">{{ module.description }}</DialogDescription>
         </div>
         <div class="flex flex-none items-center gap-2">
@@ -142,7 +164,7 @@ async function openHomepage() {
               </Expandable>
             </section>
 
-            <div ref="reviews" class="scroll-mt-6">
+            <div v-if="catalogParts" ref="reviews" class="scroll-mt-6">
               <CatalogReviews :module-id="module.id" :module-name="module.name" :publisher="module.publisher" />
             </div>
           </div>
@@ -157,8 +179,10 @@ async function openHomepage() {
                   <dt class="text-muted-foreground">{{ t("catalog.updated") }}</dt>
                   <dd data-testid="catalog-info-updated">{{ updated }}</dd>
                 </template>
-                <dt class="text-muted-foreground">{{ t("catalog.size") }}</dt>
-                <dd>{{ size }}</dd>
+                <template v-if="module.size > 0">
+                  <dt class="text-muted-foreground">{{ t("catalog.size") }}</dt>
+                  <dd>{{ sizeText }}</dd>
+                </template>
                 <template v-if="module.publisher">
                   <dt class="text-muted-foreground">{{ t("catalog.developer") }}</dt>
                   <dd class="truncate" :title="module.owner">{{ module.publisher }}</dd>
@@ -177,7 +201,7 @@ async function openHomepage() {
               <p v-else>{{ t("catalog.accessNone") }}</p>
             </section>
 
-            <section data-testid="catalog-info-report">
+            <section v-if="catalogParts" data-testid="catalog-info-report">
               <p v-if="reported" class="text-muted-foreground" role="status" :data-testid="`catalog-reported-${module.id}`">{{ t("catalog.reported") }}</p>
               <div v-else-if="reportAsk" class="bg-muted/40 flex flex-wrap items-center gap-2 rounded-md p-3" :data-testid="`catalog-report-ask-${module.id}`">
                 <p class="w-full">{{ t("catalog.reportAsk", { name: module.name }) }}</p>
