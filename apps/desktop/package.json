@@ -69,6 +69,10 @@
       "!out/**/*.map"
     ],
     "asar": false,
+    "electronLanguages": [
+      "en-US",
+      "de"
+    ],
     "npmRebuild": false,
     "extraResources": [
       {
