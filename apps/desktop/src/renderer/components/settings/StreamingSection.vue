@@ -83,6 +83,10 @@ const hotkeyGames = computed(() => {
   return [...games.entries()].map(([id, game]) => ({ id, ...game })).sort((a, b) => a.name.localeCompare(b.name));
 });
 
+function previewLink(link: (typeof streaming.value.links)[number]) {
+  void act({ type: "preview-overlay", owner: link.owner, moduleId: link.moduleId, gameId: link.gameId, key: link.key });
+}
+
 function removeHotkey(hotkey: HotkeyView) {
   void act({ type: "remove-hotkey", owner: hotkey.owner, moduleId: hotkey.moduleId, gameId: hotkey.gameId, action: hotkey.action, target: hotkey.target });
 }
@@ -119,6 +123,19 @@ function removeHotkey(hotkey: HotkeyView) {
         </span>
         <span class="min-w-0 flex-1 truncate font-medium">{{ module.name }}</span>
         <Button variant="danger" :aria-label="t('integrations.grants.revokeLabel', { name: module.name })" @click="revoke(module)">{{ t("integrations.grants.revoke") }}</Button>
+      </li>
+    </ul>
+  </SettingGroup>
+
+  <SettingGroup :title="t('streaming.links.title')">
+    <p v-if="!streaming.links.length" class="text-muted-foreground py-4 text-sm" data-testid="overlay-links-empty">{{ t("streaming.links.none") }}</p>
+    <ul v-else class="flex flex-col" data-testid="overlay-link-list">
+      <li v-for="link in streaming.links" :key="`${link.gameId}:${link.moduleId}:${link.key}`" class="flex items-center gap-3 border-b py-3 last:border-b-0">
+        <span class="flex min-w-0 flex-1 flex-col">
+          <span class="truncate font-medium">{{ link.moduleName }} · {{ link.key }}</span>
+          <span class="text-muted-foreground truncate text-xs">{{ link.gameName }}</span>
+        </span>
+        <Button variant="secondary" size="sm" :aria-label="t('overlays.previewLabel', { name: link.moduleName })" :data-testid="`link-preview-${link.key}`" @click="previewLink(link)">{{ t("overlays.preview") }}</Button>
       </li>
     </ul>
   </SettingGroup>

@@ -9,7 +9,8 @@ import { computed, inject } from "vue";
 import type { InstanceStatus } from "../../../shared/host-api";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
-import { act, state } from "../../host";
+import { Badge } from "@tavora/official-ui/components/ui/badge";
+import { act, openSettings, state } from "../../host";
 import { t } from "../../i18n";
 import MenuArea from "../menus/MenuArea.vue";
 import ModuleIcon from "../ModuleIcon.vue";
@@ -33,6 +34,11 @@ const title = computed(() => {
 });
 const hover = computed(() => (panel.value?.content ? `${title.value}\n${panel.value.content}` : title.value));
 
+/** The Live badge opens Settings > Overlays at the panel's entry, or at the module's overlays. */
+function openLive() {
+  openSettings({ section: "overlays", setting: panel.value?.inGame ? "game-panels" : "game-overlay-list" });
+}
+
 function items() {
   const docked = props.params.containerApi.getPanel(id);
   return docked ? panelMenu(docked, props.params.containerApi, dock.info) : [];
@@ -53,6 +59,9 @@ function items() {
     >
       <ModuleIcon v-if="state?.library.moduleIcons" :module-id="panel?.moduleId" :panel-type="panel?.panelType" />
       <span class="truncate font-medium">{{ panel?.name }}</span>
+      <button v-if="panel?.live" type="button" class="flex-none" data-testid="panel-live" :aria-label="t('panel.liveLabel', { name: panel.name })" :title="t('panel.liveLabel', { name: panel.name })" @pointerdown.stop @mousedown.stop @click.stop="openLive">
+        <Badge variant="info">{{ t("panel.live") }}</Badge>
+      </button>
       <span
         v-if="STATUS_LABEL(status)"
         :class="
