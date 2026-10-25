@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.13",
+    date: "2026-10-25",
+    title: "To-Dos while you play",
+    notes: [
+      "To-Dos in your game stay visible as a read-only list. Set its background and padding in To-Dos.",
+    ],
+  },
+  {
     version: "0.21.12",
     date: "2026-10-25",
     title: "Panels stay put",
