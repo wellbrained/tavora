@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.33",
+    date: "2026-10-25",
+    title: "Clearer module tags",
+    notes: [
+      "Modules you installed from the catalog say \"Catalog\" in Add module and Settings, ones added from a zip file \"From file\". \"Local\" is now only for modules in your development folders.",
+      "The examples that ship with Tavora say \"Example\".",
+    ],
+  },
+  {
     version: "0.20.32",
     date: "2026-10-25",
     title: "See what is left to publish",
