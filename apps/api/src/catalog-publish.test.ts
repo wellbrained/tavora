@@ -254,6 +254,31 @@ describe("publishing to the catalog", () => {
     expect(await full.reason(answer)).toBe("catalog-full");
   });
 
+  it("keeps the zips of a module's newest versions only, so a full account can still publish its next version", async () => {
+    const probe = generateKeyPairSync("ed25519").privateKey;
+    const size = moduleZip(probe, "wellbrained.timer", "1.0.0").length;
+    // Room for three zips of this size and a little more, never four.
+    const own = setup({ accountBytes: size * 3 + 50, keepVersions: 3 });
+    const dev = own.developer("dev@example.com");
+    const sha = new Map<string, string>();
+    for (const version of ["1.0.0", "1.0.1", "1.0.2", "1.0.3", "1.0.4"]) {
+      const answer = await own.send(dev.key, moduleZip(dev.key, "wellbrained.timer", version));
+      expect(answer.status).toBe(201);
+      sha.set(version, ((await answer.json()) as { sha256: string }).sha256);
+    }
+    const zip = (version: string) => own.app.request(`http://tavora.test/v1/catalog/zips/${sha.get(version)}.zip`);
+    expect((await zip("1.0.0")).status).toBe(404);
+    expect((await zip("1.0.1")).status).toBe(404);
+    for (const version of ["1.0.2", "1.0.3", "1.0.4"]) expect((await zip(version)).status).toBe(200);
+    expect(existsSync(path.join(own.dir, "zips", `${sha.get("1.0.0")}.zip`))).toBe(false);
+    expect(own.catalog.storedBytes(dev.accountId)).toBeLessThanOrEqual(size * 3 + 50);
+    // The old versions' notes stay on the module's page.
+    const page = (await (await own.app.request("http://tavora.test/v1/catalog/modules/wellbrained.timer")).json()) as { versions: { version: string }[] };
+    expect(page.versions.map((v) => v.version)).toEqual(["1.0.4", "1.0.3", "1.0.2", "1.0.1", "1.0.0"]);
+    // Another module of the same account still has to fit beside them.
+    expect(await own.reason(await own.send(dev.key, moduleZip(dev.key, "wellbrained.clock", "1.0.0")))).toBe("account-full");
+  });
+
   it("tells the maintainer once a day when the catalog is full, and shows it until an upload fits (C9)", async () => {
     const first = moduleZip(generateKeyPairSync("ed25519").privateKey);
     const full = setup({ catalogBytes: 2 * first.length + 100 }, "maintainer@example.com");
