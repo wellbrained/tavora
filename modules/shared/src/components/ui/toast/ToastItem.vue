@@ -11,12 +11,15 @@ import { dismissToast, TOAST_DURATION, type ToastItem } from "./toast";
 const props = defineProps<{ item: ToastItem }>();
 
 let remaining = props.item.duration ?? TOAST_DURATION;
+/** Infinity and 0 mean it stays until it is dismissed. */
+const forever = !Number.isFinite(remaining) || remaining <= 0;
 let startedAt = 0;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let hovered = false;
 let focused = false;
 
 function start() {
+  if (forever) return;
   startedAt = Date.now();
   timer = setTimeout(() => dismissToast(props.item.id), remaining);
 }
@@ -52,6 +55,7 @@ function runAction() {
   <div
     data-slot="toast"
     :data-variant="item.variant ?? 'default'"
+    :data-testid="item.testid"
     :class="
       cn(
         'bg-popover text-popover-foreground animate-in fade-in-0 slide-in-from-bottom-2 pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-md border p-3 text-sm shadow-md',
@@ -67,7 +71,7 @@ function runAction() {
       <p :class="cn('font-medium', item.variant === 'error' && 'text-destructive')">{{ item.title }}</p>
       <p v-if="item.description" class="text-muted-foreground text-xs">{{ item.description }}</p>
     </div>
-    <Button v-if="item.action" type="button" size="xs" variant="secondary" class="flex-none" @click="runAction">{{ item.action.label }}</Button>
+    <Button v-if="item.action" type="button" size="xs" variant="secondary" class="flex-none" :data-testid="item.actionTestid" @click="runAction">{{ item.action.label }}</Button>
     <Button type="button" size="icon-xs" variant="ghost" class="-mt-0.5 -mr-1 flex-none" :aria-label="uiText.dismiss" :title="uiText.dismiss" @click="dismissToast(item.id)">
       <X :stroke-width="1.5" />
     </Button>

@@ -7,8 +7,12 @@ export interface ToastOptions {
   /** One button on the toast, such as Undo. Pressing it also dismisses the toast. */
   action?: { label: string; onClick: () => void };
   variant?: "default" | "error";
-  /** How long it stays, in milliseconds. */
+  /** How long it stays, in milliseconds. Infinity or 0 keeps it until it is dismissed. */
   duration?: number;
+  /** Test id on the toast. */
+  testid?: string;
+  /** Test id on the action button. */
+  actionTestid?: string;
 }
 
 export interface ToastItem extends ToastOptions {
@@ -27,11 +31,11 @@ export function dismissToast(id: number): void {
   toasts.value = toasts.value.filter((item) => item.id !== id);
 }
 
-/** Shows a toast and returns a function that dismisses it again. */
-export function toast(options: ToastOptions): () => void {
+/** Shows a toast. `dismiss()` on the result closes it early. */
+export function toast(options: ToastOptions): { id: number; dismiss: () => void } {
   const id = nextId++;
   toasts.value = [...toasts.value, { ...options, id }].slice(-MAX_TOASTS);
-  return () => dismissToast(id);
+  return { id, dismiss: () => dismissToast(id) };
 }
 
 export function useToast() {

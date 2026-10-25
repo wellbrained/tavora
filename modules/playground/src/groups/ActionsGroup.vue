@@ -183,6 +183,13 @@ const renaming = ref(false);
           >
             With Undo
           </Button>
+          <Button
+            variant="secondary"
+            :disabled="off"
+            @click="toast({ title: 'Deleted “Shopping”', duration: 10000, action: { label: 'Undo', onClick: () => toast({ title: 'Brought back' }) } })"
+          >
+            Long Undo (10 s)
+          </Button>
           <Button variant="secondary" :disabled="off" @click="toast({ title: 'Could not save', description: 'Try again in a moment.', variant: 'error' })">Error</Button>
         </Specimen>
       </DemoSection>

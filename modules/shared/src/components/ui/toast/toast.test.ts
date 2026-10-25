@@ -7,10 +7,15 @@ describe("toast", () => {
   });
 
   it("adds a toast and hands back a way to dismiss it", () => {
-    const dismiss = toast({ title: "Saved" });
+    const { dismiss } = toast({ title: "Saved" });
     expect(toasts.value.map((item) => item.title)).toEqual(["Saved"]);
     dismiss();
     expect(toasts.value).toEqual([]);
+  });
+
+  it("returns the id and keeps duration and test ids", () => {
+    const { id } = toast({ title: "a", duration: Infinity, testid: "t", actionTestid: "x" });
+    expect(toasts.value[0]).toMatchObject({ id, duration: Infinity, testid: "t", actionTestid: "x" });
   });
 
   it("keeps the newest three", () => {
