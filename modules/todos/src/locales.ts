@@ -31,6 +31,12 @@ export const en = {
   "app.undoDeleted": "Deleted “{title}”",
   "store.saveError": "Could not save: {error}",
 
+  "live.menu": "Live view",
+  "live.background": "Background",
+  "live.padding": "Padding",
+  "live.reset": "Reset",
+  "live.more": "+{count} more",
+
   "group.show": "Show {name}",
   "group.hide": "Hide {name}",
   "group.name": "Group name",
@@ -112,6 +118,12 @@ export const de: Record<keyof typeof en, string> = {
   "app.undoFinished": "„{title}“ erledigt",
   "app.undoDeleted": "„{title}“ gelöscht",
   "store.saveError": "Konnte nicht gespeichert werden: {error}",
+
+  "live.menu": "Live-Ansicht",
+  "live.background": "Hintergrund",
+  "live.padding": "Abstand",
+  "live.reset": "Zurücksetzen",
+  "live.more": "+{count} weitere",
 
   "group.show": "{name} anzeigen",
   "group.hide": "{name} ausblenden",
