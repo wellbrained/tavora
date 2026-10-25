@@ -207,6 +207,7 @@ describe("Discord voice overlay", () => {
     const sample = fake.published.at(-1)!.state;
     expect(sample.people.map((p: any) => [p.n, p.i, p.s === 1, p.m === 1])).toEqual([["Alex", "AL", true, false], ["Sam", "SA", false, true]]);
     // The 30 seconds run out: the sample goes.
+    fake.removed.length = 0;
     later.at(-1)!();
     flush();
     expect(fake.removed).toEqual(["voice"]);
