@@ -294,7 +294,7 @@
           },
           "inGame": {
             "type": "boolean",
-            "description": "The player may show this panel in their game: its menu offers Show in game, and the panel appears over the game only while the player holds Tavora's in-game layer open. Needs a minTavora newer than 0.21.0 (except Tavora's own modules); the TypeScript validator checks that."
+            "description": "The player may show this panel in their game: its menu offers Show in game, and the panel appears over the game only while the player holds Tavora's in-game layer open. Needs a minTavora newer than 0.21.1 (except Tavora's own modules); the TypeScript validator checks that."
           }
         }
       }

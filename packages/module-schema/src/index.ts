@@ -341,7 +341,7 @@ export const MAX_TRANSLATIONS = 32;
 /** The last Tavora that refuses an `overlay` without the `stream-overlay` connector. */
 export const LAST_TAVORA_WITHOUT_GAME_OVERLAYS = "0.20.50";
 /** The last Tavora that refuses a panel type's `inGame`; a manifest with it needs a newer `minTavora`. */
-export const LAST_TAVORA_WITHOUT_IN_GAME_PANELS = "0.21.0";
+export const LAST_TAVORA_WITHOUT_IN_GAME_PANELS = "0.21.1";
 /** The last Tavora that refuses `translations`; a manifest with them needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_TRANSLATIONS = "0.20.12";
 const LANGUAGE_CODE = /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/;
