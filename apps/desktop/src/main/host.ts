@@ -1,4 +1,5 @@
 import { ReadOnlyFiles } from './read-only-files';
+import { showInBackground, windowLook, type WindowStart } from "./background-window";
 import { saveDialogDirectory } from './save-dialog-folder';
 import { randomUUID } from "node:crypto";
 import { existsSync, watch, type FSWatcher } from "node:fs";
@@ -258,6 +259,8 @@ export interface HostOptions {
   discordAuthorizeUrl?: string | undefined;
   /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
   hidden?: boolean;
+  /** Development only: how the window comes back after `pnpm dev` restarts Tavora (background-window.ts). */
+  windowStart?: WindowStart | undefined;
   /** Tests only: pretend the system is in this mode, so a test does not depend on the PC it runs on. */
   systemTheme?: "dark" | "light" | undefined;
   /** Development and tests only: what the system's language is taken to be, instead of the real one. */
@@ -375,6 +378,8 @@ export class Host {
   private overlayChanges = 0;
   /** True while a dialog backdrop dims the host page, so the window buttons are dimmed too. */
   private dimmed = false;
+  /** True once the window has closed. */
+  private windowClosed = false;
   /** True while the window is minimized or hidden. */
   private windowHidden = false;
   /**
@@ -498,7 +503,8 @@ export class Host {
       },
     });
     this.window.removeMenu();
-    if (windowState.maximized) this.window.maximize();
+    const start = options.windowStart ?? "front";
+    if (windowState.maximized && (options.hidden || start === "front")) this.window.maximize();
     if (options.hidden) {
       // A truly hidden window never resizes its panels, so tests get one that
       // is shown but transparent, click-through, unfocused and off the taskbar.
@@ -506,6 +512,10 @@ export class Host {
       this.window.setIgnoreMouseEvents(true);
       this.window.setSkipTaskbar(true);
       this.window.once("ready-to-show", () => this.window.showInactive());
+    } else if (start !== "front") {
+      this.window.once("ready-to-show", () =>
+        showInBackground(this.window, start, windowState.maximized, () => screen.dipToScreenRect(this.window, screen.getDisplayMatching(windowState.bounds).workArea)),
+      );
     } else {
       this.window.once("ready-to-show", () => this.window.show());
     }
@@ -1559,6 +1569,7 @@ export class Host {
     this.window.on("restore", hidden(false));
     this.window.on("show", hidden(false));
     this.window.on("closed", () => {
+      this.windowClosed = true;
       for (const view of this.views.values()) view.dispose();
       this.views.clear();
       this.viewsByContents.clear();
@@ -1628,6 +1639,27 @@ export class Host {
     const file = await writeWithExtension(picked.filePath, "zip", zip);
     this.rememberPicked("module-zip", file);
     return path.basename(file);
+  }
+
+  /** How the window is now, so a restart under `pnpm dev` brings it back the same way. */
+  windowLook(): WindowStart {
+    return windowLook(this.window);
+  }
+
+  /**
+   * `pnpm dev` rebuilt a module in the repo (modules/, examples/): its open panels load the new build, the way a
+   * development folder's do, instead of Tavora restarting. A module that had not loaded is looked for again.
+   */
+  async moduleBuilt(dir: string): Promise<void> {
+    const real = await realpath(dir).catch(() => dir);
+    const same = (root: string) => path.relative(root, real) === "";
+    let module = [...this.modules.values()].find((item) => same(item.root));
+    if (!module) {
+      await this.reloadModules();
+      this.pushState();
+      module = [...this.modules.values()].find((item) => same(item.root));
+    }
+    if (module) this.reloadModuleViews(module.manifest.id);
   }
 
   /** Shows the window in front, for a question that came from outside it (the pack command's sign request). */
@@ -2515,6 +2547,8 @@ export class Host {
 
   /** The running games changed (game-watch.ts). Games already running when the watch began start nothing. */
   private gamesRunning(running: ReadonlySet<string>, initial: boolean): void {
+    // The watcher stops when the window closes and reports every game as closed: there is nothing left to switch.
+    if (this.windowClosed) return;
     const before = this.running;
     const started = [...running].filter((id) => !before.includes(id));
     this.running = [...before.filter((id) => running.has(id)), ...started];
