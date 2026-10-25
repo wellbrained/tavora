@@ -11,7 +11,8 @@ import { computed, nextTick, onMounted, ref } from "vue";
 import type { CatalogModuleView, CatalogPageResult } from "../../shared/host-api";
 import type { InstalledModule } from "../module-page";
 import { formatSize } from "../catalog-size";
-import { act, api, dialog } from "../host";
+import { act, api, dialog, state } from "../host";
+import { compareModuleVersions } from "../../shared/module-version";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { formatDate, t } from "../i18n";
@@ -56,6 +57,10 @@ onMounted(async () => {
 
 /** The listing as the main process read it for this page, or the card's until then. */
 const module = computed(() => (page.value?.status === "ok" ? page.value.module : props.module));
+/** The version installed here: the listing may already have a newer one, which waits for the update check. */
+const installedVersion = computed(() => (props.installed ? (state.value?.modules.find((item) => item.id === props.module.id)?.version ?? null) : null));
+/** The listing's version, when it is newer than the installed one. */
+const newest = computed(() => (installedVersion.value && compareModuleVersions(module.value.version, installedVersion.value) > 0 ? module.value.version : null));
 const sizeText = computed(() => props.size ?? formatSize(module.value.size));
 const loaded = computed(() => (page.value?.status === "ok" ? page.value : null));
 const latest = computed(() => loaded.value?.versions.find((version) => version.version === module.value.version) ?? null);
@@ -166,7 +171,11 @@ async function openHomepage() {
               <h3 class="mb-2 font-medium">{{ t("catalog.details") }}</h3>
               <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5" data-testid="catalog-info-details">
                 <dt class="text-muted-foreground">{{ t("catalog.version") }}</dt>
-                <dd class="tabular-nums">{{ module.version }}</dd>
+                <dd class="tabular-nums" data-testid="catalog-info-version">{{ installedVersion ?? module.version }}</dd>
+                <template v-if="newest">
+                  <dt class="text-muted-foreground">{{ t("catalog.newest") }}</dt>
+                  <dd class="tabular-nums" data-testid="catalog-info-newest">{{ newest }}</dd>
+                </template>
                 <template v-if="updated">
                   <dt class="text-muted-foreground">{{ t("catalog.updated") }}</dt>
                   <dd data-testid="catalog-info-updated">{{ updated }}</dd>

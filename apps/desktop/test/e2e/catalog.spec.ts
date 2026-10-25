@@ -417,6 +417,17 @@ test("catalog module updates wait for the player, install from the Updates view 
     await expectModuleText(app, id, "version", "1.0.0");
     await expect(page.getByTestId("module-updates-button")).toHaveText("1 update");
 
+    // The module's page says the version installed, and the newest one beside it.
+    await page.getByTestId("add-module").click();
+    await page.getByTestId(`module-name-${id}`).click();
+    const info = page.getByTestId(`catalog-info-${id}`);
+    await expect(info.getByTestId("catalog-info-version")).toHaveText("1.0.0");
+    await expect(info.getByTestId("catalog-info-newest")).toHaveText("1.1.0");
+    await page.keyboard.press("Escape");
+    await expect(info).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("add-module-dialog")).toHaveCount(0);
+
     // The header button opens the library on Updates: versions, what is new, and Update.
     await page.getByTestId("module-updates-button").click();
     await expect(page.getByTestId("module-view-title")).toHaveText("Updates");
