@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
-import { CHECKLIST, checkCi, checkInstalled, checkRelease, compareVersions, lastReleased } from "./release-guards.mjs";
+import { CHECKLIST, asksHandChecks, checkCi, checkInstalled, checkRelease, compareVersions, lastReleased } from "./release-guards.mjs";
 
 const ready = { branch: "main", dirty: false, ahead: 0, behind: 0, tags: [] as string[], noteVersions: ["0.4.0"] };
 
@@ -115,5 +115,20 @@ describe("checkInstalled", () => {
 describe("CHECKLIST", () => {
   it("has the four by-hand checks that can be made before publishing", () => {
     expect(CHECKLIST).toHaveLength(4);
+  });
+
+  it("names what covers each check automatically", () => {
+    for (const item of CHECKLIST) expect(item.coveredBy).toBeTruthy();
+  });
+});
+
+describe("asksHandChecks", () => {
+  it("lists the checks without asking before 1.0", () => {
+    expect(asksHandChecks("0.21.13")).toBe(false);
+  });
+
+  it("asks them again from 1.0.0 on", () => {
+    expect(asksHandChecks("1.0.0")).toBe(true);
+    expect(asksHandChecks("1.2.3")).toBe(true);
   });
 });
