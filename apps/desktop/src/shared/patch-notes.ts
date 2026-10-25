@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.9",
+    date: "2026-10-25",
+    title: "System info is lighter on games",
+    notes: [
+      "NVIDIA graphics cards are now read directly, so watching them can't cause small hitches in a game anymore.",
+      "System Monitor shows your NVIDIA card's temperature and power use.",
+    ],
+  },
+  {
     version: "0.21.8",
     date: "2026-10-25",
     title: "Smoother game switching",
