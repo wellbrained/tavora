@@ -20,6 +20,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.54",
+    date: "2026-10-25",
+    title: "Panels over your game",
+    notes: [
+      "Pick Show over game in a panel's menu to put the whole panel over your game, like To-Dos or Notes.",
+      "Its slot says Shown over game. Press Bring back there, in the overlay's frame or in Settings > Overlays to return it.",
+      "It follows your overlay settings: when it shows, how see-through it is, and the Arrange key. While you arrange you can click and type in it.",
+      "Panels over your game come back into their workspace when Tavora starts.",
+      "To-Dos fits small panels better.",
+    ],
+  },
+  {
     version: "0.20.53",
     date: "2026-10-25",
     title: "Calculator keyboard",
