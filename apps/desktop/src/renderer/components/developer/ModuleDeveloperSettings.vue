@@ -81,6 +81,7 @@ function unlinkKey(fingerprint: string) {
     title: t("account.developer.unlinkTitle"),
     message: t("account.developer.unlinkMessage"),
     confirm: t("account.developer.unlink"),
+    danger: true,
     run: () => submitAction({ type: "account-unlink-key", fingerprint }),
   });
 }
@@ -203,7 +204,7 @@ function removeToken(token: AccountPublishToken) {
               <div class="flex flex-wrap items-center gap-2">
                 <Button variant="secondary" size="sm" :disabled="busy" data-testid="account-key-lost" @click="replaceKey(row.fingerprint, false)">{{ t("account.developer.replaceLost") }}</Button>
                 <Button variant="destructive" size="sm" :disabled="busy" data-testid="account-key-leaked" @click="replaceKey(row.fingerprint, true)">{{ t("account.developer.replaceLeaked") }}</Button>
-                <Button variant="ghost" size="sm" @click="replacing = null">{{ t("common.cancel") }}</Button>
+                <Button variant="secondary" size="sm" @click="replacing = null">{{ t("common.cancel") }}</Button>
               </div>
             </div>
           </li>

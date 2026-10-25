@@ -76,6 +76,7 @@ test("a development folder loads its module, reloads its panels on a new build, 
     await last.page.getByTestId("rail-settings").click();
     await last.page.getByTestId("settings-nav-development").click();
     await folders.nth(0).getByTestId("remove-development-folder").click();
+    await last.page.getByTestId("confirm-submit").click();
     await expect(folders).toHaveCount(1);
     await expect(last.page.getByTestId(`module-${ID}`)).toHaveCount(0);
   } finally {

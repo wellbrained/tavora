@@ -5,6 +5,7 @@
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
@@ -138,7 +139,7 @@ function removeHotkey(hotkey: HotkeyView) {
               <span class="text-muted-foreground truncate text-xs">{{ hotkey.moduleName }}<template v-if="hotkey.taken"> · <span class="text-destructive">{{ t("streaming.hotkeys.taken") }}</span></template></span>
             </span>
             <span class="flex flex-none items-center gap-1">
-              <kbd v-for="key in hotkeyKeys(hotkey.accelerator, mac)" :key="key" class="bg-secondary text-foreground min-w-7 rounded-sm border border-b-2 px-1.5 py-0.5 text-center font-mono text-xs">{{ key }}</kbd>
+              <Kbd v-for="key in hotkeyKeys(hotkey.accelerator, mac)" :key="key">{{ key }}</Kbd>
             </span>
             <Button variant="ghost" size="sm" :aria-label="t('streaming.hotkeys.removeLabel', { label: hotkey.label, action: hotkey.actionName })" @click="removeHotkey(hotkey)">
               {{ t("streaming.hotkeys.remove") }}

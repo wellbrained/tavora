@@ -278,6 +278,22 @@ export interface HostOptions {
 /** Built on first use; it carries the module font, so it is not small. */
 let moduleCss: string | undefined;
 
+/**
+ * Writes `data` to the file a save dialog gave, adding `.extension` when the name lacks it. The dialog asked before
+ * replacing the file the player chose; a name with the extension added was never asked about, so that one is not replaced.
+ */
+async function writeWithExtension(picked: string, extension: string, data: Buffer | string, mode?: number): Promise<string> {
+  const chosen = path.resolve(picked);
+  const file = chosen.toLowerCase().endsWith(`.${extension}`) ? chosen : `${chosen}.${extension}`;
+  try {
+    await writeFile(file, data, { flag: file === chosen ? "w" : "wx", ...(mode === undefined ? {} : { mode }) });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new PlayerError("error.file.taken", { name: path.basename(file) });
+    throw error;
+  }
+  return file;
+}
+
 const ICON_URL = `${HOST_SCHEME}://app/game-icons/`;
 /** A saved icon as a 32 px bitmap (blue, green, red, alpha), or null when it cannot be read. */
 function loadSmallBitmap(file: string): Uint8Array | null {
@@ -1594,12 +1610,24 @@ export class Host {
   }
 
   /** Packs a dev module signed with a kept key and saves the zip where the developer picks. */
+  /**
+   * The system's save dialog with the zip's name suggested (numbered when taken), opening where the player last
+   * saved a module zip while that folder is still there, else Documents\Tavora.
+   */
   private async saveModuleZip(moduleId: string): Promise<string | undefined> {
     const { manifest, zip } = await this.publisher.pack(this.projectOf(moduleId));
-    const picked = await dialog.showSaveDialog(this.window, { defaultPath: `${manifest.id}-${manifest.version}.zip`, filters: [{ name: "Zip", extensions: ["zip"] }] });
+    const folder = await this.ownFileFolder("module-zip");
+    const german = this.language.startsWith("de");
+    const picked = await dialog.showSaveDialog(this.window, {
+      title: german ? "Modul als ZIP speichern" : "Save module as zip",
+      defaultPath: path.join(folder, freeFileName(`${manifest.id}-${manifest.version}`, (fileName) => existsSync(path.join(folder, fileName)), "zip")),
+      filters: [{ name: german ? "ZIP-Dateien" : "Zip files", extensions: ["zip"] }],
+      properties: ["showOverwriteConfirmation"],
+    });
     if (picked.canceled || !picked.filePath) return undefined;
-    await writeFile(picked.filePath, zip);
-    return path.basename(picked.filePath);
+    const file = await writeWithExtension(picked.filePath, "zip", zip);
+    this.rememberPicked("module-zip", file);
+    return path.basename(file);
   }
 
   /** Shows the window in front, for a question that came from outside it (the pack command's sign request). */
@@ -1979,18 +2007,36 @@ export class Host {
         await this.developerKeys.create();
       },
       "developer-key-add": async () => {
-        const picked = await dialog.showOpenDialog(this.window, { properties: ["openFile"], filters: [{ name: "PEM", extensions: ["pem", "key"] }, { name: "*", extensions: ["*"] }] });
+        const german = this.language.startsWith("de");
+        const picked = await dialog.showOpenDialog(this.window, {
+          title: german ? "Schlüsseldatei öffnen" : "Open key file",
+          defaultPath: await this.ownFileFolder("publisher-key"),
+          properties: ["openFile"],
+          filters: [
+            { name: german ? "Schlüsseldateien" : "Key files", extensions: ["pem", "key"] },
+            { name: "*", extensions: ["*"] },
+          ],
+        });
         const file = picked.filePaths[0];
         if (picked.canceled || !file) return;
         const text = await readFile(file, "utf8").catch(() => null);
         if (text === null || text.length > 10_000) throw new PlayerError("developerKeys.error.notKey");
         await this.developerKeys.add(text);
+        this.rememberPicked("publisher-key", file);
       },
       "developer-key-export": async (action) => {
         const pem = this.developerKeys.exportKey(action.fingerprint);
-        const picked = await dialog.showSaveDialog(this.window, { defaultPath: `publisher-key-${action.fingerprint.slice(0, 8)}.pem` });
+        const folder = await this.ownFileFolder("publisher-key");
+        const german = this.language.startsWith("de");
+        const picked = await dialog.showSaveDialog(this.window, {
+          title: german ? "Schlüsseldatei speichern" : "Save key file",
+          defaultPath: path.join(folder, freeFileName(`publisher-key-${action.fingerprint.slice(0, 8)}`, (fileName) => existsSync(path.join(folder, fileName)), "pem")),
+          filters: [{ name: german ? "Schlüsseldateien" : "Key files", extensions: ["pem"] }],
+          properties: ["showOverwriteConfirmation"],
+        });
         if (picked.canceled || !picked.filePath) return;
-        await writeFile(picked.filePath, pem, { mode: 0o600 });
+        const file = await writeWithExtension(picked.filePath, "pem", pem, 0o600);
+        this.rememberPicked("publisher-key", file);
       },
       "developer-key-link": (action) => this.developerKeys.link(action.fingerprint),
       "developer-recovery-key": (action) => this.developerKeys.enterKey(action.key),
@@ -3586,6 +3632,14 @@ export class Host {
     const text = await readJsonText(file);
     this.rememberFileFolder(module, file);
     return { fileName: path.basename(file), text };
+  }
+
+  /** Where the dialog for one of Tavora's own files (a module zip, a key file) opens: the folder last used for `place` while it is still there, else Documents\Tavora. */
+  private async ownFileFolder(place: DialogPlace): Promise<string> {
+    const last = this.library.dialogFolders[place];
+    const folder = last && existsSync(last) ? last : documentsFolder();
+    await mkdir(folder, { recursive: true });
+    return folder;
   }
 
   /** The dialog for `place` opens next time in the folder `picked` is in (for a picked folder, its parent), and the library is saved. */

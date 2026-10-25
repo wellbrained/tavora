@@ -253,7 +253,7 @@ function browse() {
         <Button variant="ghost" size="icon-sm" class="mr-auto" :disabled="busy || view.status !== 'ready'" :aria-label="t('publish.checkAgain')" :title="t('publish.checkAgain')" data-testid="publish-refresh" @click="run({ type: 'publish-refresh' })">
           <RefreshCw :stroke-width="1.5" />
         </Button>
-        <Button variant="ghost" :disabled="view.status === 'publishing'" data-testid="publish-cancel" @click="close">{{ t("common.cancel") }}</Button>
+        <Button variant="secondary" :disabled="view.status === 'publishing'" data-testid="publish-cancel" @click="close">{{ t("common.cancel") }}</Button>
         <Button :disabled="busy || view.status !== 'ready' || view.problems.length > 0" data-testid="publish-upload" @click="run({ type: 'publish-upload' })">
           {{ view.status === "publishing" ? t("publish.publishing") : t("publish.publish") }}
         </Button>

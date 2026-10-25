@@ -162,7 +162,7 @@ function startOver() {
       <div class="flex gap-2">
         <Input v-model="keyText" class="max-w-120 font-mono" maxlength="200" autocomplete="off" spellcheck="false" :aria-label="t('cloudCopy.askKey.label')" data-testid="cloud-copy-key-input" />
         <Button type="submit" :disabled="busy || !keyText.trim()" data-testid="cloud-copy-key-submit">{{ t("cloudCopy.askKey.continue") }}</Button>
-        <Button type="button" variant="ghost" :disabled="busy" @click="run({ type: 'cloud-copy-cancel' })">{{ t("common.cancel") }}</Button>
+        <Button type="button" variant="secondary" :disabled="busy" @click="run({ type: 'cloud-copy-cancel' })">{{ t("common.cancel") }}</Button>
       </div>
       <p v-if="view.busy" class="text-muted-foreground text-sm" role="status">{{ status }}</p>
       <div class="flex items-center gap-3">
