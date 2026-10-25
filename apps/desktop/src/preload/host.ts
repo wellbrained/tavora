@@ -18,6 +18,7 @@ const api: TavoraHostApi = {
   catalogReviews: (moduleId) => ipcRenderer.invoke("host:catalog-reviews", moduleId),
   releaseStatuses: (copies) => ipcRenderer.invoke("host:release-statuses", copies),
   setPanelBounds: (bounds) => ipcRenderer.send("host:panel-bounds", bounds),
+  setWorkspaceBounds: (bounds) => ipcRenderer.send("host:workspace-bounds", bounds),
   setOverlay: (open) => ipcRenderer.send("host:overlay", open),
   setDimmed: (dimmed) => ipcRenderer.send("host:dimmed", dimmed),
   onState: (listener) => {

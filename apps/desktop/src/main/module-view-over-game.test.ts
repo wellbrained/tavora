@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 // ModuleView needs only a little of Electron to be made: a view with a page, and a session to harden.
-const made = vi.hoisted(() => ({ views: [] as { background: string; visible: boolean; css: string[]; removed: string[] }[] }));
+const made = vi.hoisted(() => ({ views: [] as { background: string; visible: boolean; css: string[]; removed: string[] }[], sent: [] as unknown[][] }));
 
 vi.mock("electron", () => {
   const session = () => ({
@@ -31,7 +31,7 @@ vi.mock("electron", () => {
         return `key-${this.state.css.length}`;
       },
       removeInsertedCSS: async (key: string) => void this.state.removed.push(key),
-      send: () => undefined,
+      send: (channel: string, ...args: unknown[]) => void made.sent.push([channel, ...args]),
       postMessage: () => undefined,
     };
     constructor() {
@@ -173,5 +173,63 @@ describe("a panel over the game", () => {
     await vi.waitFor(() => expect(state.css.some((css) => css.includes("opacity:0.25"))).toBe(true));
     view.leaveGame();
     await vi.waitFor(() => expect(state.removed).toHaveLength(2));
+  });
+});
+
+describe("a panel shown again", () => {
+  const frameRequest = () => made.sent.filter(([channel]) => channel === "tavora:frame").at(-1)?.[1];
+
+  it("is see-through until the page says it has drawn, so what lies under it stays", async () => {
+    const drawn = vi.fn();
+    const view = make({ onDrawn: drawn });
+    const state = made.views.at(-1)!;
+    view.revealed = true;
+    view.setVisible(true);
+    expect(state.background).toBe("#00000000");
+    const done = vi.fn();
+    void view.drawn.then(done);
+    const requestId = frameRequest();
+    expect(typeof requestId).toBe("number");
+    // An answer to another request, or not a number, changes nothing.
+    view.framed("1");
+    view.framed((requestId as number) + 1);
+    await Promise.resolve();
+    expect(done).not.toHaveBeenCalled();
+    view.framed(requestId);
+    await vi.waitFor(() => expect(done).toHaveBeenCalled());
+    expect(state.background).toBe("#202020");
+    expect(view.firstDrawn).toBe(true);
+    expect(drawn).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops waiting when it is hidden again, or after the cap", async () => {
+    vi.useFakeTimers();
+    try {
+      const view = make();
+      const state = made.views.at(-1)!;
+      view.setVisible(true);
+      const first = view.drawn;
+      view.setVisible(false);
+      await first;
+      expect(state.background).toBe("#202020");
+      // A page that never answers (stuck, broken) gets its colour back and lets the cover go.
+      view.setVisible(true);
+      const done = vi.fn();
+      void view.drawn.then(done);
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(done).toHaveBeenCalled();
+      expect(state.background).toBe("#202020");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stays clear over the game", () => {
+    const view = make();
+    const state = made.views.at(-1)!;
+    view.enterGame(() => false);
+    view.setVisible(true);
+    view.framed(frameRequest());
+    expect(state.background).toBe("#00000000");
   });
 });

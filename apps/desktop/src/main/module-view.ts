@@ -25,6 +25,7 @@ import { serveClipboard } from "./clipboard-http";
 import { cleanPictureName, servePictureSave } from "./picture-save-http";
 import { serveJsonOpen, serveJsonSave } from "./json-file-http";
 import { saveJsonExport, serveJsonExport } from './json-export-http';
+import { DRAW_CAP_MS } from "./panel-cover";
 import { isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
 import { moduleFetch, type TestHosts } from "./network";
@@ -57,6 +58,8 @@ export interface ModuleViewOptions {
   storageLimit?: number;
   /** The page has its data and may be shown (see ModuleView.revealed). */
   onReveal?(): void;
+  /** The page has drawn for the first time in its slot (see ModuleView.firstDrawn). */
+  onDrawn?(): void;
   /** The player opened a web address from the module (links.open); it was checked to be one. */
   onOpenLink(url: string): void;
   /** A call that needs Tavora's own window was refused because the panel is over the game; the host tells the player (once per press). */
@@ -486,6 +489,7 @@ export class ModuleView {
   /** Starts counting for a new page: it is hidden until it settles or the cap runs out. */
   private hideUntilSettled(): void {
     this.revealed = false;
+    this.firstDrawn = false;
     // Over the game nothing else shows the view again (the host leaves such a panel alone), so it hides and shows itself.
     if (this.overGame) this.view.setVisible(false);
     this.clearRevealTimers();
@@ -779,8 +783,59 @@ export class ModuleView {
     this.bridge?.emit("workspace.resize", { ...this.viewport });
   }
 
+  /** Whether the panel is shown now (in its slot, or over the game). */
+  private shown = false;
+  private drawing: Promise<void> = Promise.resolve();
+  private frameRequests = 0;
+  private readonly frameWaiters = new Map<number, () => void>();
+  /** False from a new page's start until it has drawn once; the host UI keeps the panel's loader under it until then. */
+  firstDrawn = false;
+
   setVisible(visible: boolean): void {
     this.view.setVisible(visible);
+    if (visible === this.shown) return;
+    this.shown = visible;
+    if (visible) this.drawing = this.awaitFrame();
+    else for (const done of [...this.frameWaiters.values()]) done();
+  }
+
+  /** Resolves once the panel has drawn since it was last shown (at most DRAW_CAP_MS later), or now while it is hidden. */
+  get drawn(): Promise<void> {
+    return this.shown ? this.drawing : Promise.resolve();
+  }
+
+  /**
+   * A page draws nothing while hidden, and a heavy one takes a few hundred ms for its first frame once shown. Until
+   * that frame the view is see-through, so what the host UI shows in the slot stays: the panel's picture from while
+   * a dialog was open, or its loader. The preload answers after the page's next frames (tavora:frame).
+   */
+  private awaitFrame(): Promise<void> {
+    const contents = this.view.webContents;
+    if (contents.isDestroyed()) return Promise.resolve();
+    if (!this.overGame) this.view.setBackgroundColor("#00000000");
+    const requestId = ++this.frameRequests;
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        this.frameWaiters.delete(requestId);
+        if (requestId === this.frameRequests && !contents.isDestroyed()) {
+          if (!this.overGame) this.view.setBackgroundColor(this.options.getTheme().tokens.background);
+          if (this.shown && this.revealed && !this.firstDrawn) {
+            this.firstDrawn = true;
+            this.options.onDrawn?.();
+          }
+        }
+        resolve();
+      };
+      const timer = setTimeout(done, DRAW_CAP_MS);
+      this.frameWaiters.set(requestId, done);
+      contents.send("tavora:frame", requestId);
+    });
+  }
+
+  /** The preload says the page has drawn since frame request `requestId`. */
+  framed(requestId: unknown): void {
+    if (typeof requestId === "number") this.frameWaiters.get(requestId)?.();
   }
 
   /**
@@ -852,7 +907,8 @@ export class ModuleView {
 
   /** Recolours the page and tells the module, which may restyle itself through ui.onThemeChange. */
   applyTheme(theme: TavoraTheme): void {
-    if (!this.overGame) this.view.setBackgroundColor(theme.tokens.background);
+    // A panel still waiting for its first frame stays see-through until then (awaitFrame).
+    if (!this.overGame && !this.frameWaiters.size) this.view.setBackgroundColor(theme.tokens.background);
     void this.insertThemeCss(theme);
     this.bridge?.emit("ui.theme", theme);
   }
