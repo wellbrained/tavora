@@ -2,6 +2,7 @@
 import { Minus, Plus } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Slider } from "@tavora/official-ui/components/ui/slider";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { useFloating } from "../host";
 import { t } from "../i18n";
@@ -213,16 +214,15 @@ function onOpenChange(value: boolean) {
         <Button size="icon-sm" variant="ghost" :aria-label="t('crop.smaller')" :title="t('crop.smaller')" :disabled="share <= MIN_SHARE + 0.001" @click="resize(frame.side / 1.25)">
           <Minus :stroke-width="1.5" />
         </Button>
-        <input
-          type="range"
-          class="accent-primary min-w-0 flex-1"
+        <Slider
+          class="min-w-0 flex-1"
           :min="MIN_SHARE"
-          max="1"
-          step="0.005"
+          :max="1"
+          :step="0.005"
           :aria-label="t('crop.size')"
           data-testid="crop-size"
-          :value="share"
-          @input="resize(Number(($event.target as HTMLInputElement).value) * maxSide)"
+          :model-value="[share]"
+          @update:model-value="$event?.[0] !== undefined && resize($event[0] * maxSide)"
         />
         <Button size="icon-sm" variant="ghost" :aria-label="t('crop.larger')" :title="t('crop.larger')" :disabled="share >= 0.999" @click="resize(frame.side * 1.25)">
           <Plus :stroke-width="1.5" />
