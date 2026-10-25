@@ -78,6 +78,14 @@ export function windowsForegroundProbe(): ForegroundProbe {
       // Nothing to give the keyboard back to unless this look finds a window.
       if (!own) last = null;
       if (!window || user32.isIconic(window) || !pid[0]) return null;
+      if (own) {
+        // The game window found before is gone (the game exited while a panel over it had the keyboard): nothing is in front but Tavora.
+        // GetClientRect fails for a window that no longer exists; no new call is needed.
+        if (!last || !user32.getClientRect(last, new Int32Array(4))) {
+          last = null;
+          return null;
+        }
+      }
       const handle = user32.handleOf(window);
       if (known?.pid !== pid[0] || known.handle !== handle) known = { handle, pid: pid[0], program: programPath(windows, pid[0], name) };
       const size = new Int32Array(4);

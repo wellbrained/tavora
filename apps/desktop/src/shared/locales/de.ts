@@ -1509,6 +1509,7 @@ export const de: Record<keyof typeof en, string> = {
   "overlays.bringBack": "Zurückholen",
   "overlays.bringBackLabel": "Dieses Panel zurückholen",
   "overlays.bringBackNamed": "{name} aus {game} zurückholen",
+  "overlays.bringBackFirst": "Hol das Panel zurück, um das zu tun.",
   "overlays.full": "Dein Spiel hat keinen Platz für ein weiteres Overlay.",
   "overlays.arrangeAction": "Overlays anordnen",
   "overlays.arrangeLabel": "Overlays",

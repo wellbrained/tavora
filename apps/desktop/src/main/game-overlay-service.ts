@@ -36,7 +36,7 @@ import type { StreamingModule } from "./streaming";
 
 /** The part of a game overlay's window the service drives (a test stands in for Electron). */
 export type OverlayWindow = Pick<GameOverlayWindow, "setRect" | "setShown" | "setArranging" | "setHideFromCapture" | "setOpacity" | "destroy" | "dragging"> &
-  Partial<Pick<GameOverlayWindow, "focused">>;
+  Partial<Pick<GameOverlayWindow, "focused" | "focusPanel">>;
 
 /** What a window shows and tells back; the service hands it to `openWindow`. */
 export interface OverlayWindowRequest {
@@ -112,6 +112,8 @@ interface Open {
   hideFromCapture: boolean;
   arranging: boolean;
   shown: boolean;
+  /** When the window was shown last, to tell which of several panel windows is the newest. */
+  shownOrder: number;
   /** Since when the window is hidden because its game is not in front; null while it isn't. */
   idleSince: number | null;
 }
@@ -126,6 +128,7 @@ export class GameOverlays {
   private game: Rect | null = null;
   private arranging: string | null = null;
   private escape = false;
+  private shownCount = 0;
   /** When each overlay's page crashed lately, and the overlays whose page crashed so often they are left alone. */
   private readonly crashes = new Map<string, number[]>();
   private readonly stopped = new Set<string>();
@@ -373,6 +376,7 @@ export class GameOverlays {
     const now = Date.now();
     const live = new Set<string>();
     const gone: GameOverlay[] = [];
+    const started: Open[] = [];
     for (const overlay of this.store.all()) {
       const id = overlayId(overlay);
       live.add(id);
@@ -411,9 +415,21 @@ export class GameOverlays {
       entry.idleSince = null;
       if (entry.opacity !== overlay.opacity) entry.window.setOpacity((entry.opacity = overlay.opacity));
       if (entry.hideFromCapture !== overlay.hideFromCapture) entry.window.setHideFromCapture((entry.hideFromCapture = overlay.hideFromCapture));
-      if (entry.arranging !== arranging) entry.window.setArranging((entry.arranging = arranging));
       if (!entry.window.dragging) entry.window.setRect(placeRelative(overlay.rect, this.game!));
-      if (!entry.shown) entry.window.setShown((entry.shown = true));
+      if (!entry.shown) {
+        entry.window.setShown((entry.shown = true));
+        entry.shownOrder = ++this.shownCount;
+      }
+      // After the window has its place and is shown (on top), never before: a window that takes the mouse and the keyboard while still unplaced would flash in the wrong spot.
+      if (entry.arranging !== arranging) {
+        entry.window.setArranging((entry.arranging = arranging));
+        if (arranging) started.push(entry);
+      }
+    }
+    // One window takes the keyboard, the panel shown last; not each in turn.
+    if (started.length > 0) {
+      const newest = [...this.open.values()].filter((entry) => entry.arranging && entry.shown && entry.window.focusPanel).sort((a, b) => b.shownOrder - a.shownOrder)[0];
+      newest?.window.focusPanel?.();
     }
     for (const [id, entry] of this.open) {
       if (live.has(id)) continue;
@@ -450,7 +466,7 @@ export class GameOverlays {
     const window = isPanelKey(overlay.key) ? this.options.panels?.openWindow({ ...request, instanceId: panelInstanceOf(overlay.key), gameId: overlay.gameId }) : this.options.openWindow(request);
     if (!window) return null;
     // A new window is fully opaque, click-through and visible to capture; apply sets the rest.
-    const entry: Open = { window, opacity: 100, hideFromCapture: false, arranging: false, shown: false, idleSince: null };
+    const entry: Open = { window, opacity: 100, hideFromCapture: false, arranging: false, shown: false, shownOrder: 0, idleSince: null };
     this.open.set(id, entry);
     return entry;
   }
@@ -554,6 +570,8 @@ export class GameOverlays {
     clearInterval(this.timer);
     this.timer = undefined;
     this.closeAll();
+    // The keys follow the game in front: with none, the arrange and toggle keys go back to the system.
+    this.setFront(null, null);
     await this.store.save();
   }
 }

@@ -1585,6 +1585,8 @@ export class Host {
     this.window.on("show", hidden(false));
     this.window.on("closed", () => {
       this.windowClosed = true;
+      // The overlay windows (and the keys for arranging) go with the main window; they would keep Tavora running.
+      void this.gameOverlays.shutdown().catch((error: unknown) => console.error("[tavora]", error));
       for (const view of this.views.values()) view.dispose();
       this.views.clear();
       this.viewsByContents.clear();
@@ -2543,8 +2545,10 @@ export class Host {
    * A module asked to open a web address (links.open, already checked): a new tab in the game's
    * newest Browser panel, or in that panel itself while it is still empty, or in a new Browser panel.
    */
-  private openLinkFromModule(url: string): void {
+  private openLinkFromModule(url: string, gameId?: string): void {
     const game = this.game;
+    // The panel that asked belongs to a game that isn't the one shown (it is over its game): its link is not for this one.
+    if (gameId !== undefined && game?.id !== gameId) throw new HostError("PERMISSION_DENIED", "links.open works only in the game shown now");
     if (!game) return;
     try {
       const browserId = this.records(game.id)
@@ -2989,7 +2993,11 @@ export class Host {
         this.applyBounds();
         this.pushStateSoon();
       },
-      onOpenLink: (url) => this.openLinkFromModule(url),
+      onOpenLink: (url) => this.openLinkFromModule(url, game.id),
+      onNeedsTavora: () => {
+        this.notice = translate(this.language, "overlays.bringBackFirst");
+        this.pushState();
+      },
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
       savePicture: (png, name) => this.savePictureAs(png, name),
       saveJson: (data, name) => this.saveJsonAs(module, data, name),
@@ -3013,6 +3021,8 @@ export class Host {
       hotkeys: this.streaming.hotkeysFor(module, game.id),
       ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
       onStatus: (status) => {
+        // A panel over the game that crashed goes back to its slot, where the crash screen is.
+        if (status === "crashed" && this.floating(record.instanceId)) this.gameOverlays.bringBack(record.instanceId);
         if (!measured && status === "ready") {
           measured = true;
           timings.record("panel-open", performance.now() - openedAt!);

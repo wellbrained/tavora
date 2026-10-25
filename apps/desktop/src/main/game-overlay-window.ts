@@ -8,7 +8,7 @@
 // The same window also holds a whole panel the player moved over its game (`panel`). It is the panel's own view, moved
 // here from the workspace and moved back when the window goes; nothing about the panel changes. While arranging, that
 // window takes the mouse and the keyboard too, and the frame sits around the panel instead of over it.
-import { BrowserWindow, WebContentsView, screen, session, type Session } from "electron";
+import { BrowserWindow, WebContentsView, app, screen, session, type Session } from "electron";
 import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
 import { dragRect, panelBounds, type Opacity, type Rect } from "./game-overlays";
@@ -84,6 +84,11 @@ export class GameOverlayWindow {
   private arranging = false;
   private drag: { rect: Rect; cursor: { x: number; y: number }; edges: Edges | null } | null = null;
   private destroyed = false;
+  /** Tavora is quitting: the window may close then (an app quit closes every window and must not be held up). */
+  private quitting = false;
+  private readonly onQuit = () => {
+    this.quitting = true;
+  };
 
   constructor(private readonly options: GameOverlayWindowOptions) {
     // No "persist:" prefix: nothing of the page is kept on disk. Each overlay has a session of its own, kept for as long
@@ -121,8 +126,22 @@ export class GameOverlayWindow {
     contents.on("will-navigate", (event) => event.preventDefault());
     contents.on("did-finish-load", () => void this.applyOpacity());
     contents.once("render-process-gone", () => this.end());
+    // A window holding a panel is never closed by the player (Alt+F4 while arranging): that would strand the panel.
+    // Bring back is how it leaves. Tavora's own destroy() does not go through this.
+    window.on("close", (event) => {
+      if (options.panel && !this.destroyed && !this.quitting) event.preventDefault();
+    });
+    app.on("before-quit", this.onQuit);
     window.once("closed", () => {
+      app.removeListener("before-quit", this.onQuit);
+      const unexpected = !this.destroyed;
       this.destroyed = true;
+      // Closed by something other than destroy(): let go of the panel and tell the service, so no dead entry stays.
+      if (unexpected) {
+        this.release();
+        if (!this.frame.webContents.isDestroyed()) this.frame.webContents.close();
+        this.options.ended();
+      }
     });
     // A panel brings its own page; this window only holds it.
     if (!options.panel) void contents.loadURL(`${GAME_OVERLAY_ORIGIN}/`).catch(() => this.end());
@@ -204,7 +223,15 @@ export class GameOverlayWindow {
     }
   }
 
-  /** Whether the window takes the mouse and shows the frame, for arranging. */
+  /** Gives the keyboard to the panel (the service does so for one panel window only). */
+  focusPanel(): void {
+    const panel = this.options.panel;
+    if (!panel || this.isDestroyed || !this.arranging) return;
+    this.window.focus();
+    panel.view.webContents.focus();
+  }
+
+  /** Whether the window takes the mouse and shows the frame, for arranging. The keyboard is given with focusPanel. */
   setArranging(arranging: boolean): void {
     if (this.isDestroyed || this.arranging === arranging) return;
     this.arranging = arranging;
@@ -217,10 +244,6 @@ export class GameOverlayWindow {
     // A panel takes the keyboard as well while arranging, so its text fields can be typed in.
     this.window.setFocusable(arranging);
     this.placePanel();
-    if (arranging) {
-      this.window.focus();
-      panel.view.webContents.focus();
-    }
   }
 
   /** Only with this on is the window hidden from screen capture. */
@@ -264,16 +287,20 @@ export class GameOverlayWindow {
     }
   }
 
+  /** The panel is let go, not closed: its page goes on running wherever the host puts it. It closes only when the panel itself does. */
+  private release(): void {
+    const panel = this.options.panel;
+    if (!panel) return;
+    if (!this.window.isDestroyed()) this.window.contentView.removeChildView(panel.view);
+    panel.leaveGame();
+    this.options.released?.();
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    const panel = this.options.panel;
-    if (panel) {
-      // The panel is let go, not closed: its page goes on running wherever the host puts it. It closes only when the panel itself does.
-      if (!this.window.isDestroyed()) this.window.contentView.removeChildView(panel.view);
-      panel.leaveGame();
-      this.options.released?.();
-    }
+    app.removeListener("before-quit", this.onQuit);
+    this.release();
     // Close the pages' processes too, as the other views do; destroying the window alone can leave them running.
     if (!this.frame.webContents.isDestroyed()) this.frame.webContents.close();
     if (!this.window.isDestroyed()) {

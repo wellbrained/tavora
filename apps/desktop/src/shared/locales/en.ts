@@ -1508,6 +1508,7 @@ export const en = {
   "overlays.bringBackLabel": "Bring this panel back",
   "overlays.bringBackNamed": "Bring {name} back from {game}",
   "overlays.full": "Your game has no room for another overlay.",
+  "overlays.bringBackFirst": "Bring the panel back to do this.",
   "overlays.arrangeAction": "Arrange overlays",
   "overlays.arrangeLabel": "Overlays",
   "overlays.toggleAction": "Show or hide",

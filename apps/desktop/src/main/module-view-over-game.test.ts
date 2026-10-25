@@ -24,7 +24,12 @@ vi.mock("electron", () => {
       on: () => undefined,
       loadURL: async () => undefined,
       isDestroyed: () => false,
-      insertCSS: async (css: string) => (this.state.css.push(css), `key-${this.state.css.length}`),
+      insertCSS: async (css: string) => {
+        this.state.css.push(css);
+        // The page takes a moment to take a style.
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        return `key-${this.state.css.length}`;
+      },
       removeInsertedCSS: async (key: string) => void this.state.removed.push(key),
       send: () => undefined,
       postMessage: () => undefined,
@@ -51,9 +56,9 @@ vi.mock("electron", () => {
   };
 });
 
-const { ModuleView } = await import("./module-view");
+const { ModuleView, allowedHere } = await import("./module-view");
 
-function make() {
+function make(extra: Record<string, unknown> = {}) {
   const options = {
     instanceId: "11111111-1111-4111-8111-111111111111",
     module: { owner: "official", root: "/nowhere", provenance: "official", manifest: { id: "tavora.todos", entry: "dist/index.html", permissions: {} } },
@@ -65,6 +70,7 @@ function make() {
     saveJson: async () => null,
     openJson: async () => null,
     discord: { release: () => undefined },
+    ...extra,
   };
   return new ModuleView(options as never);
 }
@@ -104,6 +110,55 @@ describe("a panel over the game", () => {
     expect(state.background).toBe("#00000000");
     view.leaveGame();
     expect(state.background).toBe("#202020");
+  });
+
+  it("takes the style away even when it was still being inserted as the panel came back", async () => {
+    const view = make();
+    const state = made.views.at(-1)!;
+    view.enterGame(() => false);
+    view.setGameOpacity(50);
+    // The style is on its way in when the panel comes back.
+    await vi.waitFor(() => expect(state.css).toHaveLength(1));
+    view.leaveGame();
+    await vi.waitFor(() => expect(state.removed).toEqual(["key-1"]));
+  });
+
+  it("refuses calls that need Tavora's window while over the game, and tells the player once per press", () => {
+    const told = vi.fn();
+    const view = make({ onNeedsTavora: told });
+    const refuse = (what: string) => (view as unknown as { refuseOverGame(what: string): void }).refuseOverGame(what);
+    // In the workspace nothing is refused.
+    expect(() => refuse("ui.showMenu")).not.toThrow();
+    expect(told).not.toHaveBeenCalled();
+
+    view.enterGame(() => true);
+    view.noteGesture();
+    expect(() => refuse("ui.showMenu")).toThrowError(expect.objectContaining({ code: "PERMISSION_DENIED" }));
+    expect(() => refuse("links.open")).toThrow();
+    expect(told).toHaveBeenCalledTimes(1);
+    // Another press, another notice.
+    view.noteGesture();
+    (view as unknown as { gestureAt: number }).gestureAt += 1;
+    expect(() => refuse("hotkeys.set")).toThrow();
+    expect(told).toHaveBeenCalledTimes(2);
+
+    view.leaveGame();
+    expect(() => refuse("ui.showMenu")).not.toThrow();
+  });
+
+  it("refuses the dialogs the session answers when the last press came from a panel over the game", () => {
+    const gesture: { at: number; overGame?: boolean; refuse?: () => void } = { at: Date.now() };
+    const refuse = vi.fn();
+    const allowed = allowedHere(gesture);
+    expect(allowed()).toBe(true);
+    gesture.overGame = true;
+    gesture.refuse = refuse;
+    expect(allowed()).toBe(false);
+    expect(refuse).toHaveBeenCalled();
+    gesture.overGame = false;
+    expect(allowed()).toBe(true);
+    gesture.at = Date.now() - 60_000;
+    expect(allowed()).toBe(false);
   });
 
   it("fades the page by a style of Tavora's own, and takes it away when it comes back", async () => {

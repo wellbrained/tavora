@@ -58,6 +58,8 @@ export interface ModuleViewOptions {
   onReveal?(): void;
   /** The player opened a web address from the module (links.open); it was checked to be one. */
   onOpenLink(url: string): void;
+  /** A call that needs Tavora's own window was refused because the panel is over the game; the host tells the player (once per press). */
+  onNeedsTavora?(): void;
   /** Shows a module's menu in the host UI, over this panel (host.ts); resolves with the chosen id, or null. */
   showMenu(menu: CheckedMenu): Promise<string | null>;
   pickReadOnlyFile?(extensions:string[]):Promise<string|null>;
@@ -95,6 +97,8 @@ export interface ModuleViewOptions {
     publish(key: string, state: JsonValue): void;
     remove(key: string): void;
     copyLink(key: string): Promise<OverlayLinkResult>;
+    /** Whether copyLink would open Tavora's window now (the consent dialog, or the setting that is off). */
+    copyNeedsWindow?(): boolean;
     resetLink(key: string): void;
     showOverGame(key: string): GameOverlayResult;
   };
@@ -120,12 +124,30 @@ const hardened = new WeakSet<Session>();
  * address is answered by the session, which cannot tell its panels apart, so this is kept per session; all of its
  * panels are the same module.
  */
-const sessionGestures = new WeakMap<Session, { at: number }>();
+const sessionGestures = new WeakMap<Session, SessionGesture>();
 
-function gestureOf(ses: Session): { at: number } {
+/** `overGame`: the latest press came from a panel over the game, whose calls that need Tavora's window are refused. */
+interface SessionGesture {
+  at: number;
+  overGame?: boolean;
+  /** Tells the player once per press that the panel has to come back first. */
+  refuse?: () => void;
+}
+
+function gestureOf(ses: Session): SessionGesture {
   let gesture = sessionGestures.get(ses);
   if (!gesture) sessionGestures.set(ses, (gesture = { at: 0 }));
   return gesture;
+}
+
+/** For the calls the session answers that open Tavora's dialogs: a press made over the game doesn't count. */
+export function allowedHere(gesture: SessionGesture): () => boolean {
+  return () => {
+    if (Date.now() - gesture.at > GESTURE_MS) return false;
+    if (!gesture.overGame) return true;
+    gesture.refuse?.();
+    return false;
+  };
 }
 
 async function writeClipboardPicture(png: Buffer): Promise<void> {
@@ -175,18 +197,18 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
     if (url.pathname === PICTURES_PATH) {
       const gesture = gestureOf(ses);
       return servePictureSave(request, url, {
-        allowed: () => Date.now() - gesture.at <= GESTURE_MS,
+        allowed: allowedHere(gesture),
         consume: () => void (gesture.at = 0),
         save: files.savePicture,
       });
     }
     if (url.pathname === JSON_SAVE_PATH) {
       const gesture = gestureOf(ses);
-      return serveJsonSave(request, url, { allowed: () => Date.now() - gesture.at <= GESTURE_MS, consume: () => void (gesture.at = 0), save: files.saveJson }, cleanPictureName);
+      return serveJsonSave(request, url, { allowed: allowedHere(gesture), consume: () => void (gesture.at = 0), save: files.saveJson }, cleanPictureName);
     }
     if (url.pathname === JSON_OPEN_PATH) {
       const gesture = gestureOf(ses);
-      return serveJsonOpen(request, { allowed: () => Date.now() - gesture.at <= GESTURE_MS, consume: () => void (gesture.at = 0), open: files.openJson });
+      return serveJsonOpen(request, { allowed: allowedHere(gesture), consume: () => void (gesture.at = 0), open: files.openJson });
     }
     if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
     const file = await resolveAsset(module.root, url.pathname);
@@ -399,7 +421,10 @@ export class ModuleView {
     if (!gestureCounts(this.overGame !== null, this.overGame?.arranging() ?? false)) return;
     this.gestureAt = Date.now();
     this.usedAt = this.gestureAt;
-    gestureOf(this.view.webContents.session).at = this.gestureAt;
+    const shared = gestureOf(this.view.webContents.session);
+    shared.at = this.gestureAt;
+    shared.overGame = this.overGame !== null;
+    shared.refuse = () => this.needsTavora();
     for (const wake of this.gestureWaiters) wake();
   }
 
@@ -407,6 +432,23 @@ export class ModuleView {
    * Something only a click or key press in the page may do, once per click. Waits a moment first for a click
    * whose report has not arrived yet.
    */
+  /** The press whose refusal the player was told about, so one press shows the notice once. */
+  private toldAt = 0;
+
+  /** Tells the player once per press that the panel has to come back first. */
+  private needsTavora(): void {
+    if (this.toldAt === this.gestureAt && this.gestureAt !== 0) return;
+    this.toldAt = this.gestureAt;
+    this.options.onNeedsTavora?.();
+  }
+
+  /** Calls that need Tavora's own window (a dialog, a menu, another panel) are not for a panel over the game. */
+  private refuseOverGame(what: string): void {
+    if (!this.overGame) return;
+    this.needsTavora();
+    throw new HostError("PERMISSION_DENIED", `${what} is not available while the panel is shown over the game; bring it back first`);
+  }
+
   private async takeGesture(what: string): Promise<void> {
     if (Date.now() - this.gestureAt > GESTURE_MS) {
       await new Promise<void>((resolve) => {
@@ -427,6 +469,7 @@ export class ModuleView {
   private async openLink(url: string): Promise<void> {
     if (!isWebUrl(url)) throw new HostError("INVALID_PARAMS", "params.url must be an http or https address");
     // One click opens one link, so a script cannot open a pile of them.
+    this.refuseOverGame("links.open");
     await this.takeGesture("links.open");
     this.options.onOpenLink(url);
   }
@@ -500,6 +543,7 @@ export class ModuleView {
         setContent: this.options.setContent,
         openPanel: async (type, content) => {
           // One click opens or switches one panel, so a page cannot keep panels coming on its own.
+          this.refuseOverGame("panels.open");
           await this.takeGesture("panels.open");
           return this.options.openPanel(type, content);
         },
@@ -509,7 +553,10 @@ export class ModuleView {
         isMaximized: () => this.maximized,
         setMaximized: async (maximized) => {
           // Covering the other panels takes a click, so a page cannot take over the workspace on its own.
-          if (maximized) await this.takeGesture("panel.setMaximized");
+          if (maximized) {
+            this.refuseOverGame("panel.setMaximized");
+            await this.takeGesture("panel.setMaximized");
+          }
           this.options.setMaximized(maximized);
         },
         game,
@@ -551,6 +598,7 @@ export class ModuleView {
         },
         readOnlyFiles: {
           pick: async extensions => {
+            this.refuseOverGame('files.pickReadOnly');
             await this.takeGesture('files.pickReadOnly');
             const selected = await this.options.pickReadOnlyFile?.(extensions);
             if (!selected || this.bridge !== bridge) return null;
@@ -560,6 +608,7 @@ export class ModuleView {
         },
         showMenu: async (menu) => {
           // One click opens one menu, so a page cannot keep menus coming on its own.
+          this.refuseOverGame("ui.showMenu");
           await this.takeGesture("ui.showMenu");
           return this.options.showMenu(menu);
         },
@@ -568,12 +617,14 @@ export class ModuleView {
           remove: (key) => this.options.overlay.remove(key),
           copyLink: async (key) => {
             // One click copies one link, so a page cannot keep the clipboard to itself.
+            if (this.options.overlay.copyNeedsWindow?.()) this.refuseOverGame("overlay.copyLink");
             await this.takeGesture("overlay.copyLink");
             return this.options.overlay.copyLink(key);
           },
           resetLink: (key) => this.options.overlay.resetLink(key),
           showOverGame: async (key) => {
             // One click shows one overlay, so a page cannot keep opening windows over the game.
+            this.refuseOverGame("overlay.showOverGame");
             await this.takeGesture("overlay.showOverGame");
             return this.options.overlay.showOverGame(key);
           },
@@ -583,6 +634,7 @@ export class ModuleView {
           set: async (action, target, label) => {
             if (!(module.manifest.actions ?? []).some((item) => item.id === action)) throw new HostError("INVALID_PARAMS", `this module has no action "${action}" in its manifest`);
             // Tavora's dialog takes the key; one click opens it once.
+            this.refuseOverGame("hotkeys.set");
             await this.takeGesture("hotkeys.set");
             return this.options.hotkeys.set(action, target, label);
           },
@@ -701,7 +753,14 @@ export class ModuleView {
     if (!away) return;
     this.overGame = null;
     this.view.setBackgroundColor(this.options.getTheme().tokens.background);
-    if (away.css && !this.view.webContents.isDestroyed()) this.view.webContents.removeInsertedCSS(away.css).catch(() => undefined);
+    // After any style being set or removed, so the style it inserts last isn't left behind.
+    const contents = this.view.webContents;
+    this.gameOpacityQueue = this.gameOpacityQueue.then(async () => {
+      if (!away.css || contents.isDestroyed()) return;
+      const css = away.css;
+      away.css = undefined;
+      await contents.removeInsertedCSS(css).catch(() => undefined);
+    });
   }
 
   /** How much of the panel shows through over the game: a style of Tavora's own on the page, as for overlay pages. */

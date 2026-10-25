@@ -224,7 +224,7 @@ The same [`overlay`](./manifest.md#overlay) page can also be shown over the play
 - The page has no bridge and runs under the same policy as a Stream overlay page, with no network. Clicks go through it to the game, so it can't take input.
 - Theme and language don't reach the page, and its size is the player's choice, so lay it out for any size and keep its background transparent.
 - Keys that start with `panel-` are Tavora's: `overlay.showOverGame` refuses them with `INVALID_PARAMS`.
-- The player can also move a whole panel over the game from its menu. Your panel isn't told and calls nothing different: it keeps its bridge, and hears `workspace.resize` for the new size, `lifecycle.suspend` while it is hidden (its game isn't in front) and `lifecycle.resume` when it shows again. It sits on a see-through background, so keep it readable at any size. Clicks and key presses reach it only while the player arranges overlays.
+- The player can also move a whole panel over the game from its menu. Your panel isn't told and calls nothing different: it keeps its bridge, and hears `workspace.resize` for the new size, `lifecycle.suspend` while it is hidden (its game isn't in front) and `lifecycle.resume` when it shows again. It sits on a see-through background, so keep it readable at any size. Clicks and key presses reach it only while the player arranges overlays. While it is over the game, calls that need Tavora's own window (`pictures.save`, `files.saveJson`, `files.openJson`, `files.pickReadOnly`, `overlay.copyLink` when it needs the consent dialog or a setting, `overlay.showOverGame`, `hotkeys.set`, `ui.showMenu`, `panels.open`, `panel.setMaximized` and `links.open`) are refused with `PERMISSION_DENIED`; Tavora tells the player to bring the panel back first.
 
 ### Hotkeys
 
@@ -315,7 +315,7 @@ SDK:
 | `BAD_REQUEST` | Malformed message, wrong `v`, no handshake yet, over the size limit or too many requests in flight | `supported` for a wrong `v` |
 | `UNKNOWN_METHOD` | The method is not part of the protocol | |
 | `INVALID_PARAMS` | Params missing, of the wrong shape or not JSON, or params sent to a method that takes none | |
-| `PERMISSION_DENIED` | The method exists but needs a capability this module was not granted | `capability` |
+| `PERMISSION_DENIED` | The method exists but needs a capability this module was not granted; also a call that needs a click it did not get, or Tavora's own window while the panel is over the game | `capability` (only for a missing capability) |
 | `QUOTA_EXCEEDED` | A storage, document or panel-state limit would be exceeded, or a network answer is over 5 MB | |
 | `NETWORK_ERROR` | `network.fetch` got no answer: the host could not be found or reached, the connection or certificate failed, or it took too long | |
 | `CONFLICT` | `ifRevision` did not match | `revision` |

@@ -42,15 +42,25 @@ class FakeWindow implements OverlayWindow {
   dragging = false;
   destroyed = false;
   focused = false;
+  /** What the service asked of it, in order. */
+  log: string[] = [];
+  focusedPanel = 0;
   constructor(readonly request: OverlayWindowRequest & { instanceId?: string }) {}
   setRect(rect: Rect) {
     this.rect = rect;
+    this.log.push("rect");
   }
   setShown(shown: boolean) {
     this.shown = shown;
+    this.log.push(shown ? "show" : "hide");
   }
   setArranging(arranging: boolean) {
     this.arranging = arranging;
+    this.log.push(arranging ? "arrange" : "stop");
+  }
+  focusPanel() {
+    this.focusedPanel++;
+    this.log.push("focus");
   }
   setHideFromCapture(show: boolean) {
     this.hideFromCapture = show;
@@ -811,6 +821,52 @@ describe("a panel over the game", () => {
       // The game's own place is not taken from that window.
       expect(live()[0]!.rect).toMatchObject({ width: expect.any(Number) });
       expect(live()[0]!.rect!.x).toBeLessThan(500);
+    });
+
+    it("places and shows a window before it arranges and takes the keyboard, and only the newest panel window takes it", async () => {
+      const { service, world, live, key } = await setup();
+      const second = "0a1b2c3d-0000-4000-8000-000000000002";
+      over(service);
+      world.panelNames.set(second, "Notes");
+      over(service, second);
+      const [first, newest] = live();
+      service.pressed(key(arrangeBinding("elden")));
+      expect(first!.focusedPanel).toBe(0);
+      expect(newest!.focusedPanel).toBe(1);
+      expect(newest!.log.indexOf("focus")).toBeGreaterThan(newest!.log.indexOf("arrange"));
+      // A panel moved over the game while arranging is placed and shown first, then arranges, then takes the keyboard.
+      const third = "0a1b2c3d-0000-4000-8000-000000000003";
+      world.panelNames.set(third, "Clock");
+      over(service, third);
+      const made = live().at(-1)!;
+      expect(made.log.filter((step, at) => made.log.indexOf(step) === at)).toEqual(["rect", "show", "arrange", "focus"]);
+    });
+
+    it("ends arranging when the game exits while a panel over it has the keyboard (nothing of Tavora's remembered is in front)", async () => {
+      const { service, world, live, key, } = await setup();
+      over(service);
+      service.pressed(key(arrangeBinding("elden")));
+      live()[0]!.focused = true;
+      // The probe finds no game window left to give the keyboard to and reports no window.
+      world.foreground = null;
+      service.tick();
+      expect(live()[0]).toMatchObject({ shown: false, arranging: false });
+      expect(world.registered.has("Escape")).toBe(false);
+    });
+
+    it("closes every window, unregisters Escape and stops looking on shutdown", async () => {
+      const { service, world, live, key } = await setup();
+      service.start();
+      over(service);
+      show(service);
+      service.pressed(key(arrangeBinding("elden")));
+      expect(world.registered.has("Escape")).toBe(true);
+      const windows = [...world.windows];
+      await service.shutdown();
+      expect(windows.every((window) => window.destroyed)).toBe(true);
+      expect(live()).toHaveLength(0);
+      expect(world.registered.has("Escape")).toBe(false);
+      expect(service.frontGame()).toBe(null);
     });
 
     it("ends arranging when Tavora's own window is in front but no panel has the keyboard", async () => {
