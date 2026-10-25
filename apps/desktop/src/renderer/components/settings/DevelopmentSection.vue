@@ -12,7 +12,7 @@ import { computed, onMounted } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DevelopmentProblemKind } from "../../../shared/host-api";
-import { account, act, developerKeys, developerState, dialog, publishModule, saveModuleZip, showToast, state } from "../../host";
+import { account, act, confirmAction, developerKeys, developerState, dialog, publishModule, saveModuleZip, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleDeveloperSettings from "../developer/ModuleDeveloperSettings.vue";
 import ModuleRow from "./ModuleRow.vue";
@@ -56,6 +56,16 @@ const folderTint = { local: "bg-info/15 shadow-[inset_3px_0_0_var(--info)]", rel
 async function addFolder() {
   const result = await act({ type: "add-development-folder" });
   if (result.ok && result.id) showToast(t("settings.devFolders.added", { folder: result.id }));
+}
+
+function removeFolder(folder: string) {
+  confirmAction({
+    title: t("settings.devFolders.removeTitle"),
+    message: t("settings.devFolders.removeMessage"),
+    confirm: t("settings.devFolders.remove"),
+    danger: true,
+    run: () => submitAction({ type: "remove-development-folder", folder }),
+  });
 }
 
 onMounted(() => {
@@ -122,7 +132,7 @@ function advice(kind: DevelopmentProblemKind | null, message: string | null, fol
             class="flex-none"
             :aria-label="t('settings.devFolders.removeLabel', { folder: entry.folder })"
             data-testid="remove-development-folder"
-            @click="act({ type: 'remove-development-folder', folder: entry.folder })"
+            @click="removeFolder(entry.folder)"
           >
             <Trash2 :stroke-width="1.5" /> {{ t("settings.devFolders.remove") }}
           </Button>

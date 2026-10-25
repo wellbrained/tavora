@@ -6,13 +6,14 @@
 // look, and the player's own themes.
 import { Check, CopyPlus, FolderOpen, RefreshCw } from "@lucide/vue";
 import { computed } from "vue";
+import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
+import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { ThemeVariationView, ThemeView } from "../../../shared/host-api";
 import { act, state } from "../../host";
 import { t } from "../../i18n";
-import SegmentedControl from "./SegmentedControl.vue";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
@@ -82,59 +83,61 @@ const showVariation = computed(() => {
     >
       <p class="font-medium">{{ t("settings.theme.label") }}</p>
       <p class="text-muted-foreground mt-0.5 mb-4 text-sm">{{ t("settings.theme.description") }}</p>
-      <div class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3" role="group" :aria-label="t('settings.theme.label')" data-testid="themes">
-        <button
-          v-for="theme in appearance.themes"
-          :key="theme.id"
-          type="button"
-          :aria-pressed="theme.id === appearance.themeId"
-          :class="
-            cn(
-              'bg-background hover:border-input flex flex-col overflow-hidden rounded-lg border text-left',
-              theme.id === appearance.themeId && 'border-primary ring-primary/40 hover:border-primary ring-1',
-            )
-          "
-          :data-testid="`theme-${theme.id}`"
-          @click="pick(theme)"
-        >
-          <!-- The preview: rail, window, a card with text and the primary button, in the theme's colours. -->
-          <span class="flex h-24 w-full" :style="{ background: previewOf(theme).colors.background }" aria-hidden="true">
-            <span class="flex w-7 flex-none flex-col items-center gap-1.5 pt-2.5" :style="{ background: previewOf(theme).colors.rail }">
-              <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.primary }" />
-              <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.secondary }" />
-              <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.secondary }" />
-            </span>
-            <span class="flex flex-1 p-2.5">
-              <span
-                class="flex flex-1 flex-col gap-1.5 border p-2"
-                :style="{
-                  background: previewOf(theme).colors.card,
-                  borderColor: previewOf(theme).colors.border,
-                  borderRadius: `${previewOf(theme).radius}px`,
-                }"
-              >
-                <span class="h-1.5 w-3/4 rounded-full" :style="{ background: previewOf(theme).colors.foreground }" />
-                <span class="h-1.5 w-1/2 rounded-full" :style="{ background: previewOf(theme).colors['muted-foreground'] }" />
-                <span class="mt-auto flex gap-1.5">
-                  <span class="h-3.5 w-10" :style="{ background: previewOf(theme).colors.primary, borderRadius: `${previewOf(theme).radius / 2}px` }" />
-                  <span class="h-3.5 w-8" :style="{ background: previewOf(theme).colors.secondary, borderRadius: `${previewOf(theme).radius / 2}px` }" />
+      <!-- Two themes a row at least, three or four when there is room. -->
+      <div class="@container">
+        <div class="grid grid-cols-2 gap-3 @xl:grid-cols-3 @3xl:grid-cols-4" role="group" :aria-label="t('settings.theme.label')" data-testid="themes">
+          <button
+            v-for="theme in appearance.themes"
+            :key="theme.id"
+            type="button"
+            :aria-pressed="theme.id === appearance.themeId"
+            :class="
+              cn(
+                'bg-background hover:border-input flex flex-col overflow-hidden rounded-lg border text-left',
+                theme.id === appearance.themeId && 'border-primary ring-primary/40 hover:border-primary ring-1',
+              )
+            "
+            :data-testid="`theme-${theme.id}`"
+            @click="pick(theme)"
+          >
+            <!-- The preview: rail, window, a card with text and the primary button, in the theme's colours. -->
+            <span class="flex h-24 w-full" :style="{ background: previewOf(theme).colors.background }" aria-hidden="true">
+              <span class="flex w-7 flex-none flex-col items-center gap-1.5 pt-2.5" :style="{ background: previewOf(theme).colors.rail }">
+                <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.primary }" />
+                <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.secondary }" />
+                <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.secondary }" />
+              </span>
+              <span class="flex flex-1 p-2.5">
+                <span
+                  class="flex flex-1 flex-col gap-1.5 border p-2"
+                  :style="{
+                    background: previewOf(theme).colors.card,
+                    borderColor: previewOf(theme).colors.border,
+                    borderRadius: `${previewOf(theme).radius}px`,
+                  }"
+                >
+                  <span class="h-1.5 w-3/4 rounded-full" :style="{ background: previewOf(theme).colors.foreground }" />
+                  <span class="h-1.5 w-1/2 rounded-full" :style="{ background: previewOf(theme).colors['muted-foreground'] }" />
+                  <span class="mt-auto flex gap-1.5">
+                    <span class="h-3.5 w-10" :style="{ background: previewOf(theme).colors.primary, borderRadius: `${previewOf(theme).radius / 2}px` }" />
+                    <span class="h-3.5 w-8" :style="{ background: previewOf(theme).colors.secondary, borderRadius: `${previewOf(theme).radius / 2}px` }" />
+                  </span>
                 </span>
               </span>
             </span>
-          </span>
-          <span class="bg-card flex flex-1 flex-col gap-0.5 border-t px-3 py-2.5">
-            <span class="flex items-center gap-2">
-              <span class="truncate font-medium">{{ theme.name }}</span>
-              <span
-                :class="cn('flex-none rounded-sm border px-1.5 text-xs', theme.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
-                >{{ theme.provenance === "official" ? t("common.official") : t("common.local") }}</span
-              >
-              <Check v-if="theme.id === appearance.themeId" class="text-primary ml-auto size-4 flex-none" :stroke-width="1.5" />
+            <span class="bg-card flex flex-1 flex-col gap-0.5 border-t px-3 py-2.5">
+              <span class="flex items-center gap-2">
+                <span class="truncate font-medium">{{ theme.name }}</span>
+                <Badge variant="outline" :class="cn('flex-none font-normal', theme.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')">{{
+                  theme.provenance === "official" ? t("common.official") : t("common.local")
+                }}</Badge>
+                <Check v-if="theme.id === appearance.themeId" class="text-primary ml-auto size-4 flex-none" :stroke-width="1.5" />
+              </span>
+              <span v-if="theme.description" class="text-muted-foreground line-clamp-2 text-xs">{{ theme.description }}</span>
+              <span v-if="theme.variations.length > 1" class="text-muted-foreground text-xs">{{ theme.variations.map((item) => item.name).join(" · ") }}</span>
             </span>
-            <span v-if="theme.description" class="text-muted-foreground line-clamp-2 text-xs">{{ theme.description }}</span>
-            <span v-if="theme.variations.length > 1" class="text-muted-foreground text-xs">{{ theme.variations.map((item) => item.name).join(" · ") }}</span>
-          </span>
-        </button>
+          </button>
+        </div>
       </div>
     </div>
     <SettingRow

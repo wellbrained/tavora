@@ -4,6 +4,7 @@
 // that already says it, like a project folder's, hides it). The buttons for it go in the slot.
 import { FileArchive, FolderCode, Package, Store, Upload } from "@lucide/vue";
 import { computed } from "vue";
+import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { releaseStatus, state } from "../../host";
 import { t } from "../../i18n";
@@ -40,32 +41,30 @@ const tagClass = {
       <span class="flex min-w-0 items-center gap-2">
         <span class="truncate font-medium">{{ module.name }}</span>
         <span class="text-muted-foreground flex-none text-xs tabular-nums">{{ module.version }}</span>
-        <span
-          :class="cn('inline-flex flex-none items-center gap-1 rounded-sm border px-1.5 text-xs font-medium', tagClass[kind])"
-          :data-testid="`module-tag-${module.id}`"
-          :data-kind="kind"
-          ><Package v-if="kind === 'release'" class="size-3" aria-hidden="true" /><FolderCode v-else-if="kind === 'local'" class="size-3" aria-hidden="true" /><Store v-else-if="kind === 'catalog'" class="size-3" aria-hidden="true" /><FileArchive v-else-if="kind === 'file'" class="size-3" aria-hidden="true" />{{ tag }}</span
-        >
-        <span
-          v-if="pending"
-          class="border-warning/40 bg-warning/15 text-warning inline-flex flex-none items-center gap-1 rounded-sm border px-1.5 text-xs font-medium"
-          :data-testid="`module-pending-${module.id}`"
-          :data-status="pending"
-          ><Upload class="size-3" aria-hidden="true" />{{ pending === "new-version" ? t("release.newVersion") : t("release.notPublished") }}</span
-        >
-        <span
+        <Badge variant="outline" :class="cn('py-0', tagClass[kind])" :data-testid="`module-tag-${module.id}`" :data-kind="kind">
+          <Package v-if="kind === 'release'" aria-hidden="true" />
+          <FolderCode v-else-if="kind === 'local'" aria-hidden="true" />
+          <Store v-else-if="kind === 'catalog'" aria-hidden="true" />
+          <FileArchive v-else-if="kind === 'file'" aria-hidden="true" />{{ tag }}
+        </Badge>
+        <Badge v-if="pending" variant="warning" class="border-warning/40 py-0" :data-testid="`module-pending-${module.id}`" :data-status="pending">
+          <Upload aria-hidden="true" />{{ pending === "new-version" ? t("release.newVersion") : t("release.notPublished") }}
+        </Badge>
+        <Badge
           v-if="module.publisher && module.publisherName"
-          class="text-muted-foreground min-w-0 flex-none truncate rounded-sm border px-1.5 text-xs"
+          variant="outline"
+          class="text-muted-foreground block min-w-0 truncate py-0 font-normal"
           :title="t('settings.modules.byNameHint', { name: module.publisherName, key: module.publisher })"
           :data-testid="`module-publisher-${module.id}`"
-          >{{ t("settings.modules.byName", { name: module.publisherName }) }}</span
+          >{{ t("settings.modules.byName", { name: module.publisherName }) }}</Badge
         >
-        <span
+        <Badge
           v-else-if="module.publisher"
-          class="text-muted-foreground flex-none rounded-sm border px-1.5 font-mono text-xs"
+          variant="outline"
+          class="text-muted-foreground py-0 font-mono font-normal"
           :title="t('settings.modules.publisherHint', { key: module.publisher })"
           :data-testid="`module-publisher-${module.id}`"
-          >{{ t("settings.modules.publisher", { short: module.publisher.slice(0, 8) }) }}</span
+          >{{ t("settings.modules.publisher", { short: module.publisher.slice(0, 8) }) }}</Badge
         >
       </span>
       <span v-if="module.description" class="text-muted-foreground line-clamp-2 text-sm">{{ module.description }}</span>

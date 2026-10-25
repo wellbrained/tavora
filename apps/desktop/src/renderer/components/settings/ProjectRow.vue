@@ -3,6 +3,7 @@
 // piece for its icon (its own can't be shown before it loads), the name and version its manifest
 // gives (else the project folder's name), and what to do next. The buttons for it go in the slot.
 import { CircleAlert } from "@lucide/vue";
+import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 
@@ -18,7 +19,7 @@ defineProps<{ name: string; version: string | null; status: string }>();
       <span class="flex min-w-0 items-center gap-2">
         <span class="truncate font-medium" data-testid="development-project-name">{{ name }}</span>
         <span v-if="version" class="text-muted-foreground flex-none text-xs tabular-nums">{{ version }}</span>
-        <span class="text-muted-foreground flex-none rounded-sm border px-1.5 text-xs">{{ t("common.local") }}</span>
+        <Badge variant="outline" class="text-muted-foreground py-0 font-normal">{{ t("common.local") }}</Badge>
       </span>
       <span class="flex gap-1.5 text-sm">
         <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />

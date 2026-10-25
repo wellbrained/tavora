@@ -28,6 +28,7 @@ import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
+import { CodeInput, codeDigits } from "@tavora/official-ui/components/ui/code-input";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@tavora/official-ui/components/ui/context-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import {
@@ -48,7 +49,9 @@ import {
 import { Expandable } from "@tavora/official-ui/components/ui/expandable";
 import { Combobox, ComboboxAnchor, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@tavora/official-ui/components/ui/combobox";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { Label } from "@tavora/official-ui/components/ui/label";
+import { Picker } from "@tavora/official-ui/components/ui/picker";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
@@ -74,8 +77,8 @@ const SECTIONS = [
   { id: "type", title: "Typography", keywords: "text fonts headings caption mono numbers link" },
   { id: "buttons", title: "Buttons", keywords: "primary secondary ghost outline destructive danger remove link icon loading split group menu" },
   { id: "tooltips", title: "Tooltips", keywords: "tooltip hover help readable keyboard" },
-  { id: "fields", title: "Text fields", keywords: "input textarea search label hint error" },
-  { id: "choices", title: "Choices", keywords: "checkbox switch radio segmented select dropdown combobox autocomplete search slider" },
+  { id: "fields", title: "Text fields", keywords: "input textarea search label hint error code one-time" },
+  { id: "choices", title: "Choices", keywords: "checkbox switch radio segmented select picker dropdown combobox autocomplete search slider" },
   { id: "ratings", title: "Star rating", keywords: "stars rating review score" },
   { id: "expandable", title: "Show more", keywords: "expand collapse more less long text read clamp" },
   { id: "tabs", title: "Tabs", keywords: "tabs views" },
@@ -108,6 +111,16 @@ const segment = ref<"day" | "week" | "month">("week");
 const density = ref<"tight" | "normal">("normal");
 const select = ref("poe2");
 const picked = ref<string>();
+const pickedGame = ref("satisfactory");
+const pickedLanguage = ref("en");
+const LANGUAGE_OPTIONS = [
+  { value: "en", label: "English", keywords: "englisch" },
+  { value: "de", label: "Deutsch", keywords: "german" },
+  { value: "fr", label: "Français", keywords: "french" },
+  { value: "es", label: "Español", keywords: "spanish" },
+  { value: "ja", label: "日本語", keywords: "japanese" },
+];
+const code = ref("");
 const GAMES = ["Path of Exile 2", "Diablo IV", "Final Fantasy XIV", "Guild Wars 2", "Satisfactory", "Stardew Valley", "Enshrouded"];
 const volume = ref([60]);
 const range = ref([20, 80]);
@@ -368,6 +381,11 @@ function bump(by: number) {
           <Input id="pg-mono" model-value="tavora.notes" class="font-mono" :disabled="off" />
         </div>
         <div class="flex flex-col gap-1.5">
+          <Label for="pg-code">Code (digits only, pasted spaces are fine)</Label>
+          <CodeInput id="pg-code" v-model="code" placeholder="123 456" :disabled="off" />
+          <p class="text-muted-foreground text-xs">{{ codeDigits(code).length === 6 ? "Ready: " + codeDigits(code) : "Six digits" }}</p>
+        </div>
+        <div class="flex flex-col gap-1.5">
           <Label for="pg-notes">Text area (grows with its text)</Label>
           <Textarea id="pg-notes" v-model="notes" placeholder="Details, links, anything else" :disabled="off" />
         </div>
@@ -444,6 +462,19 @@ function bump(by: number) {
             </ComboboxList>
           </Combobox>
           <span class="text-muted-foreground text-sm">{{ picked ?? "Nothing picked" }}</span>
+        </Specimen>
+        <Specimen label="Picker (a button with the list under it)">
+          <Picker
+            v-model="pickedGame"
+            label="Game"
+            :disabled="off"
+            :options="[
+              { value: 'satisfactory', label: 'Satisfactory' },
+              { value: 'enshrouded', label: 'Enshrouded' },
+              { value: 'poe2', label: 'Path of Exile 2' },
+            ]"
+          />
+          <Picker v-model="pickedLanguage" label="Language" search="Search languages" empty="No language found" :disabled="off" :options="LANGUAGE_OPTIONS" />
         </Specimen>
         <Specimen label="Slider" column>
           <div class="flex items-center gap-3">
@@ -582,8 +613,8 @@ function bump(by: number) {
         </Specimen>
         <Specimen label="Keyboard keys">
           <span class="text-sm">Search with</span>
-          <kbd class="bg-secondary rounded-sm border px-1.5 py-0.5 font-mono text-xs">Ctrl</kbd>
-          <kbd class="bg-secondary rounded-sm border px-1.5 py-0.5 font-mono text-xs">K</kbd>
+          <Kbd>Ctrl</Kbd>
+          <Kbd>K</Kbd>
         </Specimen>
       </DemoSection>
 
