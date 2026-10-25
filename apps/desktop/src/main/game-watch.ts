@@ -162,6 +162,11 @@ export class GameWatcher {
     this.update();
   }
 
+  /** The library games a program belongs to, by the install folders the watcher knows (the program in front, for game overlays). */
+  gamesOf(program: string): Set<string> {
+    return this.installedKnown ? runningGames(this.options.entries(), this.installed, [program], null) : new Set();
+  }
+
   private look(): void {
     if (this.stopped || !this.probe) return;
     try {

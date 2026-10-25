@@ -3,6 +3,8 @@ import path from "node:path";
 
 export const MODULE_SCHEME = "tavora-module";
 export const HOST_SCHEME = "tavora-host";
+/** The address of a game overlay's page inside its own window (game-overlay-page.ts). */
+export const GAME_OVERLAY_SCHEME = "tavora-overlay";
 
 // Applied to every module response. Modules may only load what is inside
 // their own bundle; there is no remote code, no remote connections and no

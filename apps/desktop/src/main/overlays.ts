@@ -81,6 +81,12 @@ export class OverlayStore {
     return link ? { link, state: this.states.get(token) ?? null } : null;
   }
 
+  /** The link a key has now, without making one. */
+  peek(subject: OverlaySubject): { link: OverlayLink; state: JsonValue | null } | null {
+    const link = this.linkOf(subject);
+    return link ? { link, state: this.states.get(link.token) ?? null } : null;
+  }
+
   private linkOf(subject: OverlaySubject): OverlayLink | undefined {
     for (const link of this.links.values()) if (sameSubject(link, subject)) return link;
     return undefined;
@@ -194,6 +200,12 @@ export interface OverlayPage {
   entry: string;
 }
 
+/** The file of a request for `rest` ("/" for the page itself) under an overlay's address: the module's own files, next to the page. */
+export function resolveOverlayFile(page: OverlayPage, rest: string): Promise<string | null> {
+  const dir = path.posix.dirname(page.entry);
+  return resolveAsset(page.root, rest === "/" ? `/${page.entry}` : `${dir === "." ? "" : `/${dir}`}${rest}`);
+}
+
 export interface OverlayServerOptions {
   store: OverlayStore;
   /** The page for a link, or null when its module is gone, is another owner's now, or lost the connector. */
@@ -288,8 +300,7 @@ export class OverlayServer {
         return void response.end();
       }
       if (rest === `/${OVERLAY_STATE_PATH}`) return this.stream(request, response, found.link, found.state);
-      const dir = path.posix.dirname(page.entry);
-      const file = await resolveAsset(page.root, rest === "/" ? `/${page.entry}` : `${dir === "." ? "" : `/${dir}`}${rest}`);
+      const file = await resolveOverlayFile(page, rest);
       if (!file) return this.plain(response, 404, "Not found");
       const body = await readFile(file);
       response.writeHead(200, { ...COMMON_HEADERS, "Content-Type": contentTypeFor(file), "Content-Security-Policy": OVERLAY_CSP, "Content-Length": body.byteLength });
