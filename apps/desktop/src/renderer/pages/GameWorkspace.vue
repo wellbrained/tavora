@@ -17,6 +17,7 @@ import {
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds } from "../../shared/host-api";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
 import { act, api as host, dialog, dragging, nextPanelSlot, panelToMaximize, panelToShow, state } from "../host";
 import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
@@ -440,12 +441,12 @@ const emptySlot = EmptySlot as unknown as VueComponent;
       <div class="app-no-drag flex flex-none items-center gap-2">
         <ModuleUpdatesButton />
         <LayoutsMenu />
-        <div class="flex">
-          <Button size="sm" variant="secondary" :class="{ 'rounded-r-none': view.panels.length > 0 }" data-testid="add-module" @click="dialog = { kind: 'add-module' }">
+        <ButtonGroup>
+          <Button size="sm" variant="secondary" data-testid="add-module" @click="dialog = { kind: 'add-module' }">
             <Plus :stroke-width="1.5" /> {{ t("workspace.addModule") }}
           </Button>
           <ModulesMenu v-if="view.panels.length" />
-        </div>
+        </ButtonGroup>
       </div>
     </header>
 

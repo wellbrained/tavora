@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.20.42",
+    date: "2026-10-25",
+    title: "Small tidy-ups",
+    notes: [
+      "The Steam import and Share icons lists use Tavora's own checkboxes.",
+      "The rail's resize edge lights up clearly when you reach it with the keyboard.",
+      "Shorter tips on an empty game and in the Steam import.",
+    ],
+  },
+  {
     version: "0.20.41",
     date: "2026-10-25",
     title: "Smaller download",

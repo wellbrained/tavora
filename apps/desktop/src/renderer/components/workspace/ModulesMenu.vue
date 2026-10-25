@@ -19,7 +19,7 @@ const track = useFloating();
       <Button
         size="sm"
         variant="secondary"
-        class="rounded-l-none border-l border-black/20 px-1.5"
+        class="px-1.5"
         data-testid="modules-in-game"
         :aria-label="t('workspace.modulesInGame')"
         :title="t('workspace.modulesInGame')"

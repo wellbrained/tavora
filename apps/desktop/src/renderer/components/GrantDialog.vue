@@ -123,7 +123,7 @@ async function allow() {
       <p v-else class="bg-muted text-muted-foreground rounded-md px-3 py-2 text-sm">{{ t("grant.aiUsageNone") }}</p>
       <p class="text-muted-foreground text-sm">
         {{ t("grant.aiUsageNote") }}
-        <button type="button" class="text-foreground underline underline-offset-2" @click="editAccounts">{{ t("grant.aiUsageAccounts") }}</button>
+        <Button type="button" variant="link" class="text-foreground inline h-auto p-0 align-baseline font-[inherit] text-[inherit] whitespace-normal underline underline-offset-2" @click="editAccounts">{{ t("grant.aiUsageAccounts") }}</Button>
       </p>
     </section>
     <section v-if="connectors.includes('discord')" class="flex flex-col gap-2" :aria-label="t('grant.discord')" data-testid="grant-discord">

@@ -138,7 +138,12 @@ async function share() {
       <ul class="-mx-2 max-h-[280px] overflow-y-auto" :aria-label="t('shareIcons.list')">
         <li v-for="row in rows" :key="row.key">
           <label class="hover:bg-accent flex cursor-pointer items-center gap-3 rounded-md px-2 py-2">
-            <Checkbox :model-value="ticked.has(row.key)" :disabled="busy" :data-testid="`share-icon-${row.key}`" @update:model-value="toggle(row.key, $event === true)" />
+            <Checkbox
+              :model-value="ticked.has(row.key)"
+              :disabled="busy"
+              :data-testid="`share-icon-${row.key}`"
+              @update:model-value="(checked) => toggle(row.key, checked === true)"
+            />
             <img :src="row.icon" alt="" class="bg-secondary size-10 flex-none rounded-lg object-contain p-1" draggable="false" />
             <span class="min-w-0 flex-1 truncate">{{ row.name }}</span>
           </label>

@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Bold,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Copy,
   Info,
@@ -25,6 +26,7 @@ import {
 import { ConfirmDialog, connectModule, SegmentedControl, Tooltip } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { CodeInput, codeDigits } from "@tavora/official-ui/components/ui/code-input";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@tavora/official-ui/components/ui/context-menu";
@@ -73,7 +75,7 @@ interface PanelState {
 const SECTIONS = [
   { id: "colours", title: "Colours", keywords: "tokens theme palette swatches radius" },
   { id: "type", title: "Typography", keywords: "text fonts headings caption mono numbers link" },
-  { id: "buttons", title: "Buttons", keywords: "primary secondary ghost outline destructive danger remove link icon loading" },
+  { id: "buttons", title: "Buttons", keywords: "primary secondary ghost outline destructive danger remove link icon loading split group menu" },
   { id: "tooltips", title: "Tooltips", keywords: "tooltip hover help readable keyboard" },
   { id: "fields", title: "Text fields", keywords: "input textarea search label hint error code one-time" },
   { id: "choices", title: "Choices", keywords: "checkbox switch radio segmented select picker dropdown combobox autocomplete search slider" },
@@ -317,6 +319,24 @@ function bump(by: number) {
             <Button size="icon-sm" variant="ghost" aria-label="Bold" title="Bold" :aria-pressed="true" class="bg-secondary" :disabled="off"><Bold :stroke-width="1.5" /></Button>
             <Button size="icon-sm" variant="ghost" aria-label="Italic" title="Italic" :aria-pressed="false" :disabled="off"><Italic :stroke-width="1.5" /></Button>
           </div>
+        </Specimen>
+        <Specimen label="Split buttons (an action with its ▾ menu)">
+          <ButtonGroup label="Add a module">
+            <Button size="sm" variant="secondary" :disabled="off"><Plus :stroke-width="1.5" /> Add module</Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child>
+                <Button size="sm" variant="secondary" class="px-1.5" aria-label="Modules in this game" title="Modules in this game" :disabled="off"><ChevronDown :stroke-width="1.5" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem>Notes</DropdownMenuItem>
+                <DropdownMenuItem>To-dos</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </ButtonGroup>
+          <ButtonGroup label="Add all">
+            <Button size="sm" variant="outline" :disabled="off">Add all</Button>
+            <Button size="sm" variant="outline" class="px-2" aria-label="Show panels" title="Show panels" :disabled="off"><ChevronDown :stroke-width="1.75" /></Button>
+          </ButtonGroup>
         </Specimen>
       </DemoSection>
 

@@ -138,7 +138,7 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
                 :model-value="game.status === 'new' && ticked.has(game.appid)"
                 :disabled="busy || game.status !== 'new'"
                 :data-testid="`steam-game-${game.appid}`"
-                @update:model-value="toggle(game.appid, $event === true)"
+                @update:model-value="(checked) => toggle(game.appid, checked === true)"
               />
               <span class="min-w-0 flex-1 truncate">{{ game.name }}</span>
               <span v-if="game.status !== 'new'" class="flex-none text-xs">{{ status(game) }}</span>
