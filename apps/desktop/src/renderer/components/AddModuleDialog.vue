@@ -304,7 +304,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
               >
                 <div class="flex items-start gap-3">
                   <button type="button" class="bg-primary/10 border-primary/20 text-primary focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg border outline-none focus-visible:ring-2" tabindex="-1" aria-hidden="true" @click="openInfo(module)">
-                    <ModuleIcon :module-id="module.id" size="size-5" />
+                    <ModuleIcon :module-id="module.id" size="size-[34px]" />
                   </button>
                   <div class="min-w-0 flex-1">
                     <div class="flex min-w-0 items-center gap-2">

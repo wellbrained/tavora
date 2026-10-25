@@ -72,7 +72,7 @@ async function updateAll() {
         <li v-for="module in shown" :key="module.id" class="bg-background/40 flex flex-col gap-3 rounded-xl border p-4" :data-testid="`update-${module.id}`">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span class="bg-primary/10 border-primary/20 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg border" aria-hidden="true">
-              <ModuleIcon :module-id="module.id" size="size-5" />
+              <ModuleIcon :module-id="module.id" size="size-[34px]" />
             </span>
             <div class="min-w-0 flex-1 basis-48">
               <p class="truncate font-medium" :title="module.name">{{ module.name }}</p>
