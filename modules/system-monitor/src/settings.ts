@@ -1,10 +1,15 @@
 // What the player chose, and what that asks Tavora to watch. Pure, so it is tested on its own.
 //  - Module-wide (`storage.app`): how often it updates, and which drives to watch (null until the player has chosen).
-//  - Per panel (`panel.setState`): which blocks show, and which graphics card.
+//  - Per panel (`panel.setState`): which sections (System, Connection) and blocks show, and which graphics card.
+//  - The connection watcher's own choices (on or off, the address pinged) are Tavora's, not kept here.
 import { SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, type SystemInfo, type SystemInterval, type SystemWatchBlocks } from "@tavora/sdk";
 
 export const BLOCKS = ["cpu", "gpu", "ram", "drives"] as const;
 export type BlockId = (typeof BLOCKS)[number];
+
+/** The two sections of the panel; either can be hidden, but not both. */
+export const SECTIONS = ["system", "connection"] as const;
+export type SectionId = (typeof SECTIONS)[number];
 
 export const INTERVALS = SYSTEM_INTERVALS_MS;
 export const DEFAULT_INTERVAL: SystemInterval = 1000;
@@ -22,6 +27,7 @@ export interface AppSettings {
 }
 
 export interface PanelSettings {
+  sections: Record<SectionId, boolean>;
   blocks: Record<BlockId, boolean>;
   /** The graphics card to show when there are several; null for the dedicated one. */
   gpu: string | null;
@@ -30,7 +36,7 @@ export interface PanelSettings {
 export const APP_KEY = "settings";
 
 export const defaultApp = (): AppSettings => ({ intervalMs: DEFAULT_INTERVAL, drives: null });
-export const defaultPanel = (): PanelSettings => ({ blocks: { cpu: true, gpu: true, ram: true, drives: true }, gpu: null });
+export const defaultPanel = (): PanelSettings => ({ sections: { system: true, connection: true }, blocks: { cpu: true, gpu: true, ram: true, drives: true }, gpu: null });
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -49,6 +55,14 @@ export function parseApp(raw: unknown): AppSettings {
 export function parsePanel(raw: unknown): PanelSettings {
   const result = defaultPanel();
   if (!isRecord(raw)) return result;
+  if (isRecord(raw.sections)) {
+    for (const id of SECTIONS) {
+      const value = raw.sections[id];
+      if (typeof value === "boolean") result.sections[id] = value;
+    }
+  }
+  // At least one section always shows.
+  if (!SECTIONS.some((id) => result.sections[id])) result.sections = defaultPanel().sections;
   if (isRecord(raw.blocks)) {
     const blocks = raw.blocks;
     for (const id of BLOCKS) {
@@ -66,6 +80,12 @@ export function parsePanel(raw: unknown): PanelSettings {
 export function toggleBlock(panel: PanelSettings, id: BlockId): PanelSettings {
   const blocks = { ...panel.blocks, [id]: !panel.blocks[id] };
   return BLOCKS.some((block) => blocks[block]) ? { ...panel, blocks } : panel;
+}
+
+/** Turns a section on or off; the last one shown can't be turned off. */
+export function toggleSection(panel: PanelSettings, id: SectionId): PanelSettings {
+  const sections = { ...panel.sections, [id]: !panel.sections[id] };
+  return SECTIONS.some((section) => sections[section]) ? { ...panel, sections } : panel;
 }
 
 /** The internal drives, which are watched until the player chooses. */
@@ -92,12 +112,30 @@ export interface WatchRequest {
 /** What to ask Tavora to watch: only what this panel shows. Tavora's own use is always there for the bottom line. */
 export function watchRequest(info: SystemInfo, app: AppSettings, panel: PanelSettings): WatchRequest {
   const blocks: SystemWatchBlocks = { tavora: true };
-  if (panel.blocks.cpu) blocks.cpu = true;
-  if (panel.blocks.gpu && info.gpus.length > 0) blocks.gpu = true;
-  if (panel.blocks.ram) blocks.ram = true;
-  const drives = watchedDrives(info, app);
-  if (panel.blocks.drives && drives.length > 0) blocks.drives = drives;
+  if (panel.sections.connection) blocks.connection = true;
+  if (panel.sections.system) {
+    if (panel.blocks.cpu) blocks.cpu = true;
+    if (panel.blocks.gpu && info.gpus.length > 0) blocks.gpu = true;
+    if (panel.blocks.ram) blocks.ram = true;
+    const drives = watchedDrives(info, app);
+    if (panel.blocks.drives && drives.length > 0) blocks.drives = drives;
+  }
   return { blocks, intervalMs: app.intervalMs };
+}
+
+const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+const LABEL = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/** The address to ping as Tavora takes it (an IPv4 address or a name, in lower case), or null when it is neither. Tavora checks it again. */
+export function cleanTarget(text: string): string | null {
+  const target = text.trim().toLowerCase().replace(/\.$/, "");
+  const ip = IPV4.exec(target);
+  if (ip) {
+    const parts = ip.slice(1).map(Number);
+    return parts.every((part) => part <= 255) && parts[0]! > 0 && parts[0]! < 224 ? target : null;
+  }
+  if (target.length === 0 || target.length > 253 || /^[\d.]+$/.test(target)) return null;
+  return target.split(".").every((label) => LABEL.test(label)) ? target : null;
 }
 
 /** The same request as text, to tell whether anything changed. */

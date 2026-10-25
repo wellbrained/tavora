@@ -24,6 +24,11 @@ import {
   type SystemSnapshot,
   type SystemWatchBlocks,
   type SystemInterval,
+  type SystemConnection,
+  type SystemConnectionLog,
+  type SystemConnectionSettings,
+  type SystemOutage,
+  type SystemOutageKind,
   type BlobInfo,
   type BlobUsage,
   type Capability,
@@ -75,6 +80,11 @@ export type {
   SystemWatchBlocks,
   SystemInterval,
   SystemDriveKind,
+  SystemConnection,
+  SystemConnectionLog,
+  SystemConnectionSettings,
+  SystemOutage,
+  SystemOutageKind,
   BlobInfo,
   BlobType,
   BlobUsage,
@@ -105,7 +115,7 @@ export type {
   TavoraViewport,
   ThemeToken,
 } from "./protocol.js";
-export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, THEME_TOKENS } from "./protocol.js";
+export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, THEME_TOKENS } from "./protocol.js";
 
 /** How long a menu may stay open; the host closes it itself when its panel goes. */
 const MENU_TIMEOUT_MS = 60 * 60_000;
@@ -354,6 +364,20 @@ export interface TavoraSDK {
       onSnapshot(fn: (snapshot: SystemSnapshot) => void): Unsubscribe;
       /** Fires when a drive is plugged in or removed; ask info() again. */
       onDrivesChange(fn: () => void): Unsubscribe;
+      /**
+       * The drops of the connection in the last 30 days, newest first (Tavora 0.21.10 and newer). Tavora watches the
+       * connection while a System Monitor panel exists in any game or workspace, shown or not: it pings the router
+       * and one internet address every 5 seconds and sends nothing else.
+       */
+      connectionLog(): Promise<SystemConnectionLog>;
+      /** Empties the log of drops (Tavora 0.21.10 and newer). */
+      clearConnectionLog(): Promise<void>;
+      /** Whether the connection is watched and which address is pinged (Tavora 0.21.10 and newer). */
+      connectionSettings(): Promise<SystemConnectionSettings>;
+      /** Changes the settings given and returns all of them; a `target` that is no IP address or name is refused (Tavora 0.21.10 and newer). */
+      setConnectionSettings(settings: Partial<SystemConnectionSettings>): Promise<SystemConnectionSettings>;
+      /** Fires when the connection goes down, changes kind or comes back, for a panel that watches `connection` (Tavora 0.21.10 and newer). */
+      onConnectionChange(fn: (connection: SystemConnection) => void): Unsubscribe;
     };
     /**
      * `discord`: the Discord app on this PC, through Tavora's Discord sign-in. The connection runs while a
@@ -796,6 +820,13 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         },
         onSnapshot: (fn) => on("systemInfo.snapshot", fn),
         onDrivesChange: (fn) => on("systemInfo.drivesChanged", () => fn()),
+        connectionLog: () => call("systemInfo.connectionLog"),
+        clearConnectionLog: async () => {
+          await call("systemInfo.clearConnectionLog");
+        },
+        connectionSettings: () => call("systemInfo.connectionSettings"),
+        setConnectionSettings: (settings) => call("systemInfo.setConnectionSettings", settings),
+        onConnectionChange: (fn) => on("systemInfo.connectionChanged", fn),
       },
       discord: {
         state: () => call("discord.state"),

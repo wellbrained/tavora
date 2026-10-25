@@ -1,12 +1,12 @@
-// The panel's link to Tavora's system-info connector: what this PC is, the newest numbers, and what the player
-// chose. Tavora does the timing and pauses it while the panel is hidden, so there are no timers here. The numbers
+// The panel's link to Tavora's system-info connector: what this PC is, the newest numbers, the connection and its
+// log of drops, and what the player chose. Tavora does the timing and pauses it while the panel is hidden, so there are no timers here. The numbers
 // live in shallow refs and plain arrays: a snapshot replaces the old one whole, and only the text that changed is
 // redrawn.
 import { errorMessage } from "@tavora/official-ui";
-import { TavoraError, type JsonValue, type SystemInfo, type SystemInterval, type SystemSnapshot, type TavoraSDK } from "@tavora/sdk";
+import { TavoraError, type JsonValue, type SystemConnection, type SystemConnectionSettings, type SystemInfo, type SystemInterval, type SystemOutage, type SystemSnapshot, type TavoraSDK } from "@tavora/sdk";
 import { markRaw, ref, shallowRef } from "vue";
 import { createHistory, type History } from "./history";
-import { APP_KEY, defaultPanel, parseApp, parsePanel, pickGpu, requestKey, toggleBlock, watchRequest, type AppSettings, type BlockId, type PanelSettings } from "./settings";
+import { APP_KEY, defaultPanel, parseApp, parsePanel, pickGpu, requestKey, toggleBlock, toggleSection, watchRequest, type AppSettings, type BlockId, type PanelSettings, type SectionId } from "./settings";
 
 export type Status = "loading" | "ready" | "denied" | "empty" | "error";
 
@@ -19,6 +19,14 @@ export function createMonitor(sdk: TavoraSDK) {
   const error = ref("");
   const info = shallowRef<SystemInfo | null>(null);
   const snapshot = shallowRef<SystemSnapshot | null>(null);
+  /** The connection as of the last check; null before the first one. */
+  const connection = shallowRef<SystemConnection | null>(null);
+  /** The drops of the last 30 days, the newest first. */
+  const outages = shallowRef<SystemOutage[]>([]);
+  /** Whether Tavora watches the connection, and what it pings. */
+  const connectionSettings = shallowRef<SystemConnectionSettings | null>(null);
+  /** This Tavora is older than the connection watcher (0.21.10), so there is nothing to show. */
+  const connectionMissing = ref(false);
   const app = shallowRef<AppSettings>(parseApp(null));
   const panel = shallowRef<PanelSettings>(defaultPanel());
   /** The last 5 minutes of CPU and GPU use, for the graphs. */
@@ -63,6 +71,26 @@ export function createMonitor(sdk: TavoraSDK) {
     status.value = "ready";
   }
 
+  /** The log of drops and the watcher's settings. An older Tavora has neither. */
+  async function loadConnection(): Promise<void> {
+    try {
+      const [log, settings] = await Promise.all([sdk.connectors.systemInfo.connectionLog(), sdk.connectors.systemInfo.connectionSettings()]);
+      outages.value = log.outages;
+      connectionSettings.value = settings;
+      connectionMissing.value = false;
+    } catch (reason) {
+      if (!isDenied(reason)) connectionMissing.value = true;
+    }
+  }
+
+  async function refreshLog(): Promise<void> {
+    try {
+      outages.value = (await sdk.connectors.systemInfo.connectionLog()).outages;
+    } catch {
+      // The list stays as it was.
+    }
+  }
+
   const cleanup: (() => void)[] = [];
 
   async function start(): Promise<void> {
@@ -76,11 +104,18 @@ export function createMonitor(sdk: TavoraSDK) {
       sdk.connectors.systemInfo.onSnapshot((next) => {
         if (stopped) return;
         snapshot.value = next;
+        if (next.connection) connection.value = next.connection;
         if (next.cpu) cpuHistory.push(next.cpu.usage);
         if (next.ram && next.ram.totalBytes > 0) ramHistory.push((next.ram.usedBytes / next.ram.totalBytes) * 100);
         const id = info.value ? pickGpu(info.value, panel.value.gpu) : null;
         const gpu = next.gpus?.find((entry) => entry.id === id);
         if (gpu) gpuHistory.push(gpu.usage);
+      }),
+      // The connection went down, changed or came back: show it at once, and read the log again.
+      sdk.connectors.systemInfo.onConnectionChange((next) => {
+        if (stopped) return;
+        connection.value = next;
+        void refreshLog();
       }),
       // A drive was plugged in or removed: ask again, then watch the drives the player picked.
       sdk.connectors.systemInfo.onDrivesChange(() => {
@@ -90,6 +125,7 @@ export function createMonitor(sdk: TavoraSDK) {
     try {
       await readInfo();
       await watch();
+      await loadConnection();
     } catch (reason) {
       fail(reason);
     }
@@ -102,6 +138,7 @@ export function createMonitor(sdk: TavoraSDK) {
     try {
       await readInfo();
       await watch();
+      await loadConnection();
     } catch (reason) {
       fail(reason);
     }
@@ -115,7 +152,9 @@ export function createMonitor(sdk: TavoraSDK) {
   function setPanel(next: PanelSettings): void {
     if (next === panel.value) return;
     if (next.gpu !== panel.value.gpu) gpuHistory.clear();
+    const showsLog = next.sections.connection && !panel.value.sections.connection;
     panel.value = next;
+    if (showsLog) void loadConnection();
     void sdk.panel.setState(next as unknown as JsonValue).catch(() => undefined);
     void watch();
   }
@@ -136,10 +175,35 @@ export function createMonitor(sdk: TavoraSDK) {
     cpuHistory,
     gpuHistory,
     ramHistory,
+    connection,
+    outages,
+    connectionSettings,
+    connectionMissing,
     start,
     retry,
     stop,
     toggleBlock: (id: BlockId) => setPanel(toggleBlock(panel.value, id)),
+    toggleSection: (id: SectionId) => setPanel(toggleSection(panel.value, id)),
+    /** Switches the watching of the connection on or off for this PC (not only for this panel). */
+    async setWatching(enabled: boolean): Promise<void> {
+      try {
+        connectionSettings.value = await sdk.connectors.systemInfo.setConnectionSettings({ enabled });
+      } catch {
+        // The switch stays as it was.
+      }
+    },
+    /** Sets the address to ping; throws when Tavora refuses it, for the dialog to say. */
+    async setTarget(target: string): Promise<void> {
+      connectionSettings.value = await sdk.connectors.systemInfo.setConnectionSettings({ target });
+    },
+    async clearLog(): Promise<void> {
+      try {
+        await sdk.connectors.systemInfo.clearConnectionLog();
+      } catch {
+        // The list stays as it was.
+      }
+      await refreshLog();
+    },
     setGpu: (id: string) => setPanel({ ...panel.value, gpu: id }),
     setInterval(intervalMs: SystemInterval): void {
       if (intervalMs === app.value.intervalMs) return;

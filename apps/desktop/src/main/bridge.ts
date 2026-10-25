@@ -20,6 +20,8 @@ import {
   type NetworkResponse,
   type GameOverlayResult,
   type OverlayLinkResult,
+  type SystemConnectionLog,
+  type SystemConnectionSettings,
   type SystemInfo,
   type PageResponse,
   type PanelContent,
@@ -37,7 +39,7 @@ import { checkMenu, type CheckedMenu } from "./module-menu";
 import {checkTooltip,checkTooltipAnchor,tooltipId} from "./tooltip-content";
 import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
 import { checkPanelContent } from "./panel-content";
-import { parseWatch, type WatchRequest } from "./system-info-parse";
+import { parseConnectionSettings, parseWatch, type ConnectionSettingsChange, type WatchRequest } from "./system-info-parse";
 import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
 
 /** The parts of Electron's MessagePortMain the bridge uses. */
@@ -87,7 +89,15 @@ export interface BridgeContext {
    * The system-info connector (system-info.ts) for this panel; only reached with the `systemInfo` capability. `watch`
    * gets the request already checked (system-info-parse.ts); it replaces what this panel watched before.
    */
-  systemInfo: { info(): SystemInfo; watch(request: WatchRequest): void };
+  systemInfo: {
+    info(): SystemInfo;
+    watch(request: WatchRequest): void;
+    /** The connection watcher's log, settings and the change of settings (connection.ts); the change comes already checked. */
+    connectionLog(): SystemConnectionLog;
+    clearConnectionLog(): void;
+    connectionSettings(): SystemConnectionSettings;
+    setConnectionSettings(change: ConnectionSettingsChange): SystemConnectionSettings;
+  };
   /**
    * The discord connector (discord.ts) for this panel; only reached with the `discord` capability. Commands
    * and subscriptions arrive checked (discord-commands.ts); connect, allowControl, SELECT_VOICE_CHANNEL and
@@ -313,6 +323,16 @@ const handlers = new Map<string, Handler>([
       needs(s, "systemInfo", "systemInfo.watch");
       s.context.systemInfo.watch(parseWatch(params));
       return null;
+    },
+  ],
+  ["systemInfo.connectionLog", (s, params) => (needs(s, "systemInfo", "systemInfo.connectionLog"), noParams(params), s.context.systemInfo.connectionLog())],
+  ["systemInfo.clearConnectionLog", (s, params) => (needs(s, "systemInfo", "systemInfo.clearConnectionLog"), noParams(params), s.context.systemInfo.clearConnectionLog(), null)],
+  ["systemInfo.connectionSettings", (s, params) => (needs(s, "systemInfo", "systemInfo.connectionSettings"), noParams(params), s.context.systemInfo.connectionSettings())],
+  [
+    "systemInfo.setConnectionSettings",
+    (s, params) => {
+      needs(s, "systemInfo", "systemInfo.setConnectionSettings");
+      return s.context.systemInfo.setConnectionSettings(parseConnectionSettings(params));
     },
   ],
 

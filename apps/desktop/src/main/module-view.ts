@@ -18,6 +18,7 @@ import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
 import type { PanelContent, PanelLaunch } from "./panel-content";
 import { LIMITS, type PanelOpenResult } from "@tavora/sdk/protocol";
 import type { DiscordConnector, DiscordListener } from "./discord";
+import type { ConnectionWatcher } from "./connection";
 import type { SystemMonitor, SystemSubscription } from "./system-info";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
@@ -96,6 +97,8 @@ export interface ModuleViewOptions {
   aiUsage: BridgeContext["aiUsage"];
   /** The system-info connector, shared by every panel; each view holds one subscription of its own. */
   systemInfo: Pick<SystemMonitor, "info" | "subscribe">;
+  /** The connection watcher (connection.ts): its log and settings are shared by every panel. */
+  connection: Pick<ConnectionWatcher, "outageLog" | "clearLog" | "getSettings" | "setSettings">;
   /** The discord connector, shared by every panel; this view uses it under its own instance id. */
   discord: Pick<DiscordConnector, "use" | "release" | "state" | "connectNow" | "allowControl" | "command" | "subscribe" | "unsubscribe" | "image">;
   /** Overlays of this module in this game: Stream overlay links (granted the stream-overlay connector) and game overlays. */
@@ -706,11 +709,18 @@ export class ModuleView {
             drivesChanged: () => {
               if (connected()) bridge().emit("systemInfo.drivesChanged", null);
             },
+            connectionChanged: (connection) => {
+              if (connected()) bridge().emit("systemInfo.connectionChanged", connection);
+            },
           });
           if (this.suspended) this.systemWatch.setSuspended(true);
         }
         this.systemWatch.watch(request);
       },
+      connectionLog: () => this.options.connection.outageLog(),
+      clearConnectionLog: () => this.options.connection.clearLog(),
+      connectionSettings: () => this.options.connection.getSettings(),
+      setConnectionSettings: (change) => this.options.connection.setSettings(change),
     };
   }
 

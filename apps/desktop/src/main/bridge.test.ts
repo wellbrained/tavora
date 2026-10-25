@@ -54,7 +54,14 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     data: registry.get("local", moduleId, "poe2"),
     appSettings: registry.appSettings("local", moduleId),
     aiUsage: { accounts: () => Promise.reject(new Error("no AI accounts in this test")), read: () => Promise.reject(new Error("no AI accounts in this test")) },
-    systemInfo: { info: () => { throw new Error("no system info in this test"); }, watch: () => { throw new Error("no system info in this test"); } },
+    systemInfo: {
+      info: () => { throw new Error("no system info in this test"); },
+      watch: () => { throw new Error("no system info in this test"); },
+      connectionLog: () => { throw new Error("no system info in this test"); },
+      clearConnectionLog: () => { throw new Error("no system info in this test"); },
+      connectionSettings: () => { throw new Error("no system info in this test"); },
+      setConnectionSettings: () => { throw new Error("no system info in this test"); },
+    },
     discord: noDiscord,
     panelState: registry.panelState,
     capabilities: () => new Set(),
@@ -568,13 +575,32 @@ describe("aiUsage", () => {
 describe("systemInfo", () => {
   const INFO = { cpu: { model: "Test CPU", threads: 8 }, ramBytes: 16e9, gpus: [], drives: [{ id: "C:", label: "", kind: "internal" as const, totalBytes: 1e12 }] };
   const watching: unknown[] = [];
+  const settings = { enabled: true, target: "1.1.1.1" };
+  const cleared: number[] = [];
+  const changed: unknown[] = [];
   const granted = (extra: Partial<BridgeContext> = {}) =>
-    connected({ ...makeContext(), capabilities: () => new Set(["systemInfo"] as const), systemInfo: { info: () => INFO, watch: (request) => void watching.push(request) }, ...extra });
+    connected({
+      ...makeContext(),
+      capabilities: () => new Set(["systemInfo"] as const),
+      systemInfo: {
+        info: () => INFO,
+        watch: (request) => void watching.push(request),
+        connectionLog: () => ({ outages: [{ start: 1, end: 2, kind: "offline" as const, durationMs: 1 }] }),
+        clearConnectionLog: () => void cleared.push(1),
+        connectionSettings: () => settings,
+        setConnectionSettings: (change) => (changed.push(change), { ...settings, ...change }),
+      },
+      ...extra,
+    });
   const request = { blocks: { cpu: true, drives: ["C:", "D:"] }, intervalMs: 1000 };
 
   it.each([
     ["systemInfo.info", undefined],
     ["systemInfo.watch", request],
+    ["systemInfo.connectionLog", undefined],
+    ["systemInfo.clearConnectionLog", undefined],
+    ["systemInfo.connectionSettings", undefined],
+    ["systemInfo.setConnectionSettings", { enabled: false }],
   ])("denies %s without the system-info connector", async (method, params) => {
     expect(await call(port, method, params)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "systemInfo" } });
   });
@@ -584,7 +610,7 @@ describe("systemInfo", () => {
     const p = await granted();
     expect(await call(p, "systemInfo.info")).toMatchObject({ ok: true, result: INFO });
     expect(await call(p, "systemInfo.watch", request)).toMatchObject({ ok: true, result: null });
-    expect(watching).toEqual([{ blocks: { cpu: true, gpu: false, ram: false, drives: ["C:", "D:"], tavora: false }, intervalMs: 1000 }]);
+    expect(watching).toEqual([{ blocks: { cpu: true, gpu: false, ram: false, drives: ["C:", "D:"], tavora: false, connection: false }, intervalMs: 1000 }]);
   });
 
   it("takes no params for info", async () => {
@@ -613,11 +639,32 @@ describe("systemInfo", () => {
     expect(watching).toEqual([]);
   });
 
+  it("reads and clears the log of drops and reads the settings", async () => {
+    cleared.length = 0;
+    const p = await granted();
+    expect(await call(p, "systemInfo.connectionLog")).toMatchObject({ ok: true, result: { outages: [{ kind: "offline" }] } });
+    expect(await call(p, "systemInfo.clearConnectionLog")).toMatchObject({ ok: true, result: null });
+    expect(cleared).toEqual([1]);
+    expect(await call(p, "systemInfo.connectionSettings")).toMatchObject({ ok: true, result: settings });
+    expect(await call(p, "systemInfo.connectionLog", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+
+  it("changes the settings after checking them", async () => {
+    changed.length = 0;
+    const p = await granted();
+    expect(await call(p, "systemInfo.setConnectionSettings", { enabled: false, target: "Example.com" })).toMatchObject({ ok: true, result: { enabled: false, target: "example.com" } });
+    expect(changed).toEqual([{ enabled: false, target: "example.com" }]);
+    for (const bad of [undefined, { target: "http://example.com" }, { target: 5 }, { enabled: "no" }, { other: true }]) {
+      expect(await call(p, "systemInfo.setConnectionSettings", bad)).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    }
+    expect(changed).toHaveLength(1);
+  });
+
   it("takes empty blocks as stopping", async () => {
     watching.length = 0;
     const p = await granted();
     expect(await call(p, "systemInfo.watch", { blocks: {}, intervalMs: 60000 })).toMatchObject({ ok: true });
-    expect(watching).toEqual([{ blocks: { cpu: false, gpu: false, ram: false, drives: [], tavora: false }, intervalMs: 60000 }]);
+    expect(watching).toEqual([{ blocks: { cpu: false, gpu: false, ram: false, drives: [], tavora: false, connection: false }, intervalMs: 60000 }]);
   });
 });
 
