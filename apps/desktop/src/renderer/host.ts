@@ -50,22 +50,6 @@ export const releasePendingCount = computed(() => {
   return releaseCopies().filter((copy) => known[copy.id] === "new-version" || known[copy.id] === "not-published").length;
 });
 
-// A copy added, removed or built to another version while Settings is open: ask again.
-watch(
-  () => releaseCopies().map((copy) => `${copy.id}@${copy.version}`).join(","),
-  () => {
-    if (settingsOpen.value) void refreshReleaseStatuses();
-  },
-);
-
-// A Publish that went through: ask again, so the badge goes once the new version is listed.
-watch(
-  () => publish.value?.status,
-  (status) => {
-    if (status === "published") void refreshReleaseStatuses();
-  },
-);
-
 /** Settings > Integrations > Discord: the Discord connector's sign-in. */
 export const discord = shallowRef<DiscordView | null>(null);
 api.onDiscord((next) => (discord.value = next));
@@ -363,6 +347,22 @@ export function openSettings(target: { section: SettingsSection; setting?: strin
   settingsTarget.value = target;
   settingsOpen.value = true;
 }
+
+// A copy added, removed or built to another version while Settings is open: ask again.
+watch(
+  () => releaseCopies().map((copy) => `${copy.id}@${copy.version}`).join(","),
+  () => {
+    if (settingsOpen.value) void refreshReleaseStatuses();
+  },
+);
+
+// A Publish that went through: ask again, so the badge goes once the new version is listed.
+watch(
+  () => publish.value?.status,
+  (status) => {
+    if (status === "published") void refreshReleaseStatuses();
+  },
+);
 
 /** The search box behind Ctrl+K. */
 export const searchOpen = ref(false);
