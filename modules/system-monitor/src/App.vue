@@ -9,6 +9,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import ConnectionSection from "./ConnectionSection.vue";
+import AppsDialog from "./AppsDialog.vue";
 import DrivesDialog from "./DrivesDialog.vue";
 import { memory, num } from "./format";
 import { language, setLanguage, t } from "./i18n";
@@ -23,6 +24,7 @@ const monitor = shallowRef<Monitor | null>(null);
 const connectError = ref<string | null>(null);
 const picking = ref(false);
 const connecting = ref(false);
+const showingApps = ref(false);
 
 onMounted(async () => {
   try {
@@ -88,7 +90,7 @@ const checkedDrives = computed(() => (monitor.value?.info.value ? watchedDrives(
     </p>
     <div v-else class="@container min-h-0 flex-1 overflow-y-auto">
       <h2 v-if="bothSections" class="text-muted-foreground px-3 pt-2 text-[0.6875rem] font-medium tracking-wide uppercase" data-testid="heading-system">{{ t("section.system") }}</h2>
-      <SystemSection v-if="sections.system" :monitor="monitor" />
+      <SystemSection v-if="sections.system" :monitor="monitor" @show-apps="showingApps = true" />
       <h2 v-if="bothSections" class="text-muted-foreground px-3 pt-1 text-[0.6875rem] font-medium tracking-wide uppercase" data-testid="heading-connection">{{ t("section.connection") }}</h2>
       <ConnectionSection v-if="sections.connection" :monitor="monitor" />
       <p v-if="!snapshot" class="text-muted-foreground px-3 py-2 text-xs" data-testid="waiting">{{ t("waiting") }}</p>
@@ -103,5 +105,6 @@ const checkedDrives = computed(() => (monitor.value?.info.value ? watchedDrives(
 
     <ConnectionDialog v-if="connecting && monitor.connectionSettings.value" :current="monitor.connectionSettings.value" :save="monitor.setConnection" @done="connecting = false" @cancel="connecting = false" />
     <DrivesDialog v-if="picking && monitor.info.value" :info="monitor.info.value" :checked="checkedDrives" @save="saveDrives" @cancel="picking = false" />
+    <AppsDialog v-if="showingApps && sdk" :sdk="sdk" :total-bytes="monitor.info.value?.ramBytes ?? 0" @close="showingApps = false" />
   </div>
 </template>

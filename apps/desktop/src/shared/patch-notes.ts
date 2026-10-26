@@ -20,6 +20,62 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.21",
+    date: "2026-10-26",
+    title: "See which apps use your memory",
+    notes: [
+      "The System Monitor's Memory card has a new button at the top right: it lists your apps with their RAM and CPU.",
+      "Search the list and sort it by name, RAM or CPU. Windows' own apps are marked.",
+    ],
+  },
+  {
+    version: "0.21.20",
+    date: "2026-10-26",
+    title: "Tidier Settings",
+    notes: [
+      "Each module in Settings > Modules keeps Update and Patch notes up front; Move data, Report and Remove now live in a ⋯ menu.",
+      "Module icons look the same in every list.",
+      "Keyboard keys look the same everywhere, in search, the game rail and the shortcut dialog.",
+      "Settings search finds the Version row.",
+    ],
+  },
+  {
+    version: "0.21.19",
+    date: "2026-10-26",
+    title: "Module problems in your language",
+    notes: [
+      "Settings > Modules and Settings > Development now explain why a module can't load in your language, in plain words.",
+    ],
+  },
+  {
+    version: "0.21.18",
+    date: "2026-10-26",
+    title: "Media for modules",
+    notes: [
+      "Modules can now show what plays on your PC, like Spotify or a browser tab, and play, pause or skip when you click. Tavora asks you first.",
+      "You can take it back in Settings > Integrations > Media.",
+    ],
+  },
+  {
+    version: "0.21.17",
+    date: "2026-10-26",
+    title: "Tidier Publish screen",
+    notes: [
+      "The unlabeled refresh icon on the Publish screen is gone.",
+    ],
+  },
+  {
+    version: "0.21.16",
+    date: "2026-10-26",
+    title: "Quick game switch",
+    notes: [
+      "Switching to a game without panels no longer shows the loading fire while a panel is up in game.",
+      "Games open about 3 seconds faster: panels draw while the loading cover is up instead of waiting for it.",
+      "No more white flash over the panels when a game opens.",
+      "Panels no longer flash empty when a hint, menu or dialog opens or closes over them.",
+    ],
+  },
+  {
     version: "0.21.15",
     date: "2026-10-26",
     title: "Right version on a module's page",

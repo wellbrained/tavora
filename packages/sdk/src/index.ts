@@ -20,6 +20,7 @@ import {
   PROTOCOL_VERSION,
   type AiUsageAccountInfo,
   type AiUsageReading,
+  type SystemApps,
   type SystemInfo,
   type SystemSnapshot,
   type SystemWatchBlocks,
@@ -29,6 +30,8 @@ import {
   type SystemConnectionSettings,
   type SystemOutage,
   type SystemOutageKind,
+  type MediaAction,
+  type MediaState,
   type BlobInfo,
   type BlobUsage,
   type Capability,
@@ -75,6 +78,8 @@ export type {
   GameOverlayResult,
   AiUsageAccountInfo,
   AiUsageReading,
+  SystemApp,
+  SystemApps,
   SystemInfo,
   SystemSnapshot,
   SystemWatchBlocks,
@@ -85,6 +90,10 @@ export type {
   SystemConnectionSettings,
   SystemOutage,
   SystemOutageKind,
+  MediaAction,
+  MediaSession,
+  MediaState,
+  MediaStatus,
   BlobInfo,
   BlobType,
   BlobUsage,
@@ -115,7 +124,7 @@ export type {
   TavoraViewport,
   ThemeToken,
 } from "./protocol.js";
-export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, THEME_TOKENS } from "./protocol.js";
+export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, MEDIA_ACTIONS, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, THEME_TOKENS } from "./protocol.js";
 
 /** How long a menu may stay open; the host closes it itself when its panel goes. */
 const MENU_TIMEOUT_MS = 60 * 60_000;
@@ -373,22 +382,41 @@ export interface TavoraSDK {
       /** Fires when a drive is plugged in or removed; ask info() again. */
       onDrivesChange(fn: () => void): Unsubscribe;
       /**
-       * The drops of the connection in the last 30 days, newest first (Tavora 0.21.16 and newer). Tavora watches the
+       * The drops of the connection in the last 30 days, newest first (Tavora 0.21.22 and newer). Tavora watches the
        * connection while a System Monitor panel exists in any game or workspace, shown or not: it pings the router
        * and one internet address every 5 seconds and sends nothing else.
        */
       connectionLog(): Promise<SystemConnectionLog>;
-      /** Empties the log of drops. Only for Tavora's own System Monitor, right after a click or key press (Tavora 0.21.16 and newer). */
+      /** Empties the log of drops. Only for Tavora's own System Monitor, right after a click or key press (Tavora 0.21.22 and newer). */
       clearConnectionLog(): Promise<void>;
-      /** Whether the connection is watched and which address is pinged (Tavora 0.21.16 and newer). */
+      /** Whether the connection is watched and which address is pinged (Tavora 0.21.22 and newer). */
       connectionSettings(): Promise<SystemConnectionSettings>;
       /**
        * Changes the settings given and returns all of them. Only for Tavora's own System Monitor, right after a click or key
-       * press, once every 5 seconds; a `target` that is not a public IPv4 address or public name is refused (Tavora 0.21.16 and newer).
+       * press, once every 5 seconds; a `target` that is not a public IPv4 address or public name is refused (Tavora 0.21.22 and newer).
        */
       setConnectionSettings(settings: Partial<SystemConnectionSettings>): Promise<SystemConnectionSettings>;
-      /** Fires when the connection goes down, changes kind or comes back, for a panel that watches `connection` (Tavora 0.21.16 and newer). */
+      /** Fires when the connection goes down, changes kind or comes back, for a panel that watches `connection` (Tavora 0.21.22 and newer). */
       onConnectionChange(fn: (connection: SystemConnection) => void): Unsubscribe;
+      /** The apps running now with their memory and CPU. Only for Tavora's own System Monitor; others get PERMISSION_DENIED. */
+      apps(): Promise<SystemApps>;
+    };
+    /**
+     * `media`: what plays on this PC, as Windows' media controls show it (Spotify, browsers, video players), and
+     * play/pause, next and previous. Windows only. A hidden panel keeps getting changes, so an overlay stays current.
+     */
+    media: {
+      /** Starts this panel's watch and answers what plays now; onChange fires with every change from then on. */
+      watch(): Promise<MediaState>;
+      /** Ends this panel's watch. It also ends with the page. */
+      unwatch(): Promise<void>;
+      /** Fires with what plays now whenever it changes, while the panel watches. */
+      onChange(fn: (state: MediaState) => void): Unsubscribe;
+      /**
+       * Asks a session's app to play or pause, skip or go back. Call it from a click or key press in the panel, or
+       * from one of the module's hotkeys; one press allows one call. True when the app took it.
+       */
+      control(session: string, action: MediaAction): Promise<boolean>;
     };
     /**
      * `discord`: the Discord app on this PC, through Tavora's Discord sign-in. The connection runs while a
@@ -841,6 +869,15 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         connectionSettings: () => call("systemInfo.connectionSettings"),
         setConnectionSettings: (settings) => call("systemInfo.setConnectionSettings", settings),
         onConnectionChange: (fn) => on("systemInfo.connectionChanged", fn),
+        apps: () => call("systemInfo.apps"),
+      },
+      media: {
+        watch: async () => (await call("media.watch", { on: true })) as MediaState,
+        unwatch: async () => {
+          await call("media.watch", { on: false });
+        },
+        onChange: (fn) => on("media.changed", fn),
+        control: (session, action) => call("media.control", { session, action }),
       },
       discord: {
         state: () => call("discord.state"),

@@ -433,11 +433,12 @@
         "connectors": {
           "type": "array",
           "uniqueItems": true,
-          "description": "Parts of Tavora that reach outside the module's panel, which the module asks to use without seeing what is behind them. ai-usage reads the usage of the player's Claude and Codex accounts; discord talks to the Discord app on this PC (voice channels, who is talking, joining and muting); stream-overlay shows the module's overlay page in streaming software on this PC; system-info reads this PC's hardware and how busy it is (CPU, graphics card, memory, drives).",
+          "description": "Parts of Tavora that reach outside the module's panel, which the module asks to use without seeing what is behind them. ai-usage reads the usage of the player's Claude and Codex accounts; discord talks to the Discord app on this PC (voice channels, who is talking, joining and muting); stream-overlay shows the module's overlay page in streaming software on this PC; system-info reads this PC's hardware and how busy it is (CPU, graphics card, memory, drives); media sees what plays on this PC (Spotify, browsers, video players) and can play, pause and skip.",
           "items": {
             "enum": [
               "ai-usage",
               "discord",
+              "media",
               "stream-overlay",
               "system-info"
             ]

@@ -8,13 +8,15 @@
 // notes open in a dialog. Module library opens the library on Tavora's catalog. Below the
 // list are the websites modules may reach, and where module files live. What module developers use (development folders, the examples) is in
 // Settings > Development instead.
-import { ArrowRightLeft, CircleAlert, CloudDownload, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Store, Trash2 } from "@lucide/vue";
+import { ArrowRightLeft, CircleAlert, CloudDownload, Ellipsis, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Store, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { act, confirmAction, dialog, gamesUsing, listOf, settingsOpen, showToast, state, submitAction } from "../../host";
+import { problemText } from "../../../shared/module-problem";
 import { t } from "../../i18n";
 import ModuleGrantsSection from "./ModuleGrantsSection.vue";
 import ModuleNotesDialog from "./ModuleNotesDialog.vue";
@@ -50,6 +52,11 @@ function openLibrary() {
 function openCount(moduleId: string): number {
   return state.value!.panels.filter((panel) => panel.moduleId === moduleId).length;
 }
+
+/** Report is for modules from the catalog, and only while online search is on. */
+const canReport = (module: ModuleView) => module.fromCatalog && state.value!.library.onlineSearch;
+/** Whether a module has anything for its ⋯ menu. */
+const hasMore = (module: ModuleView) => module.localDataWaiting || canReport(module) || module.removable;
 
 async function install() {
   const result = await act({ type: "install-module" });
@@ -136,9 +143,7 @@ function remove(module: ModuleView) {
           <div class="flex min-w-0 flex-1 flex-col gap-2">
             <p class="text-sm leading-relaxed [overflow-wrap:anywhere]">
               <span class="font-medium">{{ problem.folder }}</span>{{ " " }}
-              <span class="text-muted-foreground">{{
-                problem.kind === "not-built" ? t("settings.modules.notBuilt") : t("settings.modules.problem", { message: problem.message })
-              }}</span>
+              <span class="text-muted-foreground">{{ problemText(t, "modules", problem.kind, problem.values) }}</span>
             </p>
             <p class="text-muted-foreground text-xs [overflow-wrap:anywhere]" data-testid="module-problem-path">{{ problem.path }}</p>
           </div>
@@ -212,34 +217,44 @@ function remove(module: ModuleView) {
               t("settings.modules.notesNew")
             }}</Badge>
           </Button>
-          <Button
-            v-if="module.localDataWaiting"
-            variant="secondary"
-            :data-testid="`move-local-data-${module.id}`"
-            @click="moveLocal(module)"
-          >
-            <ArrowRightLeft :stroke-width="1.5" /> {{ t("settings.modules.moveLocal") }}
-          </Button>
-          <Button
-            v-if="module.fromCatalog && state!.library.onlineSearch"
-            variant="ghost"
-            :aria-label="t('settings.modules.reportLabel', { name: module.name })"
-            :title="t('catalog.reportHint')"
-            :data-testid="`report-module-${module.id}`"
-            @click="report(module)"
-          >
-            <Flag :stroke-width="1.5" /> {{ t("settings.modules.report") }}
-          </Button>
-          <Button
-            v-if="module.removable"
-            variant="danger"
-            :aria-label="t('settings.modules.removeLabel', { name: module.name })"
-            :title="openCount(module.id) ? t('settings.modules.removeHint') : undefined"
-            :data-testid="`remove-module-${module.id}`"
-            @click="remove(module)"
-          >
-            <Trash2 :stroke-width="1.5" /> {{ t("common.remove") }}
-          </Button>
+          <DropdownMenu v-if="hasMore(module)">
+            <DropdownMenuTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="flex-none"
+                :aria-label="t('common.moreActions')"
+                :title="t('common.moreActions')"
+                :data-testid="`module-more-${module.id}`"
+              >
+                <Ellipsis :stroke-width="1.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem v-if="module.localDataWaiting" :data-testid="`move-local-data-${module.id}`" @select="moveLocal(module)">
+                <ArrowRightLeft :stroke-width="1.5" /> {{ t("settings.modules.moveLocal") }}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                v-if="canReport(module)"
+                :aria-label="t('settings.modules.reportLabel', { name: module.name })"
+                :title="t('catalog.reportHint')"
+                :data-testid="`report-module-${module.id}`"
+                @select="report(module)"
+              >
+                <Flag :stroke-width="1.5" /> {{ t("settings.modules.report") }}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                v-if="module.removable"
+                variant="destructive"
+                :aria-label="t('settings.modules.removeLabel', { name: module.name })"
+                :title="openCount(module.id) ? t('settings.modules.removeHint') : undefined"
+                :data-testid="`remove-module-${module.id}`"
+                @select="remove(module)"
+              >
+                <Trash2 :stroke-width="1.5" /> {{ t("common.remove") }}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </ModuleRow>
       </ul>
     </div>

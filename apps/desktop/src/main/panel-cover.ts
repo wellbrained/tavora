@@ -17,6 +17,11 @@ export const FIRE_AFTER_MS = 500;
 export const FIRE_MIN_MS = 300;
 /** How long the cover waits for the panels' first frames, at most. A broken module cannot hide the workspace. */
 export const DRAW_CAP_MS = 3_000;
+/**
+ * How long a panel's frame can take from "drawn" (the page's frame callbacks ran) to the screen. Until then what lies
+ * under the panel stays: its picture from while a dialog was open, or its see-through background.
+ */
+export const ON_SCREEN_MS = 250;
 /** The cover's session: in memory only (no "persist:"), never shared with a module or the host UI. */
 const COVER_PARTITION = "tavora-cover";
 /** How long the fire takes to fade in, in the cover page. */
@@ -154,10 +159,10 @@ body.fire .campfire{opacity:1}
 @keyframes rise{0%{opacity:0;transform:translate(0,0) scale(.7) rotate(0)}10%{opacity:.9}35%{opacity:.8;transform:translate(calc(var(--dx)*-.15),calc(var(--dy)*.33)) scale(1) rotate(35deg)}65%{opacity:.55;transform:translate(calc(var(--dx)*.65),calc(var(--dy)*.65)) scale(.8) rotate(-20deg)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.2) rotate(65deg)}}
 @media (prefers-reduced-motion:reduce){.campfire{display:none}}
 </style></head><body><div class="campfire" role="status"><div class="fire-box" aria-hidden="true">${logo}<div class="embers">${embers}</div></div><span>${escapeHtml(label)}</span></div><script>
-const SIZE=176,HEADROOM=95,GAP=26,LABEL=20,MARGIN=16,root=document.querySelector(".campfire"),box=document.querySelector(".fire-box");
+(()=>{const SIZE=176,HEADROOM=95,GAP=26,LABEL=20,MARGIN=16,root=document.querySelector(".campfire"),box=document.querySelector(".fire-box");
 function fit(){const s=Math.max(0,Math.min(1,(innerWidth-2*MARGIN)/SIZE,(innerHeight-2*MARGIN-GAP-LABEL)/(SIZE+HEADROOM)));root.style.setProperty("--cf-size",SIZE*s+"px");root.style.setProperty("--cf-scale",s);root.style.paddingTop=HEADROOM*s+"px";box.style.display=s>.2?"":"none"}
-fit();addEventListener("resize",fit);
-setTimeout(()=>document.body.classList.add("fire"),Math.max(0,${Math.round(fireAtEpoch)}-Date.now()));
+fit();onresize=fit;
+clearTimeout(window.fireTimer);window.fireTimer=setTimeout(()=>document.body.classList.add("fire"),Math.max(0,${Math.round(fireAtEpoch)}-Date.now()));})();
 </script></body></html>`;
 }
 
@@ -186,6 +191,8 @@ export class PanelCover {
   private shownAt = 0;
   private fireAt = 0;
   private active = false;
+  /** The cover's view has loaded a page once; later covers are written into it (start). */
+  private pageLoaded = false;
   private holdTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now: () => number;
 
@@ -212,7 +219,10 @@ export class PanelCover {
     // The colour shows at once, before the page has loaded; the page only adds the fire and the card's border.
     view.setBackgroundColor(theme.tokens.background);
     const page = coverPage({ theme, label, fireAtEpoch: this.shownAt + this.fireAt, emblem: this.options.emblem() });
-    void view.webContents.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page)}`).catch(() => undefined);
+    // Loading a new page can give the view a new surface, white over the whole workspace for a frame or two before
+    // the page draws: once the cover has a page, the next one is written into it instead.
+    if (this.pageLoaded) void view.webContents.executeJavaScript(`document.open();document.write(${JSON.stringify(page)});document.close();`).catch(() => undefined);
+    else void view.webContents.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page)}`).then(() => (this.pageLoaded = true), () => undefined);
     this.place();
   }
 
@@ -242,6 +252,7 @@ export class PanelCover {
     this.cancel();
     if (this.view && !this.view.webContents.isDestroyed()) this.view.webContents.close();
     this.view = null;
+    this.pageLoaded = false;
   }
 
   private place(): void {
@@ -268,6 +279,8 @@ export class PanelCover {
     const contents = view.webContents;
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
     contents.on("will-navigate", (event) => event.preventDefault());
+    // A page that is gone takes nothing written into it: the next cover loads one again.
+    contents.on("render-process-gone", () => (this.pageLoaded = false));
     return view;
   }
 }

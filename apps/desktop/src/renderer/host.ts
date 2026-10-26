@@ -525,7 +525,24 @@ api.onModuleMenu((menu) => (moduleMenu.value = menu));
 
 /** Still images of the panels, by instance id, while they are hidden. */
 export const frozen = shallowRef<Record<string, string>>({});
-api.onFrozen((images) => (frozen.value = images));
+let frozenChanges = 0;
+/** The pictures not yet painted on screen, and what to do once they all are. */
+let unpainted: { ids: Set<string>; done: () => void } | null = null;
+// Chromium reports a picture (elementtiming "frozen:<instance id>", PanelContent.vue) once a frame with it is on
+// screen. Put in the page is not enough: a big image can take a few frames more, and the slot shows empty until then.
+new PerformanceObserver((list) => {
+  if (!unpainted) return;
+  for (const entry of list.getEntries() as (PerformanceEntry & { identifier: string })[]) unpainted.ids.delete(entry.identifier.replace(/^frozen:/, ""));
+  if (!unpainted.ids.size) unpainted.done();
+}).observe({ type: "element" });
+api.onFrozen((images) => {
+  const change = ++frozenChanges;
+  unpainted = null;
+  frozen.value = images;
+  const ids = Object.keys(images);
+  // The host hides the panels once their pictures are on screen.
+  if (ids.length) unpainted = { ids: new Set(ids), done: () => ((unpainted = null), change === frozenChanges && api.frozenShown()) };
+});
 
 /** For a menu component: reports its open state, also when it unmounts open. */
 export function useFloating(): (open: boolean) => void {

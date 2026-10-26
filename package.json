@@ -1,6 +1,6 @@
 {
   "name": "tavora",
-  "version": "0.21.15",
+  "version": "0.21.21",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",
@@ -15,6 +15,7 @@
     "test:e2e": "pnpm --filter @tavora/desktop test:e2e",
     "release": "pnpm --filter @tavora/desktop release",
     "perf:system-info": "pnpm --filter @tavora/desktop perf:system-info",
+    "perf:media": "pnpm --filter @tavora/desktop perf:media",
     "release:sdk": "node scripts/release-sdk.mjs",
     "pack-module": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source packages/pack/src/cli.ts",
     "tavora-pack": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source packages/pack/src/cli.ts",

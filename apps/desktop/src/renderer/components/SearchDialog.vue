@@ -5,6 +5,7 @@
 import { Blocks, Home, LayoutPanelLeft, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, SlidersHorizontal } from "@lucide/vue";
 import { computed, nextTick, ref, watch, type Component } from "vue";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
+import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { CatalogMatch, GameView, OnlineGame } from "../../shared/host-api";
@@ -305,9 +306,9 @@ function onKey(event: KeyboardEvent) {
       </div>
 
       <div class="text-muted-foreground flex gap-4 border-t px-4 py-2 text-xs" aria-hidden="true">
-        <span><kbd class="font-sans">↑</kbd> <kbd class="font-sans">↓</kbd> {{ t("search.hint.move") }}</span>
-        <span><kbd class="font-sans">{{ t("search.key.enter") }}</kbd> {{ t("search.hint.open") }}</span>
-        <span><kbd class="font-sans">{{ t("search.key.esc") }}</kbd> {{ t("search.hint.close") }}</span>
+        <span><Kbd class="font-sans">↑</Kbd> <Kbd class="font-sans">↓</Kbd> {{ t("search.hint.move") }}</span>
+        <span><Kbd class="font-sans">{{ t("search.key.enter") }}</Kbd> {{ t("search.hint.open") }}</span>
+        <span><Kbd class="font-sans">{{ t("search.key.esc") }}</Kbd> {{ t("search.hint.close") }}</span>
       </div>
     </DialogContent>
   </Dialog>

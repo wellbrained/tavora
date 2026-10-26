@@ -1,10 +1,17 @@
 [
   {
-    "version": "0.1.2",
-    "date": "2026-10-25",
+    "version": "0.1.3",
+    "date": "2026-10-26",
     "notes": [
       "New Connection section: see if you're online, your ping to the router and the internet, lost pings and the speed of your network.",
-      "Drops in your connection are listed with the time and how long they lasted, even when the panel was closed. Needs Tavora 0.21.16."
+      "Drops in your connection are listed with the time and how long they lasted, even when the panel was closed. Needs Tavora 0.21.22."
+    ]
+  },
+  {
+    "version": "0.1.2",
+    "date": "2026-10-26",
+    "notes": [
+      "See which apps use your memory: the new button on the Memory card lists them with their RAM and CPU."
     ]
   },
   {

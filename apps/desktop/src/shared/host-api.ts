@@ -2,6 +2,7 @@ import type { Language, LanguageSetting, MessageKey } from "./i18n";
 // Contract between the trusted host UI (renderer) and the main process.
 // Types only: imported by both sides, so it must not import Electron or Node.
 import type { IconTone } from "./icon-tone";
+import type { ModuleProblemKind, ModuleProblemValues } from "./module-problem";
 import type { HostAction } from "./host-actions";
 
 /**
@@ -25,7 +26,7 @@ export type IconView = { kind: "monogram"; text: string } | { kind: "image"; url
 export type DeveloperLink = "docs" | "discussions" | "issue";
 
 /** Why a development project did not load, for the fix Settings suggests. */
-export type DevelopmentProblemKind = "not-built" | "no-module" | "missing";
+export type DevelopmentProblemKind = ModuleProblemKind;
 
 /** One version of a module's patch notes, as its changelog file says; plain text. */
 export interface ModuleNote {
@@ -569,8 +570,8 @@ export interface HostViewState {
     update: { version: string; asks: ModulePermissions; notes: ModuleNote[] } | null;
   }[];
   /** Folders in the modules folder that could not be loaded, and why, for module authors. */
-  /** `path` is the folder's full path; `kind` "not-built" gets its own text in Settings, the others show `message`. */
-  moduleProblems: { folder: string; path: string; message: string; kind?: "not-built" | "no-module" | "missing" }[];
+  /** `path` is the folder's full path. Settings words the problem from `kind` and `values`; `message` is the English line for logs. */
+  moduleProblems: { folder: string; path: string; message: string; kind?: ModuleProblemKind; values?: ModuleProblemValues }[];
   /**
    * Folders added in Settings > Development: a module project, or a folder of projects. `problem` is
    * set when the folder itself has none or is gone; each project says the module it loads or why not.
@@ -580,8 +581,9 @@ export interface HostViewState {
     folder: string;
     problem: string | null;
     kind: DevelopmentProblemKind | null;
+    values?: ModuleProblemValues;
     /** `name` and `version` are what the manifest of a project that didn't load gives, when it has them. */
-    projects: { project: string; moduleId: string | null; problem: string | null; kind: DevelopmentProblemKind | null; name: string | null; version: string | null }[];
+    projects: { project: string; moduleId: string | null; problem: string | null; kind: DevelopmentProblemKind | null; values?: ModuleProblemValues; name: string | null; version: string | null }[];
   }[];
   /** Saved data of modules that are not installed (or of another publisher than the installed one), kept until deleted. */
   leftoverModuleData: { owner: string; moduleId: string; publisher: string | null }[];
@@ -733,7 +735,7 @@ export interface ModulePermissions {
 }
 
 /** The connectors Tavora has (module-schema CONNECTORS). */
-export type ModuleConnector = "ai-usage" | "discord" | "stream-overlay" | "system-info";
+export type ModuleConnector = "ai-usage" | "discord" | "media" | "stream-overlay" | "system-info";
 
 /** Everything the host UI can ask the main process to do: the table in host-actions.ts. */
 export type { HostAction, HostActionType } from "./host-actions";
@@ -993,6 +995,8 @@ export interface TavoraHostApi {
   setDimmed(dimmed: boolean): void;
   onState(listener: (state: HostViewState) => void): void;
   onFrozen(listener: (images: Record<string, string>) => void): void;
+  /** The still images from `onFrozen` are on screen: the host hides the panels only then, so their slots never show empty. */
+  frozenShown(): void;
   /** Tavora-wide keyboard shortcuts, also when a module panel has focus. */
   onShortcut(listener: (shortcut: HostShortcut) => void): void;
   getDiscord(): Promise<DiscordView | null>;

@@ -62,7 +62,9 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
       clearConnectionLog: () => { throw new Error("no system info in this test"); },
       connectionSettings: () => { throw new Error("no system info in this test"); },
       setConnectionSettings: () => { throw new Error("no system info in this test"); },
+      apps: () => Promise.reject(new Error("no system info in this test")),
     },
+    media: { watch: () => { throw new Error("no media in this test"); }, control: () => Promise.reject(new Error("no media in this test")) },
     discord: noDiscord,
     panelState: registry.panelState,
     capabilities: () => new Set(),
@@ -585,8 +587,62 @@ describe("aiUsage", () => {
   });
 });
 
+describe("media", () => {
+  const STATE = { state: "ready" as const, sessions: [] };
+  const calls: unknown[] = [];
+  const granted = () =>
+    connected({
+      ...makeContext(),
+      capabilities: () => new Set(["media"] as const),
+      media: {
+        watch: (on) => (calls.push(["watch", on]), on ? STATE : null),
+        control: async (session, action) => (calls.push(["control", session, action]), true),
+      },
+    });
+
+  it.each([
+    ["media.watch", { on: true }],
+    ["media.control", { session: "Spotify.exe#0", action: "next" }],
+  ])("denies %s without the media connector", async (method, params) => {
+    expect(await call(port, method, params)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "media" } });
+  });
+
+  it("starts and ends a watch", async () => {
+    calls.length = 0;
+    const p = await granted();
+    expect(await call(p, "media.watch", { on: true })).toMatchObject({ ok: true, result: STATE });
+    expect(await call(p, "media.watch", { on: false })).toMatchObject({ ok: true, result: null });
+    expect(calls).toEqual([["watch", true], ["watch", false]]);
+  });
+
+  it("passes a checked control on", async () => {
+    calls.length = 0;
+    const p = await granted();
+    expect(await call(p, "media.control", { session: "Spotify.exe#0", action: "playPause" })).toMatchObject({ ok: true, result: true });
+    expect(calls).toEqual([["control", "Spotify.exe#0", "playPause"]]);
+  });
+
+  it.each([
+    ["media.watch", undefined],
+    ["media.watch", {}],
+    ["media.watch", { on: 1 }],
+    ["media.watch", { on: true, extra: 1 }],
+    ["media.control", undefined],
+    ["media.control", { session: "", action: "next" }],
+    ["media.control", { session: "a", action: "seek" }],
+    ["media.control", { session: 1, action: "next" }],
+    ["media.control", { session: "a", action: "next", extra: 1 }],
+  ])("refuses %s with %j", async (method, params) => {
+    calls.length = 0;
+    const p = await granted();
+    expect(await call(p, method, params)).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(calls).toEqual([]);
+  });
+});
+
 describe("systemInfo", () => {
   const INFO = { cpu: { model: "Test CPU", threads: 8 }, ramBytes: 16e9, gpus: [], drives: [{ id: "C:", label: "", kind: "internal" as const, totalBytes: 1e12 }] };
+  const APPS = { apps: [{ name: "Firefox", memoryBytes: 6.8e9, cpu: 1.2, windows: false }], usedBytes: 20e9 };
   const watching: unknown[] = [];
   const settings = { enabled: true, target: "1.1.1.1" };
   const cleared: number[] = [];
@@ -602,6 +658,7 @@ describe("systemInfo", () => {
         clearConnectionLog: () => void cleared.push(1),
         connectionSettings: () => settings,
         setConnectionSettings: (change) => (changed.push(change), { ...settings, ...change }),
+        apps: async () => APPS,
       },
       ...extra,
     });
@@ -614,6 +671,7 @@ describe("systemInfo", () => {
     ["systemInfo.clearConnectionLog", undefined],
     ["systemInfo.connectionSettings", undefined],
     ["systemInfo.setConnectionSettings", { enabled: false }],
+    ["systemInfo.apps", undefined],
   ])("denies %s without the system-info connector", async (method, params) => {
     expect(await call(port, method, params)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "systemInfo" } });
   });
@@ -629,6 +687,12 @@ describe("systemInfo", () => {
   it("takes no params for info", async () => {
     const p = await granted();
     expect(await call(p, "systemInfo.info", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+
+  it("answers the apps, without params", async () => {
+    const p = await granted();
+    expect(await call(p, "systemInfo.apps")).toMatchObject({ ok: true, result: APPS });
+    expect(await call(p, "systemInfo.apps", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
   });
 
   it.each([

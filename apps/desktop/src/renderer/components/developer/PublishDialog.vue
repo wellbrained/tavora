@@ -4,7 +4,7 @@
 // listed with its fix right here: the next version and its patch notes, an id with the developer's own
 // prefix (Check, then Claim it), or a build. Publish uploads exactly what this shows; the click is the
 // approval, so nothing asks again.
-import { CircleAlert, RefreshCw, TriangleAlert } from "@lucide/vue";
+import { CircleAlert, TriangleAlert } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
@@ -250,9 +250,6 @@ function browse() {
       </template>
 
       <div class="flex items-center justify-end gap-2">
-        <Button variant="ghost" size="icon-sm" class="mr-auto" :disabled="busy || view.status !== 'ready'" :aria-label="t('publish.checkAgain')" :title="t('publish.checkAgain')" data-testid="publish-refresh" @click="run({ type: 'publish-refresh' })">
-          <RefreshCw :stroke-width="1.5" />
-        </Button>
         <Button variant="secondary" :disabled="view.status === 'publishing'" data-testid="publish-cancel" @click="close">{{ t("common.cancel") }}</Button>
         <Button :disabled="busy || view.status !== 'ready' || view.problems.length > 0" data-testid="publish-upload" @click="run({ type: 'publish-upload' })">
           {{ view.status === "publishing" ? t("publish.publishing") : t("publish.publish") }}

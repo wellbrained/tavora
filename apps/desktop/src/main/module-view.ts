@@ -3,8 +3,8 @@ import { serveReadOnlyFile } from './read-only-files-http';
 import { READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { app, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
-import type { Capability, GameOverlayResult, SystemInfo, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
+import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
+import type { Capability, GameOverlayResult, SystemApps, SystemInfo, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./gamedata";
 import { gestureCounts, type Opacity } from "./game-overlays";
@@ -20,15 +20,17 @@ import { LIMITS, type PanelOpenResult } from "@tavora/sdk/protocol";
 import type { DiscordConnector, DiscordListener } from "./discord";
 import { connectionAccess, type ConnectionWatcher } from "./connection";
 import type { SystemMonitor, SystemSubscription } from "./system-info";
+import type { MediaConnector, MediaSubscription } from "./media";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
 import { serveClipboard } from "./clipboard-http";
 import { cleanPictureName, servePictureSave } from "./picture-save-http";
 import { serveJsonOpen, serveJsonSave } from "./json-file-http";
 import { saveJsonExport, serveJsonExport } from './json-export-http';
-import { DRAW_CAP_MS } from "./panel-cover";
+import { DRAW_CAP_MS, ON_SCREEN_MS } from "./panel-cover";
 import { isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
+import { onlySystemMonitor } from "./system-apps";
 import { moduleFetch, type TestHosts } from "./network";
 import type { InstalledModule } from "./registry";
 import type { InstanceStatus } from "../shared/host-api";
@@ -98,9 +100,11 @@ export interface ModuleViewOptions {
   /** The ai-usage connector, for a module granted it. */
   aiUsage: BridgeContext["aiUsage"];
   /** The system-info connector, shared by every panel; each view holds one subscription of its own. */
-  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; subscribe: SystemMonitor["subscribe"] };
+  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; subscribe: SystemMonitor["subscribe"]; apps(): Promise<SystemApps> };
   /** The connection watcher (connection.ts): its log and settings are shared by every panel. */
   connection: Pick<ConnectionWatcher, "outageLog" | "clearLog" | "getSettings" | "setSettings">;
+  /** The media connector, shared by every panel; each view holds one subscription of its own while it watches. */
+  media: Pick<MediaConnector, "subscribe">;
   /** The discord connector, shared by every panel; this view uses it under its own instance id. */
   discord: Pick<DiscordConnector, "use" | "release" | "state" | "connectNow" | "allowControl" | "command" | "subscribe" | "unsubscribe" | "image">;
   /** Overlays of this module in this game: Stream overlay links (granted the stream-overlay connector) and game overlays. */
@@ -287,6 +291,10 @@ export class ModuleView {
   private suspended = false;
   /** This panel's watch of the PC (system-info.ts), once it asked to watch something. */
   private systemWatch: SystemSubscription | undefined;
+  /** This panel's watch of what plays on the PC (media.ts), while it watches. */
+  private mediaWatch: MediaSubscription | undefined;
+  /** When one of the module's hotkeys was last pressed for this panel; it allows one media.control, like a click. */
+  private hotkeyAt = 0;
   /** The inserted theme stylesheet of the current page, removed when the theme changes. */
   private themeCssKey: string | undefined;
   /** Theme stylesheets are swapped one at a time, so none is left behind. */
@@ -584,6 +592,7 @@ export class ModuleView {
         appSettings: this.options.appSettings,
         aiUsage: this.options.aiUsage,
         systemInfo: this.systemInfoFor(() => bridge),
+        media: this.mediaFor(() => bridge),
         discord: this.discordFor(() => bridge),
         capabilities: () => this.capabilities(),
         readPage: (params) => moduleReadPage(params, {
@@ -675,6 +684,7 @@ export class ModuleView {
         this.options.tooltip?.close();
         this.bridge = undefined;
         this.stopSystemWatch();
+        this.stopMediaWatch();
         this.options.discord.release(this.options.instanceId);
       },
     );
@@ -682,12 +692,13 @@ export class ModuleView {
     this.view.webContents.postMessage("tavora:port", null, [port2]);
   }
 
-  /** What the player has granted now (grants.ts): `network` with any granted host, `aiUsage`, `systemInfo`, `discord` and `overlay` with their connectors. */
+  /** What the player has granted now (grants.ts): `network` with any granted host, `aiUsage`, `systemInfo`, `media`, `discord` and `overlay` with their connectors. */
   private capabilities(): ReadonlySet<Capability> {
     const granted = new Set<Capability>();
     if (this.options.networkHosts().size > 0) granted.add("network");
     if (this.options.connectors().has("ai-usage")) granted.add("aiUsage");
     if (this.options.connectors().has("system-info")) granted.add("systemInfo");
+    if (this.options.connectors().has("media")) granted.add("media");
     if (this.options.connectors().has("discord")) granted.add("discord");
     if (this.options.connectors().has("stream-overlay")) granted.add("overlay");
     return granted;
@@ -702,6 +713,10 @@ export class ModuleView {
     const connected = () => this.bridge === bridge() && this.capabilities().has("systemInfo");
     return {
       info: () => this.options.systemInfo.info(),
+      apps: () => {
+        onlySystemMonitor(this.options.module.owner, this.options.module.manifest.id, "systemInfo.apps");
+        return this.options.systemInfo.apps();
+      },
       watch: (request) => {
         if (!this.systemWatch) {
           this.systemWatch = this.options.systemInfo.subscribe({
@@ -727,6 +742,41 @@ export class ModuleView {
   private stopSystemWatch(): void {
     this.systemWatch?.close();
     this.systemWatch = undefined;
+  }
+
+  /**
+   * The media connector as this panel uses it. Changes reach only this page and only while the grant lasts (a revoke
+   * ends the watch at the next change at the latest, and closing the panel ends it at once). Unlike system info they
+   * keep coming while the panel is hidden: they are rare and cheap, and a module's overlay over the game or on stream
+   * has to stay current while Tavora is behind the game. A control needs a click or key press in the page, or one of
+   * the module's hotkeys, just before; one press allows one control.
+   */
+  private mediaFor(bridge: () => BridgeSession): BridgeContext["media"] {
+    const connected = () => this.bridge === bridge() && this.capabilities().has("media");
+    return {
+      watch: (on) => {
+        if (!on) {
+          this.stopMediaWatch();
+          return null;
+        }
+        this.mediaWatch ??= this.options.media.subscribe((state) => {
+          if (connected()) bridge().emit("media.changed", state);
+          else this.stopMediaWatch();
+        });
+        return this.mediaWatch.state();
+      },
+      control: async (session, action) => {
+        if (!this.mediaWatch) return false;
+        if (Date.now() - this.hotkeyAt <= GESTURE_MS) this.hotkeyAt = 0;
+        else await this.takeGesture("media.control");
+        return (await this.mediaWatch?.control(session, action)) ?? false;
+      },
+    };
+  }
+
+  private stopMediaWatch(): void {
+    this.mediaWatch?.close();
+    this.mediaWatch = undefined;
   }
 
   /**
@@ -778,6 +828,7 @@ export class ModuleView {
 
   /** The player pressed a hotkey set for this module in this game. */
   hotkeyPressed(binding: HotkeyBinding): void {
+    this.hotkeyAt = Date.now();
     this.bridge?.emit("hotkeys.pressed", { ...binding });
   }
 
@@ -824,12 +875,17 @@ export class ModuleView {
     if (contents.isDestroyed()) return Promise.resolve();
     if (!this.overGame) this.view.setBackgroundColor("#00000000");
     const requestId = ++this.frameRequests;
+    this.frameSeenAs = "not received";
     return new Promise((resolve) => {
       const done = () => {
         clearTimeout(timer);
         this.frameWaiters.delete(requestId);
         if (requestId === this.frameRequests && !contents.isDestroyed()) {
-          if (!this.overGame) this.view.setBackgroundColor(this.options.getTheme().tokens.background);
+          contents.setBackgroundThrottling(true);
+          // Opaque at once, the panel would show its plain colour until the frame is on screen.
+          setTimeout(() => {
+            if (requestId === this.frameRequests && !this.frameWaiters.size && !this.overGame && !contents.isDestroyed()) this.view.setBackgroundColor(this.options.getTheme().tokens.background);
+          }, ON_SCREEN_MS);
           if (this.shown && this.revealed && !this.firstDrawn) {
             this.firstDrawn = true;
             this.options.onDrawn?.();
@@ -837,10 +893,34 @@ export class ModuleView {
         }
         resolve();
       };
-      const timer = setTimeout(done, DRAW_CAP_MS);
+      // Shows up in Settings > Diagnostic info, so a panel that keeps a game's cover up that long can be found.
+      const timer = setTimeout(() => {
+        if (!contents.isDestroyed()) {
+          const { width, height } = this.view.getBounds();
+          console.warn(`[tavora] ${this.moduleId}${this.typeName ? ` (${this.typeName})` : ""} did not draw within ${DRAW_CAP_MS} ms of being shown: ${width}x${height}, ${this.status}, loading ${contents.isLoading()}, suspended ${this.suspended}, revealed ${this.revealed}, page ${this.frameSeenAs}, window ${this.windowState()}`);
+        }
+        done();
+      }, DRAW_CAP_MS);
       this.frameWaiters.set(requestId, done);
+      // Chromium counts a page under another view (the game's loading cover) as hidden, and a hidden page does not
+      // draw: until this frame, the page counts as shown wherever it lies.
+      contents.setBackgroundThrottling(false);
       contents.send("tavora:frame", requestId);
     });
+  }
+
+  /** The window the panel is in: whether Windows shows it, so a panel that never draws can be told from a hidden window. */
+  private windowState(): string {
+    const window = BrowserWindow.getAllWindows().find((w) => w.contentView.children.includes(this.view));
+    if (!window) return "none";
+    return [window.isVisible() ? "visible" : "hidden", window.isMinimized() && "minimized", window.isFocused() ? "focused" : "unfocused"].filter(Boolean).join(" ");
+  }
+
+  /** What the page said when the last frame request reached it (document.visibilityState), or "not received". */
+  private frameSeenAs = "not received";
+
+  frameSeen(visibility: unknown): void {
+    if (typeof visibility === "string") this.frameSeenAs = visibility.slice(0, 20);
   }
 
   /** The preload says the page has drawn since frame request `requestId`. */
@@ -1080,6 +1160,7 @@ export class ModuleView {
     this.bridge?.close();
     this.bridge = undefined;
     this.stopSystemWatch();
+    this.stopMediaWatch();
     this.options.discord.release(this.options.instanceId);
   }
 

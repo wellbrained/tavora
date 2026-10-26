@@ -89,8 +89,16 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The Media connector's helper is Rust (packages/media-helper); the runner has Rust, and pnpm build builds it.
+      - name: Test the media helper
+        working-directory: packages/media-helper
+        run: cargo test --release --locked
       - run: pnpm build
-      - run: pnpm --filter @tavora/desktop package --win nsis --publish never
+      - name: The media helper is in the package
+        shell: pwsh
+        run: |
+          pnpm --filter @tavora/desktop package --win nsis --publish never
+          if (-not (Test-Path apps/desktop/release/win-unpacked/resources/media-helper/tavora-media.exe)) { throw "tavora-media.exe is missing from the package." }
       - name: Install like a player (silent, for this user)
         shell: pwsh
         run: |

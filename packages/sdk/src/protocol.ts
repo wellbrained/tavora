@@ -264,7 +264,7 @@ export interface SystemWatchBlocks {
   ram?: boolean;
   /** Drive letters with a colon ("C:"), at most 26. */
   drives?: string[];
-  /** The internet connection: pings, packet loss and speed (SystemConnection). Tavora 0.21.16 and newer. */
+  /** The internet connection: pings, packet loss and speed (SystemConnection). Tavora 0.21.22 and newer. */
   connection?: boolean;
   /** Tavora's own CPU and memory use. */
   tavora?: boolean;
@@ -326,8 +326,74 @@ export interface SystemSnapshot {
   }[];
   /** Tavora's own use: `cpu` as a share of the whole PC, `memoryBytes` in working set. */
   tavora?: { cpu: number; memoryBytes: number };
-  /** The connection as of its last check (every 5 seconds), when the panel asked for it. Tavora 0.21.16 and newer. */
+  /** The connection as of its last check (every 5 seconds), when the panel asked for it. Tavora 0.21.22 and newer. */
   connection?: SystemConnection;
+}
+
+/** One app running on this PC: its processes taken together under one name (systemInfo.apps). */
+export interface SystemApp {
+  /** The program's file name without ".exe" and with a capital first letter ("Firefox"), or Windows' own name ("Memory Compression"). */
+  name: string;
+  /** Memory only this app uses (private working set), as Task Manager's Memory column. */
+  memoryBytes: number;
+  /** CPU since the last reading as a share of the whole PC, with one decimal; null before there are two readings. */
+  cpu: number | null;
+  /** One of Windows' own processes, such as svchost or Memory Compression. */
+  windows: boolean;
+}
+
+/** The apps running now, the biggest first, and how much memory the PC uses in all (systemInfo.apps). */
+export interface SystemApps {
+  apps: SystemApp[];
+  usedBytes: number;
+}
+
+/** What a media session is doing, as the player reports it to Windows. */
+export type MediaStatus = "playing" | "paused" | "stopped" | "changing" | "closed";
+
+/** What media.control can ask a player to do. */
+export type MediaAction = "playPause" | "next" | "previous";
+
+/** The actions media.control takes. */
+export const MEDIA_ACTIONS: readonly MediaAction[] = ["playPause", "next", "previous"];
+
+/**
+ * One app that plays something, as Windows' media controls (the volume flyout) show it: Spotify, a browser tab,
+ * a video player. Texts are as the app gives them and may be empty.
+ */
+export interface MediaSession {
+  /** Stays the same while the session lasts; pass it to media.control. */
+  id: string;
+  /** The app: `id` as Windows names it (such as "Spotify.exe"), `name` a readable name (such as "Spotify"). */
+  app: { id: string; name: string };
+  /** The session Windows' media keys work on now. At most one is. */
+  current: boolean;
+  title: string;
+  artist: string;
+  album: string;
+  status: MediaStatus;
+  /**
+   * Where the song was at `positionAt` (milliseconds since 1970), in milliseconds. While playing it runs on from
+   * there, so count forward yourself; a new `media.changed` comes when it jumps. Null when the app doesn't say.
+   */
+  positionMs: number | null;
+  positionAt: number | null;
+  /** The song's length in milliseconds, or null when the app doesn't say. */
+  durationMs: number | null;
+  /** The cover as a JPEG data URL, at most 300 px on each side, or null when there is none. */
+  cover: string | null;
+  /** Which actions the app takes now. */
+  can: Record<MediaAction, boolean>;
+}
+
+/**
+ * The media connector's view of this PC. `ready`: `sessions` is what plays now (it may be empty). `starting`:
+ * Tavora is still looking. `unavailable`: this PC can't tell (not Windows, or this Tavora was built without it).
+ * `failed`: Tavora couldn't read it and stopped trying until a panel starts watching again.
+ */
+export interface MediaState {
+  state: "starting" | "ready" | "unavailable" | "failed";
+  sessions: MediaSession[];
 }
 
 /**
@@ -485,10 +551,10 @@ export interface DocumentChange {
  * Capabilities gate methods beyond the always-available core. A module has a
  * capability once the player granted one of its permissions for it (`network`:
  * a host in `permissions.network`; `aiUsage`: the `ai-usage` connector; `discord`:
- * the `discord` connector; `overlay`: the `stream-overlay` connector; `systemInfo`: the `system-info` connector); calling a gated method without it fails
+ * the `discord` connector; `overlay`: the `stream-overlay` connector; `systemInfo`: the `system-info` connector; `media`: the `media` connector); calling a gated method without it fails
  * with PERMISSION_DENIED. The others cannot be granted yet.
  */
-export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "systemInfo" | "files" | "clipboard" | "sharedData";
+export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "systemInfo" | "media" | "files" | "clipboard" | "sharedData";
 
 /**
  * What overlay.copyLink did. `copied`: the link is on the clipboard, ready to paste into OBS as a Browser Source.
@@ -591,18 +657,35 @@ export interface Methods {
    * `systemInfo.snapshot` at once, then one every `intervalMs`. A panel that is hidden gets none.
    */
   "systemInfo.watch": { params: { blocks: SystemWatchBlocks; intervalMs: SystemInterval }; result: null };
-  /** The drops of the connection in the last 30 days (capability `systemInfo`). Tavora 0.21.16 and newer. */
+  /** The drops of the connection in the last 30 days (capability `systemInfo`). Tavora 0.21.22 and newer. */
   "systemInfo.connectionLog": { params: undefined; result: SystemConnectionLog };
-  /** Empties the log of drops. Only for Tavora's own System Monitor, right after a click or key press (capability `systemInfo`). Tavora 0.21.16 and newer. */
+  /** Empties the log of drops. Only for Tavora's own System Monitor, right after a click or key press (capability `systemInfo`). Tavora 0.21.22 and newer. */
   "systemInfo.clearConnectionLog": { params: undefined; result: null };
-  /** Whether the connection is watched and which address is pinged (capability `systemInfo`). Tavora 0.21.16 and newer. */
+  /** Whether the connection is watched and which address is pinged (capability `systemInfo`). Tavora 0.21.22 and newer. */
   "systemInfo.connectionSettings": { params: undefined; result: SystemConnectionSettings };
   /**
    * Changes what is given and leaves the rest. Only for Tavora's own System Monitor, right after a click or key press, and
    * once every 5 seconds (capability `systemInfo`). A `target` that is not a public IPv4 address or a public name is
-   * `INVALID_PARAMS`. Tavora 0.21.16 and newer.
+   * `INVALID_PARAMS`. Tavora 0.21.22 and newer.
    */
   "systemInfo.setConnectionSettings": { params: Partial<SystemConnectionSettings>; result: SystemConnectionSettings };
+  /**
+   * The apps running now, with their memory and CPU. Only for Tavora's own System Monitor (capability `systemInfo`);
+   * any other module gets PERMISSION_DENIED. Tavora 0.21.21 and newer.
+   */
+  "systemInfo.apps": { params: undefined; result: SystemApps };
+  /**
+   * Starts (`on: true`) or ends this panel's watch of what plays on this PC (capability `media`) and answers what
+   * plays now; `media.changed` follows every change while it watches, also while the panel is hidden, so an
+   * overlay can stay current. Ending answers null. Tavora 0.21.18 and newer.
+   */
+  "media.watch": { params: { on: boolean }; result: MediaState | null };
+  /**
+   * Asks the app of a session to play or pause, skip to the next or go back (capability `media`). Needs a click or
+   * key press in the panel, or one of the module's hotkeys, just before; one press allows one call. True when the
+   * app took it.
+   */
+  "media.control": { params: { session: string; action: MediaAction }; result: boolean };
   /** The connection to the Discord app; starts it for this panel (capability `discord`). */
   "discord.state": { params: undefined; result: DiscordState };
   /** Signs in, asking for approval in Discord when needed. Only right after a click or key press (capability `discord`). */
@@ -685,9 +768,11 @@ export interface Events {
   "systemInfo.drivesChanged": null;
   /**
    * The connection went down, changed kind or came back. Only with capability `systemInfo`, while the panel watches
-   * the `connection` block and is shown. Ask systemInfo.connectionLog again. Tavora 0.21.16 and newer.
+   * the `connection` block and is shown. Ask systemInfo.connectionLog again. Tavora 0.21.22 and newer.
    */
   "systemInfo.connectionChanged": SystemConnection;
+  /** What plays on this PC changed (media.watch). Only with capability `media`, while the panel watches. */
+  "media.changed": MediaState;
   /** The player added, renamed or removed an AI account; ask aiUsage.accounts again. Only with capability `aiUsage`. */
   "aiUsage.accountsChanged": null;
   /** The connection to the Discord app changed. Only with capability `discord`, after discord.state. */

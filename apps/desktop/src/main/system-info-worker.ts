@@ -1,9 +1,13 @@
 /**
  * The worker thread the system-info connector reads the PC in (system-info-thread.ts is the main process's side).
  * It holds the one SystemMonitor and its probe, and passes messages both ways: what the panels watch in, the
- * snapshots out. Tavora's own use is filled in by the main process, which alone can read it.
+ * snapshots out. Tavora's own use is filled in by the main process, which alone can read it. The System Monitor's
+ * list of apps (system-apps.ts) is read here too, only when asked.
  */
+import os from "node:os";
 import { parentPort } from "node:worker_threads";
+import type { SystemApps } from "@tavora/sdk/protocol";
+import { AppsReader, readProcesses } from "./system-apps";
 import { SystemMonitor, type SystemSubscription } from "./system-info";
 import type { FromWorker, ToWorker } from "./system-info-thread";
 import { systemProbe } from "./system-info-windows";
@@ -19,6 +23,21 @@ const monitor = new SystemMonitor({
   log: (message, error) => post({ type: "log", message, error: error instanceof Error ? (error.stack ?? error.message) : String(error) }),
 });
 const subscriptions = new Map<number, SystemSubscription>();
+const apps = new AppsReader();
+
+/** A CPU figure needs two readings; when the last one is old, take a second one a moment after the first. */
+const FRESH_MS = 10_000;
+const SECOND_LOOK_MS = 500;
+
+async function readApps(): Promise<SystemApps> {
+  if (process.platform !== "win32") return { apps: [], usedBytes: 0 };
+  const used = () => os.totalmem() - os.freemem();
+  if (apps.age(Date.now()) > FRESH_MS) {
+    apps.read(readProcesses(), Date.now(), used());
+    await new Promise((resolve) => setTimeout(resolve, SECOND_LOOK_MS));
+  }
+  return apps.read(readProcesses(), Date.now(), used());
+}
 
 port.on("message", (message: ToWorker) => {
   switch (message.type) {
@@ -28,6 +47,12 @@ port.on("message", (message: ToWorker) => {
       } catch (error) {
         post({ type: "info", id: message.id, error: error instanceof Error ? error.message : String(error) });
       }
+      return;
+    case "apps":
+      readApps().then(
+        (read) => post({ type: "apps", id: message.id, apps: read }),
+        (error: unknown) => post({ type: "apps", id: message.id, error: error instanceof Error ? error.message : String(error) }),
+      );
       return;
     case "subscribe": {
       const { sub } = message;

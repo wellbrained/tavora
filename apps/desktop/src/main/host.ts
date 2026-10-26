@@ -138,6 +138,8 @@ import { AiUsageConnector } from "./ai-usage";
 import { ConnectionFile, ConnectionWatcher, SYSTEM_MONITOR_ID } from "./connection";
 import { connectionProbe } from "./connection-windows";
 import { SystemMonitorThread } from "./system-info-thread";
+import { MediaConnector } from "./media";
+import { helperPath, mediaDeps } from "./media-windows";
 import { readClaudeEmail } from "./ai-usage-claude";
 import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
@@ -178,7 +180,7 @@ import {
 import type { PanelContent, PanelLaunch } from "./panel-content";
 import type { PanelOpenResult } from "@tavora/sdk/protocol";
 import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
-import { layoutKey, OpenTimes, PanelCover } from "./panel-cover";
+import { layoutKey, ON_SCREEN_MS, OpenTimes, PanelCover } from "./panel-cover";
 
 interface Rect {
   x: number;
@@ -197,6 +199,8 @@ const OPENING_CAP_MS = REVEAL_CAP_MS * 4;
 const timingLog = !app.isPackaged && process.env.TAVORA_TIMINGS ? (line: string) => console.log(`[tavora] ${line}`) : null;
 /** How long to wait for a still image of a panel before hiding it anyway. */
 const FREEZE_TIMEOUT_MS = 250;
+/** How long to wait for the host UI to show the panels' still images before hiding the panels anyway. */
+const FROZEN_SHOWN_CAP_MS = 300;
 /** How long a development folder's build must be quiet before its panels reload. */
 const DEVELOPMENT_RELOAD_MS = 300;
 /** The pages Settings > Development links to. */
@@ -347,6 +351,12 @@ export class Host {
   private systemInfo!: SystemMonitorThread;
   /** The connection watcher (connection.ts): pings the router and one internet address while System Monitor is in a game or workspace, and keeps the log of drops. */
   private connection!: ConnectionWatcher;
+  /** The Media connector: what plays on this PC, read by Tavora's media helper only while a panel of a granted module watches. */
+  private readonly media = new MediaConnector(
+    mediaDeps(helperPath(app.isPackaged, process.resourcesPath, path.resolve(__dirname, "../../../..")), (message, error) =>
+      error === undefined ? console.warn(`[tavora] ${message}`) : console.warn(`[tavora] ${message}`, error),
+    ),
+  );
   /** The player's Tavora account; the sign-in never leaves the main process. */
   private readonly account: AccountClient;
   /** The cloud copy: made before the data is read, since a newer copy is taken before anything reads it. */
@@ -1510,6 +1520,10 @@ export class Host {
       if (event.senderFrame?.parent !== null) return;
       this.viewsByContents.get(event.sender.id)?.framed(requestId);
     });
+    ipcMain.on("tavora:frame-seen", (event: IpcMainEvent, visibility: unknown) => {
+      if (event.senderFrame?.parent !== null) return;
+      this.viewsByContents.get(event.sender.id)?.frameSeen(visibility);
+    });
     ipcMain.on("tavora:pong", (event: IpcMainEvent) => {
       if (event.senderFrame?.parent !== null) return;
       this.viewsByContents.get(event.sender.id)?.pong();
@@ -1607,6 +1621,9 @@ export class Host {
     ipcMain.on("host:overlay", (event, open: unknown) => {
       if (fromHost(event) && typeof open === "boolean") void this.setOverlay(open);
     });
+    ipcMain.on("host:frozen-shown", (event) => {
+      if (fromHost(event)) this.frozenShown?.();
+    });
     ipcMain.on("host:dimmed", (event, dimmed: unknown) => {
       if (fromHost(event) && typeof dimmed === "boolean" && dimmed !== this.dimmed) {
         this.dimmed = dimmed;
@@ -1658,6 +1675,7 @@ export class Host {
       this.discord.dispose();
       this.systemInfo.dispose();
       this.connection.dispose();
+      this.media.dispose();
       this.gameWatcher.stop();
       this.copySync.dispose();
       this.pairing.dispose();
@@ -3016,7 +3034,8 @@ export class Host {
     if (!game) return;
     for (const record of this.records(game.id)) this.createView(record, game);
     this.workspaces.relayout();
-    if ([...this.views.values()].some((view) => view instanceof ModuleView)) {
+    // Only this game's own module pages are waited for: a panel in the in-game layer runs on from another game.
+    if (this.records(game.id).some((record) => this.views.get(record.instanceId) instanceof ModuleView && !this.floating(record.instanceId))) {
       this.endOpening();
       const layout = layoutKey(game.id, this.records(game.id));
       this.opening = { startedAt: performance.now(), timer: setTimeout(() => this.endOpening(true), OPENING_CAP_MS), layout };
@@ -3118,6 +3137,7 @@ export class Host {
       discord: this.discord,
       systemInfo: this.systemInfo,
       connection: this.connection,
+      media: this.media,
       overlay: {
         ...this.streaming.overlayFor(module, game.id),
         showOverGame: (key) => this.gameOverlays.show(module, game.id, key),
@@ -3540,6 +3560,7 @@ export class Host {
     // The dialog has to be seen; the panels' pictures stand in for them, so the cover goes.
     this.cover.cancel();
     const images: Record<string, string> = {};
+    const freezeStarted = performance.now();
     await Promise.all(
       [...this.views].map(async ([instanceId, view]) => {
         if (this.floating(instanceId) || !this.panelBounds.has(instanceId) || view.status !== "ready" || (view instanceof ModuleView && !view.revealed)) return;
@@ -3553,7 +3574,28 @@ export class Host {
     );
     if (change !== this.overlayChanges || this.window.isDestroyed()) return;
     this.window.webContents.send("host:frozen", images);
+    const taken = performance.now();
+    // Hidden before their pictures are on screen, the panels' slots would show empty for a frame.
+    if (Object.keys(images).length) await this.frozenOnScreen();
+    timingLog?.(`overlay: ${Object.keys(images).length} of ${this.panelsInSlots().length} pictures taken in ${Math.round(taken - freezeStarted)} ms, on screen ${Math.round(performance.now() - taken)} ms later`);
+    if (change !== this.overlayChanges || this.window.isDestroyed()) return;
     for (const [instanceId, view] of this.views) if (!this.floating(instanceId)) view.setVisible(false);
+  }
+
+  private frozenShown: (() => void) | null = null;
+
+  /** Resolves once the host UI says the panels' still images are on screen, or after FROZEN_SHOWN_CAP_MS. */
+  private frozenOnScreen(): Promise<void> {
+    this.frozenShown?.();
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        if (this.frozenShown === done) this.frozenShown = null;
+        resolve();
+      };
+      const timer = setTimeout(done, FROZEN_SHOWN_CAP_MS);
+      this.frozenShown = done;
+    });
   }
 
   /**
@@ -3564,9 +3606,12 @@ export class Host {
     this.applyBounds();
     const shown = this.panelsInSlots();
     this.logDraws(shown, "dialog closed");
-    void Promise.all(shown.map((view) => view.drawn)).then(() => {
-      if (change === this.overlayChanges && !this.window.isDestroyed()) this.window.webContents.send("host:frozen", {});
-    });
+    void Promise.all(shown.map((view) => view.drawn))
+      // Taken away as soon as the panels said they drew, the pictures could leave their slots empty for a frame.
+      .then(() => new Promise((resolve) => setTimeout(resolve, ON_SCREEN_MS)))
+      .then(() => {
+        if (change === this.overlayChanges && !this.window.isDestroyed()) this.window.webContents.send("host:frozen", {});
+      });
   }
 
   /** The module panels placed in their workspace slots now. */
@@ -3765,7 +3810,7 @@ export class Host {
           this.lifecycle.updates.pending(module.manifest.id),
         ),
       })),
-      moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder && !problem.official).map(({ folder, path: full, message, kind }) => ({ folder, path: full, message, ...(kind ? { kind } : {}) })),
+      moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder && !problem.official).map(({ folder, path: full, message, kind, values }) => ({ folder, path: full, message, ...(kind ? { kind } : {}), ...(values ? { values } : {}) })),
       developmentFolders: this.library.developmentFolders.map((folder) => {
         const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
         const projects = new Map<string, HostViewState["developmentFolders"][number]["projects"][number]>();
@@ -3781,6 +3826,7 @@ export class Host {
             moduleId: null,
             problem: item.message,
             kind: item.kind ?? null,
+            ...(item.values ? { values: item.values } : {}),
             name: item.about?.name ?? null,
             version: item.about?.version ?? null,
           });
@@ -3789,6 +3835,7 @@ export class Host {
           folder,
           problem: own?.message ?? null,
           kind: own?.kind ?? null,
+          ...(own?.values ? { values: own.values } : {}),
           projects: [...projects.values()].sort((a, b) => a.project.localeCompare(b.project)),
         };
       }),

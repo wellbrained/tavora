@@ -4,6 +4,7 @@
 // The main process lets every hotkey go while it is open, so keys set already can be caught here too.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { hotkeyFromInput, hotkeyKeys } from "../../shared/hotkey-keys";
 import { act, state } from "../host";
 import { t } from "../i18n";
@@ -67,7 +68,7 @@ function answer(choice: "set" | "remove" | "cancel") {
   >
     <div class="bg-muted flex min-h-20 flex-col items-center justify-center gap-2 rounded-lg px-4 py-4 text-center" aria-live="polite" data-testid="hotkey-keys">
       <span v-if="shown" class="flex flex-wrap items-center justify-center gap-1">
-        <kbd v-for="key in hotkeyKeys(shown, mac)" :key="key" class="bg-background text-foreground min-w-9 rounded-md border border-b-2 px-2 py-1 font-mono text-sm">{{ key }}</kbd>
+        <Kbd v-for="key in hotkeyKeys(shown, mac)" :key="key" class="bg-background min-w-9 rounded-md px-2 py-1 text-sm">{{ key }}</Kbd>
       </span>
       <span v-else class="text-muted-foreground text-sm">{{ t("hotkey.press") }}</span>
       <span v-if="shown && !picked" class="text-muted-foreground text-xs">{{ t("hotkey.now") }}</span>
