@@ -665,6 +665,8 @@ export interface OverlayKeyView {
 export interface GameOverlaysView {
   supported: boolean;
   enabled: boolean;
+  /** Overlays stay over the game's spot when the player switches to another window. */
+  stay: boolean;
   /** "Hide all for now" is on: nothing shows until Tavora starts again or the player shows it again. */
   hidden: boolean;
   layerKey: OverlayKeyView | null;

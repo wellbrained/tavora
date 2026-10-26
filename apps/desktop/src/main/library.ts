@@ -98,6 +98,8 @@ export interface Library {
   overlayPort: number;
   /** Game overlays: module overlay pages shown over the player's game (game-overlays.ts). Off until the player turns it on. */
   gameOverlays: boolean;
+  /** Game overlays stay where they are when the player switches to another window, as long as the game window is open. */
+  overlaysStay: boolean;
   /** Where modules keep their pictures, when the player moved it from the default folder. */
   moduleFilesFolder: string | null;
   /** Module project folders a developer added in Settings > Modules; loaded straight from there (registry.ts). */
@@ -185,6 +187,7 @@ export function emptyLibrary(): Library {
     streamOverlays: false,
     overlayPort: DEFAULT_OVERLAY_PORT,
     gameOverlays: false,
+    overlaysStay: true,
     moduleFilesFolder: null,
     developmentFolders: [],
     dialogFolders: {},
@@ -711,6 +714,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.moduleIcons === "boolean") library.moduleIcons = saved.moduleIcons;
   if (typeof saved.streamOverlays === "boolean") library.streamOverlays = saved.streamOverlays;
   if (typeof saved.gameOverlays === "boolean") library.gameOverlays = saved.gameOverlays;
+  if (typeof saved.overlaysStay === "boolean") library.overlaysStay = saved.overlaysStay;
   if (Number.isInteger(saved.overlayPort) && (saved.overlayPort as number) >= MIN_OVERLAY_PORT && (saved.overlayPort as number) <= MAX_OVERLAY_PORT) library.overlayPort = saved.overlayPort as number;
   if (typeof saved.moduleFilesFolder === "string" && saved.moduleFilesFolder.length <= 500 && path.isAbsolute(saved.moduleFilesFolder)) library.moduleFilesFolder = saved.moduleFilesFolder;
   if (Array.isArray(saved.developmentFolders)) library.developmentFolders = cleanDevelopmentFolders(saved.developmentFolders);

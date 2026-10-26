@@ -36,6 +36,7 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "set-stream-overlays", enabled: true }],
   [{ type: "set-overlay-port", port: 47820 }],
   [{ type: "set-game-overlays", enabled: true }],
+  [{ type: "set-overlays-stay", enabled: false }],
   [{ type: "set-game-overlay", owner: "official", moduleId: "tavora.clock-counter", gameId: "poe2", key: "item-1", mode: "toggle", opacity: 50, hideFromCapture: true }],
   [{ type: "set-game-overlay", owner: "official", moduleId: "tavora.clock-counter", gameId: "poe2", key: "item-1" }],
   [{ type: "set-panel-view", instanceId: FOLDER, mode: "toggle", opacity: 50, hideFromCapture: true }],

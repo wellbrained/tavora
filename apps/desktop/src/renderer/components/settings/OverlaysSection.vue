@@ -30,6 +30,11 @@ const enabled = computed({
   set: (on: boolean) => void act({ type: "set-game-overlays", enabled: on }),
 });
 
+const stay = computed({
+  get: () => overlays.value.stay,
+  set: (on: boolean) => void act({ type: "set-overlays-stay", enabled: on }),
+});
+
 const modes = computed(() => [
   { value: "always" as const, label: t("overlays.mode.always") },
   { value: "toggle" as const, label: t("overlays.mode.toggle") },
@@ -72,6 +77,9 @@ function stopShowing(instanceId: string) {
   <SettingGroup :title="t('overlays.group.overlays')">
     <SettingRow :label="t('settings.game-overlays.label')" :description="t('settings.game-overlays.description')" setting="game-overlays" :highlighted="highlight === 'game-overlays'">
       <Switch v-model="enabled" :aria-label="t('settings.game-overlays.label')" data-testid="game-overlays" />
+    </SettingRow>
+    <SettingRow :label="t('settings.overlays-stay.label')" :description="t('settings.overlays-stay.description')" setting="overlays-stay" :highlighted="highlight === 'overlays-stay'">
+      <Switch v-model="stay" :disabled="!enabled" :aria-label="t('settings.overlays-stay.label')" data-testid="overlays-stay" />
     </SettingRow>
     <SettingRow :label="t('settings.overlay-layer-key.label')" :description="t('settings.overlay-layer-key.description')" setting="overlay-layer-key" :highlighted="highlight === 'overlay-layer-key'">
       <template #below>

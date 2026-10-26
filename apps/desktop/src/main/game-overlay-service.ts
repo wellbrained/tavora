@@ -84,6 +84,8 @@ export interface GameOverlayServiceOptions {
   probe(): ForegroundProbe;
   /** Physical pixels of the screen to the DIPs windows are placed in. */
   toDip(rect: Rect): Rect;
+  /** Overlays stay over the game window's spot while the player is in another window (Settings > Overlays). */
+  stay?(): boolean;
   /** The main screen (DIPs): what a panel shown in the game is sized against before any game window was seen. */
   screen?(): Rect;
   openWindow(request: OverlayWindowRequest): OverlayWindow;
@@ -159,6 +161,9 @@ export class GameOverlays {
   private game: Rect | null = null;
   /** The last game window seen in front: a panel shown in the game while Tavora is in front is sized against it. */
   private lastGame: Rect | null = null;
+  /** The game seen in front last, and its window while the player is in another one and overlays stay (`stay`). */
+  private left: string | null = null;
+  private away: { gameId: string; bounds: Rect } | null = null;
   /** The game whose in-game layer is open. */
   private layer: string | null = null;
   /** The window handle of the game window in front (when known), the one the layer opened over, and what Windows says about full screen. */
@@ -514,6 +519,8 @@ export class GameOverlays {
     if (!this.active() || (this.store.all().length === 0 && this.store.panels().length === 0)) {
       this.closeAll();
       this.setFront(null, null);
+      this.left = null;
+      this.away = null;
       return;
     }
     return this.look();
@@ -544,6 +551,7 @@ export class GameOverlays {
     this.setFront(front, front && foreground ? this.options.toDip(foreground.bounds) : null);
     this.frontWindow = front && foreground?.handle ? foreground.handle : null;
     this.notification = front && foreground ? foreground.notification : null;
+    this.away = this.stayingAway(front);
     if (front && foreground && looksExclusive(foreground.notification) && !this.store.exclusiveHintShown) {
       this.store.markExclusiveHintShown();
       this.options.notify(translate(this.options.language(), "overlays.exclusiveHint"));
@@ -551,6 +559,25 @@ export class GameOverlays {
     // The layer ends (and gives the keyboard to nobody) when its game window is gone, minimized, another one, or the game went exclusive full screen.
     if (this.layer !== null && (this.layer !== this.front || (this.layerWindow !== null && this.frontWindow !== this.layerWindow) || looksExclusive(this.notification))) this.closeLayer(false);
     this.apply();
+  }
+
+  /**
+   * Where overlays stay while the player is in another window: over the game window seen in front last, while it is
+   * still open and not minimized. Overlays only; the layer and the keys stay with the game in front.
+   */
+  private stayingAway(front: string | null): { gameId: string; bounds: Rect } | null {
+    if (front !== null) {
+      this.left = front;
+      this.probe?.keep?.();
+      return null;
+    }
+    if (this.left === null || !this.options.stay?.()) return null;
+    const kept = this.probe?.kept?.() ?? null;
+    if (!kept) {
+      this.left = null;
+      return null;
+    }
+    return { gameId: this.left, bounds: this.options.toDip(kept) };
   }
 
   private setFront(gameId: string | null, bounds: Rect | null): void {
@@ -569,6 +596,9 @@ export class GameOverlays {
     const started: Open[] = [];
     const front = this.front;
     const layerOpen = this.layer !== null && this.layer === front && this.game !== null;
+    // Overlays show over the game in front, or stay over the one the player left.
+    const shownGame = front ?? this.away?.gameId ?? null;
+    const area = this.game ?? this.away?.bounds ?? null;
     // The veil first: everything shown after it is above it.
     let veilNew = false;
     if (layerOpen) {
@@ -586,8 +616,8 @@ export class GameOverlays {
       live.add(id);
       const module = this.options.module(overlay.moduleId);
       const usable = module !== undefined && module.owner === overlay.owner && !!module.manifest.overlay;
-      const inFront = front !== null && appliesTo(overlay, front);
-      const visible = usable && !this.stopped.has(id) && this.game !== null && overlayVisible({ enabled: active, gameInFront: inFront, mode: overlay.mode, toggledOn: this.toggled.has(id), layerOpen: layerOpen && inFront });
+      const inFront = shownGame !== null && appliesTo(overlay, shownGame);
+      const visible = usable && !this.stopped.has(id) && area !== null && overlayVisible({ enabled: active, gameInFront: inFront, mode: overlay.mode, toggledOn: this.toggled.has(id), layerOpen: layerOpen && inFront });
       let entry = this.open.get(id);
       if (!visible) {
         if (entry?.shown) {
@@ -608,7 +638,7 @@ export class GameOverlays {
       entry.idleSince = null;
       if (entry.opacity !== overlay.opacity) entry.window.setOpacity((entry.opacity = overlay.opacity));
       if (entry.hideFromCapture !== overlay.hideFromCapture) entry.window.setHideFromCapture((entry.hideFromCapture = overlay.hideFromCapture));
-      if (!entry.window.dragging) entry.window.setRect(placeRelative(overlay.rect, this.game!));
+      if (!entry.window.dragging) entry.window.setRect(placeRelative(overlay.rect, area!));
       if (!entry.shown) {
         entry.window.setShown((entry.shown = true));
         entry.shownOrder = ++this.shownCount;
@@ -649,8 +679,8 @@ export class GameOverlays {
       live.add(id);
       const module = this.options.module(panel.moduleId);
       const usable = module !== undefined && module.owner === panel.owner && !!module.manifest.overlay;
-      const inFront = front !== null && appliesTo(panel, front);
-      const visible = usable && this.liveStateOf(panel) !== undefined && !this.stopped.has(id) && this.game !== null && !layerOpen && overlayVisible({ enabled: active, gameInFront: inFront, mode: panel.mode, toggledOn: this.toggled.has(id), layerOpen: false });
+      const inFront = shownGame !== null && appliesTo(panel, shownGame);
+      const visible = usable && this.liveStateOf(panel) !== undefined && !this.stopped.has(id) && area !== null && !layerOpen && overlayVisible({ enabled: active, gameInFront: inFront, mode: panel.mode, toggledOn: this.toggled.has(id), layerOpen: false });
       let entry = this.open.get(id);
       if (!visible) {
         if (entry?.shown) {
@@ -667,7 +697,7 @@ export class GameOverlays {
       entry.idleSince = null;
       if (entry.opacity !== panel.opacity) entry.window.setOpacity((entry.opacity = panel.opacity));
       if (entry.hideFromCapture !== panel.hideFromCapture) entry.window.setHideFromCapture((entry.hideFromCapture = panel.hideFromCapture));
-      entry.window.setRect(placeRelative(panel.rect, this.game!));
+      entry.window.setRect(placeRelative(panel.rect, area!));
       if (!entry.shown) {
         entry.window.setShown((entry.shown = true));
         entry.shownOrder = ++this.shownCount;
@@ -702,7 +732,7 @@ export class GameOverlays {
         const link = store.peek(subject)?.link;
         return link ? store.watch(link.token, fn) : null;
       },
-      gameBounds: () => this.game,
+      gameBounds: () => this.game ?? this.away?.bounds ?? null,
       moved,
       closeRequested,
       ended: () => this.crashed(id),
@@ -732,7 +762,7 @@ export class GameOverlays {
           if (watchers.size === 0) this.liveWatchers.delete(instanceId);
         };
       },
-      gameBounds: () => this.game,
+      gameBounds: () => this.game ?? this.away?.bounds ?? null,
       moved: () => {},
       closeRequested: () => {},
       ended: () => this.crashed(id),
@@ -874,6 +904,7 @@ export class GameOverlays {
     return {
       supported: this.options.supported,
       enabled: this.options.enabled(),
+      stay: this.options.stay?.() ?? false,
       hidden: this.suspended,
       layerKey: this.options.keyOf(layerBinding()),
       groups: [...groups.values()].sort((a, b) => (a.name === null ? -1 : b.name === null ? 1 : a.name.localeCompare(b.name))),
