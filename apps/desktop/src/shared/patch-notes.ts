@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.34",
+    date: "2026-10-26",
+    title: "Publishing can wait for a quick look",
+    notes: [
+      "Your first module, or a version with new pictures or more permissions, waits for a quick look at Tavora before players see it.",
+      "Publishing tells you when that happens, and we email you when it's in.",
+    ],
+  },
+  {
     version: "0.21.33",
     date: "2026-10-26",
     title: "Counting updates",
