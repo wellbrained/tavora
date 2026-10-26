@@ -41,7 +41,7 @@ function revoke(module: ModuleView) {
     <p v-if="!granted.length" class="text-muted-foreground py-4 text-sm" data-testid="module-grants-empty">{{ t("integrations.grants.none") }}</p>
     <ul v-else class="flex flex-col" data-testid="module-grants">
       <li v-for="module in granted" :key="module.id" class="flex items-start gap-3 border-b py-3 last:border-b-0" :data-testid="`module-grant-${module.id}`">
-        <span class="bg-background text-primary flex size-8 flex-none items-center justify-center rounded-lg border" aria-hidden="true">
+        <span class="module-tile size-8" aria-hidden="true">
           <ModuleIcon :module-id="module.id" size="size-4" />
         </span>
         <span class="flex min-w-0 flex-1 flex-col gap-1">

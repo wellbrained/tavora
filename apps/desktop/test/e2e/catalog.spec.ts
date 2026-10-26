@@ -541,6 +541,7 @@ test("a player reports a module from Browse and from Settings, and only its id, 
     await page.keyboard.press("Escape");
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-modules").click();
+    await page.getByTestId("module-more-wellbrained.tracker").click();
     await expect(page.getByTestId("report-module-wellbrained.tracker")).toHaveText("Report to Tavora");
     await page.getByTestId("report-module-wellbrained.tracker").click();
     await page.getByTestId("confirm-submit").click();

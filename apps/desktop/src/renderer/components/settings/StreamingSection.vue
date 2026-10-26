@@ -118,7 +118,7 @@ function removeHotkey(hotkey: HotkeyView) {
     <p v-if="!overlayModules.length" class="text-muted-foreground py-4 text-sm" data-testid="overlay-modules-empty">{{ t("streaming.modules.none") }}</p>
     <ul v-else class="flex flex-col" data-testid="overlay-modules">
       <li v-for="module in overlayModules" :key="module.id" class="flex items-center gap-3 border-b py-3 last:border-b-0">
-        <span class="bg-background text-primary flex size-8 flex-none items-center justify-center rounded-lg border" aria-hidden="true">
+        <span class="module-tile size-8" aria-hidden="true">
           <ModuleIcon :module-id="module.id" size="size-4" />
         </span>
         <span class="min-w-0 flex-1 truncate font-medium">{{ module.name }}</span>
