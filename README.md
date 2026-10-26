@@ -20,7 +20,7 @@ Tavora is a local-first gaming companion for your second monitor. Keep notes, to
 - **Track To-Dos.** Colored groups, sub-to-dos, pinned objectives, descriptions, and undo for finishing or deleting a task.
 - **Sketch on a Whiteboard.** Multiple boards per game, drawing tools, pictures, and Copy as picture. Built on [Excalidraw](https://github.com/excalidraw/excalidraw).
 - **Keep guides nearby.** The built-in Browser has per-game tabs and sign-ins, ad blocking, and a choice to share a site's sign-in across games.
-- **Add more tools.** Official Discord and AI Usage modules, plus modules you install from ZIP files. Modules ask before using capabilities such as named websites or host connectors.
+- **Add more tools.** Notes, To-Dos, a Whiteboard and a few more come with Tavora; everything else, such as Discord and AI Usage, you install from the catalog or a ZIP file. Modules ask before using capabilities such as named websites or host connectors.
 - **Make it comfortable.** Three built-in themes, light/dark modes that can follow the system, custom themes, English and German, keyboard shortcuts, and Ctrl+K search.
 
 **Discord voice access is currently limited to approved testers of Tavora's Discord app.** Discord account sign-in is separate. AI Usage reads supported Claude and Codex accounts on this PC through the host; modules do not receive their credentials.

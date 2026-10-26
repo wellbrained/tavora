@@ -1268,6 +1268,8 @@ export const en = {
   "panel.live": "Live",
   "panel.liveLabel": "{name} is live in your game. Open Settings > Overlays.",
   "panel.moduleWaiting": "{module} can't load right now, for example while it's being built. This panel comes back once it loads.",
+  "panel.moved": "{module} is now a separate module. Install it to keep using it here; your settings come along.",
+  "panel.movedOffline": "Turn on online features in Settings to install it.",
   "panel.typeGoneChoose": "Choose another panel of {module}:",
   "panel.remove": "Remove",
   "panel.reload": "Reload",

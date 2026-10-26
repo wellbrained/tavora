@@ -9,6 +9,7 @@
 // A panel that is over the game right now (the in-game layer is open) leaves a quiet note in its slot (game-overlay-window.ts).
 // A panel whose type the module no longer offers says so, with Remove and the
 // module's other panel types (the decision log, named panels round 4).
+// A panel of Discord or AI Usage, which left Tavora for the catalog, offers to install it.
 import type { IDockviewPanelProps } from "dockview-vue";
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -32,6 +33,15 @@ const reviewNeeded = computed(() => {
   return module !== undefined && needsGrant(module);
 });
 const updateWaiting = computed(() => module.value?.update ?? null);
+
+// Discord and AI Usage left Tavora for the catalog: their panels install them from there with one press.
+const installing = ref(false);
+async function installMoved() {
+  if (!panel.value) return;
+  installing.value = true;
+  await act({ type: "install-catalog-module", moduleId: panel.value.moduleId });
+  installing.value = false;
+}
 
 // The still image is shown at the size it was taken (its pixels over the
 // screen's pixel ratio), so resizing a split crops or reveals it instead of
@@ -106,7 +116,14 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
       class="flex size-full flex-col items-center justify-center gap-3 overflow-y-auto p-4 text-center"
       :data-testid="`panel-type-gone-${id}`"
     >
-      <p v-if="!module" class="max-w-sm text-sm" :data-testid="`panel-module-waiting-${id}`">{{ t("panel.moduleWaiting", { module: panel.name }) }}</p>
+      <template v-if="panel.moved">
+        <p class="max-w-sm text-sm" :data-testid="`panel-module-moved-${id}`">{{ t("panel.moved", { module: panel.name }) }}</p>
+        <p v-if="!state?.library.onlineSearch" class="text-muted-foreground max-w-sm text-sm">{{ t("panel.movedOffline") }}</p>
+        <Button v-else size="sm" :disabled="installing" data-testid="install-moved-module" @click="installMoved()">
+          {{ installing ? t("catalog.installing") : t("catalog.install") }}
+        </Button>
+      </template>
+      <p v-else-if="!module" class="max-w-sm text-sm" :data-testid="`panel-module-waiting-${id}`">{{ t("panel.moduleWaiting", { module: panel.name }) }}</p>
       <p v-else class="max-w-sm text-sm">{{ t("panel.typeGone", { module: module.name, type: panel.name }) }}</p>
       <template v-if="module?.panels.length">
         <p class="text-muted-foreground text-sm">{{ t("panel.typeGoneChoose", { module: module.name }) }}</p>

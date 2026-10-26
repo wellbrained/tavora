@@ -322,6 +322,16 @@ describe("the built-in panel's settings", () => {
     expect(await new AiUsageConnector(deps).legacyPanelData()).toBeNull();
   });
 
+  it("are asked for at start without looking for accounts or reading a login", async () => {
+    const detect = vi.fn(async () => [{ provider: "claude" as const, directory: CLAUDE_DIR }]);
+    const reads: string[] = [];
+    const { connector, store } = setup({ detect, readText: async (file) => (reads.push(file), null) });
+    expect(await connector.legacyPanelData()).toBeNull();
+    expect(detect).not.toHaveBeenCalled();
+    expect(reads).toEqual([FILE]);
+    expect(store.has(FILE)).toBe(false);
+  });
+
   it("are clamped and defaulted when odd", async () => {
     const { connector } = setup({}, { [FILE]: JSON.stringify({ version: 1, refreshMinutes: 500, style: "weird", accounts: [] }) });
     expect(await connector.legacyPanelData()).toEqual({ refreshMinutes: 60, style: "remaining", readings: {} });

@@ -17,7 +17,7 @@ export function modulePartition(owner: string, moduleId: string, gameId: string)
 }
 
 /** Electron's directory name for a `persist:` partition, as it writes it on disk. */
-function partitionDirName(partition: string): string {
+export function partitionDirName(partition: string): string {
   return partition.slice("persist:".length).toLowerCase().replaceAll(":", "%3A");
 }
 

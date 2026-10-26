@@ -1,4 +1,5 @@
-// The Discord module and the discord connector (the threat model, D1 to D9).
+// The discord connector (the threat model, D1 to D9), used by a small probe module from test/connector-fixtures.
+// The Discord module itself lives in the catalog now; what it shows is tested in its own repo.
 // A pretend Discord app listens where the real one would, and a local server
 // stands in for Discord's token address, so nothing here reaches Discord.
 
@@ -9,40 +10,21 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
 import { fakeDiscord, type FakeDiscord } from "../../src/main/discord-fake.test-helper";
-import { clickInModule, expectModuleText, inModule, launch } from "./harness";
+import { clickInModule, desktopDir, expectModuleText, inModule, launch } from "./harness";
 
-const DISCORD = "tavora.discord";
+const DISCORD = "local.test.discord-probe";
+/** Not in test/fixtures, which every launch loads: a module asking for Discord would show its settings in every spec. */
+const PROBES = path.join(desktopDir, "test/connector-fixtures");
 
 let fake: FakeDiscord;
 let tokens: Server;
 let tokenUrl: string;
 const tokenBodies: string[] = [];
 
-const person = (id: string, name: string, voice: Record<string, boolean> = {}) => ({
-  nick: null,
-  voice_state: { mute: false, deaf: false, self_mute: false, self_deaf: false, ...voice },
-  user: { id, username: name.toLowerCase(), global_name: name, avatar: null },
-});
-
 test.beforeAll(async () => {
   fake = await fakeDiscord();
   fake.answers.set("AUTHORIZE", () => ({ data: { code: "code123" } }));
   fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "alex", global_name: "Alex" }, scopes: ["rpc", "rpc.voice.read", "rpc.voice.write", "identify"] } }));
-  fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({
-    data: {
-      id: "10",
-      guild_id: "20",
-      name: "Factory Floor",
-      voice_states: [person("1", "Alex"), person("2", "Jonas"), person("3", "Lena", { self_mute: true }), person("4", "Max", { self_mute: true, self_deaf: true }), person("5", "Sarah", { mute: true })],
-    },
-  }));
-  fake.answers.set("GET_GUILD", () => ({ data: { id: "20", name: "Wellbrained Crew", icon_url: null } }));
-  fake.answers.set("GET_CHANNELS", () => ({ data: { channels: [{ id: "10", type: 2 }, { id: "11", type: 2 }, { id: "12", type: 2 }] } }));
-  fake.answers.set("GET_CHANNEL", (args) =>
-    args.channel_id === "11"
-      ? { data: { id: "11", guild_id: "20", name: "Lobby", position: 1, voice_states: [person("6", "Tobi"), person("7", "Kira", { self_mute: true })] } }
-      : { data: { id: "12", guild_id: "20", name: "AFK", position: 2, voice_states: [] } },
-  );
   tokens = createServer((request, response) => {
     let body = "";
     request.on("data", (chunk: Buffer) => (body += chunk.toString()));
@@ -66,17 +48,18 @@ async function gesture(app: ElectronApplication) {
   }, DISCORD);
 }
 
-const count = (app: ElectronApplication, selector: string) => inModule<number>(app, DISCORD, `document.querySelectorAll('${selector}').length`).catch(() => -1);
-const attribute = (app: ElectronApplication, testId: string, name: string) =>
-  inModule<string | null>(app, DISCORD, `document.querySelector('[data-testid="${testId}"]')?.getAttribute("${name}") ?? null`).catch(() => null);
+/** What the host answered the probe for one of its buttons so far. */
+const answers = (app: ElectronApplication, label: string) =>
+  inModule<{ ok: boolean }[]>(app, DISCORD, `window.probe.results.filter((r) => r.label === ${JSON.stringify(label)}).map((r) => r.answer)`).catch(() => []);
+const events = (app: ElectronApplication) => inModule<{ event: string }[]>(app, DISCORD, "window.probe.events").catch(() => []);
 
 test.afterAll(async () => {
   await fake.close();
   await new Promise((resolve) => tokens.close(resolve));
 });
 
-test("the Discord module asks first, connects once approved and shows who is in the voice channel and who is talking", async () => {
-  const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_DISCORD_IPC: fake.path, TAVORA_DISCORD_TOKEN_URL: tokenUrl } });
+test("a module with the discord connector asks first, connects once approved and acts only after the player's own click", async () => {
+  const { app, page, userData } = await launch(undefined, [PROBES], { env: { TAVORA_DISCORD_IPC: fake.path, TAVORA_DISCORD_TOKEN_URL: tokenUrl } });
   try {
     // Adding it asks to let it use Discord with Tavora's sign-in (the module grants row of 2026-10-16).
     await page.getByTestId("add-module").click();
@@ -84,19 +67,20 @@ test("the Discord module asks first, connects once approved and shows who is in 
     await expect(page.getByTestId("grant-dialog")).toBeVisible();
     await expect(page.getByTestId("grant-discord")).toContainText("Join or leave a voice channel when you click");
     await page.getByTestId("grant-allow").click();
-    await expectModuleText(app, DISCORD, "discord-connect", "Connect");
+    await expectModuleText(app, DISCORD, "probe-status", "ready");
     // Nothing is asked of Discord before the player connects.
     expect(fake.commands).toEqual([]);
 
     // Connecting needs the player's own click (D8).
-    await clickInModule(app, DISCORD, "discord-connect");
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await clickInModule(app, DISCORD, "probe-connect");
+    await expect.poll(async () => (await answers(app, "connect")).length).toBe(1);
     expect(fake.commands.some((c) => c.cmd === "AUTHORIZE")).toBe(false);
+    expect((await answers(app, "connect"))[0]!.ok).toBe(false);
     await gesture(app);
-    await clickInModule(app, DISCORD, "discord-connect");
-    await expectModuleText(app, DISCORD, "discord-server", "Wellbrained Crew");
-    await expect.poll(() => count(app, '[data-testid="discord-current"]')).toBe(1);
-    await expect.poll(() => count(app, "[data-testid^=discord-member-]")).toBe(7);
+    await clickInModule(app, DISCORD, "probe-connect");
+    await expect.poll(async () => (await answers(app, "connect")).length).toBe(2);
+    expect((await answers(app, "connect"))[1]!.ok).toBe(true);
+    await expect.poll(() => inModule<string | undefined>(app, DISCORD, "window.probe.states.at(-1)?.status")).toBe("connected");
     // D2: only voice is read.
     expect(fake.commands.find((c) => c.cmd === "AUTHORIZE")?.args.scopes).toEqual(["rpc", "rpc.voice.read", "rpc.voice.write", "identify"]);
     // D1: no secret exists; the one-time verifier only goes to the token address, and it matches the challenge the Discord app got.
@@ -112,39 +96,27 @@ test("the Discord module asks first, connects once approved and shows who is in 
     expect(onDisk).not.toContain("access");
     expect(onDisk).not.toContain("refresh");
 
-    fake.dispatch("SPEAKING_START", { user_id: "2", channel_id: "10" });
-    await expect.poll(() => attribute(app, "discord-member-2", "data-speaking")).toBe("true");
-    fake.dispatch("SPEAKING_START", { user_id: "1", channel_id: "10" });
-    await expect.poll(() => attribute(app, "discord-member-1", "data-speaking")).toBe("true");
-    if (process.env.TAVORA_DISCORD_SCREENSHOT) await page.screenshot({ path: process.env.TAVORA_DISCORD_SCREENSHOT });
-    fake.dispatch("SPEAKING_STOP", { user_id: "2", channel_id: "10" });
-    await expect.poll(() => attribute(app, "discord-member-2", "data-speaking")).toBeNull();
-
-    fake.dispatch("VOICE_STATE_DELETE", person("5", "Sarah"));
-    await expect.poll(() => count(app, '[data-testid="discord-member-5"]')).toBe(0);
+    // The module gets the events it subscribed to.
+    fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: null });
+    await expect.poll(async () => (await events(app)).some((e) => e.event === "VOICE_CHANNEL_SELECT")).toBe(true);
 
     // Muting needs the player's own click too (D8): unmuting would switch their microphone back on.
-    await clickInModule(app, DISCORD, "discord-mute");
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await clickInModule(app, DISCORD, "probe-mute");
+    await expect.poll(async () => (await answers(app, "mute")).length).toBe(1);
     expect(fake.commands.some((c) => c.cmd === "SET_VOICE_SETTINGS")).toBe(false);
     await gesture(app);
-    await clickInModule(app, DISCORD, "discord-mute");
+    await clickInModule(app, DISCORD, "probe-mute");
     await expect.poll(() => fake.commands.find((c) => c.cmd === "SET_VOICE_SETTINGS")?.args).toEqual({ mute: true });
 
     // Joining a channel needs the player's own click too (D8).
-    await clickInModule(app, DISCORD, "discord-join-11");
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await clickInModule(app, DISCORD, "probe-join-11");
+    await expect.poll(async () => (await answers(app, "join")).length).toBe(1);
     expect(fake.commands.some((c) => c.cmd === "SELECT_VOICE_CHANNEL")).toBe(false);
     await gesture(app);
-    await clickInModule(app, DISCORD, "discord-join-11");
+    await clickInModule(app, DISCORD, "probe-join-11");
     await expect.poll(() => fake.commands.find((c) => c.cmd === "SELECT_VOICE_CHANNEL")?.args).toEqual({ channel_id: "11", force: true });
 
-    // Leaving voice in Discord.
-    fake.answers.set("GET_SELECTED_VOICE_CHANNEL", () => ({ data: null }));
-    fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: null });
-    await expect.poll(() => count(app, '[data-testid="discord-no-call"]')).toBe(1);
-
-    // Settings > Integrations > Discord lists the module, which can be taken back.
+    // Settings > Integrations > Discord lists the module (it asks for the connector).
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-integrations").click();
     await expect(page.getByTestId(`discord-user-${DISCORD}`)).toBeVisible();

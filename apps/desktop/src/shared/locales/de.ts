@@ -1270,6 +1270,8 @@ export const de: Record<keyof typeof en, string> = {
   "panel.live": "Live",
   "panel.liveLabel": "{name} ist live in deinem Spiel. Öffne Einstellungen > Overlays.",
   "panel.moduleWaiting": "{module} kann gerade nicht laden, zum Beispiel während es gebaut wird. Dieses Panel kommt zurück, sobald es lädt.",
+  "panel.moved": "{module} ist jetzt ein eigenes Modul. Installier es, um es hier weiter zu nutzen; deine Einstellungen kommen mit.",
+  "panel.movedOffline": "Schalte in den Einstellungen die Online-Funktionen ein, um es zu installieren.",
   "panel.typeGoneChoose": "Wähle ein anderes Panel von {module}:",
   "panel.remove": "Entfernen",
   "panel.reload": "Neu laden",

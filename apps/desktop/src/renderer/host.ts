@@ -58,12 +58,28 @@ void api.getDiscord().then((initial) => {
   if (initial && !discord.value) discord.value = initial;
 });
 
-/** The AI usage panel's accounts and readings, and Settings > Integrations. */
+/** Whether an installed module asks for this connector; Settings > Integrations shows Discord and AI usage only then. */
+export function asksFor(connector: ModuleConnector): boolean {
+  return (state.value?.modules ?? []).some((module) => module.permissions.asks.connectors.includes(connector));
+}
+
+/**
+ * The AI usage accounts, for Settings > Integrations and the consent dialog. Asked for only once a
+ * module wants them, so Tavora reads no AI login for a player without such a module.
+ */
 export const aiUsage = shallowRef<AiUsageView | null>(null);
 api.onAiUsage((next) => (aiUsage.value = next));
-void api.getAiUsage().then((initial) => {
-  if (initial && !aiUsage.value) aiUsage.value = initial;
-});
+const stopAiUsageWatch = watch(
+  () => asksFor("ai-usage"),
+  (asks) => {
+    if (!asks) return;
+    queueMicrotask(() => stopAiUsageWatch());
+    void api.getAiUsage().then((initial) => {
+      if (initial && !aiUsage.value) aiUsage.value = initial;
+    });
+  },
+  { immediate: true },
+);
 
 /** Settings > Account: the address, the devices and where a sign-in is. */
 export const account = shallowRef<AccountView | null>(null);
@@ -143,6 +159,11 @@ export const copyQuestion = computed<"closing" | "conflict" | "newer" | null>(()
 /** Settings sections not shown on this run: Account until accounts are on. */
 export const hiddenSettings = computed<ReadonlySet<SettingsSection>>(
   () => new Set<SettingsSection>([...(account.value?.enabled ? [] : (["account"] as const)), ...(state.value?.gameOverlays.supported ? [] : (["overlays"] as const))]),
+);
+
+/** Single settings not shown on this run: Discord and AI usage until an installed module asks for them. */
+export const hiddenSettingIds = computed<ReadonlySet<string>>(
+  () => new Set([...(asksFor("discord") ? [] : ["discord-connection"]), ...(asksFor("ai-usage") ? [] : ["ai-usage-accounts"])]),
 );
 
 export const toast = ref<string | null>(null);
