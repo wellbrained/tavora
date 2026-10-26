@@ -50,7 +50,7 @@ a specimen in the playground.
 
 ## Game modules live outside this repo
 
-Game-specific modules are never part of this repo or the app. They live in the private `wellbrained/tavora-game-modules` repo: the dev Tavora loads each module's local folder (`local.<module>`), and a release copy with the catalog id is published from the dev Tavora. This is a locked decision; see "Game modules" in the repo's `CLAUDE.md`.
+Game-specific modules are never part of this repo or the app. They live in the private `wellbrained/tavora-modules` repo: the dev Tavora loads each module's local folder (`local.<module>`), and a release copy with the catalog id is published from the dev Tavora. This is a locked decision; see "Game modules" in the repo's `CLAUDE.md`.
 
 ## Catalog page
 
