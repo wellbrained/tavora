@@ -20,6 +20,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.24",
+    date: "2026-10-26",
+    title: "Discord and AI Usage are separate modules now",
+    notes: [
+      "Tavora comes with just the basics. Add Discord and AI Usage from the catalog if you want them.",
+      "Already using them? Their panels show an Install button, and your settings come along.",
+      "Settings > Integrations shows Discord and AI usage only once you have a module that uses them.",
+    ],
+  },
+  {
     version: "0.21.23",
     date: "2026-10-26",
     title: "Panels in game fit their size",
