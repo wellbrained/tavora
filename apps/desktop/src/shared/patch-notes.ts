@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.28",
+    date: "2026-10-26",
+    title: "Overlays start at the right size",
+    notes: [
+      "An overlay you put over your game starts at the size its module suits.",
+      "Media players in a browser window of their own show the browser's name.",
+    ],
+  },
+  {
     version: "0.21.27",
     date: "2026-10-26",
     title: "Overlays stay when you alt-tab",
