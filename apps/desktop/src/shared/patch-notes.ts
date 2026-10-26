@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.23",
+    date: "2026-10-26",
+    title: "Panels in game fit their size",
+    notes: [
+      "A panel you show in your game starts at the size its module suits, not one size for all.",
+    ],
+  },
+  {
     version: "0.21.22",
     date: "2026-10-26",
     title: "Is your connection OK?",
