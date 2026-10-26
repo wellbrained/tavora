@@ -543,7 +543,7 @@ export interface Methods {
   "systemInfo.watch": { params: { blocks: SystemWatchBlocks; intervalMs: SystemInterval }; result: null };
   /**
    * The apps running now, with their memory and CPU. Only for Tavora's own System Monitor (capability `systemInfo`);
-   * any other module gets PERMISSION_DENIED. Tavora 0.21.16 and newer.
+   * any other module gets PERMISSION_DENIED. Tavora 0.21.18 and newer.
    */
   "systemInfo.apps": { params: undefined; result: SystemApps };
   /** The connection to the Discord app; starts it for this panel (capability `discord`). */

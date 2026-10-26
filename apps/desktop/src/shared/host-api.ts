@@ -993,6 +993,8 @@ export interface TavoraHostApi {
   setDimmed(dimmed: boolean): void;
   onState(listener: (state: HostViewState) => void): void;
   onFrozen(listener: (images: Record<string, string>) => void): void;
+  /** The still images from `onFrozen` are on screen: the host hides the panels only then, so their slots never show empty. */
+  frozenShown(): void;
   /** Tavora-wide keyboard shortcuts, also when a module panel has focus. */
   onShortcut(listener: (shortcut: HostShortcut) => void): void;
   getDiscord(): Promise<DiscordView | null>;

@@ -88,9 +88,13 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
     >
       <p>{{ t("panel.overGame") }}</p>
     </div>
+    <!-- A new element for each picture, decoded before it is painted, so Chromium says when it is on screen (host.ts). -->
     <img
       v-else-if="image"
+      :key="image"
       :src="image"
+      v-bind="{ elementtiming: `frozen:${id}` }"
+      decoding="sync"
       alt=""
       class="absolute top-0 left-0 max-w-none"
       :style="imageSize ? { width: `${imageSize.width}px`, height: `${imageSize.height}px` } : { width: '100%', height: '100%' }"

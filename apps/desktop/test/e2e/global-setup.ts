@@ -2,12 +2,15 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { useRunTempDir } from "../../../../scripts/test-temp.ts";
 
 // A fresh checkout or worktree has no build, and Electron then opens its own
 // "no app found" window instead of Tavora, while the modules in modules/ and
 // examples/ never show up. CI and `pnpm release` build before the e2e step;
 // this covers running the suite by hand, and does nothing when all is built.
-export default function globalSetup(): void {
+// The run also gets its own temp folder, which the workers and the apps they start
+// inherit; Playwright calls the returned function when the run ends, which removes it.
+export default function globalSetup(): () => void {
   const desktopDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   if (!existsSync(path.join(desktopDir, "out/main/index.cjs"))) {
     console.log("No build found in out/, building first...");
@@ -15,6 +18,7 @@ export default function globalSetup(): void {
     if (run.status !== 0) throw new Error("The build failed, so the e2e tests cannot start.");
   }
   buildMissingModules(path.resolve(desktopDir, "../.."));
+  return useRunTempDir();
 }
 
 // Builds each module in modules/ and examples/ whose manifest entry is missing, with

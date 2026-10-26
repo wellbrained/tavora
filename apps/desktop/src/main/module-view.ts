@@ -3,7 +3,7 @@ import { serveReadOnlyFile } from './read-only-files-http';
 import { READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { app, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
+import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
 import type { Capability, GameOverlayResult, SystemApps, SystemInfo, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./gamedata";
@@ -25,7 +25,7 @@ import { serveClipboard } from "./clipboard-http";
 import { cleanPictureName, servePictureSave } from "./picture-save-http";
 import { serveJsonOpen, serveJsonSave } from "./json-file-http";
 import { saveJsonExport, serveJsonExport } from './json-export-http';
-import { DRAW_CAP_MS } from "./panel-cover";
+import { DRAW_CAP_MS, ON_SCREEN_MS } from "./panel-cover";
 import { isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
 import { onlySystemMonitor } from "./system-apps";
@@ -822,12 +822,17 @@ export class ModuleView {
     if (contents.isDestroyed()) return Promise.resolve();
     if (!this.overGame) this.view.setBackgroundColor("#00000000");
     const requestId = ++this.frameRequests;
+    this.frameSeenAs = "not received";
     return new Promise((resolve) => {
       const done = () => {
         clearTimeout(timer);
         this.frameWaiters.delete(requestId);
         if (requestId === this.frameRequests && !contents.isDestroyed()) {
-          if (!this.overGame) this.view.setBackgroundColor(this.options.getTheme().tokens.background);
+          contents.setBackgroundThrottling(true);
+          // Opaque at once, the panel would show its plain colour until the frame is on screen.
+          setTimeout(() => {
+            if (requestId === this.frameRequests && !this.frameWaiters.size && !this.overGame && !contents.isDestroyed()) this.view.setBackgroundColor(this.options.getTheme().tokens.background);
+          }, ON_SCREEN_MS);
           if (this.shown && this.revealed && !this.firstDrawn) {
             this.firstDrawn = true;
             this.options.onDrawn?.();
@@ -835,10 +840,34 @@ export class ModuleView {
         }
         resolve();
       };
-      const timer = setTimeout(done, DRAW_CAP_MS);
+      // Shows up in Settings > Diagnostic info, so a panel that keeps a game's cover up that long can be found.
+      const timer = setTimeout(() => {
+        if (!contents.isDestroyed()) {
+          const { width, height } = this.view.getBounds();
+          console.warn(`[tavora] ${this.moduleId}${this.typeName ? ` (${this.typeName})` : ""} did not draw within ${DRAW_CAP_MS} ms of being shown: ${width}x${height}, ${this.status}, loading ${contents.isLoading()}, suspended ${this.suspended}, revealed ${this.revealed}, page ${this.frameSeenAs}, window ${this.windowState()}`);
+        }
+        done();
+      }, DRAW_CAP_MS);
       this.frameWaiters.set(requestId, done);
+      // Chromium counts a page under another view (the game's loading cover) as hidden, and a hidden page does not
+      // draw: until this frame, the page counts as shown wherever it lies.
+      contents.setBackgroundThrottling(false);
       contents.send("tavora:frame", requestId);
     });
+  }
+
+  /** The window the panel is in: whether Windows shows it, so a panel that never draws can be told from a hidden window. */
+  private windowState(): string {
+    const window = BrowserWindow.getAllWindows().find((w) => w.contentView.children.includes(this.view));
+    if (!window) return "none";
+    return [window.isVisible() ? "visible" : "hidden", window.isMinimized() && "minimized", window.isFocused() ? "focused" : "unfocused"].filter(Boolean).join(" ");
+  }
+
+  /** What the page said when the last frame request reached it (document.visibilityState), or "not received". */
+  private frameSeenAs = "not received";
+
+  frameSeen(visibility: unknown): void {
+    if (typeof visibility === "string") this.frameSeenAs = visibility.slice(0, 20);
   }
 
   /** The preload says the page has drawn since frame request `requestId`. */

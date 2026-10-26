@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 // ModuleView needs only a little of Electron to be made: a view with a page, and a session to harden.
-const made = vi.hoisted(() => ({ views: [] as { background: string; visible: boolean; css: string[]; removed: string[] }[], sent: [] as unknown[][] }));
+const made = vi.hoisted(() => ({ views: [] as { background: string; visible: boolean; throttled: boolean; css: string[]; removed: string[] }[], sent: [] as unknown[][] }));
 
 vi.mock("electron", () => {
   const session = () => ({
@@ -16,7 +16,7 @@ vi.mock("electron", () => {
   });
   const ses = session();
   class WebContentsView {
-    state = { background: "", visible: true, css: [] as string[], removed: [] as string[] };
+    state = { background: "", visible: true, throttled: true, css: [] as string[], removed: [] as string[] };
     webContents = {
       session: ses,
       setWindowOpenHandler: () => undefined,
@@ -24,6 +24,8 @@ vi.mock("electron", () => {
       on: () => undefined,
       loadURL: async () => undefined,
       isDestroyed: () => false,
+      isLoading: () => false,
+      setBackgroundThrottling: (allowed: boolean) => void (this.state.throttled = allowed),
       insertCSS: async (css: string) => {
         this.state.css.push(css);
         // The page takes a moment to take a style.
@@ -45,9 +47,13 @@ vi.mock("electron", () => {
       this.state.visible = visible;
     }
     setBounds() {}
+    getBounds() {
+      return { x: 0, y: 0, width: 0, height: 0 };
+    }
   }
   return {
     app: { isPackaged: false, getPath: () => "/nowhere" },
+    BrowserWindow: { getAllWindows: () => [] },
     clipboard: {},
     ClipboardItem: class {},
     MessageChannelMain: class {},
@@ -197,9 +203,11 @@ describe("a panel shown again", () => {
     expect(done).not.toHaveBeenCalled();
     view.framed(requestId);
     await vi.waitFor(() => expect(done).toHaveBeenCalled());
-    expect(state.background).toBe("#202020");
     expect(view.firstDrawn).toBe(true);
     expect(drawn).toHaveBeenCalledTimes(1);
+    // Its colour comes back once the frame has had time to reach the screen, so it does not show plain before that.
+    expect(state.background).toBe("#00000000");
+    await vi.waitFor(() => expect(state.background).toBe("#202020"));
   });
 
   it("stops waiting when it is hidden again, or after the cap", async () => {
@@ -211,6 +219,7 @@ describe("a panel shown again", () => {
       const first = view.drawn;
       view.setVisible(false);
       await first;
+      await vi.advanceTimersByTimeAsync(250);
       expect(state.background).toBe("#202020");
       // A page that never answers (stuck, broken) gets its colour back and lets the cover go.
       view.setVisible(true);
@@ -218,7 +227,31 @@ describe("a panel shown again", () => {
       void view.drawn.then(done);
       await vi.advanceTimersByTimeAsync(3_000);
       expect(done).toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(250);
       expect(state.background).toBe("#202020");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Under the game's loading cover Chromium would count the page as hidden, and it would never draw there.
+  it("counts as shown wherever it lies until it has drawn, and is paused as usual after", async () => {
+    vi.useFakeTimers();
+    try {
+      const view = make();
+      const state = made.views.at(-1)!;
+      view.setVisible(true);
+      expect(state.throttled).toBe(false);
+      view.framed(frameRequest());
+      expect(state.throttled).toBe(true);
+      view.setVisible(false);
+      view.setVisible(true);
+      expect(state.throttled).toBe(false);
+      view.setVisible(false);
+      expect(state.throttled).toBe(true);
+      view.setVisible(true);
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(state.throttled).toBe(true);
     } finally {
       vi.useRealTimers();
     }

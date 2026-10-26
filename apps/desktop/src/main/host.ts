@@ -176,7 +176,7 @@ import {
 import type { PanelContent, PanelLaunch } from "./panel-content";
 import type { PanelOpenResult } from "@tavora/sdk/protocol";
 import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
-import { layoutKey, OpenTimes, PanelCover } from "./panel-cover";
+import { layoutKey, ON_SCREEN_MS, OpenTimes, PanelCover } from "./panel-cover";
 
 interface Rect {
   x: number;
@@ -195,6 +195,8 @@ const OPENING_CAP_MS = REVEAL_CAP_MS * 4;
 const timingLog = !app.isPackaged && process.env.TAVORA_TIMINGS ? (line: string) => console.log(`[tavora] ${line}`) : null;
 /** How long to wait for a still image of a panel before hiding it anyway. */
 const FREEZE_TIMEOUT_MS = 250;
+/** How long to wait for the host UI to show the panels' still images before hiding the panels anyway. */
+const FROZEN_SHOWN_CAP_MS = 300;
 /** How long a development folder's build must be quiet before its panels reload. */
 const DEVELOPMENT_RELOAD_MS = 300;
 /** The pages Settings > Development links to. */
@@ -1500,6 +1502,10 @@ export class Host {
       if (event.senderFrame?.parent !== null) return;
       this.viewsByContents.get(event.sender.id)?.framed(requestId);
     });
+    ipcMain.on("tavora:frame-seen", (event: IpcMainEvent, visibility: unknown) => {
+      if (event.senderFrame?.parent !== null) return;
+      this.viewsByContents.get(event.sender.id)?.frameSeen(visibility);
+    });
     ipcMain.on("tavora:pong", (event: IpcMainEvent) => {
       if (event.senderFrame?.parent !== null) return;
       this.viewsByContents.get(event.sender.id)?.pong();
@@ -1596,6 +1602,9 @@ export class Host {
     });
     ipcMain.on("host:overlay", (event, open: unknown) => {
       if (fromHost(event) && typeof open === "boolean") void this.setOverlay(open);
+    });
+    ipcMain.on("host:frozen-shown", (event) => {
+      if (fromHost(event)) this.frozenShown?.();
     });
     ipcMain.on("host:dimmed", (event, dimmed: unknown) => {
       if (fromHost(event) && typeof dimmed === "boolean" && dimmed !== this.dimmed) {
@@ -3005,7 +3014,8 @@ export class Host {
     if (!game) return;
     for (const record of this.records(game.id)) this.createView(record, game);
     this.workspaces.relayout();
-    if ([...this.views.values()].some((view) => view instanceof ModuleView)) {
+    // Only this game's own module pages are waited for: a panel in the in-game layer runs on from another game.
+    if (this.records(game.id).some((record) => this.views.get(record.instanceId) instanceof ModuleView && !this.floating(record.instanceId))) {
       this.endOpening();
       const layout = layoutKey(game.id, this.records(game.id));
       this.opening = { startedAt: performance.now(), timer: setTimeout(() => this.endOpening(true), OPENING_CAP_MS), layout };
@@ -3528,6 +3538,7 @@ export class Host {
     // The dialog has to be seen; the panels' pictures stand in for them, so the cover goes.
     this.cover.cancel();
     const images: Record<string, string> = {};
+    const freezeStarted = performance.now();
     await Promise.all(
       [...this.views].map(async ([instanceId, view]) => {
         if (this.floating(instanceId) || !this.panelBounds.has(instanceId) || view.status !== "ready" || (view instanceof ModuleView && !view.revealed)) return;
@@ -3541,7 +3552,28 @@ export class Host {
     );
     if (change !== this.overlayChanges || this.window.isDestroyed()) return;
     this.window.webContents.send("host:frozen", images);
+    const taken = performance.now();
+    // Hidden before their pictures are on screen, the panels' slots would show empty for a frame.
+    if (Object.keys(images).length) await this.frozenOnScreen();
+    timingLog?.(`overlay: ${Object.keys(images).length} of ${this.panelsInSlots().length} pictures taken in ${Math.round(taken - freezeStarted)} ms, on screen ${Math.round(performance.now() - taken)} ms later`);
+    if (change !== this.overlayChanges || this.window.isDestroyed()) return;
     for (const [instanceId, view] of this.views) if (!this.floating(instanceId)) view.setVisible(false);
+  }
+
+  private frozenShown: (() => void) | null = null;
+
+  /** Resolves once the host UI says the panels' still images are on screen, or after FROZEN_SHOWN_CAP_MS. */
+  private frozenOnScreen(): Promise<void> {
+    this.frozenShown?.();
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        if (this.frozenShown === done) this.frozenShown = null;
+        resolve();
+      };
+      const timer = setTimeout(done, FROZEN_SHOWN_CAP_MS);
+      this.frozenShown = done;
+    });
   }
 
   /**
@@ -3552,9 +3584,12 @@ export class Host {
     this.applyBounds();
     const shown = this.panelsInSlots();
     this.logDraws(shown, "dialog closed");
-    void Promise.all(shown.map((view) => view.drawn)).then(() => {
-      if (change === this.overlayChanges && !this.window.isDestroyed()) this.window.webContents.send("host:frozen", {});
-    });
+    void Promise.all(shown.map((view) => view.drawn))
+      // Taken away as soon as the panels said they drew, the pictures could leave their slots empty for a frame.
+      .then(() => new Promise((resolve) => setTimeout(resolve, ON_SCREEN_MS)))
+      .then(() => {
+        if (change === this.overlayChanges && !this.window.isDestroyed()) this.window.webContents.send("host:frozen", {});
+      });
   }
 
   /** The module panels placed in their workspace slots now. */
