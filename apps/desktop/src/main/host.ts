@@ -136,6 +136,8 @@ import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
 import { AiUsageConnector } from "./ai-usage";
 import { SystemMonitorThread } from "./system-info-thread";
+import { MediaConnector } from "./media";
+import { helperPath, mediaDeps } from "./media-windows";
 import { readClaudeEmail } from "./ai-usage-claude";
 import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
@@ -353,6 +355,12 @@ export class Host {
     },
     log: (message, error) => console.warn(`[tavora] ${message}`, error),
   });
+  /** The Media connector: what plays on this PC, read by Tavora's media helper only while a panel of a granted module watches. */
+  private readonly media = new MediaConnector(
+    mediaDeps(helperPath(app.isPackaged, process.resourcesPath, path.resolve(__dirname, "../../../..")), (message, error) =>
+      error === undefined ? console.warn(`[tavora] ${message}`) : console.warn(`[tavora] ${message}`, error),
+    ),
+  );
   /** The player's Tavora account; the sign-in never leaves the main process. */
   private readonly account: AccountClient;
   /** The cloud copy: made before the data is read, since a newer copy is taken before anything reads it. */
@@ -1656,6 +1664,7 @@ export class Host {
       this.browsersByContents.clear();
       this.discord.dispose();
       this.systemInfo.dispose();
+      this.media.dispose();
       this.gameWatcher.stop();
       this.copySync.dispose();
       this.pairing.dispose();
@@ -3116,6 +3125,7 @@ export class Host {
       aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
       discord: this.discord,
       systemInfo: this.systemInfo,
+      media: this.media,
       overlay: {
         ...this.streaming.overlayFor(module, game.id),
         showOverGame: (key) => this.gameOverlays.show(module, game.id, key),

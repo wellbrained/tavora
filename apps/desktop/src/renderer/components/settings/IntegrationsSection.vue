@@ -6,6 +6,7 @@
 import AiUsageSection from "./AiUsageSection.vue";
 import DiscordSection from "./DiscordSection.vue";
 import SystemInfoSection from "./SystemInfoSection.vue";
+import MediaSection from "./MediaSection.vue";
 
 defineProps<{ highlight: string | null }>();
 </script>
@@ -14,4 +15,5 @@ defineProps<{ highlight: string | null }>();
   <DiscordSection :highlight="highlight" />
   <AiUsageSection :highlight="highlight" />
   <SystemInfoSection />
+  <MediaSection />
 </template>
