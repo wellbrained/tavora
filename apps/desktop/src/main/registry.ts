@@ -40,12 +40,6 @@ export const OFFICIAL_PREFIX = "tavora.";
 /** The id the Browser is listed under in the module library; reserved like every `tavora.` id. */
 export const BROWSER_MODULE_ID = "tavora.browser";
 
-/** The official Discord module (modules/discord), which Tavora moves the built-in panel's settings to. */
-export const DISCORD_MODULE_ID = "tavora.discord";
-
-/** The official AI Usage module (modules/ai-usage), which Tavora moves the built-in panel's settings to. */
-export const AI_USAGE_MODULE_ID = "tavora.ai-usage";
-
 /**
  * The example modules that ship with Tavora as starting points for module
  * authors. Settings > Development lists them under Examples, to open or copy,

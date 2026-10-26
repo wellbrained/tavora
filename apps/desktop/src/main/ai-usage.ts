@@ -152,18 +152,26 @@ export class AiUsageConnector {
 
   constructor(private readonly deps: AiUsageDeps) {}
 
-  /** Loads the saved accounts once; the first time ever, offers the profile folders found on this PC. */
+  /** The saved file, null when there is none yet. */
+  private async readFile(): Promise<Record<string, unknown> | null> {
+    const text = await this.deps.readText(this.deps.file);
+    try {
+      const parsed: unknown = text === null ? null : JSON.parse(text);
+      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      // A damaged file starts empty, like a missing one would not: nothing is offered again.
+      return {};
+    }
+  }
+
+  /**
+   * Loads the saved accounts once, when a module or Settings first asks (never at start, so a
+   * player without the AI Usage module has nothing read); the first time ever, offers the profile
+   * folders found on this PC.
+   */
   private load(): Promise<void> {
     this.loaded ??= (async () => {
-      const text = await this.deps.readText(this.deps.file);
-      let file: Record<string, unknown> | null = null;
-      try {
-        const parsed: unknown = text === null ? null : JSON.parse(text);
-        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) file = parsed as Record<string, unknown>;
-      } catch {
-        // A damaged file starts empty, like a missing one would not: nothing is offered again.
-        file = {};
-      }
+      const file = await this.readFile();
       if (file) {
         this.accounts = parseAccounts(file);
         this.legacy = parseLegacy(file, this.accounts);
@@ -200,8 +208,13 @@ export class AiUsageConnector {
 
   /** What the built-in panel kept (version 1 of the file), for the AI Usage module; null once handed over. */
   async legacyPanelData(): Promise<LegacyPanelData | null> {
-    await this.load();
-    return this.legacy;
+    // Asked at every start: only the file is read, no folder is looked through and no login is read.
+    if (this.loaded) {
+      await this.loaded;
+      return this.legacy;
+    }
+    const file = await this.readFile();
+    return file ? parseLegacy(file, parseAccounts(file)) : null;
   }
 
   /** The panel's settings are with the module now: the file keeps only the accounts. */

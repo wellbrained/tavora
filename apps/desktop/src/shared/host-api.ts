@@ -94,6 +94,8 @@ export interface PanelView {
   live?: boolean;
   /** A Browser tab opened from another one: docked beside it, and left in the background when asked. */
   openedFrom?: { instanceId: string; background: boolean };
+  /** The panel of a module that left Tavora for the catalog (Discord, AI Usage) and is not installed: it offers to install it. */
+  moved?: boolean;
 }
 
 /** One of a module's named panel types, as Add module and the tabs show it. */

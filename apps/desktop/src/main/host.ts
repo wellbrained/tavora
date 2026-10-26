@@ -41,6 +41,7 @@ import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/lay
 import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
+import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
 import { applyOwners, checkZipData, readOwnerRecords } from "./installer";
 import { readModulePage } from "./module-page";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
@@ -130,7 +131,7 @@ import { supportTarget } from "./module-support";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { AI_USAGE_MODULE_ID, BROWSER_MODULE_ID, browserModule, DISCORD_MODULE_ID, describeModules, developmentProjects, discoverModules, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, waitingModules, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { BROWSER_MODULE_ID, browserModule, describeModules, developmentProjects, discoverModules, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, waitingModules, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
@@ -606,9 +607,14 @@ export class Host {
     await migrateModuleData(userData, (line) => console.warn(`[tavora] ${line}`), library.moduleFilesFolder ?? defaultFilesRoot(userData)).catch((error: unknown) =>
       console.error("[tavora] moving module data under its owner failed", error),
     );
+    // Discord and AI Usage left Tavora for the catalog: what they saved goes with them.
+    await moveOfficialModules(userData, (line) => console.warn(`[tavora] ${line}`), library.moduleFilesFolder ?? defaultFilesRoot(userData)).catch((error: unknown) =>
+      console.error("[tavora] moving the data of Discord and AI Usage failed", error),
+    );
     const expired = purgeExpired(library, new Date());
     const waiting = waitingModules(moduleProblems);
-    const workspace = await savedData.loadWorkspace(Object.keys(library.games), (id) => modules.has(id) || waiting.has(id));
+    // A module that left Tavora for the catalog keeps its panels while it is not installed: they offer to install it.
+    const workspace = await savedData.loadWorkspace(Object.keys(library.games), (id) => modules.has(id) || waiting.has(id) || movedModule(id) !== undefined);
     settlePanelTypes(workspace, panelTypesOf(modules));
     const { profile, saved: profileSaved } = await savedData.loadProfile();
     const windowState = initialBounds(
@@ -716,7 +722,7 @@ export class Host {
     try {
       const legacy = await this.aiUsage.legacyPanelData();
       if (!legacy) return;
-      const settings = this.data.appSettings(OFFICIAL_OWNER, AI_USAGE_MODULE_ID);
+      const settings = this.data.appSettings(MOVED_MODULES_OWNER, AI_USAGE_MODULE_ID);
       if ((await settings.get("settings")) === null) await settings.set("settings", { refreshMinutes: legacy.refreshMinutes, style: legacy.style });
       if ((await settings.get("readings")) === null) await settings.set("readings", legacy.readings);
       await this.aiUsage.forgetLegacyPanelData();
@@ -735,11 +741,11 @@ export class Host {
     try {
       const legacy = await this.discord.legacyPanelData();
       if (!legacy) return;
-      const settings = this.data.appSettings(OFFICIAL_OWNER, DISCORD_MODULE_ID);
+      const settings = this.data.appSettings(MOVED_MODULES_OWNER, DISCORD_MODULE_ID);
       if (legacy.last && (await settings.get("last")) === null) await settings.set("last", { ...legacy.last });
       for (const [gameId, game] of Object.entries(legacy.games)) {
         if (!this.library.games[gameId]) continue;
-        const store = this.data.get(OFFICIAL_OWNER, DISCORD_MODULE_ID, gameId).settings;
+        const store = this.data.get(MOVED_MODULES_OWNER, DISCORD_MODULE_ID, gameId).settings;
         if ((await store.get("server")) === null) await store.set("server", { ...game });
       }
       await this.discord.forgetLegacyPanelData();
@@ -1133,7 +1139,7 @@ export class Host {
    */
   private dropPanelsOfMissingModules(): void {
     const waiting = waitingModules(this.moduleProblems);
-    for (const instanceId of this.workspaces.dropMissingModules((moduleId) => this.modules.has(moduleId) || waiting.has(moduleId))) this.closeView(instanceId);
+    for (const instanceId of this.workspaces.dropMissingModules((moduleId) => this.modules.has(moduleId) || waiting.has(moduleId) || movedModule(moduleId) !== undefined)) this.closeView(instanceId);
   }
 
   // ── Pictures of modules ──────────────────────────────────────────────
@@ -3835,10 +3841,14 @@ export class Host {
         const type = this.panelTypeOf(record);
         const module = this.modules.get(record.moduleId);
         // A development module that cannot load right now is named from its manifest until it loads.
-        const name = type?.name ?? (module ? this.shown(module.manifest).name : (waitingModules(this.moduleProblems).get(record.moduleId) ?? record.moduleId));
+        const name = type?.name ?? (module ? this.shown(module.manifest).name : (waitingModules(this.moduleProblems).get(record.moduleId) ?? movedModule(record.moduleId)?.name ?? record.moduleId));
         const panelType = record.panelType ?? null;
         const openedFrom = this.openedFrom.get(record.instanceId);
-        if (type === undefined) return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: record.panelType ?? name, status: "unavailable" as const, waiting: false, content: null };
+        if (type === undefined) {
+          // A module that left Tavora for the catalog and is not installed yet: its panel offers to install it.
+          const moved = !module && movedModule(record.moduleId) !== undefined;
+          return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: moved ? name : (record.panelType ?? name), status: "unavailable" as const, waiting: false, content: null, ...(moved ? { moved } : {}) };
+        }
         const content = record.content?.title ?? null;
         if (!(view instanceof BrowserPanel)) {
           const status = view?.status ?? "loading";

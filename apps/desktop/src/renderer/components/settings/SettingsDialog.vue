@@ -10,7 +10,7 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
-import { act, hiddenSettings, refreshReleaseStatuses, releasePendingCount, settingsOpen, settingsTarget, state } from "../../host";
+import { act, hiddenSettingIds, hiddenSettings, refreshReleaseStatuses, releasePendingCount, settingsOpen, settingsTarget, state } from "../../host";
 import { formatDate, t } from "../../i18n";
 import AboutSection from "./AboutSection.vue";
 import AccountSection from "./AccountSection.vue";
@@ -110,7 +110,7 @@ const results = computed<Result[]>(() => {
     description: t("settings.results.trashUntil", { date: formatDate(entry.purgeAt) }),
     keywords: [],
   }));
-  return rank([...settingEntries(hiddenSettings.value), ...trashed], query.value, (item) => ({
+  return rank([...settingEntries(hiddenSettings.value, hiddenSettingIds.value), ...trashed], query.value, (item) => ({
     name: item.label,
     extra: [item.description, sectionLabel(item.section), ...item.keywords],
   }));

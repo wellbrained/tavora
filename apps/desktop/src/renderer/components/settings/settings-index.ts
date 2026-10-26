@@ -119,9 +119,9 @@ export interface SettingEntry {
   keywords: string[];
 }
 
-/** The searchable settings, worded in the current language, leaving out sections that are hidden here. */
-export function settingEntries(hidden: ReadonlySet<SettingsSection> = new Set()): SettingEntry[] {
-  return SETTING_SECTIONS.filter(([, section]) => !hidden.has(section)).map(([id, section]) => ({
+/** The searchable settings, worded in the current language, leaving out sections and settings that are hidden here. */
+export function settingEntries(hidden: ReadonlySet<SettingsSection> = new Set(), hiddenIds: ReadonlySet<string> = new Set()): SettingEntry[] {
+  return SETTING_SECTIONS.filter(([id, section]) => !hidden.has(section) && !hiddenIds.has(id)).map(([id, section]) => ({
     id,
     section,
     label: t(`settings.${id}.label` as MessageKey),
