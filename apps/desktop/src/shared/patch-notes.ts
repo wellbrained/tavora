@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.17",
+    date: "2026-10-26",
+    title: "Tidier Publish screen",
+    notes: [
+      "The unlabeled refresh icon on the Publish screen is gone.",
+    ],
+  },
+  {
     version: "0.21.16",
     date: "2026-10-26",
     title: "Quick game switch",
