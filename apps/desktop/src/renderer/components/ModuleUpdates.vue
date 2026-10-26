@@ -71,7 +71,7 @@ async function updateAll() {
       <ul class="flex flex-col gap-3 pt-4" :aria-label="t('addModule.updates.list')">
         <li v-for="module in shown" :key="module.id" class="bg-background/40 flex flex-col gap-3 rounded-xl border p-4" :data-testid="`update-${module.id}`">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span class="bg-primary/10 border-primary/20 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg border" aria-hidden="true">
+            <span class="module-tile size-10" aria-hidden="true">
               <ModuleIcon :module-id="module.id" size="size-[34px]" />
             </span>
             <div class="min-w-0 flex-1 basis-48">

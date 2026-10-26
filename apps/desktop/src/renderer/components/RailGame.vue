@@ -2,6 +2,7 @@
 import type { GameView } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
 import type { MenuItem } from "@/host";
+import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { t } from "../i18n";
 import GameIcon from "./GameIcon.vue";
 import MenuArea from "./menus/MenuArea.vue";
@@ -52,12 +53,7 @@ defineOptions({ inheritAttrs: false });
       >
         <span class="rail-icon flex-none rounded-[12px]"><GameIcon :game="game" :size="48" /></span>
         <span v-if="expanded" class="truncate text-sm font-medium">{{ game.name }}</span>
-        <kbd
-          v-if="shortcut"
-          class="bg-secondary text-primary ml-auto flex-none rounded-sm border border-b-2 px-1.5 py-0.5 font-mono text-xs"
-          :data-testid="`${testid}-shortcut`"
-          >{{ shortcut }}</kbd
-        >
+        <Kbd v-if="shortcut" class="text-primary ml-auto flex-none" :data-testid="`${testid}-shortcut`">{{ shortcut }}</Kbd>
       </button>
       </RailTooltip>
       <div

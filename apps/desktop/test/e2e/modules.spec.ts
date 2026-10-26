@@ -36,7 +36,9 @@ test("the modules page lists where modules came from, reloads, and removes one w
   await page.getByTestId("rail-settings").click();
   await page.getByTestId("settings-nav-modules").click();
   await expect(page.getByTestId("module-origin-local.test.mini")).toHaveText("Your modules folder, in mini");
+  await page.getByTestId("module-more-local.test.mini").click();
   await expect(page.getByTestId("remove-module-local.test.mini")).toBeVisible();
+  await page.keyboard.press("Escape");
   // Tavora's own modules are listed, with the Official badge instead of a folder, but cannot be removed here.
   await expect(page.getByTestId("module-tavora.notes")).toContainText("Official");
   await expect(page.getByTestId("module-origin-tavora.notes")).toHaveCount(0);
@@ -118,6 +120,7 @@ test("the modules page lists where modules came from, reloads, and removes one w
   await expect(panels(page, "local.test.mini")).toHaveCount(1);
   await page.getByTestId("rail-settings").click();
   await page.getByTestId("settings-nav-modules").click();
+  await page.getByTestId("module-more-local.test.mini").click();
   await page.getByTestId("remove-module-local.test.mini").click();
   await page.getByTestId("confirm-submit").click();
   await expect(page.getByTestId("module-local.test.mini")).toHaveCount(0);
@@ -236,6 +239,7 @@ test("data left by modules that are gone is listed and deleted, and a local copy
     electronApp.relaunch = () => undefined;
   });
   const closed = app.waitForEvent("close");
+  await page.getByTestId("module-more-wellbrained.mini").click();
   await page.getByTestId("move-local-data-wellbrained.mini").click();
   await page.getByTestId("confirm-submit").click();
   await closed;

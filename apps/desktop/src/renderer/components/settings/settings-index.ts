@@ -75,6 +75,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["steam-icons", "online"],
   ["share-icons", "online"],
   ["auto-update", "about"],
+  ["app-version", "about"],
   ["check-updates", "about"],
   ["backups", "about"],
   ["diagnostics", "about"],

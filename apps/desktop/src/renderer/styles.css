@@ -278,3 +278,10 @@
     transition-duration: 0ms !important;
   }
 }
+
+/* The box a module's icon sits in, in every list and header. Add the size (size-8, size-10) where it is used. */
+@layer components {
+  .module-tile {
+    @apply bg-background text-primary flex flex-none items-center justify-center rounded-lg border;
+  }
+}

@@ -47,7 +47,12 @@ async function copyDiagnostics() {
 
 <template>
   <SettingGroup>
-    <SettingRow :label="t('settings.about.version', { version })" :description="t('settings.about.versionHint')">
+    <SettingRow
+      :label="t('settings.about.version', { version })"
+      :description="t('settings.about.versionHint')"
+      setting="app-version"
+      :highlighted="highlight === 'app-version'"
+    >
       <Button variant="secondary" data-testid="open-patch-notes" @click="emit('patchNotes')">{{ t("settings.section.patch-notes") }}</Button>
     </SettingRow>
     <SettingRow :label="t('settings.check-updates.label')" :description="updateRow.text" setting="check-updates" :highlighted="highlight === 'check-updates'">

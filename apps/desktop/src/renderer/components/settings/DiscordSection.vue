@@ -65,7 +65,7 @@ function revoke(module: ModuleView) {
       <p v-if="!users.length" class="text-muted-foreground pt-1 text-sm" data-testid="discord-users-none">{{ t("integrations.discord.noModules") }}</p>
       <ul v-else class="mt-1 flex flex-col" data-testid="discord-users">
         <li v-for="module in users" :key="module.id" class="flex items-center gap-3 border-b py-2 last:border-b-0" :data-testid="`discord-user-${module.id}`">
-          <span class="bg-background text-primary flex size-8 flex-none items-center justify-center rounded-lg border" aria-hidden="true">
+          <span class="module-tile size-8" aria-hidden="true">
             <ModuleIcon :module-id="module.id" size="size-4" />
           </span>
           <span class="min-w-0 flex-1 truncate font-medium">{{ module.name }}</span>

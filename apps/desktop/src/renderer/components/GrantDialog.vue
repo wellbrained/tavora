@@ -107,7 +107,7 @@ async function allow() {
     @close="close"
   >
     <div class="flex items-center gap-3">
-      <span class="bg-background text-primary flex size-10 flex-none items-center justify-center rounded-[10px] border" aria-hidden="true">
+      <span class="module-tile size-10" aria-hidden="true">
         <ModuleIcon :module-id="module.id" size="size-[34px]" />
       </span>
       <span class="text-muted-foreground text-sm" data-testid="grant-from">{{ from }}</span>

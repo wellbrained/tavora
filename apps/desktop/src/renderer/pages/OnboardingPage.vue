@@ -5,6 +5,7 @@
 import { ArrowLeft, Camera, Keyboard, PanelLeft, Plus, Search } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
 import GameIcon from "../components/GameIcon.vue";
@@ -169,7 +170,7 @@ const tips = computed(() => [
               <span class="text-muted-foreground text-sm">{{ tip.text }}</span>
             </span>
             <span v-if="tip.keys" class="flex flex-none gap-1">
-              <kbd v-for="key in tip.keys" :key="key" class="bg-secondary rounded-sm border border-b-2 px-1.5 py-0.5 font-mono text-xs">{{ key }}</kbd>
+              <Kbd v-for="key in tip.keys" :key="key">{{ key }}</Kbd>
             </span>
           </li>
         </ul>
