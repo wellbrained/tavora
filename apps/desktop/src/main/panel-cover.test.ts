@@ -3,15 +3,16 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const made = vi.hoisted(() => ({ views: [] as { background: string; visible: boolean; url: string; added: number }[] }));
+const made = vi.hoisted(() => ({ views: [] as { background: string; visible: boolean; url: string; added: number; loads: number; written: string[]; listeners: Map<string, () => void> }[] }));
 
 vi.mock("electron", () => {
   class WebContentsView {
-    state = { background: "", visible: true, url: "", added: 0 };
+    state = { background: "", visible: true, url: "", added: 0, loads: 0, written: [] as string[], listeners: new Map<string, () => void>() };
     webContents = {
       setWindowOpenHandler: () => undefined,
-      on: () => undefined,
-      loadURL: async (url: string) => void (this.state.url = url),
+      on: (event: string, listener: () => void) => void this.state.listeners.set(event, listener),
+      loadURL: async (url: string) => void ((this.state.url = url), this.state.loads++),
+      executeJavaScript: async (script: string) => void this.state.written.push(script),
       isDestroyed: () => false,
       close: () => undefined,
     };
@@ -175,5 +176,24 @@ describe("the cover", () => {
     expect(state().visible).toBe(true);
     cover.cancel();
     expect(state().visible).toBe(false);
+  });
+
+  // Loading a page again could show the view white for a frame, over the whole workspace.
+  it("loads its page once and writes the next ones into it, unless the page is gone", async () => {
+    const { cover, state } = setup();
+    cover.setBounds({ x: 0, y: 0, width: 100, height: 100 });
+    cover.start(theme("dark", "#000"), "Loading Satisfactory", undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    cover.finish();
+    cover.start(theme("dark", "#000"), "Loading Path of Exile 2", undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state().loads).toBe(1);
+    expect(state().written).toHaveLength(1);
+    expect(state().written[0]).toContain("Loading Path of Exile 2");
+    state().listeners.get("render-process-gone")!();
+    cover.start(theme("dark", "#000"), "Loading Enshrouded", undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state().loads).toBe(2);
+    expect(state().written).toHaveLength(1);
   });
 });
