@@ -2,11 +2,11 @@ import { ref } from "vue";
 import { resource } from "./api";
 import type { Summary } from "./types";
 
-// To add a section (Approval): a component in sections/, an id here and an entry in App.vue's SECTIONS.
-export type SectionId = "overview" | "updates" | "modules" | "review" | "accounts" | "stats" | "status";
+// To add a section: a component in sections/, an id here and an entry in App.vue's SECTIONS.
+export type SectionId = "overview" | "approval" | "updates" | "modules" | "review" | "accounts" | "stats" | "status";
 
 const SAVED = "adminSection";
-const IDS: SectionId[] = ["overview", "updates", "modules", "review", "accounts", "stats", "status"];
+const IDS: SectionId[] = ["overview", "approval", "updates", "modules", "review", "accounts", "stats", "status"];
 const saved = sessionStorage.getItem(SAVED);
 
 export const section = ref<SectionId>(IDS.includes(saved as SectionId) ? (saved as SectionId) : "overview");

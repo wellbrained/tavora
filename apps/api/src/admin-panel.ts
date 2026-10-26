@@ -56,6 +56,7 @@ export function registerPanelRoutes(app: Hono, options: PanelOptions): void {
   const { submissions, store, catalog, accounts, reviews, probes, now = Date.now } = options;
 
   const waiting = (): WaitingKind[] => [
+    { id: "approval", label: "Module versions waiting for review", count: catalog?.waitingVersions().length ?? 0, section: "approval" },
     { id: "icons", label: "Icons offered by players", count: submissions.listPending().length, section: "review", tab: "pending" },
     { id: "reports", label: "Reported modules", count: catalog?.reports().length ?? 0, section: "review", tab: "reports" },
     { id: "reviews", label: "Reported reviews", count: reviews?.reports().length ?? 0, section: "review", tab: "reviews" },

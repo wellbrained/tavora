@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Tavora Admin: a left list of sections and one column of content. Everything behind the admin token.
-import { Activity, BarChart3, Boxes, ClipboardCheck, Home, LogOut, Newspaper, RefreshCw, Users } from "@lucide/vue";
+import { Activity, BarChart3, Boxes, ClipboardCheck, Home, LogOut, Newspaper, RefreshCw, ShieldCheck, Users } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
@@ -9,6 +9,7 @@ import { computed, onMounted, ref, watch, type Component } from "vue";
 import { setToken, token } from "./api";
 import { go, refreshTick, section, summary, type SectionId } from "./nav";
 import { problem } from "./problem";
+import ApprovalSection from "./sections/ApprovalSection.vue";
 import AccountsSection from "./sections/AccountsSection.vue";
 import ModulesSection from "./sections/ModulesSection.vue";
 import OverviewSection from "./sections/OverviewSection.vue";
@@ -17,9 +18,10 @@ import StatsSection from "./sections/StatsSection.vue";
 import StatusSection from "./sections/StatusSection.vue";
 import UpdatesSection from "./sections/UpdatesSection.vue";
 
-// Add a section here (Approval comes later) and in nav.ts.
+// Add a section here and in nav.ts.
 const SECTIONS: { id: SectionId; label: string; icon: Component; view: Component; waiting?: string }[] = [
   { id: "overview", label: "Overview", icon: Home, view: OverviewSection },
+  { id: "approval", label: "Approval", icon: ShieldCheck, view: ApprovalSection, waiting: "approval" },
   { id: "updates", label: "Updates", icon: Newspaper, view: UpdatesSection },
   { id: "modules", label: "Modules", icon: Boxes, view: ModulesSection },
   { id: "review", label: "Review", icon: ClipboardCheck, view: ReviewSection, waiting: "review" },
