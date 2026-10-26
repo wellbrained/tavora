@@ -29,6 +29,7 @@ import {
   guardDrop,
   guideFits,
   maximizedPanel,
+  panelInfo,
   placePanel,
   placeTab,
   resolveDropPosition,
@@ -50,8 +51,6 @@ import PanelTab from "../components/workspace/PanelTab.vue";
 import { DOCK } from "../components/workspace/dock-context";
 import { outerColumns, type ColumnSide, type DockColumn } from "../dock-columns";
 
-/** Width of a panel card's border (dock.css), in px. */
-const CARD_BORDER = 1;
 /** Space between panel cards and around the dock, in px. */
 const GAP = 8;
 const THEME = { name: "tavora", className: "dockview-theme-tavora", colorScheme: "dark" as const, gap: GAP };
@@ -62,19 +61,10 @@ const view = computed(() => state.value!);
 const game = computed(() => (view.value.currentGameId ? view.value.library.games[view.value.currentGameId] : undefined));
 
 function info(instanceId: string): PanelInfo | undefined {
-  const panel = view.value.panels.find((item) => item.instanceId === instanceId);
-  const module = panel && view.value.modules.find((item) => item.id === panel.moduleId);
-  // A panel type may need more (or less) room than its module.
-  const size = module?.panels.find((type) => type.id === panel?.panelType) ?? module;
-  // A panel card's 1 px border on each side comes out of the module's room.
-  return panel && size
-    ? {
-        title: panel.name,
-        minWidth: size.minWidth + 2 * CARD_BORDER,
-        minHeight: size.minHeight + 2 * CARD_BORDER,
-        ...(module ? { module: { id: module.id, name: module.name } } : {}),
-      }
-    : undefined;
+  return panelInfo(
+    view.value.panels.find((item) => item.instanceId === instanceId),
+    view.value.modules,
+  );
 }
 
 // ── Where panels are ───────────────────────────────────────────────────

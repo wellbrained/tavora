@@ -10,7 +10,7 @@ import {
   type DockviewWillDropEvent,
   type SerializedDockview,
 } from "dockview-vue";
-import type { LayoutNode, SavedLayout } from "../shared/host-api";
+import type { HostViewState, LayoutNode, PanelView, SavedLayout } from "../shared/host-api";
 
 /** Height of a group's tab bar; module content starts below it. */
 export const TAB_HEIGHT = 36;
@@ -25,6 +25,30 @@ export interface PanelInfo {
   module?: { id: string; name: string };
   minWidth: number;
   minHeight: number;
+}
+
+/** Width of a panel card's border (dock.css), in px. */
+const CARD_BORDER = 1;
+
+/**
+ * The room a panel needs when its module is not there: Discord or AI Usage before they are installed, or a
+ * development module that can't load right now. Enough for the note and the button its slot shows.
+ */
+export const MISSING_MODULE_SIZE = { minWidth: 240, minHeight: 160 };
+
+/** What docking needs to know about a panel: its title, and the room its module (or panel type) asks for. */
+export function panelInfo(panel: PanelView | undefined, modules: readonly HostViewState["modules"][number][]): PanelInfo | undefined {
+  if (!panel) return undefined;
+  const module = modules.find((item) => item.id === panel.moduleId);
+  // A panel type may need more (or less) room than its module.
+  const size = module?.panels.find((type) => type.id === panel.panelType) ?? module ?? MISSING_MODULE_SIZE;
+  // A panel card's 1 px border on each side comes out of the module's room.
+  return {
+    title: panel.name,
+    minWidth: size.minWidth + 2 * CARD_BORDER,
+    minHeight: size.minHeight + 2 * CARD_BORDER,
+    ...(module ? { module: { id: module.id, name: module.name } } : {}),
+  };
 }
 
 export function toDockview(layout: SavedLayout, info: (id: string) => PanelInfo | undefined): SerializedDockview {
