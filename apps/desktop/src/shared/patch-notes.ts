@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.35",
+    date: "2026-10-26",
+    title: "Hints stay open from the keyboard",
+    notes: [
+      "A hint you open with Tab no longer closes when the panel changes size under your mouse.",
+    ],
+  },
+  {
     version: "0.21.34",
     date: "2026-10-26",
     title: "Your overlays, your layout",
