@@ -4,6 +4,7 @@ import { LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateM
 import { resolveAsset } from "./assets";
 import { readModuleChangelog } from "./module-changelog";
 import { moduleIconUrl } from "./module-icon";
+import type { ModuleProblemKind, ModuleProblemValues } from "../shared/module-problem";
 
 /**
  * Who publishes a module, shown to players next to its name. Official
@@ -72,8 +73,9 @@ export interface ModuleProblem {
   developmentFolder?: string;
   /** For a project in a development folder: the project's full path. */
   developmentProject?: string;
-  /** What Settings can suggest: build it first, add another folder, or the folder is gone. */
-  kind?: "not-built" | "no-module" | "missing";
+  /** Why it did not load, so Settings can say it in the player's language; `values` are the details that text names. */
+  kind?: ModuleProblemKind;
+  values?: ModuleProblemValues;
   /** The name and version its manifest gives, when it has them, so Settings can name the module; its id too, when it has one. */
   about?: { name: string; version: string | null; id?: string };
   /** One of Tavora's own modules: kept only so its panels wait, never shown in Settings. */
@@ -130,19 +132,20 @@ export async function discoverModules(
     }
     const found = project === undefined ? await candidates(dir) : project === "missing" ? [] : project;
     for (const candidate of found) {
-      const report = (message: string, kind?: ModuleProblem["kind"], about?: ModuleProblem["about"]) =>
+      const report = (message: string, kind?: ModuleProblem["kind"], about?: ModuleProblem["about"], values?: ModuleProblemValues) =>
         problems.push({
           folder: path.basename(candidate),
           path: candidate,
           message,
           ...(fromProject ? { developmentFolder: dir, developmentProject: candidate } : {}),
           ...(kind ? { kind } : {}),
+          ...(values ? { values } : {}),
           ...(about ? { about } : {}),
           ...(provenance === "official" ? { official: true as const } : {}),
         });
-      const installed = await loadModule(candidate, provenance, tavoraVersion, (message, kind, about) => {
+      const installed = await loadModule(candidate, provenance, tavoraVersion, (message, kind, about, values) => {
         // Tavora's own modules show no problems in Settings, but one that can't load keeps its panels waiting.
-        if (provenance === "local" || about?.id) report(message, kind, about);
+        if (provenance === "local" || about?.id) report(message, kind, about, values);
       });
       if (!installed) continue;
       if (fromProject) {
@@ -153,17 +156,17 @@ export async function discoverModules(
       const about = { name: installed.manifest.name, version: installed.manifest.version };
       if (provenance !== "official" && id.startsWith(OFFICIAL_PREFIX)) {
         console.warn(`[tavora] module id ${id} in ${candidate} is reserved for official Tavora modules; skipping it`);
-        report("its id is reserved for Tavora's own modules", undefined, about);
+        report("its id is reserved for Tavora's own modules", "reserved-id", about);
         continue;
       }
       if (provenance !== "official" && installed.manifest.permissions.webAssembly === true) {
         console.warn(`[tavora] module ${id} in ${candidate} asks to run WebAssembly, which only Tavora's own modules may; skipping it`);
-        report("permissions.webAssembly is only for Tavora's own modules", undefined, about);
+        report("permissions.webAssembly is only for Tavora's own modules", "webassembly", about);
         continue;
       }
       if (modules.has(id)) {
         console.warn(`[tavora] duplicate module id ${id} in ${candidate}; keeping the first one`);
-        if (provenance === "local") report("another module with the same id is already loaded", undefined, about);
+        if (provenance === "local") report("another module with the same id is already loaded", "duplicate-id", about);
         continue;
       }
       modules.set(id, installed);
@@ -239,7 +242,7 @@ async function loadModule(
   dir: string,
   provenance: Provenance,
   tavoraVersion: string | undefined,
-  report: (message: string, kind?: ModuleProblem["kind"], about?: ModuleProblem["about"]) => void,
+  report: (message: string, kind?: ModuleProblem["kind"], about?: ModuleProblem["about"], values?: ModuleProblemValues) => void,
 ): Promise<InstalledModule | undefined> {
   let raw: unknown;
   try {
@@ -247,21 +250,22 @@ async function loadModule(
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       console.warn(`[tavora] unreadable manifest in ${dir}`);
-      report("its tavora.module.json cannot be read");
+      report("its tavora.module.json cannot be read", "unreadable");
     }
     return undefined;
   }
   const about = aboutOf(raw);
-  const problem = (message: string, kind?: ModuleProblem["kind"]) => report(message, kind, about);
+  const problem = (message: string, kind: ModuleProblemKind, values?: ModuleProblemValues) => report(message, kind, about, values);
   const result = validateManifest(raw);
   if (!result.ok) {
     console.warn(`[tavora] invalid module in ${dir}: ${result.errors.join("; ")}`);
-    problem(result.errors.slice(0, 2).join("; "));
+    const errors = result.errors.slice(0, 2).join("; ");
+    problem(errors, "invalid", { errors });
     return undefined;
   }
   if (tavoraVersion !== undefined && needsNewerTavora(result.manifest, tavoraVersion)) {
     console.warn(`[tavora] module ${result.manifest.id} needs Tavora ${result.manifest.minTavora}; this is ${tavoraVersion}`);
-    problem(`it needs Tavora ${result.manifest.minTavora} or newer (this is ${tavoraVersion})`);
+    problem(`it needs Tavora ${result.manifest.minTavora} or newer (this is ${tavoraVersion})`, "needs-newer", { needs: String(result.manifest.minTavora), current: tavoraVersion });
     return undefined;
   }
   const root = await realpath(dir);
@@ -269,13 +273,13 @@ async function loadModule(
   for (const entry of entries) {
     if (await resolveAsset(root, `/${entry}`)) continue;
     console.warn(`[tavora] module ${result.manifest.id} has no entry file ${entry}; is it built?`);
-    problem(`the entry file ${entry} is missing (is it built?)`, "not-built");
+    problem(`the entry file ${entry} is missing (is it built?)`, "not-built", { file: entry });
     return undefined;
   }
   for (const icon of icons) {
     if (await resolveAsset(root, `/${icon}`)) continue;
     console.warn(`[tavora] module ${result.manifest.id} has no icon file ${icon}`);
-    problem(`the icon file ${icon} is missing`);
+    problem(`the icon file ${icon} is missing`, "icon-missing", { file: icon });
     return undefined;
   }
   return { manifest: result.manifest, root, provenance, owner: provenance === "official" ? OFFICIAL_OWNER : LOCAL_OWNER };
