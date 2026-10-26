@@ -20,6 +20,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.20",
+    date: "2026-10-26",
+    title: "Tidier Settings",
+    notes: [
+      "Each module in Settings > Modules keeps Update and Patch notes up front; Move data, Report and Remove now live in a ⋯ menu.",
+      "Module icons look the same in every list.",
+      "Keyboard keys look the same everywhere, in search, the game rail and the shortcut dialog.",
+      "Settings search finds the Version row.",
+    ],
+  },
+  {
     version: "0.21.19",
     date: "2026-10-26",
     title: "Module problems in your language",
