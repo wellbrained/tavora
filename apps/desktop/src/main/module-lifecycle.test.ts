@@ -64,7 +64,7 @@ async function setup() {
   let modules = new Map<string, InstalledModule>();
   let catalogIds = new Set<string>();
   const catalog = { index: [] as CatalogEntry[], zips: new Map<string, Buffer>() };
-  const state = { online: true, binFails: false, onClose: (_moduleId: string) => {} };
+  const state = { online: true, binFails: false, onClose: (_moduleId: string) => {}, grantChanges: 0 };
   const publish = (entry: CatalogEntry, zip: Buffer) => {
     catalog.index = [entry];
     catalog.zips.set(entry.zip.sha256, zip);
@@ -90,6 +90,7 @@ async function setup() {
       installed: async () => undefined,
     },
     online: () => state.online,
+    grantsChanged: () => void state.grantChanges++,
     autoUpdateModules: () => true,
     firstKey: (key) => key,
     panels: {
@@ -194,6 +195,17 @@ describe("ModuleLifecycle", () => {
     expect(steps).toEqual([`close panels ${ID}`]);
     expect(grantWhenClosed).toBeDefined();
     expect(grants.get(fingerprint(key), ID)).toBeUndefined();
+  });
+
+  it("tells the host when a grant is taken back or given, so what runs on it can stop at once", async () => {
+    const { lifecycle, state, zipFile } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    await lifecycle.installFile(await zipFile(zipOf("1.0.0", key, ["api.example.com"])));
+    state.grantChanges = 0;
+    await lifecycle.grant(ID, ["api.example.com"], []);
+    expect(state.grantChanges).toBe(1);
+    await lifecycle.revoke(ID);
+    expect(state.grantChanges).toBe(2);
   });
 
   it("installs from the catalog only while online, and only the listed publisher's zip", async () => {

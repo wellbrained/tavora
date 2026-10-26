@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SystemInfo, SystemSnapshot } from "@tavora/sdk/protocol";
+import type { SystemConnection, SystemInfo, SystemSnapshot } from "@tavora/sdk/protocol";
+import type { ConnectionSource } from "./connection";
 import { NO_PARTS, SystemMonitor, WARM_UP_MS, type ProbeParts, type ProbeSample, type SystemProbe, type TavoraUsage } from "./system-info";
 import { parseWatch } from "./system-info-parse";
 
@@ -80,7 +81,8 @@ let tavora: TavoraUsage;
 function listener() {
   const snapshots: SystemSnapshot[] = [];
   let drives = 0;
-  return { snapshots, get drives() { return drives; }, target: { snapshot: (s: SystemSnapshot) => void snapshots.push(s), drivesChanged: () => void drives++ } };
+  const connections: SystemConnection[] = [];
+  return { snapshots, connections, get drives() { return drives; }, target: { snapshot: (s: SystemSnapshot) => void snapshots.push(s), drivesChanged: () => void drives++, connectionChanged: (c: SystemConnection) => void connections.push(c) } };
 }
 
 function watching(blocks: object, intervalMs: 1000 | 2000 | 5000 | 15000 | 60000 = 1000) {
@@ -448,5 +450,56 @@ describe("a PC without Windows' counters", () => {
     expect(received.snapshots[0]!.gpus).toBeUndefined();
     expect(received.snapshots[0]!.ram).toBeDefined();
     expect(received.snapshots[0]!.drives![0]!.connected).toBe(false);
+  });
+});
+
+describe("the connection block", () => {
+  const READING: SystemConnection = { state: "online", routerMs: 2, internetMs: 14, routerFound: true, lossPercent: 0, downMbit: 1.5, upMbit: 0.2, target: "1.1.1.1", since: null };
+
+  function withConnection() {
+    let reading = READING;
+    const listeners = new Set<(connection: SystemConnection) => void>();
+    const source: ConnectionSource = {
+      read: () => reading,
+      onChange: (listener) => (listeners.add(listener), () => listeners.delete(listener)),
+    };
+    monitor = new SystemMonitor({ probe, tavora: () => tavora, connection: source });
+    return { change: (next: SystemConnection) => ((reading = next), [...listeners].forEach((listener) => listener(next))) };
+  }
+
+  it("puts the watcher's reading in the snapshot of a panel that asks, and only that panel's", () => {
+    withConnection();
+    const asking = watching({ connection: true });
+    const other = watching({ ram: true });
+    vi.advanceTimersByTime(WARM_UP_MS);
+    expect(asking.snapshots[0]!.connection).toEqual(READING);
+    expect(other.snapshots[0]!.connection).toBeUndefined();
+  });
+
+  it("costs the counters nothing", () => {
+    withConnection();
+    watching({ connection: true });
+    expect(probe.configures).toEqual([]);
+    vi.advanceTimersByTime(WARM_UP_MS + 3000);
+    expect(probe.collects.every((parts) => !Object.values(parts).some(Boolean))).toBe(true);
+  });
+
+  it("tells shown panels that watch it about a change, and nobody else", () => {
+    const { change } = withConnection();
+    const asking = watching({ connection: true });
+    const hidden = watching({ connection: true });
+    const other = watching({ cpu: true });
+    hidden.subscription.setSuspended(true);
+    change({ ...READING, state: "no-internet", since: 5 });
+    expect(asking.connections).toEqual([{ ...READING, state: "no-internet", since: 5 }]);
+    expect(hidden.connections).toEqual([]);
+    expect(other.connections).toEqual([]);
+  });
+
+  it("is left out when there is no watcher", () => {
+    const w = watching({ connection: true, ram: true });
+    vi.advanceTimersByTime(WARM_UP_MS);
+    expect(w.snapshots[0]!.connection).toBeUndefined();
+    expect(w.snapshots[0]!.ram).toBeDefined();
   });
 });

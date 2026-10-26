@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SystemInfo, SystemSnapshot } from "@tavora/sdk/protocol";
+import type { SystemConnection, SystemInfo, SystemSnapshot } from "@tavora/sdk/protocol";
 import { parseWatch } from "./system-info-parse";
 import { IDLE_MS, RESTART_MS, SystemMonitorThread, type FromWorker, type ToWorker, type WorkerLike } from "./system-info-thread";
 
@@ -34,17 +34,35 @@ const logged: string[] = [];
 const latest = () => workers[workers.length - 1]!;
 const cpu = (intervalMs: 1000 | 5000 = 1000) => parseWatch({ blocks: { cpu: true }, intervalMs });
 
+const ONLINE: SystemConnection = { state: "online", routerMs: 2, internetMs: 14, routerFound: true, lossPercent: 0, downMbit: 1.5, upMbit: 0.2, target: "1.1.1.1", since: null };
+/** The connection watcher's listeners, as the test's stand-in for it collected them. */
+let connectionListeners: ((connection: SystemConnection) => void)[];
+
 function listener() {
   const snapshots: SystemSnapshot[] = [];
+  const changes: SystemConnection[] = [];
   let drives = 0;
-  return { snapshots, get drives() { return drives; }, target: { snapshot: (s: SystemSnapshot) => void snapshots.push(s), drivesChanged: () => void drives++ } };
+  return {
+    snapshots,
+    changes,
+    get drives() { return drives; },
+    target: { snapshot: (s: SystemSnapshot) => void snapshots.push(s), drivesChanged: () => void drives++, connectionChanged: (c: SystemConnection) => void changes.push(c) },
+  };
 }
 
 beforeEach(() => {
   vi.useFakeTimers();
   workers = [];
   logged.length = 0;
+  connectionListeners = [];
   thread = new SystemMonitorThread({
+    connection: {
+      read: () => ONLINE,
+      onChange: (tell) => {
+        connectionListeners.push(tell);
+        return () => undefined;
+      },
+    },
     start: () => {
       const worker = new FakeWorker();
       workers.push(worker);
@@ -167,6 +185,34 @@ describe("snapshots", () => {
     subscription.watch(cpu());
     latest().send({ type: "snapshot", sub, snapshot: { at: 2, intervalMs: 1000 } });
     expect(a.snapshots[1]!.tavora).toBeUndefined();
+  });
+
+  it("get the connection filled in here, only when watched", () => {
+    const a = listener();
+    const subscription = thread.subscribe(a.target);
+    subscription.watch(parseWatch({ blocks: { connection: true }, intervalMs: 1000 }));
+    const sub = (latest().received[0] as { sub: number }).sub;
+    latest().send({ type: "snapshot", sub, snapshot: { at: 1, intervalMs: 1000 } });
+    expect(a.snapshots[0]!.connection).toEqual(ONLINE);
+    subscription.watch(cpu());
+    latest().send({ type: "snapshot", sub, snapshot: { at: 2, intervalMs: 1000 } });
+    expect(a.snapshots[1]!.connection).toBeUndefined();
+  });
+
+  it("pass a change of the connection to shown panels that watch it", () => {
+    const watching = listener();
+    const hidden = listener();
+    const other = listener();
+    thread.subscribe(watching.target).watch(parseWatch({ blocks: { connection: true }, intervalMs: 1000 }));
+    const away = thread.subscribe(hidden.target);
+    away.watch(parseWatch({ blocks: { connection: true }, intervalMs: 1000 }));
+    away.setSuspended(true);
+    thread.subscribe(other.target).watch(cpu());
+    const down = { ...ONLINE, state: "no-internet" as const, internetMs: null, since: 5 };
+    for (const tell of connectionListeners) tell(down);
+    expect(watching.changes).toEqual([down]);
+    expect(hidden.changes).toEqual([]);
+    expect(other.changes).toEqual([]);
   });
 
   it("stop after the panel closed", () => {

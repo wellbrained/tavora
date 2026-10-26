@@ -2,8 +2,8 @@
   "$schema": "../../packages/module-schema/schema/tavora.module.schema.json",
   "id": "tavora.system-monitor",
   "name": "System Monitor",
-  "description": "See how busy your PC is: CPU, graphics card, memory and drives.",
-  "version": "0.1.2",
+  "description": "See how busy your PC is and how your connection is doing: CPU, graphics card, memory, drives and ping.",
+  "version": "0.1.3",
   "apiVersion": "1",
   "minTavora": "0.21.1",
   "entry": "dist/index.html",
@@ -13,7 +13,7 @@
   "translations": {
     "de": {
       "name": "Systemmonitor",
-      "description": "Sieh, wie ausgelastet dein PC ist: CPU, Grafikkarte, Arbeitsspeicher und Laufwerke."
+      "description": "Sieh, wie ausgelastet dein PC ist und wie es um deine Verbindung steht: CPU, Grafikkarte, Arbeitsspeicher, Laufwerke und Ping."
     }
   },
   "permissions": { "network": [], "connectors": ["system-info"] }

@@ -6,6 +6,7 @@ import { LIMITS } from "@tavora/sdk/protocol";
 import {
   DEFAULT_PANEL_RECT,
   DEFAULT_RELATIVE_RECT,
+  panelStartRect,
   GAME_OVERLAYS_FILE,
   GameOverlayStore,
   MIN_OVERLAY_SIZE,
@@ -289,6 +290,24 @@ describe("scope", () => {
 const ID = "0a1b2c3d-0000-4000-8000-000000000001";
 const ID2 = "0a1b2c3d-0000-4000-8000-000000000002";
 const panel = (instanceId = ID, gameId = "poe2") => ({ owner: "official", moduleId: "tavora.todos", gameId, scope: "game" as const, instanceId });
+
+describe("panelStartRect", () => {
+  const screen = { x: 0, y: 0, width: 1920, height: 1080 };
+
+  it("gives the size the module prefers, in the corner", () => {
+    expect(panelStartRect({ width: 360, height: 216 }, screen)).toEqual({ x: DEFAULT_PANEL_RECT.x, y: DEFAULT_PANEL_RECT.y, width: 0.1875, height: 0.2 });
+  });
+
+  it("keeps the usual size for what the module leaves out, or with no window to measure", () => {
+    expect(panelStartRect({ width: 360 }, screen).height).toBe(DEFAULT_PANEL_RECT.height);
+    expect(panelStartRect(null, screen)).toEqual(DEFAULT_PANEL_RECT);
+    expect(panelStartRect({ width: 360, height: 200 }, null)).toEqual(DEFAULT_PANEL_RECT);
+  });
+
+  it("never gets bigger than the window", () => {
+    expect(panelStartRect({ width: 4000, height: 4000 }, screen)).toMatchObject({ width: 1 - DEFAULT_PANEL_RECT.x, height: 1 - DEFAULT_PANEL_RECT.y });
+  });
+});
 
 describe("panels in the game", () => {
   it("are kept by instance id across a restart, with where the player put them", async () => {

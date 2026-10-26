@@ -2,7 +2,7 @@ import type { SystemInfo } from "@tavora/sdk";
 import { describe, expect, it } from "vitest";
 import { createHistory } from "./history";
 import { buildMenu, parsePick } from "./menu";
-import { defaultApp, defaultDrives, defaultPanel, parseApp, parsePanel, pickGpu, toggleBlock, watchedDrives, watchRequest } from "./settings";
+import { cleanTarget, defaultApp, defaultDrives, defaultPanel, parseApp, parsePanel, pickGpu, toggleBlock, toggleSection, watchedDrives, watchRequest } from "./settings";
 
 const info = (overrides: Partial<SystemInfo> = {}): SystemInfo => ({
   cpu: { model: "CPU", threads: 8 },
@@ -46,6 +46,7 @@ describe("parse", () => {
   it("reads good values and drops bad drive ids", () => {
     expect(parseApp({ intervalMs: 5000, drives: ["c:", "C:", "nope", 4] })).toEqual({ intervalMs: 5000, drives: ["C:"] });
     expect(parsePanel({ blocks: { cpu: false, gpu: true, ram: true, drives: false }, gpu: "igpu" })).toEqual({
+      sections: { system: true, connection: true },
       blocks: { cpu: false, gpu: true, ram: true, drives: false },
       gpu: "igpu",
     });
@@ -64,6 +65,29 @@ describe("blocks", () => {
   });
 });
 
+describe("sections", () => {
+  it("hides either section but never both", () => {
+    let panel = toggleSection(defaultPanel(), "connection");
+    expect(panel.sections).toEqual({ system: true, connection: false });
+    expect(toggleSection(panel, "system")).toBe(panel);
+    panel = toggleSection(toggleSection(panel, "connection"), "system");
+    expect(panel.sections).toEqual({ system: false, connection: true });
+  });
+  it("reads saved sections, and shows both for a panel saved before there were two", () => {
+    expect(parsePanel({ blocks: { cpu: true } }).sections).toEqual({ system: true, connection: true });
+    expect(parsePanel({ sections: { system: false, connection: true } }).sections).toEqual({ system: false, connection: true });
+    expect(parsePanel({ sections: { system: false, connection: false } }).sections).toEqual({ system: true, connection: true });
+  });
+});
+
+describe("cleanTarget", () => {
+  it("takes an IPv4 address or a name, as Tavora does", () => {
+    expect(cleanTarget(" 1.1.1.1 ")).toBe("1.1.1.1");
+    expect(cleanTarget("Example.com")).toBe("example.com");
+    for (const bad of ["", "300.1.1.1", "1.1.1", "0.0.0.0", "224.0.0.1", "http://x.com", "x.com/a", "a b", "-a.com", "router"]) expect(cleanTarget(bad), bad).toBeNull();
+  });
+});
+
 describe("pickGpu", () => {
   it("takes the choice, else the dedicated card, else the first", () => {
     expect(pickGpu(info(), "igpu")).toBe("igpu");
@@ -77,14 +101,18 @@ describe("pickGpu", () => {
 describe("watchRequest", () => {
   it("asks only for what the panel shows, plus Tavora's own use", () => {
     expect(watchRequest(info(), defaultApp(), defaultPanel())).toEqual({
-      blocks: { tavora: true, cpu: true, gpu: true, ram: true, drives: ["C:", "D:"] },
+      blocks: { tavora: true, connection: true, cpu: true, gpu: true, ram: true, drives: ["C:", "D:"] },
       intervalMs: 1000,
     });
-    const panel = parsePanel({ blocks: { cpu: true, gpu: false, ram: false, drives: false } });
+    const panel = parsePanel({ sections: { system: true, connection: false }, blocks: { cpu: true, gpu: false, ram: false, drives: false } });
     expect(watchRequest(info(), { intervalMs: 15000, drives: null }, panel)).toEqual({ blocks: { tavora: true, cpu: true }, intervalMs: 15000 });
   });
+  it("asks for the connection alone when the System section is hidden", () => {
+    const panel = parsePanel({ sections: { system: false, connection: true } });
+    expect(watchRequest(info(), defaultApp(), panel).blocks).toEqual({ tavora: true, connection: true });
+  });
   it("leaves out graphics and drives when there are none", () => {
-    expect(watchRequest(info({ gpus: [], drives: [] }), defaultApp(), defaultPanel()).blocks).toEqual({ tavora: true, cpu: true, ram: true });
+    expect(watchRequest(info({ gpus: [], drives: [] }), defaultApp(), defaultPanel()).blocks).toEqual({ tavora: true, connection: true, cpu: true, ram: true });
   });
 });
 
@@ -92,10 +120,24 @@ describe("menu", () => {
   it("checks what is on, and offers the graphics card only with several", () => {
     const entries = buildMenu(say, info(), defaultApp(), defaultPanel());
     const ids = entries.flatMap((entry) => (entry.type === "item" ? [entry.id] : []));
-    expect(ids).toEqual(["block:cpu", "block:gpu", "block:ram", "block:drives", "interval:1000", "interval:2000", "interval:5000", "interval:15000", "interval:60000", "gpu:igpu", "gpu:dgpu", "drives"]);
+    expect(ids).toEqual(["section:system", "section:connection", "block:cpu", "block:gpu", "block:ram", "block:drives", "interval:1000", "interval:2000", "interval:5000", "interval:15000", "interval:60000", "gpu:igpu", "gpu:dgpu", "drives"]);
     const checked = entries.filter((entry) => entry.type === "item" && entry.checked).map((entry) => (entry.type === "item" ? entry.id : ""));
-    expect(checked).toEqual(["block:cpu", "block:gpu", "block:ram", "block:drives", "interval:1000", "gpu:dgpu"]);
+    expect(checked).toEqual(["section:system", "section:connection", "block:cpu", "block:gpu", "block:ram", "block:drives", "interval:1000", "gpu:dgpu"]);
     expect(buildMenu(say, info({ gpus: [] }), defaultApp(), defaultPanel()).some((entry) => entry.type === "item" && entry.id.startsWith("gpu:"))).toBe(false);
+  });
+  it("offers the connection dialog once Tavora has settings, with the address or 'off' as hint", () => {
+    const settings = { enabled: true, target: "1.1.1.1" };
+    const item = (entries: ReturnType<typeof buildMenu>) => entries.find((entry) => entry.type === "item" && entry.id === "connection");
+    expect(item(buildMenu(say, info(), defaultApp(), defaultPanel(), settings))).toMatchObject({ hint: "1.1.1.1" });
+    expect(item(buildMenu(say, info(), defaultApp(), defaultPanel(), { enabled: false, target: "x.com" }))).toMatchObject({ hint: "menu.connectionOff" });
+    expect(item(buildMenu(say, info(), defaultApp(), defaultPanel()))).toBeUndefined();
+  });
+  it("leaves out the System choices when that section is hidden, and keeps the last section", () => {
+    const panel = parsePanel({ sections: { system: false, connection: true } });
+    const entries = buildMenu(say, info(), defaultApp(), panel);
+    const ids = entries.flatMap((entry) => (entry.type === "item" ? [entry.id] : []));
+    expect(ids).toEqual(["section:system", "section:connection", "interval:1000", "interval:2000", "interval:5000", "interval:15000", "interval:60000"]);
+    expect(entries.find((entry) => entry.type === "item" && entry.id === "section:connection")).toMatchObject({ disabled: true });
   });
   it("won't turn off the last block", () => {
     const panel = parsePanel({ blocks: { cpu: true, gpu: false, ram: false, drives: false } });
@@ -107,6 +149,9 @@ describe("menu", () => {
     expect(parsePick("interval:5000")).toEqual({ kind: "interval", ms: 5000 });
     expect(parsePick("gpu:0x00000000_0x0001defc")).toEqual({ kind: "gpu", id: "0x00000000_0x0001defc" });
     expect(parsePick("drives")).toEqual({ kind: "drives" });
+    expect(parsePick("section:connection")).toEqual({ kind: "section", id: "connection" });
+    expect(parsePick("connection")).toEqual({ kind: "connection" });
+    expect(parsePick("section:nope")).toBeNull();
     expect(parsePick("interval:3000")).toBeNull();
     expect(parsePick("block:nope")).toBeNull();
   });

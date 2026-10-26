@@ -8,7 +8,8 @@
  * names only.
  */
 import os from "node:os";
-import type { SystemInfo, SystemSnapshot } from "@tavora/sdk/protocol";
+import type { SystemConnection, SystemInfo, SystemSnapshot } from "@tavora/sdk/protocol";
+import type { ConnectionSource } from "./connection";
 import { isEmptyWatch, percent, type WatchBlocks, type WatchRequest } from "./system-info-parse";
 
 /** Which Windows counters to read in one go: each is its own query, so a part nobody needs costs nothing. */
@@ -67,6 +68,8 @@ export interface TavoraUsage {
 export interface SystemListener {
   snapshot(snapshot: SystemSnapshot): void;
   drivesChanged(): void;
+  /** The connection went down, changed kind or came back (connection.ts); only for a panel that watches it. */
+  connectionChanged?(connection: SystemConnection): void;
 }
 
 /** One panel's hold on the monitor. */
@@ -82,6 +85,8 @@ export interface SystemSubscription {
 export interface SystemMonitorOptions {
   probe: SystemProbe;
   tavora: () => TavoraUsage;
+  /** The connection watcher (connection.ts), which runs on its own; panels only read what it found. */
+  connection?: ConnectionSource;
   /** For tests. */
   now?: () => number;
   /** For problems; the monitor never throws out of a timer. */
@@ -149,6 +154,7 @@ const sameParts = (a: ProbeParts, b: ProbeParts): boolean => (Object.keys(a) as 
 export class SystemMonitor {
   private readonly probe: SystemProbe;
   private readonly tavora: () => TavoraUsage;
+  private readonly connection: ConnectionSource | undefined;
   private readonly now: () => number;
   private readonly log: (message: string, error: unknown) => void;
   private readonly subscriptions = new Set<Subscription>();
@@ -163,6 +169,13 @@ export class SystemMonitor {
   constructor(options: SystemMonitorOptions) {
     this.probe = options.probe;
     this.tavora = options.tavora;
+    this.connection = options.connection;
+    // The watcher runs whether or not a panel is shown; only panels that are shown and watch it are told.
+    this.connection?.onChange((reading) => {
+      for (const subscription of this.active()) {
+        if (subscription.request?.blocks.connection) this.deliver(subscription, () => subscription.listener.connectionChanged?.(reading));
+      }
+    });
     this.now = options.now ?? Date.now;
     this.log = options.log ?? (() => undefined);
   }
@@ -428,6 +441,7 @@ export class SystemMonitor {
       snapshot.ram = { usedBytes: Math.max(0, totalBytes - os.freemem()), totalBytes };
     }
     if (blocks.drives.length > 0) snapshot.drives = blocks.drives.map((id) => this.driveReading(id, sample));
+    if (blocks.connection && this.connection) snapshot.connection = this.connection.read();
     if (blocks.tavora && tavora) snapshot.tavora = { cpu: percent(tavora.cpu), memoryBytes: Math.max(0, Math.round(tavora.memoryBytes)) };
     return snapshot;
   }

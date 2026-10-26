@@ -20,6 +20,8 @@ import {
   type NetworkResponse,
   type GameOverlayResult,
   type OverlayLinkResult,
+  type SystemConnectionLog,
+  type SystemConnectionSettings,
   type SystemApps,
   type SystemInfo,
   type MediaAction,
@@ -40,7 +42,7 @@ import { checkMenu, type CheckedMenu } from "./module-menu";
 import {checkTooltip,checkTooltipAnchor,tooltipId} from "./tooltip-content";
 import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
 import { checkPanelContent } from "./panel-content";
-import { parseWatch, type WatchRequest } from "./system-info-parse";
+import { parseConnectionSettings, parseWatch, type ConnectionSettingsChange, type WatchRequest } from "./system-info-parse";
 import { parseControlParams, parseWatchParams } from "./media-parse";
 import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
 
@@ -94,7 +96,17 @@ export interface BridgeContext {
    * gets the request already checked (system-info-parse.ts); it replaces what this panel watched before. `apps`
    * refuses every module but Tavora's own System Monitor.
    */
-  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; watch(request: WatchRequest): void; apps(): Promise<SystemApps> };
+  systemInfo: {
+    info(): SystemInfo | Promise<SystemInfo>;
+    watch(request: WatchRequest): void;
+    /** The connection watcher's log, settings and the change of settings (connection.ts); the change comes already checked. */
+    connectionLog(): SystemConnectionLog;
+    connectionSettings(): SystemConnectionSettings;
+    /** These two change something for the whole PC: only for the official System Monitor, and right after a click or key press. */
+    clearConnectionLog(): void | Promise<void>;
+    setConnectionSettings(change: ConnectionSettingsChange): SystemConnectionSettings | Promise<SystemConnectionSettings>;
+    apps(): Promise<SystemApps>;
+  };
   /**
    * The media connector (media.ts) for this panel; only reached with the `media` capability. `watch(false)` answers
    * null. `control` throws PERMISSION_DENIED unless the panel just got a click or key press, or one of the module's
@@ -326,6 +338,16 @@ const handlers = new Map<string, Handler>([
       needs(s, "systemInfo", "systemInfo.watch");
       s.context.systemInfo.watch(parseWatch(params));
       return null;
+    },
+  ],
+  ["systemInfo.connectionLog", (s, params) => (needs(s, "systemInfo", "systemInfo.connectionLog"), noParams(params), s.context.systemInfo.connectionLog())],
+  ["systemInfo.clearConnectionLog", async (s, params) => (needs(s, "systemInfo", "systemInfo.clearConnectionLog"), noParams(params), await s.context.systemInfo.clearConnectionLog(), null)],
+  ["systemInfo.connectionSettings", (s, params) => (needs(s, "systemInfo", "systemInfo.connectionSettings"), noParams(params), s.context.systemInfo.connectionSettings())],
+  [
+    "systemInfo.setConnectionSettings",
+    async (s, params) => {
+      needs(s, "systemInfo", "systemInfo.setConnectionSettings");
+      return await s.context.systemInfo.setConnectionSettings(parseConnectionSettings(params));
     },
   ],
   ["systemInfo.apps", (s, params) => (needs(s, "systemInfo", "systemInfo.apps"), noParams(params), s.context.systemInfo.apps())],

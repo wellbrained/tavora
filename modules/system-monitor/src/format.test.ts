@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { degrees, driveTone, megahertz, memory, num, percent, size, speed, temperatureTone, usedPercent, watts } from "./format";
+import { clock, degrees, driveTone, dropsToday, duration, lossPercent, lossTone, mbit, megahertz, memory, num, percent, pingMs, pingTone, size, speed, temperatureTone, usedPercent, watts } from "./format";
 
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
@@ -89,5 +89,39 @@ describe("power and clock", () => {
     expect(watts(309.6, "de")).toBe("310 W");
     expect(watts(0.4)).toBe("0 W");
     expect(megahertz(1905.2)).toBe("1905 MHz");
+  });
+});
+
+describe("connection numbers", () => {
+  it("writes pings in whole milliseconds and turns yellow from 100", () => {
+    expect(pingMs(14.4)).toBe("14");
+    expect(pingMs(0.2)).toBe("<1");
+    expect(pingTone(99)).toBe("ok");
+    expect(pingTone(100)).toBe("warning");
+    expect(pingTone(null)).toBe("ok");
+  });
+  it("writes the loss and the speed, and turns yellow from 2 % lost", () => {
+    expect(lossPercent(0)).toBe("0");
+    expect(lossPercent(2.5, "de")).toBe("2,5");
+    expect(lossPercent(40)).toBe("40");
+    expect(lossTone(1.9)).toBe("ok");
+    expect(lossTone(2)).toBe("warning");
+    expect(mbit(0)).toBe("0");
+    expect(mbit(1.46)).toBe("1.5");
+    expect(mbit(94.3)).toBe("94");
+  });
+  it("says how long a drop lasted", () => {
+    expect(duration(400)).toBe("0 s");
+    expect(duration(40_000)).toBe("40 s");
+    expect(duration(3 * 60_000)).toBe("3 min");
+    expect(duration(65 * 60_000)).toBe("1 h 5 min");
+    expect(duration(2 * 3600_000)).toBe("2 h");
+  });
+  it("counts the drops of today", () => {
+    const now = new Date(2026, 9, 25, 15, 0).getTime();
+    const at = (day: number, hour: number) => ({ start: new Date(2026, 9, day, hour, 0).getTime() });
+    expect(dropsToday([at(24, 23), at(25, 0), at(25, 14)], now)).toBe(2);
+    expect(dropsToday([], now)).toBe(0);
+    expect(clock(new Date(2026, 9, 25, 14, 5).getTime(), "en-GB")).toBe("14:05");
   });
 });

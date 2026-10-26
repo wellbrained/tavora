@@ -3,9 +3,12 @@
  * (system-info-worker.ts), and this is its side in the main process. Every look at the PC is a call into Windows
  * that can wait: a drive that has gone to sleep wakes up first, and Windows' counters take a while the first time.
  * In the worker such a wait holds up only the readings, never Tavora. The worker starts with the first panel that
- * asks and ends a minute after the last one stopped watching, so with no panel it costs nothing.
+ * asks and ends a minute after the last one stopped watching, so with no panel it costs nothing. The connection
+ * watcher (connection.ts) stays in the main process: its pings already run off the main thread, and it keeps
+ * watching while no panel is shown.
  */
 import type { SystemApps, SystemInfo, SystemSnapshot } from "@tavora/sdk/protocol";
+import type { ConnectionSource } from "./connection";
 import type { SystemListener, SystemSubscription, TavoraUsage } from "./system-info";
 import { isEmptyWatch, percent, type WatchRequest } from "./system-info-parse";
 
@@ -42,6 +45,8 @@ export interface SystemMonitorThreadOptions {
   /** Starts the worker. */
   start: () => WorkerLike;
   tavora: () => TavoraUsage;
+  /** The connection watcher; panels only read what it found. */
+  connection?: ConnectionSource;
   log?: (message: string, error: unknown) => void;
 }
 
@@ -66,6 +71,12 @@ export class SystemMonitorThread {
 
   constructor(options: SystemMonitorThreadOptions) {
     this.options = options;
+    // Only panels that are shown and watch the connection are told.
+    options.connection?.onChange((reading) => {
+      for (const held of this.held.values()) {
+        if (!held.suspended && held.request?.blocks.connection) this.deliver(() => held.listener.connectionChanged?.(reading));
+      }
+    });
   }
 
   /** What this PC is, read in the worker. */
@@ -166,7 +177,7 @@ export class SystemMonitorThread {
       case "snapshot": {
         const held = this.held.get(message.sub);
         if (!held) return;
-        this.deliver(() => held.listener.snapshot(this.withTavora(held, message.snapshot)));
+        this.deliver(() => held.listener.snapshot(this.withMain(held, message.snapshot)));
         return;
       }
       case "drivesChanged": {
@@ -180,7 +191,13 @@ export class SystemMonitorThread {
     }
   }
 
-  /** Tavora's own use is known only here (app.getAppMetrics), so it is filled in on the way. */
+  /** Tavora's own use (app.getAppMetrics) and the connection are known only here, so they are filled in on the way. */
+  private withMain(held: Held, snapshot: SystemSnapshot): SystemSnapshot {
+    const connection = this.options.connection;
+    if (held.request?.blocks.connection && connection) snapshot = { ...snapshot, connection: connection.read() };
+    return this.withTavora(held, snapshot);
+  }
+
   private withTavora(held: Held, snapshot: SystemSnapshot): SystemSnapshot {
     if (!held.request?.blocks.tavora) return snapshot;
     try {

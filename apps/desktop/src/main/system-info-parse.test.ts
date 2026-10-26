@@ -16,7 +16,7 @@ const refused = (params: unknown) => {
 describe("parseWatch", () => {
   it("fills in every part and drops repeated drives", () => {
     expect(parseWatch({ blocks: { cpu: true, drives: ["C:", "D:", "C:"] }, intervalMs: 2000 })).toEqual({
-      blocks: { cpu: true, gpu: false, ram: false, drives: ["C:", "D:"], tavora: false },
+      blocks: { cpu: true, gpu: false, ram: false, drives: ["C:", "D:"], tavora: false, connection: false },
       intervalMs: 2000,
     });
   });

@@ -3,7 +3,9 @@
  * Windows' counter names into numbers per graphics card. Nothing here touches the PC.
  */
 import { SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, type SystemInterval } from "@tavora/sdk/protocol";
+import { isPrivateHost } from "./browser-url";
 import { HostError } from "./errors";
+import { isPublicAddress } from "./network";
 
 /** What one panel watches, checked: every part spelled out, drive letters without repeats. */
 export interface WatchBlocks {
@@ -12,6 +14,8 @@ export interface WatchBlocks {
   ram: boolean;
   drives: string[];
   tavora: boolean;
+  /** The connection watcher's readings (connection.ts). */
+  connection: boolean;
 }
 
 export interface WatchRequest {
@@ -19,12 +23,12 @@ export interface WatchRequest {
   intervalMs: SystemInterval;
 }
 
-const BLOCK_KEYS = new Set(["cpu", "gpu", "ram", "drives", "tavora"]);
+const BLOCK_KEYS = new Set(["cpu", "gpu", "ram", "drives", "tavora", "connection"]);
 const DRIVE_ID = /^[A-Z]:$/;
 
 /** Whether the watch asks for nothing, which stops it. */
 export function isEmptyWatch(blocks: WatchBlocks): boolean {
-  return !blocks.cpu && !blocks.gpu && !blocks.ram && !blocks.tavora && blocks.drives.length === 0;
+  return !blocks.cpu && !blocks.gpu && !blocks.ram && !blocks.tavora && !blocks.connection && blocks.drives.length === 0;
 }
 
 /** Checks the params of systemInfo.watch strictly: unknown keys, wrong types and intervals Tavora doesn't offer are refused. */
@@ -40,7 +44,7 @@ export function parseWatch(params: unknown): WatchRequest {
   }
   const given = record.blocks;
   if (typeof given !== "object" || given === null || Array.isArray(given)) throw new HostError("INVALID_PARAMS", "params.blocks must be an object");
-  const blocks: WatchBlocks = { cpu: false, gpu: false, ram: false, drives: [], tavora: false };
+  const blocks: WatchBlocks = { cpu: false, gpu: false, ram: false, drives: [], tavora: false, connection: false };
   for (const [key, value] of Object.entries(given as Record<string, unknown>)) {
     if (!BLOCK_KEYS.has(key)) throw new HostError("INVALID_PARAMS", `params.blocks.${key} is not known`);
     if (key === "drives") {
@@ -50,7 +54,7 @@ export function parseWatch(params: unknown): WatchRequest {
       blocks.drives = [...new Set(value as string[])];
     } else {
       if (typeof value !== "boolean") throw new HostError("INVALID_PARAMS", `params.blocks.${key} must be true or false`);
-      blocks[key as "cpu" | "gpu" | "ram" | "tavora"] = value;
+      blocks[key as "cpu" | "gpu" | "ram" | "tavora" | "connection"] = value;
     }
   }
   return { blocks, intervalMs: intervalMs as SystemInterval };
@@ -118,4 +122,60 @@ export function coresInOrder(items: Iterable<{ name: string; value: number }>): 
   }
   cores.sort((a, b) => a.group - b.group || a.index - b.index);
   return cores.map((core) => core.value);
+}
+
+const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+const HOST_LABEL = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/** The four numbers of an IPv4 address such as "1.1.1.1", or null when the text is none. */
+export function parseIpv4(text: string): [number, number, number, number] | null {
+  const match = IPV4.exec(text);
+  if (!match) return null;
+  const parts = match.slice(1).map(Number);
+  return parts.every((part) => part <= 255) ? (parts as [number, number, number, number]) : null;
+}
+
+/**
+ * Checks a ping address: a public IPv4 address or a host name such as "example.com". No scheme, port, path or spaces;
+ * IPv6 is not offered yet. Nothing on this PC or the local network: no private, loopback, link-local or reserved
+ * address, no name without a dot, no local ending such as ".lan" and no router name such as "fritz.box". Returns it in
+ * lower case. A name is judged again after it is looked up (connection.ts).
+ */
+export function parseConnectionTarget(value: unknown): string {
+  if (typeof value !== "string") throw new HostError("INVALID_PARAMS", "params.target must be an IP address or a name");
+  const target = value.trim().toLowerCase().replace(/\.$/, "");
+  const ip = parseIpv4(target);
+  if (ip) {
+    if (!isPublicAddress(target)) throw new HostError("INVALID_PARAMS", "params.target must be a public address, not one on this PC or the local network");
+    return target;
+  }
+  if (isPrivateHost(target)) throw new HostError("INVALID_PARAMS", "params.target must be a public name, not one on this PC or the local network");
+  const labels = target.split(".");
+  // All digits and dots is a broken IP address, not a name.
+  if (target.length === 0 || target.length > 253 || /^[\d.]+$/.test(target) || !labels.every((label) => HOST_LABEL.test(label))) {
+    throw new HostError("INVALID_PARAMS", "params.target must be an IP address or a name such as example.com");
+  }
+  return target;
+}
+
+/** What the player may change about the watcher; every part is optional. */
+export interface ConnectionSettingsChange {
+  enabled?: boolean;
+  target?: string;
+}
+
+/** Checks the params of systemInfo.setConnectionSettings strictly. */
+export function parseConnectionSettings(params: unknown): ConnectionSettingsChange {
+  if (typeof params !== "object" || params === null || Array.isArray(params)) throw new HostError("INVALID_PARAMS", "params must be an object");
+  const record = params as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    if (key !== "enabled" && key !== "target") throw new HostError("INVALID_PARAMS", `params.${key} is not known`);
+  }
+  const change: ConnectionSettingsChange = {};
+  if (record.enabled !== undefined) {
+    if (typeof record.enabled !== "boolean") throw new HostError("INVALID_PARAMS", "params.enabled must be true or false");
+    change.enabled = record.enabled;
+  }
+  if (record.target !== undefined) change.target = parseConnectionTarget(record.target);
+  return change;
 }
