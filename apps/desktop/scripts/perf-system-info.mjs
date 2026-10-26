@@ -3,7 +3,12 @@
 //
 //   pnpm perf:system-info                         one second, 60 seconds
 //   pnpm perf:system-info --interval 5000 --seconds 120
-//   pnpm perf:system-info --blocks gpu --seconds 30    only some parts: cpu,gpu,ram,drives,tavora (default all)
+//   pnpm perf:system-info --blocks gpu --seconds 30    only some parts: cpu,gpu,ram,drives,tavora,connection (default all)
+//   pnpm perf:system-info --blocks watcher --seconds 60   only the connection watcher, as when no panel is shown
+//
+// "connection" and "watcher" run the connection watcher (src/main/connection.ts) with the real pings: two echoes every 5
+// seconds, the route, the adapter counters and Windows' online hint. It prints the time its look takes on the main thread
+// (the part before it waits for the pings) and how long the pings took to answer.
 //
 // It prints the time of one look at the PC (average, 95th percentile, worst), how much of the whole PC this process
 // used (CPU time over wall time over logical processors), and how much memory grew. The budget is 1 % of the PC on
@@ -23,10 +28,10 @@ function option(name, fallback) {
 }
 const intervalMs = option("interval", 1000);
 const seconds = option("seconds", 60);
-const blockNames = process.argv.includes("--blocks") ? process.argv[process.argv.indexOf("--blocks") + 1].split(",").map((name) => name.trim()).filter(Boolean) : ["cpu", "gpu", "ram", "drives", "tavora"];
-const unknownBlocks = blockNames.filter((name) => !["cpu", "gpu", "ram", "drives", "tavora"].includes(name));
+const blockNames = process.argv.includes("--blocks") ? process.argv[process.argv.indexOf("--blocks") + 1].split(",").map((name) => name.trim()).filter(Boolean) : ["cpu", "gpu", "ram", "drives", "tavora", "connection"];
+const unknownBlocks = blockNames.filter((name) => !["cpu", "gpu", "ram", "drives", "tavora", "connection", "watcher"].includes(name));
 if (unknownBlocks.length) {
-  console.error(`Unknown block: ${unknownBlocks.join(", ")} (use cpu, gpu, ram, drives, tavora)`);
+  console.error(`Unknown block: ${unknownBlocks.join(", ")} (use cpu, gpu, ram, drives, tavora, connection, watcher)`);
   process.exit(1);
 }
 if (process.platform !== "win32") {
@@ -38,7 +43,7 @@ if (process.platform !== "win32") {
 const outfile = path.join(root, "out", "perf-system-info.cjs");
 await build({
   stdin: {
-    contents: 'export * from "./src/main/system-info"; export * from "./src/main/system-info-windows"; export * from "./src/main/system-info-parse";',
+    contents: 'export * from "./src/main/system-info"; export * from "./src/main/system-info-windows"; export * from "./src/main/system-info-parse"; export * from "./src/main/connection"; export * from "./src/main/connection-windows";',
     resolveDir: root,
     loader: "ts",
   },
@@ -51,22 +56,51 @@ await build({
   outfile,
   logLevel: "warning",
 });
-const { SystemMonitor, windowsSystemProbe, parseWatch } = createRequire(import.meta.url)(outfile);
+const { SystemMonitor, windowsSystemProbe, parseWatch, ConnectionWatcher, DEFAULT_STORED, windowsConnectionProbe } = createRequire(import.meta.url)(outfile);
 
 const probe = windowsSystemProbe();
 // One look is one run of the monitor's timer; the regular timer is timed from outside.
 const looks = [];
+const connectionLooks = [];
+let bucket = looks;
 const realSetInterval = globalThis.setInterval;
-globalThis.setInterval = (callback, ms, ...args) =>
-  realSetInterval(() => {
+globalThis.setInterval = (callback, ms, ...args) => {
+  const into = bucket;
+  return realSetInterval(() => {
     const started = performance.now();
     callback(...args);
-    looks.push(performance.now() - started);
+    into.push(performance.now() - started);
   }, ms, ...args);
+};
 let lastCpu = process.cpuUsage();
 let lastAt = performance.now();
+// The connection watcher with the real pings; its own timer is timed apart from the monitor's.
+const wantsWatcher = blockNames.includes("connection") || blockNames.includes("watcher");
+const pingTimes = [];
+let routerFound = true;
+let watcher = null;
+if (wantsWatcher) {
+  const real = windowsConnectionProbe();
+  const timed = {
+    local: () => real.local(),
+    ping: async (channel, address, timeoutMs) => {
+      const started = performance.now();
+      const answer = await real.ping(channel, address, timeoutMs);
+      pingTimes.push(performance.now() - started);
+      return answer;
+    },
+    resolve: (name) => real.resolve(name),
+    close: () => real.close(),
+  };
+  const stored = { ...DEFAULT_STORED, outages: [] };
+  watcher = new ConnectionWatcher({ probe: timed, store: { save: () => undefined, saveNow: () => undefined }, initial: stored, log: (message, error) => console.warn(message, error) });
+  bucket = connectionLooks;
+  watcher.setActive(true);
+  bucket = looks;
+}
 const monitor = new SystemMonitor({
   probe,
+  connection: watcher ?? undefined,
   tavora: () => {
     const used = process.cpuUsage(lastCpu);
     const now = performance.now();
@@ -104,8 +138,10 @@ const memoryTimer = realSetInterval(() => (rssMax = Math.max(rssMax, process.mem
 
 const cpuBefore = process.cpuUsage();
 const startedWatching = performance.now();
-subscription.watch(parseWatch({
+// "watcher" alone is a PC with no panel shown: the watcher runs, nothing watches.
+if (!blockNames.every((name) => name === "watcher")) subscription.watch(parseWatch({
     blocks: {
+      connection: blockNames.includes("connection"),
       cpu: blockNames.includes("cpu"),
       gpu: blockNames.includes("gpu"),
       ram: blockNames.includes("ram"),
@@ -137,6 +173,15 @@ console.log(`One look: average ${average.toFixed(2)} ms, 95th percentile ${perce
 console.log(`CPU: ${cpuPercent.toFixed(3)} % of the whole PC (${((cpuUsed.user + cpuUsed.system) / 1000).toFixed(0)} ms of CPU in ${(wall / 1000).toFixed(1)} s, ${os.cpus().length} logical processors)`);
 console.log(`CPU after the first look: ${steadyPercent.toFixed(3)} % of the whole PC (${((steadyUsed.user + steadyUsed.system) / 1000).toFixed(0)} ms of CPU in ${(steadyWall / 1000).toFixed(1)} s)`);
 console.log(`Memory: RSS ${mb(rssBefore)} MB before, ${mb(rssAfter)} MB after (growth ${mb(rssAfter - rssBefore)} MB), highest ${mb(rssMax)} MB`);
+if (watcher) {
+  const sync = [...connectionLooks].sort((a, b) => a - b);
+  const syncAverage = sync.reduce((sum, ms) => sum + ms, 0) / Math.max(1, sync.length);
+  const pings = [...pingTimes].sort((a, b) => a - b);
+  console.log(`Connection look (main thread, before waiting for the pings): ${sync.length} looks, average ${syncAverage.toFixed(3)} ms, worst ${(sync.at(-1) ?? 0).toFixed(3)} ms`);
+  console.log(`Pings answered after: average ${(pings.reduce((sum, ms) => sum + ms, 0) / Math.max(1, pings.length)).toFixed(1)} ms, worst ${(pings.at(-1) ?? 0).toFixed(1)} ms (${pings.length} pings, on koffi's worker threads)`);
+  console.log(`Connection: ${JSON.stringify(watcher.read())}`);
+  watcher.dispose();
+}
 console.log(`Stopped: ${monitor.running ? "STILL RUNNING" : "nothing running"}`);
 if (lastSnapshot) console.log(`Last snapshot: cpu ${lastSnapshot.cpu?.usage} %, ${lastSnapshot.cpu?.cores.length} cores, gpus ${JSON.stringify(lastSnapshot.gpus)}`);
 process.exit(0);

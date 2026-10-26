@@ -55,7 +55,7 @@ Values you store must be JSON. Type parameters such as `get<number>()` are not c
 | `tavora.network.fetch(url, init)` | A web request to a host listed in `permissions.network`, once the player granted it. See [Network](https://docs.mytavora.app/reference/protocol#network). |
 | `tavora.network.readPage(url)` | Capture a public page in an isolated temporary browser, using the same grants. No player sign-ins or module scripts; Tavora 0.19.3+. |
 | `tavora.connectors.aiUsage` | The usage of the player's Claude and Codex accounts, with the `ai-usage` connector. |
-| `tavora.connectors.systemInfo` | The PC's hardware and how busy it is, with the `system-info` connector: `info()`, `watch(options)`, `onSnapshot`, `onDrivesChange`. |
+| `tavora.connectors.systemInfo` | The PC's hardware and how busy it is, with the `system-info` connector: `info()`, `watch(options)`, `onSnapshot`, `onDrivesChange`, and for the connection `connectionLog()`, `clearConnectionLog()`, `connectionSettings()`, `setConnectionSettings(settings)`, `onConnectionChange`. |
 | `tavora.connectors.media` | What plays on the PC, with the `media` connector: `watch()`, `unwatch()`, `onChange`, `control(session, action)`. |
 | `tavora.connectors.discord` | The Discord app on this PC through Tavora's Discord sign-in, with the `discord` connector: voice channels, mute and deafen, voice events. |
 

@@ -135,6 +135,8 @@ import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
 import { AiUsageConnector } from "./ai-usage";
+import { ConnectionFile, ConnectionWatcher, SYSTEM_MONITOR_ID } from "./connection";
+import { connectionProbe } from "./connection-windows";
 import { SystemMonitorThread } from "./system-info-thread";
 import { MediaConnector } from "./media";
 import { helperPath, mediaDeps } from "./media-windows";
@@ -346,15 +348,9 @@ export class Host {
   /** The AI Usage connector: the AI accounts, read for modules granted it. */
   private readonly aiUsage: AiUsageConnector;
   /** The System info connector: this PC's hardware and usage, read in a worker thread only while a shown panel of a granted module watches. */
-  private readonly systemInfo = new SystemMonitorThread({
-    start: () => new Worker(path.join(__dirname, "system-info-worker.cjs")),
-    // Electron's CPU figure is already a share of the whole PC; its memory is in kilobytes.
-    tavora: () => {
-      const metrics = app.getAppMetrics();
-      return { cpu: metrics.reduce((sum, item) => sum + item.cpu.percentCPUUsage, 0), memoryBytes: metrics.reduce((sum, item) => sum + item.memory.workingSetSize, 0) * 1024 };
-    },
-    log: (message, error) => console.warn(`[tavora] ${message}`, error),
-  });
+  private systemInfo!: SystemMonitorThread;
+  /** The connection watcher (connection.ts): pings the router and one internet address while System Monitor is in a game or workspace, and keeps the log of drops. */
+  private connection!: ConnectionWatcher;
   /** The Media connector: what plays on this PC, read by Tavora's media helper only while a panel of a granted module watches. */
   private readonly media = new MediaConnector(
     mediaDeps(helperPath(app.isPackaged, process.resourcesPath, path.resolve(__dirname, "../../../..")), (message, error) =>
@@ -502,6 +498,7 @@ export class Host {
       autoUpdateModules: () => this.library.autoUpdateModules,
       firstKey: (key) => this.safetyLists.firstKey(key),
       panels: { reload: (moduleId) => this.reloadModuleViews(moduleId), close: (moduleId) => this.removeModulePanels(moduleId) },
+      grantsChanged: () => this.syncConnection(),
       removed: (owner, moduleId) => {
         this.gameOverlays.forgetModule(moduleId, owner);
         this.previews.closeModule(moduleId, owner);
@@ -647,6 +644,19 @@ export class Host {
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
     host.moduleData = await listModuleData(userData, host.files.root());
     host.grants = await GrantStore.load(userData);
+    const connectionFile = new ConnectionFile(path.join(userData, "connection.json"));
+    host.connection = new ConnectionWatcher({ probe: connectionProbe(), store: connectionFile, initial: await connectionFile.load(), log: (message, error) => console.warn(`[tavora] ${message}`, error) });
+    host.systemInfo = new SystemMonitorThread({
+      start: () => new Worker(path.join(__dirname, "system-info-worker.cjs")),
+      connection: host.connection,
+      // Electron's CPU figure is already a share of the whole PC; its memory is in kilobytes.
+      tavora: () => {
+        const metrics = app.getAppMetrics();
+        return { cpu: metrics.reduce((sum, item) => sum + item.cpu.percentCPUUsage, 0), memoryBytes: metrics.reduce((sum, item) => sum + item.memory.workingSetSize, 0) * 1024 };
+      },
+      log: (message, error) => console.warn(`[tavora] ${message}`, error),
+    });
+    host.syncConnection();
     host.streaming = await Host.streamingService(host);
     host.gameOverlays = await Host.gameOverlayService(host);
     host.previews = Host.previewService(host);
@@ -1664,6 +1674,7 @@ export class Host {
       this.browsersByContents.clear();
       this.discord.dispose();
       this.systemInfo.dispose();
+      this.connection.dispose();
       this.media.dispose();
       this.gameWatcher.stop();
       this.copySync.dispose();
@@ -3125,6 +3136,7 @@ export class Host {
       aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
       discord: this.discord,
       systemInfo: this.systemInfo,
+      connection: this.connection,
       media: this.media,
       overlay: {
         ...this.streaming.overlayFor(module, game.id),
@@ -3931,10 +3943,21 @@ export class Host {
     this.statePush = undefined;
     // Hotkeys follow the game shown now and its panels, which most changes that push the state can move.
     this.streaming?.sync();
+    this.syncConnection();
     if (!this.window.isDestroyed()) this.window.webContents.send("host:state", this.viewState());
   }
 
   private statePush: ReturnType<typeof setImmediate> | undefined;
+
+  /**
+   * The connection watcher runs while the System Monitor module is in any game or workspace and the player has granted
+   * it System info, whether or not a panel is shown, so drops are logged. Asked after every change of panels or grants.
+   */
+  private syncConnection(): void {
+    if (!this.connection) return;
+    const present = this.workspaces.gamesUsing(SYSTEM_MONITOR_ID).length > 0;
+    this.connection.setActive(process.platform === "win32" && present && this.connectorsOf(SYSTEM_MONITOR_ID).has("system-info"));
+  }
 
   /** Pushes the state once for a burst of changes, such as every panel of a game that just opened loading at once. */
   private pushStateSoon(): void {

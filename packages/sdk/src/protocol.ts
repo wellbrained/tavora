@@ -264,6 +264,8 @@ export interface SystemWatchBlocks {
   ram?: boolean;
   /** Drive letters with a colon ("C:"), at most 26. */
   drives?: string[];
+  /** The internet connection: pings, packet loss and speed (SystemConnection). Tavora 0.21.22 and newer. */
+  connection?: boolean;
   /** Tavora's own CPU and memory use. */
   tavora?: boolean;
 }
@@ -324,6 +326,8 @@ export interface SystemSnapshot {
   }[];
   /** Tavora's own use: `cpu` as a share of the whole PC, `memoryBytes` in working set. */
   tavora?: { cpu: number; memoryBytes: number };
+  /** The connection as of its last check (every 5 seconds), when the panel asked for it. Tavora 0.21.22 and newer. */
+  connection?: SystemConnection;
 }
 
 /** One app running on this PC: its processes taken together under one name (systemInfo.apps). */
@@ -391,6 +395,70 @@ export interface MediaState {
   state: "starting" | "ready" | "unavailable" | "failed";
   sessions: MediaSession[];
 }
+
+/**
+ * What kind of trouble a drop of the connection was.
+ * offline: Windows says there is no network. no-router: the router stopped answering (3 pings in a row) and the
+ * internet is down too. no-internet: 3 pings in a row to the internet address were lost, and the router answers, is
+ * not found or never answers pings.
+ */
+export type SystemOutageKind = "offline" | "no-router" | "no-internet";
+
+/**
+ * How the internet connection is doing, as the system-info connector watches it. Tavora pings the router and one
+ * address on the internet every 5 seconds while a System Monitor panel exists in any game or workspace, whether
+ * or not it is shown, so drops are logged. Nothing but those pings is sent.
+ */
+export interface SystemConnection {
+  /**
+   * online: all is well. offline, no-router and no-internet: a drop is going on (SystemOutageKind; a drop keeps the worst
+   * kind it had). off: the
+   * watcher is switched off (SystemConnectionSettings.enabled) or not running, so there are no readings.
+   */
+  state: "online" | SystemOutageKind | "off";
+  /** The last ping to the router in milliseconds, or null when it was lost or no router was found. */
+  routerMs: number | null;
+  /** The last ping to `target` in milliseconds, or null when it was lost. */
+  internetMs: number | null;
+  /** False when Tavora found no router (no network adapter with a gateway). */
+  routerFound: boolean;
+  /** Pings lost out of the last 100 to the router or to `target`, whichever is worse; 0 to 100 with one decimal. */
+  lossPercent: number;
+  /** Speed of the network adapter in use in megabits per second since the last check (not a speed test), or null before the second check. */
+  downMbit: number | null;
+  upMbit: number | null;
+  /** What is pinged on the internet: an IP address or a name. */
+  target: string;
+  /** When the current drop began (milliseconds since 1970), or null while online. */
+  since: number | null;
+}
+
+/** One drop of the connection in the log. */
+export interface SystemOutage {
+  /** When it began (milliseconds since 1970). */
+  start: number;
+  /** When it ended, or null while it goes on. */
+  end: number | null;
+  kind: SystemOutageKind;
+  /** How long it lasted (so far, if it goes on), in milliseconds. */
+  durationMs: number;
+}
+
+/** The drops of the last 30 days on this PC, the newest first. */
+export interface SystemConnectionLog {
+  outages: SystemOutage[];
+}
+
+/** What the player chose for the watcher. It is the same for every panel and module on this PC. */
+export interface SystemConnectionSettings {
+  /** Whether Tavora watches the connection at all. */
+  enabled: boolean;
+  /** An IP address or a name, such as "1.1.1.1" or "example.com". */
+  target: string;
+}
+
+/** The address pinged unless the player picks another. */
+export const SYSTEM_PING_TARGET = "1.1.1.1";
 
 /**
  * The discord connector's connection to the Discord app on this PC, with Tavora's Discord sign-in.
@@ -589,15 +657,27 @@ export interface Methods {
    * `systemInfo.snapshot` at once, then one every `intervalMs`. A panel that is hidden gets none.
    */
   "systemInfo.watch": { params: { blocks: SystemWatchBlocks; intervalMs: SystemInterval }; result: null };
+  /** The drops of the connection in the last 30 days (capability `systemInfo`). Tavora 0.21.22 and newer. */
+  "systemInfo.connectionLog": { params: undefined; result: SystemConnectionLog };
+  /** Empties the log of drops. Only for Tavora's own System Monitor, right after a click or key press (capability `systemInfo`). Tavora 0.21.22 and newer. */
+  "systemInfo.clearConnectionLog": { params: undefined; result: null };
+  /** Whether the connection is watched and which address is pinged (capability `systemInfo`). Tavora 0.21.22 and newer. */
+  "systemInfo.connectionSettings": { params: undefined; result: SystemConnectionSettings };
+  /**
+   * Changes what is given and leaves the rest. Only for Tavora's own System Monitor, right after a click or key press, and
+   * once every 5 seconds (capability `systemInfo`). A `target` that is not a public IPv4 address or a public name is
+   * `INVALID_PARAMS`. Tavora 0.21.22 and newer.
+   */
+  "systemInfo.setConnectionSettings": { params: Partial<SystemConnectionSettings>; result: SystemConnectionSettings };
   /**
    * The apps running now, with their memory and CPU. Only for Tavora's own System Monitor (capability `systemInfo`);
-   * any other module gets PERMISSION_DENIED. Tavora 0.21.19 and newer.
+   * any other module gets PERMISSION_DENIED. Tavora 0.21.21 and newer.
    */
   "systemInfo.apps": { params: undefined; result: SystemApps };
   /**
    * Starts (`on: true`) or ends this panel's watch of what plays on this PC (capability `media`) and answers what
    * plays now; `media.changed` follows every change while it watches, also while the panel is hidden, so an
-   * overlay can stay current. Ending answers null. Tavora 0.21.16 and newer.
+   * overlay can stay current. Ending answers null. Tavora 0.21.18 and newer.
    */
   "media.watch": { params: { on: boolean }; result: MediaState | null };
   /**
@@ -686,6 +766,11 @@ export interface Events {
   "systemInfo.snapshot": SystemSnapshot;
   /** A drive was plugged in or removed; ask systemInfo.info again. Only with capability `systemInfo`, while the panel watches. */
   "systemInfo.drivesChanged": null;
+  /**
+   * The connection went down, changed kind or came back. Only with capability `systemInfo`, while the panel watches
+   * the `connection` block and is shown. Ask systemInfo.connectionLog again. Tavora 0.21.22 and newer.
+   */
+  "systemInfo.connectionChanged": SystemConnection;
   /** What plays on this PC changed (media.watch). Only with capability `media`, while the panel watches. */
   "media.changed": MediaState;
   /** The player added, renamed or removed an AI account; ask aiUsage.accounts again. Only with capability `aiUsage`. */

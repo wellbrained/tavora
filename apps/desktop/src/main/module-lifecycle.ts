@@ -47,6 +47,8 @@ export interface ModuleLifecycleOptions {
   panels: ModulePanels;
   /** A module was removed from the player's modules folder: whatever Tavora keeps only while it is installed (game overlays) goes. */
   removed?(owner: string, moduleId: string): void;
+  /** What a module is granted changed (granted, taken back, or removed with the module); things that run on a grant look again. */
+  grantsChanged?(): void;
   /** Moves a module's folder to the recycle bin. */
   trash(dir: string): Promise<void>;
   /** Looks for modules again, so `modules()` and `blocked()` say what is on disk now. */
@@ -136,6 +138,7 @@ export class ModuleLifecycle {
     // whatever is installed next under this id is asked again.
     await forgetOwner(this.options.userData, path.basename(module.root));
     await this.options.grants().revoke(module.owner, moduleId);
+    this.options.grantsChanged?.();
     this.updates.forget(moduleId);
     await this.options.reload();
   }
@@ -149,6 +152,7 @@ export class ModuleLifecycle {
     const module = this.options.modules().get(moduleId);
     if (!module || module.builtIn) throw new LibraryError("error.moduleMissing");
     await this.options.grants().grant(module, { network, connectors });
+    this.options.grantsChanged?.();
     this.options.panels.reload(moduleId);
   }
 
@@ -158,6 +162,7 @@ export class ModuleLifecycle {
     if (!module) throw new LibraryError("error.moduleMissing");
     this.options.panels.close(moduleId);
     await this.options.grants().revoke(module.owner, moduleId);
+    this.options.grantsChanged?.();
   }
 
   /** What every install goes by. A module stopped by a block still counts as installed, so a fixed zip is its update. */

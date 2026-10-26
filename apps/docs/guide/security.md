@@ -54,7 +54,7 @@ Connectors are capabilities built for one purpose. The host holds the connection
 
 - **Discord** shows and controls the player's own voice state through the Discord app on the same PC. A module sends only fixed commands with fixed fields, and never sees a token. Joining or leaving a channel, muting and unmuting need a real click in the module's panel. A granted module does see the player's voice channels, servers and who is in them, and the consent dialog says so.
 - **AI Usage** reads usage limits of AI subscriptions signed in on the PC. A module gets account names, plans and readings, never a login, a token or where it is stored. Each account is read at most once a minute for all modules together.
-- **System info** lets a module read this PC's hardware and how busy it is: processor, memory, graphics cards, drives and Tavora's own use, see [System info](#system-info).
+- **System info** lets a module read this PC's hardware and how busy it is: processor, memory, graphics cards, drives and Tavora's own use, and how the connection is doing (pings to the router and one internet address), see [System info](#system-info).
 - **Media** lets a module see what plays on this PC and play, pause or skip it, see [Media](#media).
 - **Stream overlay** shows the module's overlay page in streaming software on the same PC, see [Stream overlays](#stream-overlays).
 
@@ -91,14 +91,28 @@ A module's **patch notes** also show outside its panel, in Settings > Modules. T
 
 ## System info
 
-A module granted the `system-info` connector can read this PC's hardware and how busy it is: processor, memory, graphics cards, drives and Tavora's own use. The consent dialog says so.
+A module granted the `system-info` connector can read this PC's hardware and how busy it is: processor, memory, graphics cards, drives and Tavora's own use, and how its connection is doing. The consent dialog says so. Two things run on their own terms: reading the PC, and watching the connection.
 
-- **Read only while a panel shows it.** Tavora reads the PC only while at least one panel that is shown watches something. A hidden, minimized or covered panel counts for nothing, and with no watching panel there is no timer and no open counter. All panels share one reader, which looks at most once a second.
-- **Windows' own numbers, read in Tavora's process.** The values are the performance counters Task Manager shows, plus the drive list and the names of the graphics cards. For NVIDIA cards, usage, video memory, temperature, clock speed and power come from NVIDIA's own library that ships with the driver (`nvml.dll`), loaded and read inside Tavora's process. Tavora starts no helper program, installs no driver and sends nothing anywhere.
+**Reading the PC**
+
+- **Read only while a panel shows it.** Tavora reads the PC's performance only while at least one panel that is shown watches something. A hidden, minimized or covered panel counts for nothing, and with no watching panel there is no timer and no open counter. All panels share one reader, which looks at most once a second.
+- **Windows' own numbers, read in Tavora's process.** The values are the performance counters Task Manager shows, plus the drive list and the names of the graphics cards. For NVIDIA cards, usage, video memory, temperature, clock speed and power come from NVIDIA's own library that ships with the driver (`nvml.dll`), loaded and read inside Tavora's process. Tavora starts no helper program and installs no driver; none of this is sent anywhere.
 - **Numbers and names only.** A module gets the processor and graphics card names, sizes, percentages and drive letters with their labels. It never gets a file name, a path, a serial number, a user name or what other programs are running.
 - **The list of apps is only for Tavora's own System Monitor.** Its Memory card can show the apps running on the PC with their memory and CPU (`systemInfo.apps`). Tavora answers that only for its own System Monitor, never for another module, with the grant or without. The list holds each program's file name and numbers, never a path, a window title or anything from inside a program. Tavora reads it with one call into Windows that opens no process, so a game and its anti-cheat are never touched, and only while the apps dialog is open and the panel is shown. It can't close or change any program.
 - **Network drives are not asked.** A network drive that doesn't answer could hold Tavora up, so its name and size are left out.
-- **It ends with the panel and with the grant.** Closing the panel ends its watch at once. Taking the connector back removes the module's panels (see Revoking above), and a snapshot is never sent to a module without the grant.
+
+**Watching the connection**
+
+- **It runs without a panel.** While Tavora's own System Monitor is in any game or workspace and the player has granted it System info, Tavora watches the connection, whether or not a panel is shown, so drops are logged. Without the module in a workspace, or without the grant (taking it back stops the watcher at once), or with it switched off, nothing runs. This is the one part of System info that does not wait for a panel.
+- **Two pings every 5 seconds.** Tavora sends one ICMP echo (a ping with 32 bytes of filler) to the router and one to an address on the internet, `1.1.1.1` unless the player picks another. The router is the next hop of Windows' route to the internet, which Tavora reads from the routing table. The pings use Windows' own ping function inside Tavora's process: no `ping.exe`, no helper program, no admin rights. Nothing else is sent, nothing goes to a Tavora server, and no module sees the pings or the router's address.
+- **Name lookups.** When the address is a name, Tavora asks the PC's name server for it, at most every 5 minutes (every 30 seconds while it can't be found), one lookup at a time. The address that comes back must be public; if it is not, Tavora does not ping it.
+- **Only public addresses.** The address is a public IPv4 address or a name with a dot in it. Tavora refuses private, loopback, link-local, shared (CGNAT), documentation, multicast and other reserved addresses, names without a dot, local endings such as `.local`, `.lan` or `.home.arpa`, and router names such as `fritz.box`. Tavora's pings can't be aimed at this PC or the local network except for the router itself.
+- **Only the System Monitor, only after a click.** Any granted module can read the log of drops, the settings and the readings. Changing the settings (watching on or off, the address) and clearing the log are only for Tavora's own System Monitor (publisher `official`, id `tavora.system-monitor`, which other publishers can't take), and each call must come right after a click or key press in its page, one per click. A change can be made once every 5 seconds, and a new address waits for the next normal ping.
+- **The log of drops stays on the PC.** Tavora keeps the start, end and kind of each drop for 30 days in `connection.json` in its data folder, and a module can only read or clear it. The alert is a notice in the panel: no sound, no system notification. The same calls read whether Windows thinks it is online and the byte counters of the network adapter in use, which stay on the PC.
+
+**Ending**
+
+- **The snapshots end with the panel and the grant.** Closing the panel ends its watch at once. Taking the connector back removes the module's panels (see Revoking above) and stops the watcher, and a snapshot or an event is never sent to a module without the grant.
 
 ## Media
 
