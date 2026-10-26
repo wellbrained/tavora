@@ -22,178 +22,24 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.21.32",
     date: "2026-10-26",
-    title: "Your layout, in every game",
+    title: "Your overlays, your layout",
     notes: [
-      "Arrange general overlays in All games, then move individual items in a game or customize its whole layout.",
-      "Follow All games again for one item or the whole game; mode, opacity and capture settings stay shared.",
-      "Reset position and Reset size work on the canvas. Opacity menus keep a still preview instead of flickering.",
-      "Take picture refreshes when Tavora sees your running game's window and explains when it cannot capture yet.",
-      "Changes apply straight away. Done closes the layout window.",
-    ],
-  },
-  {
-    version: "0.21.31",
-    date: "2026-10-26",
-    title: "How much did you download this month?",
-    notes: [
-      "Turn on Traffic in the System Monitor's menu to see your downloads and uploads this week, this month and in the 3 months before.",
-      "The numbers come from Windows, so they also count while Tavora is closed.",
-    ],
-  },
-  {
-    version: "0.21.30",
-    date: "2026-10-26",
-    title: "New icons",
-    notes: [
-      "Clock & Counter and Calculator have their own icons.",
-    ],
-  },
-  {
-    version: "0.21.29",
-    date: "2026-10-26",
-    title: "Arrange your overlays on a canvas",
-    notes: [
-      "New Overlay layout window: open it from Settings > Overlays, a panel's menu or the button on an overlay's frame in your game.",
-      "Move and resize overlays and panels on a canvas shaped like your game, with a soft grid that snaps. Hold Alt to place them freely.",
-      "Add a picture of your game under the grid, taken from the running game or picked from a file. It stays on your PC.",
-      "Overlays and panels now stick to their nearest corner and scale with your game window, so they stay put on wider screens.",
-      "Settings > Overlays keeps the switches. Everything else about your overlays is in the layout now.",
-      "Overlay content now follows the game window's height: bigger at 1440p, smaller at 720p. If an overlay clips its content, make it a bit bigger.",
-    ],
-  },
-  {
-    version: "0.21.28",
-    date: "2026-10-26",
-    title: "Overlays start at the right size",
-    notes: [
-      "An overlay you put over your game starts at the size its module suits.",
-      "Media players in a browser window of their own show the browser's name.",
-    ],
-  },
-  {
-    version: "0.21.27",
-    date: "2026-10-26",
-    title: "Overlays stay when you alt-tab",
-    notes: [
-      "Your game overlays stay on screen when you switch to another window, until you minimize or close the game.",
-      "Turn it off in Settings > Overlays.",
-    ],
-  },
-  {
-    version: "0.21.26",
-    date: "2026-10-26",
-    title: "Tavora starts after a quick close",
-    notes: [
-      "Closing Tavora right after adding a panel no longer stops it from starting next time.",
-    ],
-  },
-  {
-    version: "0.21.25",
-    date: "2026-10-26",
-    title: "Is your connection good for playing?",
-    notes: [
-      "The System Monitor rates your connection: Smooth, Laggy or Unstable, and shows how long it ran without a drop.",
-      "The four connection cards fit in one row, and drops only show once there is one.",
-    ],
-  },
-  {
-    version: "0.21.24",
-    date: "2026-10-26",
-    title: "Discord and AI Usage are separate modules now",
-    notes: [
-      "Tavora comes with just the basics. Add Discord and AI Usage from the catalog if you want them.",
-      "Already using them? Their panels show an Install button, and your settings come along.",
-      "Settings > Integrations shows Discord and AI usage only once you have a module that uses them.",
-    ],
-  },
-  {
-    version: "0.21.23",
-    date: "2026-10-26",
-    title: "Panels in game fit their size",
-    notes: [
-      "A panel you show in your game starts at the size its module suits, not one size for all.",
-    ],
-  },
-  {
-    version: "0.21.22",
-    date: "2026-10-26",
-    title: "Is your connection OK?",
-    notes: [
-      "System Monitor has a new Connection section: online or not, your ping to the router and the internet, lost pings and the speed of your network.",
-      "It lists the drops of your connection from the last 30 days, even when the panel was closed.",
-      "For this, Tavora pings your router and one web address every 5 seconds while System Monitor is in a game. Turn it off in the module's menu.",
-    ],
-  },
-  {
-    version: "0.21.21",
-    date: "2026-10-26",
-    title: "See which apps use your memory",
-    notes: [
-      "The System Monitor's Memory card has a new button at the top right: it lists your apps with their RAM and CPU.",
-      "Search the list and sort it by name, RAM or CPU. Windows' own apps are marked.",
-    ],
-  },
-  {
-    version: "0.21.20",
-    date: "2026-10-26",
-    title: "Tidier Settings",
-    notes: [
-      "Each module in Settings > Modules keeps Update and Patch notes up front; Move data, Report and Remove now live in a ⋯ menu.",
-      "Module icons look the same in every list.",
-      "Keyboard keys look the same everywhere, in search, the game rail and the shortcut dialog.",
-      "Settings search finds the Version row.",
-    ],
-  },
-  {
-    version: "0.21.19",
-    date: "2026-10-26",
-    title: "Module problems in your language",
-    notes: [
-      "Settings > Modules and Settings > Development now explain why a module can't load in your language, in plain words.",
-    ],
-  },
-  {
-    version: "0.21.18",
-    date: "2026-10-26",
-    title: "Media for modules",
-    notes: [
-      "Modules can now show what plays on your PC, like Spotify or a browser tab, and play, pause or skip when you click. Tavora asks you first.",
-      "You can take it back in Settings > Integrations > Media.",
-    ],
-  },
-  {
-    version: "0.21.17",
-    date: "2026-10-26",
-    title: "Tidier Publish screen",
-    notes: [
-      "The unlabeled refresh icon on the Publish screen is gone.",
-    ],
-  },
-  {
-    version: "0.21.16",
-    date: "2026-10-26",
-    title: "Quick game switch",
-    notes: [
-      "Switching to a game without panels no longer shows the loading fire while a panel is up in game.",
-      "Games open about 3 seconds faster: panels draw while the loading cover is up instead of waiting for it.",
-      "No more white flash over the panels when a game opens.",
-      "Panels no longer flash empty when a hint, menu or dialog opens or closes over them.",
-    ],
-  },
-  {
-    version: "0.21.15",
-    date: "2026-10-26",
-    title: "Right version on a module's page",
-    notes: [
-      "A module's page shows the version you have, and the newest one when an update is out.",
-    ],
-  },
-  {
-    version: "0.21.14",
-    date: "2026-10-26",
-    title: "System Monitor without the freeze",
-    notes: [
-      "Adding the System Monitor no longer freezes Tavora for a few seconds, and no longer says \"Can't read your PC\" when a drive is still waking up.",
+      "Arrange overlays and panels in the new Overlay layout window, opened from Settings > Overlays or an item's menu. Move and resize on a grid; hold Alt to place freely.",
+      "Use All games for a shared layout, move one item just for a game, or customize its whole layout. Follow All games again whenever you want; mode, opacity and capture settings stay shared.",
+      "Add a picture of your game under the grid, captured from the running game or picked from a file. It stays on your PC. Take picture explains when it cannot capture yet.",
+      "Overlays start at the size their module suits, stick to the nearest corner and scale with your game window. Their content scales with the window's height; resize an overlay if it clips.",
+      "Game overlays stay visible when you switch windows, until you minimize or close the game. Turn this off in Settings > Overlays.",
+      "Reset position and Reset size work on the canvas. Opacity menus keep a still preview. Changes apply straight away; Done closes the layout window.",
+      "System Monitor shows your apps with RAM and CPU use. Search or sort the list; Windows' own apps are marked.",
+      "The new Connection section shows your connection, ping, lost pings, network speed and drops from the last 30 days. It rates your connection Smooth, Laggy or Unstable and shows how long it stayed up.",
+      "Connection checks ping your router and one web address every 5 seconds while System Monitor is in a game. Turn them off in the module's menu.",
+      "Turn on Traffic in System Monitor's menu to see downloads and uploads this week, this month and the 3 months before. Windows counts them even while Tavora is closed.",
+      "Adding System Monitor no longer freezes Tavora for a few seconds or says it cannot read your PC while a drive wakes up.",
+      "Modules can show what plays on your PC and play, pause or skip after a click. Tavora asks first; take access back in Settings > Integrations > Media. Browser players in their own window show the browser's name.",
+      "Discord and AI Usage are now separate catalog modules. Existing panels offer Install and keep your settings; their integrations appear once you have a module that uses them.",
+      "Games open faster, without white or empty panel flashes. Empty workspaces no longer show the loading fire while a panel is in game. Closing Tavora just after adding a panel no longer stops the next startup.",
+      "Module pages show your installed version and the newest update. Settings explains module problems in your language and keeps less-used module actions in a menu.",
+      "Keyboard keys and module icons look consistent. Settings search finds Version, the Publish screen is tidier, and Clock & Counter and Calculator have their own icons.",
     ],
   },
   {

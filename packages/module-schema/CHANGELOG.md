@@ -2,7 +2,10 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
-## Unreleased
+## 0.1.3
+
+- Connector permissions include `stream-overlay`, `system-info` and `media`, with the matching host-version checks. `permissions.onRequest` lets a module ask for supported access when the player uses it.
+- Overlay pages and manifest `actions` describe stream overlays and host-managed hotkeys. Optional in-game sizes let overlays and panels start at the module's preferred size.
 
 - `inGame` at the top for a module without panel types, the same as a panel type's `inGame`; not together with `panels`.
 - Panel types: `inGame`, whether the player may show the panel in their game (`LAST_TAVORA_WITHOUT_IN_GAME_PANELS`, 0.21.2). The panel appears over the game only while the player holds Tavora's in-game layer open. A manifest with it needs a `minTavora` newer than that, except Tavora's own modules.

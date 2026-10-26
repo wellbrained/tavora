@@ -1,6 +1,6 @@
 {
   "name": "@tavora/module-schema",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Validator and JSON Schema for Tavora module manifests (tavora.module.json).",
   "type": "module",
   "keywords": [
