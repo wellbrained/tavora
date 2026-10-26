@@ -53,6 +53,7 @@ export default defineConfig({
           { text: "Several panels", link: "/guide/panels" },
           { text: "Your publisher key", link: "/guide/publisher-key" },
           { text: "Publishing to the catalog", link: "/guide/publishing" },
+          { text: "What's not allowed", link: "/guide/catalog-rules" },
           { text: "Troubleshooting", link: "/guide/troubleshooting" },
           { text: "Security model", link: "/guide/security" },
         ],

@@ -32,7 +32,7 @@ async function project(manifest: Record<string, unknown> = MANIFEST, { built = t
   return dir;
 }
 
-function publisher(options: { listed?: { version: string; owner: string } | null | "offline"; prefix?: PrefixState; refuse?: PlayerError; noKey?: boolean } = {}) {
+function publisher(options: { listed?: { version: string; owner: string } | null | "offline"; prefix?: PrefixState; refuse?: PlayerError; noKey?: boolean; waits?: boolean } = {}) {
   const { privateKey } = generateKeyPairSync("ed25519");
   const uploads: Buffer[] = [];
   const views: (PublishView | null)[] = [];
@@ -46,7 +46,7 @@ function publisher(options: { listed?: { version: string; owner: string } | null
       upload: async (_key, zip) => {
         if (options.refuse) throw options.refuse;
         uploads.push(zip);
-        return { id: "me.tracker", version: "1.2.3", sha256: createHash("sha256").update(zip).digest("hex") };
+        return { id: "me.tracker", version: "1.2.3", sha256: createHash("sha256").update(zip).digest("hex"), status: options.waits ? "waiting" : "published", reasons: [] };
       },
     },
     listed: async () => {
@@ -84,12 +84,21 @@ describe("ModulePublisher", () => {
 
     await reviewer.publish();
     expect(reviewer.view()).toMatchObject({ status: "published", published: { id: "me.tracker", version: "1.2.3" } });
+    expect(reviewer.view()?.published?.waiting).toBeUndefined();
     expect(uploads).toHaveLength(1);
     expect(uploads[0]!.length).toBe(view.size);
     expect(verifyFiles(readZip(uploads[0]!))).toEqual({ ok: true, owner, signed: true });
 
     reviewer.close();
     expect(reviewer.view()).toBeNull();
+  });
+
+  it("says so when a person at Tavora looks at the upload before it lists", async () => {
+    const dir = await project();
+    const { publisher: reviewer } = publisher({ waits: true });
+    await reviewer.open(dir);
+    await reviewer.publish();
+    expect(reviewer.view()).toMatchObject({ status: "published", published: { id: "me.tracker", version: "1.2.3", waiting: true } });
   });
 
   it("offers the next versions when the catalog has this one, and writes the pick into the project", async () => {

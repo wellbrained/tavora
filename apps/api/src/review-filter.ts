@@ -52,3 +52,33 @@ export function checkReviewText(text: string): FilterResult {
   if (PARTS.some((part) => joined.includes(part))) return "words";
   return "ok";
 }
+
+/**
+ * Adult / 18+ terms (decided 2026-10-26): the catalog has no age check, so a module about them waits for
+ * a person. They are only checked in module texts (checkModuleText), not in reviews. A wrong hit costs
+ * a short wait for review, never a refusal.
+ */
+const ADULT_WORDS = [
+  "porn", "porno", "pornos", "pornhub", "pornographic", "pornography", "hentai", "nsfw", "erotic", "erotica", "nude", "nudes", "nudity", "nudist",
+  "sexcam", "sexcams", "camgirl", "camgirls", "onlyfans", "fetish", "bdsm", "blowjob", "handjob", "cumshot", "orgasm", "milf", "lewd", "lewds",
+  "sex tape", "sex game", "sex games", "sex mod", "sex scene", "sex scenes", "adult content", "adults only", "adult only", "sexual content", "explicit content",
+  "porno", "pornografie", "erotik", "nacktbilder", "nacktfotos", "sexspiel", "sexspiele", "ab 18", "nur fuer erwachsene",
+];
+
+/** "18+", "+18" and the likes, which the letters-only reading above drops. */
+const ADULT_RAW = /(?:^|[^\d.])(?:ab\s?18\b|18\s?\+|\+\s?18\b|18\s?plus\b|xxx+\b|r18\b|r-18\b)/i;
+
+export type ModuleTextResult = "ok" | "words" | "adult";
+
+/**
+ * Whether a module's text (name, descriptions in every language, changelog notes, readme) may list without a
+ * look: the slur list of the reviews, plus the adult terms. Links are fine here, a readme has them.
+ */
+export function checkModuleText(text: string): ModuleTextResult {
+  if (checkReviewText(text.replace(LINK_GLOBAL, " ")) === "words") return "words";
+  const words = ` ${plainWords(text)} `;
+  if (ADULT_WORDS.some((word) => words.includes(` ${word} `)) || ADULT_RAW.test(text)) return "adult";
+  return "ok";
+}
+
+const LINK_GLOBAL = new RegExp(LINK.source, "gi");

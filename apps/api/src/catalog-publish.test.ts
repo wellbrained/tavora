@@ -12,15 +12,18 @@ import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
 import { keyFingerprint } from "./publishers.ts";
 import { createRateLimiter } from "./rate-limit.ts";
+import type { Scanner } from "./virus-scan.ts";
 
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
+/** A virus scanner that finds nothing, so the tests of publishing see only the checks they mean to. */
+const cleanScanner: Scanner = { scan: async () => ({ clean: true }) };
 const roomy = () => createRateLimiter({ limit: 1000, windowMs: 60_000 });
 const rawKey = (key: KeyObject) => createPublicKey(key).export({ format: "der", type: "spki" }).subarray(12);
 /** A catalogue key for the tests, standing in for Tavora's offline one. */
 const catalogue = generateKeyPairSync("ed25519").privateKey;
 
 function moduleZip(key: KeyObject, id = "wellbrained.timer", version = "1.0.0", extra: ZipFile[] = []): Buffer {
-  const manifest = { id, name: "Timer", version, apiVersion: "1", entry: "index.html", games: [], viewport: { minWidth: 200, minHeight: 150 }, permissions: { network: [] } };
+  const manifest = { id, name: id.startsWith("wellbrained.") ? "Timer" : `Timer ${id.split(".")[0]}`, version, apiVersion: "1", entry: "index.html", games: [], viewport: { minWidth: 200, minHeight: 150 }, permissions: { network: [] } };
   const files: ZipFile[] = [{ name: "tavora.module.json", data: Buffer.from(JSON.stringify(manifest)) }, { name: "index.html", data: Buffer.from("<p>timer</p>") }, ...extra];
   return writeZip([...files, signFiles(files, key)]);
 }
@@ -50,6 +53,7 @@ function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string, pr
     rateLimiter: roomy(),
     publishRateLimiter: roomy(),
     publishLimits: limits,
+    scanner: cleanScanner,
     catalogueKey: catalogPublicKey(catalogue),
     accounts: { store, mailer: inbox, now: () => clock.now, prefixRateLimiter },
     ...(maintainerEmail ? { maintainerEmail } : {}),
@@ -58,9 +62,11 @@ function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string, pr
   const signIns = new Map<KeyObject, string>();
   let firstSignIn: string | undefined;
   /** An account with a linked key, signed in. */
-  const developer = (email: string) => {
+  const developer = (email: string, options: { fresh?: boolean } = {}) => {
     const key = generateKeyPairSync("ed25519").privateKey;
     const account = store.createAccount({ email }, clock.now);
+    // Developers with a version approved already (a fresh one has none, so its first module waits).
+    if (!options.fresh) catalog.trustAccount(account.id, new Date(clock.now));
     store.linkKey(account.id, keyFingerprint(rawKey(key)), rawKey(key).toString("base64"), clock.now);
     const { token } = store.createSession(account.id, "windows", clock.now);
     signIns.set(key, token);

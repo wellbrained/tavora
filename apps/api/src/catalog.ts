@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { isGameId, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
-import { MANIFEST_FILE, readZip, verifyFiles, ZIP_LIMITS, ZipError } from "@tavora/pack";
+import { MANIFEST_FILE, readZip, SIGNATURE_FILE, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
 
 /**
@@ -108,6 +108,51 @@ export interface CheckedZip {
   icon: (CatalogScreenshot & { data: Buffer }) | null;
   /** The readme's text, checked to be plain UTF-8 within the limit. */
   readme: string | null;
+  /** Every file of the zip, for the automatic checks (moderation.ts). Never stored. */
+  files: ZipFile[];
+}
+
+/** Why a version waits: which check stopped it, a short text for its developer, and what helps the maintainer judge it. */
+export interface ReviewReason {
+  check: string;
+  text: string;
+  detail?: string;
+}
+
+/** What is kept with a version that waits for review. */
+export interface ReviewInfo {
+  reasons: ReviewReason[];
+  /** The language of the developer's request ("en" or "de"), for the emails that follow. */
+  language: string;
+  /** The publish token's name when it came from CI. */
+  token: string | null;
+}
+
+export type VersionStatus = "listed" | "waiting";
+
+/** A version waiting for review, with what the maintainer needs to judge it. */
+export interface WaitingVersion {
+  sha256: string;
+  id: string;
+  version: string;
+  size: number;
+  owner: string;
+  accountId: string | null;
+  queuedAt: string;
+  manifest: ModuleManifest;
+  notes: string[];
+  readme: string | null;
+  screenshots: CatalogScreenshot[];
+  icon: CatalogScreenshot | null;
+  review: ReviewInfo;
+}
+
+/** The files of a zip that count for telling copies apart: [sha256, size] each. Tiny files and the manifest and signature are left out. */
+export const MIN_COPY_FILE_BYTES = 64;
+export function copyHashes(files: readonly ZipFile[]): [string, number][] {
+  return files
+    .filter((file) => file.name !== MANIFEST_FILE && file.name !== SIGNATURE_FILE && file.data.length >= MIN_COPY_FILE_BYTES)
+    .map((file): [string, number] => [createHash("sha256").update(file.data).digest("hex"), file.data.length]);
 }
 
 /** Checks a module zip the way the app's installer does, and refuses what the catalog does not take. */
@@ -165,7 +210,7 @@ export function checkCatalogZip(bytes: Buffer): CheckedZip {
   const iconData = manifest.icon === undefined ? undefined : file(manifest.icon)?.data;
   const kind = iconData ? iconType(iconData) : null;
   const icon = iconData && kind && manifest.icon!.endsWith(`.${kind}`) ? { sha256: createHash("sha256").update(iconData).digest("hex"), type: kind, size: iconData.length, data: iconData } : null;
-  return { manifest, owner: verified.owner, sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length, notes, screenshots, icon, readme };
+  return { manifest, owner: verified.owner, sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length, notes, screenshots, icon, readme, files };
 }
 
 /** What a player sees of a module in the catalog, at its newest version. */
@@ -235,6 +280,23 @@ export interface AdminModule {
   versions: { version: string; publishedAt: string; size: number; zipKept: boolean }[];
 }
 
+interface WaitingSql {
+  sha256: string;
+  module_id: string;
+  version: string;
+  size: number;
+  manifest: string;
+  notes: string;
+  published_at: string;
+  account_id: string | null;
+  signer: string | null;
+  screenshots: string | null;
+  icon: string | null;
+  readme: string | null;
+  review: string | null;
+  owner: string;
+}
+
 interface VersionSql {
   module_id: string;
   owner: string;
@@ -250,7 +312,7 @@ interface VersionSql {
 
 const LATEST = `
   select m.id as module_id, coalesce(v.signer, m.owner) as owner, v.version, v.sha256, v.size, v.manifest, v.notes, v.published_at, v.screenshots, v.icon
-  from modules m join versions v on v.seq = (select max(seq) from versions where module_id = m.id)
+  from modules m join versions v on v.seq = (select max(seq) from versions where module_id = m.id and status = 'listed')
   where m.listed = 1`;
 
 /** The manifest's translated name and description, by language; languages that translate neither are left out. */
@@ -343,6 +405,17 @@ export class CatalogStore {
     if (!columns.includes("readme")) this.db.exec("alter table versions add column readme text");
     // When an older version's zip was deleted to make room (prune); the row stays for its notes and the signed lists.
     if (!columns.includes("zip_removed")) this.db.exec("alter table versions add column zip_removed text");
+    // Review before listing (decided 2026-10-26): 'waiting' versions are not listed, and their zip stays private until a person
+    // approves them. `review` holds why (JSON, see ReviewInfo), `file_hashes` the files' [sha256, size] for telling copies apart.
+    if (!columns.includes("status")) this.db.exec("alter table versions add column status text not null default 'listed'");
+    if (!columns.includes("review")) this.db.exec("alter table versions add column review text");
+    if (!columns.includes("file_hashes")) this.db.exec("alter table versions add column file_hashes text");
+    this.db.exec(`
+      create table if not exists trusted_accounts (account_id text primary key, since text not null);
+      create table if not exists declined (
+        sha256 text primary key, module_id text not null, version text not null, account_id text, reason text not null, note text, at text not null
+      );
+    `);
   }
 
   close(): void {
@@ -352,7 +425,8 @@ export class CatalogStore {
   /**
    * Adds a checked zip as a module's newest version, and stores the zip under its hash. `uploadedBy`
    * is the account a publisher's upload came from; versions added by hand have none. `firstKey` says
-   * which key a signing key succeeds (catalog-trust.ts); without it only the owner key adds versions.
+   * which key a signing key succeeds (catalog-trust.ts); without it only the owner key adds versions. With `review` that has reasons the version
+   * waits (not listed, zip kept privately) until approve(); without reasons it lists at once.
    */
   add(
     bytes: Buffer,
@@ -360,6 +434,7 @@ export class CatalogStore {
     uploadedBy: string | null = null,
     checked: CheckedZip = checkCatalogZip(bytes),
     firstKey: (fingerprint: string) => string = (fingerprint) => fingerprint,
+    review?: ReviewInfo,
   ): CheckedZip {
     const { manifest, owner, sha256 } = checked;
     const module = this.db.prepare("select owner from modules where id = ?").get(manifest.id) as { owner: string } | undefined;
@@ -381,11 +456,12 @@ export class CatalogStore {
     const screenshots = checked.screenshots.map(({ sha256: hash, type, size }) => ({ sha256: hash, type, size }));
     const icon = checked.icon ? { sha256: checked.icon.sha256, type: checked.icon.type, size: checked.icon.size } : null;
     const at = now.toISOString();
+    const waits = review !== undefined && review.reasons.length > 0;
     this.db.exec("begin");
     try {
       if (!module) this.db.prepare("insert into modules (id, owner, created_at) values (?, ?, ?)").run(manifest.id, owner, at);
       this.db
-        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id, signer, screenshots, icon, readme) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id, signer, screenshots, icon, readme, status, review, file_hashes) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .run(
           manifest.id,
           manifest.version,
@@ -399,6 +475,9 @@ export class CatalogStore {
           screenshots.length ? JSON.stringify(screenshots) : null,
           icon ? JSON.stringify(icon) : null,
           checked.readme,
+          waits ? "waiting" : "listed",
+          review ? JSON.stringify(review) : null,
+          JSON.stringify(copyHashes(checked.files)),
         );
       this.db.exec("commit");
     } catch (error) {
@@ -424,7 +503,7 @@ export class CatalogStore {
   /** A module's versions that still have their zip, past its newest `keep`, newest first. */
   private storedBeyond(moduleId: string, keep: number): { sha256: string; size: number; account_id: string | null }[] {
     return this.db
-      .prepare("select sha256, size, account_id from versions where module_id = ? and zip_removed is null order by seq desc limit -1 offset ?")
+      .prepare("select sha256, size, account_id from versions where module_id = ? and zip_removed is null and status = 'listed' order by seq desc limit -1 offset ?")
       .all(moduleId, Math.max(0, keep)) as unknown as { sha256: string; size: number; account_id: string | null }[];
   }
 
@@ -457,7 +536,7 @@ export class CatalogStore {
   signedBy(fingerprint: string, before: Date): string[] {
     return (
       this.db
-        .prepare("select v.sha256 from versions v join modules m on m.id = v.module_id where coalesce(v.signer, m.owner) = ? and v.published_at < ? order by v.seq")
+        .prepare("select v.sha256 from versions v join modules m on m.id = v.module_id where coalesce(v.signer, m.owner) = ? and v.published_at < ? and v.status = 'listed' order by v.seq")
         .all(fingerprint, before.toISOString()) as unknown as { sha256: string }[]
     ).map((row) => row.sha256);
   }
@@ -467,13 +546,252 @@ export class CatalogStore {
     return Number(this.db.prepare("update modules set listed = ? where id = ?").run(listed ? 1 : 0, id).changes) > 0;
   }
 
+  // ── Review before listing (decided 2026-10-26) ─────────────────────────
+
+  private zipPath(sha256: string): string {
+    return path.join(this.zips, `${sha256}.zip`);
+  }
+
+  /** A stored zip by its hash, whatever its status; null when it is gone or is not what its name says. Private: only the maintainer's review reads it. */
+  zipBytes(sha256: string): Buffer | null {
+    if (!SHA256.test(sha256)) return null;
+    try {
+      const bytes = readFileSync(this.zipPath(sha256));
+      return createHash("sha256").update(bytes).digest("hex") === sha256 ? bytes : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private waitingOf(row: WaitingSql): WaitingVersion {
+    return {
+      sha256: row.sha256,
+      id: row.module_id,
+      version: row.version,
+      size: row.size,
+      owner: row.signer ?? row.owner,
+      accountId: row.account_id,
+      queuedAt: row.published_at,
+      manifest: JSON.parse(row.manifest) as ModuleManifest,
+      notes: JSON.parse(row.notes) as string[],
+      readme: row.readme,
+      screenshots: row.screenshots === null ? [] : (JSON.parse(row.screenshots) as CatalogScreenshot[]),
+      icon: row.icon === null ? null : (JSON.parse(row.icon) as CatalogScreenshot),
+      review: row.review === null ? { reasons: [], language: "en", token: null } : (JSON.parse(row.review) as ReviewInfo),
+    };
+  }
+
+  private static readonly WAITING_SELECT =
+    "select v.sha256, v.module_id, v.version, v.size, v.manifest, v.notes, v.published_at, v.account_id, v.signer, v.screenshots, v.icon, v.readme, v.review, m.owner from versions v join modules m on m.id = v.module_id where v.status = 'waiting'";
+
+  /** The versions waiting for review, oldest first. */
+  waitingVersions(): WaitingVersion[] {
+    return (this.db.prepare(`${CatalogStore.WAITING_SELECT} order by v.seq`).all() as unknown as WaitingSql[]).map((row) => this.waitingOf(row));
+  }
+
+  /** One waiting version by its zip's hash, or null. */
+  waitingVersion(sha256: string): WaitingVersion | null {
+    const row = this.db.prepare(`${CatalogStore.WAITING_SELECT} and v.sha256 = ?`).get(sha256) as WaitingSql | undefined;
+    return row ? this.waitingOf(row) : null;
+  }
+
+  /** How many versions an account has waiting. */
+  waitingCount(accountId: string): number {
+    return (this.db.prepare("select count(*) as n from versions where account_id = ? and status = 'waiting'").get(accountId) as { n: number }).n;
+  }
+
+  /** Lists a waiting version, and counts its account as approved from now on. Null when no such version waits or its zip is gone. */
+  approve(sha256: string, now: Date = new Date()): WaitingVersion | null {
+    const waiting = this.waitingVersion(sha256);
+    if (!waiting || this.zipBytes(sha256) === null) return null;
+    this.db.exec("begin");
+    try {
+      this.db.prepare("update versions set status = 'listed' where sha256 = ? and status = 'waiting'").run(sha256);
+      if (waiting.accountId) this.trustAccount(waiting.accountId, now);
+      this.db.exec("commit");
+    } catch (error) {
+      this.db.exec("rollback");
+      throw error;
+    }
+    return waiting;
+  }
+
+  /** Counts an account as approved: its next versions' first-module check passes (the other checks still run). */
+  trustAccount(accountId: string, now: Date = new Date()): void {
+    this.db.prepare("insert into trusted_accounts (account_id, since) values (?, ?) on conflict (account_id) do nothing").run(accountId, now.toISOString());
+  }
+
+  /**
+   * Takes a waiting version away for good: its row, its zip and the pictures nothing else uses (withdrawn by its developer or
+   * declined). A module left without any version goes too. Null when no such version waits.
+   */
+  removeWaiting(sha256: string): WaitingVersion | null {
+    const waiting = this.waitingVersion(sha256);
+    if (!waiting) return null;
+    this.db.prepare("delete from versions where sha256 = ? and status = 'waiting'").run(sha256);
+    rmSync(this.zipPath(sha256), { force: true });
+    if (!this.db.prepare("select 1 from versions where module_id = ?").get(waiting.id)) this.db.prepare("delete from modules where id = ?").run(waiting.id);
+    for (const picture of [...waiting.screenshots, ...(waiting.icon ? [waiting.icon] : [])]) {
+      const pattern = `%"${picture.sha256}"%`;
+      if (!this.db.prepare("select 1 from versions where screenshots like ? or icon like ?").get(pattern, pattern)) rmSync(path.join(this.shots, `${picture.sha256}.${picture.type}`), { force: true });
+    }
+    return waiting;
+  }
+
+  /** Remembers a declined zip, so exactly this zip is not taken again. */
+  recordDeclined(waiting: WaitingVersion, reason: string, note: string | null, now: Date = new Date()): void {
+    this.db
+      .prepare("insert into declined (sha256, module_id, version, account_id, reason, note, at) values (?, ?, ?, ?, ?, ?, ?) on conflict (sha256) do nothing")
+      .run(waiting.sha256, waiting.id, waiting.version, waiting.accountId, reason, note, now.toISOString());
+  }
+
+  isDeclined(sha256: string): boolean {
+    return this.db.prepare("select 1 from declined where sha256 = ?").get(sha256) !== undefined;
+  }
+
+  /**
+   * Whether an account has had a version approved or listed: it has a listed version of its own, or a listed module
+   * whose key it holds (accounts from before the review count as approved), or the maintainer approved one.
+   */
+  accountApproved(accountId: string, fingerprints: readonly string[]): boolean {
+    if (this.db.prepare("select 1 from trusted_accounts where account_id = ?").get(accountId)) return true;
+    if (this.db.prepare("select 1 from versions where account_id = ? and status = 'listed' limit 1").get(accountId)) return true;
+    for (const fingerprint of fingerprints) {
+      if (this.db.prepare("select 1 from versions v join modules m on m.id = v.module_id where v.status = 'listed' and coalesce(v.signer, m.owner) = ? limit 1").get(fingerprint)) return true;
+    }
+    return false;
+  }
+
+  /** A module's newest listed version (other than `except`), with what the checks compare a new one to; null when it has none. */
+  previousListed(moduleId: string, except?: string): { version: string; manifest: ModuleManifest; icon: CatalogScreenshot | null; screenshots: CatalogScreenshot[] } | null {
+    const row = this.db
+      .prepare("select version, manifest, icon, screenshots from versions where module_id = ? and status = 'listed' and sha256 is not ? order by seq desc limit 1")
+      .get(moduleId, except ?? null) as { version: string; manifest: string; icon: string | null; screenshots: string | null } | undefined;
+    return row
+      ? {
+          version: row.version,
+          manifest: JSON.parse(row.manifest) as ModuleManifest,
+          icon: row.icon === null ? null : (JSON.parse(row.icon) as CatalogScreenshot),
+          screenshots: row.screenshots === null ? [] : (JSON.parse(row.screenshots) as CatalogScreenshot[]),
+        }
+      : null;
+  }
+
+  /** The language an account's newest upload asked for ("en" or "de"), for emails nobody asked in a request. */
+  languageOf(accountId: string): string {
+    const row = this.db.prepare("select review from versions where account_id = ? and review is not null order by seq desc limit 1").get(accountId) as { review: string } | undefined;
+    return row ? ((JSON.parse(row.review) as Partial<ReviewInfo>).language ?? "en") : "en";
+  }
+
+  /**
+   * Every other publisher's listed module (its newest listed version) as id and names, translated names too. Waiting versions are
+   * left out, so a copy that waits never makes the original's developer wait.
+   */
+  othersNames(self: { moduleId: string; accountId: string | null; fingerprints: readonly string[] }): { id: string; names: string[] }[] {
+    const rows = this.db
+      .prepare(
+        `select v.module_id, v.account_id, v.manifest, coalesce(v.signer, m.owner) as signer from versions v join modules m on m.id = v.module_id
+         where v.status = 'listed' and v.seq = (select max(seq) from versions where module_id = v.module_id and status = 'listed')`,
+      )
+      .all() as unknown as { module_id: string; account_id: string | null; manifest: string; signer: string }[];
+    return rows
+      .filter((row) => row.module_id !== self.moduleId && (self.accountId === null || row.account_id !== self.accountId) && !self.fingerprints.includes(row.signer))
+      .map((row) => {
+        const manifest = JSON.parse(row.manifest) as ModuleManifest;
+        return { id: row.module_id, names: [manifest.name, ...Object.values(manifest.translations ?? {}).flatMap((translation) => translation.name ?? [])] };
+      });
+  }
+
+  /**
+   * The other publisher's version whose files share the most bytes with `hashes` (see copyHashes), as a share of them from 0 to 1;
+   * null when no other publisher's version has a file in common. Versions from before the hashes were kept are read from their zip.
+   */
+  mostSimilar(self: { moduleId: string; accountId: string | null; fingerprints: readonly string[] }, hashes: readonly [string, number][]): { id: string; version: string; share: number } | null {
+    const total = hashes.reduce((sum, [, size]) => sum + size, 0);
+    if (total === 0) return null;
+    const rows = this.db
+      .prepare(
+        `select v.module_id, v.version, v.sha256, v.account_id, v.file_hashes, v.zip_removed, coalesce(v.signer, m.owner) as signer
+         from versions v join modules m on m.id = v.module_id where v.status = 'listed'`,
+      )
+      .all() as unknown as { module_id: string; version: string; sha256: string; account_id: string | null; file_hashes: string | null; zip_removed: string | null; signer: string }[];
+    let best: { id: string; version: string; share: number } | null = null;
+    for (const row of rows) {
+      if (row.module_id === self.moduleId || (self.accountId !== null && row.account_id === self.accountId) || self.fingerprints.includes(row.signer)) continue;
+      let theirs: [string, number][] | null = row.file_hashes === null ? null : (JSON.parse(row.file_hashes) as [string, number][]);
+      if (theirs === null && row.zip_removed === null) {
+        const bytes = this.zipBytes(row.sha256);
+        try {
+          theirs = bytes ? copyHashes(readZip(bytes)) : null;
+        } catch {
+          theirs = null;
+        }
+      }
+      if (!theirs) continue;
+      const known = new Set(theirs.map(([hash]) => hash));
+      const shared = hashes.reduce((sum, [hash, size]) => (known.has(hash) ? sum + size : sum), 0);
+      if (shared > 0 && (!best || shared / total > best.share)) best = { id: row.module_id, version: row.version, share: shared / total };
+    }
+    return best;
+  }
+
+  /** The ids of every module an account's keys or uploads made, listed or not. */
+  modulesOfAccount(accountId: string, fingerprints: readonly string[]): string[] {
+    const ids = new Set((this.db.prepare("select distinct module_id from versions where account_id = ?").all(accountId) as unknown as { module_id: string }[]).map((row) => row.module_id));
+    for (const fingerprint of fingerprints) {
+      const rows = this.db.prepare("select distinct m.id from modules m join versions v on v.module_id = m.id where m.owner = ? or v.signer = ?").all(fingerprint, fingerprint) as unknown as { id: string }[];
+      for (const row of rows) ids.add(row.id);
+    }
+    return [...ids];
+  }
+
+  /** Delists these modules; returns those that were listed (and so are the ones to list again later). */
+  unlistAll(ids: readonly string[]): string[] {
+    return ids.filter((id) => Number(this.db.prepare("update modules set listed = 0 where id = ? and listed = 1").run(id).changes) > 0);
+  }
+
+  /** A waiting version's picture for the maintainer's review: only one a waiting version names. */
+  waitingPicture(sha256: string, type: string): Buffer | null {
+    if (!SHA256.test(sha256) || (type !== "png" && type !== "webp")) return null;
+    const pattern = `%"${sha256}"%`;
+    if (!this.db.prepare("select 1 from versions where status = 'waiting' and (screenshots like ? or icon like ?)").get(pattern, pattern)) return null;
+    try {
+      const bytes = readFileSync(path.join(this.shots, `${sha256}.${type}`));
+      return createHash("sha256").update(bytes).digest("hex") === sha256 ? bytes : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The listed modules' newest versions that still have their zip, for the one-time run of the checks over what is already live. */
+  liveVersions(): { id: string; version: string; sha256: string; owner: string; accountId: string | null; manifest: ModuleManifest }[] {
+    return (
+      this.db
+        .prepare(
+          `select m.id, v.version, v.sha256, coalesce(v.signer, m.owner) as owner, v.account_id, v.manifest
+           from modules m join versions v on v.seq = (select max(seq) from versions where module_id = m.id and status = 'listed')
+           where m.listed = 1 and v.zip_removed is null order by m.id`,
+        )
+        .all() as unknown as { id: string; version: string; sha256: string; owner: string; account_id: string | null; manifest: string }[]
+    ).map((row) => ({ id: row.id, version: row.version, sha256: row.sha256, owner: row.owner, accountId: row.account_id, manifest: JSON.parse(row.manifest) as ModuleManifest }));
+  }
+
+  /** A saved note of the catalog (the one-time run's results), or null. */
+  getState(name: string): string | null {
+    return (this.db.prepare("select value from catalog_state where name = ?").get(name) as { value: string } | undefined)?.value ?? null;
+  }
+
+  setState(name: string, value: string): void {
+    this.db.prepare("insert into catalog_state (name, value) values (?, ?) on conflict (name) do update set value = excluded.value").run(name, value);
+  }
+
   /**
    * Records a player's report of a zip. Only a zip the catalog lists, under that module id and key
    * (the module's owner, or the key that signed that version), can be reported. Reports hide nothing: a person decides on the admin page (C12).
    */
   report(input: { id: string; owner: string; sha256: string }, now: Date = new Date()): boolean {
     const known = this.db
-      .prepare("select 1 from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.id = ? and (m.owner = ? or v.signer = ?) and m.listed = 1")
+      .prepare("select 1 from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.id = ? and (m.owner = ? or v.signer = ?) and m.listed = 1 and v.status = 'listed'")
       .get(input.sha256, input.id, input.owner, input.owner);
     if (!known) return false;
     const at = now.toISOString();
@@ -485,7 +803,7 @@ export class CatalogStore {
 
   /** Counts one install of a listed module from Browse. Nothing about the player is kept. */
   countInstall(id: string): boolean {
-    if (!this.db.prepare("select 1 from modules where id = ? and listed = 1").get(id)) return false;
+    if (!this.db.prepare("select 1 from modules m where m.id = ? and m.listed = 1 and exists (select 1 from versions where module_id = m.id and status = 'listed')").get(id)) return false;
     this.db.prepare("insert into installs (module_id, count) values (?, 1) on conflict (module_id) do update set count = count + 1").run(id);
     return true;
   }
@@ -613,7 +931,7 @@ export class CatalogStore {
     if (!row) return null;
     const readme = (this.db.prepare("select readme from versions where sha256 = ?").get(row.sha256) as { readme: string | null }).readme;
     const versions = (
-      this.db.prepare("select version, published_at, notes from versions where module_id = ? order by seq desc").all(id) as unknown as {
+      this.db.prepare("select version, published_at, notes from versions where module_id = ? and status = 'listed' order by seq desc").all(id) as unknown as {
         version: string;
         published_at: string;
         notes: string;
@@ -672,7 +990,7 @@ export class CatalogStore {
   /** A zip of a listed module by its hash, or null. A delisted module's zips are not handed out. */
   zip(sha256: string): Buffer | null {
     if (!SHA256.test(sha256)) return null;
-    const listed = this.db.prepare("select 1 from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.listed = 1 and v.zip_removed is null").get(sha256);
+    const listed = this.db.prepare("select 1 from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.listed = 1 and v.zip_removed is null and v.status = 'listed'").get(sha256);
     if (!listed) return null;
     try {
       const bytes = readFileSync(path.join(this.zips, `${sha256}.zip`));

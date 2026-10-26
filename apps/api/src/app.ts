@@ -3,6 +3,7 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { accountRoutes, type AccountOptions } from "./accounts.ts";
 import { publishHandlers, type PublishLimits } from "./catalog-publish.ts";
+import type { Scanner } from "./virus-scan.ts";
 import { reportHandlers } from "./catalog-report.ts";
 import { copyRoutes } from "./cloud-copy.ts";
 import { pairingRoutes } from "./pairing.ts";
@@ -46,6 +47,8 @@ export interface AppOptions {
   /** Publishing: uploads per client, and the catalog's size limits. Publishing also needs accounts. */
   publishRateLimiter?: RateLimiter;
   publishLimits?: Partial<PublishLimits>;
+  /** The virus scanner of the checks every new version runs. Without one, every new version waits for review. */
+  scanner?: Scanner;
   /** The catalogue public key uploads check the signed lists against; CATALOGUE_PUBLIC_KEY by default. */
   catalogueKey?: string;
   /** Reports per client. */
@@ -58,7 +61,7 @@ export interface AppOptions {
   stats?: StatsStore;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, catalogueKey, reportRateLimiter, maintainerEmail, reviewRateLimiter, stats }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, reportRateLimiter, maintainerEmail, reviewRateLimiter, stats }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 100, windowMs: 3_600_000 });
@@ -224,6 +227,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     clientKey: (request) => (clientKey ? clientKey(request) : "local"),
     ...(publishRateLimiter ? { rateLimiter: publishRateLimiter } : {}),
     ...(publishLimits ? { limits: publishLimits } : {}),
+    ...(scanner ? { scanner } : {}),
     ...(catalogueKey ? { catalogueKey } : {}),
     ...(accounts?.now ? { now: accounts.now } : {}),
     ...(accounts ? { mail: { mailer: accounts.mailer, ...(accounts.mailDailyLimit === undefined ? {} : { mailDailyLimit: accounts.mailDailyLimit }) } } : {}),
@@ -232,6 +236,9 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
       : {}),
   });
   catalogApp.post("/publish", publish.limit, publish.handler);
+  // The developer's own versions waiting for review, and taking one back.
+  catalogApp.get("/waiting", publish.waiting);
+  catalogApp.delete("/waiting/:sha256", publish.withdraw);
   const report = reportHandlers({
     catalog,
     accounts,

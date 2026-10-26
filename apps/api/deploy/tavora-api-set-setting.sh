@@ -11,6 +11,8 @@
 #                                            it once; it is stored nowhere else, so save it
 #   tavora-api-set-setting.sh maintainer-email [address]
 #                                            who hears when the module catalog is full
+#   tavora-api-set-setting.sh clamav         tells the service where ClamAV's clamd socket is, for the virus scan of new
+#                                            catalog versions (tavora-api-clamav installs ClamAV and runs this)
 #   tavora-api-set-setting.sh brevo-key      asks for the Brevo API key (not shown while typed);
 #                                            the service sends sign-in codes with it
 #
@@ -59,13 +61,17 @@ case "${1:-}" in
     set_var BREVO_API_KEY "$key"
     shown='the Brevo API key'
     ;;
+  clamav)
+    set_var CLAMD_SOCKET /var/run/clamav/clamd.ctl
+    shown='the ClamAV socket'
+    ;;
   admin-token)
     token="$(openssl rand -hex 24)"
     set_var ADMIN_TOKEN "$token"
     shown='a new admin token'
     ;;
   *)
-    echo 'Usage: tavora-api-set-setting.sh takedown [address] | maintainer-email [address] | admin-token | brevo-key'
+    echo 'Usage: tavora-api-set-setting.sh takedown [address] | maintainer-email [address] | admin-token | brevo-key | clamav'
     exit 2
     ;;
 esac
@@ -78,4 +84,4 @@ if [[ "${1:-}" == admin-token ]]; then
   echo "Admin token (shown once, save it now):"
   echo "$token"
 fi
-journalctl -u tavora-api -n 8 --no-pager | grep -E 'TAKEDOWN_CONTACT|MAINTAINER_EMAIL|ADMIN_TOKEN|review page|accounts|email' || true
+journalctl -u tavora-api -n 8 --no-pager | grep -E 'TAKEDOWN_CONTACT|MAINTAINER_EMAIL|ADMIN_TOKEN|review page|accounts|email|[Vv]irus scan' || true

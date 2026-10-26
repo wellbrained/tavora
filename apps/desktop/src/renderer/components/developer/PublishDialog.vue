@@ -38,7 +38,8 @@ const prefixProblem = computed(() => problem("prefix"));
 const notBuilt = computed(() => problem("not-built"));
 const invalid = computed(() => problem("invalid"));
 
-const title = computed(() => (view.value?.status === "published" ? t("publish.done", { version: view.value.published?.version ?? "" }) : module.value ? t("publish.title", { name: module.value.name }) : t("publish.publish")));
+const waiting = computed(() => view.value?.published?.waiting === true);
+const title = computed(() => (view.value?.status === "published" ? t(waiting.value ? "publish.waiting" : "publish.done", { version: view.value.published?.version ?? "" }) : module.value ? t("publish.title", { name: module.value.name }) : t("publish.publish")));
 // The description as the module's page will show it, with a soft tip for what a page usually has. Never blocks.
 const readmeMissing = computed(() => (view.value?.readme?.length ? missingSections(view.value.readme) : []));
 const catalogLine = computed(() => {
@@ -136,10 +137,10 @@ function browse() {
   <ModalDialog v-if="view" :title="title" class="sm:max-w-[560px]" testid="publish-review" @close="close">
     <!-- Published. -->
     <template v-if="view.status === 'published'">
-      <p class="text-muted-foreground text-sm" data-testid="publish-done">{{ t("publish.doneText") }}</p>
+      <p class="text-muted-foreground text-sm" data-testid="publish-done">{{ t(waiting ? "publish.waitingText" : "publish.doneText") }}</p>
       <div class="flex justify-end gap-2">
         <Button variant="ghost" @click="close">{{ t("common.close") }}</Button>
-        <Button data-testid="publish-browse" @click="browse">{{ t("publish.browse") }}</Button>
+        <Button v-if="!waiting" data-testid="publish-browse" @click="browse">{{ t("publish.browse") }}</Button>
       </div>
     </template>
 

@@ -603,7 +603,7 @@ describe("the developer side", () => {
     }) as typeof fetch;
     const { account } = client(fetchImpl, { saved: SAVED });
     await account.init();
-    expect(await account.publishModule(privateKey, zip)).toEqual({ id: "me.tracker", version: "1.0.0", sha256 });
+    expect(await account.publishModule(privateKey, zip)).toEqual({ id: "me.tracker", version: "1.0.0", sha256, status: "published", reasons: [] });
     expect(sent!.get("authorization")).toBe(`Bearer ${TOKEN}`);
     expect(sent!.get("accept-language")).toBe("de");
     expect(verify(null, Buffer.from(`${PUBLISH_STATEMENT}\n${sha256}`), createPublicKey(privateKey), Buffer.from(sent!.get("x-tavora-signature")!, "base64"))).toBe(true);
@@ -624,7 +624,12 @@ describe("the developer side", () => {
     }) as typeof fetch;
     const { account } = client(fetchImpl, { saved: SAVED });
     await account.init();
-    expect(await account.uploadModule(privateKey, zip)).toEqual({ id: "me.tracker", version: "1.0.1", sha256 });
+    expect(await account.uploadModule(privateKey, zip)).toEqual({ id: "me.tracker", version: "1.0.1", sha256, status: "published", reasons: [] });
+    // A version a person at Tavora looks at first is uploaded, not listed.
+    const listed = answer;
+    answer = () => json({ status: "waiting", id: "me.tracker", version: "1.0.2", sha256, reasons: [{ check: "first-module", text: "x" }] }, 202);
+    expect(await account.uploadModule(privateKey, zip)).toMatchObject({ version: "1.0.2", status: "waiting" });
+    answer = listed;
     expect(sent!.headers.get("content-type")).toBe("application/zip");
     expect(sent!.headers.get("authorization")).toBe(`Bearer ${TOKEN}`);
     expect(sent!.headers.get("accept-language")).toBe("de");

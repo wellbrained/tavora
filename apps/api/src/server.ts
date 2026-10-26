@@ -18,6 +18,7 @@ import { StatsStore } from "./stats.ts";
 import { ReviewStore } from "./reviews.ts";
 import { createSteamClient } from "./steam.ts";
 import { createSubmissions } from "./submissions.ts";
+import { scannerFromEnv } from "./virus-scan.ts";
 
 const port = Number(process.env.PORT ?? 4010);
 const datasetPath = process.env.TAVORA_GAMES_DB ?? "data/games.sqlite";
@@ -100,9 +101,14 @@ const snapshotAccounts = () => {
 snapshotAccounts();
 setInterval(snapshotAccounts, 60 * 60_000).unref();
 
+// The virus scan every new catalog version goes through (ClamAV). Without one, or when it fails, every new version waits for review.
+const scanner = scannerFromEnv(process.env);
+console.log(scanner ? "[tavora-api] Virus scan for new catalog versions: on." : "[tavora-api] No CLAMD_SOCKET, CLAMD_HOST or CLAMSCAN_PATH: every new catalog version waits for review.");
+
 let testRequests = 0;
 const app = createApp({
   db,
+  ...(scanner ? { scanner } : {}),
   icons,
   submissions,
   catalog,
@@ -152,6 +158,7 @@ if (adminToken && adminToken.length >= 24) {
     ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
     stateDir,
     stats,
+    moderation: { ...(scanner ? { scanner } : {}), ...(mailer ? { mailer } : {}), mailDailyLimit },
   });
   serve({ fetch: admin.fetch, port: adminPort, hostname: "127.0.0.1" }, (info) => {
     console.log(`[tavora-api] Tavora Admin on http://127.0.0.1:${info.port} (local only)`);
