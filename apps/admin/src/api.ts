@@ -12,7 +12,7 @@ export class WrongToken extends Error {
 
 /**
  * Behind the maintainer's tailnet proxy, the proxy signs in (CoreHub password) and adds the token itself: the page
- * then never holds it, Lock signs out there, and an ended session goes back to the proxy's sign-in.
+ * then never holds it, Sign out ends the session there, and an ended session goes back to the proxy's sign-in.
  */
 export const proxied = ref(sessionStorage.getItem("adminProxied") === "1");
 const PROXY_TOKEN = "via-proxy";

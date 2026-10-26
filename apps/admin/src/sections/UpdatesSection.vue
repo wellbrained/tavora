@@ -29,7 +29,7 @@ watch(refreshTick, () => void updates.reload());
 </script>
 
 <template>
-  <PageTitle title="Updates" hint="The app versions players can get. Show-only for now." />
+  <PageTitle title="Tavora Updates" hint="The app versions players can get. Show-only for now." />
   <Notice v-if="updates.error.value" variant="error">{{ updates.error.value }}</Notice>
 
   <Group title="Update feed" hint="updates.mytavora.app">

@@ -6,6 +6,7 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { computed, onMounted, ref, watch, type Component } from "vue";
+import emblem from "./brand/tavora-emblem.png";
 import { detectProxy, lock, setToken, token } from "./api";
 import { go, refreshTick, section, summary, type SectionId } from "./nav";
 import { problem } from "./problem";
@@ -21,10 +22,10 @@ import UpdatesSection from "./sections/UpdatesSection.vue";
 // Add a section here and in nav.ts.
 const SECTIONS: { id: SectionId; label: string; icon: Component; view: Component; waiting?: string }[] = [
   { id: "overview", label: "Overview", icon: Home, view: OverviewSection },
-  { id: "approval", label: "Approval", icon: ShieldCheck, view: ApprovalSection, waiting: "approval" },
-  { id: "updates", label: "Updates", icon: Newspaper, view: UpdatesSection },
+  { id: "approval", label: "Module Review", icon: ShieldCheck, view: ApprovalSection, waiting: "approval" },
+  { id: "updates", label: "Tavora Updates", icon: Newspaper, view: UpdatesSection },
   { id: "modules", label: "Modules", icon: Boxes, view: ModulesSection },
-  { id: "review", label: "Review", icon: ClipboardCheck, view: ReviewSection, waiting: "review" },
+  { id: "review", label: "Icon Review", icon: ClipboardCheck, view: ReviewSection, waiting: "review" },
   { id: "accounts", label: "Accounts", icon: Users, view: AccountsSection },
   { id: "stats", label: "Stats", icon: BarChart3, view: StatsSection },
   { id: "status", label: "Status", icon: Activity, view: StatusSection, waiting: "status" },
@@ -77,7 +78,7 @@ onMounted(async () => {
   <div v-if="checking" class="h-full" />
   <div v-else-if="!token" class="flex h-full items-center justify-center p-6">
     <form class="flex w-full max-w-sm flex-col gap-3" @submit.prevent="signIn">
-      <h1 class="text-xl font-semibold">Tavora Admin</h1>
+      <h1 class="flex items-center gap-2.5 text-xl font-semibold"><img :src="emblem" alt="" class="size-9" />Tavora Admin</h1>
       <p class="text-muted-foreground text-sm">Paste the admin token. It stays in this tab only.</p>
       <Notice v-if="wrong" variant="error">That token didn't work.</Notice>
       <Input v-model="typed" type="password" placeholder="Admin token" aria-label="Admin token" autocomplete="off" autofocus />
@@ -87,15 +88,15 @@ onMounted(async () => {
 
   <div v-else class="flex h-full">
     <aside class="bg-rail flex w-56 flex-none flex-col gap-3 border-r p-3">
-      <p class="px-3 pt-1 text-sm font-semibold">Tavora Admin</p>
+      <p class="flex items-center gap-2.5 px-2 pt-1 text-lg font-semibold"><img :src="emblem" alt="" class="size-9" />Tavora Admin</p>
       <NavList :groups="groups" label="Sections" :model-value="section" class="flex-1" @update:model-value="go($event)" />
       <div class="flex flex-col gap-1">
-        <Button type="button" variant="ghost" size="sm" class="justify-start" :disabled="summary.loading.value" @click="refresh"><RefreshCw :class="{ 'animate-spin': summary.loading.value }" />Refresh</Button>
-        <Button type="button" variant="ghost" size="sm" class="justify-start" @click="lock"><LogOut />Lock</Button>
+        <Button type="button" variant="ghost" class="justify-start text-base [&_svg]:size-5" :disabled="summary.loading.value" @click="refresh"><RefreshCw :class="{ 'animate-spin': summary.loading.value }" />Refresh</Button>
+        <Button type="button" variant="ghost" class="justify-start text-base [&_svg]:size-5" @click="lock"><LogOut />Sign out</Button>
       </div>
     </aside>
     <main class="min-w-0 flex-1 overflow-y-auto">
-      <div class="mx-auto flex max-w-3xl flex-col gap-6 p-6">
+      <div class="flex max-w-[1056px] flex-col gap-6 p-6">
         <Notice v-if="problem" variant="error">{{ problem }}</Notice>
         <Notice v-if="summary.error.value" variant="error">{{ summary.error.value }}</Notice>
         <component :is="view" :key="section" />

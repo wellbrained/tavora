@@ -82,7 +82,7 @@ watch(refreshTick, () => void load());
 </script>
 
 <template>
-  <PageTitle title="Approval" hint="Module versions that wait for you before they're listed." />
+  <PageTitle title="Module Review" hint="Module versions that wait for you before they're listed." />
   <Notice v-if="error" variant="error">{{ error }}</Notice>
 
   <Tabs v-model="tab" class="border-b">

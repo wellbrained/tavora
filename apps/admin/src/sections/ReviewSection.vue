@@ -83,7 +83,7 @@ watch(refreshTick, () => void load());
 </script>
 
 <template>
-  <PageTitle title="Review" hint="Icons, reports and key requests that need a person." />
+  <PageTitle title="Icon Review" hint="Icons, reports and key requests that need a person." />
   <Notice v-if="error" variant="error">{{ error }}</Notice>
   <Notice v-if="reports.data.value?.catalogFullSince" variant="warning">The module catalog has been full since {{ when(reports.data.value.catalogFullSince) }}. Uploads are refused until there's room.</Notice>
 
