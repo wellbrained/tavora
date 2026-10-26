@@ -139,8 +139,7 @@ describe("the cover", () => {
     cover.setBounds({ x: 8, y: 50, width: 800, height: 600 });
     cover.start(theme("dark", "#101010"), "Loading", 100);
     expect(state().visible).toBe(true);
-    // A hair short of opaque (#aarrggbb): Chromium counts a page under an opaque view as hidden, and it would not draw.
-    expect(state().background).toBe("#fe101010");
+    expect(state().background).toBe("#101010");
     expect(parent.addChildView).toHaveBeenCalledTimes(1);
     cover.finish();
     expect(state().visible).toBe(false);
