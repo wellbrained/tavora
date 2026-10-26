@@ -72,8 +72,11 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     if (element) show(element, { x: event.clientX, y: event.clientY });
   };
   const move = (event: PointerEvent) => { if (current) state.at = { x: event.clientX, y: event.clientY }; };
+  // Only the pointer leaving the hint's own element closes it: a layout change under a resting pointer fires
+  // pointerout elsewhere, and that must not close a hint opened from the keyboard.
   const out = (event: PointerEvent) => {
-    if (current && !(event.relatedTarget instanceof Node && current.contains(event.relatedTarget))) hide();
+    if (!current || !(event.target instanceof Node) || !current.contains(event.target)) return;
+    if (!(event.relatedTarget instanceof Node && current.contains(event.relatedTarget))) hide();
   };
   const focus = (event: FocusEvent) => {
     if (!keyboard) return;
