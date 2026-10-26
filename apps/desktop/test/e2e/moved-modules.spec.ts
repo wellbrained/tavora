@@ -25,6 +25,17 @@ test("panels of the old Discord and AI Usage modules say they moved, and their s
   records[0]!.moduleId = "tavora.discord";
   records[1]!.moduleId = "tavora.ai-usage";
   for (const record of records) delete record.panelType;
+  // The second panel is left out of the layout, as when Tavora closed before the layout was saved: it is docked
+  // again at start, though its module isn't installed (this used to stop Tavora from starting).
+  const left = (saved.games.poe2.instances as { instanceId: string }[])[1]!.instanceId;
+  const strip = (node: { panels?: string[]; active?: string | null; children?: unknown[] }): void => {
+    if (node.panels) {
+      node.panels = node.panels.filter((id) => id !== left);
+      if (node.active === left) node.active = node.panels[0] ?? null;
+    }
+    for (const child of node.children ?? []) strip(child as typeof node);
+  };
+  strip(saved.games.poe2.layout.root);
   await writeFile(file, JSON.stringify(saved));
 
   const { app, page } = await launch(userData);

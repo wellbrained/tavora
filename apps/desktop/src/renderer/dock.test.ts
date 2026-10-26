@@ -1,7 +1,22 @@
 import { describe, expect, it } from "vitest";
 import type { Position } from "dockview-vue";
-import { dropReorders, fromDockview, GUIDE, maximizedPanel, resolveDropPosition, resolveOuterEdge, shareOut, toDockview } from "./dock";
-import type { SavedLayout } from "../shared/host-api";
+import { dropReorders, fromDockview, GUIDE, maximizedPanel, MISSING_MODULE_SIZE, panelInfo, resolveDropPosition, resolveOuterEdge, shareOut, toDockview } from "./dock";
+import type { HostViewState, PanelView, SavedLayout } from "../shared/host-api";
+
+describe("what docking knows about a panel", () => {
+  const panel = (moduleId: string, panelType: string | null = null): PanelView => ({ instanceId: "p", moduleId, panelType, name: "Discord", status: "unavailable", waiting: false, content: null });
+  const module = { id: "a.notes", name: "Notes", minWidth: 300, minHeight: 200, panels: [{ id: "big", minWidth: 500, minHeight: 400 }] } as unknown as HostViewState["modules"][number];
+
+  it("takes the room its module or panel type asks for, plus the card border", () => {
+    expect(panelInfo(panel("a.notes"), [module])).toMatchObject({ minWidth: 302, minHeight: 202, module: { id: "a.notes", name: "Notes" } });
+    expect(panelInfo(panel("a.notes", "big"), [module])).toMatchObject({ minWidth: 502, minHeight: 402 });
+  });
+
+  it("still has a size when its module is not installed, so it can be docked", () => {
+    expect(panelInfo(panel("wellbrained.discord"), [module])).toEqual({ title: "Discord", minWidth: MISSING_MODULE_SIZE.minWidth + 2, minHeight: MISSING_MODULE_SIZE.minHeight + 2 });
+    expect(panelInfo(undefined, [module])).toBeUndefined();
+  });
+});
 import { gridName, gridTemplate, LAYOUT_TEMPLATES, templateRects } from "../shared/layout-templates";
 
 describe("the maximized group", () => {
