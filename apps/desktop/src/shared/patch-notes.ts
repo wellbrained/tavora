@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.33",
+    date: "2026-10-26",
+    title: "Counting updates",
+    notes: [
+      "Tavora now tells its service which version you updated to, and which catalog modules you updated, as a plain number. Nothing about you is sent, and only while Online features are on.",
+    ],
+  },
+  {
     version: "0.21.32",
     date: "2026-10-26",
     title: "Your overlays, your layout",
