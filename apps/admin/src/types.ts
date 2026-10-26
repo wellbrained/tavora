@@ -78,7 +78,12 @@ export interface CatalogModule {
   createdAt: string;
   installs: number;
   storedBytes: number;
-  versions: { version: string; publishedAt: string; size: number; zipKept: boolean }[];
+  versions: { version: string; sha256: string; publishedAt: string; size: number; zipKept: boolean }[];
+}
+
+export interface Blocks {
+  blocks: { sha256: string; reason: string; id: string | null; name: string | null; version: string | null; state: "in-force" | "to-sign" }[];
+  signed: { sequence: number; issued: string } | null;
 }
 
 export interface Modules {

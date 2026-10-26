@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import type { AccountStore } from "./account-store.ts";
 import { registerPanelRoutes } from "./admin-panel.ts";
 import { createProbes, type Probes } from "./admin-probes.ts";
+import { blockRoutes, blocksToSign } from "./block-admin.ts";
 import type { CatalogStore } from "./catalog.ts";
 import { catalogTrust } from "./catalog-trust.ts";
 import { keyRequestStatus, revocationEntries, successionEntries } from "./key-requests.ts";
@@ -249,6 +250,9 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     return accounts?.declineKeyRequest(old, Date.now()) ? context.json({ ok: true }) : context.json({ error: "No open request for this key." }, 404);
   });
 
+  // Block from the panel: blocks to sign, and the file to sign them (block-admin.ts).
+  if (catalog) app.route("/api/blocks", blockRoutes({ catalog, trust }));
+
   registerPanelRoutes(app, {
     submissions,
     store,
@@ -256,6 +260,7 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     accounts,
     reviews,
     probes: probes ?? createProbes(),
+    blocksToSign: () => (catalog ? blocksToSign(catalog, trust()).length : 0),
     keysWaiting: () => (accounts?.allKeyRequests() ?? []).filter((request) => keyRequestStatus(request, trust()) === "waiting").length,
     dataset: dataset ?? (() => ({ games: 0, builtAt: null })),
     mailDailyLimit,

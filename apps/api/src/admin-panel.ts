@@ -24,6 +24,8 @@ export interface PanelOptions {
   probes: Probes;
   /** How many key replacement requests wait for a decision. */
   keysWaiting: () => number;
+  /** How many blocks wait to be signed. */
+  blocksToSign?: () => number;
   /** The game dataset's name for itself (`/v1/health`): how many games, and when it was built. */
   dataset: () => { games: number; builtAt: string | null };
   /** Emails a day the provider allows; absent while accounts are off. */
@@ -61,6 +63,7 @@ export function registerPanelRoutes(app: Hono, options: PanelOptions): void {
     { id: "reports", label: "Reported modules", count: catalog?.reports().length ?? 0, section: "review", tab: "reports" },
     { id: "reviews", label: "Reported reviews", count: reviews?.reports().length ?? 0, section: "review", tab: "reviews" },
     { id: "keys", label: "Publisher key requests", count: options.keysWaiting(), section: "review", tab: "keys" },
+    { id: "blocks", label: "Blocks to sign", count: options.blocksToSign?.() ?? 0, section: "modules" },
     { id: "catalog-full", label: "The module catalog is full", count: catalog?.fullSince() ? 1 : 0, section: "status" },
   ];
 

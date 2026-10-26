@@ -155,6 +155,15 @@ The admin app (`ADMIN_PORT`, token as for the rest) answers JSON under `/api/mod
 | `GET /bans` | The banned accounts with reason, note, date and the modules unlisted |
 | `POST /live-check {}` / `GET /live-check` | The one-time run of the five checks over every module already live (newest listed version with its zip kept): **results only, nothing is unlisted or changed**. A second run needs `{ "again": true }`; `GET` returns the saved result |
 
+**Block from the panel.** The admin app also answers under `/api/blocks` (the Modules section is built on it). A block turns a zip off for every player once the signed blocks list holds it; the service only keeps the blocks to sign and never the catalogue key:
+
+| Call | What it does |
+| --- | --- |
+| `GET /` | Every block, in force (in the served signed list) or to sign, with its module, version and reason; `signed` is the served list's sequence and date |
+| `POST / { sha256, reason }` | Keeps a block to sign. The reason is what players read, one line of at most 300 characters. 404 for a zip the catalog never had, 409 if it's in force already |
+| `POST /remove { sha256 }` | Takes back a block to sign. 409 for one in force: sign a list without it instead |
+| `GET /blocks.json` | The entries for `pnpm tavora-catalog-sign blocks`: every block in force, then the ones to sign. Sign it on your PC, upload with `catalog set-list blocks`; a block then shows as in force |
+
 Emails to developers go out through the same mailer as the publish emails, never with the allowance kept for sign-in codes; a mail that can't go out doesn't undo the decision.
 
 **What the server needs:** ClamAV with clamd and fresh signatures. `tavora-api-clamav` on the server (copied there by `Deploy-Api.ps1`) installs `clamav-daemon`, `clamav-freshclam` and `socat`, downloads the signatures, adds the service's user to the `clamav` group, waits until clamd answers and runs `tavora-api-set-setting clamav`, which sets `CLAMD_SOCKET=/var/run/clamav/clamd.ctl` and restarts the service. clamd needs about 1 GB of memory while it holds its signatures, so check the server has the room; the service keeps its 256 MB limit because it only streams files to clamd. `tavora-api-clamav status` shows whether clamd answers. Until then every new version waits for review (the log says so at start). Set `MAINTAINER_EMAIL` too, or nobody is told when a version waits.

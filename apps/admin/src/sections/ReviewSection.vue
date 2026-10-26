@@ -9,7 +9,7 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Tabs, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import { computed, onMounted, ref, watch } from "vue";
-import { act, call, keepPictures, message, resource } from "../api";
+import { act, call, download, keepPictures, message, resource } from "../api";
 import ActionButton from "../components/ActionButton.vue";
 import Group from "../components/Group.vue";
 import Line from "../components/Line.vue";
@@ -74,19 +74,6 @@ async function bulk(past: string, rows: PendingIcon[], path: string, extra: Reco
   if (done < rows.length) problem.value = `${past} ${done} of ${rows.length}, skipped the rest.`;
 }
 
-// The signed lists are fetched with the token, then saved from a blob address.
-async function download(kind: "successions" | "revocations"): Promise<void> {
-  const response = await call(`/api/keys/${kind}.json`);
-  if (!response.ok) throw new Error(`Can't get ${kind}.json.`);
-  const url = URL.createObjectURL(await response.blob());
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${kind}.json`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 const short = (fingerprint: string) => `${fingerprint.slice(0, 12)}…`;
 const DAY = 86_400_000;
@@ -221,8 +208,8 @@ watch(refreshTick, () => void load());
   <template v-else>
     <Group title="Key requests">
       <template #actions>
-        <ActionButton variant="secondary" :run="() => download('successions')">successions.json</ActionButton>
-        <ActionButton variant="secondary" :run="() => download('revocations')">revocations.json</ActionButton>
+        <ActionButton variant="secondary" :run="() => download('/api/keys/successions.json', 'successions.json')">successions.json</ActionButton>
+        <ActionButton variant="secondary" :run="() => download('/api/keys/revocations.json', 'revocations.json')">revocations.json</ActionButton>
       </template>
       <p class="text-muted-foreground px-3 py-2 text-xs">
         Each file holds every entry in force plus the waiting ones. Check it, sign it offline with
