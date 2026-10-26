@@ -20,3 +20,7 @@ export function ago(iso: string | null | undefined, now = Date.now()): string {
 }
 
 export const plural = (count: number, one: string, many = `${one}s`): string => `${count} ${count === 1 ? one : many}`;
+
+/** The five reasons for Decline and Ban, as the developer's email names them. */
+export const REASONS = { unsafe: "Unsafe or harmful", hateful: "Hateful content", adult: "Adult content", spam: "Spam or copy", broken: "Doesn't work" } as const;
+export const reasonLabel = (reason: string): string => REASONS[reason as keyof typeof REASONS] ?? reason;

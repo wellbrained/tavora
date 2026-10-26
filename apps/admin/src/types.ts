@@ -110,3 +110,62 @@ export interface Stats {
   totals: Record<StatKind, Record<string, number>>;
   accounts: ({ total: number; active7: number; active30: number } | null)[];
 }
+
+export interface ReviewReason {
+  check: string;
+  text: string;
+  detail?: string;
+}
+
+export type DeclineReason = "unsafe" | "hateful" | "adult" | "spam" | "broken";
+
+/** GET /api/moderation/waiting: one version waiting for review, with what helps judge it. */
+export interface WaitingVersion {
+  sha256: string;
+  id: string;
+  name: string;
+  version: string;
+  size: number;
+  queuedAt: string;
+  previousVersion: string | null;
+  reasons: ReviewReason[];
+  developer: {
+    accountId: string | null;
+    name: string | null;
+    email: string | null;
+    banned: boolean;
+    approvedBefore: boolean;
+    keys: string[];
+    prefixes: string[];
+    modules: string[];
+  };
+  module: {
+    description: string | null;
+    homepage: string | null;
+    support: string | null;
+    games: unknown;
+    permissions: { network: string[]; connectors: string[] };
+    notes: string[];
+    readme: string | null;
+    pictures: { sha256: string; type: string; size: number; kind: "icon" | "screenshot" }[];
+    files: { name: string; size: number }[];
+  };
+}
+
+export interface Ban {
+  accountId: string;
+  reason: string;
+  note: string | null;
+  bannedAt: string;
+  modules: string[];
+  email: string | null;
+  name: string | null;
+}
+
+export interface LiveCheck {
+  ranAt: string;
+  checked: number;
+  skipped: number;
+  flagged: number;
+  results: { id: string; version: string; name: string; owner: string; developer: string | null; reasons: ReviewReason[]; error?: string }[];
+}
