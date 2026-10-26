@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.4",
+    "date": "2026-10-26",
+    "notes": [
+      "The Connection section says how your connection is for playing: Smooth, Laggy or Unstable, and how long it has run without a drop.",
+      "All four connection cards fit in one row, and the drops list only shows once there is a drop."
+    ]
+  },
+  {
     "version": "0.1.3",
     "date": "2026-10-26",
     "notes": [

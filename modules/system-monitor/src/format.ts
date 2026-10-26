@@ -115,6 +115,30 @@ export function lossTone(value: number): DriveTone {
   return value >= 2 ? "warning" : "ok";
 }
 
+export type Verdict = "smooth" | "laggy" | "unstable";
+
+/**
+ * How the connection is for playing, from the ping to the internet and the loss of the last 100 pings. Smooth: under
+ * 60 ms and under 1 % lost. Laggy: under 120 ms and under 3 %. Unstable: worse. A lost last ping (null) is already in
+ * the loss, so then only the loss counts.
+ */
+export function verdict(internetMs: number | null, loss: number): Verdict {
+  const ping = internetMs ?? 0;
+  if (ping < 60 && loss < 1) return "smooth";
+  if (ping < 120 && loss < 3) return "laggy";
+  return "unstable";
+}
+
+/** When the last drop in the log ended, or null when there is none (or one still goes on). */
+export function lastDropEnd(outages: readonly { end: number | null }[]): number | null {
+  let last: number | null = null;
+  for (const outage of outages) {
+    if (outage.end === null) return null;
+    if (last === null || outage.end > last) last = outage.end;
+  }
+  return last;
+}
+
 /** How long a drop lasted: "40 s", "3 min", "1 h 5 min". */
 export function duration(ms: number): string {
   const seconds = Math.max(0, Math.round(ms / 1000));

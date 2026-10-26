@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// The Connection section: is the PC online, how fast the router and the internet answer, how many pings get lost, how
-// much goes through the network adapter, and the drops of the last 30 days. Tavora's connection watcher does the
+// The Connection section: how the connection is for playing (smooth, laggy, unstable or down), how fast the router and
+// the internet answer, how much goes through the network adapter, how many pings get lost, and the drops of the last
+// 30 days (only once there is one). Tavora's connection watcher does the
 // pinging (it runs even while this panel is hidden, so drops are logged); this only shows what it found. A red notice
 // tops the section while the connection is down. No sound and no system notification, by design.
 import { ArrowDown, ArrowUp } from "@lucide/vue";
@@ -10,7 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/off
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import type { SystemConnection, SystemOutageKind } from "@tavora/sdk";
 import { computed, ref } from "vue";
-import { clock, dayAndClock, dropsToday, duration, lossPercent, lossTone, mbit, pingMs, pingTone, type DriveTone } from "./format";
+import { clock, dayAndClock, dropsToday, duration, lastDropEnd, lossPercent, lossTone, mbit, pingMs, pingTone, verdict, type DriveTone, type Verdict } from "./format";
 import { language, plural, t } from "./i18n";
 import type { Monitor } from "./monitor";
 
@@ -37,11 +38,21 @@ const checking = computed(() => connection.value === null && !isOff.value);
 
 const TEXT_TONE: Record<DriveTone, string> = { ok: "", warning: "text-warning", danger: "text-destructive" };
 
+/** Green only while smooth; laggy and unstable are yellow, so red always means the connection is down. */
+const VERDICT: Record<Verdict, { text: "verdict.smooth" | "verdict.laggy" | "verdict.unstable"; class: string }> = {
+  smooth: { text: "verdict.smooth", class: "text-success" },
+  laggy: { text: "verdict.laggy", class: "text-warning" },
+  unstable: { text: "verdict.unstable", class: "text-warning" },
+};
+
 const status = computed(() => {
-  if (isOff.value) return { text: t("state.off"), class: "text-muted-foreground" };
-  if (checking.value) return { text: t("state.checking"), class: "text-muted-foreground" };
-  if (down.value) return { text: t(KIND_SHORT[down.value]), class: "text-destructive" };
-  return { text: t("state.online"), class: "text-success" };
+  if (isOff.value) return { text: t("state.off"), class: "text-muted-foreground", detail: t("connection.off") };
+  const now = connection.value;
+  if (checking.value || !now) return { text: t("state.checking"), class: "text-muted-foreground", detail: "" };
+  if (down.value) return { text: t(KIND_SHORT[down.value]), class: "text-destructive", detail: t("status.down", { duration: duration(at.value - (now.since ?? at.value)) }) };
+  const ended = lastDropEnd(outages.value);
+  const look = VERDICT[verdict(now.internetMs, now.lossPercent)];
+  return { text: t(look.text), class: look.class, detail: ended === null ? t("status.noDrops") : t("status.calm", { duration: duration(at.value - ended) }) };
 });
 
 const banner = computed(() => {
@@ -108,15 +119,14 @@ const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
     <template v-else>
       <Notice v-if="banner" variant="error" :title="banner.title" data-testid="connection-banner">{{ banner.text }}</Notice>
 
-      <div class="grid grid-cols-1 items-start gap-2 @min-[620px]:grid-cols-3">
+      <!-- Four cards in a row on a wide panel, two by two below 620 px, one by one on a very narrow one. -->
+      <div class="grid grid-cols-1 items-stretch gap-2 @min-[320px]:grid-cols-2 @min-[620px]:grid-cols-4">
         <section :class="CARD" data-testid="connection-status">
           <header class="flex items-baseline gap-2">
             <span :class="LABEL">{{ t("status.title") }}</span>
           </header>
           <div :class="cn(BIG, 'text-center whitespace-nowrap', status.class)" data-testid="status-text">{{ status.text }}</div>
-          <p class="text-muted-foreground truncate text-center text-xs tabular-nums" data-testid="status-detail">
-            {{ isOff ? t("connection.off") : connection ? connection.target : "" }}
-          </p>
+          <p class="text-muted-foreground truncate text-center text-xs tabular-nums" data-testid="status-detail">{{ status.detail }}</p>
         </section>
 
         <section :class="CARD" data-testid="connection-ping">
@@ -135,14 +145,6 @@ const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
           </div>
         </section>
 
-        <section :class="CARD" data-testid="connection-loss" :title="t('loss.hint')" tabindex="0">
-          <header class="flex items-baseline gap-2">
-            <span :class="LABEL">{{ t("loss.title") }}</span>
-          </header>
-          <div :class="cn(BIG, 'text-center', loss.class)" data-testid="loss-text">{{ loss.text }}<span v-if="loss.text" class="text-muted-foreground ml-0.5 text-base font-normal">%</span></div>
-          <p class="text-muted-foreground truncate text-center text-xs">{{ t("loss.hint") }}</p>
-        </section>
-
         <section :class="CARD" data-testid="connection-speed" :title="t('speed.hint')" tabindex="0">
           <header class="flex items-baseline gap-2">
             <span :class="LABEL">{{ t("speed.title") }}</span>
@@ -153,15 +155,23 @@ const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
           </div>
           <p class="text-muted-foreground text-center text-xs">{{ t("speed.unit") }}</p>
         </section>
+        <section :class="CARD" data-testid="connection-loss" :title="t('loss.hint')" tabindex="0">
+          <header class="flex items-baseline gap-2">
+            <span :class="LABEL">{{ t("loss.title") }}</span>
+          </header>
+          <div :class="cn(BIG, 'text-center', loss.class)" data-testid="loss-text">{{ loss.text }}<span v-if="loss.text" class="text-muted-foreground ml-0.5 text-base font-normal">%</span></div>
+          <p class="text-muted-foreground truncate text-center text-xs">{{ t("loss.hint") }}</p>
+        </section>
 
-        <section :class="cn(CARD, 'gap-1 @min-[620px]:col-span-2')" data-testid="connection-drops">
+
+        <section v-if="outages.length" :class="cn(CARD, 'col-span-full gap-1')" data-testid="connection-drops">
           <Collapsible>
             <div class="flex items-center gap-2">
               <CollapsibleTrigger class="min-w-0 flex-1 py-0.5" data-testid="drops-toggle">
                 <span :class="LABEL">{{ t("drops.title") }}</span>
                 <span class="min-w-0 flex-1 truncate text-right text-xs tabular-nums" data-testid="drops-today">{{ dropsText }}</span>
               </CollapsibleTrigger>
-              <Button v-if="outages.length" variant="ghost" size="xs" data-testid="drops-clear" @click="confirming = true">{{ t("drops.clear") }}</Button>
+              <Button variant="ghost" size="xs" data-testid="drops-clear" @click="confirming = true">{{ t("drops.clear") }}</Button>
             </div>
             <CollapsibleContent>
               <p v-if="rows.length === 0" class="text-muted-foreground pt-1.5 text-xs" data-testid="drops-empty">{{ t("drops.empty") }}</p>

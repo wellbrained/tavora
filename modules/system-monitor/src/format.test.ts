@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clock, degrees, driveTone, dropsToday, duration, lossPercent, lossTone, mbit, megahertz, memory, num, percent, pingMs, pingTone, size, speed, temperatureTone, usedPercent, watts } from "./format";
+import { clock, degrees, driveTone, dropsToday, duration, lastDropEnd, lossPercent, lossTone, mbit, megahertz, memory, num, percent, pingMs, pingTone, size, speed, temperatureTone, usedPercent, verdict, watts } from "./format";
 
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
@@ -123,5 +123,29 @@ describe("connection numbers", () => {
     expect(dropsToday([at(24, 23), at(25, 0), at(25, 14)], now)).toBe(2);
     expect(dropsToday([], now)).toBe(0);
     expect(clock(new Date(2026, 9, 25, 14, 5).getTime(), "en-GB")).toBe("14:05");
+  });
+});
+
+describe("verdict", () => {
+  it.each([
+    [14, 0, "smooth"],
+    [59, 0.9, "smooth"],
+    [60, 0, "laggy"],
+    [20, 1, "laggy"],
+    [119, 2.9, "laggy"],
+    [120, 0, "unstable"],
+    [20, 3, "unstable"],
+    [null, 0.5, "smooth"],
+    [null, 5, "unstable"],
+  ] as const)("calls %s ms with %s %% lost %s", (ms, loss, expected) => {
+    expect(verdict(ms, loss)).toBe(expected);
+  });
+});
+
+describe("lastDropEnd", () => {
+  it("is the latest end, or null with no drop or one still going", () => {
+    expect(lastDropEnd([])).toBeNull();
+    expect(lastDropEnd([{ end: 5 }, { end: 9 }, { end: 7 }])).toBe(9);
+    expect(lastDropEnd([{ end: 5 }, { end: null }])).toBeNull();
   });
 });
