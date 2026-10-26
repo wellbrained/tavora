@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.21",
+    date: "2026-10-26",
+    title: "See which apps use your memory",
+    notes: [
+      "The System Monitor's Memory card has a new button at the top right: it lists your apps with their RAM and CPU.",
+      "Search the list and sort it by name, RAM or CPU. Windows' own apps are marked.",
+    ],
+  },
+  {
     version: "0.21.20",
     date: "2026-10-26",
     title: "Tidier Settings",
