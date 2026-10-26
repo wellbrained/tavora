@@ -285,6 +285,15 @@ describe("panel types", () => {
     expect(validateManifest({ ...valid, id: "tavora.planner", panels })).toMatchObject({ ok: true });
   });
 
+  it("takes overlaySize with an overlay page and a minTavora newer than 0.21.27", () => {
+    const overlay = { ...valid, minTavora: "0.21.28", overlay: "dist/overlay.html", permissions: { network: [], connectors: ["stream-overlay"] } };
+    expect(validateManifest({ ...overlay, overlaySize: { width: 440, height: 100 } }).ok).toBe(true);
+    expect(validateManifest({ ...overlay, minTavora: "0.21.27", overlaySize: { width: 440, height: 100 } })).toEqual({ ok: false, errors: [expect.stringContaining("overlaySize needs a minTavora newer than 0.21.27")] });
+    expect(validateManifest({ ...valid, minTavora: "0.21.28", overlaySize: { width: 440, height: 100 } })).toEqual({ ok: false, errors: ["overlaySize needs an overlay page"] });
+    expect(validateManifest({ ...overlay, overlaySize: { width: 440 } })).toEqual({ ok: false, errors: ["overlaySize must be { width, height } in pixels"] });
+    expect(validateManifest({ ...overlay, overlaySize: { width: 440, height: 100, depth: 1 } }).ok).toBe(false);
+  });
+
   it("passes inGame on to the resolved type", () => {
     const types = panelTypes({ ...valid, minTavora: "0.21.3", panels: [{ id: "a", name: "A", inGame: true }, { id: "b", name: "B" }] } as ModuleManifest);
     expect(types.map((type) => type.inGame)).toEqual([true, undefined]);

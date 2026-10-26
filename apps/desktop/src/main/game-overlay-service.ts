@@ -15,6 +15,7 @@ import { HostError } from "./errors";
 import type { Foreground, ForegroundProbe } from "./foreground";
 import type { GameOverlayWindow } from "./game-overlay-window";
 import {
+  DEFAULT_RELATIVE_RECT,
   ALL_GAMES,
   GameOverlayStore,
   LAYER_OWNER,
@@ -29,7 +30,7 @@ import {
   looksExclusive,
   overlayId,
   overlayVisible,
-  panelStartRect,
+  startRect,
   panelWindowId,
   placeRelative,
   relativeTo,
@@ -223,7 +224,7 @@ export class GameOverlays {
       return "off";
     }
     const subject: GameOverlaySubject = { owner: module.owner, moduleId: module.manifest.id, gameId, key };
-    const added = this.store.add(subject, this.options.scopeOf(gameId));
+    const added = this.store.add(subject, this.options.scopeOf(gameId), startRect(module.manifest.overlaySize ?? null, this.startArea(), DEFAULT_RELATIVE_RECT));
     if (added === "full") return "full";
     try {
       // The link holds what the module publishes for the key; making it now means the page hears it from the start.
@@ -260,14 +261,18 @@ export class GameOverlays {
       if (this.options.supported) this.options.openSetting("game-overlays");
       return "off";
     }
-    const area = this.game ?? this.lastGame ?? this.options.screen?.() ?? null;
-    const added = this.store.addPanel({ ...panel, scope: this.options.scopeOf(panel.gameId) }, panelStartRect(preferred, area));
+    const added = this.store.addPanel({ ...panel, scope: this.options.scopeOf(panel.gameId) }, startRect(preferred, this.startArea()));
     if (added === "full") return "full";
     // The player asked for it: a live view whose page crashed too often gets another chance.
     this.revive(liveWindowId(panel.instanceId));
     this.options.changed();
     this.tick();
     return "shown";
+  }
+
+  /** What a new overlay or panel is sized against: the game window in front, else the one seen last, else the main screen. */
+  private startArea(): Rect | null {
+    return this.game ?? this.lastGame ?? this.options.screen?.() ?? null;
   }
 
   /** Whether the panel is one the player shows in their game. */

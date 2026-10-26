@@ -113,8 +113,9 @@ export function parseHelperLine(line: string): HelperMessage | null {
 /** Apps whose Windows name says little; the rest are named after their program or package. */
 const KNOWN_APPS: [RegExp, string][] = [
   [/spotify/i, "Spotify"],
-  [/^chrome$|chrome\.exe$/i, "Chrome"],
-  [/^msedge$|msedge\.exe$/i, "Edge"],
+  // A site or web app in a window of its own is "Chrome.<app>" or "MSEdge.<site>": named after the browser.
+  [/^chrome$|chrome\.exe$|^chrome\./i, "Chrome"],
+  [/^msedge$|msedge\.exe$|^msedge\./i, "Edge"],
   // Firefox registers itself under a hash of its install folder.
   [/^308046B0AF4A39CB$|firefox/i, "Firefox"],
   [/brave/i, "Brave"],

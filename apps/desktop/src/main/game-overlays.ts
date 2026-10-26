@@ -59,17 +59,17 @@ export const DEFAULT_RELATIVE_RECT: RelativeRect = { x: 0.02, y: 0.03, width: 0.
 export const DEFAULT_PANEL_RECT: RelativeRect = { x: 0.02, y: 0.03, width: 0.22, height: 0.4 };
 
 /**
- * Where a panel shown in the game starts: in the corner, at the size its module prefers (the manifest's preferred
- * viewport) in a window of `area`'s size, so a small panel isn't stretched. Without a preferred size, or before any game
- * window is known, it gets DEFAULT_PANEL_RECT's size.
+ * Where a panel or overlay shown in the game starts: in the corner of `usual`, at the size its module prefers (a panel's
+ * preferred viewport, an overlay's `overlaySize`) in a window of `area`'s size, so it isn't stretched. Without a
+ * preferred size, or before any game window is known, it gets `usual`'s size.
  */
-export function panelStartRect(preferred: { width?: number | undefined; height?: number | undefined } | null, area: Rect | null): RelativeRect {
-  if (!area || area.width <= 0 || area.height <= 0) return { ...DEFAULT_PANEL_RECT };
+export function startRect(preferred: { width?: number | undefined; height?: number | undefined } | null, area: Rect | null, usual: RelativeRect = DEFAULT_PANEL_RECT): RelativeRect {
+  if (!area || area.width <= 0 || area.height <= 0) return { ...usual };
   const share = (size: number | undefined, of: number, room: number, fallback: number) => (size && size > 0 ? Math.min(room, size / of) : fallback);
   return {
-    ...DEFAULT_PANEL_RECT,
-    width: share(preferred?.width, area.width, 1 - DEFAULT_PANEL_RECT.x, DEFAULT_PANEL_RECT.width),
-    height: share(preferred?.height, area.height, 1 - DEFAULT_PANEL_RECT.y, DEFAULT_PANEL_RECT.height),
+    ...usual,
+    width: share(preferred?.width, area.width, 1 - usual.x, usual.width),
+    height: share(preferred?.height, area.height, 1 - usual.y, usual.height),
   };
 }
 
@@ -353,11 +353,11 @@ export class GameOverlayStore {
   }
 
   /** Adds an overlay with the usual settings, in the corner of the game's window; a game (and the general ones) may have `LIMITS.maxGameOverlays`. */
-  add(subject: GameOverlaySubject, scope: OverlayScope): AddResult {
+  add(subject: GameOverlaySubject, scope: OverlayScope, first: RelativeRect = DEFAULT_RELATIVE_RECT): AddResult {
     if (this.find(subject)) return "exists";
     const bucket = bucketOf({ scope, gameId: subject.gameId });
     if (this.count(bucket) >= LIMITS.maxGameOverlays) return "full";
-    this.overlays.push({ ...subject, scope, mode: "always", opacity: 100, hideFromCapture: false, rect: this.startRect(DEFAULT_RELATIVE_RECT, bucket) });
+    this.overlays.push({ ...subject, scope, mode: "always", opacity: 100, hideFromCapture: false, rect: this.startRect(first, bucket) });
     this.saveSoon();
     return "added";
   }
