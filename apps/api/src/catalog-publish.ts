@@ -3,11 +3,14 @@ import { bodyLimit } from "hono/body-limit";
 import { PUBLISH_STATEMENT, ZIP_LIMITS } from "@tavora/pack";
 import type { AccountStore } from "./account-store.ts";
 import { MAIL_RESERVED } from "./accounts.ts";
-import { CatalogError, checkCatalogZip, type CatalogStore, type CheckedZip } from "./catalog.ts";
+import { CatalogError, checkCatalogZip, type CatalogStore, type CheckedZip, type ReviewReason } from "./catalog.ts";
 import { catalogTrust } from "./catalog-trust.ts";
-import { mailLanguage, publishedMail, type Mail, type Mailer } from "./mail.ts";
+import { mailLanguage, publishedMail, type Mail, type MailLanguage, type Mailer } from "./mail.ts";
+import { createNotifier, waitingMail, waitingNoticeMail } from "./moderation-mail.ts";
+import { reviewUpload } from "./moderation.ts";
 import { signedStatement } from "./publishers.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import type { Scanner } from "./virus-scan.ts";
 
 /**
  * Publishing to the catalog (Milestone E, step 3): `tavora-pack publish` sends a zip it packed, with
@@ -19,8 +22,15 @@ import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
  * by whoever received it; only the key's holder decides what lists. A revoked key publishes nothing
  * new (C6), and a successor key publishes the modules of the key it replaces (C7), both by the lists
  * signed with the catalogue key.
+ *
+ * Review before listing (decided 2026-10-26): every new version runs the automatic checks of moderation.ts. All pass: it lists at once
+ * (201). Any fails, it is the first module of an account that has had nothing approved, or its pictures are new: it waits (202), not
+ * listed, its zip kept privately, until a person approves it on the review page. Nothing approves a version by itself, and a check that
+ * cannot run counts as failed. A banned account publishes nothing (403 banned).
  */
 export interface PublishLimits {
+  /** Versions one account may have waiting for review at once. */
+  waitingPerAccount: number;
   /** Uploads per account in 24 hours (C9). */
   uploadsPerDay: number;
   /** Bytes of zips one account may have stored. */
@@ -32,6 +42,7 @@ export interface PublishLimits {
 }
 
 export const PUBLISH_LIMITS: Readonly<PublishLimits> = {
+  waitingPerAccount: 5,
   uploadsPerDay: 10,
   accountBytes: 200 * 1024 * 1024,
   catalogBytes: 20 * 1024 * 1024 * 1024,
@@ -55,6 +66,8 @@ export interface PublishOptions {
   maintainer?: { email: string; mailer: Mailer; mailDailyLimit?: number };
   /** How the developer is told about each publish. Absent: nobody is (tests that don't look). */
   mail?: { mailer: Mailer; mailDailyLimit?: number };
+  /** The virus scanner of the automatic checks. Without one every new version waits for review. */
+  scanner?: Scanner | undefined;
 }
 
 export function catalogFullMail(to: string, usedBytes: number, catalogBytes: number): Mail {
@@ -70,10 +83,10 @@ export function catalogFullMail(to: string, usedBytes: number, catalogBytes: num
 }
 
 /** The middleware and handler for POST /v1/catalog/publish. */
-export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, maintainer, mail }: PublishOptions) {
+export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, maintainer, mail, scanner }: PublishOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
-  const { uploadsPerDay, accountBytes, catalogBytes, keepVersions } = { ...PUBLISH_LIMITS, ...limits };
-  const refuse = (context: Context, status: 400 | 401 | 403 | 409 | 413 | 415 | 429 | 503 | 507, reason: string, error: string) => context.json({ error, reason }, status);
+  const { uploadsPerDay, accountBytes, catalogBytes, keepVersions, waitingPerAccount } = { ...PUBLISH_LIMITS, ...limits };
+  const refuse = (context: Context, status: 400 | 401 | 403 | 404 | 409 | 413 | 415 | 429 | 503 | 507, reason: string, error: string) => context.json({ error, reason }, status);
 
   const limit = bodyLimit({
     maxSize: ZIP_LIMITS.maxArchiveBytes,
@@ -119,6 +132,20 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     }
   };
 
+  const languageOf = (context: Context): MailLanguage => mailLanguage((context.req.header("accept-language") ?? "").slice(0, 2).toLowerCase());
+
+  // A version that waits: the developer hears of it, and so does the maintainer. Best effort, like the published email.
+  const tellWaiting = async (store: AccountStore, context: Context, accountId: string, checked: CheckedZip, reasons: ReviewReason[], at: number) => {
+    if (!mail && !maintainer) return;
+    const module = { id: checked.manifest.id, name: checked.manifest.name, version: checked.manifest.version };
+    const to = store.account(accountId)?.email;
+    if (mail && to) await createNotifier({ store, mailer: mail.mailer, mailDailyLimit: mail.mailDailyLimit, now: () => at }).send(waitingMail(to, module, reasons, languageOf(context)));
+    if (maintainer) {
+      const developer = store.developer(accountId)?.name ?? to ?? accountId;
+      await createNotifier({ store, mailer: maintainer.mailer, mailDailyLimit: maintainer.mailDailyLimit, now: () => at }).send(waitingNoticeMail(maintainer.email, module, developer, reasons));
+    }
+  };
+
   const handler = async (context: Context) => {
     const wait = limiter.check(clientKey(context.req.raw));
     if (wait > 0) {
@@ -147,6 +174,9 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
       return refuse(context, 403, "bad-signature", "The upload is not signed by the key that signed the zip.");
     }
     if (by.accountId !== key.accountId) return refuse(context, 403, "wrong-account", "This publisher key is linked to another Tavora account than the one publishing.");
+    // A banned developer publishes nothing, with any of the account's keys, a sign-in or a token (decided 2026-10-26).
+    if (store.isBanned(key.accountId) || store.isBannedKey(checked.owner)) return refuse(context, 403, "banned", "This account can't publish to the catalog any more. Check your email for why.");
+    if (catalog.isDeclined(checked.sha256)) return refuse(context, 403, "declined", "Tavora declined this exact zip. Fix the problem and publish a new version.");
     const trust = catalogTrust(catalog, catalogueKey);
     if (trust.revoked(checked.owner, checked.sha256)) return refuse(context, 403, "key-revoked", "This publisher key was revoked and publishes nothing new. Link a new key to your account.");
     // Reported as leaked in the app: nothing new from it while the revocation waits to be signed.
@@ -175,6 +205,9 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (!isMaintainer && catalog.uploadsSince(key.accountId, new Date(at - 86_400_000)) >= uploadsPerDay) {
       return refuse(context, 429, "daily-limit", `An account can publish ${uploadsPerDay} versions a day. Try again tomorrow.`);
     }
+    if (catalog.waitingCount(key.accountId) >= waitingPerAccount) {
+      return refuse(context, 429, "too-many-waiting", `${waitingPerAccount} of your versions are waiting for review already. Wait for them, or withdraw one.`);
+    }
     // Only a module's newest versions keep their zips, so what this version pushes out doesn't count against it.
     const id = checked.manifest.id;
     if (catalog.storedBytes(key.accountId) - catalog.freedByNextVersion(id, keepVersions, key.accountId) + checked.size > accountBytes) {
@@ -187,18 +220,62 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
       return refuse(context, 507, "catalog-full", "The catalog has no room right now. Tavora has been told.");
     }
 
+    // The automatic checks. They never throw: one that cannot run is a reason to wait.
+    const reasons = await reviewUpload({ catalog, scanner }, checked, bytes, { accountId: key.accountId, fingerprints: store.keys(key.accountId).map((linked) => linked.fingerprint) });
     try {
-      catalog.add(bytes, new Date(at), key.accountId, checked, firstKey);
+      catalog.add(bytes, new Date(at), key.accountId, checked, firstKey, { reasons, language: languageOf(context), token: by.token });
     } catch (error) {
       if (error instanceof CatalogError) return refuse(context, 409, "conflict", error.message);
       throw error;
     }
+    if (held === "free") store.reservePrefix(key.accountId, prefix, at);
+    if (reasons.length > 0) {
+      await tellWaiting(store, context, key.accountId, checked, reasons, at);
+      return context.json(
+        { status: "waiting", id: checked.manifest.id, version: checked.manifest.version, sha256: checked.sha256, reasons: reasons.map(({ check, text }) => ({ check, text })) },
+        202,
+      );
+    }
     catalog.prune(id, keepVersions, new Date(at));
     catalog.clearFull();
-    if (held === "free") store.reservePrefix(key.accountId, prefix, at);
     await tellPublished(store, context, key.accountId, checked, by.token, at);
     return context.json({ status: "published", id: checked.manifest.id, version: checked.manifest.version, sha256: checked.sha256 }, 201);
   };
 
-  return { limit, handler };
+  /** The signed-in account's versions waiting for review, with their reasons. */
+  const waiting = (context: Context) => {
+    const wait = limiter.check(clientKey(context.req.raw));
+    if (wait > 0) {
+      context.header("Retry-After", String(wait));
+      return refuse(context, 429, "too-many", "Too many requests. Wait a while and try again.");
+    }
+    if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
+    const by = uploader(store, context, now());
+    if (!by) return refuse(context, 401, "sign-in-needed", "Sign in to see your versions.");
+    return context.json({
+      waiting: catalog
+        .waitingVersions()
+        .filter((version) => version.accountId === by.accountId)
+        .map((version) => ({ id: version.id, version: version.version, sha256: version.sha256, queuedAt: version.queuedAt, reasons: version.review.reasons.map(({ check, text }) => ({ check, text })) })),
+    });
+  };
+
+  /** Takes one of the account's waiting versions back: its row and zip go. Only the account that uploaded it can. */
+  const withdraw = (context: Context) => {
+    const wait = limiter.check(clientKey(context.req.raw));
+    if (wait > 0) {
+      context.header("Retry-After", String(wait));
+      return refuse(context, 429, "too-many", "Too many requests. Wait a while and try again.");
+    }
+    if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
+    const by = uploader(store, context, now());
+    if (!by) return refuse(context, 401, "sign-in-needed", "Sign in to withdraw a version.");
+    const sha256 = context.req.param("sha256") ?? "";
+    const version = /^[0-9a-f]{64}$/.test(sha256) ? catalog.waitingVersion(sha256) : null;
+    if (!version || version.accountId !== by.accountId) return refuse(context, 404, "not-waiting", "No version of yours with this hash is waiting for review.");
+    catalog.removeWaiting(sha256);
+    return context.json({ status: "withdrawn", id: version.id, version: version.version, sha256 });
+  };
+
+  return { limit, handler, waiting, withdraw };
 }

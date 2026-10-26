@@ -289,7 +289,8 @@ export interface PublishView {
   ownPrefix: string | null;
   /** Why the last Publish didn't go through, in words. */
   error: string | null;
-  published: { id: string; version: string } | null;
+  /** What the catalog did: `waiting` when a person at Tavora looks at it before it lists (review before listing). */
+  published: { id: string; version: string; waiting?: boolean } | null;
 }
 
 export type PublishProblem =

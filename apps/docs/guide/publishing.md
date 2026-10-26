@@ -48,7 +48,18 @@ Press **Publish** on the review screen to sign the zip with your key and upload 
 
 Every upload sends an email to your account's address, naming the module, the version and whether it came from Tavora or which publish token. If you didn't publish it, write to [tavora.app@gmail.com](mailto:tavora.app@gmail.com) right away.
 
-The service checks the zip the way Tavora's installer does: the size and compression limits, the manifest and every file it names, that each screenshot really is a PNG or WebP within the limits, the changelog and the signature over every file. A zip that passes is listed at once. There's no review before listing; a person at Tavora looks only at modules players report.
+The service checks the zip the way Tavora's installer does: the size and compression limits, the manifest and every file it names, that each screenshot really is a PNG or WebP within the limits, the changelog and the signature over every file. A zip that passes is checked automatically (see [Waiting for review](#waiting-for-review)) and, if all is well, listed at once. Read [what's not allowed in the catalog](./catalog-rules.md) before you publish.
+
+## Waiting for review
+
+Every new version goes through automatic checks: its words (including adult terms), what it asks for, whether it copies another module, warning signs in its code (`eval`, `new Function`, WebAssembly, code loaded from the internet, packed or obfuscated code) and a virus scan. If they all pass, it is listed at once. If one doesn't, or can't run, the version **waits**: it isn't listed, and a person at Tavora looks at it. A version also always waits when:
+
+- it's the first module of your account, until one of your versions has been approved, or
+- its icon or screenshots are new or changed since the last version.
+
+Tavora's Publish screen says the version is waiting for review, and `tavora-pack publish` prints **Waiting for review** with the reasons. You get an email when it waits and another when it's decided; nothing is approved automatically. Waiting is normal and nothing to fix. **Approve** lists it, **Decline** tells you why in an email (*Unsafe or harmful*, *Hateful content*, *Adult content*, *Spam or copy* or *Doesn't work*, with an optional note), never lists that version and deletes its zip, and a developer who keeps breaking the [rules](./catalog-rules.md) can be banned: the account and its keys can't publish, and its modules leave the catalog.
+
+To take a waiting version back, run `TAVORA_PUBLISH_TOKEN=tvp_… npx @tavora/pack withdraw <zip or sha256>`. An account can have 5 versions waiting at once.
 
 ## What players see
 
@@ -88,6 +99,9 @@ An account can publish 10 versions a day and keep 200 MB of zips in the catalog.
 | Your account has published as many versions as it can today | Wait a day. |
 | Your modules take as much room in the catalog as an account may have | Make the zip smaller. |
 | The zip was refused: … | The zip failed a check; the message names it. |
+| This account can't publish to the catalog any more | The account was banned. The email says why; see [what's not allowed](./catalog-rules.md). |
+| Tavora declined this exact zip | Fix what the email says and publish a new version. |
+| … versions are waiting for review already | Wait for them, or withdraw one with `tavora-pack withdraw`. |
 
 ## Publish from CI
 

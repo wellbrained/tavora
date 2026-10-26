@@ -151,6 +151,9 @@ const REASONS: Record<string, MessageKey> = {
   "account-full": "publish.error.accountFull",
   "catalog-full": "publish.error.catalogFull",
   "too-big": "publish.error.tooBig",
+  banned: "publish.error.banned",
+  declined: "publish.error.declined",
+  "too-many-waiting": "publish.error.tooManyWaiting",
 };
 
 /** The prefixes the account holds as the service answers them; null for anything off. */
@@ -513,7 +516,8 @@ export class AccountClient {
     if (typeof answer.id !== "string" || typeof answer.version !== "string" || typeof answer.sha256 !== "string") throw new PlayerError("error.generic");
     // The upload reserved the prefix when it was new.
     await this.readPrefixes();
-    return { id: answer.id, version: answer.version, sha256: answer.sha256 };
+    // 202 is a version a person at Tavora looks at before it lists.
+    return { id: answer.id, version: answer.version, sha256: answer.sha256, status: answer.status === "waiting" ? "waiting" : "published", reasons: [] };
   }
 
   // ── Id prefixes ────────────────────────────────────────────────────────

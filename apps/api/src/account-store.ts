@@ -243,6 +243,11 @@ export class AccountStore {
         name text not null, created_at integer not null, expires_at integer not null, last_used_at integer
       );
       create index if not exists publish_tokens_account on publish_tokens (account_id);
+      -- Banned developers (decided 2026-10-26). No foreign key: deleting the account does not lift the ban, and its keys stay banned.
+      create table if not exists bans (
+        account_id text primary key, reason text not null, note text, banned_at integer not null, modules text not null, email text, name text
+      );
+      create table if not exists banned_keys (fingerprint text primary key, account_id text not null);
     `);
     this.migrate();
   }
@@ -449,6 +454,8 @@ export class AccountStore {
   linkKey(accountId: string, fingerprint: string, publicKey: string, now: number): "ok" | "taken" | "too-many" {
     const owner = this.db.prepare("select account_id from publisher_keys where fingerprint = ?").get(fingerprint) as { account_id: string } | undefined;
     if (owner) return owner.account_id === accountId ? "ok" : "taken";
+    // A key of a banned developer is never linked again, not even after the account is deleted.
+    if (this.isBannedKey(fingerprint)) return "taken";
     if (this.keys(accountId).length >= MAX_KEYS) return "too-many";
     this.db.prepare("insert into publisher_keys (fingerprint, account_id, public_key, linked_at) values (?, ?, ?, ?)").run(fingerprint, accountId, publicKey, now);
     return "ok";
@@ -458,6 +465,50 @@ export class AccountStore {
     return (
       this.db.prepare("select fingerprint, linked_at from publisher_keys where account_id = ? order by linked_at, rowid").all(accountId) as unknown as { fingerprint: string; linked_at: number }[]
     ).map((row) => ({ fingerprint: row.fingerprint, linkedAt: new Date(row.linked_at).toISOString() }));
+  }
+
+  // ── Bans (decided 2026-10-26) ──────────────────────────────────────────
+
+  /** Bans a developer account and every key linked to it now. `modules` are the ids delisted with the ban, to list again on unban. */
+  ban(accountId: string, reason: string, note: string | null, modules: readonly string[], now: number): void {
+    const email = this.account(accountId)?.email ?? null;
+    const name = this.developer(accountId)?.name ?? null;
+    this.db.exec("begin");
+    try {
+      this.db
+        .prepare("insert into bans (account_id, reason, note, banned_at, modules, email, name) values (?, ?, ?, ?, ?, ?, ?) on conflict (account_id) do update set reason = excluded.reason, note = excluded.note, banned_at = excluded.banned_at, modules = excluded.modules")
+        .run(accountId, reason, note, now, JSON.stringify(modules), email, name);
+      this.db.prepare("insert into banned_keys (fingerprint, account_id) select fingerprint, account_id from publisher_keys where account_id = ? on conflict (fingerprint) do nothing").run(accountId);
+      this.db.exec("commit");
+    } catch (error) {
+      this.db.exec("rollback");
+      throw error;
+    }
+  }
+
+  /** Lifts a ban; returns the module ids the ban delisted, or null when the account was not banned. */
+  unban(accountId: string): string[] | null {
+    const row = this.db.prepare("select modules from bans where account_id = ?").get(accountId) as { modules: string } | undefined;
+    if (!row) return null;
+    this.db.prepare("delete from banned_keys where account_id = ?").run(accountId);
+    this.db.prepare("delete from bans where account_id = ?").run(accountId);
+    return JSON.parse(row.modules) as string[];
+  }
+
+  /** Whether an account is banned. */
+  isBanned(accountId: string): boolean {
+    return this.db.prepare("select 1 from bans where account_id = ?").get(accountId) !== undefined;
+  }
+
+  /** Whether a key was linked to an account when it was banned: it can never be linked to another account. */
+  isBannedKey(fingerprint: string): boolean {
+    return this.db.prepare("select 1 from banned_keys where fingerprint = ?").get(fingerprint) !== undefined;
+  }
+
+  bans(): { accountId: string; reason: string; note: string | null; bannedAt: number; modules: string[]; email: string | null; name: string | null }[] {
+    return (this.db.prepare("select account_id, reason, note, banned_at, modules, email, name from bans order by banned_at desc").all() as unknown as { account_id: string; reason: string; note: string | null; banned_at: number; modules: string; email: string | null; name: string | null }[]).map(
+      (row) => ({ accountId: row.account_id, reason: row.reason, note: row.note, bannedAt: row.banned_at, modules: JSON.parse(row.modules) as string[], email: row.email, name: row.name }),
+    );
   }
 
   /** Unlinks one of the account's keys; false when it has no such key. */

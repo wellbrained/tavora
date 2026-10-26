@@ -115,7 +115,7 @@ export class ModulePublisher {
     this.changed();
     try {
       const published = await this.options.account.upload(key, zip);
-      review.view = { ...review.view, status: "published", published: { id: published.id, version: published.version } };
+      review.view = { ...review.view, status: "published", published: { id: published.id, version: published.version, ...(published.status === "waiting" ? { waiting: true } : {}) } };
     } catch (error) {
       review.view = { ...review.view, status: "ready", error: this.options.translate(error instanceof PlayerError ? error : new PlayerError("error.generic")) };
       if (!(error instanceof PlayerError)) console.error("[tavora] publishing failed", error);

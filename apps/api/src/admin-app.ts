@@ -10,6 +10,7 @@ import { catalogTrust } from "./catalog-trust.ts";
 import { keyRequestStatus, revocationEntries, successionEntries } from "./key-requests.ts";
 import type { IconState } from "./icon-state.ts";
 import { isIconId, type IconStore } from "./icons.ts";
+import { moderationRoutes, type ModerationAdminOptions } from "./moderation-admin.ts";
 import type { ReviewStore } from "./reviews.ts";
 import { statsRange, type StatsStore } from "./stats.ts";
 import type { Submissions } from "./submissions.ts";
@@ -61,11 +62,13 @@ export interface AdminOptions {
   stateDir?: string;
   /** The plain daily totals for GET /api/stats. Absent: the route answers 503. */
   stats?: StatsStore;
+  /** The review before listing (`/api/moderation/*`; needs `catalog` and `accounts`): the scanner, and how developers are emailed. */
+  moderation?: Pick<ModerationAdminOptions, "scanner" | "mailer" | "mailDailyLimit" | "now" | "keepVersions">;
 }
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, adminDir, probes, dataset, mailDailyLimit, stateDir, stats }: AdminOptions) {
+export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation }: AdminOptions) {
   const app = new Hono();
   const expected = digest(token);
 
@@ -266,6 +269,8 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     if (!range) return context.json({ error: "Ask for ?days=1-730 or ?from=&to= as YYYY-MM-DD." }, 400);
     return context.json({ ...range, ...stats.series(range.from, range.to) });
   });
+  // Approval: versions waiting for review, Approve, Decline, Ban, and the one-time check of what is live (moderation-admin.ts).
+  if (catalog && accounts) app.route("/api/moderation", moderationRoutes({ catalog, accounts, ...moderation }));
 
   app.notFound((context) => context.json({ error: "Not found." }, 404));
   app.onError((error, context) => {

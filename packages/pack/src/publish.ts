@@ -14,11 +14,19 @@ export const PUBLISH_STATEMENT = "tavora-catalog-publish-1";
 
 export class PublishError extends Error {}
 
-/** What the catalog lists now. */
+/** Where to read what is not allowed in the catalog; linked from what `tavora-pack publish` prints. */
+export const CATALOG_RULES_URL = "https://docs.mytavora.app/guide/catalog-rules";
+
+/**
+ * What the catalog did with the upload: it `published` it (listed at once), or it is `waiting` for a person at Tavora to look
+ * at it first (review before listing, decided 2026-10-26). A waiting version is not listed, and `reasons` say why.
+ */
 export interface Published {
   id: string;
   version: string;
   sha256: string;
+  status: "published" | "waiting";
+  reasons: { check: string; text: string }[];
 }
 
 /** The signature (base64) the service checks: this key over the publish statement for these bytes. */
@@ -41,6 +49,9 @@ const MESSAGES: Record<string, string> = {
   "catalog-full": "The catalog has no room right now. Tavora has been told; try again later.",
   "too-many": "Too many uploads from this connection. Wait a while and try again.",
   "too-big": "The zip is too big for the catalog.",
+  banned: `This account can't publish to the catalog any more. Check your email for why. What's not allowed: ${CATALOG_RULES_URL}`,
+  declined: "Tavora declined this exact zip. Fix the problem and publish a new version.",
+  "too-many-waiting": "As many of your versions are waiting for review as an account may have. Wait for them, or withdraw one with tavora-pack withdraw.",
   unavailable: "Publishing is not available right now.",
 };
 
@@ -90,7 +101,7 @@ export async function publishZip(options: {
   } catch {
     throw new PublishError(`Tavora's service could not be reached (${url}). Check your internet connection.`);
   }
-  const answer = (await response.json().catch(() => ({}))) as { reason?: unknown; error?: unknown; id?: unknown; version?: unknown; sha256?: unknown };
+  const answer = (await response.json().catch(() => ({}))) as { reason?: unknown; error?: unknown; id?: unknown; version?: unknown; sha256?: unknown; status?: unknown; reasons?: unknown };
   if (!response.ok) {
     // A token was sent, so it is the token that doesn't work.
     const reason = answer.reason === "sign-in-needed" ? "token-not-working" : answer.reason;
@@ -99,5 +110,27 @@ export async function publishZip(options: {
     throw new PublishError(known ?? (typeof answer.error === "string" ? answer.error : `The service refused the upload (${response.status}).`));
   }
   if (typeof answer.id !== "string" || typeof answer.version !== "string" || typeof answer.sha256 !== "string") throw new PublishError("The service gave an answer tavora-pack does not understand.");
-  return { id: answer.id, version: answer.version, sha256: answer.sha256 };
+  const reasons = (Array.isArray(answer.reasons) ? answer.reasons : [])
+    .filter((item): item is { check: string; text: string } => typeof item === "object" && item !== null && typeof (item as { check?: unknown }).check === "string" && typeof (item as { text?: unknown }).text === "string")
+    .map(({ check, text }) => ({ check, text }));
+  // Anything but a plain "published" answer is not listed yet.
+  return { id: answer.id, version: answer.version, sha256: answer.sha256, status: answer.status === "waiting" ? "waiting" : "published", reasons };
+}
+
+/** Takes back a version that waits for review (its zip's SHA-256). Resolves with what was withdrawn. */
+export async function withdrawVersion(options: { token: string | undefined; sha256: string; apiUrl?: string; fetch?: typeof fetch }): Promise<{ id: string; version: string }> {
+  if (!options.token) throw new PublishError(MESSAGES["sign-in-needed"]!);
+  if (!/^[0-9a-f]{64}$/.test(options.sha256)) throw new PublishError("Give the zip's SHA-256 (64 letters and digits), or the zip file.");
+  const url = `${(options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, "")}/v1/catalog/waiting/${options.sha256}`;
+  let response: Response;
+  try {
+    response = await (options.fetch ?? fetch)(url, { method: "DELETE", headers: { Accept: "application/json", Authorization: `Bearer ${options.token}` }, redirect: "error", signal: AbortSignal.timeout(30_000) });
+  } catch {
+    throw new PublishError(`Tavora's service could not be reached (${url}). Check your internet connection.`);
+  }
+  const answer = (await response.json().catch(() => ({}))) as { reason?: unknown; id?: unknown; version?: unknown };
+  if (response.ok && typeof answer.id === "string" && typeof answer.version === "string") return { id: answer.id, version: answer.version };
+  if (answer.reason === "not-waiting") throw new PublishError("None of your versions with this hash is waiting for review.");
+  if (answer.reason === "sign-in-needed") throw new PublishError(MESSAGES["token-not-working"]!);
+  throw new PublishError(`The service refused the request (${response.status}).`);
 }
