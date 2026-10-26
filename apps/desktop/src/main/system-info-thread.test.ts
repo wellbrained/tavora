@@ -77,6 +77,18 @@ describe("the worker", () => {
     await expect(asked).resolves.toEqual(INFO);
   });
 
+  it("answers the apps from the worker, and passes on a failure", async () => {
+    const apps = { apps: [{ name: "Firefox", memoryBytes: 6.8e9, cpu: 1.2, windows: false }], usedBytes: 20e9 };
+    const asked = thread.apps();
+    const message = latest().received[0] as { type: string; id: number };
+    expect(message.type).toBe("apps");
+    latest().send({ type: "apps", id: message.id, apps });
+    await expect(asked).resolves.toEqual(apps);
+    const failing = thread.apps();
+    latest().send({ type: "apps", id: (latest().received[1] as { id: number }).id, error: "no ntdll" });
+    await expect(failing).rejects.toThrow("no ntdll");
+  });
+
   it("passes on a failed info", async () => {
     const asked = thread.info();
     latest().send({ type: "info", id: (latest().received[0] as { id: number }).id, error: "no PDH" });

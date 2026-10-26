@@ -34,6 +34,8 @@ withDefaults(defineProps<{
     <header class="flex items-baseline gap-2">
       <span class="text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase">{{ title }}</span>
       <span class="min-w-0 flex-1 truncate text-xs">{{ name }}</span>
+      <!-- A small button at the top right (the Memory card's apps), kept from making the header taller. -->
+      <slot name="action" />
     </header>
     <!-- The usage and the temperature are one pair, centred together; until Tavora reports one, a muted dash holds its place so the usage does not move later. -->
     <div class="flex items-baseline justify-center gap-3 whitespace-nowrap" data-testid="usage">

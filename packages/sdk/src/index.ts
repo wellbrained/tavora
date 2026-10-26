@@ -20,6 +20,7 @@ import {
   PROTOCOL_VERSION,
   type AiUsageAccountInfo,
   type AiUsageReading,
+  type SystemApps,
   type SystemInfo,
   type SystemSnapshot,
   type SystemWatchBlocks,
@@ -72,6 +73,8 @@ export type {
   GameOverlayResult,
   AiUsageAccountInfo,
   AiUsageReading,
+  SystemApp,
+  SystemApps,
   SystemInfo,
   SystemSnapshot,
   SystemWatchBlocks,
@@ -368,6 +371,8 @@ export interface TavoraSDK {
       onSnapshot(fn: (snapshot: SystemSnapshot) => void): Unsubscribe;
       /** Fires when a drive is plugged in or removed; ask info() again. */
       onDrivesChange(fn: () => void): Unsubscribe;
+      /** The apps running now with their memory and CPU. Only for Tavora's own System Monitor; others get PERMISSION_DENIED. */
+      apps(): Promise<SystemApps>;
     };
     /**
      * `media`: what plays on this PC, as Windows' media controls show it (Spotify, browsers, video players), and
@@ -830,6 +835,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         },
         onSnapshot: (fn) => on("systemInfo.snapshot", fn),
         onDrivesChange: (fn) => on("systemInfo.drivesChanged", () => fn()),
+        apps: () => call("systemInfo.apps"),
       },
       media: {
         watch: async () => (await call("media.watch", { on: true })) as MediaState,

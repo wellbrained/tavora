@@ -5,13 +5,14 @@
  * In the worker such a wait holds up only the readings, never Tavora. The worker starts with the first panel that
  * asks and ends a minute after the last one stopped watching, so with no panel it costs nothing.
  */
-import type { SystemInfo, SystemSnapshot } from "@tavora/sdk/protocol";
+import type { SystemApps, SystemInfo, SystemSnapshot } from "@tavora/sdk/protocol";
 import type { SystemListener, SystemSubscription, TavoraUsage } from "./system-info";
 import { isEmptyWatch, percent, type WatchRequest } from "./system-info-parse";
 
 /** What the main process tells the worker. */
 export type ToWorker =
   | { type: "info"; id: number }
+  | { type: "apps"; id: number }
   | { type: "subscribe"; sub: number }
   | { type: "watch"; sub: number; request: WatchRequest }
   | { type: "suspend"; sub: number; suspended: boolean }
@@ -21,6 +22,8 @@ export type ToWorker =
 export type FromWorker =
   | { type: "info"; id: number; info: SystemInfo }
   | { type: "info"; id: number; error: string }
+  | { type: "apps"; id: number; apps: SystemApps }
+  | { type: "apps"; id: number; error: string }
   | { type: "snapshot"; sub: number; snapshot: SystemSnapshot }
   | { type: "drivesChanged"; sub: number }
   | { type: "log"; message: string; error: string };
@@ -57,7 +60,7 @@ export class SystemMonitorThread {
   private readonly options: SystemMonitorThreadOptions;
   private worker: WorkerLike | null = null;
   private readonly held = new Map<number, Held>();
-  private readonly asked = new Map<number, { resolve: (info: SystemInfo) => void; reject: (error: Error) => void }>();
+  private readonly asked = new Map<number, { resolve: (answer: never) => void; reject: (error: Error) => void }>();
   private nextId = 1;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -67,10 +70,19 @@ export class SystemMonitorThread {
 
   /** What this PC is, read in the worker. */
   info(): Promise<SystemInfo> {
+    return this.ask("info");
+  }
+
+  /** The apps running now, read in the worker (system-apps.ts). Only for Tavora's own System Monitor. */
+  apps(): Promise<SystemApps> {
+    return this.ask("apps");
+  }
+
+  private ask<T>(type: "info" | "apps"): Promise<T> {
     const id = this.nextId++;
-    return new Promise((resolve, reject) => {
-      this.asked.set(id, { resolve, reject });
-      this.ensure().postMessage({ type: "info", id });
+    return new Promise<T>((resolve, reject) => {
+      this.asked.set(id, { resolve: resolve as (answer: never) => void, reject });
+      this.ensure().postMessage({ type, id });
       this.settle();
     });
   }
@@ -142,11 +154,12 @@ export class SystemMonitorThread {
 
   private receive(message: FromWorker): void {
     switch (message.type) {
-      case "info": {
+      case "info":
+      case "apps": {
         const asked = this.asked.get(message.id);
         this.asked.delete(message.id);
-        if ("info" in message) asked?.resolve(message.info);
-        else asked?.reject(new Error(message.error));
+        if ("error" in message) asked?.reject(new Error(message.error));
+        else asked?.resolve(("info" in message ? message.info : message.apps) as never);
         this.settle();
         return;
       }

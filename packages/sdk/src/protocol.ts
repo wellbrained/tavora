@@ -326,6 +326,24 @@ export interface SystemSnapshot {
   tavora?: { cpu: number; memoryBytes: number };
 }
 
+/** One app running on this PC: its processes taken together under one name (systemInfo.apps). */
+export interface SystemApp {
+  /** The program's file name without ".exe" and with a capital first letter ("Firefox"), or Windows' own name ("Memory Compression"). */
+  name: string;
+  /** Memory only this app uses (private working set), as Task Manager's Memory column. */
+  memoryBytes: number;
+  /** CPU since the last reading as a share of the whole PC, with one decimal; null before there are two readings. */
+  cpu: number | null;
+  /** One of Windows' own processes, such as svchost or Memory Compression. */
+  windows: boolean;
+}
+
+/** The apps running now, the biggest first, and how much memory the PC uses in all (systemInfo.apps). */
+export interface SystemApps {
+  apps: SystemApp[];
+  usedBytes: number;
+}
+
 /** What a media session is doing, as the player reports it to Windows. */
 export type MediaStatus = "playing" | "paused" | "stopped" | "changing" | "closed";
 
@@ -571,6 +589,11 @@ export interface Methods {
    * `systemInfo.snapshot` at once, then one every `intervalMs`. A panel that is hidden gets none.
    */
   "systemInfo.watch": { params: { blocks: SystemWatchBlocks; intervalMs: SystemInterval }; result: null };
+  /**
+   * The apps running now, with their memory and CPU. Only for Tavora's own System Monitor (capability `systemInfo`);
+   * any other module gets PERMISSION_DENIED. Tavora 0.21.19 and newer.
+   */
+  "systemInfo.apps": { params: undefined; result: SystemApps };
   /**
    * Starts (`on: true`) or ends this panel's watch of what plays on this PC (capability `media`) and answers what
    * plays now; `media.changed` follows every change while it watches, also while the panel is hidden, so an

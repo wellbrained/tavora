@@ -55,7 +55,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     data: registry.get("local", moduleId, "poe2"),
     appSettings: registry.appSettings("local", moduleId),
     aiUsage: { accounts: () => Promise.reject(new Error("no AI accounts in this test")), read: () => Promise.reject(new Error("no AI accounts in this test")) },
-    systemInfo: { info: () => { throw new Error("no system info in this test"); }, watch: () => { throw new Error("no system info in this test"); } },
+    systemInfo: { info: () => { throw new Error("no system info in this test"); }, watch: () => { throw new Error("no system info in this test"); }, apps: () => Promise.reject(new Error("no system info in this test")) },
     media: { watch: () => { throw new Error("no media in this test"); }, control: () => Promise.reject(new Error("no media in this test")) },
     discord: noDiscord,
     panelState: registry.panelState,
@@ -634,14 +634,16 @@ describe("media", () => {
 
 describe("systemInfo", () => {
   const INFO = { cpu: { model: "Test CPU", threads: 8 }, ramBytes: 16e9, gpus: [], drives: [{ id: "C:", label: "", kind: "internal" as const, totalBytes: 1e12 }] };
+  const APPS = { apps: [{ name: "Firefox", memoryBytes: 6.8e9, cpu: 1.2, windows: false }], usedBytes: 20e9 };
   const watching: unknown[] = [];
   const granted = (extra: Partial<BridgeContext> = {}) =>
-    connected({ ...makeContext(), capabilities: () => new Set(["systemInfo"] as const), systemInfo: { info: () => INFO, watch: (request) => void watching.push(request) }, ...extra });
+    connected({ ...makeContext(), capabilities: () => new Set(["systemInfo"] as const), systemInfo: { info: () => INFO, watch: (request) => void watching.push(request), apps: async () => APPS }, ...extra });
   const request = { blocks: { cpu: true, drives: ["C:", "D:"] }, intervalMs: 1000 };
 
   it.each([
     ["systemInfo.info", undefined],
     ["systemInfo.watch", request],
+    ["systemInfo.apps", undefined],
   ])("denies %s without the system-info connector", async (method, params) => {
     expect(await call(port, method, params)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "systemInfo" } });
   });
@@ -657,6 +659,12 @@ describe("systemInfo", () => {
   it("takes no params for info", async () => {
     const p = await granted();
     expect(await call(p, "systemInfo.info", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+
+  it("answers the apps, without params", async () => {
+    const p = await granted();
+    expect(await call(p, "systemInfo.apps")).toMatchObject({ ok: true, result: APPS });
+    expect(await call(p, "systemInfo.apps", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
   });
 
   it.each([

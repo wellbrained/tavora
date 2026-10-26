@@ -20,6 +20,7 @@ import {
   type NetworkResponse,
   type GameOverlayResult,
   type OverlayLinkResult,
+  type SystemApps,
   type SystemInfo,
   type MediaAction,
   type MediaState,
@@ -90,9 +91,10 @@ export interface BridgeContext {
   aiUsage: { accounts(): Promise<AiUsageAccountInfo[]>; read(accountId: string): Promise<AiUsageReading> };
   /**
    * The system-info connector (system-info.ts) for this panel; only reached with the `systemInfo` capability. `watch`
-   * gets the request already checked (system-info-parse.ts); it replaces what this panel watched before.
+   * gets the request already checked (system-info-parse.ts); it replaces what this panel watched before. `apps`
+   * refuses every module but Tavora's own System Monitor.
    */
-  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; watch(request: WatchRequest): void };
+  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; watch(request: WatchRequest): void; apps(): Promise<SystemApps> };
   /**
    * The media connector (media.ts) for this panel; only reached with the `media` capability. `watch(false)` answers
    * null. `control` throws PERMISSION_DENIED unless the panel just got a click or key press, or one of the module's
@@ -326,6 +328,7 @@ const handlers = new Map<string, Handler>([
       return null;
     },
   ],
+  ["systemInfo.apps", (s, params) => (needs(s, "systemInfo", "systemInfo.apps"), noParams(params), s.context.systemInfo.apps())],
 
   ["media.watch", (s, params) => (needs(s, "media", "media.watch"), s.context.media.watch(parseWatchParams(params)))],
   [
