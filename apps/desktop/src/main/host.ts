@@ -3005,7 +3005,8 @@ export class Host {
     if (!game) return;
     for (const record of this.records(game.id)) this.createView(record, game);
     this.workspaces.relayout();
-    if ([...this.views.values()].some((view) => view instanceof ModuleView)) {
+    // Only this game's own module pages are waited for: a panel in the in-game layer runs on from another game.
+    if (this.records(game.id).some((record) => this.views.get(record.instanceId) instanceof ModuleView && !this.floating(record.instanceId))) {
       this.endOpening();
       const layout = layoutKey(game.id, this.records(game.id));
       this.opening = { startedAt: performance.now(), timer: setTimeout(() => this.endOpening(true), OPENING_CAP_MS), layout };
