@@ -23,6 +23,7 @@ import {
   type SystemConnectionLog,
   type SystemConnectionSettings,
   type SystemApps,
+  type SystemTraffic,
   type SystemInfo,
   type MediaAction,
   type MediaState,
@@ -93,8 +94,8 @@ export interface BridgeContext {
   aiUsage: { accounts(): Promise<AiUsageAccountInfo[]>; read(accountId: string): Promise<AiUsageReading> };
   /**
    * The system-info connector (system-info.ts) for this panel; only reached with the `systemInfo` capability. `watch`
-   * gets the request already checked (system-info-parse.ts); it replaces what this panel watched before. `apps`
-   * refuses every module but Tavora's own System Monitor.
+   * gets the request already checked (system-info-parse.ts); it replaces what this panel watched before. `apps` and
+   * `traffic` refuse every module but Tavora's own System Monitor.
    */
   systemInfo: {
     info(): SystemInfo | Promise<SystemInfo>;
@@ -106,6 +107,7 @@ export interface BridgeContext {
     clearConnectionLog(): void | Promise<void>;
     setConnectionSettings(change: ConnectionSettingsChange): SystemConnectionSettings | Promise<SystemConnectionSettings>;
     apps(): Promise<SystemApps>;
+    traffic(): Promise<SystemTraffic>;
   };
   /**
    * The media connector (media.ts) for this panel; only reached with the `media` capability. `watch(false)` answers
@@ -351,6 +353,7 @@ const handlers = new Map<string, Handler>([
     },
   ],
   ["systemInfo.apps", (s, params) => (needs(s, "systemInfo", "systemInfo.apps"), noParams(params), s.context.systemInfo.apps())],
+  ["systemInfo.traffic", (s, params) => (needs(s, "systemInfo", "systemInfo.traffic"), noParams(params), s.context.systemInfo.traffic())],
 
   ["media.watch", (s, params) => (needs(s, "media", "media.watch"), s.context.media.watch(parseWatchParams(params)))],
   [

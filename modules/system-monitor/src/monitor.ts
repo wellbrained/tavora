@@ -1,14 +1,21 @@
 // The panel's link to Tavora's system-info connector: what this PC is, the newest numbers, the connection and its
 // log of drops, and what the player chose. Tavora does the timing and pauses it while the panel is hidden, so there are no timers here. The numbers
 // live in shallow refs and plain arrays: a snapshot replaces the old one whole, and only the text that changed is
-// redrawn.
+// redrawn. The traffic, when shown, is read again with the first snapshot 5 minutes after the last read, so it too
+// pauses while the panel is hidden.
 import { errorMessage } from "@tavora/official-ui";
-import { TavoraError, type JsonValue, type SystemConnection, type SystemConnectionSettings, type SystemInfo, type SystemInterval, type SystemOutage, type SystemSnapshot, type TavoraSDK } from "@tavora/sdk";
+import { TavoraError, type JsonValue, type SystemConnection, type SystemConnectionSettings, type SystemInfo, type SystemInterval, type SystemOutage, type SystemSnapshot, type SystemTraffic, type TavoraSDK } from "@tavora/sdk";
 import { markRaw, ref, shallowRef } from "vue";
 import { createHistory, type History } from "./history";
 import { APP_KEY, defaultPanel, parseApp, parsePanel, pickGpu, requestKey, toggleBlock, toggleSection, watchRequest, type AppSettings, type BlockId, type PanelSettings, type SectionId } from "./settings";
 
 export type Status = "loading" | "ready" | "denied" | "empty" | "error";
+
+/** The traffic: not read yet, read, or not readable (an older Tavora has none). */
+export type TrafficStatus = "loading" | "ready" | "old" | "error";
+
+/** How often the traffic is read again while it shows. Tavora answers from its last read within this time anyway. */
+export const TRAFFIC_EVERY_MS = 5 * 60 * 1000;
 
 export type Monitor = ReturnType<typeof createMonitor>;
 
@@ -29,6 +36,10 @@ export function createMonitor(sdk: TavoraSDK) {
   const connectionMissing = ref(false);
   const app = shallowRef<AppSettings>(parseApp(null));
   const panel = shallowRef<PanelSettings>(defaultPanel());
+  const traffic = shallowRef<SystemTraffic | null>(null);
+  const trafficStatus = ref<TrafficStatus>("loading");
+  let trafficAt = 0;
+  let readingTraffic = false;
   /** The last 5 minutes of CPU and GPU use, for the graphs. */
   const cpuHistory: History = markRaw(createHistory(app.value.intervalMs));
   const gpuHistory: History = markRaw(createHistory(app.value.intervalMs));
@@ -83,6 +94,23 @@ export function createMonitor(sdk: TavoraSDK) {
     }
   }
 
+  const showsTraffic = () => panel.value.traffic && panel.value.sections.connection;
+
+  /** Reads the traffic when it shows and the last read is 5 minutes old (or there is none). */
+  async function readTraffic(force = false): Promise<void> {
+    if (!showsTraffic() || readingTraffic || (!force && Date.now() - trafficAt < TRAFFIC_EVERY_MS)) return;
+    readingTraffic = true;
+    trafficAt = Date.now();
+    try {
+      traffic.value = await sdk.connectors.systemInfo.traffic();
+      trafficStatus.value = "ready";
+    } catch (reason) {
+      trafficStatus.value = reason instanceof TavoraError && reason.code === "UNKNOWN_METHOD" ? "old" : "error";
+    } finally {
+      readingTraffic = false;
+    }
+  }
+
   async function refreshLog(): Promise<void> {
     try {
       outages.value = (await sdk.connectors.systemInfo.connectionLog()).outages;
@@ -105,6 +133,7 @@ export function createMonitor(sdk: TavoraSDK) {
         if (stopped) return;
         snapshot.value = next;
         if (next.connection) connection.value = next.connection;
+        void readTraffic();
         if (next.cpu) cpuHistory.push(next.cpu.usage);
         if (next.ram && next.ram.totalBytes > 0) ramHistory.push((next.ram.usedBytes / next.ram.totalBytes) * 100);
         const id = info.value ? pickGpu(info.value, panel.value.gpu) : null;
@@ -153,8 +182,10 @@ export function createMonitor(sdk: TavoraSDK) {
     if (next === panel.value) return;
     if (next.gpu !== panel.value.gpu) gpuHistory.clear();
     const showsLog = next.sections.connection && !panel.value.sections.connection;
+    const wasTraffic = showsTraffic();
     panel.value = next;
     if (showsLog) void loadConnection();
+    if (!wasTraffic) void readTraffic(true);
     void sdk.panel.setState(next as unknown as JsonValue).catch(() => undefined);
     void watch();
   }
@@ -179,11 +210,14 @@ export function createMonitor(sdk: TavoraSDK) {
     outages,
     connectionSettings,
     connectionMissing,
+    traffic,
+    trafficStatus,
     start,
     retry,
     stop,
     toggleBlock: (id: BlockId) => setPanel(toggleBlock(panel.value, id)),
     toggleSection: (id: SectionId) => setPanel(toggleSection(panel.value, id)),
+    toggleTraffic: () => setPanel({ ...panel.value, traffic: !panel.value.traffic }),
     /**
      * Sets whether the connection is watched and which address is pinged, for the whole PC. Call it straight from the
      * click that saves (Tavora wants one). Throws when Tavora refuses, for the dialog to say.

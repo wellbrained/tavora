@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.5",
+    "date": "2026-10-26",
+    "notes": [
+      "Turn on Traffic in the menu to see how much your PC downloaded and uploaded this week, this month and in the 3 months before.",
+      "The numbers come from Windows, so they count while Tavora is closed too."
+    ]
+  },
+  {
     "version": "0.1.4",
     "date": "2026-10-26",
     "notes": [

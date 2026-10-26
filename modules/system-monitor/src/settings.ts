@@ -1,6 +1,7 @@
 // What the player chose, and what that asks Tavora to watch. Pure, so it is tested on its own.
 //  - Module-wide (`storage.app`): how often it updates, and which drives to watch (null until the player has chosen).
-//  - Per panel (`panel.setState`): which sections (System, Connection) and blocks show, and which graphics card.
+//  - Per panel (`panel.setState`): which sections (System, Connection) and blocks show, which graphics card, and
+//    whether the traffic shows (off until the player turns it on; while off, Tavora reads none).
 //  - The connection watcher's own choices (on or off, the address pinged) are Tavora's, not kept here.
 import { SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, type SystemInfo, type SystemInterval, type SystemWatchBlocks } from "@tavora/sdk";
 
@@ -31,12 +32,14 @@ export interface PanelSettings {
   blocks: Record<BlockId, boolean>;
   /** The graphics card to show when there are several; null for the dedicated one. */
   gpu: string | null;
+  /** Whether the Connection section shows the traffic of this week and the last months. */
+  traffic: boolean;
 }
 
 export const APP_KEY = "settings";
 
 export const defaultApp = (): AppSettings => ({ intervalMs: DEFAULT_INTERVAL, drives: null });
-export const defaultPanel = (): PanelSettings => ({ sections: { system: true, connection: true }, blocks: { cpu: true, gpu: true, ram: true, drives: true }, gpu: null });
+export const defaultPanel = (): PanelSettings => ({ sections: { system: true, connection: true }, blocks: { cpu: true, gpu: true, ram: true, drives: true }, gpu: null, traffic: false });
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -73,6 +76,7 @@ export function parsePanel(raw: unknown): PanelSettings {
   // At least one block always shows.
   if (!BLOCKS.some((id) => result.blocks[id])) result.blocks = defaultPanel().blocks;
   if (typeof raw.gpu === "string") result.gpu = raw.gpu;
+  if (typeof raw.traffic === "boolean") result.traffic = raw.traffic;
   return result;
 }
 

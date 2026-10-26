@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The Connection section: how the connection is for playing (smooth, laggy, unstable or down), how fast the router and
 // the internet answer, how much goes through the network adapter, how many pings get lost, and the drops of the last
-// 30 days (only once there is one). Tavora's connection watcher does the
+// 30 days (only once there is one), and the traffic of this week and the last months when the player turned it on. Tavora's connection watcher does the
 // pinging (it runs even while this panel is hidden, so drops are logged); this only shows what it found. A red notice
 // tops the section while the connection is down. No sound and no system notification, by design.
 import { ArrowDown, ArrowUp } from "@lucide/vue";
@@ -14,6 +14,7 @@ import { computed, ref } from "vue";
 import { clock, dayAndClock, dropsToday, duration, lastDropEnd, lossPercent, lossTone, mbit, pingMs, pingTone, verdict, type DriveTone, type Verdict } from "./format";
 import { language, plural, t } from "./i18n";
 import type { Monitor } from "./monitor";
+import TrafficCard from "./TrafficCard.vue";
 
 const props = defineProps<{ monitor: Monitor }>();
 
@@ -163,6 +164,7 @@ const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
           <p class="text-muted-foreground truncate text-center text-xs">{{ t("loss.hint") }}</p>
         </section>
 
+        <TrafficCard v-if="monitor.panel.value.traffic" :monitor="monitor" />
 
         <section v-if="outages.length" :class="cn(CARD, 'col-span-full gap-1')" data-testid="connection-drops">
           <Collapsible>
