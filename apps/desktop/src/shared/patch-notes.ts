@@ -22,16 +22,9 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.21.35",
     date: "2026-10-26",
-    title: "Hints stay open from the keyboard",
-    notes: [
-      "A hint you open with Tab no longer closes when the panel changes size under your mouse.",
-    ],
-  },
-  {
-    version: "0.21.34",
-    date: "2026-10-26",
     title: "Your overlays, your layout",
     notes: [
+      "A hint you open with Tab no longer closes when the panel changes size under your mouse.",
       "Arrange overlays and panels in the new Overlay layout window, opened from Settings > Overlays or an item's menu. Move and resize on a grid; hold Alt to place freely.",
       "Use All games for a shared layout, move one item just for a game, or customize its whole layout. Follow All games again whenever you want; mode, opacity and capture settings stay shared.",
       "Add a picture of your game under the grid, captured from the running game or picked from a file. It stays on your PC. Take picture explains when it cannot capture yet.",
