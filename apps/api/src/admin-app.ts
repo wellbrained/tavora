@@ -11,6 +11,7 @@ import { keyRequestStatus, revocationEntries, successionEntries } from "./key-re
 import type { IconState } from "./icon-state.ts";
 import { isIconId, type IconStore } from "./icons.ts";
 import type { ReviewStore } from "./reviews.ts";
+import { statsRange, type StatsStore } from "./stats.ts";
 import type { Submissions } from "./submissions.ts";
 
 /**
@@ -58,11 +59,13 @@ export interface AdminOptions {
   mailDailyLimit?: number;
   /** The state directory, where the daily backup leaves its time. */
   stateDir?: string;
+  /** The plain daily totals for GET /api/stats. Absent: the route answers 503. */
+  stats?: StatsStore;
 }
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, adminDir, probes, dataset, mailDailyLimit, stateDir }: AdminOptions) {
+export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, adminDir, probes, dataset, mailDailyLimit, stateDir, stats }: AdminOptions) {
   const app = new Hono();
   const expected = digest(token);
 
@@ -254,6 +257,14 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     dataset: dataset ?? (() => ({ games: 0, builtAt: null })),
     mailDailyLimit,
     stateDir,
+  });
+
+  // Daily totals for charts: ?days=<1-730> ending today (default 30), or ?from=YYYY-MM-DD&to=YYYY-MM-DD (UTC days).
+  app.get("/api/stats", (context) => {
+    if (!stats) return context.json({ error: "Counting is off." }, 503);
+    const range = statsRange(context.req.query(), Date.now());
+    if (!range) return context.json({ error: "Ask for ?days=1-730 or ?from=&to= as YYYY-MM-DD." }, 400);
+    return context.json({ ...range, ...stats.series(range.from, range.to) });
   });
 
   app.notFound((context) => context.json({ error: "Not found." }, 404));

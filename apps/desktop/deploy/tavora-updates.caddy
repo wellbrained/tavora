@@ -5,6 +5,21 @@ updates.mytavora.app {
     # No access log on purpose: it would record who updates, and when.
     # No compression: installers are already compressed and the updater downloads
     # byte ranges of them, which compression would break.
+    # Counting installer downloads, as one plain number per version and day. Only a download that starts
+    # fresh counts: a plain GET of an installer without a Range header and without the header the app's
+    # updater sends (X-Tavora-Update, see updates.ts), so updates and resumed downloads don't. The API
+    # keeps only the version from the file name (it is told the address, nothing about who asked), and
+    # answers 204 so the download goes on. If the API is down, a new installer download fails until it
+    # is back; updates and the manifests never go through it.
+    @installer {
+        method GET
+        path /Tavora-Setup-*.exe
+        not header Range *
+        not header X-Tavora-Update *
+    }
+    forward_auth @installer 127.0.0.1:4010 {
+        uri /internal/installer-download
+    }
     # The manifests change with every release and must never be cached.
     @manifests path *.yml
     header @manifests Cache-Control "no-cache"

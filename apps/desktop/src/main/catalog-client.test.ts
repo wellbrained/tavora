@@ -149,6 +149,16 @@ describe("CatalogClient.list", () => {
     await expect(offline.installed("wellbrained.tracker")).resolves.toBeUndefined();
   });
 
+  it("tells the catalog about an update with only the module id, and never throws", async () => {
+    const { impl, calls } = fakeFetch(() => new Response(null, { status: 204 }));
+    await new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl }).updated("wellbrained.tracker");
+    expect(calls[0]!.url).toBe("https://catalog.test/v1/catalog/updated");
+    expect(calls[0]!.init).toMatchObject({ method: "POST", credentials: "omit", body: JSON.stringify({ id: "wellbrained.tracker" }) });
+    const offline = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: (async () => Promise.reject(new TypeError("offline"))) as typeof fetch });
+    await expect(offline.updated("wellbrained.tracker")).resolves.toBeUndefined();
+    await offline.updated("not a module id");
+  });
+
   it("says when the catalog is off, busy or unreachable", async () => {
     const client = (answer: () => Response) => new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: fakeFetch(answer).impl });
     expect(await client(() => json({}, 503)).list({ game: "poe2" }, "en")).toEqual({ status: "unavailable" });

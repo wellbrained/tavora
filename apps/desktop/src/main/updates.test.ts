@@ -1,11 +1,12 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import type { UpdateState } from "../shared/host-api";
-import { CHECK_EVERY_MS, FIRST_CHECK_MS, UpdateManager, type Timers, type UpdaterLike } from "./updates";
+import { CHECK_EVERY_MS, FIRST_CHECK_MS, UPDATER_HEADER, UpdateManager, type Timers, type UpdaterLike } from "./updates";
 
 class FakeUpdater extends EventEmitter {
   autoDownload = true;
   autoInstallOnAppQuit = false;
+  requestHeaders: Record<string, string> | null = null;
   checks = 0;
   downloads = 0;
   installs: [boolean | undefined, boolean | undefined][] = [];
@@ -37,7 +38,7 @@ function fakeTimers() {
   return { timers, pending };
 }
 
-function make(autoDownload = true) {
+function make(autoDownload = true, onDownloaded?: (version: string) => void) {
   const updater = new FakeUpdater();
   const states: UpdateState[] = [];
   const logs: string[] = [];
@@ -46,6 +47,7 @@ function make(autoDownload = true) {
     updater: updater as unknown as UpdaterLike,
     autoDownload,
     onChange: (s) => states.push(s),
+    ...(onDownloaded ? { onDownloaded } : {}),
     log: (l) => logs.push(l),
     timers,
     now: () => new Date("2026-10-16T09:30:00.000Z"),
@@ -59,6 +61,19 @@ describe("UpdateManager", () => {
     expect(on.updater.autoDownload).toBe(true);
     expect(on.updater.autoInstallOnAppQuit).toBe(true);
     expect(make(false).updater.autoDownload).toBe(false);
+  });
+
+  it("marks the updater's requests, so the feed can tell them from an installer download", () => {
+    expect(make().updater.requestHeaders).toEqual({ [UPDATER_HEADER]: "1" });
+  });
+
+  it("tells the host once when a version finished downloading, with its number", () => {
+    const seen: string[] = [];
+    const { updater } = make(true, (version) => seen.push(version));
+    updater.emit("update-available", { version: "0.3.0" });
+    expect(seen).toEqual([]);
+    updater.emit("update-downloaded", { version: "0.3.0" });
+    expect(seen).toEqual(["0.3.0"]);
   });
 
   it("checks once shortly after start and then every six hours", async () => {

@@ -101,6 +101,7 @@ import { parseReadme, readmeAllowsLink } from "./catalog-readme";
 import { CHECK_INTERVAL_MS } from "./catalog-updates";
 import { isReleaseCopies, releaseStatuses } from "./release-pending";
 import { DEFAULT_API_URL, OnlineSearch } from "./online";
+import { countAppUpdate } from "./usage-counts";
 import { PublisherNames } from "./publisher-names";
 import { UpdateManager, type UpdaterLike } from "./updates";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
@@ -802,6 +803,9 @@ export class Host {
         updater: autoUpdater as unknown as UpdaterLike,
         autoDownload: this.library.autoUpdate,
         onChange: () => this.pushState(),
+        onDownloaded: (version) => {
+          if (this.library.onlineSearch) void countAppUpdate({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL }, version);
+        },
         log: (line) => this.logUpdate(line),
       });
       this.updates.start();

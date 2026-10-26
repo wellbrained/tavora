@@ -20,7 +20,13 @@ api.mytavora.app {
     # The service rate-limits per client from the first X-Forwarded-For address,
     # so the proxy sets it and never passes on what a client sent.
     # No access log is configured on purpose: requests hold what players typed.
-    reverse_proxy 127.0.0.1:4010 {
-        header_up X-Forwarded-For {remote_host}
+    # /internal/ is for the update feed's web server (it counts installer downloads), never the public.
+    handle /internal/* {
+        respond 404
+    }
+    handle {
+        reverse_proxy 127.0.0.1:4010 {
+            header_up X-Forwarded-For {remote_host}
+        }
     }
 }

@@ -276,6 +276,17 @@ Tavora keeps a developer's publisher keys (Settings > Development), so the recov
 - **Publish tokens are narrow.** A token is shown once and the service keeps only its hash. It works for a year, is removed in Settings > Development > Publisher keys and CI, and publishes only under id prefixes the account already holds, so it can't claim a new one. It can't sign in, read the account or change anything else.
 - **Every upload is told.** The account's email address gets a mail for each published version, naming the module, the key and whether it came from Tavora or which token.
 
+## What Tavora counts
+
+Tavora counts a few things as plain daily totals (per UTC day) so the maintainer can see how the project is used. A count is a number that goes up by one. Nothing about who or from where is kept: no address, no id of a PC or a player, no request log, and a player without an account is never counted as a person.
+
+- **App downloads.** How often each installer version is downloaded from the update feed. The feed's web server tells the service the file name when a download starts and nothing else, and the service keeps the version and a number.
+- **App updates.** How often each version finished downloading as an update. The app tells the service the version number, only while online features are on, with no cookies, referrer or sign-in. The app marks its own update requests with a header, so an update is never counted as an installer download.
+- **Module installs and updates.** How often each catalog module was installed from Browse or updated. The app sends only the module id, as it already did for installs.
+- **Accounts, once a day.** How many accounts exist and how many used a sign-in in the last 7 and 30 days, as three numbers. Nobody is named.
+
+The numbers are shown on the private admin page, which only the maintainer reaches. Anyone can send the counting calls, so the totals are a guide, not an audit.
+
 ## The cloud copy
 
 The cloud copy (Settings > Account) keeps your Tavora data on Tavora's service or in a folder you pick, so your other PCs get it. It is optional and off until you turn it on.
