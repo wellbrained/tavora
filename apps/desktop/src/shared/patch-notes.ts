@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.19",
+    date: "2026-10-26",
+    title: "Module problems in your language",
+    notes: [
+      "Settings > Modules and Settings > Development now explain why a module can't load in your language, in plain words.",
+    ],
+  },
+  {
     version: "0.21.18",
     date: "2026-10-26",
     title: "Media for modules",
