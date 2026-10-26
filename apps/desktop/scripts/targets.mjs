@@ -22,6 +22,16 @@ export const targets = [
     // The module font is embedded in main (src/main/module-fonts.ts).
     loader: { ".woff2": "base64" },
   },
+  // The system-info connector reads the PC in a worker thread of its own (src/main/system-info-thread.ts).
+  {
+    ...common,
+    entryPoints: ["src/main/system-info-worker.ts"],
+    outfile: "out/main/system-info-worker.cjs",
+    platform: "node",
+    format: "cjs",
+    target: "node22",
+    external: ["koffi"],
+  },
   // Sandboxed preloads can only require a few electron modules, so they are
   // bundled for the browser with everything inlined.
   ...["module", "host", "tooltip", "game-overlay"].map((name) => ({

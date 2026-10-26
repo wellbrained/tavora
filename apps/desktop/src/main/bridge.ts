@@ -92,7 +92,7 @@ export interface BridgeContext {
    * gets the request already checked (system-info-parse.ts); it replaces what this panel watched before.
    */
   systemInfo: {
-    info(): SystemInfo;
+    info(): SystemInfo | Promise<SystemInfo>;
     watch(request: WatchRequest): void;
     /** The connection watcher's log, settings and the change of settings (connection.ts); the change comes already checked. */
     connectionLog(): SystemConnectionLog;

@@ -20,6 +20,22 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.15",
+    date: "2026-10-26",
+    title: "Right version on a module's page",
+    notes: [
+      "A module's page shows the version you have, and the newest one when an update is out.",
+    ],
+  },
+  {
+    version: "0.21.14",
+    date: "2026-10-26",
+    title: "System Monitor without the freeze",
+    notes: [
+      "Adding the System Monitor no longer freezes Tavora for a few seconds, and no longer says \"Can't read your PC\" when a drive is still waking up.",
+    ],
+  },
+  {
     version: "0.21.13",
     date: "2026-10-25",
     title: "Tavora in your game, and a tidier Tavora",

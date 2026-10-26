@@ -4,7 +4,7 @@
     "date": "2026-10-25",
     "notes": [
       "New Connection section: see if you're online, your ping to the router and the internet, lost pings and the speed of your network.",
-      "Drops in your connection are listed with the time and how long they lasted, even when the panel was closed. Needs Tavora 0.21.14."
+      "Drops in your connection are listed with the time and how long they lasted, even when the panel was closed. Needs Tavora 0.21.16."
     ]
   },
   {

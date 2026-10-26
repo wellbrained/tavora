@@ -4,7 +4,7 @@ import { READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
-import type { Capability, GameOverlayResult, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
+import type { Capability, GameOverlayResult, SystemInfo, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./gamedata";
 import { gestureCounts, type Opacity } from "./game-overlays";
@@ -98,7 +98,7 @@ export interface ModuleViewOptions {
   /** The ai-usage connector, for a module granted it. */
   aiUsage: BridgeContext["aiUsage"];
   /** The system-info connector, shared by every panel; each view holds one subscription of its own. */
-  systemInfo: Pick<SystemMonitor, "info" | "subscribe">;
+  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; subscribe: SystemMonitor["subscribe"] };
   /** The connection watcher (connection.ts): its log and settings are shared by every panel. */
   connection: Pick<ConnectionWatcher, "outageLog" | "clearLog" | "getSettings" | "setSettings">;
   /** The discord connector, shared by every panel; this view uses it under its own instance id. */

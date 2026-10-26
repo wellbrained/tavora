@@ -7,6 +7,8 @@
 //   pnpm release --allow-patch  a one-off release of a patch version (x.y.z), e.g. to try an update
 //   pnpm release --skip-ci-check  releases without asking GitHub whether Checks passed (offline only)
 //
+// Before 1.0 the by-hand checks are listed with what already covers them, not asked (asksHandChecks).
+//
 // Order on the server: the installer and its blockmap first, latest.yml last, so a
 // manifest never points at a file that is not there yet (deploy/tavora-updates-publish.sh).
 import { spawnSync } from "node:child_process";
@@ -15,7 +17,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
-import { AFTER_RELEASE, CHECKLIST, checkCi, checkInstalled, checkRelease } from "./release-guards.mjs";
+import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkInstalled, checkRelease } from "./release-guards.mjs";
 import { checkStart } from "./start-check.mjs";
 
 /** The version of the Tavora installed for this user (asar is off, so its package.json is a plain file), or null. */
@@ -143,12 +145,15 @@ if (dryRun) {
   process.exit(0);
 }
 
-if (!dryRun) {
-  step("Checks by hand");
-  console.log(`Installer: ${path.join(releaseDir, installer)}`);
+step("Checks by hand");
+console.log(`Installer: ${path.join(releaseDir, installer)}`);
+if (!asksHandChecks(version)) {
+  console.log("Not asked before 1.0, these ran automatically:");
+  for (const { check, coveredBy } of CHECKLIST) console.log(`  ${check} (${coveredBy})`);
+} else {
   const ask = createInterface({ input: process.stdin, output: process.stdout });
   for (const [index, item] of CHECKLIST.entries()) {
-    const answer = (await ask.question(`  ${item} [y/N] `)).trim().toLowerCase();
+    const answer = (await ask.question(`  ${item.check} [y/N] `)).trim().toLowerCase();
     if (answer !== "y") {
       ask.close();
       console.error("Not releasing: that check did not pass. Nothing was published or tagged.");

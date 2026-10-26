@@ -870,6 +870,7 @@ export const en = {
   "catalog.section.more": "More",
   "catalog.details": "Details",
   "catalog.version": "Version",
+  "catalog.newest": "Newest",
   "catalog.updated": "Updated",
   "catalog.size": "Size",
   "catalog.developer": "Developer",

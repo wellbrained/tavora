@@ -872,6 +872,7 @@ export const de: Record<keyof typeof en, string> = {
   "catalog.section.more": "Mehr",
   "catalog.details": "Details",
   "catalog.version": "Version",
+  "catalog.newest": "Neueste",
   "catalog.updated": "Aktualisiert",
   "catalog.size": "Größe",
   "catalog.developer": "Entwickler",

@@ -25,7 +25,7 @@ export function createMonitor(sdk: TavoraSDK) {
   const outages = shallowRef<SystemOutage[]>([]);
   /** Whether Tavora watches the connection, and what it pings. */
   const connectionSettings = shallowRef<SystemConnectionSettings | null>(null);
-  /** This Tavora is older than the connection watcher (0.21.14), so there is nothing to show. */
+  /** This Tavora is older than the connection watcher (0.21.16), so there is nothing to show. */
   const connectionMissing = ref(false);
   const app = shallowRef<AppSettings>(parseApp(null));
   const panel = shallowRef<PanelSettings>(defaultPanel());
