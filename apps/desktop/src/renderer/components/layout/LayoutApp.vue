@@ -4,14 +4,15 @@
 // grid and the game's picture dimmed under it. The live pages and the layer that takes the mouse are separate views
 // over the canvas (main/overlay-layout-window.ts); this page only tells the main process where the canvas is.
 import { Image as ImageIcon, Redo2, Trash2, Undo2 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Picker } from "@tavora/official-ui/components/ui/picker";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { TooltipProvider } from "reka-ui";
 import { GRID_SETTINGS, type GridSetting } from "../../../shared/layout-math";
-import { toast } from "../../host";
+import { LAYOUT_ALL_GAMES, type LayoutStills } from "../../../shared/layout-view";
+import { api, toast } from "../../host";
 import { t } from "../../i18n";
 import HotkeyDialog from "../HotkeyDialog.vue";
 import LayoutRow from "./LayoutRow.vue";
@@ -64,13 +65,37 @@ function measure() {
   if (box) room.value = { width: Math.max(0, box.clientWidth - 32), height: Math.max(0, box.clientHeight - 32) };
 }
 
-/** While a list, a menu or a dialog is open over the page, the live pages step aside: they would be drawn over it. */
+/**
+ * While a list, a menu or a dialog is open over the page, the live pages step aside: they would be drawn over it. The main
+ * process first sends still pictures of them (below), so nothing on the canvas changes.
+ */
 function lookForCover() {
   const now = document.querySelector("[data-reka-popper-content-wrapper], [role=dialog], [role=listbox], [role=menu]") !== null;
   if (now === covered) return;
   covered = now;
   send({ type: "cover", covered: now });
 }
+
+/** Still pictures of the live pages and of the layer, drawn where they are while they step aside for a list or menu. */
+const stills = shallowRef<LayoutStills>({ items: [], layer: null });
+let stillChanges = 0;
+function decoded(url: string): Promise<unknown> {
+  const image = new Image();
+  image.src = url;
+  return image.decode().catch(() => undefined);
+}
+api.layout.onStills(async (next) => {
+  const change = ++stillChanges;
+  const urls = [...next.items.map((item) => item.url), ...(next.layer ? [next.layer.url] : [])];
+  // Said to be shown only once they are decoded and a frame with them was drawn: the pages step aside after that.
+  await Promise.all(urls.map(decoded));
+  if (change !== stillChanges) return;
+  stills.value = next;
+  if (!urls.length) return;
+  await nextTick();
+  requestAnimationFrame(() => requestAnimationFrame(() => change === stillChanges && api.layout.stillsShown()));
+});
+const stillStyle = (bounds: { x: number; y: number; width: number; height: number }) => ({ left: `${bounds.x}px`, top: `${bounds.y}px`, width: `${bounds.width}px`, height: `${bounds.height}px` });
 
 onMounted(() => {
   observer = new ResizeObserver(() => {
@@ -111,6 +136,7 @@ const grid = computed({
   set: (value: GridSetting) => send({ type: "grid", grid: value }),
 });
 const gridOptions = computed(() => GRID_SETTINGS.map((value) => ({ value, label: t(`overlays.layout.grid.${value}`) })));
+const pictureHint = computed(() => (view.value?.canTakePicture ? null : view.value?.pictureHint === "switch" ? t("overlays.layout.switchToGame") : t("overlays.layout.noGame")));
 const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.value.picture}` : null));
 </script>
 
@@ -131,7 +157,11 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
           <Button variant="ghost" size="icon-sm" :disabled="!view.canRedo" :aria-label="t('overlays.layout.redo')" :title="t('overlays.layout.redo')" data-testid="layout-redo" @click="send({ type: 'redo' })"><Redo2 :stroke-width="1.5" /></Button>
         </div>
         <div class="ml-auto flex flex-wrap items-center gap-2">
-          <Button variant="secondary" size="sm" :disabled="!view.canTakePicture" data-testid="layout-take-picture" @click="send({ type: 'take-picture' })">{{ t("overlays.layout.takePicture") }}</Button>
+          <Button size="sm" data-testid="layout-done" :title="t('overlays.layout.live')" @click="send({ type: 'done' })">{{ t('overlays.layout.done') }}</Button>
+          <!-- A disabled button shows no hint of its own, so the hint sits on its wrapper. -->
+          <span class="inline-flex" :title="pictureHint ?? undefined" data-testid="layout-take-picture-hint">
+            <Button variant="secondary" size="sm" :disabled="!view.canTakePicture" :aria-description="pictureHint ?? undefined" data-testid="layout-take-picture" @click="send({ type: 'take-picture' })">{{ t("overlays.layout.takePicture") }}</Button>
+          </span>
           <Button variant="secondary" size="sm" data-testid="layout-choose-picture" @click="send({ type: 'choose-picture' })"><ImageIcon :stroke-width="1.5" />{{ t("overlays.layout.choosePicture") }}</Button>
           <Button v-if="view.picture" variant="ghost" size="sm" data-testid="layout-remove-picture" @click="send({ type: 'remove-picture' })"><Trash2 :stroke-width="1.5" />{{ t("overlays.layout.removePicture") }}</Button>
         </div>
@@ -145,11 +175,16 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
         <Notice v-if="!view.enabled" variant="info" data-testid="layout-off">{{ t("overlays.layout.off") }}</Notice>
       </div>
       <div class="flex min-h-0 flex-1">
-        <aside class="flex w-80 flex-none flex-col gap-2 overflow-y-auto border-r p-3" :aria-label="t('overlays.layout.list')">
+        <aside class="flex w-[26rem] flex-none flex-col gap-2 overflow-y-auto border-r p-3" :aria-label="t('overlays.layout.list')">
           <h2 class="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">{{ t("overlays.layout.list") }}</h2>
           <p v-if="!view.items.length" class="text-muted-foreground px-1 py-2 text-sm" data-testid="layout-empty">{{ t("overlays.layout.empty") }}</p>
-          <ul v-else class="flex flex-col gap-2">
-            <LayoutRow v-for="item in view.items" :key="item.id" :item="item" :selected="view.selection === item.id" :game-name="gameName" />
+          <div v-if="view.gameId !== LAYOUT_ALL_GAMES && view.items.some((item) => item.general)" class="flex flex-col gap-2 px-1 py-2">
+            <p class="text-muted-foreground text-xs">{{ t(view.customized ? 'overlays.layout.customized' : 'overlays.layout.following') }}</p>
+            <Button v-if="!view.customized" variant="secondary" size="sm" data-testid="layout-customize" @click="send({ type: 'customize' })">{{ t('overlays.layout.customize') }}</Button>
+            <Button v-if="view.hasOverrides || view.customized" variant="secondary" size="sm" data-testid="layout-follow-all" @click="send({ type: 'follow-all' })">{{ t('overlays.layout.followAgain') }}</Button>
+          </div>
+          <ul v-if="view.items.length" class="flex flex-col gap-2">
+            <LayoutRow v-for="item in view.items" :key="item.id" :item="item" :selected="view.selection === item.id" :game-name="gameName" :per-game="view.gameId !== LAYOUT_ALL_GAMES" />
           </ul>
         </aside>
         <main ref="area" class="relative min-w-0 flex-1 overflow-hidden">
@@ -165,6 +200,10 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
           </div>
           <p v-if="!view.seen" class="text-muted-foreground absolute right-4 bottom-1 left-4 truncate text-center text-xs">{{ t("overlays.layout.unseen") }}</p>
         </main>
+      </div>
+      <div class="pointer-events-none fixed inset-0 z-10" aria-hidden="true" data-testid="layout-stills">
+        <img v-for="still in stills.items" :key="still.id" :src="still.url" alt="" class="absolute" :style="stillStyle(still.bounds)" />
+        <img v-if="stills.layer" :src="stills.layer.url" alt="" class="absolute" :style="stillStyle(stills.layer.bounds)" />
       </div>
       <HotkeyDialog />
     </div>

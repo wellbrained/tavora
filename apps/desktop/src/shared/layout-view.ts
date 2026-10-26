@@ -4,7 +4,7 @@
 import { GRID_SETTINGS, isGridSetting, type Canvas, type GridSetting } from "./layout-math";
 import type { AnchoredRect, Rect } from "./overlay-anchor";
 
-/** The pseudo game of the picker for general overlays when no game was seen yet. */
+/** The picker entry for the shared positions of general overlays and panels. */
 export const LAYOUT_ALL_GAMES = "$all";
 
 /** What an item's actions are aimed at: an overlay (by its subject) or a panel in game (by its id). */
@@ -22,8 +22,9 @@ export interface LayoutItemView {
   name: string;
   moduleId: string;
   kind: "overlay" | "panel";
-  /** General (shown over every game, with one position) or the game's own. */
+  /** General (shown over every game, with optional per-game positions) or the game's own. */
   general: boolean;
+  ownPosition: boolean;
   /** The position as saved: an anchor and offsets and a size in units of the game window's height. */
   rect: AnchoredRect;
   /** Where it sits on the canvas, in canvas units (1080 high). */
@@ -40,10 +41,21 @@ export interface LayoutItemView {
   hiddenOnCanvas: boolean;
 }
 
+/**
+ * Still pictures of the live pages and of the layer, in window pixels, while a list or menu is open over the canvas:
+ * the shell draws them where the native views are, then the views step aside, so nothing on the canvas changes.
+ */
+export interface LayoutStills {
+  items: { id: string; bounds: Rect; url: string }[];
+  layer: { bounds: Rect; url: string } | null;
+}
+
 export interface LayoutView {
-  /** The games of the picker; the first is where the window opens when nothing says otherwise. */
+  /** All games first, then the library games in name order. */
   games: { id: string; name: string }[];
   gameId: string;
+  customized: boolean;
+  hasOverrides: boolean;
   /** Canvas units: 1080 high, as wide as the game window's shape. */
   canvas: Canvas;
   /** Whether the game window's size was seen; false means the shape of the main screen is used. */
@@ -57,8 +69,10 @@ export interface LayoutView {
   items: LayoutItemView[];
   /** The game's picture (a Tavora-internal address), or null. */
   picture: string | null;
-  /** The game's window was seen and may still be open, so a picture can be taken. */
+  /** The game is running and Tavora has seen its window, so a picture can be taken. */
   canTakePicture: boolean;
+  /** Why Take picture is off: the game is not running ("start"), or it runs but its window was not seen yet ("switch"); null when it can be taken. */
+  pictureHint: "start" | "switch" | null;
   canUndo: boolean;
   canRedo: boolean;
   /** Game overlays are off in Settings: the layout still works, but nothing shows over the game. */
@@ -84,7 +98,14 @@ export type LayoutMessage =
   | { type: "undo" }
   | { type: "redo" }
   | { type: "canvas-hidden"; id: string; hidden: boolean }
+  /** Reset position: back to where a new item starts, at the size it has. */
   | { type: "reset"; id: string }
+  /** Reset size: back to the size a new item gets, where it is. */
+  | { type: "reset-size"; id: string }
+  | { type: "customize" }
+  | { type: "follow-all" }
+  | { type: "done" }
+  | { type: "follow-item"; id: string }
   | { type: "take-picture" }
   | { type: "choose-picture" }
   | { type: "remove-picture" }
@@ -131,11 +152,16 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
     case "choose-picture":
     case "remove-picture":
     case "dismiss-notice":
+    case "customize":
+    case "follow-all":
+    case "done":
       return { type: raw.type };
     case "canvas-hidden":
       return text(raw.id) && typeof raw.hidden === "boolean" ? { type: "canvas-hidden", id: raw.id, hidden: raw.hidden } : null;
     case "reset":
-      return text(raw.id) ? { type: "reset", id: raw.id } : null;
+    case "reset-size":
+    case "follow-item":
+      return text(raw.id) ? { type: raw.type, id: raw.id } : null;
     default:
       return null;
   }

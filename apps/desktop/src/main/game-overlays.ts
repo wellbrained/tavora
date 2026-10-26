@@ -150,11 +150,16 @@ export interface SeenSize {
 /** What the file keeps of a position: fractions of the window (for older Tavoras, and all there is until converted) and the anchor. */
 type StoredPosition = { rect: LegacyRect; anchor?: AnchoredRect };
 
+export interface GameLayoutState {
+  detached: boolean;
+  positions: Record<string, AnchoredRect>;
+}
+
 type GameOverlayFile = {
   version?: number;
   exclusiveHintShown?: boolean;
   /** The Overlay layout: the grid setting, the window's place and the last window size seen per game. */
-  layout?: { grid?: GridSetting; window?: WindowState; seen?: Record<string, SeenSize> };
+  layout?: { grid?: GridSetting; window?: WindowState; seen?: Record<string, SeenSize>; games?: Record<string, GameLayoutState> };
   overlays: unknown[];
   panels: unknown[];
 };
@@ -295,6 +300,7 @@ export class GameOverlayStore {
   private gridSetting: GridSetting = DEFAULT_GRID;
   private windowState: WindowState | null = null;
   private seen = new Map<string, SeenSize>();
+  private layouts = new Map<string, GameLayoutState>();
   private readonly queue = new SerialQueue();
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -379,6 +385,17 @@ export class GameOverlayStore {
       if (store.panelOf(instanceId) || store.count(bucketOf(panel)) >= LIMITS.maxGameOverlays) continue;
       store.inGame.push(panel);
     }
+    for (const [gameId, state] of Object.entries(layout.games ?? {})) {
+      if (!validField(gameId) || !state || typeof state !== "object") continue;
+      const positions: Record<string, AnchoredRect> = {};
+      for (const item of [...store.overlays, ...store.inGame]) {
+        if (item.scope !== "all") continue;
+        const id = "instanceId" in item ? panelWindowId(item.instanceId) : overlayId(item);
+        const rect = normalizeAnchored(state.positions?.[id]);
+        if (rect) positions[id] = rect;
+      }
+      store.layouts.set(gameId, { detached: state.detached === true, positions });
+    }
     return store;
   }
 
@@ -392,11 +409,11 @@ export class GameOverlayStore {
 
   /** The overlays that show over `gameId`: its own and the general ones. */
   of(gameId: string): GameOverlay[] {
-    return this.overlays.filter((overlay) => appliesTo(overlay, gameId));
+    return this.overlays.filter((overlay) => appliesTo(overlay, gameId)).map((item) => this.positioned(item, gameId));
   }
 
   panelsOf(gameId: string): InGamePanel[] {
-    return this.inGame.filter((panel) => appliesTo(panel, gameId));
+    return this.inGame.filter((panel) => appliesTo(panel, gameId)).map((item) => this.positioned(item, gameId));
   }
 
   panelOf(instanceId: string): InGamePanel | undefined {
@@ -546,18 +563,75 @@ export class GameOverlayStore {
 
   /** A game left the library: its window size goes too. */
   forgetSeen(gameId: string): void {
-    if (this.seen.delete(gameId)) this.saveSoon();
+    this.layouts.delete(gameId);
+    this.seen.delete(gameId);
+    this.saveSoon();
   }
 
   /** Puts the position of an overlay or panel to `rect` (the layout's Reset position); false when there is no such item. */
-  setRect(subject: GameOverlaySubject | { instanceId: string }, rect: AnchoredRect): boolean {
+  setRect(subject: GameOverlaySubject | { instanceId: string }, rect: AnchoredRect, gameId?: string): boolean {
     const target = "instanceId" in subject ? this.panelOf(subject.instanceId) : this.find(subject);
     const next = normalizeAnchored(rect);
     if (!target || !next) return false;
+    if (target.scope === "all" && gameId && gameId !== ALL_GAMES) {
+      const state = this.layoutState(gameId);
+      state.positions["instanceId" in target ? panelWindowId(target.instanceId) : overlayId(target)] = next;
+      this.layouts.set(gameId, state);
+      this.saveSoon();
+      return true;
+    }
     target.rect = next;
     delete target.legacy;
     this.saveSoon();
     return true;
+  }
+
+  layoutState(gameId: string): GameLayoutState {
+    const state = this.layouts.get(gameId);
+    return { detached: state?.detached ?? false, positions: structuredClone(state?.positions ?? {}) };
+  }
+
+  setLayoutState(gameId: string, state: GameLayoutState): void {
+    if (gameId === ALL_GAMES) return;
+    this.layouts.set(gameId, structuredClone(state));
+    this.saveSoon();
+  }
+
+  ownPosition(gameId: string, id: string): boolean {
+    return Object.hasOwn(this.layouts.get(gameId)?.positions ?? {}, id);
+  }
+
+  follow(gameId: string, id?: string): void {
+    if (!id) this.layouts.delete(gameId);
+    else {
+      const state = this.layouts.get(gameId);
+      if (state) {
+        delete state.positions[id];
+        state.detached = false;
+      }
+    }
+    this.saveSoon();
+  }
+
+  customize(gameId: string, size: SeenSize = this.seen.get(gameId) ?? DEFAULT_GAME_SIZE): void {
+    if (gameId === ALL_GAMES) return;
+    const state = this.layoutState(gameId);
+    state.detached = true;
+    for (const item of [...this.overlays, ...this.inGame]) {
+      if (item.scope !== "all") continue;
+      const id = "instanceId" in item ? panelWindowId(item.instanceId) : overlayId(item);
+      state.positions[id] ??= item.legacy ? migrateLegacy(item.legacy, size) : { ...item.rect };
+    }
+    this.setLayoutState(gameId, state);
+  }
+
+  positioned<T extends GameOverlay | InGamePanel>(item: T, gameId: string): T {
+    const id = "instanceId" in item ? panelWindowId(item.instanceId) : overlayId(item);
+    const rect = item.scope === "all" ? this.layouts.get(gameId)?.positions[id] : undefined;
+    if (!rect) return item;
+    const placed = { ...item, rect };
+    delete placed.legacy;
+    return placed;
   }
 
   /**
@@ -587,6 +661,17 @@ export class GameOverlayStore {
   }
 
   private saveSoon(): void {
+    const items = [...this.overlays, ...this.inGame].filter((item) => item.scope === "all");
+    const ids = new Set(items.map((item) => "instanceId" in item ? panelWindowId(item.instanceId) : overlayId(item)));
+    for (const [gameId, state] of this.layouts) {
+      for (const id of Object.keys(state.positions)) if (!ids.has(id)) delete state.positions[id];
+      if (state.detached) {
+        for (const item of items) {
+          const id = "instanceId" in item ? panelWindowId(item.instanceId) : overlayId(item);
+          state.positions[id] ??= item.legacy ? migrateLegacy(item.legacy, this.seen.get(gameId) ?? DEFAULT_GAME_SIZE) : { ...item.rect };
+        }
+      }
+    }
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => void this.save(), SAVE_DELAY_MS);
   }
@@ -598,7 +683,7 @@ export class GameOverlayStore {
     const body: GameOverlayFile = {
       version: FILE_VERSION,
       exclusiveHintShown: this.hintShown,
-      layout: { grid: this.gridSetting, ...(this.windowState ? { window: this.windowState } : {}), seen: Object.fromEntries(this.seen) },
+      layout: { grid: this.gridSetting, ...(this.windowState ? { window: this.windowState } : {}), seen: Object.fromEntries(this.seen), games: Object.fromEntries(this.layouts) },
       overlays: this.overlays.map(({ rect, legacy, ...item }) => ({ ...item, ...this.stored({ gameId: item.gameId, rect, ...(legacy ? { legacy } : {}) }) })),
       panels: this.inGame.map(({ rect, legacy, ...item }) => ({ ...item, ...this.stored({ gameId: item.gameId, rect, ...(legacy ? { legacy } : {}) }) })),
     };

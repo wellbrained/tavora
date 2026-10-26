@@ -3,7 +3,7 @@
 // draws what the player works with: each item's outline, the selection with its eight handles, the key of a toggle
 // item, and the guide lines while something snaps. Dragging works in canvas units (the game window at 1080 high); the
 // main process moves the live pages and keeps the result. Holding Alt places freely.
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { cn } from "@/lib/utils";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
@@ -43,7 +43,7 @@ interface Drag {
 }
 const drag = ref<Drag | null>(null);
 /** Where the items are while being dragged, and until the main process has sent the result. */
-const local = ref<Record<string, Rect>>({});
+const local = shallowRef<Record<string, Rect>>({});
 const guides = ref<Guide[]>([]);
 let frame = 0;
 let pending: { id: string; rect: Rect } | null = null;
