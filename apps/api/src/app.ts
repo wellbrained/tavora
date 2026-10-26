@@ -9,6 +9,7 @@ import { pairingRoutes } from "./pairing.ts";
 import { reviewRoutes, type ReviewStore } from "./reviews.ts";
 import { vaultRoutes } from "./vault.ts";
 import { catalogFilter, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
+import { isAppVersion, type StatsStore } from "./stats.ts";
 import { catalogTrust } from "./catalog-trust.ts";
 import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
@@ -53,9 +54,11 @@ export interface AppOptions {
   maintainerEmail?: string;
   /** Ratings, replies and review reports written per client. */
   reviewRateLimiter?: RateLimiter;
+  /** Plain daily totals (stats.ts). Absent: nothing is counted. */
+  stats?: StatsStore;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, catalogueKey, reportRateLimiter, maintainerEmail, reviewRateLimiter }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, catalogueKey, reportRateLimiter, maintainerEmail, reviewRateLimiter, stats }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 100, windowMs: 3_600_000 });
@@ -264,6 +267,15 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const body = (await context.req.json().catch(() => null)) as { id?: unknown } | null;
     const id = typeof body?.id === "string" && body.id.length <= 200 ? body.id : null;
     if (!id || !catalog!.countInstall(id)) return context.json({ error: "Not found." }, 404);
+    stats?.count("module-install", id);
+    return context.body(null, 204);
+  });
+  // Sent once by the app after a module from the catalog was updated: only the module id.
+  catalogApp.post("/updated", async (context) => {
+    const body = (await context.req.json().catch(() => null)) as { id?: unknown } | null;
+    const id = typeof body?.id === "string" && body.id.length <= 200 ? body.id : null;
+    if (!id || !catalog!.isListed(id)) return context.json({ error: "Not found." }, 404);
+    stats?.count("module-update", id);
     return context.body(null, 204);
   });
   catalogApp.get("/zips/:file", (context) => {
@@ -327,6 +339,29 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   // Publisher keys belong to accounts, so they come and go with them.
   if (accounts) app.route("/v1/publishers", publisherRoutes({ store: accounts.store, ...(accounts.verifyRateLimiter ? { linkRateLimiter: accounts.verifyRateLimiter } : {}), ...(accounts.now ? { now: accounts.now } : {}) }, limiter, (request) => (clientKey ? clientKey(request) : "local")));
   else app.all("/v1/publishers/*", (context) => context.json({ error: "Publishers are not available right now.", reason: "unavailable" }, 503));
+
+  // Sent once by the app when a new Tavora version finished downloading: only the version.
+  app.post("/v1/app/updated", async (context) => {
+    const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
+    if (wait > 0) {
+      context.header("Retry-After", String(wait));
+      return context.json({ error: "Too many requests." }, 429);
+    }
+    const body = (await context.req.json().catch(() => null)) as { version?: unknown } | null;
+    if (!isAppVersion(body?.version)) return context.json({ error: "Send { version }." }, 400);
+    stats?.count("app-update", body.version);
+    return context.body(null, 204);
+  });
+
+  // Called by the update feed's web server for every installer download that starts (Caddy forward_auth,
+  // apps/desktop/deploy/tavora-updates.caddy), never through the public address (api.mytavora.app answers
+  // 404 for /internal/). It reads the version from the file name and answers 204 whatever happens, so the
+  // download goes on; nothing about the request is kept.
+  app.get("/internal/installer-download", (context) => {
+    const version = /^\/Tavora-Setup-([0-9.]+)\.exe$/.exec(context.req.header("x-forwarded-uri") ?? "")?.[1];
+    if (isAppVersion(version)) stats?.count("app-installer", version);
+    return context.body(null, 204);
+  });
 
   app.notFound((context) => context.json({ error: "Not found." }, 404));
   app.onError((error, context) => {

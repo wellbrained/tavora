@@ -64,6 +64,7 @@ async function setup() {
   let modules = new Map<string, InstalledModule>();
   let catalogIds = new Set<string>();
   const catalog = { index: [] as CatalogEntry[], zips: new Map<string, Buffer>() };
+  const counted: string[] = [];
   const state = { online: true, binFails: false, onClose: (_moduleId: string) => {}, grantChanges: 0 };
   const publish = (entry: CatalogEntry, zip: Buffer) => {
     catalog.index = [entry];
@@ -87,7 +88,8 @@ async function setup() {
         return entry;
       },
       download: async (zip) => catalog.zips.get(zip.sha256)!,
-      installed: async () => undefined,
+      installed: async (id) => void counted.push(`install ${id}`),
+      updated: async (id) => void counted.push(`update ${id}`),
     },
     online: () => state.online,
     grantsChanged: () => void state.grantChanges++,
@@ -119,7 +121,7 @@ async function setup() {
     await writeFile(file, zip);
     return file;
   };
-  return { userData, userModules, grants, steps, lifecycle, publish, state, zipFile, modules: () => modules };
+  return { counted, userData, userModules, grants, steps, lifecycle, publish, state, zipFile, modules: () => modules };
 }
 
 describe("ModuleLifecycle", () => {
@@ -267,5 +269,20 @@ describe("ModuleLifecycle", () => {
     const { updated } = await lifecycle.updates.check();
     expect(updated.map((item) => item.manifest.version)).toEqual(["1.1.0"]);
     expect(modules().get(ID)?.manifest.version).toBe("1.1.0");
+  });
+
+  it("tells the catalog an install and an update apart, and a zip picked by hand counts as neither", async () => {
+    const { lifecycle, publish, counted, zipFile } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const owner = fingerprint(key);
+    publish(listing("1.0.0", zipOf("1.0.0", key), owner), zipOf("1.0.0", key));
+    await lifecycle.installFromCatalog(ID);
+    expect(counted).toEqual([`install ${ID}`]);
+    const update = zipOf("1.1.0", key);
+    publish(listing("1.1.0", update, owner), update);
+    await lifecycle.updates.check();
+    expect(counted).toEqual([`install ${ID}`, `update ${ID}`]);
+    await lifecycle.installFile(await zipFile(zipOf("1.2.0", key)));
+    expect(counted).toHaveLength(2);
   });
 });

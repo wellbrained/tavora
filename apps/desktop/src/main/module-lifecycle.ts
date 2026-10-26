@@ -37,7 +37,7 @@ export interface ModuleLifecycleOptions {
   installRules(): Promise<{ userModules: string; safety?: SafetyCheck }>;
   /** What the player granted each module (grants.ts). */
   grants(): GrantStore;
-  catalog: Pick<CatalogClient, "index" | "details" | "download" | "module" | "installed">;
+  catalog: Pick<CatalogClient, "index" | "details" | "download" | "module" | "installed" | "updated">;
   /** Whether online features are on; the catalog is not asked otherwise. */
   online(): boolean;
   /** Whether catalog updates that ask for nothing new install by themselves. */
@@ -73,6 +73,8 @@ export class ModuleLifecycle {
       install: async (zip, expect) => {
         const installed = await installZipData(zip, { ...(await this.installOptions()), expect, catalog: true });
         await this.finishInstall(installed);
+        // Counted as an update, not an install: only the module id, once, so the totals per day can be charted.
+        void this.options.catalog.updated(installed.manifest.id);
         return installed;
       },
       ...(options.log ? { log: options.log } : {}),

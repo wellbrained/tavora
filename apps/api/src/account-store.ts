@@ -768,6 +768,13 @@ export class AccountStore {
     return Number(this.db.prepare("delete from sessions where id = ? and account_id = ?").run(id, accountId).changes) > 0;
   }
 
+  /** Plain numbers for the daily snapshot: all accounts, and those with a sign-in used in the last 7 and 30 days. Nobody is named. */
+  activity(now: number): { total: number; active7: number; active30: number } {
+    const count = (sql: string, ...args: number[]) => (this.db.prepare(sql).get(...args) as { n: number }).n;
+    const active = (days: number) => count("select count(distinct account_id) as n from sessions where last_used_at > ?", now - days * DAY_MS);
+    return { total: count("select count(*) as n from accounts"), active7: active(7), active30: active(30) };
+  }
+
   // ── Housekeeping ───────────────────────────────────────────────────────
 
   private sweep(now: number): void {

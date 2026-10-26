@@ -490,6 +490,11 @@ export class CatalogStore {
     return true;
   }
 
+  /** Whether a module is in the catalog and listed. */
+  isListed(id: string): boolean {
+    return Boolean(this.db.prepare("select 1 from modules where id = ? and listed = 1").get(id));
+  }
+
   /** How many times a module was installed from Browse. */
   installCount(id: string): number {
     return (this.db.prepare("select count from installs where module_id = ?").get(id) as { count: number } | undefined)?.count ?? 0;

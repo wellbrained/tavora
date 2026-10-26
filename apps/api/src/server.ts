@@ -14,6 +14,7 @@ import { normalize } from "./ids.ts";
 import { loadIconStore } from "./icons.ts";
 import { createBrevoMailer, createTestInbox, createTestInboxApp, type Mailer } from "./mail.ts";
 import { clientOf } from "./rate-limit.ts";
+import { StatsStore } from "./stats.ts";
 import { ReviewStore } from "./reviews.ts";
 import { createSteamClient } from "./steam.ts";
 import { createSubmissions } from "./submissions.ts";
@@ -91,6 +92,13 @@ const catalog = new CatalogStore(path.join(stateDir, "catalog"));
 // Ratings and reviews of catalog modules, keyed by account: their own file, in the daily backup.
 const reviews = accountStore ? new ReviewStore(path.join(stateDir, "reviews.sqlite")) : undefined;
 console.log(`[tavora-api] ${catalog.index().length} modules in the catalog.`);
+// Plain daily totals (stats.ts): nothing about a player. Once a day the account numbers are written down too.
+const stats = new StatsStore(path.join(stateDir, "stats.sqlite"));
+const snapshotAccounts = () => {
+  if (accountStore && !stats.hasSnapshot()) stats.snapshotAccounts(accountStore.activity(Date.now()));
+};
+snapshotAccounts();
+setInterval(snapshotAccounts, 60 * 60_000).unref();
 
 let testRequests = 0;
 const app = createApp({
@@ -98,6 +106,7 @@ const app = createApp({
   icons,
   submissions,
   catalog,
+  stats,
   ...(mailer && accountStore
     ? {
         accounts: {
@@ -142,6 +151,7 @@ if (adminToken && adminToken.length >= 24) {
     dataset: () => ({ games: Number(meta().games ?? 0), builtAt: meta().built_at ?? null }),
     ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
     stateDir,
+    stats,
   });
   serve({ fetch: admin.fetch, port: adminPort, hostname: "127.0.0.1" }, (info) => {
     console.log(`[tavora-api] Tavora Admin on http://127.0.0.1:${info.port} (local only)`);

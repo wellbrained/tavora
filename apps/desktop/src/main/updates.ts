@@ -4,6 +4,8 @@ import type { UpdateState } from "../shared/host-api";
 export interface UpdaterLike {
   autoDownload: boolean;
   autoInstallOnAppQuit: boolean;
+  /** Sent with every request to the update feed. */
+  requestHeaders?: Record<string, string> | null;
   on(event: "update-available" | "update-downloaded", listener: (info: { version: string }) => void): unknown;
   on(event: "update-not-available" | "checking-for-update", listener: () => void): unknown;
   on(event: "error", listener: (error: Error) => void): unknown;
@@ -19,6 +21,12 @@ export interface Timers {
   clearInterval(handle: unknown): void;
 }
 
+/**
+ * Tells the feed's web server a request is the updater's, not a player downloading the installer, so
+ * installer downloads and updates are counted apart. It carries no value about the player.
+ */
+export const UPDATER_HEADER = "X-Tavora-Update";
+
 export const FIRST_CHECK_MS = 60 * 1000;
 export const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
 
@@ -27,6 +35,8 @@ export interface UpdateManagerOptions {
   /** Whether new versions download by themselves (a Settings switch). */
   autoDownload: boolean;
   onChange: (state: UpdateState) => void;
+  /** A new version finished downloading (the host counts it, once, and only with Online features on). */
+  onDownloaded?: (version: string) => void;
   log?: (line: string) => void;
   timers?: Timers;
   firstCheckMs?: number;
@@ -44,6 +54,7 @@ export class UpdateManager {
   private current: UpdateState = { status: "idle", checkedAt: null, failed: false };
   private readonly updater: UpdaterLike;
   private readonly onChange: (state: UpdateState) => void;
+  private readonly onDownloaded: (version: string) => void;
   private readonly log: (line: string) => void;
   private readonly timers: Timers;
   private readonly firstCheckMs: number;
@@ -55,6 +66,7 @@ export class UpdateManager {
   constructor(options: UpdateManagerOptions) {
     this.updater = options.updater;
     this.onChange = options.onChange;
+    this.onDownloaded = options.onDownloaded ?? (() => {});
     this.log = options.log ?? (() => {});
     this.timers = options.timers ?? {
       setTimeout: (run, ms) => setTimeout(run, ms),
@@ -69,6 +81,7 @@ export class UpdateManager {
     this.updater.autoDownload = options.autoDownload;
     // A downloaded update installs by itself when Tavora is closed.
     this.updater.autoInstallOnAppQuit = true;
+    this.updater.requestHeaders = { ...this.updater.requestHeaders, [UPDATER_HEADER]: "1" };
     this.updater.on("update-available", (info) => {
       this.log(`update ${info.version} available`);
       this.set(this.updater.autoDownload ? { status: "downloading", version: info.version } : { status: "available", version: info.version });
@@ -76,6 +89,7 @@ export class UpdateManager {
     this.updater.on("update-downloaded", (info) => {
       this.log(`update ${info.version} downloaded`);
       this.set({ status: "ready", version: info.version });
+      this.onDownloaded(info.version);
     });
     this.updater.on("update-not-available", () => {
       this.log("up to date");

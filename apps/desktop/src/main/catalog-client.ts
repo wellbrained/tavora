@@ -476,6 +476,18 @@ export class CatalogClient {
     }).catch(() => undefined);
   }
 
+  /** Tells the catalog a module from it was updated: only its id, counted per day, never who. Never throws. */
+  async updated(id: string): Promise<void> {
+    if (!isModuleId(id)) return;
+    await this.fetchImpl(`${this.baseUrl}/v1/catalog/updated`, {
+      ...REQUEST,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+      signal: AbortSignal.timeout(this.listTimeoutMs),
+    }).catch(() => undefined);
+  }
+
   /** A module's ratings and newest reviews, each checked; a review that isn't is left out. Throws a CatalogError the player can read. */
   async reviews(id: string): Promise<{ rating: CatalogRating | null; reviews: CatalogReview[] }> {
     const body = await this.send("GET", `/v1/catalog/modules/${encodeURIComponent(id)}/reviews`);
