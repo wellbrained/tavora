@@ -20,6 +20,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.16",
+    date: "2026-10-26",
+    title: "Quick game switch",
+    notes: [
+      "Switching to a game without panels no longer shows the loading fire while a panel is up in game.",
+      "Games open about 3 seconds faster: panels draw while the loading cover is up instead of waiting for it.",
+      "No more white flash over the panels when a game opens.",
+      "Panels no longer flash empty when a hint, menu or dialog opens or closes over them.",
+    ],
+  },
+  {
     version: "0.21.15",
     date: "2026-10-26",
     title: "Right version on a module's page",
