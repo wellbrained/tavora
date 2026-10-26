@@ -10,6 +10,28 @@ export class WrongToken extends Error {
   }
 }
 
+/**
+ * Behind the maintainer's tailnet proxy, the proxy signs in (CoreHub password) and adds the token itself: the page
+ * then never holds it, Lock signs out there, and an ended session goes back to the proxy's sign-in.
+ */
+export const proxied = ref(sessionStorage.getItem("adminProxied") === "1");
+const PROXY_TOKEN = "via-proxy";
+
+/** Whether the API answers without a token, because a signing-in proxy adds it. */
+export async function detectProxy(): Promise<boolean> {
+  const response = await fetch("/api/summary", { cache: "no-store" }).catch(() => null);
+  if (!response?.ok) return false;
+  proxied.value = true;
+  sessionStorage.setItem("adminProxied", "1");
+  setToken(PROXY_TOKEN);
+  return true;
+}
+
+export function lock(): void {
+  if (proxied.value) location.assign("/.signout");
+  else setToken("");
+}
+
 export function setToken(value: string): void {
   token.value = value;
   if (value) sessionStorage.setItem(KEY, value);
@@ -25,6 +47,7 @@ export async function call(path: string, body?: unknown, cache: RequestCache = "
     cache,
   });
   if (response.status === 401) {
+    if (proxied.value) location.assign("/.signin");
     setToken("");
     throw new WrongToken();
   }

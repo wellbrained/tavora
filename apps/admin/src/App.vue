@@ -6,7 +6,7 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { computed, onMounted, ref, watch, type Component } from "vue";
-import { setToken, token } from "./api";
+import { detectProxy, lock, setToken, token } from "./api";
 import { go, refreshTick, section, summary, type SectionId } from "./nav";
 import { problem } from "./problem";
 import ApprovalSection from "./sections/ApprovalSection.vue";
@@ -31,6 +31,8 @@ const SECTIONS: { id: SectionId; label: string; icon: Component; view: Component
 ];
 
 const typed = ref("");
+/** Until we know whether a proxy signs in for us, show nothing rather than the token form. */
+const checking = ref(!token.value);
 const wrong = ref(false);
 
 /** How many things wait in a section, from the Overview's list of kinds. */
@@ -63,13 +65,17 @@ watch(token, (value, before) => {
   if (value) void summary.reload();
   else if (before) wrong.value = true;
 });
-onMounted(() => {
+onMounted(async () => {
+  // A proxy found here sets the token, and the watch above loads the summary.
   if (token.value) void summary.reload();
+  else await detectProxy();
+  checking.value = false;
 });
 </script>
 
 <template>
-  <div v-if="!token" class="flex h-full items-center justify-center p-6">
+  <div v-if="checking" class="h-full" />
+  <div v-else-if="!token" class="flex h-full items-center justify-center p-6">
     <form class="flex w-full max-w-sm flex-col gap-3" @submit.prevent="signIn">
       <h1 class="text-xl font-semibold">Tavora Admin</h1>
       <p class="text-muted-foreground text-sm">Paste the admin token. It stays in this tab only.</p>
@@ -85,7 +91,7 @@ onMounted(() => {
       <NavList :groups="groups" label="Sections" :model-value="section" class="flex-1" @update:model-value="go($event)" />
       <div class="flex flex-col gap-1">
         <Button type="button" variant="ghost" size="sm" class="justify-start" :disabled="summary.loading.value" @click="refresh"><RefreshCw :class="{ 'animate-spin': summary.loading.value }" />Refresh</Button>
-        <Button type="button" variant="ghost" size="sm" class="justify-start" @click="setToken('')"><LogOut />Lock</Button>
+        <Button type="button" variant="ghost" size="sm" class="justify-start" @click="lock"><LogOut />Lock</Button>
       </div>
     </aside>
     <main class="min-w-0 flex-1 overflow-y-auto">
