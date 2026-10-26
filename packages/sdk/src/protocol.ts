@@ -344,6 +344,54 @@ export interface SystemApps {
   usedBytes: number;
 }
 
+/** What a media session is doing, as the player reports it to Windows. */
+export type MediaStatus = "playing" | "paused" | "stopped" | "changing" | "closed";
+
+/** What media.control can ask a player to do. */
+export type MediaAction = "playPause" | "next" | "previous";
+
+/** The actions media.control takes. */
+export const MEDIA_ACTIONS: readonly MediaAction[] = ["playPause", "next", "previous"];
+
+/**
+ * One app that plays something, as Windows' media controls (the volume flyout) show it: Spotify, a browser tab,
+ * a video player. Texts are as the app gives them and may be empty.
+ */
+export interface MediaSession {
+  /** Stays the same while the session lasts; pass it to media.control. */
+  id: string;
+  /** The app: `id` as Windows names it (such as "Spotify.exe"), `name` a readable name (such as "Spotify"). */
+  app: { id: string; name: string };
+  /** The session Windows' media keys work on now. At most one is. */
+  current: boolean;
+  title: string;
+  artist: string;
+  album: string;
+  status: MediaStatus;
+  /**
+   * Where the song was at `positionAt` (milliseconds since 1970), in milliseconds. While playing it runs on from
+   * there, so count forward yourself; a new `media.changed` comes when it jumps. Null when the app doesn't say.
+   */
+  positionMs: number | null;
+  positionAt: number | null;
+  /** The song's length in milliseconds, or null when the app doesn't say. */
+  durationMs: number | null;
+  /** The cover as a JPEG data URL, at most 300 px on each side, or null when there is none. */
+  cover: string | null;
+  /** Which actions the app takes now. */
+  can: Record<MediaAction, boolean>;
+}
+
+/**
+ * The media connector's view of this PC. `ready`: `sessions` is what plays now (it may be empty). `starting`:
+ * Tavora is still looking. `unavailable`: this PC can't tell (not Windows, or this Tavora was built without it).
+ * `failed`: Tavora couldn't read it and stopped trying until a panel starts watching again.
+ */
+export interface MediaState {
+  state: "starting" | "ready" | "unavailable" | "failed";
+  sessions: MediaSession[];
+}
+
 /**
  * The discord connector's connection to the Discord app on this PC, with Tavora's Discord sign-in.
  * The connection runs while a panel of a module granted the connector has asked for it.
@@ -435,10 +483,10 @@ export interface DocumentChange {
  * Capabilities gate methods beyond the always-available core. A module has a
  * capability once the player granted one of its permissions for it (`network`:
  * a host in `permissions.network`; `aiUsage`: the `ai-usage` connector; `discord`:
- * the `discord` connector; `overlay`: the `stream-overlay` connector; `systemInfo`: the `system-info` connector); calling a gated method without it fails
+ * the `discord` connector; `overlay`: the `stream-overlay` connector; `systemInfo`: the `system-info` connector; `media`: the `media` connector); calling a gated method without it fails
  * with PERMISSION_DENIED. The others cannot be granted yet.
  */
-export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "systemInfo" | "files" | "clipboard" | "sharedData";
+export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "systemInfo" | "media" | "files" | "clipboard" | "sharedData";
 
 /**
  * What overlay.copyLink did. `copied`: the link is on the clipboard, ready to paste into OBS as a Browser Source.
@@ -543,9 +591,21 @@ export interface Methods {
   "systemInfo.watch": { params: { blocks: SystemWatchBlocks; intervalMs: SystemInterval }; result: null };
   /**
    * The apps running now, with their memory and CPU. Only for Tavora's own System Monitor (capability `systemInfo`);
-   * any other module gets PERMISSION_DENIED. Tavora 0.21.18 and newer.
+   * any other module gets PERMISSION_DENIED. Tavora 0.21.19 and newer.
    */
   "systemInfo.apps": { params: undefined; result: SystemApps };
+  /**
+   * Starts (`on: true`) or ends this panel's watch of what plays on this PC (capability `media`) and answers what
+   * plays now; `media.changed` follows every change while it watches, also while the panel is hidden, so an
+   * overlay can stay current. Ending answers null. Tavora 0.21.16 and newer.
+   */
+  "media.watch": { params: { on: boolean }; result: MediaState | null };
+  /**
+   * Asks the app of a session to play or pause, skip to the next or go back (capability `media`). Needs a click or
+   * key press in the panel, or one of the module's hotkeys, just before; one press allows one call. True when the
+   * app took it.
+   */
+  "media.control": { params: { session: string; action: MediaAction }; result: boolean };
   /** The connection to the Discord app; starts it for this panel (capability `discord`). */
   "discord.state": { params: undefined; result: DiscordState };
   /** Signs in, asking for approval in Discord when needed. Only right after a click or key press (capability `discord`). */
@@ -626,6 +686,8 @@ export interface Events {
   "systemInfo.snapshot": SystemSnapshot;
   /** A drive was plugged in or removed; ask systemInfo.info again. Only with capability `systemInfo`, while the panel watches. */
   "systemInfo.drivesChanged": null;
+  /** What plays on this PC changed (media.watch). Only with capability `media`, while the panel watches. */
+  "media.changed": MediaState;
   /** The player added, renamed or removed an AI account; ask aiUsage.accounts again. Only with capability `aiUsage`. */
   "aiUsage.accountsChanged": null;
   /** The connection to the Discord app changed. Only with capability `discord`, after discord.state. */

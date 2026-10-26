@@ -25,6 +25,8 @@ import {
   type SystemSnapshot,
   type SystemWatchBlocks,
   type SystemInterval,
+  type MediaAction,
+  type MediaState,
   type BlobInfo,
   type BlobUsage,
   type Capability,
@@ -78,6 +80,10 @@ export type {
   SystemWatchBlocks,
   SystemInterval,
   SystemDriveKind,
+  MediaAction,
+  MediaSession,
+  MediaState,
+  MediaStatus,
   BlobInfo,
   BlobType,
   BlobUsage,
@@ -108,7 +114,7 @@ export type {
   TavoraViewport,
   ThemeToken,
 } from "./protocol.js";
-export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, THEME_TOKENS } from "./protocol.js";
+export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, MEDIA_ACTIONS, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, THEME_TOKENS } from "./protocol.js";
 
 /** How long a menu may stay open; the host closes it itself when its panel goes. */
 const MENU_TIMEOUT_MS = 60 * 60_000;
@@ -367,6 +373,23 @@ export interface TavoraSDK {
       onDrivesChange(fn: () => void): Unsubscribe;
       /** The apps running now with their memory and CPU. Only for Tavora's own System Monitor; others get PERMISSION_DENIED. */
       apps(): Promise<SystemApps>;
+    };
+    /**
+     * `media`: what plays on this PC, as Windows' media controls show it (Spotify, browsers, video players), and
+     * play/pause, next and previous. Windows only. A hidden panel keeps getting changes, so an overlay stays current.
+     */
+    media: {
+      /** Starts this panel's watch and answers what plays now; onChange fires with every change from then on. */
+      watch(): Promise<MediaState>;
+      /** Ends this panel's watch. It also ends with the page. */
+      unwatch(): Promise<void>;
+      /** Fires with what plays now whenever it changes, while the panel watches. */
+      onChange(fn: (state: MediaState) => void): Unsubscribe;
+      /**
+       * Asks a session's app to play or pause, skip or go back. Call it from a click or key press in the panel, or
+       * from one of the module's hotkeys; one press allows one call. True when the app took it.
+       */
+      control(session: string, action: MediaAction): Promise<boolean>;
     };
     /**
      * `discord`: the Discord app on this PC, through Tavora's Discord sign-in. The connection runs while a
@@ -813,6 +836,14 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         onSnapshot: (fn) => on("systemInfo.snapshot", fn),
         onDrivesChange: (fn) => on("systemInfo.drivesChanged", () => fn()),
         apps: () => call("systemInfo.apps"),
+      },
+      media: {
+        watch: async () => (await call("media.watch", { on: true })) as MediaState,
+        unwatch: async () => {
+          await call("media.watch", { on: false });
+        },
+        onChange: (fn) => on("media.changed", fn),
+        control: (session, action) => call("media.control", { session, action }),
       },
       discord: {
         state: () => call("discord.state"),

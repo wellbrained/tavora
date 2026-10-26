@@ -19,6 +19,7 @@ import type { PanelContent, PanelLaunch } from "./panel-content";
 import { LIMITS, type PanelOpenResult } from "@tavora/sdk/protocol";
 import type { DiscordConnector, DiscordListener } from "./discord";
 import type { SystemMonitor, SystemSubscription } from "./system-info";
+import type { MediaConnector, MediaSubscription } from "./media";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
 import { serveClipboard } from "./clipboard-http";
@@ -99,6 +100,8 @@ export interface ModuleViewOptions {
   aiUsage: BridgeContext["aiUsage"];
   /** The system-info connector, shared by every panel; each view holds one subscription of its own. */
   systemInfo: { info(): SystemInfo | Promise<SystemInfo>; subscribe: SystemMonitor["subscribe"]; apps(): Promise<SystemApps> };
+  /** The media connector, shared by every panel; each view holds one subscription of its own while it watches. */
+  media: Pick<MediaConnector, "subscribe">;
   /** The discord connector, shared by every panel; this view uses it under its own instance id. */
   discord: Pick<DiscordConnector, "use" | "release" | "state" | "connectNow" | "allowControl" | "command" | "subscribe" | "unsubscribe" | "image">;
   /** Overlays of this module in this game: Stream overlay links (granted the stream-overlay connector) and game overlays. */
@@ -285,6 +288,10 @@ export class ModuleView {
   private suspended = false;
   /** This panel's watch of the PC (system-info.ts), once it asked to watch something. */
   private systemWatch: SystemSubscription | undefined;
+  /** This panel's watch of what plays on the PC (media.ts), while it watches. */
+  private mediaWatch: MediaSubscription | undefined;
+  /** When one of the module's hotkeys was last pressed for this panel; it allows one media.control, like a click. */
+  private hotkeyAt = 0;
   /** The inserted theme stylesheet of the current page, removed when the theme changes. */
   private themeCssKey: string | undefined;
   /** Theme stylesheets are swapped one at a time, so none is left behind. */
@@ -582,6 +589,7 @@ export class ModuleView {
         appSettings: this.options.appSettings,
         aiUsage: this.options.aiUsage,
         systemInfo: this.systemInfoFor(() => bridge),
+        media: this.mediaFor(() => bridge),
         discord: this.discordFor(() => bridge),
         capabilities: () => this.capabilities(),
         readPage: (params) => moduleReadPage(params, {
@@ -673,6 +681,7 @@ export class ModuleView {
         this.options.tooltip?.close();
         this.bridge = undefined;
         this.stopSystemWatch();
+        this.stopMediaWatch();
         this.options.discord.release(this.options.instanceId);
       },
     );
@@ -680,12 +689,13 @@ export class ModuleView {
     this.view.webContents.postMessage("tavora:port", null, [port2]);
   }
 
-  /** What the player has granted now (grants.ts): `network` with any granted host, `aiUsage`, `systemInfo`, `discord` and `overlay` with their connectors. */
+  /** What the player has granted now (grants.ts): `network` with any granted host, `aiUsage`, `systemInfo`, `media`, `discord` and `overlay` with their connectors. */
   private capabilities(): ReadonlySet<Capability> {
     const granted = new Set<Capability>();
     if (this.options.networkHosts().size > 0) granted.add("network");
     if (this.options.connectors().has("ai-usage")) granted.add("aiUsage");
     if (this.options.connectors().has("system-info")) granted.add("systemInfo");
+    if (this.options.connectors().has("media")) granted.add("media");
     if (this.options.connectors().has("discord")) granted.add("discord");
     if (this.options.connectors().has("stream-overlay")) granted.add("overlay");
     return granted;
@@ -725,6 +735,41 @@ export class ModuleView {
   private stopSystemWatch(): void {
     this.systemWatch?.close();
     this.systemWatch = undefined;
+  }
+
+  /**
+   * The media connector as this panel uses it. Changes reach only this page and only while the grant lasts (a revoke
+   * ends the watch at the next change at the latest, and closing the panel ends it at once). Unlike system info they
+   * keep coming while the panel is hidden: they are rare and cheap, and a module's overlay over the game or on stream
+   * has to stay current while Tavora is behind the game. A control needs a click or key press in the page, or one of
+   * the module's hotkeys, just before; one press allows one control.
+   */
+  private mediaFor(bridge: () => BridgeSession): BridgeContext["media"] {
+    const connected = () => this.bridge === bridge() && this.capabilities().has("media");
+    return {
+      watch: (on) => {
+        if (!on) {
+          this.stopMediaWatch();
+          return null;
+        }
+        this.mediaWatch ??= this.options.media.subscribe((state) => {
+          if (connected()) bridge().emit("media.changed", state);
+          else this.stopMediaWatch();
+        });
+        return this.mediaWatch.state();
+      },
+      control: async (session, action) => {
+        if (!this.mediaWatch) return false;
+        if (Date.now() - this.hotkeyAt <= GESTURE_MS) this.hotkeyAt = 0;
+        else await this.takeGesture("media.control");
+        return (await this.mediaWatch?.control(session, action)) ?? false;
+      },
+    };
+  }
+
+  private stopMediaWatch(): void {
+    this.mediaWatch?.close();
+    this.mediaWatch = undefined;
   }
 
   /**
@@ -776,6 +821,7 @@ export class ModuleView {
 
   /** The player pressed a hotkey set for this module in this game. */
   hotkeyPressed(binding: HotkeyBinding): void {
+    this.hotkeyAt = Date.now();
     this.bridge?.emit("hotkeys.pressed", { ...binding });
   }
 
@@ -1107,6 +1153,7 @@ export class ModuleView {
     this.bridge?.close();
     this.bridge = undefined;
     this.stopSystemWatch();
+    this.stopMediaWatch();
     this.options.discord.release(this.options.instanceId);
   }
 

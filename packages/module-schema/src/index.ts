@@ -305,9 +305,10 @@ export function isGameId(value: unknown): value is string {
  * without seeing what is behind them. `ai-usage` reads the usage of the player's Claude and Codex accounts with their
  * sign-ins; `discord` talks to the Discord app on this PC with Tavora's Discord sign-in (voice channels, who is
  * talking, joining and muting); `stream-overlay` shows the module's `overlay` page in streaming software on this PC;
- * `system-info` reads this PC's hardware and how busy it is (CPU, graphics card, memory, drives).
+ * `system-info` reads this PC's hardware and how busy it is (CPU, graphics card, memory, drives); `media` sees what plays
+ * on this PC (Spotify, browsers, video players) and can play, pause and skip.
  */
-export const CONNECTORS = ["ai-usage", "discord", "stream-overlay", "system-info"] as const;
+export const CONNECTORS = ["ai-usage", "discord", "media", "stream-overlay", "system-info"] as const;
 export type Connector = (typeof CONNECTORS)[number];
 
 /** Connectors a module may have Tavora ask for on first use (permissions.onRequest) instead of when it is added. */

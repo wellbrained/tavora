@@ -82,7 +82,9 @@ Methods without params must be sent with `params` left out.
 | `aiUsage.read` | `{ accountId }` | `AiUsageReading`; needs the `aiUsage` capability |
 | `systemInfo.info` | none | `SystemInfo`; this PC's processor, memory, graphics cards and drives. Needs the `systemInfo` capability, see [Connectors](#connectors). Tavora 0.21.1+ |
 | `systemInfo.watch` | `{ blocks, intervalMs }` | `null`; sets what this panel watches, see [Connectors](#connectors). Needs the `systemInfo` capability |
-| `systemInfo.apps` | none | `SystemApps`; the apps running now with their memory and CPU. Only for Tavora's own System Monitor, see [Connectors](#connectors). Tavora 0.21.18+ |
+| `media.watch` | `{ on }` | `MediaState` (or `null` for `on: false`); starts or ends this panel's watch of what plays, see [Connectors](#connectors). Needs the `media` capability. Tavora 0.21.16+ |
+| `media.control` | `{ session, action }` | `boolean`; asks the session's app to `playPause`, go to the `next` or `previous` song. Needs the `media` capability, a watch and a click, key press or hotkey just before |
+| `systemInfo.apps` | none | `SystemApps`; the apps running now with their memory and CPU. Only for Tavora's own System Monitor, see [Connectors](#connectors). Tavora 0.21.19+ |
 | `discord.state` | none | `DiscordState`; starts the connection for this panel. Needs the `discord` capability, see [Connectors](#connectors) |
 | `discord.connect`, `discord.allowControl` | none | `null`; only right after a real click or key press in the panel (`PERMISSION_DENIED` otherwise) |
 | `discord.command` | `{ command, args }` | `DiscordResult`; one of `DISCORD_COMMANDS` |
@@ -207,8 +209,18 @@ A connector is a part of Tavora that reaches outside the module's panel, such as
 - Tavora reads the PC only while at least one panel that is shown watches something, and opens only the counters those panels need. A panel that is hidden, minimized or covered gets no snapshots and counts for nothing; when it is shown again it gets a snapshot at once. With no watching panel nothing runs at all. Panels share one reader, so more panels cost almost nothing.
 - A `systemInfo.snapshot` holds `at` (milliseconds since 1970), `intervalMs` and only the blocks the panel asked for. `cpu` is `{ usage, peak, cores }`, `gpus` is `{ id, usage, peak, vramUsedBytes, temperatureC, clockMhz, powerW }` for each graphics card, `ram` is `{ usedBytes, totalBytes }`, `drives` is `{ id, connected, freeBytes, totalBytes, readBytesPerSec, writeBytesPerSec }` for each drive asked for, in that order, and `tavora` is `{ cpu, memoryBytes }` for Tavora itself. Percentages run from 0 to 100 with one decimal. `usage` is the average since the last snapshot, as Task Manager counts (a graphics card is as busy as its busiest kind of work, such as 3D). `peak` is the busiest second since the last snapshot when `intervalMs` is 5000 or more, and the same as `usage` below that. A drive that is gone (an unplugged USB stick) has `connected: false`, `null` sizes and speeds of 0. `temperatureC` (whole degrees Celsius of the graphics chip), `clockMhz` (graphics clock) and `powerW` (watts with one decimal) come from NVIDIA's own library on the PC and are only there for NVIDIA cards, in Tavora 0.21.8 and newer; for other cards, or when a card doesn't say, they are `null`, and older Tavora leaves them out. A block Windows can't read right now is left out.
 - `systemInfo.drivesChanged` says a drive letter appeared or went away; ask `systemInfo.info` again. It comes only while the panel watches.
-- `systemInfo.apps` (Tavora 0.21.18+) is only for Tavora's own System Monitor; every other module gets `PERMISSION_DENIED`, with the grant or without. It gives `{ apps, usedBytes }`: `apps` lists each running app once, its processes taken together, as `{ name, memoryBytes, cpu, windows }`, the biggest first. `name` is the program's file name without `.exe` and with a capital first letter, `memoryBytes` is its private working set (Task Manager's Memory column), `cpu` is its share of the whole PC since the last call with one decimal (`null` on the first call after a while), and `windows` marks Windows' own processes. `usedBytes` is the memory the PC uses in all. Tavora reads the list with one call into Windows that opens no process, only when asked; outside Windows `apps` is empty.
+- `systemInfo.apps` (Tavora 0.21.19+) is only for Tavora's own System Monitor; every other module gets `PERMISSION_DENIED`, with the grant or without. It gives `{ apps, usedBytes }`: `apps` lists each running app once, its processes taken together, as `{ name, memoryBytes, cpu, windows }`, the biggest first. `name` is the program's file name without `.exe` and with a capital first letter, `memoryBytes` is its private working set (Task Manager's Memory column), `cpu` is its share of the whole PC since the last call with one decimal (`null` on the first call after a while), and `windows` marks Windows' own processes. `usedBytes` is the memory the PC uses in all. Tavora reads the list with one call into Windows that opens no process, only when asked; outside Windows `apps` is empty.
 - Outside Windows the connector answers with the processor and memory only: no graphics cards, no drives and no `cpu`, `gpus` or `drives` in snapshots.
+
+**`media`** (capability `media`, `sdk.connectors.media`, Tavora 0.21.16+): what plays on this PC, as Windows' media controls (the volume flyout) show it, and play/pause, next and previous. Tavora reads it with a small helper program of its own that waits for Windows' change events; nothing polls and nothing leaves the PC.
+
+- `media.watch` with `{ on: true }` starts this panel's watch and answers a `MediaState`: `{ state, sessions }`. `state` is `starting` (Tavora is still looking; a `media.changed` follows), `ready`, `unavailable` (not Windows, or a Tavora built without the helper) or `failed` (the helper kept stopping; watching again tries again). `{ on: false }` ends the watch; so does closing the page.
+- Each session is one app that plays something: `{ id, app: { id, name }, current, title, artist, album, status, positionMs, positionAt, durationMs, cover, can }`. `app.id` is the name Windows gives it (such as `"Spotify.exe"` or `"Chrome"`), `app.name` a readable one (`"Spotify"`). `current` marks the session Windows' media keys work on now. `status` is `playing`, `paused`, `stopped`, `changing` or `closed`. Texts are as the app gives them and may be empty; a browser tab's title can be the page's title.
+- `positionMs` is where the song was at `positionAt` (milliseconds since 1970). While `status` is `playing` it runs on from there, so count forward yourself; a new `media.changed` comes when it jumps (a seek, a new song), not every second. Both are `null`, like `durationMs`, when the app doesn't say. Some apps report the position late or not at all.
+- `cover` is a JPEG data URL of at most 300 px a side, or `null` when the app gives none; it may come in a second `media.changed` a moment after the song. `can` says which of `playPause`, `next` and `previous` the app takes now.
+- `media.changed` carries the whole `MediaState` after every change: a song, play or pause, a jump, an app that starts or stops playing. It also comes while the panel is hidden, so an overlay can stay current.
+- `media.control` with `{ session, action }` asks the app of a watched session to do one of `playPause`, `next` or `previous`, and answers whether it took it (`false` also for a session that is gone). It needs a click or key press in the panel within 2 seconds, or a press of one of the module's hotkeys, and one press allows one call; otherwise `PERMISSION_DENIED`.
+- Outside Windows `state` is always `unavailable`.
 
 **`discord`** (capability `discord`, `sdk.connectors.discord`): the Discord app on this PC, through Tavora's own Discord sign-in (PKCE, no Client Secret). Tavora keeps the local connection, the sign-in and the token; a module sends a fixed list of RPC commands and gets Discord's answers as they came. Nothing goes through Tavora's service, and Tavora can't hear, talk or read messages.
 
@@ -305,6 +317,7 @@ The Panel Types Example in Tavora's examples folder does all of this.
 | `aiUsage.accountsChanged` | `null` | the player added, renamed or removed an AI account; only with the `aiUsage` capability |
 | `systemInfo.snapshot` | `SystemSnapshot` | how busy the PC is, for what this panel watches; only with the `systemInfo` capability, while it watches and is shown |
 | `systemInfo.drivesChanged` | `null` | a drive letter appeared or went away; only with the `systemInfo` capability, while the panel watches |
+| `media.changed` | `MediaState` | what plays on the PC changed; only with the `media` capability, while the panel watches (also while hidden) |
 | `discord.state` | `DiscordState` | the connection to the Discord app changed; only with the `discord` capability, after `discord.state` was asked |
 | `discord.event` | `{ event, data }` | a Discord event the panel subscribed to; only with the `discord` capability |
 | `hotkeys.pressed` | `{ action, target }` | the player pressed a hotkey set for this module in the game shown now; sent to one panel of the module there, the one used last |
@@ -368,6 +381,7 @@ Some methods need a capability the player grants. A module asks for it in its ma
 | `network.readPage` | `network` | the same exact-host grant; fresh isolated session |
 | `aiUsage.accounts`, `aiUsage.read` | `aiUsage` | granted for the `ai-usage` connector, see [Connectors](#connectors) |
 | `systemInfo.*` | `systemInfo` | granted for the `system-info` connector, see [Connectors](#connectors) |
+| `media.*` | `media` | granted for the `media` connector, see [Connectors](#connectors) |
 | `discord.*` | `discord` | granted for the `discord` connector, see [Connectors](#connectors) |
 | `overlay.copyLink`, `overlay.resetLink` | `overlay` | granted for the `stream-overlay` connector, see [Stream overlays](#stream-overlays). `overlay.publish`, `overlay.remove`, `overlay.showOverGame` and `overlay.preview` need none |
 | `files.open`, `files.save` | `files` | reserved |
@@ -400,6 +414,7 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | `network.readPage` answer | 5 MiB of HTML, 30 s, 5 redirects, one active import per module |
 | `aiUsage.read` | one reading per account and minute for all modules, 40 s, answers up to 256 KB |
 | `systemInfo.watch` | one watch per panel, 26 drives; Tavora reads at most once a second, for all panels together |
+| `media.control` | one per press; an app gets 5 s to answer |
 | `discord.command` | 15 s, answers and events up to 512 KB; 32 subscriptions per panel |
 | `ui.showMenu` | one menu per click or key press, 100 entries, labels 80 characters, hints 30 |
 | `overlay.publish` | 16 KB of state per overlay, 200 overlays per module and game; keys up to 64 letters, digits, `-` and `_` |

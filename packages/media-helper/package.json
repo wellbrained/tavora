@@ -1,0 +1,10 @@
+{
+  "name": "@tavora/media-helper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tavora's media helper for the Media connector (Windows only), built from Rust.",
+  "scripts": {
+    "build": "node build.mjs",
+    "test:rust": "cargo test --release"
+  }
+}
