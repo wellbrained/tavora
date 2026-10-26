@@ -398,7 +398,7 @@ describe("modes and settings", () => {
     const { service } = await setup();
     show(service);
     show(service, CLOCK, "elden", "item-2");
-    expect(service.view()).toEqual({ supported: true, enabled: true, hidden: false, layerKey: null });
+    expect(service.view()).toEqual({ supported: true, enabled: true, stay: false, hidden: false, layerKey: null });
     expect(service.layout.games()).toEqual({ own: ["elden"], general: false });
     expect(service.layout.items("elden")).toMatchObject([
       { name: "Clock & Counter · item-1", mode: "always", scope: "game", source: expect.anything() },

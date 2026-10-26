@@ -134,7 +134,10 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
   const lastPlace = () => placed.at(-1)!;
   /** Lets the shell report where the canvas is: 1080 px high is the reference, so scale 1 for a 1920x1080 game. */
   const bounds = (height = 540, x = 300, y = 50) => layout.handle({ type: "bounds", bounds: { x, y, width: Math.round((height * 16) / 9), height } }, true);
-  const flush = () => new Promise((resolve) => setTimeout(resolve, 20));
+  // The pictures are files: under load a few rounds are needed for the writes to land.
+  const flush = async () => {
+    for (let round = 0; round < 6; round += 1) await new Promise((resolve) => setTimeout(resolve, 20));
+  };
   return { layout, world, sent, placed, last, lastPlace, bounds, flush, pictures };
 }
 
