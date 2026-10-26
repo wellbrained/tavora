@@ -20,6 +20,32 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.27",
+    date: "2026-10-26",
+    title: "Overlays stay when you alt-tab",
+    notes: [
+      "Your game overlays stay on screen when you switch to another window, until you minimize or close the game.",
+      "Turn it off in Settings > Overlays.",
+    ],
+  },
+  {
+    version: "0.21.26",
+    date: "2026-10-26",
+    title: "Tavora starts after a quick close",
+    notes: [
+      "Closing Tavora right after adding a panel no longer stops it from starting next time.",
+    ],
+  },
+  {
+    version: "0.21.25",
+    date: "2026-10-26",
+    title: "Is your connection good for playing?",
+    notes: [
+      "The System Monitor rates your connection: Smooth, Laggy or Unstable, and shows how long it ran without a drop.",
+      "The four connection cards fit in one row, and drops only show once there is one.",
+    ],
+  },
+  {
     version: "0.21.24",
     date: "2026-10-26",
     title: "Discord and AI Usage are separate modules now",
