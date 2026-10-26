@@ -3,14 +3,14 @@
 // else the module's) or the module's own icon (its manifest `icon`) comes first; then, for the modules that stand for a
 // product (Discord, React, Vue, ...), its real logo, or a plain line icon
 // for the built-in ones; any other module gets a puzzle piece.
-import { Activity, Gauge, Globe, ListTodo, NotebookPen, PenTool, Puzzle } from "@lucide/vue";
+import { Activity, Calculator, Gauge, Globe, ListTodo, NotebookPen, PenTool, Puzzle, Timer } from "@lucide/vue";
 import { computed } from "vue";
 import { state } from "../host";
 import { BRAND_LOGOS } from "../module-icons";
 
 const props = withDefaults(defineProps<{ moduleId: string | undefined; panelType?: string | null; size?: string }>(), { size: "size-4", panelType: null });
 
-const LINE_ICONS = { "tavora.ai-usage": Gauge, "tavora.browser": Globe, "tavora.notes": NotebookPen, "tavora.system-monitor": Activity, "tavora.todos": ListTodo, "tavora.whiteboard": PenTool } as const;
+const LINE_ICONS = { "wellbrained.ai-usage": Gauge, "tavora.browser": Globe, "tavora.calculator": Calculator, "tavora.clock-counter": Timer, "tavora.notes": NotebookPen, "tavora.system-monitor": Activity, "tavora.todos": ListTodo, "tavora.whiteboard": PenTool } as const;
 const picture = computed(() => {
   const module = state.value?.modules.find((item) => item.id === props.moduleId);
   const type = props.panelType === null ? undefined : module?.panels.find((item) => item.id === props.panelType);
