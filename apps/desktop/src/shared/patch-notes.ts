@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.30",
+    date: "2026-10-26",
+    title: "New icons",
+    notes: [
+      "Clock & Counter and Calculator have their own icons.",
+    ],
+  },
+  {
     version: "0.21.29",
     date: "2026-10-26",
     title: "Arrange your overlays on a canvas",
