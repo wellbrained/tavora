@@ -25,3 +25,8 @@ if [ -f "$state/catalog/catalog.sqlite" ]; then
 fi
 tar -czf "$dir/tavora-api-$stamp.tar.gz" -C "$work" .
 find "$dir" -maxdepth 1 -type f -name 'tavora-api-*.tar.gz' -mtime +14 -delete
+# Tavora Admin shows when the last backup finished: one line with the time, readable by the service (the backups themselves are not).
+if [ -d "$state" ]; then
+  date -u +%Y-%m-%dT%H:%M:%SZ > "$state/last-backup.txt"
+  chmod 644 "$state/last-backup.txt"
+fi

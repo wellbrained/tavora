@@ -1,10 +1,12 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { readFileSync, statSync } from "node:fs";
+import path from "node:path";
 import { Hono } from "hono";
 import type { AccountStore } from "./account-store.ts";
-import { ADMIN_CSS, ADMIN_HTML, ADMIN_JS } from "./admin-page.ts";
+import { registerPanelRoutes } from "./admin-panel.ts";
+import { createProbes, type Probes } from "./admin-probes.ts";
 import type { CatalogStore } from "./catalog.ts";
 import { catalogTrust } from "./catalog-trust.ts";
-import { INTER_WOFF2 } from "./inter-font.ts";
 import { keyRequestStatus, revocationEntries, successionEntries } from "./key-requests.ts";
 import type { IconState } from "./icon-state.ts";
 import { isIconId, type IconStore } from "./icons.ts";
@@ -12,7 +14,9 @@ import type { ReviewStore } from "./reviews.ts";
 import type { Submissions } from "./submissions.ts";
 
 /**
- * The private review page: the icons players have offered, shown the way the
+ * Tavora Admin, the private panel: Overview, Updates, Modules, Review, Accounts and Status. The page is the
+ * built apps/admin (Vue and the shared kit), served from `adminDir`; its JSON is here and in admin-panel.ts.
+ * Review is the old review page: the icons players have offered, shown the way the
  * app will show them, with Approve, Deny and Deny and block; and the hosted
  * icons, with Take down for a publisher's request; and the modules players
  * reported from the catalog, with Delist and Dismiss; and the reviews players reported, with Hide and Dismiss; and the developers' requests to replace a lost
@@ -20,6 +24,17 @@ import type { Submissions } from "./submissions.ts";
  * port of 127.0.0.1 that the web server never forwards, and every call needs
  * the admin token, so reaching it takes the server and the token.
  */
+
+const TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".woff2": "font/woff2",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".ico": "image/x-icon",
+  ".json": "application/json; charset=utf-8",
+};
 
 export interface AdminOptions {
   token: string;
@@ -33,13 +48,39 @@ export interface AdminOptions {
   catalogueKey?: string;
   /** Ratings and reviews, for the reported reviews. Absent: the list is empty. */
   reviews?: ReviewStore;
+  /** The built panel (apps/admin/dist; the release's `admin` folder). Absent or missing: the page says it is not built. */
+  adminDir?: string;
+  /** What the panel asks the outside world; the real ones by default. */
+  probes?: Probes;
+  /** The game dataset's size and build date, as /v1/health says. */
+  dataset?: () => { games: number; builtAt: string | null };
+  /** Emails a day the mail provider allows. */
+  mailDailyLimit?: number;
+  /** The state directory, where the daily backup leaves its time. */
+  stateDir?: string;
 }
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews }: AdminOptions) {
+export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, adminDir, probes, dataset, mailDailyLimit, stateDir }: AdminOptions) {
   const app = new Hono();
   const expected = digest(token);
+
+  // A file of the built panel. Only plain names under the panel's own folder; hashed assets never change.
+  const page = (name: string): Response => {
+    const root = adminDir ? path.resolve(adminDir) : null;
+    const file = root ? path.resolve(root, name) : null;
+    if (!root || !file || !file.startsWith(root + path.sep) || !/^[\w./-]+$/.test(name)) return new Response("Not found.", { status: 404 });
+    try {
+      if (!statSync(file).isFile()) throw new Error("not a file");
+      const kept = name.startsWith("assets/") ? { "Cache-Control": "public, max-age=31536000, immutable" } : {};
+      return new Response(readFileSync(file), { headers: { "Content-Type": TYPES[path.extname(file)] ?? "application/octet-stream", ...kept } });
+    } catch {
+      return name === "index.html"
+        ? new Response("The admin panel is not built. Run: pnpm --filter @tavora/admin build", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } })
+        : new Response("Not found.", { status: 404 });
+    }
+  };
 
   app.use("*", async (context, next) => {
     await next();
@@ -48,15 +89,14 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     context.header("Referrer-Policy", "no-referrer");
     context.header(
       "Content-Security-Policy",
-      "default-src 'none'; script-src 'self'; style-src 'self'; img-src blob:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     );
   });
 
   // The page itself holds no data, so it needs no token.
-  app.get("/", (context) => context.html(ADMIN_HTML));
-  app.get("/admin.js", (context) => new Response(ADMIN_JS, { headers: { "Content-Type": "text/javascript; charset=utf-8" } }));
-  app.get("/admin.css", (context) => new Response(ADMIN_CSS, { headers: { "Content-Type": "text/css; charset=utf-8" } }));
-  app.get("/inter.woff2", () => new Response(INTER_WOFF2, { headers: { "Content-Type": "font/woff2", "Cache-Control": "public, max-age=31536000, immutable" } }));
+  app.get("/", () => page("index.html"));
+  app.get("/assets/:file", (context) => page(`assets/${context.req.param("file")}`));
+  app.get("/favicon.svg", () => page("favicon.svg"));
 
   app.use("/api/*", async (context, next) => {
     const sent = context.req.header("x-admin-token") ?? "";
@@ -201,6 +241,19 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     const { old } = await json(context.req.raw);
     if (typeof old !== "string") return context.json({ error: "Send { old }." }, 400);
     return accounts?.declineKeyRequest(old, Date.now()) ? context.json({ ok: true }) : context.json({ error: "No open request for this key." }, 404);
+  });
+
+  registerPanelRoutes(app, {
+    submissions,
+    store,
+    catalog,
+    accounts,
+    reviews,
+    probes: probes ?? createProbes(),
+    keysWaiting: () => (accounts?.allKeyRequests() ?? []).filter((request) => keyRequestStatus(request, trust()) === "waiting").length,
+    dataset: dataset ?? (() => ({ games: 0, builtAt: null })),
+    mailDailyLimit,
+    stateDir,
   });
 
   app.notFound((context) => context.json({ error: "Not found." }, 404));
