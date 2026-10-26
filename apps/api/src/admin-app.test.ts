@@ -18,7 +18,7 @@ const TOKEN = "t0ken-".repeat(5);
 const png = (seed: number) => encodePng(32, 32, Uint8Array.from({ length: 32 * 32 * 4 }, (_, i) => (i % 4 === 3 ? 255 : (i * seed) % 256)));
 const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
 
-// A stand-in for the built panel (apps/admin/dist).
+// A stand-in for the built panel (Tavora Admin's dist).
 const panel = mkdtempSync(path.join(tmpdir(), "tavora-admin-panel-"));
 mkdirSync(path.join(panel, "assets"));
 writeFileSync(path.join(panel, "index.html"), "<!doctype html><title>Tavora Admin</title>");
