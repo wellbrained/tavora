@@ -4,7 +4,7 @@ import { READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
-import type { Capability, GameOverlayResult, SystemInfo, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
+import type { Capability, GameOverlayResult, SystemApps, SystemInfo, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./gamedata";
 import { gestureCounts, type Opacity } from "./game-overlays";
@@ -28,6 +28,7 @@ import { saveJsonExport, serveJsonExport } from './json-export-http';
 import { DRAW_CAP_MS } from "./panel-cover";
 import { isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
+import { onlySystemMonitor } from "./system-apps";
 import { moduleFetch, type TestHosts } from "./network";
 import type { InstalledModule } from "./registry";
 import type { InstanceStatus } from "../shared/host-api";
@@ -97,7 +98,7 @@ export interface ModuleViewOptions {
   /** The ai-usage connector, for a module granted it. */
   aiUsage: BridgeContext["aiUsage"];
   /** The system-info connector, shared by every panel; each view holds one subscription of its own. */
-  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; subscribe: SystemMonitor["subscribe"] };
+  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; subscribe: SystemMonitor["subscribe"]; apps(): Promise<SystemApps> };
   /** The discord connector, shared by every panel; this view uses it under its own instance id. */
   discord: Pick<DiscordConnector, "use" | "release" | "state" | "connectNow" | "allowControl" | "command" | "subscribe" | "unsubscribe" | "image">;
   /** Overlays of this module in this game: Stream overlay links (granted the stream-overlay connector) and game overlays. */
@@ -699,6 +700,10 @@ export class ModuleView {
     const connected = () => this.bridge === bridge() && this.capabilities().has("systemInfo");
     return {
       info: () => this.options.systemInfo.info(),
+      apps: () => {
+        onlySystemMonitor(this.options.module.owner, this.options.module.manifest.id, "systemInfo.apps");
+        return this.options.systemInfo.apps();
+      },
       watch: (request) => {
         if (!this.systemWatch) {
           this.systemWatch = this.options.systemInfo.subscribe({

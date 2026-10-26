@@ -20,6 +20,7 @@ import {
   type NetworkResponse,
   type GameOverlayResult,
   type OverlayLinkResult,
+  type SystemApps,
   type SystemInfo,
   type PageResponse,
   type PanelContent,
@@ -87,9 +88,10 @@ export interface BridgeContext {
   aiUsage: { accounts(): Promise<AiUsageAccountInfo[]>; read(accountId: string): Promise<AiUsageReading> };
   /**
    * The system-info connector (system-info.ts) for this panel; only reached with the `systemInfo` capability. `watch`
-   * gets the request already checked (system-info-parse.ts); it replaces what this panel watched before.
+   * gets the request already checked (system-info-parse.ts); it replaces what this panel watched before. `apps`
+   * refuses every module but Tavora's own System Monitor.
    */
-  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; watch(request: WatchRequest): void };
+  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; watch(request: WatchRequest): void; apps(): Promise<SystemApps> };
   /**
    * The discord connector (discord.ts) for this panel; only reached with the `discord` capability. Commands
    * and subscriptions arrive checked (discord-commands.ts); connect, allowControl, SELECT_VOICE_CHANNEL and
@@ -317,6 +319,7 @@ const handlers = new Map<string, Handler>([
       return null;
     },
   ],
+  ["systemInfo.apps", (s, params) => (needs(s, "systemInfo", "systemInfo.apps"), noParams(params), s.context.systemInfo.apps())],
 
   ["discord.state", (s, params) => (needs(s, "discord", "discord.state"), noParams(params), s.context.discord.state())],
   ["discord.connect", async (s, params) => (needs(s, "discord", "discord.connect"), noParams(params), await s.context.discord.connect(), null)],

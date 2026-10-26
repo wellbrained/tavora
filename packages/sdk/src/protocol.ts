@@ -326,6 +326,24 @@ export interface SystemSnapshot {
   tavora?: { cpu: number; memoryBytes: number };
 }
 
+/** One app running on this PC: its processes taken together under one name (systemInfo.apps). */
+export interface SystemApp {
+  /** The program's file name without ".exe" and with a capital first letter ("Firefox"), or Windows' own name ("Memory Compression"). */
+  name: string;
+  /** Memory only this app uses (private working set), as Task Manager's Memory column. */
+  memoryBytes: number;
+  /** CPU since the last reading as a share of the whole PC, with one decimal; null before there are two readings. */
+  cpu: number | null;
+  /** One of Windows' own processes, such as svchost or Memory Compression. */
+  windows: boolean;
+}
+
+/** The apps running now, the biggest first, and how much memory the PC uses in all (systemInfo.apps). */
+export interface SystemApps {
+  apps: SystemApp[];
+  usedBytes: number;
+}
+
 /**
  * The discord connector's connection to the Discord app on this PC, with Tavora's Discord sign-in.
  * The connection runs while a panel of a module granted the connector has asked for it.
@@ -523,6 +541,11 @@ export interface Methods {
    * `systemInfo.snapshot` at once, then one every `intervalMs`. A panel that is hidden gets none.
    */
   "systemInfo.watch": { params: { blocks: SystemWatchBlocks; intervalMs: SystemInterval }; result: null };
+  /**
+   * The apps running now, with their memory and CPU. Only for Tavora's own System Monitor (capability `systemInfo`);
+   * any other module gets PERMISSION_DENIED. Tavora 0.21.16 and newer.
+   */
+  "systemInfo.apps": { params: undefined; result: SystemApps };
   /** The connection to the Discord app; starts it for this panel (capability `discord`). */
   "discord.state": { params: undefined; result: DiscordState };
   /** Signs in, asking for approval in Discord when needed. Only right after a click or key press (capability `discord`). */

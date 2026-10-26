@@ -7,6 +7,7 @@ import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import AppsDialog from "./AppsDialog.vue";
 import DrivesDialog from "./DrivesDialog.vue";
 import { memory, num } from "./format";
 import { language, setLanguage, t } from "./i18n";
@@ -19,6 +20,7 @@ const sdk = shallowRef<TavoraSDK | null>(null);
 const monitor = shallowRef<Monitor | null>(null);
 const connectError = ref<string | null>(null);
 const picking = ref(false);
+const showingApps = ref(false);
 
 onMounted(async () => {
   try {
@@ -78,7 +80,7 @@ const checkedDrives = computed(() => (monitor.value?.info.value ? watchedDrives(
       {{ t("readError", { error: monitor.error.value }) }}
     </p>
     <div v-else class="@container min-h-0 flex-1 overflow-y-auto">
-      <SystemSection :monitor="monitor" />
+      <SystemSection :monitor="monitor" @show-apps="showingApps = true" />
       <p v-if="!snapshot" class="text-muted-foreground px-3 py-2 text-xs" data-testid="waiting">{{ t("waiting") }}</p>
     </div>
 
@@ -90,5 +92,6 @@ const checkedDrives = computed(() => (monitor.value?.info.value ? watchedDrives(
     </footer>
 
     <DrivesDialog v-if="picking && monitor.info.value" :info="monitor.info.value" :checked="checkedDrives" @save="saveDrives" @cancel="picking = false" />
+    <AppsDialog v-if="showingApps && sdk" :sdk="sdk" @close="showingApps = false" />
   </div>
 </template>

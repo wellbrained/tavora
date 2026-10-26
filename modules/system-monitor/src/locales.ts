@@ -44,6 +44,18 @@ export const en = {
   "drives.notConnected": "not connected",
   "drives.cancel": "Cancel",
   "drives.save": "Save",
+
+  "apps.show": "Show apps",
+  "apps.title": "Apps using memory",
+  "apps.search": "Search apps",
+  "apps.app": "App",
+  "apps.ram": "RAM",
+  "apps.cpu": "CPU",
+  "apps.windows": "Windows",
+  "apps.loading": "Looking at your apps…",
+  "apps.error": "Can't read your apps right now.",
+  "apps.none": "No app matches.",
+  "apps.total": "Shown: {shown} of {used} in use",
 };
 
 export const de: typeof en = {
@@ -91,4 +103,16 @@ export const de: typeof en = {
   "drives.notConnected": "nicht verbunden",
   "drives.cancel": "Abbrechen",
   "drives.save": "Speichern",
+
+  "apps.show": "Apps anzeigen",
+  "apps.title": "Apps im Arbeitsspeicher",
+  "apps.search": "Apps suchen",
+  "apps.app": "App",
+  "apps.ram": "RAM",
+  "apps.cpu": "CPU",
+  "apps.windows": "Windows",
+  "apps.loading": "Schaue auf deine Apps…",
+  "apps.error": "Deine Apps lassen sich gerade nicht lesen.",
+  "apps.none": "Keine App passt.",
+  "apps.total": "Angezeigt: {shown} von {used} belegt",
 };
