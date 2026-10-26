@@ -20,6 +20,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.36",
+    date: "2026-10-27",
+    title: "Suspended accounts",
+    notes: [
+      "If Tavora suspended your account, signing in says so: \"Your account is suspended. Check your email for why.\"",
+    ],
+  },
+  {
     version: "0.21.35",
     date: "2026-10-26",
     title: "Your overlays, your layout",
