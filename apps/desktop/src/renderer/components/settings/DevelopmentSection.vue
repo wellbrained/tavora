@@ -12,6 +12,7 @@ import { computed, onMounted } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DevelopmentProblemKind } from "../../../shared/host-api";
+import { problemText, type ModuleProblemValues } from "../../../shared/module-problem";
 import { account, act, confirmAction, developerKeys, developerState, dialog, publishModule, saveModuleZip, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleDeveloperSettings from "../developer/ModuleDeveloperSettings.vue";
@@ -87,11 +88,8 @@ function shortPath(folder: string): string {
 const openProject = (project: string) => act({ type: "open-development-project", project });
 
 /** What to do about a folder or project that loaded nothing, in words. */
-function advice(kind: DevelopmentProblemKind | null, message: string | null, folder: string): string {
-  if (kind === "not-built") return t("settings.devFolders.notBuilt", { folder: baseName(folder) });
-  if (kind === "no-module") return t("settings.devFolders.noModule");
-  if (kind === "missing") return t("settings.devFolders.missing");
-  return t("settings.devFolders.problem", { message: message ?? "" });
+function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues | undefined, folder: string): string {
+  return problemText(t, "development", kind, values, baseName(folder));
 }
 </script>
 
@@ -138,7 +136,7 @@ function advice(kind: DevelopmentProblemKind | null, message: string | null, fol
           </Button>
         </div>
         <p v-if="entry.problem" class="text-muted-foreground flex gap-2 pl-7 text-sm" data-testid="development-folder-status">
-          <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" /> {{ advice(entry.kind, entry.problem, entry.folder) }}
+          <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" /> {{ advice(entry.kind, entry.values, entry.folder) }}
         </p>
         <p v-else-if="!entry.projects.length" class="text-muted-foreground pl-7 text-sm" data-testid="development-folder-status">{{ t("settings.devFolders.empty") }}</p>
         <ul v-else class="flex flex-col pl-7">
@@ -173,7 +171,7 @@ function advice(kind: DevelopmentProblemKind | null, message: string | null, fol
                 </Button>
               </template>
             </ModuleRow>
-            <ProjectRow v-else :name="project.name ?? baseName(project.project)" :version="project.version" :status="advice(project.kind, project.problem, project.project)">
+            <ProjectRow v-else :name="project.name ?? baseName(project.project)" :version="project.version" :status="advice(project.kind, project.values, project.project)">
               <Button variant="ghost" size="icon" :aria-label="t('common.openFolder')" :title="t('common.openFolder')" data-testid="open-project" @click="openProject(project.project)">
                 <FolderOpen :stroke-width="1.5" />
               </Button>

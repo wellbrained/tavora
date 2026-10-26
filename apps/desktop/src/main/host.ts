@@ -3798,7 +3798,7 @@ export class Host {
           this.lifecycle.updates.pending(module.manifest.id),
         ),
       })),
-      moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder && !problem.official).map(({ folder, path: full, message, kind }) => ({ folder, path: full, message, ...(kind ? { kind } : {}) })),
+      moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder && !problem.official).map(({ folder, path: full, message, kind, values }) => ({ folder, path: full, message, ...(kind ? { kind } : {}), ...(values ? { values } : {}) })),
       developmentFolders: this.library.developmentFolders.map((folder) => {
         const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
         const projects = new Map<string, HostViewState["developmentFolders"][number]["projects"][number]>();
@@ -3814,6 +3814,7 @@ export class Host {
             moduleId: null,
             problem: item.message,
             kind: item.kind ?? null,
+            ...(item.values ? { values: item.values } : {}),
             name: item.about?.name ?? null,
             version: item.about?.version ?? null,
           });
@@ -3822,6 +3823,7 @@ export class Host {
           folder,
           problem: own?.message ?? null,
           kind: own?.kind ?? null,
+          ...(own?.values ? { values: own.values } : {}),
           projects: [...projects.values()].sort((a, b) => a.project.localeCompare(b.project)),
         };
       }),

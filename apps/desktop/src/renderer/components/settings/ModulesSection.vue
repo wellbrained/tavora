@@ -15,6 +15,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { act, confirmAction, dialog, gamesUsing, listOf, settingsOpen, showToast, state, submitAction } from "../../host";
+import { problemText } from "../../../shared/module-problem";
 import { t } from "../../i18n";
 import ModuleGrantsSection from "./ModuleGrantsSection.vue";
 import ModuleNotesDialog from "./ModuleNotesDialog.vue";
@@ -136,9 +137,7 @@ function remove(module: ModuleView) {
           <div class="flex min-w-0 flex-1 flex-col gap-2">
             <p class="text-sm leading-relaxed [overflow-wrap:anywhere]">
               <span class="font-medium">{{ problem.folder }}</span>{{ " " }}
-              <span class="text-muted-foreground">{{
-                problem.kind === "not-built" ? t("settings.modules.notBuilt") : t("settings.modules.problem", { message: problem.message })
-              }}</span>
+              <span class="text-muted-foreground">{{ problemText(t, "modules", problem.kind, problem.values) }}</span>
             </p>
             <p class="text-muted-foreground text-xs [overflow-wrap:anywhere]" data-testid="module-problem-path">{{ problem.path }}</p>
           </div>
