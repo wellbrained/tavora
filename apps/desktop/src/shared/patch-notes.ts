@@ -22,23 +22,6 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.21.34",
     date: "2026-10-26",
-    title: "Publishing can wait for a quick look",
-    notes: [
-      "Your first module, or a version with new pictures or more permissions, waits for a quick look at Tavora before players see it.",
-      "Publishing tells you when that happens, and we email you when it's in.",
-    ],
-  },
-  {
-    version: "0.21.33",
-    date: "2026-10-26",
-    title: "Counting updates",
-    notes: [
-      "Tavora now tells its service which version you updated to, and which catalog modules you updated, as a plain number. Nothing about you is sent, and only while Online features are on.",
-    ],
-  },
-  {
-    version: "0.21.32",
-    date: "2026-10-26",
     title: "Your overlays, your layout",
     notes: [
       "Arrange overlays and panels in the new Overlay layout window, opened from Settings > Overlays or an item's menu. Move and resize on a grid; hold Alt to place freely.",
@@ -57,6 +40,9 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "Games open faster, without white or empty panel flashes. Empty workspaces no longer show the loading fire while a panel is in game. Closing Tavora just after adding a panel no longer stops the next startup.",
       "Module pages show your installed version and the newest update. Settings explains module problems in your language and keeps less-used module actions in a menu.",
       "Keyboard keys and module icons look consistent. Settings search finds Version, the Publish screen is tidier, and Clock & Counter and Calculator have their own icons.",
+      "Your first module, or a version with new pictures or more permissions, waits for a quick look at Tavora before players see it.",
+      "Publishing tells you when that happens, and we email you when it's in.",
+      "Tavora now tells its service which version you updated to, and which catalog modules you updated, as a plain number. Nothing about you is sent, and only while Online features are on.",
     ],
   },
   {
