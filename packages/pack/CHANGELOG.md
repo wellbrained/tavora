@@ -2,13 +2,11 @@
 
 What changed in `@tavora/pack`, newest first.
 
-## Unreleased
+## 0.3.0
 
 - Publishing can answer **Waiting for review**: the version is uploaded but not listed until a person at Tavora has looked at it (your first module, new pictures, or a failed automatic check). `tavora-pack publish` prints it with the reasons and exits 0. `publishZip` resolves with `status: "published" | "waiting"` and `reasons`.
 - New `tavora-pack withdraw <file.zip | sha256>` (and `withdrawVersion`) takes a waiting version back. It needs only the publish token.
 - `tavora-pack publish` links to [what's not allowed in the catalog](https://docs.mytavora.app/guide/catalog-rules). A banned account or a declined zip get their own messages.
-
-## 0.3.0
 
 - Publish from Tavora now: **Settings > Development**, then **Publish** on your module. It packs, signs and uploads with one button. `tavora-pack` is for CI.
 - `tavora-pack` signs only with a key file: `--key <file>` is required. Export your key in Tavora under **Settings > Development > Publisher keys and CI**. Without `--key` it tells you where to publish instead.
