@@ -18,7 +18,7 @@ import type { Submissions } from "./submissions.ts";
 
 /**
  * Tavora Admin, the private panel: Overview, Updates, Modules, Review, Accounts and Status. The page is the
- * built apps/admin (Vue and the shared kit), served from `adminDir`; its JSON is here and in admin-panel.ts.
+ * built Tavora Admin (its own repo, wellbrained/tavora-admin: Vue and the shared kit), served from `adminDir`; its JSON is here and in admin-panel.ts.
  * Review is the old review page: the icons players have offered, shown the way the
  * app will show them, with Approve, Deny and Deny and block; and the hosted
  * icons, with Take down for a publisher's request; and the modules players
@@ -51,7 +51,7 @@ export interface AdminOptions {
   catalogueKey?: string;
   /** Ratings and reviews, for the reported reviews. Absent: the list is empty. */
   reviews?: ReviewStore;
-  /** The built panel (apps/admin/dist; the release's `admin` folder). Absent or missing: the page says it is not built. */
+  /** The built panel (Tavora Admin's dist; on the server /srv/tavora-admin/current). Absent or missing: the page says it is not built. */
   adminDir?: string;
   /** What the panel asks the outside world; the real ones by default. */
   probes?: Probes;
@@ -84,7 +84,7 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
       return new Response(readFileSync(file), { headers: { "Content-Type": TYPES[path.extname(file)] ?? "application/octet-stream", ...kept } });
     } catch {
       return name === "index.html"
-        ? new Response("The admin panel is not built. Run: pnpm --filter @tavora/admin build", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } })
+        ? new Response("The admin panel is not built. Build or deploy Tavora Admin (wellbrained/tavora-admin).", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } })
         : new Response("Not found.", { status: 404 });
     }
   };
