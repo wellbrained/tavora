@@ -8,17 +8,27 @@ updates.mytavora.app {
     # Counting installer downloads, as one plain number per version and day. Only a download that starts
     # fresh counts: a plain GET of an installer without a Range header and without the header the app's
     # updater sends (X-Tavora-Update, see updates.ts), so updates and resumed downloads don't. The API
-    # keeps only the version from the file name (it is told the address, nothing about who asked), and
-    # answers 204 so the download goes on. If the API is down, a new installer download fails until it
-    # is back; updates and the manifests never go through it.
+    # keeps only the version from the file name (it is told the address, nothing about who asked).
+    # It never stands in the way: whatever the API answers (or if it is down or slow, after 1-2 seconds)
+    # the installer is served, only not counted (an API that cannot be reached costs the player one redirect).
     @installer {
         method GET
         path /Tavora-Setup-*.exe
         not header Range *
         not header X-Tavora-Update *
+        not query uncounted=1
     }
-    forward_auth @installer 127.0.0.1:4010 {
-        uri /internal/installer-download
+    reverse_proxy @installer 127.0.0.1:4010 {
+        method GET
+        rewrite /internal/installer-download
+        header_up X-Forwarded-Uri {uri}
+        transport http {
+            dial_timeout 1s
+            response_header_timeout 2s
+        }
+        # Any answer is thrown away and the request goes on to the file.
+        handle_response {
+        }
     }
     # The manifests change with every release and must never be cached.
     @manifests path *.yml
@@ -28,4 +38,13 @@ updates.mytavora.app {
     header @versioned Cache-Control "public, max-age=31536000, immutable"
     # Only files that were published are served; there is no directory listing.
     file_server
+    # The API could not be reached or timed out (502, 503, 504): send the same download again with
+    # ?uncounted=1, which skips the counting. (Serving the file right here would keep the error status.)
+    handle_errors {
+        @apiDown {
+            path /Tavora-Setup-*.exe
+            expression {http.error.status_code} in [502, 503, 504]
+        }
+        redir @apiDown {path}?uncounted=1 302
+    }
 }
