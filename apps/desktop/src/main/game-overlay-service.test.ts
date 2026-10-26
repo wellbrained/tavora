@@ -908,6 +908,14 @@ describe("a panel in the game", () => {
     expect(panelWindows(world)).toHaveLength(2);
   });
 
+  it("starts at the size its module prefers", async () => {
+    const { service, world, key } = await setup();
+    show(service);
+    service.showPanel({ owner: "official", moduleId: TODOS.manifest.id, gameId: "elden", instanceId: PANEL }, { width: 360, height: 200 });
+    service.pressed(layerKey(key));
+    expect(panelWindows(world)[0]!.rect).toMatchObject({ width: 360, height: 200 });
+  });
+
   it("opens the layer even with only a panel, and puts the panel above the veil and the frames", async () => {
     const { service, world, key } = await setup();
     add(service);

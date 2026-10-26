@@ -58,6 +58,21 @@ export const DEFAULT_RELATIVE_RECT: RelativeRect = { x: 0.02, y: 0.03, width: 0.
 /** A panel in the game is taller than an overlay page: it is a whole panel, not one number. */
 export const DEFAULT_PANEL_RECT: RelativeRect = { x: 0.02, y: 0.03, width: 0.22, height: 0.4 };
 
+/**
+ * Where a panel shown in the game starts: in the corner, at the size its module prefers (the manifest's preferred
+ * viewport) in a window of `area`'s size, so a small panel isn't stretched. Without a preferred size, or before any game
+ * window is known, it gets DEFAULT_PANEL_RECT's size.
+ */
+export function panelStartRect(preferred: { width?: number | undefined; height?: number | undefined } | null, area: Rect | null): RelativeRect {
+  if (!area || area.width <= 0 || area.height <= 0) return { ...DEFAULT_PANEL_RECT };
+  const share = (size: number | undefined, of: number, room: number, fallback: number) => (size && size > 0 ? Math.min(room, size / of) : fallback);
+  return {
+    ...DEFAULT_PANEL_RECT,
+    width: share(preferred?.width, area.width, 1 - DEFAULT_PANEL_RECT.x, DEFAULT_PANEL_RECT.width),
+    height: share(preferred?.height, area.height, 1 - DEFAULT_PANEL_RECT.y, DEFAULT_PANEL_RECT.height),
+  };
+}
+
 /** Who a game overlay belongs to: one key of one module in one workspace. */
 export interface GameOverlaySubject {
   owner: string;
@@ -348,11 +363,11 @@ export class GameOverlayStore {
   }
 
   /** Marks a panel as shown in the game; it counts toward the same limit as overlays. */
-  addPanel(panel: Omit<InGamePanel, "rect" | "mode" | "opacity" | "hideFromCapture">): AddResult {
+  addPanel(panel: Omit<InGamePanel, "rect" | "mode" | "opacity" | "hideFromCapture">, first: RelativeRect = DEFAULT_PANEL_RECT): AddResult {
     if (this.panelOf(panel.instanceId)) return "exists";
     const bucket = bucketOf(panel);
     if (this.count(bucket) >= LIMITS.maxGameOverlays) return "full";
-    this.inGame.push({ ...panel, rect: this.startRect(DEFAULT_PANEL_RECT, bucket), mode: "always", opacity: 100, hideFromCapture: false });
+    this.inGame.push({ ...panel, rect: this.startRect(first, bucket), mode: "always", opacity: 100, hideFromCapture: false });
     this.saveSoon();
     return "added";
   }
