@@ -697,7 +697,7 @@ export interface Methods {
    * any other module gets PERMISSION_DENIED. Tavora 0.21.21 and newer.
    */
   "systemInfo.apps": { params: undefined; result: SystemApps };
-  /** What this PC received and sent this week and month and the 3 months before (capability `systemInfo`). Only for Tavora's own System Monitor. Tavora 0.21.29 and newer. */
+  /** What this PC received and sent this week and month and the 3 months before (capability `systemInfo`). Only for Tavora's own System Monitor. Tavora 0.21.31 and newer. */
   "systemInfo.traffic": { params: undefined; result: SystemTraffic };
   /**
    * Starts (`on: true`) or ends this panel's watch of what plays on this PC (capability `media`) and answers what

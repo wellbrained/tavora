@@ -405,7 +405,7 @@ export interface TavoraSDK {
       apps(): Promise<SystemApps>;
       /**
        * What this PC received and sent this week and this month and in the 3 months before, as Windows counts it.
-       * Only for Tavora's own System Monitor; others get PERMISSION_DENIED (Tavora 0.21.29 and newer).
+       * Only for Tavora's own System Monitor; others get PERMISSION_DENIED (Tavora 0.21.31 and newer).
        */
       traffic(): Promise<SystemTraffic>;
     };
