@@ -570,6 +570,7 @@ export const en = {
   "account.error.noDeveloperName": "Choose a developer name first.",
   "account.error.keyGone": "That key is not linked to your account any more.",
   "account.error.signedOut": "You were signed out. Sign in again.",
+  "account.error.suspended": "Your account is suspended. Check your email for why.",
   "account.error.tooMany": "Too many tries. Try again in {minutes} min.",
   "account.error.dailyLimit": "Tavora has sent as many emails as it can today. Please try again from {time}.",
   "account.error.dailyLimitSoon": "Tavora has sent as many emails as it can today. Please try again tomorrow.",

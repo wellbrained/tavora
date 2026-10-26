@@ -12,7 +12,7 @@ import type { Submissions } from "./submissions.ts";
 
 /**
  * The JSON behind the panel's overview, updates, modules, accounts and status pages. All read-only, and
- * all numbers or public facts: nothing here names a player. (The review actions stay in admin-app.ts.)
+ * all numbers or public facts: nothing here names a player (the account list, which does, is accounts-admin.ts). (The review actions stay in admin-app.ts.)
  */
 
 export interface PanelOptions {

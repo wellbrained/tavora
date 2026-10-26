@@ -118,6 +118,37 @@ export function bannedMail(to: string, reason: DeclineReason, note: string | nul
       };
 }
 
+/** Why an account is suspended: the ban reasons, with "other" instead of "broken". */
+export const SUSPEND_REASONS = ["unsafe", "hateful", "adult", "spam", "other"] as const;
+export type SuspendReason = (typeof SUSPEND_REASONS)[number];
+export const isSuspendReason = (value: unknown): value is SuspendReason => (SUSPEND_REASONS as readonly unknown[]).includes(value);
+
+const SUSPEND_LABELS: Record<MailLanguage, Record<SuspendReason, string>> = {
+  en: { ...REASON_LABELS.en, other: "Something else" },
+  de: { ...REASON_LABELS.de, other: "Etwas anderes" },
+};
+
+/** Sent to the person when their account is suspended: they are signed out everywhere and cannot sign in until the maintainer lifts it. */
+export function suspendedMail(to: string, reason: SuspendReason, note: string | null, language: MailLanguage): Mail {
+  const label = SUSPEND_LABELS[language][reason];
+  const block = `${language === "de" ? "Grund" : "Reason"}: ${label}${note ? `\n${note}` : ""}`;
+  return language === "de"
+    ? {
+        to,
+        subject: "Dein Tavora-Konto ist gesperrt",
+        text:
+          `Dein Tavora-Konto ist gesperrt. Du wurdest auf allen Geräten abgemeldet und kannst dich vorerst nicht anmelden. Deine Bewertungen sind ausgeblendet. Was auf deinem PC liegt, bleibt unberührt.\n\n${block}\n\n` +
+          `Denkst du, das ist ein Fehler? Schreib uns an ${CONTACT}. Möchtest du dein Konto lieber löschen lassen, schreib uns auch dann.\n\nTavora\n`,
+      }
+    : {
+        to,
+        subject: "Your Tavora account is suspended",
+        text:
+          `Your Tavora account is suspended. You're signed out on all your devices and can't sign in for now. Your reviews are hidden. Everything on your PC stays as it is.\n\n${block}\n\n` +
+          `Think this is a mistake? Write to ${CONTACT}. If you would rather have your account deleted, write to us too.\n\nTavora\n`,
+      };
+}
+
 /** Sends the moderation emails: best effort, and never with the emails kept for sign-in codes (MAIL_RESERVED). */
 export interface Notifier {
   /** Whether the mail went out. */

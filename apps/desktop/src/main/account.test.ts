@@ -144,6 +144,14 @@ describe("signing in", () => {
     await expect(account.verify("123456")).rejects.toMatchObject({ key: "account.error.wrongCode" });
   });
 
+  it("says the account is suspended when sign-in is refused for it", async () => {
+    const { fetchImpl } = service({ "POST /verify": () => json({ reason: "suspended" }, 403) });
+    const { account } = client(fetchImpl);
+    (account as unknown as { pending: unknown }).pending = { kind: "sign-in", email: "me@example.com", step: "code" };
+    await expect(account.verify("123456")).rejects.toMatchObject({ key: "account.error.suspended" });
+    expect(account.view().account).toBeNull();
+  });
+
   it("says when the service cannot be reached or accounts are off", async () => {
     const offline = client((async () => {
       throw new TypeError("fetch failed");

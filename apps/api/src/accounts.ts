@@ -103,6 +103,8 @@ const discordConnected = (context: Context) =>
   context.json({ error: "This account already has a Discord login; disconnect it first.", reason: "discord-connected" }, 409);
 const noEmail = (context: Context) => context.json({ error: "This account has no email address.", reason: "no-email" }, 409);
 const noDiscord = (context: Context) => context.json({ error: "This account has no Discord login.", reason: "no-discord" }, 409);
+/** A suspended account (the maintainer did it, reversible): nothing signs in, and the app says so. */
+const suspended = (context: Context) => context.json({ error: "This account is suspended.", reason: "suspended" }, 403);
 const wrongCode = (context: Context) => context.json({ error: "That code is wrong or has expired.", reason: "wrong-code" }, 400);
 
 export function accountRoutes(options: AccountOptions, limiter: RateLimiter, clientKey: (request: Request) => string) {
@@ -191,6 +193,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     // A new address keeps its code until the player said yes to an account.
     if (!store.checkCode(email, "sign-in", null, input.code, at, Boolean(existing) || create)) return wrongCode(context);
     if (!existing && !create) return context.json({ status: "no-account" });
+    // Said only after the code was right, so the answer never tells whether an address has an account.
+    if (existing && store.isSuspended(existing.id)) return suspended(context);
     let account = existing;
     if (!account) {
       try {
@@ -203,6 +207,37 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     }
     const { token, session } = store.createSession(account.id, deviceOs(input.os), at, deviceName(input.name));
     return context.json({ status: existing ? "signed-in" : "created", token, device: session.id, account: accountAnswer(account) });
+  });
+
+  // ── A suspended account can still be deleted (decided 2026-10-26) ─────
+  // Suspending keeps the person out of everything but this: they prove the account is theirs with a code to its address
+  // (or a fresh Discord sign-in) and it is deleted, without ever getting a sign-in. Any other address, and any account
+  // that is not suspended, gets the same answers, so nothing here tells whether an address has an account or is suspended.
+
+  app.post("/delete/suspended/code", async (context) => {
+    const wait = codeLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const input = await body(context);
+    const email = normalizeEmail(input.email);
+    if (!email) return context.json({ error: "Send { email, language }.", reason: "bad-email" }, 400);
+    if (usedUp(true)) return usedUpAnswer(context);
+    const account = store.accountByEmail(email);
+    if (!account || !store.isSuspended(account.id)) return context.json({ status: "sent" }, 202);
+    const request = store.requestCode(email, "delete", account.id, now());
+    if (!request.ok) return tooMany(context, request.retryAfter);
+    return (await send(context, codeMail("delete", email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
+  });
+
+  app.post("/delete/suspended", async (context) => {
+    const wait = verifyLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const input = await body(context);
+    const email = normalizeEmail(input.email);
+    if (!email || typeof input.code !== "string" || !CODE.test(input.code)) return context.json({ error: "Send { email, code }.", reason: "bad-request" }, 400);
+    const account = store.accountByEmail(email);
+    if (!account || !store.isSuspended(account.id) || !store.checkCode(email, "delete", account.id, input.code, now(), true)) return wrongCode(context);
+    deleteAccount(account.id);
+    return context.body(null, 204);
   });
 
   // ── Signed in ─────────────────────────────────────────────────────────
@@ -492,6 +527,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const at = now();
     const existing = store.accountByDiscord(who.id);
     if (!existing) return context.json({ status: "no-account", ticket: store.holdDiscord(who, at), discord: { name: who.name } });
+    if (store.isSuspended(existing.id)) return suspended(context);
     store.setDiscord(existing.id, who);
     const { token, session } = store.createSession(existing.id, deviceOs(input.os), at, deviceName(input.name));
     return context.json({ status: "signed-in", token, device: session.id, account: accountAnswer({ ...existing, discord: who }) });
@@ -507,6 +543,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (!who) return context.json({ error: "That Discord sign-in has expired. Sign in with Discord again.", reason: "discord-expired" }, 400);
     // Made a moment ago by another sign-in with the same Discord login: sign in to that one.
     const account = store.accountByDiscord(who.id) ?? store.createAccount({ discord: who }, at);
+    if (store.isSuspended(account.id)) return suspended(context);
     const { token, session } = store.createSession(account.id, deviceOs(input.os), at, deviceName(input.name));
     return context.json({ status: "created", token, device: session.id, account: accountAnswer(account) });
   });
@@ -588,6 +625,18 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (!account.discord || account.discord.id !== who.id) {
       return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
     }
+    deleteAccount(account.id);
+    return context.body(null, 204);
+  });
+
+  // The same for a Discord-only (or Discord) login: a fresh Discord sign-in proves it, and only a suspended account is deleted this way.
+  app.post("/delete/suspended/discord", async (context) => {
+    const wait = verifyLimiter.check(clientKey(context.req.raw));
+    if (wait > 0) return tooMany(context, wait);
+    const who = await identify(context, await body(context));
+    if (who instanceof Response) return who;
+    const account = store.accountByDiscord(who.id);
+    if (!account || !store.isSuspended(account.id)) return context.json({ error: "That is not the Discord login of a suspended account.", reason: "discord-mismatch" }, 400);
     deleteAccount(account.id);
     return context.body(null, 204);
   });

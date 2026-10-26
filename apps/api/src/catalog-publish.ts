@@ -107,6 +107,13 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     }
   };
 
+  /** The refusal for a banned or suspended account, or null. */
+  const stoppedAccount = (store: AccountStore, accountId: string, context: Context) => {
+    if (store.isBanned(accountId)) return refuse(context, 403, "banned", "This account can't use the catalog any more. Check your email for why.");
+    if (store.isSuspended(accountId)) return refuse(context, 403, "suspended", "This account is suspended. Check your email for why.");
+    return null;
+  };
+
   /** Who uploads: a signed-in Tavora, or a publish token (with its name). Null without either. */
   const uploader = (store: AccountStore, context: Context, at: number): { accountId: string; token: string | null } | null => {
     const match = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "");
@@ -176,6 +183,10 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (by.accountId !== key.accountId) return refuse(context, 403, "wrong-account", "This publisher key is linked to another Tavora account than the one publishing.");
     // A banned developer publishes nothing, with any of the account's keys, a sign-in or a token (decided 2026-10-26).
     if (store.isBanned(key.accountId) || store.isBannedKey(checked.owner)) return refuse(context, 403, "banned", "This account can't publish to the catalog any more. Check your email for why.");
+    // A suspended account publishes nothing either, until it is unsuspended (decided 2026-10-26).
+    if (store.isSuspended(key.accountId) || store.isSuspended(by.accountId)) {
+      return refuse(context, 403, "suspended", "This account is suspended and can't publish to the catalog. Check your email for why.");
+    }
     if (catalog.isDeclined(checked.sha256)) return refuse(context, 403, "declined", "Tavora declined this exact zip. Fix the problem and publish a new version.");
     const trust = catalogTrust(catalog, catalogueKey);
     if (trust.revoked(checked.owner, checked.sha256)) return refuse(context, 403, "key-revoked", "This publisher key was revoked and publishes nothing new. Link a new key to your account.");
@@ -252,6 +263,8 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
     const by = uploader(store, context, now());
     if (!by) return refuse(context, 401, "sign-in-needed", "Sign in to see your versions.");
+    const stopped = stoppedAccount(store, by.accountId, context);
+    if (stopped) return stopped;
     return context.json({
       waiting: catalog
         .waitingVersions()
@@ -270,6 +283,9 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
     const by = uploader(store, context, now());
     if (!by) return refuse(context, 401, "sign-in-needed", "Sign in to withdraw a version.");
+    // A banned or suspended developer can't take a waiting version back and so remove what the maintainer is about to judge.
+    const stopped = stoppedAccount(store, by.accountId, context);
+    if (stopped) return stopped;
     const sha256 = context.req.param("sha256") ?? "";
     const version = /^[0-9a-f]{64}$/.test(sha256) ? catalog.waitingVersion(sha256) : null;
     if (!version || version.accountId !== by.accountId) return refuse(context, 404, "not-waiting", "No version of yours with this hash is waiting for review.");

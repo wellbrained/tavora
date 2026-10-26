@@ -177,6 +177,31 @@ const keyRequestOf = (row: KeyRequestRow): KeyRequest => ({
   declinedAt: row.declined_at,
 });
 
+/** Why an account is suspended, as the maintainer recorded it. */
+export interface Suspension {
+  reason: string;
+  note: string | null;
+  suspendedAt: number;
+  /** When the account was last used before it was suspended (its sign-ins are deleted by the suspension). */
+  lastActiveAt: number | null;
+}
+
+/** One line of the admin panel's account list. Never a secret, never the picture itself. */
+export interface AccountRow {
+  id: string;
+  email: string | null;
+  discordName: string | null;
+  createdAt: number;
+  profileName: string | null;
+  initials: string | null;
+  hasPicture: boolean;
+  developerName: string | null;
+  devices: number;
+  lastActiveAt: number | null;
+  banned: boolean;
+  suspended: boolean;
+}
+
 /** What the admin panel shows about accounts: counts only. */
 export interface AccountCounts {
   total: number;
@@ -248,6 +273,11 @@ export class AccountStore {
         account_id text primary key, reason text not null, note text, banned_at integer not null, modules text not null, email text, name text
       );
       create table if not exists banned_keys (fingerprint text primary key, account_id text not null);
+      -- Suspended accounts (decided 2026-10-26): reversible. last_active_at keeps when the account was last used, because its sessions are deleted.
+      create table if not exists suspensions (
+        account_id text primary key references accounts (id) on delete cascade,
+        reason text not null, note text, suspended_at integer not null, last_active_at integer
+      );
     `);
     this.migrate();
   }
@@ -379,6 +409,7 @@ export class AccountStore {
       this.db.prepare("delete from codes where account_id = ?").run(id);
       this.db.prepare("delete from sessions where account_id = ?").run(id);
       this.db.prepare("delete from profiles where account_id = ?").run(id);
+      this.db.prepare("delete from suspensions where account_id = ?").run(id);
       this.db.prepare("delete from accounts where id = ?").run(id);
       this.db.exec("commit");
     } catch (error) {
@@ -509,6 +540,115 @@ export class AccountStore {
     return (this.db.prepare("select account_id, reason, note, banned_at, modules, email, name from bans order by banned_at desc").all() as unknown as { account_id: string; reason: string; note: string | null; banned_at: number; modules: string; email: string | null; name: string | null }[]).map(
       (row) => ({ accountId: row.account_id, reason: row.reason, note: row.note, bannedAt: row.banned_at, modules: JSON.parse(row.modules) as string[], email: row.email, name: row.name }),
     );
+  }
+
+  // ── Suspension (decided 2026-10-26) ────────────────────────────────────
+
+  /**
+   * Suspends an account: every sign-in and every code waiting for it is deleted at once, and from now on
+   * nothing signs in. Returns how many devices were signed out. The person signs in again after unsuspend().
+   */
+  suspend(accountId: string, reason: string, note: string | null, now: number): number {
+    this.db.exec("begin");
+    try {
+      const last = (this.db.prepare("select max(last_used_at) as at from sessions where account_id = ?").get(accountId) as { at: number | null }).at;
+      this.db
+        .prepare(
+          "insert into suspensions (account_id, reason, note, suspended_at, last_active_at) values (?, ?, ?, ?, ?) on conflict (account_id) do update set reason = excluded.reason, note = excluded.note, suspended_at = excluded.suspended_at",
+        )
+        .run(accountId, reason, note, now, last);
+      const signedOut = Number(this.db.prepare("delete from sessions where account_id = ?").run(accountId).changes);
+      this.db.prepare("delete from codes where account_id = ?").run(accountId);
+      // Sign-in codes wait under the hash of the address with no account id: they go too, so a code sent before can't be used.
+      const email = (this.db.prepare("select email from accounts where id = ?").get(accountId) as { email: string | null } | undefined)?.email;
+      if (email) this.db.prepare("delete from codes where address = ?").run(addressKey(email));
+      this.db.prepare("delete from link_codes where account_id = ?").run(accountId);
+      this.db.exec("commit");
+      return signedOut;
+    } catch (error) {
+      this.db.exec("rollback");
+      throw error;
+    }
+  }
+
+  /** Lifts a suspension; false when the account was not suspended. The deleted sign-ins stay deleted. */
+  unsuspend(accountId: string): boolean {
+    return Number(this.db.prepare("delete from suspensions where account_id = ?").run(accountId).changes) > 0;
+  }
+
+  isSuspended(accountId: string): boolean {
+    return this.db.prepare("select 1 from suspensions where account_id = ?").get(accountId) !== undefined;
+  }
+
+  suspension(accountId: string): Suspension | null {
+    const row = this.db.prepare("select reason, note, suspended_at, last_active_at from suspensions where account_id = ?").get(accountId) as
+      | { reason: string; note: string | null; suspended_at: number; last_active_at: number | null }
+      | undefined;
+    return row ? { reason: row.reason, note: row.note, suspendedAt: row.suspended_at, lastActiveAt: row.last_active_at } : null;
+  }
+
+  /** The ban of one account, or null. */
+  banOf(accountId: string): { reason: string; note: string | null; bannedAt: number; modules: string[] } | null {
+    const row = this.db.prepare("select reason, note, banned_at, modules from bans where account_id = ?").get(accountId) as
+      | { reason: string; note: string | null; banned_at: number; modules: string }
+      | undefined;
+    return row ? { reason: row.reason, note: row.note, bannedAt: row.banned_at, modules: JSON.parse(row.modules) as string[] } : null;
+  }
+
+  // ── The maintainer's account list ──────────────────────────────────────
+
+  /** Every account, newest first, for the admin panel. Includes the email and Discord name; no hash, token or picture. */
+  accountRows(): AccountRow[] {
+    const rows = this.db
+      .prepare(
+        `select a.id, a.email, a.discord_name, a.created_at, p.name as profile_name, p.initials, (p.picture is not null) as has_picture, d.name as developer_name,
+           (select count(*) from sessions s where s.account_id = a.id) as devices,
+           coalesce((select max(last_used_at) from sessions s where s.account_id = a.id), x.last_active_at) as last_active_at,
+           (b.account_id is not null) as banned, (x.account_id is not null) as suspended
+         from accounts a
+         left join profiles p on p.account_id = a.id
+         left join developers d on d.account_id = a.id
+         left join bans b on b.account_id = a.id
+         left join suspensions x on x.account_id = a.id
+         order by a.created_at desc, a.rowid desc`,
+      )
+      .all() as unknown as {
+      id: string;
+      email: string | null;
+      discord_name: string | null;
+      created_at: number;
+      profile_name: string | null;
+      initials: string | null;
+      has_picture: number;
+      developer_name: string | null;
+      devices: number;
+      last_active_at: number | null;
+      banned: number;
+      suspended: number;
+    }[];
+    return rows.map((row) => ({
+      id: row.id,
+      email: row.email,
+      discordName: row.discord_name,
+      createdAt: row.created_at,
+      profileName: row.profile_name,
+      initials: row.initials,
+      hasPicture: row.has_picture === 1,
+      developerName: row.developer_name,
+      devices: row.devices,
+      lastActiveAt: row.last_active_at,
+      banned: row.banned === 1,
+      suspended: row.suspended === 1,
+    }));
+  }
+
+  /** Every account's linked key fingerprints and held prefixes, for searching the list. */
+  keysAndPrefixes(): Map<string, { keys: string[]; prefixes: string[] }> {
+    const map = new Map<string, { keys: string[]; prefixes: string[] }>();
+    const entry = (id: string) => map.get(id) ?? map.set(id, { keys: [], prefixes: [] }).get(id)!;
+    for (const row of this.db.prepare("select account_id, fingerprint from publisher_keys").all() as unknown as { account_id: string; fingerprint: string }[]) entry(row.account_id).keys.push(row.fingerprint);
+    for (const row of this.db.prepare("select account_id, prefix from module_prefixes").all() as unknown as { account_id: string; prefix: string }[]) entry(row.account_id).prefixes.push(row.prefix);
+    return map;
   }
 
   /** Unlinks one of the account's keys; false when it has no such key. */
@@ -698,6 +838,8 @@ export class AccountStore {
       | { id: string; account_id: string; name: string; expires_at: number }
       | undefined;
     if (!row || row.expires_at <= now) return null;
+    // A suspended account's tokens publish nothing and are not marked used (a ban is refused by the routes, with its own answer).
+    if (this.isSuspended(row.account_id)) return null;
     this.db.prepare("update publish_tokens set last_used_at = ? where id = ?").run(now, row.id);
     return { accountId: row.account_id, name: row.name };
   }
@@ -789,6 +931,8 @@ export class AccountStore {
       | { id: string; account_id: string; last_used_at: number }
       | undefined;
     if (!row) return null;
+    // A suspended account has no sign-ins left; this is the second lock should one ever appear.
+    if (this.isSuspended(row.account_id)) return null;
     if (row.last_used_at <= now - SESSION_IDLE_MS) {
       this.db.prepare("delete from sessions where id = ?").run(row.id);
       return null;

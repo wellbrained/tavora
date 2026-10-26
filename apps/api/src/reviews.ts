@@ -14,7 +14,8 @@ import { checkReviewText } from "./review-filter.ts";
  * does not try. Nobody rates a module of their own: an account that holds the id's prefix, or whose
  * key owns the module, is refused. Each rating keeps the version it was given on, and every version
  * counts. A review goes live at once, past a word filter (review-filter.ts); anyone can report one,
- * and a person hides it on the admin page. A hidden review's stars still count.
+ * and a person hides it on the admin page. A hidden review's stars still count. Suspending its account hides all of its reviews the same way
+ * (hideForSuspension), and unsuspending shows exactly those again.
  *
  * A review shows its author's profile name and picture, and only there: the profile stays private
  * everywhere else. Reviews live in their own file, keyed by the account id, and go with the account.
@@ -110,6 +111,9 @@ export class ReviewStore {
         count integer not null, first_at integer not null, last_at integer not null
       );
     `);
+    // Reviews hidden because their account is suspended (decided 2026-10-26), so unsuspending shows exactly these again.
+    const columns = (this.db.prepare("pragma table_info(reviews)").all() as unknown as { name: string }[]).map((column) => column.name);
+    if (!columns.includes("hidden_by_suspend")) this.db.exec("alter table reviews add column hidden_by_suspend integer not null default 0");
   }
 
   close(): void {
@@ -209,11 +213,34 @@ export class ReviewStore {
     return Number(this.db.prepare("delete from review_reports where review_id = ?").run(reviewId).changes) > 0;
   }
 
-  /** Hides a review's text (its stars still count) or shows it again. Hiding closes its report. */
+  /**
+   * Hides a review's text (its stars still count) or shows it again. Hiding closes its report. A person's choice
+   * here is final: the review is no longer one that a suspension hid, so unsuspending leaves it as set.
+   */
   setHidden(reviewId: string, hidden: boolean): boolean {
-    const changed = Number(this.db.prepare("update reviews set hidden = ? where id = ?").run(hidden ? 1 : 0, reviewId).changes) > 0;
+    const changed = Number(this.db.prepare("update reviews set hidden = ?, hidden_by_suspend = 0 where id = ?").run(hidden ? 1 : 0, reviewId).changes) > 0;
     if (changed && hidden) this.dismissReport(reviewId);
     return changed;
+  }
+
+  /**
+   * The account is suspended: every review it wrote is hidden (text and publisher reply off, like Hide), and
+   * its open reports close. Its stars still count, as for any hidden review. Returns how many were hidden now.
+   */
+  hideForSuspension(accountId: string): number {
+    this.db.prepare("delete from review_reports where review_id in (select id from reviews where account_id = ? and hidden = 0)").run(accountId);
+    return Number(this.db.prepare("update reviews set hidden = 1, hidden_by_suspend = 1 where account_id = ? and hidden = 0").run(accountId).changes);
+  }
+
+  /** The account is unsuspended: the reviews the suspension hid show again; ones a person hid stay hidden. Returns how many. */
+  showAfterSuspension(accountId: string): number {
+    return Number(this.db.prepare("update reviews set hidden = 0, hidden_by_suspend = 0 where account_id = ? and hidden_by_suspend = 1").run(accountId).changes);
+  }
+
+  /** How many reviews (ratings) an account wrote, and how many of them are hidden. */
+  countByAccount(accountId: string): { written: number; hidden: number } {
+    const row = this.db.prepare("select count(*) as written, coalesce(sum(hidden), 0) as hidden from reviews where account_id = ?").get(accountId) as { written: number; hidden: number };
+    return { written: row.written, hidden: row.hidden };
   }
 
   /** Everything an account wrote goes when the account does. */
