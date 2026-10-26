@@ -98,3 +98,15 @@ export interface Status {
   sites: { name: string; ok: boolean; status: number | null }[];
   packages: { name: string; npm: string | null; main: string | null; mainAhead: boolean }[];
 }
+
+export type StatKind = "app-installer" | "app-update" | "module-install" | "module-update";
+
+/** GET /api/stats: plain daily totals, oldest day first. */
+export interface Stats {
+  from: string;
+  to: string;
+  days: string[];
+  counts: Record<StatKind, Record<string, number[]>>;
+  totals: Record<StatKind, Record<string, number>>;
+  accounts: ({ total: number; active7: number; active30: number } | null)[];
+}
