@@ -92,6 +92,10 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
   if (file !== undefined) await writeFile(path.join(dir, "game-overlays.json"), JSON.stringify(file));
   const world = {
     enabled,
+    /** Settings > Overlays: Keep when you switch windows. */
+    stay: false,
+    /** The game window kept by the probe, where it is now; null once it is minimized or closed. */
+    kept: null as Rect | null,
     modules: new Map<string, StreamingModule>([[CLOCK.manifest.id, CLOCK], [TODOS.manifest.id, TODOS]]),
     foreground: { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0 } as Foreground | null,
     opened: [] as string[],
@@ -122,6 +126,8 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
       return world.foreground;
     },
     focus: () => void world.focused++,
+    keep: () => void (world.kept = world.foreground ? { ...world.foreground.bounds } : null),
+    kept: () => world.kept,
   };
   const shortcuts: ShortcutRegistry = {
     register: (accelerator, callback) => (world.registered.set(accelerator, callback), true),
@@ -151,6 +157,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     },
     probe: () => probe,
     toDip: (rect) => rect,
+    stay: () => world.stay,
     openWindow: (request) => {
       const window = new FakeWindow(request);
       world.windows.push(window);
@@ -245,6 +252,29 @@ describe("which window is in front", () => {
     service.tick();
     expect(window.shown).toBe(true);
     expect(service.frontGame()).toBe("elden");
+  });
+
+  it("keeps it over the game's spot when you switch windows and Keep is on, until the game is minimized; the keys don't stay", async () => {
+    const { service, world, live } = await setup();
+    world.stay = true;
+    show(service);
+    const window = live()[0]!;
+    world.foreground = { program: "C:\Program Files\Browser\browser.exe", bounds: { x: 100, y: 100, width: 800, height: 600 }, notification: 0 };
+    service.tick();
+    expect(window.shown).toBe(true);
+    // Where it was over the game, not over the browser.
+    expect(window.rect!.x).toBeLessThan(100);
+    expect(service.frontGame()).toBeNull();
+    world.kept = null;
+    service.tick();
+    expect(window.shown).toBe(false);
+    // Back in the game it shows again, and is kept again.
+    world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(window.shown).toBe(true);
+    world.foreground = null;
+    service.tick();
+    expect(window.shown).toBe(true);
   });
 
   it("hides it for another game's window and for no window at all", async () => {

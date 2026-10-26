@@ -228,6 +228,8 @@ export function hostActionTable(c: HostChecks) {
     },
     /** Settings > Overlays: the Game overlays switch. */
     "set-game-overlays": { enabled: bool },
+    /** Settings > Overlays: overlays stay when the player leaves the game window. */
+    "set-overlays-stay": { enabled: bool },
     /** Changes what the player set for one game overlay (mode, opacity, Hide from capture). */
     "set-game-overlay": {
       owner: c.ownerId,

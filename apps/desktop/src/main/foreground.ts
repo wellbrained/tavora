@@ -28,6 +28,10 @@ export interface ForegroundProbe {
   look(): Foreground | null;
   /** Gives the keyboard back to the window `look` found last. */
   focus(): void;
+  /** Keeps the window `look` found last as the game's, for `kept`. */
+  keep?(): void;
+  /** Where the kept game window is now (client area, physical pixels), or null once it is closed or minimized. */
+  kept?(): Rect | null;
 }
 
 interface User32 {
@@ -64,6 +68,8 @@ export function windowsForegroundProbe(): ForegroundProbe {
   let user32: User32 | null = null;
   let windows: Windows | null = null;
   let last: unknown = null;
+  // The game window kept by `keep`, with its process, so a window that later gets the same handle isn't taken for it.
+  let game: { window: unknown; pid: number } | null = null;
   // A program keeps its path while it runs, so the same window of the same process is asked about once. The window
   // counts too: Windows reuses process ids, and a new process must not be given the path of one that ended.
   let known: { handle: string; pid: number; program: string | null } | null = null;
@@ -106,6 +112,25 @@ export function windowsForegroundProbe(): ForegroundProbe {
     },
     focus() {
       if (user32 && last) user32.setForegroundWindow(last);
+    },
+    keep() {
+      if (!user32 || !last) return;
+      const pid = [0];
+      user32.getWindowThreadProcessId(last, pid);
+      game = { window: last, pid: pid[0]! };
+    },
+    kept() {
+      if (!user32 || !game) return null;
+      const size = new Int32Array(4);
+      const origin = new Int32Array(2);
+      // GetClientRect fails once the window is gone.
+      const pid = [0];
+      user32.getWindowThreadProcessId(game.window, pid);
+      if (pid[0] !== game.pid || user32.isIconic(game.window) || !user32.getClientRect(game.window, size) || !user32.clientToScreen(game.window, origin)) {
+        game = null;
+        return null;
+      }
+      return { x: origin[0]!, y: origin[1]!, width: size[2]!, height: size[3]! };
     },
   };
 }

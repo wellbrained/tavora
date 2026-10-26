@@ -1936,6 +1936,10 @@ export class Host {
         this.gameOverlays.tick();
         this.syncGameWatcher();
       }),
+      "set-overlays-stay": saved((action) => {
+        this.library.overlaysStay = action.enabled;
+        this.gameOverlays.tick();
+      }),
       "set-game-overlays-hidden": (action) => {
         this.gameOverlays.setHidden(action.hidden);
         this.syncGameWatcher();
@@ -4180,6 +4184,7 @@ export class Host {
       overlays: host.streaming.overlayStore,
       supported: process.platform === "win32",
       enabled: () => host.library.gameOverlays,
+      stay: () => host.library.overlaysStay,
       module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
       gameName: (gameId) => host.library.games[gameId]?.name ?? null,
       gamesOf: (program) => host.gameWatcher.gamesOf(program),

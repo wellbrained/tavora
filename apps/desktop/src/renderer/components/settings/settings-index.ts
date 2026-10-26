@@ -92,6 +92,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["overlay-links", "streaming"],
   ["hotkeys", "streaming"],
   ["game-overlays", "overlays"],
+  ["overlays-stay", "overlays"],
   ["overlay-layer-key", "overlays"],
   ["overlay-hide-all", "overlays"],
   ["game-overlay-list", "overlays"],
