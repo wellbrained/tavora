@@ -27,6 +27,7 @@ const api: TavoraHostApi = {
   onFrozen: (listener) => {
     ipcRenderer.on("host:frozen", (_event, images: Record<string, string>) => listener(images));
   },
+  frozenShown: () => ipcRenderer.send("host:frozen-shown"),
   onShortcut: (listener) => {
     ipcRenderer.on("host:shortcut", (_event, shortcut: HostShortcut) => listener(shortcut));
   },

@@ -17,6 +17,11 @@ export const FIRE_AFTER_MS = 500;
 export const FIRE_MIN_MS = 300;
 /** How long the cover waits for the panels' first frames, at most. A broken module cannot hide the workspace. */
 export const DRAW_CAP_MS = 3_000;
+/**
+ * How long a panel's frame can take from "drawn" (the page's frame callbacks ran) to the screen. Until then what lies
+ * under the panel stays: its picture from while a dialog was open, or its see-through background.
+ */
+export const ON_SCREEN_MS = 250;
 /** The cover's session: in memory only (no "persist:"), never shared with a module or the host UI. */
 const COVER_PARTITION = "tavora-cover";
 /** How long the fire takes to fade in, in the cover page. */

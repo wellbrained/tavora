@@ -203,9 +203,11 @@ describe("a panel shown again", () => {
     expect(done).not.toHaveBeenCalled();
     view.framed(requestId);
     await vi.waitFor(() => expect(done).toHaveBeenCalled());
-    expect(state.background).toBe("#202020");
     expect(view.firstDrawn).toBe(true);
     expect(drawn).toHaveBeenCalledTimes(1);
+    // Its colour comes back once the frame has had time to reach the screen, so it does not show plain before that.
+    expect(state.background).toBe("#00000000");
+    await vi.waitFor(() => expect(state.background).toBe("#202020"));
   });
 
   it("stops waiting when it is hidden again, or after the cap", async () => {
@@ -217,6 +219,7 @@ describe("a panel shown again", () => {
       const first = view.drawn;
       view.setVisible(false);
       await first;
+      await vi.advanceTimersByTimeAsync(250);
       expect(state.background).toBe("#202020");
       // A page that never answers (stuck, broken) gets its colour back and lets the cover go.
       view.setVisible(true);
@@ -224,6 +227,7 @@ describe("a panel shown again", () => {
       void view.drawn.then(done);
       await vi.advanceTimersByTimeAsync(3_000);
       expect(done).toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(250);
       expect(state.background).toBe("#202020");
     } finally {
       vi.useRealTimers();

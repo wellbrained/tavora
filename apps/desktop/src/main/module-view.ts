@@ -25,7 +25,7 @@ import { serveClipboard } from "./clipboard-http";
 import { cleanPictureName, servePictureSave } from "./picture-save-http";
 import { serveJsonOpen, serveJsonSave } from "./json-file-http";
 import { saveJsonExport, serveJsonExport } from './json-export-http';
-import { DRAW_CAP_MS } from "./panel-cover";
+import { DRAW_CAP_MS, ON_SCREEN_MS } from "./panel-cover";
 import { isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
 import { moduleFetch, type TestHosts } from "./network";
@@ -824,7 +824,10 @@ export class ModuleView {
         this.frameWaiters.delete(requestId);
         if (requestId === this.frameRequests && !contents.isDestroyed()) {
           contents.setBackgroundThrottling(true);
-          if (!this.overGame) this.view.setBackgroundColor(this.options.getTheme().tokens.background);
+          // Opaque at once, the panel would show its plain colour until the frame is on screen.
+          setTimeout(() => {
+            if (requestId === this.frameRequests && !this.frameWaiters.size && !this.overGame && !contents.isDestroyed()) this.view.setBackgroundColor(this.options.getTheme().tokens.background);
+          }, ON_SCREEN_MS);
           if (this.shown && this.revealed && !this.firstDrawn) {
             this.firstDrawn = true;
             this.options.onDrawn?.();
