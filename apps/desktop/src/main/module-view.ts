@@ -823,6 +823,7 @@ export class ModuleView {
         clearTimeout(timer);
         this.frameWaiters.delete(requestId);
         if (requestId === this.frameRequests && !contents.isDestroyed()) {
+          contents.setBackgroundThrottling(true);
           if (!this.overGame) this.view.setBackgroundColor(this.options.getTheme().tokens.background);
           if (this.shown && this.revealed && !this.firstDrawn) {
             this.firstDrawn = true;
@@ -840,6 +841,9 @@ export class ModuleView {
         done();
       }, DRAW_CAP_MS);
       this.frameWaiters.set(requestId, done);
+      // Chromium counts a page under another view (the game's loading cover) as hidden, and a hidden page does not
+      // draw: until this frame, the page counts as shown wherever it lies.
+      contents.setBackgroundThrottling(false);
       contents.send("tavora:frame", requestId);
     });
   }

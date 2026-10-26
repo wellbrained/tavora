@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 // ModuleView needs only a little of Electron to be made: a view with a page, and a session to harden.
-const made = vi.hoisted(() => ({ views: [] as { background: string; visible: boolean; css: string[]; removed: string[] }[], sent: [] as unknown[][] }));
+const made = vi.hoisted(() => ({ views: [] as { background: string; visible: boolean; throttled: boolean; css: string[]; removed: string[] }[], sent: [] as unknown[][] }));
 
 vi.mock("electron", () => {
   const session = () => ({
@@ -16,7 +16,7 @@ vi.mock("electron", () => {
   });
   const ses = session();
   class WebContentsView {
-    state = { background: "", visible: true, css: [] as string[], removed: [] as string[] };
+    state = { background: "", visible: true, throttled: true, css: [] as string[], removed: [] as string[] };
     webContents = {
       session: ses,
       setWindowOpenHandler: () => undefined,
@@ -25,6 +25,7 @@ vi.mock("electron", () => {
       loadURL: async () => undefined,
       isDestroyed: () => false,
       isLoading: () => false,
+      setBackgroundThrottling: (allowed: boolean) => void (this.state.throttled = allowed),
       insertCSS: async (css: string) => {
         this.state.css.push(css);
         // The page takes a moment to take a style.
@@ -224,6 +225,29 @@ describe("a panel shown again", () => {
       await vi.advanceTimersByTimeAsync(3_000);
       expect(done).toHaveBeenCalled();
       expect(state.background).toBe("#202020");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Under the game's loading cover Chromium would count the page as hidden, and it would never draw there.
+  it("counts as shown wherever it lies until it has drawn, and is paused as usual after", async () => {
+    vi.useFakeTimers();
+    try {
+      const view = make();
+      const state = made.views.at(-1)!;
+      view.setVisible(true);
+      expect(state.throttled).toBe(false);
+      view.framed(frameRequest());
+      expect(state.throttled).toBe(true);
+      view.setVisible(false);
+      view.setVisible(true);
+      expect(state.throttled).toBe(false);
+      view.setVisible(false);
+      expect(state.throttled).toBe(true);
+      view.setVisible(true);
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(state.throttled).toBe(true);
     } finally {
       vi.useRealTimers();
     }
