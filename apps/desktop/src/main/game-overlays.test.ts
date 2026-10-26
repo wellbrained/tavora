@@ -3,9 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LIMITS } from "@tavora/sdk/protocol";
+import { DEFAULT_PANEL_ANCHORED, DEFAULT_RECT, normalizeLegacy, placeAnchored, placeLegacy, type AnchoredRect } from "../shared/overlay-anchor";
 import {
-  DEFAULT_PANEL_RECT,
-  DEFAULT_RELATIVE_RECT,
+  DEFAULT_GAME_SIZE,
   startRect,
   GAME_OVERLAYS_FILE,
   GameOverlayStore,
@@ -17,12 +17,10 @@ import {
   gestureCounts,
   isLive,
   looksExclusive,
-  normalizeRelative,
   overlayVisible,
   panelBounds,
+  placeItem,
   scopeForKind,
-  placeRelative,
-  relativeTo,
   type GameOverlaySubject,
   type VisibilityInput,
 } from "./game-overlays";
@@ -39,6 +37,9 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true, maxRetries: 5 });
 });
 
+/** A rectangle anchored to the top left corner, in units of the game window's height. */
+const at = (x: number, y: number, width: number, height: number): AnchoredRect => ({ h: "left", v: "top", x, y, width, height });
+
 const subject = (key = "item-1", gameId = "poe2"): GameOverlaySubject => ({ owner: "official", moduleId: "tavora.clock-counter", gameId, key });
 
 describe("GameOverlayStore", () => {
@@ -47,12 +48,12 @@ describe("GameOverlayStore", () => {
     expect(store.add(subject(), "game")).toBe("added");
     expect(store.add(subject(), "game")).toBe("exists");
     expect(store.find(subject())).toMatchObject({ mode: "always", opacity: 100, hideFromCapture: false });
-    store.update(subject(), { mode: "toggle", opacity: 50, hideFromCapture: true, rect: { x: 0.5, y: 0.25, width: 0.1, height: 0.1 } });
+    store.update(subject(), { mode: "toggle", opacity: 50, hideFromCapture: true, rect: at(0.5, 0.25, 0.1, 0.1) });
     store.markExclusiveHintShown();
     await store.save();
 
     const again = await GameOverlayStore.load(dir);
-    expect(again.find(subject())).toEqual({ ...subject(), scope: "game", mode: "toggle", opacity: 50, hideFromCapture: true, rect: { x: 0.5, y: 0.25, width: 0.1, height: 0.1 } });
+    expect(again.find(subject())).toEqual({ ...subject(), scope: "game", mode: "toggle", opacity: 50, hideFromCapture: true, rect: at(0.5, 0.25, 0.1, 0.1) });
     expect(again.exclusiveHintShown).toBe(true);
   });
 
@@ -75,8 +76,8 @@ describe("GameOverlayStore", () => {
   it("ignores values it doesn't take when changing an overlay", async () => {
     const store = await GameOverlayStore.load(dir);
     store.add(subject(), "game");
-    store.update(subject(), { opacity: 33 as never, rect: { x: Number.NaN, y: 0, width: 1, height: 1 } });
-    expect(store.find(subject())).toMatchObject({ opacity: 100, rect: DEFAULT_RELATIVE_RECT });
+    store.update(subject(), { opacity: 33 as never, rect: { ...at(0, 0, 1, 1), x: Number.NaN } });
+    expect(store.find(subject())).toMatchObject({ opacity: 100, rect: DEFAULT_RECT });
     expect(store.update(subject("missing"), { mode: "toggle" })).toBe(false);
   });
 
@@ -120,54 +121,205 @@ describe("GameOverlayStore", () => {
     const store = await GameOverlayStore.load(dir);
     store.add(subject(), "game");
     await store.save();
-    expect(JSON.parse(await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8"))).toMatchObject({ version: 2, overlays: [{ key: "item-1" }], panels: [] });
+    expect(JSON.parse(await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8"))).toMatchObject({ version: 3, overlays: [{ key: "item-1" }], panels: [] });
     expect((await readdir(dir)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 });
 
-describe("where an overlay sits", () => {
-  const game = { x: 100, y: 50, width: 1920, height: 1080 };
+describe("version 3: where an overlay sits", () => {
+  const legacy = { x: 0.7, y: 0.6, width: 0.25, height: 0.3 };
+  const file = (version: number, overlays: unknown[], extra: object = {}) => writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version, overlays, panels: [], ...extra }));
+  const old = { ...subject("a"), scope: "game", mode: "always", opacity: 100, hideFromCapture: false, rect: legacy };
 
-  it("places a relative rectangle in the game's window", () => {
-    expect(placeRelative({ x: 0.5, y: 0.25, width: 0.25, height: 0.5 }, game)).toEqual({ x: 100 + 960, y: 50 + 270, width: 480, height: 540 });
+  it("keeps a version 2 file's fractions as they are, placing them the old way, until the game's real window is seen", async () => {
+    // Older Tavoras never wrote a window size, so a real version 2 file has none.
+    await file(2, [old]);
+    const store = await GameOverlayStore.load(dir);
+    expect(store.upgraded).toBe(true);
+    expect(store.migrated).toBe(false);
+    const item = store.find(subject("a"))!;
+    expect(item.legacy).toEqual(legacy);
+    const wide = { x: 0, y: 0, width: 3440, height: 1440 };
+    expect(placeItem(item, wide)).toEqual(placeLegacy(legacy, wide));
+    // Saved like that, the file still has the fractions, and no anchor.
+    await store.save();
+    const saved = JSON.parse(await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8"));
+    expect(saved.version).toBe(3);
+    expect(saved.overlays[0]).toMatchObject({ rect: legacy });
+    expect(saved.overlays[0]).not.toHaveProperty("anchor");
   });
 
-  it("keeps the same place when the resolution changes", () => {
-    const rel = { x: 0.1, y: 0.2, width: 0.3, height: 0.1 };
-    const small = placeRelative(rel, { x: 0, y: 0, width: 1280, height: 720 });
-    const big = placeRelative(rel, { x: 0, y: 0, width: 2560, height: 1440 });
-    expect(big).toEqual({ x: small.x * 2, y: small.y * 2, width: small.width * 2, height: small.height * 2 });
+  it("converts them on the first real window size of the game, onto the very same pixels", async () => {
+    await file(2, [old, { ...old, key: "b", gameId: "elden" }]);
+    const store = await GameOverlayStore.load(dir);
+    const wide = { x: 0, y: 0, width: 3440, height: 1440 };
+    // A launcher's or splash screen's window is no size to go by.
+    expect(store.convertLegacy("poe2", { width: 639, height: 480 })).toBe(false);
+    expect(store.convertLegacy("poe2", { width: 640, height: 479 })).toBe(false);
+    expect(store.find(subject("a"))!.legacy).toEqual(legacy);
+    expect(store.convertLegacy("poe2", wide)).toBe(true);
+    const item = store.find(subject("a"))!;
+    expect(item.legacy).toBeUndefined();
+    expect(placeItem(item, wide)).toEqual(placeLegacy(legacy, wide));
+    expect(placeAnchored(item.rect, wide)).toEqual(placeLegacy(legacy, wide));
+    // It was anchored to its nearest corner, so it stays in it on a wider window.
+    expect(item.rect).toMatchObject({ h: "right", v: "bottom" });
+    // Another game's item waits for its own game; a second look changes nothing.
+    expect(store.find(subject("b", "elden"))!.legacy).toEqual(legacy);
+    expect(store.convertLegacy("poe2", wide)).toBe(false);
+    const full = { x: 0, y: 0, width: 1920, height: 1080 };
+    expect(store.convertLegacy("elden", full)).toBe(true);
+    expect(placeItem(store.find(subject("b", "elden"))!, full)).toEqual(placeLegacy(legacy, full));
   });
 
-  it("follows the game's window to another monitor", () => {
-    const rel = { x: 0.1, y: 0.1, width: 0.2, height: 0.2 };
-    const second = { x: 2560, y: 0, width: 1920, height: 1080 };
-    const placed = placeRelative(rel, second);
-    expect(placed.x).toBeGreaterThanOrEqual(second.x);
-    expect(placed.x + placed.width).toBeLessThanOrEqual(second.x + second.width);
+  it("converts on any real window size, to the pixel (a few shapes, and a window that is not at the screen's corner)", async () => {
+    for (const [width, height] of [[1920, 1080], [2560, 1440], [3440, 1440], [1280, 1024], [1366, 768], [5120, 1440], [800, 600]] as const) {
+      for (const rel of [legacy, { x: 0, y: 0, width: 1, height: 1 }, { x: 0.4, y: 0.4, width: 0.2, height: 0.2 }, { x: 0.001, y: 0.9, width: 0.05, height: 0.02 }]) {
+        await file(2, [{ ...old, rect: rel }]);
+        const store = await GameOverlayStore.load(dir);
+        store.convertLegacy("poe2", { width, height });
+        const game = { x: 120, y: 40, width, height };
+        expect(placeItem(store.find(subject("a"))!, game), `${width}x${height}`).toEqual(placeLegacy(normalizeLegacy(rel)!, game));
+      }
+    }
   });
 
-  it("never lets it get smaller than a sliver or leave the window", () => {
-    expect(placeRelative({ x: 0, y: 0, width: 0.02, height: 0.02 }, { x: 0, y: 0, width: 400, height: 300 })).toMatchObject({ width: MIN_OVERLAY_SIZE, height: MIN_OVERLAY_SIZE });
-    const edge = placeRelative({ x: 0.95, y: 0.95, width: 0.2, height: 0.2 }, game);
-    expect(edge.x + edge.width).toBeLessThanOrEqual(game.x + game.width);
-    expect(edge.y + edge.height).toBeLessThanOrEqual(game.y + game.height);
-    // A window smaller than the sliver is filled, not overflowed.
-    expect(placeRelative({ x: 0, y: 0, width: 0.5, height: 0.5 }, { x: 0, y: 0, width: 30, height: 30 })).toEqual({ x: 0, y: 0, width: 30, height: 30 });
+  it("converts the general overlays and panels on the first real window of any game", async () => {
+    const general = "0a1b2c3d-0000-4000-8000-000000000009";
+    await writeFile(
+      path.join(dir, GAME_OVERLAYS_FILE),
+      JSON.stringify({ version: 2, overlays: [{ ...old, gameId: "personal", scope: "all" }], panels: [{ ...panel(general, "personal"), scope: "all", rect: legacy }, { ...panel(), rect: legacy }] }),
+    );
+    const store = await GameOverlayStore.load(dir);
+    expect(store.convertLegacy("elden", { width: 2560, height: 1440 })).toBe(true);
+    expect(store.find(subject("a", "personal"))!.legacy).toBeUndefined();
+    expect(store.panelOf(general)!.legacy).toBeUndefined();
+    // The panel of poe2 is not elden's.
+    expect(store.panelOf(ID)!.legacy).toEqual(legacy);
   });
 
-  it("turns a rectangle on screen back into fractions", () => {
-    const rel = { x: 0.25, y: 0.5, width: 0.125, height: 0.25 };
-    expect(relativeTo(placeRelative(rel, game), game)).toEqual(rel);
-    expect(relativeTo({ x: 0, y: 0, width: 10, height: 10 }, { x: 0, y: 0, width: 0, height: 0 })).toEqual(DEFAULT_RELATIVE_RECT);
+  it("converts the panels in game of an older file the same way", async () => {
+    await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version: 2, overlays: [], panels: [{ ...panel(), rect: legacy }] }));
+    const store = await GameOverlayStore.load(dir);
+    const game = { x: 0, y: 0, width: 2560, height: 1440 };
+    expect(placeItem(store.panelOf(ID)!, game)).toEqual(placeLegacy(legacy, game));
+    store.convertLegacy("poe2", game);
+    expect(store.panelOf(ID)!.legacy).toBeUndefined();
+    expect(placeItem(store.panelOf(ID)!, game)).toEqual(placeLegacy(legacy, game));
   });
 
-  it("clamps saved fractions and refuses what isn't numbers", () => {
-    expect(normalizeRelative({ x: -1, y: 2, width: 5, height: 0 })).toEqual({ x: 0, y: 0.98, width: 1, height: 0.02 });
-    expect(normalizeRelative({ x: 0.9, y: 0, width: 0.5, height: 0.5 })).toMatchObject({ x: 0.5 });
-    expect(normalizeRelative({ x: "0", y: 0, width: 1, height: 1 })).toBeNull();
-    expect(normalizeRelative(null)).toBeNull();
-    expect(normalizeRelative({ x: Number.POSITIVE_INFINITY, y: 0, width: 1, height: 1 })).toBeNull();
+  it("moving an unconverted one anchors it at once", async () => {
+    await file(2, [old, { ...old, key: "b" }, { ...old, key: "c" }]);
+    const store = await GameOverlayStore.load(dir);
+    store.update(subject("a"), { rect: at(0.1, 0.1, 0.2, 0.2) });
+    expect(store.setRect(subject("b"), at(0.2, 0.2, 0.2, 0.2))).toBe(true);
+    expect(store.find(subject("a"))!.legacy).toBeUndefined();
+    expect(store.find(subject("b"))!.legacy).toBeUndefined();
+    expect(store.find(subject("c"))!.legacy).toEqual(legacy);
+  });
+
+  it("keeps the fractions of the window next to the anchor, so an older Tavora still places things right", async () => {
+    await file(2, [old]);
+    const store = await GameOverlayStore.load(dir);
+    store.setSeen("poe2", { width: 3440, height: 1440 });
+    store.convertLegacy("poe2", { width: 3440, height: 1440 });
+    store.add(subject("n", "elden"), "game");
+    await store.save();
+    const saved = JSON.parse(await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8"));
+    const wide = { x: 0, y: 0, width: 3440, height: 1440 };
+    // On the size last seen, the fractions are the very same place as the anchor.
+    expect(placeLegacy(saved.overlays[0].rect, wide)).toEqual(placeAnchored(saved.overlays[0].anchor, wide));
+    // No size seen for the game: the fractions are computed on 1080p.
+    const full = { x: 0, y: 0, ...DEFAULT_GAME_SIZE };
+    expect(saved.overlays[1].key).toBe("n");
+    expect(placeLegacy(saved.overlays[1].rect, full)).toEqual(placeAnchored(saved.overlays[1].anchor, full));
+    // Loading it again keeps the anchor (and no longer waits for a window).
+    const again = await GameOverlayStore.load(dir);
+    expect(again.find(subject("a"))!.rect).toEqual(saved.overlays[0].anchor);
+    expect(again.find(subject("a"))!.legacy).toBeUndefined();
+    expect(again.upgraded).toBe(false);
+  });
+
+  it("reads a version 3 file's anchors as they are; without a usable anchor the fractions wait to be converted; without either the entry is dropped", async () => {
+    const good = { h: "center", v: "middle", x: 0.1, y: -0.05, width: 0.3, height: 0.2 };
+    await file(3, [
+      { ...old, anchor: good },
+      { ...old, key: "b" },
+      { ...old, key: "c", anchor: { ...good, h: "diagonal" } },
+      { ...old, key: "d", rect: null, anchor: { ...good, v: "nowhere" } },
+    ]);
+    const store = await GameOverlayStore.load(dir);
+    expect(store.upgraded).toBe(false);
+    expect(store.all().map((overlay) => overlay.key)).toEqual(["a", "b", "c"]);
+    expect(store.find(subject("a"))!.rect).toEqual(good);
+    expect(store.find(subject("a"))!.legacy).toBeUndefined();
+    expect(store.find(subject("b"))!.legacy).toEqual(legacy);
+    expect(store.find(subject("c"))!.legacy).toEqual(legacy);
+  });
+
+  it("sets a file of a newer version aside, starts empty, and never writes over it", async () => {
+    const future = JSON.stringify({ version: 4, overlays: [{ ...old, anchor: { h: "left", v: "top", x: 0, y: 0, width: 0.1, height: 0.1 } }], panels: [], somethingNew: true });
+    await writeFile(path.join(dir, GAME_OVERLAYS_FILE), future);
+    const store = await GameOverlayStore.load(dir);
+    expect(store.all()).toEqual([]);
+    expect(store.migrated).toBe(false);
+    const aside = (await readdir(dir)).filter((name) => name.startsWith(`${GAME_OVERLAYS_FILE}.corrupt-`));
+    expect(aside).toHaveLength(1);
+    expect(await readFile(path.join(dir, aside[0]!), "utf8")).toBe(future);
+    // The new file is its own: saving it leaves the set-aside copy alone.
+    store.add(subject("n"), "game");
+    await store.save();
+    expect(JSON.parse(await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8")).version).toBe(3);
+    expect(await readFile(path.join(dir, aside[0]!), "utf8")).toBe(future);
+  });
+
+  it("treats only versions 1 and 2 as old: version 3 is current", async () => {
+    for (const [version, upgraded] of [[1, true], [2, true], [3, false]] as const) {
+      await file(version, [old]);
+      expect((await GameOverlayStore.load(dir)).upgraded).toBe(upgraded);
+    }
+  });
+
+  it("converts a version 1 file too, with the clean-up of its old keys", async () => {
+    await file(1, [old, { ...old, key: `panel-${ID}` }]);
+    const store = await GameOverlayStore.load(dir);
+    expect(store.migrated).toBe(true);
+    expect(store.upgraded).toBe(true);
+    expect(store.all().map((overlay) => overlay.key)).toEqual(["a"]);
+  });
+
+  it("keeps the grid, the layout window's place and the window size last seen for each game", async () => {
+    const store = await GameOverlayStore.load(dir);
+    expect(store.grid).toBe("normal");
+    expect(store.seenSize("poe2")).toBeUndefined();
+    store.setGrid("fine");
+    store.setGrid("huge" as never);
+    store.setLayoutWindow({ bounds: { x: 10, y: 20, width: 900, height: 600 }, maximized: false });
+    expect(store.setSeen("poe2", { width: 2560.4, height: 1440 })).toBe(true);
+    expect(store.setSeen("poe2", { width: 2560, height: 1440 })).toBe(false);
+    expect(store.setSeen("poe2", { width: 20, height: 20 })).toBe(false);
+    expect(store.setSeen("poe2", { width: Number.NaN, height: 1080 })).toBe(false);
+    await store.save();
+    const again = await GameOverlayStore.load(dir);
+    expect(again.grid).toBe("fine");
+    expect(again.layoutWindow).toEqual({ bounds: { x: 10, y: 20, width: 900, height: 600 }, maximized: false });
+    expect(again.seenSize("poe2")).toEqual({ width: 2560, height: 1440 });
+    again.forgetSeen("poe2");
+    expect(again.seenSize("poe2")).toBeUndefined();
+  });
+
+  it("resets one position, for an overlay or a panel", async () => {
+    const store = await GameOverlayStore.load(dir);
+    store.add(subject("a"), "game");
+    store.addPanel(panel());
+    store.update(subject("a"), { rect: at(0.5, 0.5, 0.1, 0.1) });
+    expect(store.setRect(subject("a"), DEFAULT_RECT)).toBe(true);
+    expect(store.find(subject("a"))!.rect).toEqual(DEFAULT_RECT);
+    expect(store.setRect({ instanceId: ID }, at(0.2, 0.2, 0.3, 0.3))).toBe(true);
+    expect(store.panelOf(ID)!.rect).toEqual(at(0.2, 0.2, 0.3, 0.3));
+    expect(store.setRect(subject("missing"), DEFAULT_RECT)).toBe(false);
+    expect(store.setRect({ instanceId: ID2 }, DEFAULT_RECT)).toBe(false);
+    expect(store.setRect(subject("a"), { ...DEFAULT_RECT, width: Number.NaN })).toBe(false);
   });
 });
 
@@ -295,17 +447,36 @@ describe("startRect", () => {
   const screen = { x: 0, y: 0, width: 1920, height: 1080 };
 
   it("gives the size the module prefers, in the corner", () => {
-    expect(startRect({ width: 360, height: 216 }, screen)).toEqual({ x: DEFAULT_PANEL_RECT.x, y: DEFAULT_PANEL_RECT.y, width: 0.1875, height: 0.2 });
+    expect(startRect({ width: 360, height: 216 }, screen)).toEqual({ ...DEFAULT_PANEL_ANCHORED, width: 360 / 1080, height: 0.2 });
   });
 
   it("keeps the usual size for what the module leaves out, or with no window to measure", () => {
-    expect(startRect({ width: 360 }, screen).height).toBe(DEFAULT_PANEL_RECT.height);
-    expect(startRect(null, screen)).toEqual(DEFAULT_PANEL_RECT);
-    expect(startRect({ width: 360, height: 200 }, null)).toEqual(DEFAULT_PANEL_RECT);
+    expect(startRect({ width: 360 }, screen).height).toBe(DEFAULT_PANEL_ANCHORED.height);
+    expect(startRect(null, screen)).toEqual(DEFAULT_PANEL_ANCHORED);
+    expect(startRect({ width: 360, height: 200 }, null)).toEqual(DEFAULT_PANEL_ANCHORED);
+  });
+
+  it("starts an overlay at the size its module asks for, from the usual place of an overlay", () => {
+    expect(startRect({ width: 440, height: 100 }, screen, DEFAULT_RECT)).toEqual({ ...DEFAULT_RECT, width: 440 / 1080, height: 100 / 1080 });
+    // On the screen it was sized for, that is the very pixels asked for.
+    const placed = placeAnchored(startRect({ width: 440, height: 100 }, screen, DEFAULT_RECT), screen);
+    expect([placed.width, placed.height]).toEqual([440, 100]);
+    expect(startRect(null, screen, DEFAULT_RECT)).toEqual(DEFAULT_RECT);
+    expect(startRect({ width: 440, height: 100 }, null, DEFAULT_RECT)).toEqual(DEFAULT_RECT);
+  });
+
+  it("gives the same size on screen as the fractions of the window did, on a window of any shape", () => {
+    for (const [width, height] of [[1920, 1080], [3440, 1440], [1280, 720], [1024, 768]] as const) {
+      const area = { x: 0, y: 0, width, height };
+      const placed = placeAnchored(startRect({ width: 360, height: 216 }, area), area);
+      expect([placed.width, placed.height]).toEqual([360, 216]);
+    }
   });
 
   it("never gets bigger than the window", () => {
-    expect(startRect({ width: 4000, height: 4000 }, screen)).toMatchObject({ width: 1 - DEFAULT_PANEL_RECT.x, height: 1 - DEFAULT_PANEL_RECT.y });
+    expect(startRect({ width: 4000, height: 4000 }, screen)).toEqual({ ...DEFAULT_PANEL_ANCHORED, width: 1920 / 1080 - DEFAULT_PANEL_ANCHORED.x, height: 1 - DEFAULT_PANEL_ANCHORED.y });
+    // The same panel in a 21:9 window has room for more width, not more height.
+    expect(startRect({ width: 4000, height: 4000 }, { x: 0, y: 0, width: 2520, height: 1080 }).width).toBeGreaterThan(2);
   });
 });
 
@@ -314,11 +485,11 @@ describe("panels in the game", () => {
     const store = await GameOverlayStore.load(dir);
     expect(store.addPanel(panel())).toBe("added");
     expect(store.addPanel(panel())).toBe("exists");
-    expect(store.panelOf(ID)!.rect.height).toBeGreaterThanOrEqual(DEFAULT_PANEL_RECT.height);
-    store.updatePanel(ID, { x: 0.5, y: 0.25, width: 0.2, height: 0.3 });
+    expect(store.panelOf(ID)!.rect.height).toBeGreaterThanOrEqual(DEFAULT_PANEL_ANCHORED.height);
+    store.updatePanel(ID, at(0.5, 0.25, 0.2, 0.3));
     await store.save();
     const again = await GameOverlayStore.load(dir);
-    expect(again.panels()).toEqual([{ ...panel(), mode: "always", opacity: 100, hideFromCapture: false, rect: { x: 0.5, y: 0.25, width: 0.2, height: 0.3 } }]);
+    expect(again.panels()).toEqual([{ ...panel(), mode: "always", opacity: 100, hideFromCapture: false, rect: at(0.5, 0.25, 0.2, 0.3) }]);
     expect(again.panelsOf("poe2")).toHaveLength(1);
     expect(again.panelsOf("elden")).toHaveLength(0);
   });

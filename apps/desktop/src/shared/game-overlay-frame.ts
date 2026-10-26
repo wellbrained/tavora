@@ -11,6 +11,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:transparent;font:12px 
 #name{position:absolute;left:6px;top:4px;max-width:calc(100% - 44px);padding:1px 6px;border-radius:4px;background:rgba(10,20,35,.85);color:#e8f0fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
 #close{position:absolute;right:4px;top:4px;width:22px;height:22px;padding:0;border:0;border-radius:4px;background:rgba(10,20,35,.85);color:#e8f0fb;font:16px/20px 'Segoe UI',sans-serif;cursor:pointer}
 #close:hover{background:#b3261e}
+#layout{position:absolute;right:30px;top:4px;width:22px;height:22px;padding:0;border:0;border-radius:4px;background:rgba(10,20,35,.85);color:#e8f0fb;font:13px/20px 'Segoe UI',sans-serif;cursor:pointer}
+#layout:hover{background:#2f5f9e}
+#name{max-width:calc(100% - 70px)}
 .edge{position:absolute}
 .edge[data-edge=l],.edge[data-edge=r]{top:8px;bottom:8px;width:8px;cursor:ew-resize}
 .edge[data-edge=t],.edge[data-edge=b]{left:8px;right:8px;height:8px;cursor:ns-resize}

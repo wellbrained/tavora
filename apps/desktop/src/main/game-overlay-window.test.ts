@@ -114,6 +114,7 @@ function make() {
     setBounds: () => undefined,
     setVisible: () => undefined,
     setGameOpacity: () => undefined,
+    setGameZoom: (factor: number) => calls.push(`zoom ${factor}`),
     suspend: () => calls.push("suspend"),
     resume: () => calls.push("resume"),
   };
@@ -125,8 +126,9 @@ function make() {
     gameBounds: () => null,
     moved: () => undefined,
     closeRequested: () => calls.push("closeRequested"),
+    layoutRequested: () => calls.push("layoutRequested"),
     ended: () => calls.push("ended"),
-    frameText: () => ({ name: "To-Dos", closeLabel: "Bring back" }),
+    frameText: () => ({ name: "To-Dos", closeLabel: "Bring back", layoutLabel: "Layout" }),
     panel: panel as never,
     released: () => calls.push("released"),
   });
@@ -167,6 +169,12 @@ describe("a game overlay window holding a panel", () => {
     const before = calls.length;
     window.destroy();
     expect(calls).toHaveLength(before);
+  });
+
+  it("scales the panel's content with the game window, through the panel and not the page's shared zoom", () => {
+    const { window, calls } = make();
+    window.setZoom(1.5);
+    expect(calls).toContain("zoom 1.5");
   });
 
   it("is placed and shown on top before the panel takes the keyboard", () => {

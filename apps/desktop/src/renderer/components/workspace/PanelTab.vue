@@ -10,7 +10,7 @@ import type { InstanceStatus } from "../../../shared/host-api";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
-import { act, openSettings, state } from "../../host";
+import { act, state } from "../../host";
 import { t } from "../../i18n";
 import MenuArea from "../menus/MenuArea.vue";
 import ModuleIcon from "../ModuleIcon.vue";
@@ -34,9 +34,9 @@ const title = computed(() => {
 });
 const hover = computed(() => (panel.value?.content ? `${title.value}\n${panel.value.content}` : title.value));
 
-/** The Live badge opens Settings > Overlays at the panel's entry, or at the module's overlays. */
+/** The Live badge opens the Overlay layout, where the panel's place (or the module's overlays) can be arranged. */
 function openLive() {
-  openSettings({ section: "overlays", setting: panel.value?.inGame ? "game-panels" : "game-overlay-list" });
+  void act({ type: "open-overlay-layout" });
 }
 
 function items() {

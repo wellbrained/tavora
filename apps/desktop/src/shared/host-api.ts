@@ -4,6 +4,7 @@ import type { Language, LanguageSetting, MessageKey } from "./i18n";
 import type { IconTone } from "./icon-tone";
 import type { ModuleProblemKind, ModuleProblemValues } from "./module-problem";
 import type { HostAction } from "./host-actions";
+import type { LayoutMessage, LayoutView } from "./layout-view";
 
 /**
  * loading: the page is loading. ready: loaded and running. failed: the page
@@ -652,15 +653,17 @@ export interface StreamingView {
 }
 
 /** A key set for game overlays (the layer key, an overlay's toggle key), and whether another program holds it right now. */
+export type { LayoutMessage, LayoutView };
+
 export interface OverlayKeyView {
   accelerator: string;
   taken: boolean;
 }
 
 /**
- * Settings > Overlays (main/game-overlays.ts): the master switch, the layer key, the overlays grouped by game (the group
- * with `name` null is "All games": overlays made in a workspace that is no game) and the panels shown in the game.
- * `supported` is false where Tavora can't draw over a game (not Windows); Settings then hides the section.
+ * Settings > Overlays: the master switch, the layer key and "Hide all for now". The overlays and panels in game
+ * themselves are in the Overlay layout window (main/overlay-layout.ts). `supported` is false where Tavora can't draw
+ * over a game (not Windows); Settings then hides the section.
  */
 export interface GameOverlaysView {
   supported: boolean;
@@ -670,40 +673,6 @@ export interface GameOverlaysView {
   /** "Hide all for now" is on: nothing shows until Tavora starts again or the player shows it again. */
   hidden: boolean;
   layerKey: OverlayKeyView | null;
-  groups: {
-    id: string;
-    name: string | null;
-    overlays: {
-      owner: string;
-      moduleId: string;
-      /** The workspace the overlay was made in. */
-      gameId: string;
-      key: string;
-      /** The module's name, and the overlay's key when the module has several in this place. */
-      name: string;
-      mode: "always" | "toggle";
-      opacity: 100 | 75 | 50 | 25;
-      hideFromCapture: boolean;
-      hotkey: OverlayKeyView | null;
-    }[];
-  }[];
-  panels: {
-    instanceId: string;
-    owner: string;
-    moduleId: string;
-    /** The workspace the panel was made in. */
-    gameId: string;
-    name: string;
-    /** Null for a general panel (made in a workspace that is no game). */
-    gameName: string | null;
-    /** Its live view (the module's overlay page over the game while the layer is closed): always there, or with a key. */
-    mode: "always" | "toggle";
-    opacity: 100 | 75 | 50 | 25;
-    hideFromCapture: boolean;
-    hotkey: OverlayKeyView | null;
-    /** The module has an overlay page, so the panel can have a live view at all. */
-    live: boolean;
-  }[];
 }
 
 export interface HotkeyView {
@@ -995,6 +964,12 @@ export interface TavoraHostApi {
    * host sends `{}` once every panel has drawn again.
    */
   setOverlay(open: boolean): void;
+  /** The Overlay layout window's side (main/overlay-layout.ts): its pages get the view and answer with messages. */
+  layout: {
+    getState(): Promise<LayoutView | null>;
+    onState(listener: (view: LayoutView) => void): void;
+    send(message: LayoutMessage): void;
+  };
   /** Dims the window buttons along with the page while a dialog backdrop covers it. */
   setDimmed(dimmed: boolean): void;
   onState(listener: (state: HostViewState) => void): void;

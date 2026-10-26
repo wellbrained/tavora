@@ -251,6 +251,8 @@ export function hostActionTable(c: HostChecks) {
     "remove-game-overlay": { owner: c.ownerId, moduleId: c.moduleId, gameId: c.gameId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     /** Opens the hotkey dialog for the layer key (without gameId, owner, moduleId and key) or for one overlay's toggle key. */
     "set-overlay-key": { gameId: optional(c.gameId), owner: optional(c.ownerId), moduleId: optional(c.moduleId), key: optional(matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/)) },
+    /** Opens the Overlay layout window (Settings > Overlays, a panel's menu), on a game when it is given, else on the last one. */
+    "open-overlay-layout": { gameId: optional(c.gameId) },
     /** "Hide all for now" in Settings > Overlays, and "Show again": until Tavora starts again. */
     "set-game-overlays-hidden": { hidden: bool },
     /** Opens the preview window of an overlay (Settings > Overlays, Settings > Streaming). */

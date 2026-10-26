@@ -127,6 +127,10 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
             : { label: t("dock.showInGame"), testid: "panel-show-in-game", separator: true, run: () => act({ type: "show-panel-in-game", instanceId: panel.id }) },
         ]
       : []),
+    // A panel that has overlays or is in game can be arranged in the Overlay layout.
+    ...(module && entry?.live && state.value?.gameOverlays.supported
+      ? [{ label: t("overlays.layout.open"), testid: "panel-overlay-layout", separator: !(entry.canInGame), run: () => act({ type: "open-overlay-layout" }) }]
+      : []),
     {
       label: t("dock.closePanel"),
       testid: "panel-close",

@@ -17,5 +17,7 @@ export default defineConfig({
     modulePreload: { polyfill: false },
     // Inlined assets would need data: URLs in more places of the CSP.
     assetsInlineLimit: 0,
+    // The Tavora window, and the Overlay layout window (src/main/overlay-layout-window.ts).
+    rollupOptions: { input: { index: fileURLToPath(new URL("src/renderer/index.html", import.meta.url)), layout: fileURLToPath(new URL("src/renderer/layout.html", import.meta.url)) } },
   },
 });

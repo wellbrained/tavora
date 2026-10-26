@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
+import { placeLegacy } from "../shared/overlay-anchor";
 import type { Foreground, ForegroundProbe } from "./foreground";
 import { GameOverlays, isOverlayAction, layerBinding, toggleBinding, type OverlayWindow, type OverlayWindowRequest } from "./game-overlay-service";
 import type { VeilWindow } from "./game-veil-window";
@@ -43,6 +44,7 @@ class FakeWindow implements OverlayWindow {
   dragging = false;
   destroyed = false;
   focused = false;
+  zoom = 1;
   /** What the service asked of it, in order. */
   log: string[] = [];
   focusedPanel = 0;
@@ -72,6 +74,9 @@ class FakeWindow implements OverlayWindow {
   raise() {
     this.log.push("raise");
   }
+  setZoom(factor: number) {
+    this.zoom = factor;
+  }
   destroy() {
     this.destroyed = true;
   }
@@ -99,6 +104,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     modules: new Map<string, StreamingModule>([[CLOCK.manifest.id, CLOCK], [TODOS.manifest.id, TODOS]]),
     foreground: { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0 } as Foreground | null,
     opened: [] as string[],
+    layouts: [] as (string | null)[],
     notices: [] as string[],
     removedKeys: [] as HotkeyRecord[],
     movedKeys: [] as { from: HotkeyRecord | undefined; to: unknown }[],
@@ -171,6 +177,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     },
     shortcuts,
     openSetting: (setting) => void world.opened.push(setting),
+    openLayout: (gameId) => void world.layouts.push(gameId),
     notify: (message) => void world.notices.push(message),
     removeKeys: (test) => {
       for (const record of [...keys]) if (test(record)) world.removedKeys.push(record);
@@ -216,7 +223,7 @@ describe("showOverGame", () => {
     const { service, world } = await setup({ enabled: false });
     expect(show(service)).toBe("off");
     expect(world.opened).toEqual(["game-overlays"]);
-    expect(service.view().groups).toEqual([]);
+    expect(service.layout.games()).toEqual({ own: [], general: false });
     expect(world.windows).toHaveLength(0);
   });
 
@@ -384,20 +391,21 @@ describe("modes and settings", () => {
     service.remove({ owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" });
     expect(live()).toHaveLength(0);
     expect(world.removedKeys).toEqual([record]);
-    expect(service.view().groups).toEqual([]);
+    expect(service.layout.games()).toEqual({ own: [], general: false });
   });
 
-  it("lists overlays by game for Settings", async () => {
+  it("tells Settings the switches, and the Overlay layout the overlays by game", async () => {
     const { service } = await setup();
     show(service);
     show(service, CLOCK, "elden", "item-2");
-    expect(service.view()).toMatchObject({
-      supported: true,
-      enabled: true,
-      hidden: false,
-      panels: [],
-      groups: [{ id: "elden", name: "Elden Ring", overlays: [{ name: "Clock & Counter · item-1", mode: "always" }, { name: "Clock & Counter · item-2" }] }],
-    });
+    expect(service.view()).toEqual({ supported: true, enabled: true, stay: false, hidden: false, layerKey: null });
+    expect(service.layout.games()).toEqual({ own: ["elden"], general: false });
+    expect(service.layout.items("elden")).toMatchObject([
+      { name: "Clock & Counter · item-1", mode: "always", scope: "game", source: expect.anything() },
+      { name: "Clock & Counter · item-2" },
+    ]);
+    // Another game has none of them.
+    expect(service.layout.items("other")).toEqual([]);
   });
 });
 
@@ -524,7 +532,7 @@ describe("the in-game layer", () => {
     show(service);
     const window = live()[0]!;
     window.request.moved({ x: 960, y: 540, width: 480, height: 270 });
-    expect(service.view().groups[0]!.overlays).toHaveLength(1);
+    expect(service.layout.items("elden")).toHaveLength(1);
     window.dragging = true;
     window.rect = { x: 1, y: 2, width: 3, height: 4 };
     service.tick();
@@ -543,7 +551,7 @@ describe("the in-game layer", () => {
     show(service);
     live()[0]!.request.closeRequested();
     expect(live()).toHaveLength(0);
-    expect(service.view().groups).toEqual([]);
+    expect(service.layout.games()).toEqual({ own: [], general: false });
   });
 });
 
@@ -551,7 +559,10 @@ describe("general overlays", () => {
   it("made in a workspace that is no game show over every library game in front", async () => {
     const { service, world, live } = await setup();
     show(service, CLOCK, "personal");
-    expect(service.view().groups).toMatchObject([{ id: ALL_GAMES, name: null, overlays: [{ gameId: "personal" }] }]);
+    expect(service.layout.games()).toEqual({ own: [], general: true });
+    // Its one place is shown in every game's layout.
+    expect(service.layout.items("elden")).toMatchObject([{ scope: "all" }]);
+    expect(service.layout.items("other")).toMatchObject([{ scope: "all" }]);
     expect(live()).toHaveLength(1);
     expect(live()[0]!.shown).toBe(true);
     expect(service.frontGame()).toBe("elden");
@@ -662,9 +673,9 @@ describe("what goes with a game or a module", () => {
     show(service);
     show(service, CLOCK, "other", "item-1");
     service.forgetGame("other");
-    expect(service.view().groups.map((game) => game.id)).toEqual(["elden"]);
+    expect(service.layout.games().own).toEqual(["elden"]);
     service.forgetModule(CLOCK.manifest.id, "official");
-    expect(service.view().groups).toEqual([]);
+    expect(service.layout.games()).toEqual({ own: [], general: false });
     expect(live()).toHaveLength(0);
   });
 
@@ -672,7 +683,7 @@ describe("what goes with a game or a module", () => {
     const { service } = await setup();
     show(service);
     service.forgetModule(CLOCK.manifest.id, "someone-else");
-    expect(service.view().groups).toHaveLength(1);
+    expect(service.layout.items("elden")).toHaveLength(1);
   });
 
   it("forgets the overlays of a module another publisher's module replaced, and never serves its page", async () => {
@@ -683,7 +694,7 @@ describe("what goes with a game or a module", () => {
     world.modules.set(CLOCK.manifest.id, { ...CLOCK, owner: "someone-else" });
     expect(request.page()).toBeNull();
     service.tick();
-    expect(service.view().groups).toEqual([]);
+    expect(service.layout.games()).toEqual({ own: [], general: false });
     expect(live()).toHaveLength(0);
   });
 
@@ -806,7 +817,7 @@ describe("leftovers", () => {
     for (let i = 0; i < LIMITS.maxOverlays; i++) overlays.link(subject("k" + i));
     expect(() => show(service)).toThrowError(expect.objectContaining({ code: "QUOTA_EXCEEDED" }));
     expect(service.has(subject("item-1"))).toBe(false);
-    expect(service.view().groups).toEqual([]);
+    expect(service.layout.games()).toEqual({ own: [], general: false });
     expect(world.windows).toHaveLength(0);
   });
 
@@ -1001,7 +1012,7 @@ describe("a panel in the game", () => {
     const { service, world, key } = await setup();
     add(service);
     service.pressed(layerKey(key));
-    expect(panelWindows(world)[0]!.request.frameText()).toEqual({ name: "To-Dos", closeLabel: "Stop showing this panel in game" });
+    expect(panelWindows(world)[0]!.request.frameText()).toEqual({ name: "To-Dos", closeLabel: "Stop showing this panel in game", layoutLabel: "Open the Overlay layout" });
   });
 
   it("stopPanel keeps it in its slot, forgets it in the game", async () => {
@@ -1034,9 +1045,7 @@ describe("a panel in the game", () => {
   it("is over any library game in front when it comes from a workspace that is no game", async () => {
     const { service, world, key } = await setup();
     add(service, PANEL, "personal");
-    expect(service.view().panels).toEqual([
-      { instanceId: PANEL, owner: "official", moduleId: TODOS.manifest.id, gameId: "personal", name: "To-Dos", gameName: null, mode: "always", opacity: 100, hideFromCapture: false, hotkey: null, live: false },
-    ]);
+    expect(service.layout.items("elden")).toMatchObject([{ name: "To-Dos", scope: "all", mode: "always", opacity: 100, hideFromCapture: false, hotkey: null, source: null, ref: { kind: "panel", instanceId: PANEL } }]);
     world.foreground = { program: "D:\\Games\\Other\\other.exe", bounds: { ...SCREEN }, notification: 0 };
     service.tick();
     service.pressed(layerKey(key));
@@ -1263,15 +1272,13 @@ describe("a panel's live view", () => {
     expect(service.wants(record)).toBe(false);
   });
 
-  it("applies opacity and Hide from capture, and lists them in the settings view", async () => {
+  it("applies opacity and Hide from capture, and lists them in the layout", async () => {
     const { service, world } = await setup();
     add(service);
     await feed(service, "x");
     service.updatePanelView(PANEL, { opacity: 50, hideFromCapture: true });
     expect(liveWindows(world)[0]).toMatchObject({ opacity: 50, hideFromCapture: true });
-    expect(service.view().panels).toEqual([
-      { instanceId: PANEL, owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", name: "To-Dos", gameName: "Elden Ring", mode: "always", opacity: 50, hideFromCapture: true, hotkey: null, live: true },
-    ]);
+    expect(service.layout.items("elden")).toMatchObject([{ name: "To-Dos", scope: "game", mode: "always", opacity: 50, hideFromCapture: true, hotkey: null, source: expect.anything() }]);
   });
 
   it("is not there for a module without an overlay page", async () => {
@@ -1280,7 +1287,7 @@ describe("a panel's live view", () => {
     add(service, NO_OVERLAY);
     await feed(service, "x");
     expect(liveWindows(world)).toHaveLength(0);
-    expect(service.view().panels[0]!.live).toBe(false);
+    expect(service.layout.items("elden")[0]!.source).toBeNull();
   });
 
   it("is not there when the game is not in front, or Game overlays are off", async () => {
@@ -1406,5 +1413,150 @@ describe("a panel's live view", () => {
     expect(world.notices).toEqual(["This overlay stopped working."]);
     add(service);
     expect(liveWindows(world)).toHaveLength(1);
+  });
+});
+
+describe("positions that scale with the game window", () => {
+  const subject = { owner: "official", moduleId: CLOCK.manifest.id, gameId: "elden", key: "item-1" };
+
+  it("gives the content the zoom of the game window's height, and follows when the window changes", async () => {
+    const { service, world, live } = await setup();
+    show(service);
+    expect(live()[0]!.zoom).toBe(1);
+    world.foreground = { program: GAME_EXE, bounds: { x: 0, y: 0, width: 2560, height: 1440 }, notification: 0 };
+    service.tick();
+    expect(live()[0]!.zoom).toBeCloseTo(1440 / 1080, 5);
+    world.foreground = { program: GAME_EXE, bounds: { x: 0, y: 0, width: 640, height: 360 }, notification: 0 };
+    service.tick();
+    // A tiny window doesn't make the content unreadable.
+    expect(live()[0]!.zoom).toBe(0.5);
+  });
+
+  it("keeps a corner overlay in its corner at the same size when the window gets wider", async () => {
+    const { service, world, live } = await setup();
+    show(service);
+    const narrow = { ...live()[0]!.rect! };
+    world.foreground = { program: GAME_EXE, bounds: { x: 0, y: 0, width: 2520, height: 1080 }, notification: 0 };
+    service.tick();
+    expect(live()[0]!.rect).toEqual(narrow);
+  });
+
+  it("remembers the size of the game's window as last seen, and says so", async () => {
+    const { service, world } = await setup();
+    show(service);
+    expect(service.layout.seenSize("elden")).toEqual({ width: 1920, height: 1080 });
+    const before = world.changes;
+    service.tick();
+    expect(world.changes).toBe(before);
+    world.foreground = { program: GAME_EXE, bounds: { x: 0, y: 0, width: 2560, height: 1080 }, notification: 0 };
+    service.tick();
+    expect(service.layout.seenSize("elden")).toEqual({ width: 2560, height: 1080 });
+    expect(world.changes).toBeGreaterThan(before);
+    await service.shutdown();
+    const again = await GameOverlayStore.load(dir);
+    expect(again.seenSize("elden")).toEqual({ width: 2560, height: 1080 });
+    service.forgetGame("elden");
+    expect(service.layout.seenSize("elden")).toBeUndefined();
+  });
+
+  it("places a version 2 file's items the old way on a window of any shape, and converts them to the pixel on the first real size", async () => {
+    // Older Tavoras never wrote a window size.
+    const legacy = { x: 0.7, y: 0.6, width: 0.25, height: 0.3 };
+    const old = { owner: "official", moduleId: "tavora.clock-counter", gameId: "elden", key: "item-1", scope: "game", mode: "always", opacity: 100, hideFromCapture: false, rect: legacy };
+    const { service, world, live } = await setup({ file: { version: 2, overlays: [old], panels: [] } });
+    const wide = { x: 0, y: 0, width: 3440, height: 1440 };
+    world.foreground = { program: GAME_EXE, bounds: wide, notification: 0 };
+    service.tick();
+    // On the same pixels as before, and anchored now.
+    expect(live()[0]!.rect).toEqual(placeLegacy(legacy, wide));
+    expect(service.layout.items("elden")[0]!.legacy).toBeUndefined();
+    expect(service.layout.seenSize("elden")).toEqual({ width: 3440, height: 1440 });
+    // On another window it follows the anchor, not the fractions.
+    world.foreground = { program: GAME_EXE, bounds: { x: 0, y: 0, width: 2560, height: 1080 }, notification: 0 };
+    service.tick();
+    // 860 x 432 of the 1440 high window is 645 x 324 of a 1080 high one; its right edge is 129 from the window's.
+    expect(live()[0]!.rect).toMatchObject({ width: 645, height: 324, x: 2560 - 645 - 129 });
+  });
+
+  it("does not convert on a launcher's window, and places the old way on it", async () => {
+    const legacy = { x: 0.7, y: 0.6, width: 0.25, height: 0.3 };
+    const old = { owner: "official", moduleId: "tavora.clock-counter", gameId: "elden", key: "item-1", scope: "game", mode: "always", opacity: 100, hideFromCapture: false, rect: legacy };
+    const { service, world, live } = await setup({ file: { version: 2, overlays: [old], panels: [] } });
+    const splash = { x: 100, y: 100, width: 600, height: 400 };
+    world.foreground = { program: GAME_EXE, bounds: splash, notification: 0 };
+    service.tick();
+    expect(live()[0]!.rect).toEqual(placeLegacy(legacy, splash));
+    expect(service.layout.items("elden")[0]!.legacy).toEqual(legacy);
+    expect(service.layout.seenSize("elden")).toBeUndefined();
+    // The real window comes: converted for it, the very same place as the old way.
+    const real = { x: 0, y: 0, width: 2560, height: 1440 };
+    world.foreground = { program: GAME_EXE, bounds: real, notification: 0 };
+    service.tick();
+    expect(live()[0]!.rect).toEqual(placeLegacy(legacy, real));
+    expect(service.layout.items("elden")[0]!.legacy).toBeUndefined();
+    await service.shutdown();
+    const saved = await GameOverlayStore.load(dir);
+    expect(saved.find({ owner: "official", moduleId: "tavora.clock-counter", gameId: "elden", key: "item-1" })!.legacy).toBeUndefined();
+  });
+
+  it("writes where the player left it in the frame as an anchored place", async () => {
+    const { service, live } = await setup();
+    show(service);
+    live()[0]!.request.moved({ x: 1400, y: 700, width: 480, height: 270 });
+    const rect = service.layout.items("elden")[0]!.rect;
+    expect(rect).toMatchObject({ h: "right", v: "bottom" });
+    expect(rect.width).toBeCloseTo(480 / 1080, 5);
+  });
+
+  it("opens the Overlay layout from the frame's button, on the game in front", async () => {
+    const { service, world, live } = await setup();
+    show(service);
+    live()[0]!.request.layoutRequested();
+    expect(world.layouts).toEqual(["elden"]);
+  });
+
+  it("takes a new place from the layout at once, and a reset puts it back where a new one starts", async () => {
+    const { service, live } = await setup();
+    show(service);
+    const ref = service.layout.items("elden")[0]!.ref;
+    const first = { ...live()[0]!.rect! };
+    expect(service.layout.setRect(ref, { h: "right", v: "bottom", x: 0.05, y: 0.05, width: 0.3, height: 0.2 })).toBe(true);
+    expect(live()[0]!.rect).toEqual({ x: 1920 - 324 - 54, y: 1080 - 216 - 54, width: 324, height: 216 });
+    expect(service.layout.resetRect(ref)).toBe(true);
+    expect(live()[0]!.rect).toEqual(first);
+    expect(service.layout.setRect({ kind: "overlay", subject: { ...subject, key: "gone" } }, { h: "left", v: "top", x: 0, y: 0, width: 0.1, height: 0.1 })).toBe(false);
+  });
+
+  it("knows the window of each game as last seen in front, to take its picture on a click", async () => {
+    const { service, world } = await setup();
+    expect(service.layout.handleOf("elden")).toBeNull();
+    show(service);
+    world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0, handle: "123456" };
+    service.tick();
+    expect(service.layout.handleOf("elden")).toBe("123456");
+    service.forgetGame("elden");
+    expect(service.layout.handleOf("elden")).toBeNull();
+  });
+
+  it("forgets a game's window when the watcher reports the game stopped", async () => {
+    const { service, world } = await setup();
+    show(service);
+    world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0, handle: "123456" };
+    service.tick();
+    service.gamesRunning(new Set(["elden"]));
+    expect(service.layout.handleOf("elden")).toBe("123456");
+    service.gamesRunning(new Set());
+    expect(service.layout.handleOf("elden")).toBeNull();
+  });
+
+  it("tells the layout when a toggle key switched an overlay on or off", async () => {
+    const { service, world, key } = await setup();
+    show(service);
+    service.update(subject, { mode: "toggle" });
+    expect(service.layout.items("elden")[0]).toMatchObject({ mode: "toggle", toggledOn: false });
+    const before = world.changes;
+    service.pressed(key(toggleBinding(subject)));
+    expect(service.layout.items("elden")[0]!.toggledOn).toBe(true);
+    expect(world.changes).toBeGreaterThan(before);
   });
 });
