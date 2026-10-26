@@ -46,6 +46,20 @@ export async function act(path: string, body: unknown): Promise<void> {
   }
 }
 
+/** Saves a file the API makes (it needs the token, so it is fetched first and saved from a blob address). */
+export async function download(path: string, name: string): Promise<void> {
+  const response = await call(path);
+  if (!response.ok) throw new Error(`Can't get ${name}.`);
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /** One page of data: loads on demand, keeps the last answer, and says if loading failed. */
