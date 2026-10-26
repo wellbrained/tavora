@@ -56,6 +56,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     appSettings: registry.appSettings("local", moduleId),
     aiUsage: { accounts: () => Promise.reject(new Error("no AI accounts in this test")), read: () => Promise.reject(new Error("no AI accounts in this test")) },
     systemInfo: { info: () => { throw new Error("no system info in this test"); }, watch: () => { throw new Error("no system info in this test"); } },
+    media: { watch: () => { throw new Error("no media in this test"); }, control: () => Promise.reject(new Error("no media in this test")) },
     discord: noDiscord,
     panelState: registry.panelState,
     capabilities: () => new Set(),
@@ -575,6 +576,59 @@ describe("aiUsage", () => {
   it("passes on that an account does not exist", async () => {
     const p = await granted({ aiUsage: { accounts: async () => [], read: async () => Promise.reject(new HostError("INVALID_PARAMS", "there is no AI account with that id")) } });
     expect(await call(p, "aiUsage.read", { accountId: "gone" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+});
+
+describe("media", () => {
+  const STATE = { state: "ready" as const, sessions: [] };
+  const calls: unknown[] = [];
+  const granted = () =>
+    connected({
+      ...makeContext(),
+      capabilities: () => new Set(["media"] as const),
+      media: {
+        watch: (on) => (calls.push(["watch", on]), on ? STATE : null),
+        control: async (session, action) => (calls.push(["control", session, action]), true),
+      },
+    });
+
+  it.each([
+    ["media.watch", { on: true }],
+    ["media.control", { session: "Spotify.exe#0", action: "next" }],
+  ])("denies %s without the media connector", async (method, params) => {
+    expect(await call(port, method, params)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "media" } });
+  });
+
+  it("starts and ends a watch", async () => {
+    calls.length = 0;
+    const p = await granted();
+    expect(await call(p, "media.watch", { on: true })).toMatchObject({ ok: true, result: STATE });
+    expect(await call(p, "media.watch", { on: false })).toMatchObject({ ok: true, result: null });
+    expect(calls).toEqual([["watch", true], ["watch", false]]);
+  });
+
+  it("passes a checked control on", async () => {
+    calls.length = 0;
+    const p = await granted();
+    expect(await call(p, "media.control", { session: "Spotify.exe#0", action: "playPause" })).toMatchObject({ ok: true, result: true });
+    expect(calls).toEqual([["control", "Spotify.exe#0", "playPause"]]);
+  });
+
+  it.each([
+    ["media.watch", undefined],
+    ["media.watch", {}],
+    ["media.watch", { on: 1 }],
+    ["media.watch", { on: true, extra: 1 }],
+    ["media.control", undefined],
+    ["media.control", { session: "", action: "next" }],
+    ["media.control", { session: "a", action: "seek" }],
+    ["media.control", { session: 1, action: "next" }],
+    ["media.control", { session: "a", action: "next", extra: 1 }],
+  ])("refuses %s with %j", async (method, params) => {
+    calls.length = 0;
+    const p = await granted();
+    expect(await call(p, method, params)).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(calls).toEqual([]);
   });
 });
 

@@ -21,6 +21,8 @@ import {
   type GameOverlayResult,
   type OverlayLinkResult,
   type SystemInfo,
+  type MediaAction,
+  type MediaState,
   type PageResponse,
   type PanelContent,
   type PanelLaunch,
@@ -38,6 +40,7 @@ import {checkTooltip,checkTooltipAnchor,tooltipId} from "./tooltip-content";
 import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
 import { checkPanelContent } from "./panel-content";
 import { parseWatch, type WatchRequest } from "./system-info-parse";
+import { parseControlParams, parseWatchParams } from "./media-parse";
 import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
 
 /** The parts of Electron's MessagePortMain the bridge uses. */
@@ -90,6 +93,12 @@ export interface BridgeContext {
    * gets the request already checked (system-info-parse.ts); it replaces what this panel watched before.
    */
   systemInfo: { info(): SystemInfo | Promise<SystemInfo>; watch(request: WatchRequest): void };
+  /**
+   * The media connector (media.ts) for this panel; only reached with the `media` capability. `watch(false)` answers
+   * null. `control` throws PERMISSION_DENIED unless the panel just got a click or key press, or one of the module's
+   * hotkeys was just pressed.
+   */
+  media: { watch(on: boolean): MediaState | null; control(session: string, action: MediaAction): Promise<boolean> };
   /**
    * The discord connector (discord.ts) for this panel; only reached with the `discord` capability. Commands
    * and subscriptions arrive checked (discord-commands.ts); connect, allowControl, SELECT_VOICE_CHANNEL and
@@ -315,6 +324,16 @@ const handlers = new Map<string, Handler>([
       needs(s, "systemInfo", "systemInfo.watch");
       s.context.systemInfo.watch(parseWatch(params));
       return null;
+    },
+  ],
+
+  ["media.watch", (s, params) => (needs(s, "media", "media.watch"), s.context.media.watch(parseWatchParams(params)))],
+  [
+    "media.control",
+    async (s, params) => {
+      needs(s, "media", "media.control");
+      const { session, action } = parseControlParams(params);
+      return s.context.media.control(session, action);
     },
   ],
 

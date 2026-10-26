@@ -77,6 +77,7 @@ Settings go in `tavora.storage`, the player's work in `tavora.documents`, pictur
 | `tavora.network.fetch(url, init)` | A web request to a host listed in `permissions.network`, once the player granted it. See [Network](../reference/protocol.md#network). |
 | `tavora.connectors.aiUsage` | The usage of the player's Claude and Codex accounts, with the `ai-usage` connector. |
 | `tavora.connectors.systemInfo` | Your PC's hardware and how busy it is (CPU, graphics card, memory, drives), with the `system-info` connector. |
+| `tavora.connectors.media` | What plays on the PC (Spotify, browsers, video players) with play/pause, next and previous, with the `media` connector. |
 | `tavora.connectors.discord` | The Discord app on this PC through Tavora's Discord sign-in, with the `discord` connector: voice channels, mute and deafen, voice events. |
 
 What reaches outside the panel needs the player's yes first; see [Permissions and consent](./permissions.md). Following the theme and the language is in [Look and languages](./look-and-languages.md).

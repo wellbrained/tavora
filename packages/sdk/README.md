@@ -56,6 +56,7 @@ Values you store must be JSON. Type parameters such as `get<number>()` are not c
 | `tavora.network.readPage(url)` | Capture a public page in an isolated temporary browser, using the same grants. No player sign-ins or module scripts; Tavora 0.19.3+. |
 | `tavora.connectors.aiUsage` | The usage of the player's Claude and Codex accounts, with the `ai-usage` connector. |
 | `tavora.connectors.systemInfo` | The PC's hardware and how busy it is, with the `system-info` connector: `info()`, `watch(options)`, `onSnapshot`, `onDrivesChange`. |
+| `tavora.connectors.media` | What plays on the PC, with the `media` connector: `watch()`, `unwatch()`, `onChange`, `control(session, action)`. |
 | `tavora.connectors.discord` | The Discord app on this PC through Tavora's Discord sign-in, with the `discord` connector: voice channels, mute and deafen, voice events. |
 
 What needs the player's permission (`permissions.network` and `permissions.connectors` in the [manifest](https://docs.mytavora.app/reference/manifest)) works only once the player has granted it: they are asked when they add the module and can take it back in Settings > Integrations. Until then the call fails with `PERMISSION_DENIED`; `tavora.host.capabilities` lists what was granted when the module connected. See [Capabilities](https://docs.mytavora.app/reference/protocol#capabilities) and [Connectors](https://docs.mytavora.app/reference/protocol#connectors).
