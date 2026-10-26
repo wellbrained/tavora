@@ -107,6 +107,15 @@ describe("the worker", () => {
     await expect(failing).rejects.toThrow("no ntdll");
   });
 
+  it("reads the traffic in the worker, the ranges in and the bytes out", async () => {
+    const asked = thread.traffic();
+    await vi.waitFor(() => expect(latest().received).toHaveLength(1));
+    const message = latest().received[0] as { type: string; id: number; ranges: unknown[] };
+    expect(message).toMatchObject({ type: "traffic", ranges: expect.any(Array) });
+    latest().send({ type: "traffic", id: message.id, bytes: message.ranges.map(() => ({ downBytes: 5e9, upBytes: 1e8 })) });
+    await expect(asked).resolves.toMatchObject({ week: { downBytes: 5e9, upBytes: 1e8 } });
+  });
+
   it("passes on a failed info", async () => {
     const asked = thread.info();
     latest().send({ type: "info", id: (latest().received[0] as { id: number }).id, error: "no PDH" });

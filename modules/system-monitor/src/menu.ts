@@ -8,6 +8,7 @@ export type Pick =
   | { kind: "interval"; ms: (typeof INTERVALS)[number] }
   | { kind: "gpu"; id: string }
   | { kind: "drives" }
+  | { kind: "traffic" }
   | { kind: "connection" };
 
 /** Writes a text of the panel in the language shown (the panel passes its `t`). */
@@ -66,6 +67,8 @@ export function buildMenu(t: Say, info: SystemInfo | null, app: AppSettings, pan
       { type: "item", id: "connection", label: t("menu.connection"), hint: connection.enabled ? (connection.target.length <= 30 ? connection.target : `${connection.target.slice(0, 29)}…`) : t("menu.connectionOff") },
     );
   }
+  // The traffic goes with the connection: a tick, under Connection… when that is there.
+  if (panel.sections.connection) items.push(...(connection ? [] : [{ type: "separator" } as const]), { type: "item", id: "traffic", label: t("menu.traffic"), checked: panel.traffic });
   return items;
 }
 
@@ -73,6 +76,7 @@ export function buildMenu(t: Say, info: SystemInfo | null, app: AppSettings, pan
 export function parsePick(id: string): Pick | null {
   if (id === "drives") return { kind: "drives" };
   if (id === "connection") return { kind: "connection" };
+  if (id === "traffic") return { kind: "traffic" };
   const [kind, rest = ""] = [id.slice(0, id.indexOf(":")), id.slice(id.indexOf(":") + 1)];
   if (kind === "section" && (SECTIONS as readonly string[]).includes(rest)) return { kind: "section", id: rest as SectionId };
   if (kind === "block" && (BLOCKS as readonly string[]).includes(rest)) return { kind: "block", id: rest as BlockId };

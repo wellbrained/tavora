@@ -166,6 +166,16 @@ export function dayAndClock(at: number, language = "en"): string {
   return `${new Intl.DateTimeFormat(language, { day: "numeric", month: "short" }).format(at)}, ${clock(at, language)}`;
 }
 
+/** A month's name in this language: "October", "Oktober". */
+export function monthName(at: number, language = "en"): string {
+  return new Intl.DateTimeFormat(language, { month: "long" }).format(at);
+}
+
+/** A day in this language: "Aug 27", "27. Aug.". */
+export function shortDay(at: number, language = "en"): string {
+  return new Intl.DateTimeFormat(language, { day: "numeric", month: "short" }).format(at);
+}
+
 /** The drops that began today (since midnight on this PC), including one that goes on. */
 export function dropsToday(outages: readonly { start: number }[], now: number): number {
   const midnight = new Date(now);

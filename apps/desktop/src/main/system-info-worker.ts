@@ -2,7 +2,7 @@
  * The worker thread the system-info connector reads the PC in (system-info-thread.ts is the main process's side).
  * It holds the one SystemMonitor and its probe, and passes messages both ways: what the panels watch in, the
  * snapshots out. Tavora's own use is filled in by the main process, which alone can read it. The System Monitor's
- * list of apps (system-apps.ts) is read here too, only when asked.
+ * list of apps (system-apps.ts) and Windows' record of the traffic (traffic-windows.ts) are read here too, only when asked.
  */
 import os from "node:os";
 import { parentPort } from "node:worker_threads";
@@ -11,6 +11,7 @@ import { AppsReader, readProcesses } from "./system-apps";
 import { SystemMonitor, type SystemSubscription } from "./system-info";
 import type { FromWorker, ToWorker } from "./system-info-thread";
 import { systemProbe } from "./system-info-windows";
+import { trafficReader } from "./traffic-windows";
 
 const port = parentPort;
 if (!port) throw new Error("system-info-worker runs only as a worker thread");
@@ -24,6 +25,7 @@ const monitor = new SystemMonitor({
 });
 const subscriptions = new Map<number, SystemSubscription>();
 const apps = new AppsReader();
+const traffic = trafficReader();
 
 /** A CPU figure needs two readings; when the last one is old, take a second one a moment after the first. */
 const FRESH_MS = 10_000;
@@ -52,6 +54,12 @@ port.on("message", (message: ToWorker) => {
       readApps().then(
         (read) => post({ type: "apps", id: message.id, apps: read }),
         (error: unknown) => post({ type: "apps", id: message.id, error: error instanceof Error ? error.message : String(error) }),
+      );
+      return;
+    case "traffic":
+      traffic(message.ranges).then(
+        (bytes) => post({ type: "traffic", id: message.id, bytes }),
+        (error: unknown) => post({ type: "traffic", id: message.id, error: error instanceof Error ? error.message : String(error) }),
       );
       return;
     case "subscribe": {

@@ -144,6 +144,7 @@ import { AiUsageConnector } from "./ai-usage";
 import { ConnectionFile, ConnectionWatcher, SYSTEM_MONITOR_ID } from "./connection";
 import { connectionProbe } from "./connection-windows";
 import { SystemMonitorThread } from "./system-info-thread";
+import { TrafficFile } from "./traffic";
 import { MediaConnector } from "./media";
 import { helperPath, mediaDeps } from "./media-windows";
 import { readClaudeEmail } from "./ai-usage-claude";
@@ -670,6 +671,7 @@ export class Host {
     host.systemInfo = new SystemMonitorThread({
       start: () => new Worker(path.join(__dirname, "system-info-worker.cjs")),
       connection: host.connection,
+      trafficStore: new TrafficFile(path.join(userData, "traffic.json")),
       // Electron's CPU figure is already a share of the whole PC; its memory is in kilobytes.
       tavora: () => {
         const metrics = app.getAppMetrics();

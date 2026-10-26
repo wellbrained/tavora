@@ -21,6 +21,7 @@ import {
   type AiUsageAccountInfo,
   type AiUsageReading,
   type SystemApps,
+  type SystemTraffic,
   type SystemInfo,
   type SystemSnapshot,
   type SystemWatchBlocks,
@@ -80,6 +81,8 @@ export type {
   AiUsageReading,
   SystemApp,
   SystemApps,
+  SystemTraffic,
+  SystemTrafficPeriod,
   SystemInfo,
   SystemSnapshot,
   SystemWatchBlocks,
@@ -400,6 +403,11 @@ export interface TavoraSDK {
       onConnectionChange(fn: (connection: SystemConnection) => void): Unsubscribe;
       /** The apps running now with their memory and CPU. Only for Tavora's own System Monitor; others get PERMISSION_DENIED. */
       apps(): Promise<SystemApps>;
+      /**
+       * What this PC received and sent this week and this month and in the 3 months before, as Windows counts it.
+       * Only for Tavora's own System Monitor; others get PERMISSION_DENIED (Tavora 0.21.29 and newer).
+       */
+      traffic(): Promise<SystemTraffic>;
     };
     /**
      * `media`: what plays on this PC, as Windows' media controls show it (Spotify, browsers, video players), and
@@ -870,6 +878,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         setConnectionSettings: (settings) => call("systemInfo.setConnectionSettings", settings),
         onConnectionChange: (fn) => on("systemInfo.connectionChanged", fn),
         apps: () => call("systemInfo.apps"),
+        traffic: () => call("systemInfo.traffic"),
       },
       media: {
         watch: async () => (await call("media.watch", { on: true })) as MediaState,

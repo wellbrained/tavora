@@ -5,17 +5,19 @@
  * In the worker such a wait holds up only the readings, never Tavora. The worker starts with the first panel that
  * asks and ends a minute after the last one stopped watching, so with no panel it costs nothing. The connection
  * watcher (connection.ts) stays in the main process: its pings already run off the main thread, and it keeps
- * watching while no panel is shown.
+ * watching while no panel is shown. The traffic (traffic.ts) is kept here too, and only Windows' record is read there.
  */
-import type { SystemApps, SystemInfo, SystemSnapshot } from "@tavora/sdk/protocol";
+import type { SystemApps, SystemInfo, SystemSnapshot, SystemTraffic } from "@tavora/sdk/protocol";
 import type { ConnectionSource } from "./connection";
 import type { SystemListener, SystemSubscription, TavoraUsage } from "./system-info";
+import { TrafficBook, type TrafficBytes, type TrafficRange, type TrafficStore } from "./traffic";
 import { isEmptyWatch, percent, type WatchRequest } from "./system-info-parse";
 
 /** What the main process tells the worker. */
 export type ToWorker =
   | { type: "info"; id: number }
   | { type: "apps"; id: number }
+  | { type: "traffic"; id: number; ranges: TrafficRange[] }
   | { type: "subscribe"; sub: number }
   | { type: "watch"; sub: number; request: WatchRequest }
   | { type: "suspend"; sub: number; suspended: boolean }
@@ -27,6 +29,8 @@ export type FromWorker =
   | { type: "info"; id: number; error: string }
   | { type: "apps"; id: number; apps: SystemApps }
   | { type: "apps"; id: number; error: string }
+  | { type: "traffic"; id: number; bytes: (TrafficBytes | null)[] }
+  | { type: "traffic"; id: number; error: string }
   | { type: "snapshot"; sub: number; snapshot: SystemSnapshot }
   | { type: "drivesChanged"; sub: number }
   | { type: "log"; message: string; error: string };
@@ -47,6 +51,8 @@ export interface SystemMonitorThreadOptions {
   tavora: () => TavoraUsage;
   /** The connection watcher; panels only read what it found. */
   connection?: ConnectionSource;
+  /** Where the months of traffic that are over are kept (traffic.json); without it they are kept for this run only. */
+  trafficStore?: TrafficStore;
   log?: (message: string, error: unknown) => void;
 }
 
@@ -68,6 +74,7 @@ export class SystemMonitorThread {
   private readonly asked = new Map<number, { resolve: (answer: never) => void; reject: (error: Error) => void }>();
   private nextId = 1;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private trafficBook: TrafficBook | null = null;
 
   constructor(options: SystemMonitorThreadOptions) {
     this.options = options;
@@ -89,11 +96,20 @@ export class SystemMonitorThread {
     return this.ask("apps");
   }
 
-  private ask<T>(type: "info" | "apps"): Promise<T> {
+  /** What this PC received and sent this week, this month and the 3 months before (traffic.ts). Only for Tavora's own System Monitor. */
+  traffic(): Promise<SystemTraffic> {
+    this.trafficBook ??= new TrafficBook({
+      read: (ranges) => this.ask<(TrafficBytes | null)[]>({ type: "traffic", ranges }),
+      store: this.options.trafficStore ?? { load: () => Promise.resolve([]), save: () => undefined },
+    });
+    return this.trafficBook.read();
+  }
+
+  private ask<T>(question: "info" | "apps" | { type: "traffic"; ranges: TrafficRange[] }): Promise<T> {
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
       this.asked.set(id, { resolve: resolve as (answer: never) => void, reject });
-      this.ensure().postMessage({ type, id });
+      this.ensure().postMessage(typeof question === "string" ? { type: question, id } : { ...question, id });
       this.settle();
     });
   }
@@ -166,11 +182,12 @@ export class SystemMonitorThread {
   private receive(message: FromWorker): void {
     switch (message.type) {
       case "info":
-      case "apps": {
+      case "apps":
+      case "traffic": {
         const asked = this.asked.get(message.id);
         this.asked.delete(message.id);
         if ("error" in message) asked?.reject(new Error(message.error));
-        else asked?.resolve(("info" in message ? message.info : message.apps) as never);
+        else asked?.resolve(("info" in message ? message.info : "apps" in message ? message.apps : message.bytes) as never);
         this.settle();
         return;
       }
