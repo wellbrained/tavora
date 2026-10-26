@@ -5,6 +5,11 @@ Stream overlays and hotkeys (Tavora 0.19.26). `MIN_TAVORA` is now `0.19.32`, for
 - Stream overlays: a manifest `overlay` page that OBS or other streaming software shows as a Browser Source, with the new `stream-overlay` connector. `overlay.publish(key, state)` sets what an overlay shows (Tavora keeps it while no panel runs), `overlay.copyLink(key)` copies its link after a click, `overlay.remove` and `overlay.resetLink`. The overlay page reads its state with `watchOverlay(fn)`.
 - `permissions.onRequest`: list `"stream-overlay"` there too, and players are asked for it on the first `overlay.copyLink` instead of when they add the module; the call then gives `"denied"` if they say no (Tavora 0.19.32).
 - Hotkeys: manifest `actions`, which players bind to keys in Tavora's own dialog (`hotkeys.set(action, target, label)` after a click). Panels hear `hotkeys.onPress` while their game is shown; `hotkeys.list` and `hotkeys.remove` manage them. A module never learns the key.
+- In-game overlays: `overlay.showOverGame`, `hideOverGame`, `overGame` and `preview` show, remove, list and preview a module's overlay. `panel.setLive` supplies the read-only live view for a panel shown in game. See each method's host-version requirement.
+- Panels: `isMaximized`, `setMaximized` and `onMaximizedChange` share the host's Maximize state; maximizing requires a real click or key press.
+- Files: remember a file chosen with `pickReadOnly`, reread it with `read`, and revoke its reference with `forget`. `saveJson` and `openJson` use Tavora's dialogs without exposing paths. `exportJson` is deprecated in favour of `saveJson`; its limit is now 8 MiB. `pictures.save` also uses a save dialog.
+- System info: the consented `system-info` connector adds PC readings, running apps, connection checks and history, and Windows traffic totals. Sampling and host-version requirements are documented on the methods and protocol types.
+- Media: the consented `media` connector reads Windows media sessions, watches changes, and sends play/pause, previous or next only after a real click or key press. No player sign-in or token reaches a module.
 
 ## 0.2.10
 

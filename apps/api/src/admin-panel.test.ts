@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { signFiles, writeZip, type ZipFile } from "@tavora/pack";
+import { PATCH_NOTES } from "../../desktop/src/shared/patch-notes.ts";
 import { AccountStore } from "./account-store.ts";
 import { createAdminApp } from "./admin-app.ts";
 import type { Probes } from "./admin-probes.ts";
@@ -16,9 +17,10 @@ import { createSubmissions } from "./submissions.ts";
 const TOKEN = "t0ken-".repeat(5);
 const DAY = 86_400_000;
 const NOW = Date.parse("2026-10-26T12:00:00Z");
+const FEED_VERSION = PATCH_NOTES[1]!.version;
 
 const probes = (over: Partial<Probes> = {}): Probes => ({
-  feed: async () => ({ version: "0.21.20", releasedAt: "2026-10-20T10:00:00.000Z", installerSize: 1234 }),
+  feed: async () => ({ version: FEED_VERSION, releasedAt: "2026-10-20T10:00:00.000Z", installerSize: 1234 }),
   site: async (url) => ({ ok: !url.includes("docs"), status: url.includes("docs") ? 502 : 200 }),
   npmVersion: async (name) => (name === "@tavora/sdk" ? "0.2.7" : "1.0.0"),
   mainVersion: async (folder) => (folder.endsWith("/sdk") ? "0.2.11" : "1.0.0"),
@@ -82,9 +84,9 @@ describe("the panel's own pages", () => {
 
   it("list the app versions with their notes, marking the one on the feed", async () => {
     const updates = await ask(make(), "/api/updates");
-    expect(updates.feed).toMatchObject({ version: "0.21.20" });
+    expect(updates.feed).toMatchObject({ version: FEED_VERSION });
     const states = Object.fromEntries(updates.versions.map((version: { version: string; state: string }) => [version.version, version.state]));
-    expect(states["0.21.20"]).toBe("on-feed");
+    expect(states[FEED_VERSION]).toBe("on-feed");
     expect(Object.values(states)).toContain("waiting");
     expect(Object.values(states)).toContain("earlier");
     expect(updates.versions[0].notes.length).toBeGreaterThan(0);
