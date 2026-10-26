@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clock, degrees, driveTone, dropsToday, duration, lastDropEnd, lossPercent, lossTone, mbit, megahertz, memory, num, percent, pingMs, pingTone, size, speed, temperatureTone, usedPercent, verdict, watts } from "./format";
+import { clock, degrees, driveTone, dropsToday, duration, lastDropEnd, lossPercent, lossTone, mbit, megahertz, memory, monthName, num, percent, pingMs, pingTone, shortDay, size, speed, temperatureTone, usedPercent, verdict, watts } from "./format";
 
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
@@ -147,5 +147,16 @@ describe("lastDropEnd", () => {
     expect(lastDropEnd([])).toBeNull();
     expect(lastDropEnd([{ end: 5 }, { end: 9 }, { end: 7 }])).toBe(9);
     expect(lastDropEnd([{ end: 5 }, { end: null }])).toBeNull();
+  });
+});
+
+describe("months and days", () => {
+  it("names a month and a day in the panel's language", () => {
+    const at = new Date(2026, 7, 27, 12).getTime();
+    expect(monthName(at, "en")).toBe("August");
+    expect(monthName(at, "de")).toBe("August");
+    expect(monthName(new Date(2026, 9, 1).getTime(), "de")).toBe("Oktober");
+    expect(shortDay(at, "en")).toBe("Aug 27");
+    expect(shortDay(at, "de")).toBe("27. Aug.");
   });
 });

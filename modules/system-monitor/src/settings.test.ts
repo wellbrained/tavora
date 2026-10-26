@@ -45,11 +45,13 @@ describe("parse", () => {
   });
   it("reads good values and drops bad drive ids", () => {
     expect(parseApp({ intervalMs: 5000, drives: ["c:", "C:", "nope", 4] })).toEqual({ intervalMs: 5000, drives: ["C:"] });
-    expect(parsePanel({ blocks: { cpu: false, gpu: true, ram: true, drives: false }, gpu: "igpu" })).toEqual({
+    expect(parsePanel({ blocks: { cpu: false, gpu: true, ram: true, drives: false }, gpu: "igpu", traffic: true })).toEqual({
       sections: { system: true, connection: true },
       blocks: { cpu: false, gpu: true, ram: true, drives: false },
       gpu: "igpu",
+      traffic: true,
     });
+    expect(parsePanel({ traffic: "yes" }).traffic).toBe(false);
   });
   it("never saves a panel with no block", () => {
     expect(parsePanel({ blocks: { cpu: false, gpu: false, ram: false, drives: false } }).blocks).toEqual(defaultPanel().blocks);
@@ -120,7 +122,7 @@ describe("menu", () => {
   it("checks what is on, and offers the graphics card only with several", () => {
     const entries = buildMenu(say, info(), defaultApp(), defaultPanel());
     const ids = entries.flatMap((entry) => (entry.type === "item" ? [entry.id] : []));
-    expect(ids).toEqual(["section:system", "section:connection", "block:cpu", "block:gpu", "block:ram", "block:drives", "interval:1000", "interval:2000", "interval:5000", "interval:15000", "interval:60000", "gpu:igpu", "gpu:dgpu", "drives"]);
+    expect(ids).toEqual(["section:system", "section:connection", "block:cpu", "block:gpu", "block:ram", "block:drives", "interval:1000", "interval:2000", "interval:5000", "interval:15000", "interval:60000", "gpu:igpu", "gpu:dgpu", "drives", "traffic"]);
     const checked = entries.filter((entry) => entry.type === "item" && entry.checked).map((entry) => (entry.type === "item" ? entry.id : ""));
     expect(checked).toEqual(["section:system", "section:connection", "block:cpu", "block:gpu", "block:ram", "block:drives", "interval:1000", "gpu:dgpu"]);
     expect(buildMenu(say, info({ gpus: [] }), defaultApp(), defaultPanel()).some((entry) => entry.type === "item" && entry.id.startsWith("gpu:"))).toBe(false);
@@ -132,11 +134,17 @@ describe("menu", () => {
     expect(item(buildMenu(say, info(), defaultApp(), defaultPanel(), { enabled: false, target: "x.com" }))).toMatchObject({ hint: "menu.connectionOff" });
     expect(item(buildMenu(say, info(), defaultApp(), defaultPanel()))).toBeUndefined();
   });
+  it("offers the traffic with the Connection section, ticked when it shows", () => {
+    const traffic = (panel: ReturnType<typeof parsePanel>) => buildMenu(say, info(), defaultApp(), panel, { enabled: true, target: "1.1.1.1" }).find((entry) => entry.type === "item" && entry.id === "traffic");
+    expect(traffic(defaultPanel())).toMatchObject({ checked: false });
+    expect(traffic(parsePanel({ traffic: true }))).toMatchObject({ checked: true });
+    expect(traffic(parsePanel({ sections: { system: true, connection: false }, traffic: true }))).toBeUndefined();
+  });
   it("leaves out the System choices when that section is hidden, and keeps the last section", () => {
     const panel = parsePanel({ sections: { system: false, connection: true } });
     const entries = buildMenu(say, info(), defaultApp(), panel);
     const ids = entries.flatMap((entry) => (entry.type === "item" ? [entry.id] : []));
-    expect(ids).toEqual(["section:system", "section:connection", "interval:1000", "interval:2000", "interval:5000", "interval:15000", "interval:60000"]);
+    expect(ids).toEqual(["section:system", "section:connection", "interval:1000", "interval:2000", "interval:5000", "interval:15000", "interval:60000", "traffic"]);
     expect(entries.find((entry) => entry.type === "item" && entry.id === "section:connection")).toMatchObject({ disabled: true });
   });
   it("won't turn off the last block", () => {
@@ -151,6 +159,7 @@ describe("menu", () => {
     expect(parsePick("drives")).toEqual({ kind: "drives" });
     expect(parsePick("section:connection")).toEqual({ kind: "section", id: "connection" });
     expect(parsePick("connection")).toEqual({ kind: "connection" });
+    expect(parsePick("traffic")).toEqual({ kind: "traffic" });
     expect(parsePick("section:nope")).toBeNull();
     expect(parsePick("interval:3000")).toBeNull();
     expect(parsePick("block:nope")).toBeNull();

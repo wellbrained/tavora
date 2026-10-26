@@ -124,13 +124,28 @@ serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
   console.log(`[tavora-api] listening on http://127.0.0.1:${info.port}`);
 });
 
-// The review page: its own port of 127.0.0.1 that the web server never forwards, and a token.
+// Tavora Admin (the review page and more): its own port of 127.0.0.1 that the web server never forwards, and a token.
 const adminToken = process.env.ADMIN_TOKEN?.trim();
 if (adminToken && adminToken.length >= 24) {
   const adminPort = Number(process.env.ADMIN_PORT ?? 4011);
-  serve({ fetch: createAdminApp({ token: adminToken, submissions, state, store: icons, catalog, ...(accountStore ? { accounts: accountStore } : {}), ...(reviews ? { reviews } : {}) }).fetch, port: adminPort, hostname: "127.0.0.1" }, (info) => {
-    console.log(`[tavora-api] review page on http://127.0.0.1:${info.port} (local only)`);
+  const meta = () => Object.fromEntries((db.prepare("select key, value from meta").all() as unknown as { key: string; value: string }[]).map(({ key, value }) => [key, value]));
+  const admin = createAdminApp({
+    token: adminToken,
+    submissions,
+    state,
+    store: icons,
+    catalog,
+    ...(accountStore ? { accounts: accountStore } : {}),
+    ...(reviews ? { reviews } : {}),
+    // The built panel: the release's admin folder; in development apps/admin/dist.
+    adminDir: process.env.TAVORA_ADMIN_DIR ?? "../admin/dist",
+    dataset: () => ({ games: Number(meta().games ?? 0), builtAt: meta().built_at ?? null }),
+    ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
+    stateDir,
+  });
+  serve({ fetch: admin.fetch, port: adminPort, hostname: "127.0.0.1" }, (info) => {
+    console.log(`[tavora-api] Tavora Admin on http://127.0.0.1:${info.port} (local only)`);
   });
 } else {
-  console.log("[tavora-api] No ADMIN_TOKEN of at least 24 characters: the review page is off, and nothing offered can be approved.");
+  console.log("[tavora-api] No ADMIN_TOKEN of at least 24 characters: Tavora Admin is off, and nothing offered can be approved.");
 }

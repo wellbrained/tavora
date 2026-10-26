@@ -223,6 +223,18 @@ export interface CatalogModuleRow {
   latest: string;
 }
 
+/** A module as the admin panel lists it; versions newest first. */
+export interface AdminModule {
+  id: string;
+  name: string;
+  owner: string;
+  listed: boolean;
+  createdAt: string;
+  installs: number;
+  storedBytes: number;
+  versions: { version: string; publishedAt: string; size: number; zipKept: boolean }[];
+}
+
 interface VersionSql {
   module_id: string;
   owner: string;
@@ -558,6 +570,28 @@ export class CatalogStore {
         )
         .all() as unknown as { id: string; owner: string; listed: number; versions: number; latest: string }[]
     ).map((row) => ({ ...row, listed: row.listed === 1 }));
+  }
+
+  /** Every module, listed or not, with its versions, installs and stored bytes, for the admin panel. */
+  adminModules(): AdminModule[] {
+    const rows = this.db.prepare("select id, owner, listed, created_at from modules order by id").all() as unknown as { id: string; owner: string; listed: number; created_at: string }[];
+    const versions = this.db
+      .prepare("select module_id, version, manifest, size, published_at, zip_removed from versions order by seq desc")
+      .all() as unknown as { module_id: string; version: string; manifest: string; size: number; published_at: string; zip_removed: string | null }[];
+    const installs = new Map((this.db.prepare("select module_id, count from installs").all() as unknown as { module_id: string; count: number }[]).map((row) => [row.module_id, row.count]));
+    return rows.map((row) => {
+      const own = versions.filter((version) => version.module_id === row.id);
+      return {
+        id: row.id,
+        name: own[0] ? (JSON.parse(own[0].manifest) as ModuleManifest).name : row.id,
+        owner: row.owner,
+        listed: row.listed === 1,
+        createdAt: row.created_at,
+        installs: installs.get(row.id) ?? 0,
+        storedBytes: own.filter((version) => version.zip_removed === null).reduce((sum, version) => sum + version.size, 0),
+        versions: own.map((version) => ({ version: version.version, publishedAt: version.published_at, size: version.size, zipKept: version.zip_removed === null })),
+      };
+    });
   }
 
   /** The listed modules at their newest version: all, those for one game (and any game), or those for a personal workspace. */

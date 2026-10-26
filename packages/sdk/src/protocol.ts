@@ -348,6 +348,29 @@ export interface SystemApps {
   usedBytes: number;
 }
 
+/**
+ * What this PC received and sent in one period, as Windows counts it for Settings > Network > Data usage, over every
+ * network but VPNs (systemInfo.traffic). Windows keeps its record for 60 days; a month before that is known only when
+ * Tavora read it in time.
+ */
+export interface SystemTrafficPeriod {
+  /** When the period starts (local midnight), in milliseconds since 1970. */
+  start: number;
+  /** When it ends: now for the period still running. */
+  end: number;
+  /** Bytes received and sent; null when there is no record of the period. */
+  downBytes: number | null;
+  upBytes: number | null;
+  /** Where the record of the period begins: `start`, a later time when the record begins inside it, or null for none. */
+  countedFrom: number | null;
+}
+
+/** This week (from Monday) and this month with the 3 months before it, newest first (systemInfo.traffic). */
+export interface SystemTraffic {
+  week: SystemTrafficPeriod;
+  months: SystemTrafficPeriod[];
+}
+
 /** What a media session is doing, as the player reports it to Windows. */
 export type MediaStatus = "playing" | "paused" | "stopped" | "changing" | "closed";
 
@@ -674,6 +697,8 @@ export interface Methods {
    * any other module gets PERMISSION_DENIED. Tavora 0.21.21 and newer.
    */
   "systemInfo.apps": { params: undefined; result: SystemApps };
+  /** What this PC received and sent this week and month and the 3 months before (capability `systemInfo`). Only for Tavora's own System Monitor. Tavora 0.21.31 and newer. */
+  "systemInfo.traffic": { params: undefined; result: SystemTraffic };
   /**
    * Starts (`on: true`) or ends this panel's watch of what plays on this PC (capability `media`) and answers what
    * plays now; `media.changed` follows every change while it watches, also while the panel is hidden, so an

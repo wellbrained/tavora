@@ -63,6 +63,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
       connectionSettings: () => { throw new Error("no system info in this test"); },
       setConnectionSettings: () => { throw new Error("no system info in this test"); },
       apps: () => Promise.reject(new Error("no system info in this test")),
+      traffic: () => Promise.reject(new Error("no system info in this test")),
     },
     media: { watch: () => { throw new Error("no media in this test"); }, control: () => Promise.reject(new Error("no media in this test")) },
     discord: noDiscord,
@@ -643,6 +644,8 @@ describe("media", () => {
 describe("systemInfo", () => {
   const INFO = { cpu: { model: "Test CPU", threads: 8 }, ramBytes: 16e9, gpus: [], drives: [{ id: "C:", label: "", kind: "internal" as const, totalBytes: 1e12 }] };
   const APPS = { apps: [{ name: "Firefox", memoryBytes: 6.8e9, cpu: 1.2, windows: false }], usedBytes: 20e9 };
+  const PERIOD = { start: 1, end: 2, downBytes: 3e9, upBytes: 1e8, countedFrom: 1 };
+  const TRAFFIC = { week: PERIOD, months: [PERIOD, PERIOD, PERIOD, PERIOD] };
   const watching: unknown[] = [];
   const settings = { enabled: true, target: "1.1.1.1" };
   const cleared: number[] = [];
@@ -659,6 +662,7 @@ describe("systemInfo", () => {
         connectionSettings: () => settings,
         setConnectionSettings: (change) => (changed.push(change), { ...settings, ...change }),
         apps: async () => APPS,
+        traffic: async () => TRAFFIC,
       },
       ...extra,
     });
@@ -672,6 +676,7 @@ describe("systemInfo", () => {
     ["systemInfo.connectionSettings", undefined],
     ["systemInfo.setConnectionSettings", { enabled: false }],
     ["systemInfo.apps", undefined],
+    ["systemInfo.traffic", undefined],
   ])("denies %s without the system-info connector", async (method, params) => {
     expect(await call(port, method, params)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "systemInfo" } });
   });
@@ -693,6 +698,12 @@ describe("systemInfo", () => {
     const p = await granted();
     expect(await call(p, "systemInfo.apps")).toMatchObject({ ok: true, result: APPS });
     expect(await call(p, "systemInfo.apps", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+
+  it("answers the traffic, without params", async () => {
+    const p = await granted();
+    expect(await call(p, "systemInfo.traffic")).toMatchObject({ ok: true, result: TRAFFIC });
+    expect(await call(p, "systemInfo.traffic", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
   });
 
   it.each([

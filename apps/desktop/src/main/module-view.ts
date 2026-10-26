@@ -4,7 +4,7 @@ import { READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
-import type { Capability, GameOverlayResult, SystemApps, SystemInfo, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
+import type { Capability, GameOverlayResult, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./gamedata";
 import { gestureCounts, type Opacity } from "./game-overlays";
@@ -100,7 +100,7 @@ export interface ModuleViewOptions {
   /** The ai-usage connector, for a module granted it. */
   aiUsage: BridgeContext["aiUsage"];
   /** The system-info connector, shared by every panel; each view holds one subscription of its own. */
-  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; subscribe: SystemMonitor["subscribe"]; apps(): Promise<SystemApps> };
+  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; subscribe: SystemMonitor["subscribe"]; apps(): Promise<SystemApps>; traffic(): Promise<SystemTraffic> };
   /** The connection watcher (connection.ts): its log and settings are shared by every panel. */
   connection: Pick<ConnectionWatcher, "outageLog" | "clearLog" | "getSettings" | "setSettings">;
   /** The media connector, shared by every panel; each view holds one subscription of its own while it watches. */
@@ -716,6 +716,10 @@ export class ModuleView {
       apps: () => {
         onlySystemMonitor(this.options.module.owner, this.options.module.manifest.id, "systemInfo.apps");
         return this.options.systemInfo.apps();
+      },
+      traffic: () => {
+        onlySystemMonitor(this.options.module.owner, this.options.module.manifest.id, "systemInfo.traffic");
+        return this.options.systemInfo.traffic();
       },
       watch: (request) => {
         if (!this.systemWatch) {

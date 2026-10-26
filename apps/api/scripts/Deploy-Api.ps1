@@ -1,13 +1,13 @@
 # Builds the game search service on this PC and publishes it to the server
 # (systemd unit tavora-api, 127.0.0.1:4010, behind Caddy at api.mytavora.app).
 # Needs a real dataset: run `pnpm --filter @tavora/api dataset` first. Only apps/api
-# has to be committed; other changes in the repository do not block a deploy.
+# and apps/admin (Tavora Admin, served by the API) have to be committed; other changes in the repository do not block a deploy.
 param([switch]$AllowSmallDataset)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $api = Join-Path $repo 'apps\api'
-$changes = & git -C $repo status --porcelain -- apps/api
-if ($LASTEXITCODE -ne 0 -or $changes) { throw 'Commit the changes in apps/api before deploying.' }
+$changes = & git -C $repo status --porcelain -- apps/api apps/admin
+if ($LASTEXITCODE -ne 0 -or $changes) { throw 'Commit the changes in apps/api and apps/admin before deploying.' }
 $revision = (& git -C $repo rev-parse --short=12 HEAD).Trim()
 if ($revision -notmatch '^[a-f0-9]{12}$') { throw 'Invalid source revision.' }
 
@@ -20,6 +20,11 @@ if ($count -lt 20000 -and -not $AllowSmallDataset) { throw "The dataset has only
 if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 $bundle = Join-Path $api 'dist\server.mjs'
 if (-not (Test-Path $bundle)) { throw 'Build produced no server.mjs.' }
+# Tavora Admin: the panel's built files travel with the release (the `admin` folder next to server.mjs).
+& pnpm --dir $repo --filter @tavora/admin build
+if ($LASTEXITCODE -ne 0) { throw 'Building Tavora Admin failed.' }
+$panel = Join-Path $repo 'apps\admin\dist'
+if (-not (Test-Path (Join-Path $panel 'index.html'))) { throw 'Build produced no admin panel.' }
 
 $release = "$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))-$revision"
 $staging = Join-Path $env:TEMP "tavora-api-$release"
@@ -36,6 +41,7 @@ try {
   Copy-Item (Join-Path $api 'dist\catalog.mjs') (Join-Path $staging 'catalog.mjs')
   Copy-Item $dataset (Join-Path $staging 'games.sqlite')
   # The hosted game icons travel with the release. They are only served once TAKEDOWN_CONTACT is set in shared/production.env.
+  Copy-Item $panel (Join-Path $staging 'admin') -Recurse
   $icons = Join-Path $api 'data\icons'
   if (Test-Path (Join-Path $icons 'index.json')) { Copy-Item $icons (Join-Path $staging 'icons') -Recurse }
   & tar.exe -czf $archive -C $staging .

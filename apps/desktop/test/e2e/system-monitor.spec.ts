@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectModuleText, inModule, launch, openGame, openModule, shootPanels } from "./harness";
+import { expectModuleText, inModule, launch, openGame, openModule, shootPanels, typeInModule } from "./harness";
 
 // The official System Monitor's apps dialog: the list Tavora reads for it alone (systemInfo.apps). That no other
 // module gets it is tested in system-apps.test.ts.
@@ -11,6 +11,7 @@ test.skip(process.platform !== "win32", "the apps list reads Windows");
 
 test("the Memory card lists the apps", async () => {
   const { app, page } = await launch();
+  app.process().stderr?.on("data", (d) => process.stdout.write("STDERR " + d));
   try {
     await openGame(page, "poe2");
     await openModule(page, SYSTEM_MONITOR);
@@ -35,6 +36,31 @@ test("the Memory card lists the apps", async () => {
     // Search narrows the list to what matches.
     await inModule(app, SYSTEM_MONITOR, `(() => { const input = ${q("apps-search")}; input.value = "zzzz-nothing"; input.dispatchEvent(new Event("input", { bubbles: true })); })()`);
     await expectModuleText(app, SYSTEM_MONITOR, "apps-none", "No app matches.");
+  } finally {
+    await app.close();
+  }
+});
+
+test("Traffic in the menu shows this week and the last months, as Windows counts them", async () => {
+  const { app, page } = await launch();
+  try {
+    await openGame(page, "poe2");
+    await openModule(page, SYSTEM_MONITOR);
+    await page.getByTestId("grant-allow").click();
+    await expect.poll(() => inModule(app, SYSTEM_MONITOR, `!!${q("connection-section")}`).catch(() => false)).toBe(true);
+    // Off until the player turns it on.
+    expect(await inModule(app, SYSTEM_MONITOR, `!!${q("connection-traffic")}`)).toBe(false);
+    // The menu opens from a real key press, as Tavora wants for ui.showMenu.
+    await inModule(app, SYSTEM_MONITOR, `${q("menu")}.focus()`);
+    await typeInModule(app, SYSTEM_MONITOR, "\n");
+    await page.getByTestId("module-menu-item-traffic").click();
+    await expect(page.getByTestId("module-menu")).toHaveCount(0);
+
+    // Five periods: this week, this month and the 3 months before, each with a total or a dash.
+    const cells = () => inModule<string[]>(app, SYSTEM_MONITOR, `[...document.querySelectorAll('[data-testid="traffic-total"]')].map((cell) => cell.textContent.trim())`);
+    await expect.poll(cells, { timeout: 30_000 }).toHaveLength(5);
+    for (const cell of (await cells()).slice(0, 2)) expect(cell).toMatch(/^[0-9.,]+ (GB|TB)$/);
+    await shootPanels(app, SYSTEM_MONITOR, test.info().outputPath("system-monitor-traffic.png"));
   } finally {
     await app.close();
   }

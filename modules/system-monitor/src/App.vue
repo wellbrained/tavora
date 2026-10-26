@@ -64,6 +64,7 @@ async function openMenu(event: MouseEvent): Promise<void> {
   else if (pick.kind === "interval") started.setInterval(pick.ms);
   else if (pick.kind === "gpu") started.setGpu(pick.id);
   else if (pick.kind === "connection") connecting.value = true;
+  else if (pick.kind === "traffic") started.toggleTraffic();
   else picking.value = true;
 }
 

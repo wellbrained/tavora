@@ -1,0 +1,7 @@
+@import "@tavora/official-ui/theme.css";
+
+html,
+body,
+#app {
+  height: 100%;
+}
