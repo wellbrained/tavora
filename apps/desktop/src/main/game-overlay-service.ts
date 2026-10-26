@@ -29,6 +29,7 @@ import {
   looksExclusive,
   overlayId,
   overlayVisible,
+  panelStartRect,
   panelWindowId,
   placeRelative,
   relativeTo,
@@ -83,6 +84,8 @@ export interface GameOverlayServiceOptions {
   probe(): ForegroundProbe;
   /** Physical pixels of the screen to the DIPs windows are placed in. */
   toDip(rect: Rect): Rect;
+  /** The main screen (DIPs): what a panel shown in the game is sized against before any game window was seen. */
+  screen?(): Rect;
   openWindow(request: OverlayWindowRequest): OverlayWindow;
   /** The veil over the game window while the layer is open. */
   openVeil(): VeilWindow;
@@ -154,6 +157,8 @@ export class GameOverlays {
   /** The game in front that has something to show, and where its window is (DIPs). */
   private front: string | null = null;
   private game: Rect | null = null;
+  /** The last game window seen in front: a panel shown in the game while Tavora is in front is sized against it. */
+  private lastGame: Rect | null = null;
   /** The game whose in-game layer is open. */
   private layer: string | null = null;
   /** The window handle of the game window in front (when known), the one the layer opened over, and what Windows says about full screen. */
@@ -243,14 +248,15 @@ export class GameOverlays {
   /**
    * The player chose Show in game in a panel's menu (offered only for panel types the manifest marks `inGame`, checked by
    * the host). The panel is then over the game whenever the player opens the layer. Counts toward the game's overlays;
-   * "off" opens Settings > Overlays.
+   * "off" opens Settings > Overlays. It starts at the size its module prefers (`preferred`, the panel's viewport).
    */
-  showPanel(panel: { owner: string; moduleId: string; gameId: string; instanceId: string }): GameOverlayResult {
+  showPanel(panel: { owner: string; moduleId: string; gameId: string; instanceId: string }, preferred: { width?: number | undefined; height?: number | undefined } | null = null): GameOverlayResult {
     if (!this.options.supported || !this.options.enabled()) {
       if (this.options.supported) this.options.openSetting("game-overlays");
       return "off";
     }
-    const added = this.store.addPanel({ ...panel, scope: this.options.scopeOf(panel.gameId) });
+    const area = this.game ?? this.lastGame ?? this.options.screen?.() ?? null;
+    const added = this.store.addPanel({ ...panel, scope: this.options.scopeOf(panel.gameId) }, panelStartRect(preferred, area));
     if (added === "full") return "full";
     // The player asked for it: a live view whose page crashed too often gets another chance.
     this.revive(liveWindowId(panel.instanceId));
@@ -549,6 +555,7 @@ export class GameOverlays {
 
   private setFront(gameId: string | null, bounds: Rect | null): void {
     this.game = bounds;
+    if (bounds) this.lastGame = bounds;
     if (gameId === this.front) return;
     this.front = gameId;
     // The keys follow the game in front (streaming.ts sync).

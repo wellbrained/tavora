@@ -3418,7 +3418,11 @@ export class Host {
     const module = record && this.modules.get(record.moduleId);
     if (!game || !record || !module || !(view instanceof ModuleView)) throw new WorkspaceError("error.panelClosed");
     if (!this.canShowInGame(record)) throw new WorkspaceError("error.panelNotInGame");
-    const result = this.gameOverlays.showPanel({ owner: module.owner, moduleId: module.manifest.id, gameId: game.id, instanceId });
+    const viewport = this.panelTypeOf(record)?.viewport ?? this.shown(module.manifest).viewport;
+    const result = this.gameOverlays.showPanel(
+      { owner: module.owner, moduleId: module.manifest.id, gameId: game.id, instanceId },
+      { width: viewport.preferredWidth, height: viewport.preferredHeight },
+    );
     if (result === "full") this.notice = translate(this.language, "overlays.full");
   }
 
@@ -4189,6 +4193,7 @@ export class Host {
       probe: () => windowsForegroundProbe(),
       // Windows reports pixels; windows are placed in DIPs.
       toDip: (rect) => screen.screenToDipRect(null, rect),
+      screen: () => screen.getPrimaryDisplay().bounds,
       openWindow: (request) =>
         new GameOverlayWindow({
           preload: path.join(path.dirname(options.modulePreload), "game-overlay.cjs"),
