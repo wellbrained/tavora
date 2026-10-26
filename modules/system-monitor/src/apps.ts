@@ -1,10 +1,17 @@
-// The apps dialog's list: search and sort. Pure, so it is tested on its own.
+// The apps dialog's list: search, sort, and which apps fold away as small. Pure, so it is tested on its own.
 import type { SystemApp } from "@tavora/sdk";
 
-export type AppsSort = "name" | "memory" | "cpu";
+/** "share" is the % RAM column: the same order as RAM. */
+export type AppsSort = "name" | "memory" | "share" | "cpu";
 
-/** RAM and CPU start with the biggest, names from A. */
+/** Apps under this share of the installed RAM fold away until the player opens them. */
+export const SMALL_SHARE = 5;
+
+/** RAM, % and CPU start with the biggest, names from A. */
 export const firstDirection = (by: AppsSort): "up" | "down" => (by === "name" ? "up" : "down");
+
+/** An app's share of the installed RAM in percent, or null when the size of the RAM is unknown. */
+export const ramShare = (bytes: number, totalBytes: number): number | null => (totalBytes > 0 ? (bytes / totalBytes) * 100 : null);
 
 export function listApps(apps: readonly SystemApp[], query: string, by: AppsSort, direction: "up" | "down", language = "en"): SystemApp[] {
   const needle = query.trim().toLocaleLowerCase(language);
@@ -13,11 +20,21 @@ export function listApps(apps: readonly SystemApp[], query: string, by: AppsSort
   const byName = (a: SystemApp, b: SystemApp) => a.name.localeCompare(b.name, language, { sensitivity: "base" });
   return shown.sort((a, b) => {
     if (by === "name") return sign * byName(a, b);
-    const left = by === "memory" ? a.memoryBytes : (a.cpu ?? -1);
-    const right = by === "memory" ? b.memoryBytes : (b.cpu ?? -1);
+    const left = by === "cpu" ? (a.cpu ?? -1) : a.memoryBytes;
+    const right = by === "cpu" ? (b.cpu ?? -1) : b.memoryBytes;
     // Equal numbers keep a steady order, so rows don't swap places on every refresh.
     return sign * (left - right) || byName(a, b);
   });
+}
+
+/**
+ * Splits a listed (and sorted) list into the apps shown at once and the small ones under SMALL_SHARE % of the
+ * installed RAM. A search shows every match at once, small or not; so does an unknown RAM size.
+ */
+export function splitApps(apps: readonly SystemApp[], totalBytes: number, query: string): { big: SystemApp[]; small: SystemApp[] } {
+  if (query.trim() || totalBytes <= 0) return { big: [...apps], small: [] };
+  const limit = (totalBytes * SMALL_SHARE) / 100;
+  return { big: apps.filter((app) => app.memoryBytes >= limit), small: apps.filter((app) => app.memoryBytes < limit) };
 }
 
 export const shownBytes = (apps: readonly SystemApp[]) => apps.reduce((sum, app) => sum + app.memoryBytes, 0);

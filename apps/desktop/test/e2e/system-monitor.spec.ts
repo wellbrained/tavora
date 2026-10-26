@@ -18,8 +18,13 @@ test("the Memory card lists the apps", async () => {
     await expect.poll(() => inModule(app, SYSTEM_MONITOR, `!!${q("show-apps")}`).catch(() => false)).toBe(true);
     await inModule(app, SYSTEM_MONITOR, `${q("show-apps")}.click()`);
 
-    // Rows come in, Windows' own are marked, and the total line adds them up.
-    await expect.poll(() => inModule<number>(app, SYSTEM_MONITOR, `document.querySelectorAll('[data-testid="app-row"]').length`), { timeout: 15_000 }).toBeGreaterThan(5);
+    // Apps under 5 % of the RAM come folded away; opening them shows the rest. Windows' own are marked.
+    const count = () => inModule<number>(app, SYSTEM_MONITOR, `document.querySelectorAll('[data-testid="app-row"]').length`);
+    await expect.poll(() => inModule(app, SYSTEM_MONITOR, `!!${q("apps-small")}`), { timeout: 15_000 }).toBe(true);
+    expect(await inModule<string>(app, SYSTEM_MONITOR, `${q("apps-small")}.textContent.trim()`)).toMatch(/^Show [0-9]+ apps under 5 % RAM$/);
+    await shootPanels(app, SYSTEM_MONITOR, test.info().outputPath("system-monitor-apps-folded.png"));
+    await inModule(app, SYSTEM_MONITOR, `${q("apps-small")}.click()`);
+    await expect.poll(count).toBeGreaterThan(5);
     expect(await inModule<number>(app, SYSTEM_MONITOR, `document.querySelectorAll('[data-testid="app-windows"]').length`)).toBeGreaterThan(0);
     expect(await inModule<string>(app, SYSTEM_MONITOR, `${q("apps-total")}.textContent`)).toMatch(/^Shown: .+ GB of .+ GB in use$/);
     // Biggest first by RAM; a CPU figure follows after the second look.

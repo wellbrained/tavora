@@ -92,6 +92,6 @@ const checkedDrives = computed(() => (monitor.value?.info.value ? watchedDrives(
     </footer>
 
     <DrivesDialog v-if="picking && monitor.info.value" :info="monitor.info.value" :checked="checkedDrives" @save="saveDrives" @cancel="picking = false" />
-    <AppsDialog v-if="showingApps && sdk" :sdk="sdk" @close="showingApps = false" />
+    <AppsDialog v-if="showingApps && sdk" :sdk="sdk" :total-bytes="monitor.info.value?.ramBytes ?? 0" @close="showingApps = false" />
   </div>
 </template>

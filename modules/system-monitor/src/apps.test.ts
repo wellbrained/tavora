@@ -1,6 +1,6 @@
 import type { SystemApp } from "@tavora/sdk";
 import { describe, expect, it } from "vitest";
-import { firstDirection, listApps, shownBytes } from "./apps";
+import { firstDirection, listApps, ramShare, shownBytes, splitApps } from "./apps";
 
 const app = (name: string, memoryBytes: number, cpu: number | null = 0): SystemApp => ({ name, memoryBytes, cpu, windows: false });
 const APPS = [app("Firefox", 6.8e9, 2), app("Discord", 0.6e9, 0.1), app("Chrome", 1.9e9, 7.5), app("Svchost", 0.25e9, null)];
@@ -38,4 +38,35 @@ it("starts numbers with the biggest and names from A", () => {
 
 it("adds up what the list shows", () => {
   expect(shownBytes([app("A", 1e9), app("B", 2e9)])).toBe(3e9);
+});
+
+describe("splitApps", () => {
+  const total = 32e9;
+  it("folds away apps under 5 % of the installed RAM, keeping the order", () => {
+    const { big, small } = splitApps(listApps(APPS, "", "memory", "down"), total, "");
+    expect(names(big)).toEqual(["Firefox", "Chrome"]);
+    expect(names(small)).toEqual(["Discord", "Svchost"]);
+  });
+
+  it("counts exactly 5 % as big", () => {
+    expect(names(splitApps([app("Edge", 1.6e9)], total, "").big)).toEqual(["Edge"]);
+  });
+
+  it("shows every match of a search at once", () => {
+    expect(splitApps(listApps(APPS, "disc", "memory", "down"), total, "disc")).toEqual({ big: [APPS[1]], small: [] });
+  });
+
+  it("folds nothing when the RAM size is unknown", () => {
+    expect(splitApps(APPS, 0, "").small).toEqual([]);
+  });
+});
+
+it("works out the share of the installed RAM", () => {
+  expect(ramShare(1.6e9, 32e9)).toBe(5);
+  expect(ramShare(1e9, 0)).toBeNull();
+});
+
+it("sorts % RAM like RAM", () => {
+  expect(names(listApps(APPS, "", "share", "down"))).toEqual(names(listApps(APPS, "", "memory", "down")));
+  expect(firstDirection("share")).toBe("down");
 });
