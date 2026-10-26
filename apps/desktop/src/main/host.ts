@@ -1500,6 +1500,10 @@ export class Host {
       if (event.senderFrame?.parent !== null) return;
       this.viewsByContents.get(event.sender.id)?.framed(requestId);
     });
+    ipcMain.on("tavora:frame-seen", (event: IpcMainEvent, visibility: unknown) => {
+      if (event.senderFrame?.parent !== null) return;
+      this.viewsByContents.get(event.sender.id)?.frameSeen(visibility);
+    });
     ipcMain.on("tavora:pong", (event: IpcMainEvent) => {
       if (event.senderFrame?.parent !== null) return;
       this.viewsByContents.get(event.sender.id)?.pong();

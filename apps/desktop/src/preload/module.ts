@@ -41,6 +41,8 @@ ipcRenderer.on("tavora:ping", () => ipcRenderer.send("tavora:pong"));
 // frame is drawn, and only while the page is shown; the second one runs once the first frame is out.
 ipcRenderer.on("tavora:frame", (_event, requestId: unknown) => {
   if (typeof requestId !== "number") return;
+  // Said at once, so a panel that never draws can tell whether the request came and whether the page thought it was shown.
+  ipcRenderer.send("tavora:frame-seen", document.visibilityState);
   requestAnimationFrame(() => requestAnimationFrame(() => ipcRenderer.send("tavora:framed", requestId)));
 });
 

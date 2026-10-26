@@ -24,6 +24,7 @@ vi.mock("electron", () => {
       on: () => undefined,
       loadURL: async () => undefined,
       isDestroyed: () => false,
+      isLoading: () => false,
       insertCSS: async (css: string) => {
         this.state.css.push(css);
         // The page takes a moment to take a style.
@@ -45,9 +46,13 @@ vi.mock("electron", () => {
       this.state.visible = visible;
     }
     setBounds() {}
+    getBounds() {
+      return { x: 0, y: 0, width: 0, height: 0 };
+    }
   }
   return {
     app: { isPackaged: false, getPath: () => "/nowhere" },
+    BrowserWindow: { getAllWindows: () => [] },
     clipboard: {},
     ClipboardItem: class {},
     MessageChannelMain: class {},

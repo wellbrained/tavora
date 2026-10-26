@@ -33,6 +33,15 @@ export function holdFor(elapsed: number, fireAt: number): number {
   return Math.max(0, fireAt + FIRE_MIN_MS - elapsed);
 }
 
+/**
+ * The cover's colour: the theme's background, a hair short of opaque. Chromium counts a page shown under an opaque
+ * view as hidden, so it would not draw until the cover went; under this one it draws, and it looks the same.
+ */
+export function coverColor(background: string): string {
+  // Electron reads eight digits as #aarrggbb.
+  return /^#[0-9a-f]{6}$/i.test(background) ? `#fe${background.slice(1)}` : background;
+}
+
 /** The panels a game opens with, by module and type: its times are kept per game and per such layout. */
 export function layoutKey(gameId: string, panels: readonly { moduleId: string; panelType?: string | null | undefined }[]): string {
   const types = panels.map((panel) => `${panel.moduleId}/${panel.panelType ?? ""}`).sort();
@@ -210,7 +219,7 @@ export class PanelCover {
     this.shownAt = this.now();
     this.fireAt = fireDelay(estimateMs);
     // The colour shows at once, before the page has loaded; the page only adds the fire and the card's border.
-    view.setBackgroundColor(theme.tokens.background);
+    view.setBackgroundColor(coverColor(theme.tokens.background));
     const page = coverPage({ theme, label, fireAtEpoch: this.shownAt + this.fireAt, emblem: this.options.emblem() });
     void view.webContents.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page)}`).catch(() => undefined);
     this.place();
