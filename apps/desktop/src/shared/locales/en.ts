@@ -415,7 +415,6 @@ export const en = {
   "publish.useId": "Use it",
   "publish.newPrefix": "Publishing claims the prefix {prefix} for you. After that, only you can publish modules with it.",
   "publish.notBuilt": "There's nothing built to publish yet. Run npm run build in your project, then press Check again.",
-  "publish.checkAgain": "Check again",
   "publish.publish": "Publish",
   "publish.publishing": "Publishing…",
   "publish.done": "Published {version}!",
