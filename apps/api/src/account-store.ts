@@ -559,6 +559,9 @@ export class AccountStore {
         .run(accountId, reason, note, now, last);
       const signedOut = Number(this.db.prepare("delete from sessions where account_id = ?").run(accountId).changes);
       this.db.prepare("delete from codes where account_id = ?").run(accountId);
+      // Sign-in codes wait under the hash of the address with no account id: they go too, so a code sent before can't be used.
+      const email = (this.db.prepare("select email from accounts where id = ?").get(accountId) as { email: string | null } | undefined)?.email;
+      if (email) this.db.prepare("delete from codes where address = ?").run(addressKey(email));
       this.db.prepare("delete from link_codes where account_id = ?").run(accountId);
       this.db.exec("commit");
       return signedOut;
@@ -835,6 +838,8 @@ export class AccountStore {
       | { id: string; account_id: string; name: string; expires_at: number }
       | undefined;
     if (!row || row.expires_at <= now) return null;
+    // A suspended account's tokens publish nothing and are not marked used (a ban is refused by the routes, with its own answer).
+    if (this.isSuspended(row.account_id)) return null;
     this.db.prepare("update publish_tokens set last_used_at = ? where id = ?").run(now, row.id);
     return { accountId: row.account_id, name: row.name };
   }

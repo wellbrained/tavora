@@ -13,6 +13,7 @@ import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
 import { DiscordError, type DiscordClient } from "./discord.ts";
+import { DatabaseSync } from "node:sqlite";
 import { createTestInbox } from "./mail.ts";
 import { encodePng } from "./png.ts";
 import { keyFingerprint } from "./publishers.ts";
@@ -311,9 +312,8 @@ describe("Suspend account", () => {
     expect((await publish(signedIn)).status).not.toBe(403);
     await post("/api/accounts/suspend", { id: developer.id, reason: "spam" });
     for (const token of [signedIn, publishToken]) {
-      const refused = await publish(token);
-      expect(token === signedIn ? [401, 403] : [403]).toContain(refused.status);
-      if (token === publishToken) expect(await refused.json()).toMatchObject({ reason: "suspended" });
+      // Both are dead: the sign-in is deleted, and the token of a suspended account is not accepted at all.
+      expect((await publish(token)).status).toBe(401);
     }
     // A fresh sign-in token created behind the service's back is still refused (the second lock).
     const sneaked = store.createSession(developer.id, "windows", Date.parse("2026-10-26T12:00:00Z")).token;
@@ -406,7 +406,6 @@ describe("Suspend account", () => {
     expect((await post("/api/accounts/suspend", { id: developer.id, reason: "spam", note: 5 })).status).toBe(400);
     expect((await post("/api/accounts/suspend", { id: "nobody", reason: "spam" })).status).toBe(404);
     expect((await post("/api/accounts/suspend", { id: developer.id, reason: "spam" })).status).toBe(200);
-    expect((await post("/api/accounts/suspend", { id: developer.id, reason: "spam" })).status).toBe(409);
     expect((await post("/api/accounts/unsuspend", {})).status).toBe(400);
     expect((await post("/api/accounts/unsuspend", { id: "nobody" })).status).toBe(404);
   });
@@ -442,5 +441,157 @@ describe("Unsuspend", () => {
     expect(again.suspension(account.id)).toEqual({ reason: "spam", note: "n", suspendedAt: 3000, lastActiveAt: 2000 });
     expect(again.devices(account.id)).toEqual([]);
     again.close();
+  });
+});
+
+describe("a suspended or banned developer and the waiting versions", () => {
+  it("can neither list nor withdraw them, with a sign-in or a publish token", async () => {
+    const ctx = setup();
+    const { post, developer, publish, publishToken, catalog, store } = ctx;
+    const signedIn = store.createSession(developer.id, "windows", Date.parse("2026-10-26T12:00:00Z")).token;
+    await publish(publishToken);
+    const waiting = catalog.waitingVersions()[0]!;
+    expect((await ctx.catalogCall("GET", "/waiting", signedIn)).status).toBe(200);
+
+    await post("/api/accounts/suspend", { id: developer.id, reason: "spam" });
+    for (const token of [signedIn, publishToken]) {
+      expect((await ctx.catalogCall("GET", "/waiting", token)).status).toBe(401);
+      expect((await ctx.catalogCall("DELETE", `/waiting/${waiting.sha256}`, token)).status).toBe(401);
+    }
+    expect(catalog.waitingVersion(waiting.sha256)).not.toBeNull();
+    expect(store.publishTokenAccount(publishToken, Date.now())).toBeNull();
+    await post("/api/accounts/unsuspend", { id: developer.id });
+
+    // Banned: the token still identifies the account, and the routes say banned.
+    store.ban(developer.id, "spam", null, [], Date.now());
+    const again = store.createSession(developer.id, "windows", Date.parse("2026-10-26T12:00:00Z")).token;
+    for (const token of [again, publishToken]) {
+      for (const [method, url] of [["GET", "/waiting"], ["DELETE", `/waiting/${waiting.sha256}`]] as const) {
+        const refused = await ctx.catalogCall(method, url, token);
+        expect(refused.status).toBe(403);
+        expect(await refused.json()).toMatchObject({ reason: "banned" });
+      }
+    }
+    expect(catalog.waitingVersion(waiting.sha256)).not.toBeNull();
+  });
+});
+
+describe("deleting a suspended account", () => {
+  const codeOf = (inbox: ReturnType<typeof setup>["inbox"]) => /\n {4}(\d{6})\n/.exec(inbox.mails().at(-1)!.text)![1]!;
+
+  it("works with a code to its address, never makes a sign-in, and deletes everything", async () => {
+    const { post, account, inbox, store, reviews, player, catalogCall } = setup();
+    const mara = player("mara@example.com");
+    await catalogCall("PUT", "/modules/wellbrained.timer/review", mara.token, { stars: 3, text: "ok", version: "1.0.0" });
+    await post("/api/accounts/suspend", { id: mara.account.id, reason: "spam" });
+    inbox.clear();
+    expect((await account("/delete/suspended/code", "POST", { email: "mara@example.com" })).status).toBe(202);
+    const code = codeOf(inbox);
+    expect((await account("/delete/suspended", "POST", { email: "mara@example.com", code: code === "000000" ? "000001" : "000000" })).status).toBe(400);
+    expect((await account("/delete/suspended", "POST", { email: "mara@example.com", code })).status).toBe(204);
+    expect(store.account(mara.account.id)).toBeNull();
+    expect(store.isSuspended(mara.account.id)).toBe(false);
+    expect(reviews.own(mara.account.id, "wellbrained.timer")).toBeNull();
+    expect((await account("/delete/suspended", "POST", { email: "mara@example.com", code })).status).toBe(400);
+  });
+
+  it("answers the same for an address that is not suspended or has no account, and sends nothing", async () => {
+    const { account, inbox, developer, store } = setup();
+    for (const email of ["dev@example.com", "nobody@example.com"]) {
+      inbox.clear();
+      const answer = await account("/delete/suspended/code", "POST", { email });
+      expect(answer.status).toBe(202);
+      expect(await answer.json()).toEqual({ status: "sent" });
+      expect(inbox.mails()).toEqual([]);
+      const verify = await account("/delete/suspended", "POST", { email, code: "123456" });
+      expect(verify.status).toBe(400);
+      expect(await verify.json()).toMatchObject({ reason: "wrong-code" });
+    }
+    // A code made the usual way for a signed-in delete does not work here for an account that is not suspended.
+    const token = store.createSession(developer.id, "windows", Date.now()).token;
+    inbox.clear();
+    await account("/delete/code", "POST", {}, token);
+    const code = codeOf(inbox);
+    expect((await account("/delete/suspended", "POST", { email: "dev@example.com", code })).status).toBe(400);
+    expect(store.account(developer.id)).not.toBeNull();
+  });
+
+  it("works with a fresh Discord sign-in, and only for a suspended account", async () => {
+    const { post, account, store } = setup();
+    const discordOnly = store.createAccount({ discord: ALEX }, Date.now());
+    const refused = await account("/delete/suspended/discord", "POST", { code: "codealexalex", verifier: VERIFIER });
+    expect(refused.status).toBe(400);
+    expect(store.account(discordOnly.id)).not.toBeNull();
+    await post("/api/accounts/suspend", { id: discordOnly.id, reason: "adult" });
+    expect((await account("/delete/suspended/discord", "POST", { code: "codealexalex", verifier: VERIFIER })).status).toBe(204);
+    expect(store.account(discordOnly.id)).toBeNull();
+  });
+});
+
+describe("Suspend and the codes already sent", () => {
+  it("deletes a sign-in code waiting for the address, so it can't be used after the suspension", async () => {
+    const { post, developer, account, inbox, store } = setup();
+    await account("/code", "POST", { email: "dev@example.com" });
+    const code = /\n {4}(\d{6})\n/.exec(inbox.mails().at(-1)!.text)![1]!;
+    await post("/api/accounts/suspend", { id: developer.id, reason: "spam" });
+    const answer = await account("/verify", "POST", { email: "dev@example.com", code, os: "windows" });
+    expect(await answer.json()).toMatchObject({ reason: "wrong-code" });
+    expect(store.devices(developer.id)).toEqual([]);
+  });
+});
+
+describe("retrying Suspend and Unsuspend", () => {
+  it("finishes hiding the reviews when the account is suspended already, without a second email", async () => {
+    const { post, player, catalogCall, reviews, store, inbox } = setup();
+    const mara = player("mara@example.com");
+    await catalogCall("PUT", "/modules/wellbrained.timer/review", mara.token, { stars: 3, text: "ok", version: "1.0.0" });
+    // A first try that died after the account was suspended, before the reviews were hidden.
+    store.suspend(mara.account.id, "spam", null, Date.now());
+    expect(reviews.own(mara.account.id, "wellbrained.timer")!.hidden).toBe(false);
+    inbox.clear();
+    expect(await post("/api/accounts/suspend", { id: mara.account.id, reason: "hateful" })).toMatchObject({ status: 200, body: { ok: true, already: true, hiddenReviews: 1, mailed: false } });
+    expect(reviews.own(mara.account.id, "wellbrained.timer")!.hidden).toBe(true);
+    expect(store.suspension(mara.account.id)!.reason).toBe("spam");
+    expect(inbox.mails()).toEqual([]);
+  });
+
+  it("finishes showing the reviews when the suspension is lifted already", async () => {
+    const { post, player, catalogCall, reviews, store } = setup();
+    const mara = player("mara@example.com");
+    await catalogCall("PUT", "/modules/wellbrained.timer/review", mara.token, { stars: 3, text: "ok", version: "1.0.0" });
+    await post("/api/accounts/suspend", { id: mara.account.id, reason: "spam" });
+    store.unsuspend(mara.account.id);
+    expect(reviews.own(mara.account.id, "wellbrained.timer")!.hidden).toBe(true);
+    expect(await post("/api/accounts/unsuspend", { id: mara.account.id })).toMatchObject({ status: 200, body: { shownReviews: 1 } });
+    expect(reviews.own(mara.account.id, "wellbrained.timer")!.hidden).toBe(false);
+    expect((await post("/api/accounts/unsuspend", { id: mara.account.id })).status).toBe(404);
+  });
+});
+
+describe("an old reviews database", () => {
+  it("gets the hidden_by_suspend column and keeps its reviews", () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "tavora-reviews-old-")), "reviews.sqlite");
+    const old = new DatabaseSync(file);
+    old.exec(`
+      create table reviews (
+        id text primary key, account_id text not null, module_id text not null,
+        stars integer not null check (stars between 1 and 5), text text, version text not null,
+        created_at integer not null, updated_at integer not null, hidden integer not null default 0,
+        unique (account_id, module_id)
+      );
+      create table replies (review_id text primary key references reviews (id) on delete cascade, text text not null, updated_at integer not null);
+      create table review_reports (review_id text primary key references reviews (id) on delete cascade, count integer not null, first_at integer not null, last_at integer not null);
+      insert into reviews (id, account_id, module_id, stars, text, version, created_at, updated_at, hidden) values ('r1', 'a1', 'x.y', 4, 'fine', '1.0.0', 1, 1, 0), ('r2', 'a1', 'x.z', 2, 'hidden before', '1.0.0', 1, 1, 1);
+    `);
+    old.close();
+    const store = new ReviewStore(file);
+    expect(store.review("r1")).toMatchObject({ stars: 4, hidden: false });
+    expect(store.hideForSuspension("a1")).toBe(1);
+    expect(store.review("r1")!.hidden).toBe(true);
+    expect(store.showAfterSuspension("a1")).toBe(1);
+    expect(store.review("r1")!.hidden).toBe(false);
+    expect(store.review("r2")!.hidden).toBe(true);
+    store.close();
+    new ReviewStore(file).close();
   });
 });

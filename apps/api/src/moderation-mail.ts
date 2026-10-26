@@ -138,14 +138,14 @@ export function suspendedMail(to: string, reason: SuspendReason, note: string | 
         subject: "Dein Tavora-Konto ist gesperrt",
         text:
           `Dein Tavora-Konto ist gesperrt. Du wurdest auf allen Geräten abgemeldet und kannst dich vorerst nicht anmelden. Deine Bewertungen sind ausgeblendet. Was auf deinem PC liegt, bleibt unberührt.\n\n${block}\n\n` +
-          `Denkst du, das ist ein Fehler? Schreib uns an ${CONTACT}.\n\nTavora\n`,
+          `Denkst du, das ist ein Fehler? Schreib uns an ${CONTACT}. Möchtest du dein Konto lieber löschen lassen, schreib uns auch dann.\n\nTavora\n`,
       }
     : {
         to,
         subject: "Your Tavora account is suspended",
         text:
           `Your Tavora account is suspended. You're signed out on all your devices and can't sign in for now. Your reviews are hidden. Everything on your PC stays as it is.\n\n${block}\n\n` +
-          `Think this is a mistake? Write to ${CONTACT}.\n\nTavora\n`,
+          `Think this is a mistake? Write to ${CONTACT}. If you would rather have your account deleted, write to us too.\n\nTavora\n`,
       };
 }
 

@@ -150,7 +150,8 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
     }
     const account = ID.test(id) ? accounts.account(id) : null;
     if (!account) return context.json({ error: "No such account." }, 404);
-    if (accounts.isSuspended(id)) return context.json({ error: "This account is suspended already." }, 409);
+    // Suspending again changes nothing but finishes what a failed first try left (the reviews), so a retry is safe: no new reason, no second email.
+    if (accounts.isSuspended(id)) return context.json({ ok: true, already: true, signedOut: 0, hiddenReviews: reviews?.hideForSuspension(id) ?? 0, mailed: false });
     const language = mailLanguage(catalog?.languageOf(id));
     // No await from here to the end of the suspension: sign-ins end and reviews hide in one go.
     const signedOut = accounts.suspend(id, reason, text, now());
@@ -162,8 +163,11 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
   app.post("/unsuspend", async (context) => {
     const { id } = await json(context.req.raw);
     if (typeof id !== "string") return context.json({ error: "Send { id }." }, 400);
-    if (!ID.test(id) || !accounts.unsuspend(id)) return context.json({ error: "This account isn't suspended." }, 404);
+    if (!ID.test(id)) return context.json({ error: "This account isn't suspended." }, 404);
+    // Idempotent for a retry: the reviews the suspension hid are shown again even when the suspension is already gone.
+    const was = accounts.unsuspend(id);
     const shownReviews = reviews?.showAfterSuspension(id) ?? 0;
+    if (!was && shownReviews === 0) return context.json({ error: "This account isn't suspended." }, 404);
     return context.json({ ok: true, shownReviews });
   });
 
