@@ -100,6 +100,11 @@ export interface ModuleManifest {
    * LAST_TAVORA_WITHOUT_GAME_OVERLAYS, because older Tavoras refuse that.
    */
   overlay?: string;
+  /**
+   * The size `overlay` starts at over the player's game, in pixels (the player can still resize it). Needs `overlay` and a
+   * `minTavora` newer than LAST_TAVORA_WITHOUT_OVERLAY_SIZE.
+   */
+  overlaySize?: { width: number; height: number };
   /** What the module can do on a key press (hotkeys.set). Up to MAX_ACTIONS. */
   actions?: ModuleAction[];
   /**
@@ -133,7 +138,7 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "inGame", "overlay", "actions", "translations", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "inGame", "overlay", "overlaySize", "actions", "translations", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
 
 /** Most screenshots a manifest may name, and the longest homepage address. */
@@ -350,6 +355,8 @@ export const LAST_TAVORA_WITHOUT_GAME_OVERLAYS = "0.20.50";
 export const LAST_TAVORA_WITHOUT_IN_GAME_PANELS = "0.21.2";
 /** The last Tavora that refuses `translations`; a manifest with them needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_TRANSLATIONS = "0.20.12";
+/** The last Tavora that refuses `overlaySize`; a manifest with it needs a newer `minTavora`. */
+export const LAST_TAVORA_WITHOUT_OVERLAY_SIZE = "0.21.27";
 const LANGUAGE_CODE = /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/;
 
 /** Whether a manifest may key a translation by this: a lowercase language code such as `de` or `pt-br`. */
@@ -607,6 +614,15 @@ export function validateManifest(input: unknown): ManifestResult {
   if (input.overlay !== undefined) {
     if (!isPackagePath(input.overlay)) errors.push("overlay must be a relative path inside the package");
     else if (!input.overlay.endsWith(".html")) errors.push("overlay must be an .html file");
+  }
+  if (input.overlaySize !== undefined) {
+    const size = input.overlaySize;
+    if (!isRecord(size) || !isDimension(size.width) || !isDimension(size.height) || Object.keys(size).some((key) => key !== "width" && key !== "height")) {
+      errors.push("overlaySize must be { width, height } in pixels");
+    } else if (input.overlay === undefined) errors.push("overlaySize needs an overlay page");
+    else if (!officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_OVERLAY_SIZE)) {
+      errors.push(`overlaySize needs a minTavora newer than ${LAST_TAVORA_WITHOUT_OVERLAY_SIZE}, because older Tavoras refuse it`);
+    }
   }
 
   const permissions = input.permissions;

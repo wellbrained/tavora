@@ -15,7 +15,7 @@ import { OverlayServer, OverlayStore, overlayUrl, type OverlayLink, type Overlay
 export interface StreamingModule {
   owner: string;
   root: string;
-  manifest: Pick<ModuleManifest, "id" | "name" | "overlay" | "actions" | "permissions">;
+  manifest: Pick<ModuleManifest, "id" | "name" | "overlay" | "overlaySize" | "actions" | "permissions">;
 }
 
 /** A panel of the game shown now that hears a hotkey. */

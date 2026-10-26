@@ -80,6 +80,8 @@ describe("appName", () => {
     ["SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify", "Spotify"],
     ["Chrome", "Chrome"],
     ["MSEdge", "Edge"],
+    ["MSEdge.127.0.0.1_/.edge.Default", "Edge"],
+    ["Chrome._crx_cinhimbnkkaeohfgghhklpknlkffjgod", "Chrome"],
     ["308046B0AF4A39CB", "Firefox"],
     ["AppleInc.AppleMusicWin_nzyj5cx40ttqa!App", "Apple Music"],
     ["Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic", "Media Player"],

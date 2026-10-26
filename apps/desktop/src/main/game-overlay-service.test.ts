@@ -157,6 +157,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     },
     probe: () => probe,
     toDip: (rect) => rect,
+    screen: () => ({ ...SCREEN }),
     stay: () => world.stay,
     openWindow: (request) => {
       const window = new FakeWindow(request);
@@ -230,6 +231,14 @@ describe("showOverGame", () => {
     for (let i = 0; i < 8; i++) expect(show(service, CLOCK, "elden", `item-${i}`)).toBe("shown");
     expect(show(service, CLOCK, "elden", "item-8")).toBe("full");
     expect(show(service, CLOCK, "other", "item-8")).toBe("shown");
+  });
+
+  it("starts at the module's overlaySize, else at the usual size", async () => {
+    const { service, live } = await setup();
+    show(service, { ...CLOCK, manifest: { ...CLOCK.manifest, overlaySize: { width: 440, height: 100 } } });
+    expect(live()[0]!.rect).toMatchObject({ width: 440, height: 100 });
+    show(service, CLOCK, "elden", "item-2");
+    expect(live()[1]!.rect!.width).toBe(Math.round(SCREEN.width * 0.2));
   });
 
   it("refuses a module that has no overlay page", async () => {
