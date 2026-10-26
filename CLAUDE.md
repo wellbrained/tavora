@@ -36,7 +36,7 @@ Every save of a file, in the app and in every module (game modules too), saves t
 
 Game-specific modules (Enshrouded Builds, Satisfactory Planner, PoE2 Builds and every future one) are separate from Tavora:
 
-- They live outside this repo, in the private `wellbrained/tavora-game-modules` repo (one folder per module). They are never added to this repo, never merged into main and never bundled with the app.
+- They live outside this repo, in the private `wellbrained/tavora-modules` repo (one folder per module). They are never added to this repo, never merged into main and never bundled with the app.
 - The dev Tavora loads each module's local folder (id `local.<module>`), which is always its newest version. A release copy with the catalog id (`wellbrained.<module>`) is published from the dev Tavora. The installed Tavora only gets modules from the catalog, never development folders.
 - They use Tavora's SDK and UI kit by linking to this repo. A missing control still goes into the kit here first (see UI controls).
 
