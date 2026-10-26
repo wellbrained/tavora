@@ -103,6 +103,8 @@ const discordConnected = (context: Context) =>
   context.json({ error: "This account already has a Discord login; disconnect it first.", reason: "discord-connected" }, 409);
 const noEmail = (context: Context) => context.json({ error: "This account has no email address.", reason: "no-email" }, 409);
 const noDiscord = (context: Context) => context.json({ error: "This account has no Discord login.", reason: "no-discord" }, 409);
+/** A suspended account (the maintainer did it, reversible): nothing signs in, and the app says so. */
+const suspended = (context: Context) => context.json({ error: "This account is suspended.", reason: "suspended" }, 403);
 const wrongCode = (context: Context) => context.json({ error: "That code is wrong or has expired.", reason: "wrong-code" }, 400);
 
 export function accountRoutes(options: AccountOptions, limiter: RateLimiter, clientKey: (request: Request) => string) {
@@ -191,6 +193,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     // A new address keeps its code until the player said yes to an account.
     if (!store.checkCode(email, "sign-in", null, input.code, at, Boolean(existing) || create)) return wrongCode(context);
     if (!existing && !create) return context.json({ status: "no-account" });
+    // Said only after the code was right, so the answer never tells whether an address has an account.
+    if (existing && store.isSuspended(existing.id)) return suspended(context);
     let account = existing;
     if (!account) {
       try {
@@ -492,6 +496,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const at = now();
     const existing = store.accountByDiscord(who.id);
     if (!existing) return context.json({ status: "no-account", ticket: store.holdDiscord(who, at), discord: { name: who.name } });
+    if (store.isSuspended(existing.id)) return suspended(context);
     store.setDiscord(existing.id, who);
     const { token, session } = store.createSession(existing.id, deviceOs(input.os), at, deviceName(input.name));
     return context.json({ status: "signed-in", token, device: session.id, account: accountAnswer({ ...existing, discord: who }) });
@@ -507,6 +512,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (!who) return context.json({ error: "That Discord sign-in has expired. Sign in with Discord again.", reason: "discord-expired" }, 400);
     // Made a moment ago by another sign-in with the same Discord login: sign in to that one.
     const account = store.accountByDiscord(who.id) ?? store.createAccount({ discord: who }, at);
+    if (store.isSuspended(account.id)) return suspended(context);
     const { token, session } = store.createSession(account.id, deviceOs(input.os), at, deviceName(input.name));
     return context.json({ status: "created", token, device: session.id, account: accountAnswer(account) });
   });

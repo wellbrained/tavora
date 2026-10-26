@@ -572,6 +572,7 @@ export const de: Record<keyof typeof en, string> = {
   "account.error.noDeveloperName": "Wähle zuerst einen Entwicklernamen.",
   "account.error.keyGone": "Dieser Schlüssel ist nicht mehr mit deinem Konto verknüpft.",
   "account.error.signedOut": "Du wurdest abgemeldet. Melde dich wieder an.",
+  "account.error.suspended": "Dein Konto ist gesperrt. Schau in deine E-Mails, warum.",
   "account.error.tooMany": "Zu viele Versuche. Versuch es in {minutes} Min. noch einmal.",
   "account.error.dailyLimit": "Tavora hat heute so viele E-Mails verschickt, wie es kann. Bitte versuch es ab {time} noch einmal.",
   "account.error.dailyLimitSoon": "Tavora hat heute so viele E-Mails verschickt, wie es kann. Bitte versuch es morgen noch einmal.",

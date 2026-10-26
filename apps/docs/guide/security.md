@@ -257,6 +257,8 @@ The Browser panel shows any website, so here the attacker is any page:
 
 Tavora accounts are optional. Modules learn nothing about them: no SDK call, bridge message or module view carries the player's email address, the sign-in or whether the player is signed in. How accounts handle data is on the [privacy page](https://mytavora.app/privacy/).
 
+The maintainer can see the list of accounts and every detail the service keeps about each one (email address, Discord name, profile, devices, developer name, keys, publish tokens' names and dates, modules, reviews, the size and date of a cloud copy), on the private admin page that only the maintainer reaches. Never a secret: the service doesn't keep your sign-in or publish token itself, only a hash, and the page never shows even that. The maintainer can **suspend** an account, for example after abuse: it is signed out on every device, can't sign in or publish, its reviews are hidden, and it gets an email with the reason. A suspension can be lifted, and then you sign in again. The maintainer can't read your cloud copy, and deleting an account stays yours alone.
+
 A developer can link a publisher key to their account, so players see a developer name instead of the key's fingerprint:
 
 - **Only whoever holds the key can link it.** The signed-in app gets a one-time code (10 minutes, used once); the key signs it (Tavora itself for a key it keeps, `tavora-pack link` for a key file in CI), and the service checks that signature against the public half it was sent. The secret key never leaves the developer's PC, and the service keeps only public halves.

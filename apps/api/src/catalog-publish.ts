@@ -176,6 +176,10 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (by.accountId !== key.accountId) return refuse(context, 403, "wrong-account", "This publisher key is linked to another Tavora account than the one publishing.");
     // A banned developer publishes nothing, with any of the account's keys, a sign-in or a token (decided 2026-10-26).
     if (store.isBanned(key.accountId) || store.isBannedKey(checked.owner)) return refuse(context, 403, "banned", "This account can't publish to the catalog any more. Check your email for why.");
+    // A suspended account publishes nothing either, until it is unsuspended (decided 2026-10-26).
+    if (store.isSuspended(key.accountId) || store.isSuspended(by.accountId)) {
+      return refuse(context, 403, "suspended", "This account is suspended and can't publish to the catalog. Check your email for why.");
+    }
     if (catalog.isDeclined(checked.sha256)) return refuse(context, 403, "declined", "Tavora declined this exact zip. Fix the problem and publish a new version.");
     const trust = catalogTrust(catalog, catalogueKey);
     if (trust.revoked(checked.owner, checked.sha256)) return refuse(context, 403, "key-revoked", "This publisher key was revoked and publishes nothing new. Link a new key to your account.");

@@ -152,6 +152,7 @@ if (adminToken && adminToken.length >= 24) {
     catalog,
     ...(accountStore ? { accounts: accountStore } : {}),
     ...(reviews ? { reviews } : {}),
+    ...(copies ? { copies } : {}),
     // The built panel: deployed from wellbrained/tavora-admin to /srv/tavora-admin/current; in development
     // the TavoraAdmin checkout next to this repo.
     adminDir: process.env.TAVORA_ADMIN_DIR ?? "../../../TavoraAdmin/dist",

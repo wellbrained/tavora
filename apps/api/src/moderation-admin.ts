@@ -138,6 +138,7 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
     const waiting = catalog.waitingVersion(sha256);
     if (!waiting) return context.json({ error: "Nothing with this hash is waiting." }, 404);
     if (waiting.accountId && accounts.isBanned(waiting.accountId)) return context.json({ error: "This developer is banned. Unban them first, or decline the version." }, 409);
+    if (waiting.accountId && accounts.isSuspended(waiting.accountId)) return context.json({ error: "This developer is suspended. Unsuspend them first, or decline the version." }, 409);
     const approved = catalog.approve(sha256, new Date(now()));
     if (!approved) return context.json({ error: "Its zip is gone, so it can't be listed. Decline it." }, 409);
     catalog.prune(waiting.id, keepVersions, new Date(now()));

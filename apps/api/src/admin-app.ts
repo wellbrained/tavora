@@ -11,6 +11,8 @@ import { catalogTrust } from "./catalog-trust.ts";
 import { keyRequestStatus, revocationEntries, successionEntries } from "./key-requests.ts";
 import type { IconState } from "./icon-state.ts";
 import { isIconId, type IconStore } from "./icons.ts";
+import { accountsAdminRoutes } from "./accounts-admin.ts";
+import type { CopyStore } from "./cloud-copy.ts";
 import { moderationRoutes, type ModerationAdminOptions } from "./moderation-admin.ts";
 import type { ReviewStore } from "./reviews.ts";
 import { statsRange, type StatsStore } from "./stats.ts";
@@ -49,6 +51,8 @@ export interface AdminOptions {
   accounts?: AccountStore;
   /** The catalogue public key the served lists are checked against; CATALOGUE_PUBLIC_KEY by default. */
   catalogueKey?: string;
+  /** The cloud copies, for the account details (size and date only). Absent: no account has one. */
+  copies?: CopyStore;
   /** Ratings and reviews, for the reported reviews. Absent: the list is empty. */
   reviews?: ReviewStore;
   /** The built panel (Tavora Admin's dist; on the server /srv/tavora-admin/current). Absent or missing: the page says it is not built. */
@@ -69,7 +73,7 @@ export interface AdminOptions {
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation }: AdminOptions) {
+export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation }: AdminOptions) {
   const app = new Hono();
   const expected = digest(token);
 
@@ -276,6 +280,9 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
   });
   // Approval: versions waiting for review, Approve, Decline, Ban, and the one-time check of what is live (moderation-admin.ts).
   if (catalog && accounts) app.route("/api/moderation", moderationRoutes({ catalog, accounts, ...moderation }));
+
+  // The account list and Suspend (accounts-admin.ts). The counts at GET /api/accounts stay in admin-panel.ts.
+  if (accounts) app.route("/api/accounts", accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer: moderation?.mailer, mailDailyLimit: moderation?.mailDailyLimit, now: moderation?.now }));
 
   app.notFound((context) => context.json({ error: "Not found." }, 404));
   app.onError((error, context) => {

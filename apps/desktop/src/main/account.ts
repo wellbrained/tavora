@@ -152,6 +152,8 @@ const REASONS: Record<string, MessageKey> = {
   "catalog-full": "publish.error.catalogFull",
   "too-big": "publish.error.tooBig",
   banned: "publish.error.banned",
+  // The maintainer suspended the account: sign-in and publishing say so.
+  suspended: "account.error.suspended",
   declined: "publish.error.declined",
   "too-many-waiting": "publish.error.tooManyWaiting",
 };
