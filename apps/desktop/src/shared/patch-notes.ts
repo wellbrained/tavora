@@ -20,6 +20,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.18",
+    date: "2026-10-26",
+    title: "Media for modules",
+    notes: [
+      "Modules can now show what plays on your PC, like Spotify or a browser tab, and play, pause or skip when you click. Tavora asks you first.",
+      "You can take it back in Settings > Integrations > Media.",
+    ],
+  },
+  {
     version: "0.21.17",
     date: "2026-10-26",
     title: "Tidier Publish screen",
