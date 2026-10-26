@@ -1588,6 +1588,9 @@ export class Host {
       const message = kind ? parseLayoutMessage(raw) : null;
       if (kind && message) this.layout.handle(message, kind === "shell");
     });
+    ipcMain.on("layout:stills-shown", (event) => {
+      if (layoutSender(event) === "shell") this.layoutWindow?.stillsShown();
+    });
     ipcMain.handle("host:get-discord", (event) => (fromHost(event) ? this.discord.view() : null));
     ipcMain.handle("host:get-ai-usage", (event) => (fromHost(event) ? this.aiUsage.view() : null));
     ipcMain.handle("host:get-account", (event) => (fromHost(event) ? this.account.view() : null));
@@ -4260,7 +4263,10 @@ export class Host {
         if (!wanted) return null;
         // Electron can't capture one window alone: it takes a picture of every open window at this size and hands them all
         // over. Tavora keeps the game's by its id and lets the rest go at once, unread.
-        const sources = await desktopCapturer.getSources({ types: ["window"], thumbnailSize: size, fetchWindowIcons: false });
+        // The size is in DIPs; the window's pixels are more on a scaled screen (never wider than a picture may be).
+        const k = Math.max(1, Math.min(screen.getPrimaryDisplay().scaleFactor, MAX_PICTURE_WIDTH / Math.max(1, size.width)));
+        const thumbnailSize = { width: Math.round(size.width * k), height: Math.round(size.height * k) };
+        const sources = await desktopCapturer.getSources({ types: ["window"], thumbnailSize, fetchWindowIcons: false });
         const found = sources.find((source) => source.id === wanted.id);
         return found && !found.thumbnail.isEmpty() ? found.thumbnail.toPNG() : null;
       },
@@ -4311,6 +4317,7 @@ export class Host {
       gameName: (gameId) => host.library.games[gameId]?.name ?? null,
       gamesOf: (program) => host.gameWatcher.gamesOf(program),
       scopeOf: (gameId) => ((entry) => (entry ? scopeForKind(entry.kind) : "game"))(host.library.games[gameId]),
+      gameIds: () => Object.values(host.library.games).filter((game) => game.kind === "game" && !game.trashedAt).map((game) => game.id),
       openVeil: () => new GameVeilWindow({ hidden: !!options.hidden }),
       panels: {
         name: (instanceId) => host.panelName(instanceId),
@@ -4326,6 +4333,13 @@ export class Host {
           return view instanceof ModuleView ? view.usedAt : 0;
         },
         openWindow: (request) => host.openPanelWindow(request),
+        preferred: (gameId, instanceId) => {
+          const record = host.recordOf(instanceId, gameId);
+          const module = record && host.modules.get(record.moduleId);
+          if (!record || !module) return null;
+          const viewport = host.panelTypeOf(record)?.viewport ?? host.shown(module.manifest).viewport;
+          return { width: viewport.preferredWidth, height: viewport.preferredHeight };
+        },
       },
       probe: () => windowsForegroundProbe(),
       // Windows reports pixels; windows are placed in DIPs.
@@ -4363,6 +4377,8 @@ export class Host {
         host.syncGameWatcher();
         host.pushStateSoon();
       },
+      // Take picture in the Overlay layout depends on which games run and whose window was seen.
+      windowsChanged: () => host.layout?.refresh(),
     });
     host.streaming.useOverlayKeys(overlays);
     return overlays;

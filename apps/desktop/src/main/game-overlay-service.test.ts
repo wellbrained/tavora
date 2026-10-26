@@ -124,6 +124,10 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     broken: false,
     /** The panels there are (instance id to the name of their tab). */
     panelNames: new Map<string, string>([[PANEL, "To-Dos"]]),
+    /** The size each panel's module prefers (its viewport, in pixels). */
+    preferred: new Map<string, { width: number; height: number }>(),
+    /** How often the Overlay layout was asked to look at the games' windows again. */
+    windowsChanged: 0,
   };
   const probe: ForegroundProbe = {
     look: () => {
@@ -154,6 +158,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
       exists: (_gameId, instanceId) => !world.gone.has(instanceId),
       allowed: (_gameId, instanceId) => !world.notAllowed.has(instanceId),
       usedAt: (instanceId) => world.panelUsed.get(instanceId) ?? 0,
+      preferred: (_gameId, instanceId) => world.preferred.get(instanceId) ?? null,
       openWindow: (request) => {
         if (!world.panelNames.has(request.instanceId)) return null;
         const window = new FakeWindow(request);
@@ -190,6 +195,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     keyOf: () => null,
     language: () => "en",
     changed: () => void world.changes++,
+    windowsChanged: () => void world.windowsChanged++,
   });
   const keys: HotkeyRecord[] = [];
   const key = (binding: ReturnType<typeof toggleBinding> | ReturnType<typeof layerBinding>): HotkeyRecord => {
@@ -204,6 +210,28 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
 const show = (service: GameOverlays, module = CLOCK, gameId = "elden", key = "item-1") => service.show(module, gameId, key);
 
 describe("showOverGame", () => {
+  it("uses per-game positions in the real overlay windows, including moves in the layer", async () => {
+    const { service, world, live } = await setup();
+    show(service, CLOCK, "personal");
+    const item = service.layout.items("elden")[0]!;
+    const shared = { ...live()[0]!.rect! };
+    const own = { h: "left", v: "top", x: 0.5, y: 0.3, width: 0.2, height: 0.1 } as const;
+    service.layout.setRect(item.ref, own, "elden");
+    expect(live()[0]!.rect).toEqual({ x: 540, y: 324, width: 216, height: 108 });
+    world.foreground = { program: "D:\\Games\\Other\\game.exe", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(live()[0]!.rect).toEqual(shared);
+    live()[0]!.request.moved({ x: 700, y: 100, width: 300, height: 150 });
+    service.tick();
+    expect(live()[0]!.rect).toEqual({ x: 700, y: 100, width: 300, height: 150 });
+    expect(service.layout.items("$all")[0]!.rect).toEqual(item.rect);
+    world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(live()[0]!.rect).toEqual({ x: 540, y: 324, width: 216, height: 108 });
+    service.layout.follow("elden", item.id);
+    expect(live()[0]!.rect).toEqual(shared);
+    await service.shutdown();
+  });
   it("puts the overlay over the game right away when the game is in front", async () => {
     const { service, live } = await setup();
     expect(show(service)).toBe("shown");
@@ -1515,27 +1543,78 @@ describe("positions that scale with the game window", () => {
     expect(world.layouts).toEqual(["elden"]);
   });
 
-  it("takes a new place from the layout at once, and a reset puts it back where a new one starts", async () => {
+  it("takes a new place from the layout at once", async () => {
     const { service, live } = await setup();
     show(service);
     const ref = service.layout.items("elden")[0]!.ref;
-    const first = { ...live()[0]!.rect! };
     expect(service.layout.setRect(ref, { h: "right", v: "bottom", x: 0.05, y: 0.05, width: 0.3, height: 0.2 })).toBe(true);
     expect(live()[0]!.rect).toEqual({ x: 1920 - 324 - 54, y: 1080 - 216 - 54, width: 324, height: 216 });
-    expect(service.layout.resetRect(ref)).toBe(true);
-    expect(live()[0]!.rect).toEqual(first);
     expect(service.layout.setRect({ kind: "overlay", subject: { ...subject, key: "gone" } }, { h: "left", v: "top", x: 0, y: 0, width: 0.1, height: 0.1 })).toBe(false);
   });
 
-  it("knows the window of each game as last seen in front, to take its picture on a click", async () => {
+  it("gives the size a new overlay or panel starts with, as when it was made, for Reset size", async () => {
+    const { service, world } = await setup();
+    const sizedModule = { ...CLOCK, manifest: { ...CLOCK.manifest, overlaySize: { width: 440, height: 100 } } };
+    show(service, sizedModule);
+    world.modules.set(CLOCK.manifest.id, sizedModule);
+    service.showPanel({ owner: "official", moduleId: TODOS.manifest.id, gameId: "elden", instanceId: PANEL }, { width: 360, height: 200 });
+    world.preferred.set(PANEL, { width: 360, height: 200 });
+    const [sized, panel] = service.layout.items("elden");
+    const window = { width: 1920, height: 1080 };
+    expect(service.layout.startSize(sized!.ref, window)).toEqual({ width: 440 / 1080, height: 100 / 1080 });
+    // Without a size of its own an overlay gets the usual one, a panel the usual panel size.
+    world.modules.set(CLOCK.manifest.id, CLOCK);
+    expect(service.layout.startSize(sized!.ref, window)).toEqual({ width: 0.356, height: 0.16 });
+    world.modules.set(CLOCK.manifest.id, sizedModule);
+    expect(service.layout.startSize(panel!.ref, window)).toEqual({ width: 360 / 1080, height: 200 / 1080 });
+    world.preferred.clear();
+    expect(service.layout.startSize(panel!.ref, window)).toEqual({ width: 0.39, height: 0.4 });
+    // A window of another height: the same pixels are a different share of it.
+    expect(service.layout.startSize(sized!.ref, { width: 2560, height: 1440 })).toEqual({ width: 440 / 1440, height: 100 / 1440 });
+  });
+
+  it("knows the window of each game as last seen in front, to take its picture on a click, while the game runs", async () => {
     const { service, world } = await setup();
     expect(service.layout.handleOf("elden")).toBeNull();
     show(service);
     world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0, handle: "123456" };
     service.tick();
+    // Seen in front, but the watcher doesn't say the game runs (yet): no picture.
+    expect(service.layout.handleOf("elden")).toBeNull();
+    expect(service.layout.gameRunning("elden")).toBe(false);
+    service.gamesRunning(new Set(["elden"]));
+    expect(service.layout.gameRunning("elden")).toBe(true);
     expect(service.layout.handleOf("elden")).toBe("123456");
     service.forgetGame("elden");
     expect(service.layout.handleOf("elden")).toBeNull();
+  });
+
+  it("still has the window of a running game when another window (Tavora's own layout) is in front", async () => {
+    const { service, world } = await setup();
+    show(service);
+    world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0, handle: "123456" };
+    service.gamesRunning(new Set(["elden"]));
+    service.tick();
+    world.foreground = { program: "C:\Tavora\Tavora.exe", bounds: { x: 100, y: 100, width: 1200, height: 800 }, notification: 0, handle: "999", own: true };
+    service.tick();
+    service.tick();
+    expect(service.layout.handleOf("elden")).toBe("123456");
+  });
+
+  it("asks the layout to look again when a game's window is first seen, and when games start or stop", async () => {
+    const { service, world } = await setup();
+    show(service);
+    world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0, handle: "123456" };
+    const before = world.windowsChanged;
+    service.tick();
+    expect(world.windowsChanged).toBe(before + 1);
+    // Looking at the same window again changes nothing.
+    service.tick();
+    expect(world.windowsChanged).toBe(before + 1);
+    service.gamesRunning(new Set(["elden"]));
+    expect(world.windowsChanged).toBe(before + 2);
+    service.gamesRunning(new Set());
+    expect(world.windowsChanged).toBe(before + 3);
   });
 
   it("forgets a game's window when the watcher reports the game stopped", async () => {

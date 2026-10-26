@@ -11,7 +11,7 @@
 import type { GameOverlayResult, JsonValue } from "@tavora/sdk/protocol";
 import type { GameOverlaysView } from "../shared/host-api";
 import { translate, type Language } from "../shared/i18n";
-import { DEFAULT_RECT, DEFAULT_PANEL_ANCHORED, anchorOf, contentScale, type AnchoredRect, type LegacyRect } from "../shared/overlay-anchor";
+import { DEFAULT_RECT, anchorOf, contentScale, type AnchoredRect, type LegacyRect } from "../shared/overlay-anchor";
 import type { GridSetting } from "../shared/layout-math";
 import { HostError } from "./errors";
 import type { Foreground, ForegroundProbe } from "./foreground";
@@ -45,6 +45,7 @@ import {
   type OverlayScope,
   type Rect,
   type SeenSize,
+  type GameLayoutState,
 } from "./game-overlays";
 import type { WindowState } from "./window-state";
 import type { GameOverlaySource } from "./game-overlay-page";
@@ -90,16 +91,23 @@ export interface LayoutSource {
   /** Games that have overlays or panels of their own, and whether anything is general (shows over every game). */
   games(): { own: string[]; general: boolean };
   seenSize(gameId: string): SeenSize | undefined;
-  /** The window handle of the game's window as last seen in front, or null. */
+  /** The window handle of the game's window, while the game is running and its window was seen in front since it started; else null. */
   handleOf(gameId: string): string | null;
+  /** Whether the game watcher says the game is running. */
+  gameRunning(gameId: string): boolean;
   /** Where the game's window is on screen now or was last seen (DIPs), or null. */
   gameWindow(): Rect | null;
   grid(): GridSetting;
   setGrid(grid: GridSetting): void;
   window(): WindowState | null;
   setWindow(state: WindowState): void;
-  setRect(ref: LayoutItemRef, rect: AnchoredRect): boolean;
-  resetRect(ref: LayoutItemRef): boolean;
+  setRect(ref: LayoutItemRef, rect: AnchoredRect, gameId?: string): boolean;
+  layoutState(gameId: string): GameLayoutState;
+  setLayoutState(gameId: string, state: GameLayoutState): void;
+  customize(gameId: string): void;
+  follow(gameId: string, id?: string): void;
+  /** The size a new item of this kind starts with in a game window of this size (Reset size), in units of the window's height. */
+  startSize(ref: LayoutItemRef, window: { width: number; height: number }): { width: number; height: number };
   setOverlay(subject: GameOverlaySubject, change: GameOverlayChange): void;
   setPanel(instanceId: string, change: InGamePanelChange): void;
   remove(ref: LayoutItemRef): void;
@@ -132,6 +140,7 @@ export interface GameOverlayServiceOptions {
   enabled(): boolean;
   module(moduleId: string): StreamingModule | undefined;
   gameName(gameId: string): string | null;
+  gameIds?(): string[];
   /** Whether a library entry is a real game (kind "game"), not a workspace such as Personal. Something made in the latter is general. */
   scopeOf(gameId: string): OverlayScope;
   /** The library games a program belongs to (game-watch.ts). */
@@ -159,6 +168,8 @@ export interface GameOverlayServiceOptions {
     usedAt(instanceId: string): number;
     /** The window holding the panel (moved out of its workspace slot); null when the panel is gone. */
     openWindow(request: OverlayWindowRequest & { instanceId: string; gameId: string }): OverlayWindow | null;
+    /** The size the panel's module prefers (its viewport, in pixels), or null; Reset size in the Overlay layout starts from it. */
+    preferred?(gameId: string, instanceId: string): { width?: number | undefined; height?: number | undefined } | null;
   };
   shortcuts: ShortcutRegistry;
   /** Opens Settings at one of its settings. */
@@ -176,6 +187,8 @@ export interface GameOverlayServiceOptions {
   language(): Language;
   /** Something the Settings page or the hotkeys depend on changed. */
   changed(): void;
+  /** What the Overlay layout shows of the games' windows changed (a window was seen, a game stopped): it looks again. */
+  windowsChanged?(): void;
   /** How often the window in front is looked at. */
   everyMs?: number;
 }
@@ -230,6 +243,8 @@ export class GameOverlays {
   private frontWindow: string | null = null;
   /** The window handle of each game's window as last seen in front (in memory only), to take its picture on a click. */
   private readonly handles = new Map<string, string>();
+  /** The library games the game watcher says are running (game-watch.ts); a handle only counts for these. */
+  private running: ReadonlySet<string> = new Set();
   private layerWindow: string | null = null;
   private notification: number | null = null;
   private veil: VeilWindow | null = null;
@@ -431,13 +446,16 @@ export class GameOverlays {
 
   /** The games running now (game-watch.ts): the window remembered for a game that stopped is no window to take a picture of. */
   gamesRunning(running: ReadonlySet<string>): void {
+    this.running = new Set(running);
     for (const id of [...this.handles.keys()]) if (!running.has(id)) this.handles.delete(id);
+    this.options.windowsChanged?.();
   }
 
   /** A game left the library for good. */
   forgetGame(gameId: string): void {
     this.store.forgetSeen(gameId);
     this.handles.delete(gameId);
+    this.options.windowsChanged?.();
     this.forget((overlay) => overlay.gameId === gameId);
     this.forgetPanels((panel) => panel.gameId === gameId, true);
   }
@@ -625,7 +643,10 @@ export class GameOverlays {
     const front = foreground?.program ? gameInFront(this.options.gamesOf(foreground.program), withItems, general, (id) => this.options.scopeOf(id) === "game") : null;
     this.setFront(front, front && foreground ? this.options.toDip(foreground.bounds) : null);
     this.frontWindow = front && foreground?.handle ? foreground.handle : null;
-    if (front && this.frontWindow) this.handles.set(front, this.frontWindow);
+    if (front && this.frontWindow && this.handles.get(front) !== this.frontWindow) {
+      this.handles.set(front, this.frontWindow);
+      this.options.windowsChanged?.();
+    }
     this.notification = front && foreground ? foreground.notification : null;
     this.away = this.stayingAway(front);
     if (front && foreground && looksExclusive(foreground.notification) && !this.store.exclusiveHintShown) {
@@ -722,7 +743,7 @@ export class GameOverlays {
       entry.idleSince = null;
       if (entry.opacity !== overlay.opacity) entry.window.setOpacity((entry.opacity = overlay.opacity));
       if (entry.hideFromCapture !== overlay.hideFromCapture) entry.window.setHideFromCapture((entry.hideFromCapture = overlay.hideFromCapture));
-      if (!entry.window.dragging) entry.window.setRect(placeItem(overlay, area!));
+      if (!entry.window.dragging) entry.window.setRect(placeItem(this.store.positioned(overlay, shownGame!), area!));
       this.zoomTo(entry, area!);
       if (!entry.shown) {
         entry.window.setShown((entry.shown = true));
@@ -783,7 +804,7 @@ export class GameOverlays {
       entry.idleSince = null;
       if (entry.opacity !== panel.opacity) entry.window.setOpacity((entry.opacity = panel.opacity));
       if (entry.hideFromCapture !== panel.hideFromCapture) entry.window.setHideFromCapture((entry.hideFromCapture = panel.hideFromCapture));
-      entry.window.setRect(placeItem(panel, area!));
+      entry.window.setRect(placeItem(this.store.positioned(panel, shownGame!), area!));
       this.zoomTo(entry, area!);
       if (!entry.shown) {
         entry.window.setShown((entry.shown = true));
@@ -872,7 +893,7 @@ export class GameOverlays {
       subject,
       id,
       (rect) => {
-        if (this.game) this.store.update(subject, { rect: anchorOf(rect, this.game) });
+        if (this.game && this.front && this.store.setRect(subject, anchorOf(rect, this.game), this.front)) this.options.changed();
       },
       () => this.remove(subject),
       () => ({ name: this.nameOf(overlay), closeLabel: translate(this.options.language(), "overlays.closeLabel") }),
@@ -890,7 +911,7 @@ export class GameOverlays {
       subject,
       id,
       (rect) => {
-        if (this.game) this.store.updatePanel(panel.instanceId, anchorOf(rect, this.game));
+        if (this.game && this.front && this.store.setRect({ instanceId: panel.instanceId }, anchorOf(rect, this.game), this.front)) this.options.changed();
       },
       () => this.stopPanel(panel.instanceId),
       () => ({ name: this.options.panels?.name(panel.instanceId) ?? panel.moduleId, closeLabel: translate(this.options.language(), "overlays.stopShowingLabel") }),
@@ -972,12 +993,13 @@ export class GameOverlays {
     return {
       items: (gameId) => this.layoutItems(gameId),
       games: () => {
-        const own = new Set<string>();
+        const own = new Set<string>(this.options.gameIds?.() ?? this.running);
         for (const item of [...this.store.all(), ...this.store.panels()]) if (item.scope === "game") own.add(item.gameId);
         return { own: [...own], general: [...this.store.all(), ...this.store.panels()].some((item) => item.scope === "all") };
       },
       seenSize: (gameId) => this.store.seenSize(gameId),
-      handleOf: (gameId) => this.handles.get(gameId) ?? null,
+      handleOf: (gameId) => (this.running.has(gameId) ? (this.handles.get(gameId) ?? null) : null),
+      gameRunning: (gameId) => this.running.has(gameId),
       gameWindow: () => this.game ?? this.lastGame,
       grid: () => this.store.grid,
       setGrid: (grid) => {
@@ -986,16 +1008,33 @@ export class GameOverlays {
       },
       window: () => this.store.layoutWindow,
       setWindow: (state) => this.store.setLayoutWindow(state),
-      setRect: (ref, rect) => {
-        const done = ref.kind === "panel" ? this.store.setRect({ instanceId: ref.instanceId }, rect) : this.store.setRect(ref.subject, rect);
+      setRect: (ref, rect, gameId) => {
+        const done = ref.kind === "panel" ? this.store.setRect({ instanceId: ref.instanceId }, rect, gameId) : this.store.setRect(ref.subject, rect, gameId);
         // Over the game at once: the windows take their new place on this look.
         if (done) this.tick();
         return done;
       },
-      resetRect: (ref) => {
-        const done = ref.kind === "panel" ? this.store.setRect({ instanceId: ref.instanceId }, DEFAULT_PANEL_ANCHORED) : this.store.setRect(ref.subject, DEFAULT_RECT);
-        if (done) this.tick();
-        return done;
+      layoutState: (gameId) => this.store.layoutState(gameId),
+      setLayoutState: (gameId, state) => {
+        this.store.setLayoutState(gameId, state);
+        this.tick();
+      },
+      customize: (gameId) => {
+        this.store.customize(gameId, this.store.seenSize(gameId) ?? this.options.screen?.());
+        this.tick();
+      },
+      follow: (gameId, id) => {
+        this.store.follow(gameId, id);
+        this.tick();
+      },
+      startSize: (ref, window) => {
+        const area = { x: 0, y: 0, ...window };
+        // The same lookups as when the item was made: an overlay's size from its module, a panel's from its viewport.
+        const start =
+          ref.kind === "panel"
+            ? startRect(this.options.panels?.preferred?.(this.store.panelOf(ref.instanceId)?.gameId ?? "", ref.instanceId) ?? null, area)
+            : startRect(this.options.module(ref.subject.moduleId)?.manifest.overlaySize ?? null, area, DEFAULT_RECT);
+        return { width: start.width, height: start.height };
       },
       setOverlay: (subject, change) => this.update(subject, change),
       setPanel: (instanceId, change) => this.updatePanelView(instanceId, change),

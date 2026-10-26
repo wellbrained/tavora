@@ -4,7 +4,7 @@ import type { Language, LanguageSetting, MessageKey } from "./i18n";
 import type { IconTone } from "./icon-tone";
 import type { ModuleProblemKind, ModuleProblemValues } from "./module-problem";
 import type { HostAction } from "./host-actions";
-import type { LayoutMessage, LayoutView } from "./layout-view";
+import type { LayoutMessage, LayoutStills, LayoutView } from "./layout-view";
 
 /**
  * loading: the page is loading. ready: loaded and running. failed: the page
@@ -969,6 +969,10 @@ export interface TavoraHostApi {
     getState(): Promise<LayoutView | null>;
     onState(listener: (view: LayoutView) => void): void;
     send(message: LayoutMessage): void;
+    /** Still pictures of the live pages and the layer while a list or menu is open (empty once it closed). */
+    onStills(listener: (stills: LayoutStills) => void): void;
+    /** The stills are on screen: the live pages step aside only then. */
+    stillsShown(): void;
   };
   /** Dims the window buttons along with the page while a dialog backdrop covers it. */
   setDimmed(dimmed: boolean): void;

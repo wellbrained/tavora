@@ -45,7 +45,10 @@ describe("parseLayoutMessage", () => {
     expect(parseLayoutMessage({ type: "commit", id: "a", rect })).toEqual({ type: "commit", id: "a", rect });
     expect(parseLayoutMessage({ type: "canvas-hidden", id: "a", hidden: true })).toEqual({ type: "canvas-hidden", id: "a", hidden: true });
     expect(parseLayoutMessage({ type: "reset", id: "a" })).toEqual({ type: "reset", id: "a" });
-    for (const type of ["undo", "redo", "drag-end", "take-picture", "choose-picture", "remove-picture", "dismiss-notice"]) expect(parseLayoutMessage({ type })).toEqual({ type });
+    expect(parseLayoutMessage({ type: "reset-size", id: "a" })).toEqual({ type: "reset-size", id: "a" });
+    expect(parseLayoutMessage({ type: "follow-item", id: "a" })).toEqual({ type: "follow-item", id: "a" });
+    expect(parseLayoutMessage({ type: "follow-item" })).toBeNull();
+    for (const type of ["undo", "redo", "drag-end", "take-picture", "choose-picture", "remove-picture", "dismiss-notice", "customize", "follow-all", "done"]) expect(parseLayoutMessage({ type })).toEqual({ type });
   });
 
   it("refuses what is malformed, unknown or too big", () => {
@@ -61,6 +64,7 @@ describe("parseLayoutMessage", () => {
     expect(parseLayoutMessage({ type: "drag", id: "a", rect: null })).toBeNull();
     expect(parseLayoutMessage({ type: "commit", id: "", rect: { x: 0, y: 0, width: 1, height: 1 } })).toBeNull();
     expect(parseLayoutMessage({ type: "canvas-hidden", id: "a", hidden: 1 })).toBeNull();
+    expect(parseLayoutMessage({ type: "reset-size", id: "" })).toBeNull();
   });
 
   it("gives the window only the host actions it needs", () => {

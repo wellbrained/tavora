@@ -21,6 +21,8 @@ import {
   panelBounds,
   placeItem,
   scopeForKind,
+  overlayId,
+  panelWindowId,
   type GameOverlaySubject,
   type VisibilityInput,
 } from "./game-overlays";
@@ -43,6 +45,81 @@ const at = (x: number, y: number, width: number, height: number): AnchoredRect =
 const subject = (key = "item-1", gameId = "poe2"): GameOverlaySubject => ({ owner: "official", moduleId: "tavora.clock-counter", gameId, key });
 
 describe("GameOverlayStore", () => {
+  it("overrides one general item per game, while settings stay shared across a restart", async () => {
+    const store = await GameOverlayStore.load(dir);
+    const timer = subject("timer", "personal");
+    const clock = subject("clock", "personal");
+    store.add(timer, "all");
+    store.add(clock, "all");
+    const own = at(0.3, 0.2, 0.2, 0.1);
+    store.setRect(timer, own, "poe2");
+    store.setRect(timer, at(0.1, 0.1, 0.3, 0.2));
+    store.update(timer, { mode: "toggle", opacity: 50, hideFromCapture: true });
+    expect(store.of("poe2").find((item) => item.key === "timer")).toMatchObject({ rect: own, mode: "toggle", opacity: 50, hideFromCapture: true });
+    expect(store.of("elden").find((item) => item.key === "timer")!.rect).toEqual(store.find(timer)!.rect);
+    expect(store.ownPosition("poe2", overlayId(clock))).toBe(false);
+    await store.save();
+    const loaded = await GameOverlayStore.load(dir);
+    expect(loaded.of("poe2").find((item) => item.key === "timer")!.rect).toEqual(own);
+    loaded.follow("poe2", overlayId(timer));
+    expect(loaded.of("poe2").find((item) => item.key === "timer")!.rect).toEqual(loaded.find(timer)!.rect);
+    await loaded.save();
+  });
+
+  it("detaches a whole layout, includes later general items, and can follow All games again", async () => {
+    const store = await GameOverlayStore.load(dir);
+    const timer = subject("timer", "personal");
+    const clock = subject("clock", "personal");
+    store.add(timer, "all");
+    const before = { ...store.find(timer)!.rect };
+    store.customize("poe2");
+    store.setRect(timer, at(0.6, 0.1, 0.2, 0.2));
+    expect(store.of("poe2")[0]!.rect).toEqual(before);
+    store.add(clock, "all");
+    const clockBefore = { ...store.find(clock)!.rect };
+    store.setRect(clock, at(0.5, 0.1, 0.3, 0.2));
+    expect(store.of("poe2").find((item) => item.key === "clock")!.rect).toEqual(clockBefore);
+    await store.save();
+    const loaded = await GameOverlayStore.load(dir);
+    expect(loaded.layoutState("poe2").detached).toBe(true);
+    loaded.follow("poe2");
+    expect(loaded.of("poe2").map((item) => item.rect)).toEqual(loaded.of("elden").map((item) => item.rect));
+    await loaded.save();
+  });
+
+  it("overrides panels too, leaves game-owned items local, and prunes removed items and games", async () => {
+    const store = await GameOverlayStore.load(dir);
+    const instanceId = "11111111-1111-4111-8111-111111111111";
+    store.addPanel({ ...subject(), instanceId, scope: "all" });
+    store.add(subject("own"), "game");
+    const rect = at(0.4, 0.2, 0.3, 0.2);
+    store.setRect({ instanceId }, rect, "elden");
+    expect(store.panelsOf("elden")[0]!.rect).toEqual(rect);
+    expect(store.panelsOf("poe2")[0]!.rect).not.toEqual(rect);
+    store.setRect(subject("own"), rect, "poe2");
+    expect(store.layoutState("poe2").positions).toEqual({});
+    store.forgetPanels(() => true);
+    expect(store.ownPosition("elden", panelWindowId(instanceId))).toBe(false);
+    store.customize("elden");
+    store.forgetSeen("elden");
+    expect(store.layoutState("elden")).toEqual({ detached: false, positions: {} });
+    await store.save();
+  });
+
+  it("ignores invalid saved overrides without losing the shared layout", async () => {
+    const store = await GameOverlayStore.load(dir);
+    const item = subject("timer", "personal");
+    store.add(item, "all");
+    await store.save();
+    const file = path.join(dir, GAME_OVERLAYS_FILE);
+    const body = JSON.parse(await readFile(file, "utf8"));
+    body.layout.games = { poe2: { detached: false, positions: { [overlayId(item)]: { x: "bad" }, missing: DEFAULT_RECT } }, elden: null };
+    await writeFile(file, JSON.stringify(body));
+    const loaded = await GameOverlayStore.load(dir);
+    expect(loaded.layoutState("poe2").positions).toEqual({});
+    expect(loaded.of("poe2")[0]!.rect).toEqual(store.find(item)!.rect);
+    await loaded.save();
+  });
   it("adds an overlay with the usual settings once, and keeps it across a restart", async () => {
     const store = await GameOverlayStore.load(dir);
     expect(store.add(subject(), "game")).toBe("added");

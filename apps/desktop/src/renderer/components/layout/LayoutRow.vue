@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // One row of the Overlay layout's list (like a source in OBS): the name, the eye that hides it on the canvas only, and,
 // for the selected one, everything the player sets: when it shows (always, or with a key), how see-through it is, Hide
-// from capture, Reset position and Remove. Selecting a row selects the item on the canvas, and the other way round.
-import { Eye, EyeOff, RotateCcw, X } from "@lucide/vue";
+// from capture, Reset position, Reset size, Preview and Remove. Selecting a row selects the item on the canvas, and the other way round.
+import { Eye, EyeOff, X } from "@lucide/vue";
 import { computed } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -18,7 +18,7 @@ import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 import { send } from "./layout-state";
 
-const props = defineProps<{ item: LayoutItemView; selected: boolean; gameName: string }>();
+const props = defineProps<{ item: LayoutItemView; selected: boolean; gameName: string; perGame: boolean }>();
 const mac = navigator.platform.startsWith("Mac");
 
 type Change = { mode?: "always" | "toggle"; opacity?: 100 | 75 | 50 | 25; hideFromCapture?: boolean };
@@ -75,6 +75,10 @@ const removeLabel = computed(() => (props.item.kind === "panel" ? t("overlays.st
       </Button>
     </div>
     <div v-if="selected" class="flex flex-col gap-3 border-t px-3 py-3">
+      <div v-if="item.general && perGame" class="flex flex-wrap items-center gap-2">
+        <span class="text-muted-foreground text-xs">{{ item.ownPosition ? t('overlays.layout.ownPlace', { game: gameName }) : t('overlays.layout.followsAll') }}</span>
+        <Button v-if="item.ownPosition" variant="secondary" size="sm" :data-testid="`layout-follow-${item.id}`" @click="send({ type: 'follow-item', id: item.id })">{{ t('overlays.layout.followAgain') }}</Button>
+      </div>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span class="text-muted-foreground w-20 flex-none text-sm">{{ t("overlays.mode.label") }}</span>
         <SegmentedControl :model-value="item.mode" :options="modes" :label="t('overlays.mode.label')" @update:model-value="change({ mode: $event })" />
@@ -106,10 +110,13 @@ const removeLabel = computed(() => (props.item.kind === "panel" ? t("overlays.st
         <Switch :model-value="item.hideFromCapture" :aria-label="t('overlays.capture.label')" @update:model-value="change({ hideFromCapture: $event })" />
         <span class="text-muted-foreground min-w-0 flex-1 text-xs">{{ t("overlays.capture.hint") }}</span>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <Button variant="secondary" size="sm" :data-testid="`layout-reset-${item.id}`" @click="send({ type: 'reset', id: item.id })"><RotateCcw :stroke-width="1.5" />{{ t("overlays.layout.reset") }}</Button>
-        <Button v-if="item.kind === 'overlay' && item.live" variant="secondary" size="sm" :aria-label="t('overlays.previewLabel', { name: item.name })" @click="preview">{{ t("overlays.layout.preview") }}</Button>
-        <Button variant="danger" size="sm" class="ml-auto" :aria-label="removeLabel" :data-testid="`layout-remove-${item.id}`" @click="remove">
+      <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 border-t pt-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" size="sm" :data-testid="`layout-reset-${item.id}`" @click="send({ type: 'reset', id: item.id })">{{ t("overlays.layout.reset") }}</Button>
+          <Button variant="secondary" size="sm" :data-testid="`layout-reset-size-${item.id}`" @click="send({ type: 'reset-size', id: item.id })">{{ t("overlays.layout.resetSize") }}</Button>
+          <Button v-if="item.kind === 'overlay' && item.live" variant="secondary" size="sm" :aria-label="t('overlays.previewLabel', { name: item.name })" @click="preview">{{ t("overlays.layout.preview") }}</Button>
+        </div>
+        <Button variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive ml-auto" :aria-label="removeLabel" :data-testid="`layout-remove-${item.id}`" @click="remove">
           <X :stroke-width="1.5" />{{ item.kind === "panel" ? t("overlays.stopShowing") : t("overlays.remove") }}
         </Button>
       </div>

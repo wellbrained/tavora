@@ -16,7 +16,7 @@ import { lockedSession } from "./game-overlay-window";
 import type { LayoutFrame, LayoutWindow } from "./overlay-layout";
 import type { Rect } from "./game-overlays";
 import type { WindowState } from "./window-state";
-import type { LayoutView } from "../shared/layout-view";
+import type { LayoutStills, LayoutView } from "../shared/layout-view";
 import { pageZoom } from "../shared/overlay-anchor";
 
 export interface OverlayLayoutWindowOptions {
@@ -36,8 +36,18 @@ export interface OverlayLayoutWindowOptions {
   closed(): void;
 }
 
+/** How long a page gets to give its still picture before the window goes on without it. */
+const STILL_TIMEOUT_MS = 250;
+/** How long the shell waits to say its stills are on screen before the pages step aside anyway. */
+const STILLS_SHOWN_CAP_MS = 300;
+/** How long the stills stay under the pages when they come back, so a page that has not drawn yet never shows empty. */
+const STILLS_LINGER_MS = 80;
+const NO_STILLS: LayoutStills = { items: [], layer: null };
+
 interface ItemView {
   view: WebContentsView;
+  /** The page should show on the canvas (its item isn't hidden there, the canvas is on screen); it still steps aside behind a still picture. */
+  wanted: boolean;
   source: GameOverlaySource;
   zoom: number;
   opacity: number;
@@ -53,13 +63,21 @@ export class OverlayLayoutWindow implements LayoutWindow {
   private readonly layer: WebContentsView;
   private readonly items = new Map<string, ItemView>();
   private destroyed = false;
+  /** A list or menu of the shell is open over the canvas. */
+  private covered = false;
+  /** The live pages and the layer are out of the way because the shell shows still pictures of them. */
+  private frozen = false;
+  /** Counts the opening and closing of lists, so a slow freeze never hides the pages after the list closed. */
+  private coverChanges = 0;
+  private stillsOnScreen: (() => void) | null = null;
+  private layerWanted = false;
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly options: OverlayLayoutWindowOptions) {
     const web = { preload: options.preload, sandbox: true, contextIsolation: true, nodeIntegration: false, webviewTag: false, spellcheck: false, devTools: options.devTools };
     this.window = new BrowserWindow({
       ...options.bounds.bounds,
-      minWidth: 720,
+      minWidth: 900,
       minHeight: 480,
       title: options.title,
       ...(options.icon ? { icon: options.icon } : {}),
@@ -170,14 +188,89 @@ export class OverlayLayoutWindow implements LayoutWindow {
       }
       entry.source = frame.source;
       entry.view.setBounds(frame.bounds);
-      entry.view.setVisible(frame.visible && layer !== null && !covered);
+      entry.wanted = frame.visible && layer !== null;
+      entry.view.setVisible(entry.wanted && !this.frozen);
       this.zoom(entry, frame.zoom);
       this.fade(entry, frame.opacity);
     }
     if (layer) this.layer.setBounds(layer);
-    this.layer.setVisible(layer !== null && !covered);
+    this.layerWanted = layer !== null;
+    this.layer.setVisible(this.layerWanted && !this.frozen);
+    this.cover(covered);
     // Added again, the layer is the topmost: it takes the mouse over every page.
     if (added) this.window.contentView.addChildView(this.layer);
+  }
+
+  /**
+   * A list or menu opened or closed over the canvas. The native pages would be drawn over it, so they step aside, but not
+   * before the shell shows a still picture of each where it is (the host's frozen-image way): nothing on the canvas changes.
+   */
+  private cover(covered: boolean): void {
+    if (covered === this.covered) return;
+    this.covered = covered;
+    const change = ++this.coverChanges;
+    if (covered) void this.freeze(change);
+    else this.thaw(change);
+  }
+
+  private async freeze(change: number): Promise<void> {
+    const grab = async (view: WebContentsView, wanted: boolean) => {
+      if (!wanted || view.webContents.isDestroyed()) return null;
+      const image = await Promise.race([view.webContents.capturePage().catch(() => null), new Promise<null>((resolve) => setTimeout(() => resolve(null), STILL_TIMEOUT_MS))]);
+      return image && !image.isEmpty() ? { bounds: view.getBounds(), url: image.toDataURL() } : null;
+    };
+    const [layerShot, ...itemShots] = await Promise.all([
+      grab(this.layer, this.layerWanted),
+      ...[...this.items].map(async ([id, entry]) => {
+        const shot = await grab(entry.view, entry.wanted);
+        return shot && { id, ...shot };
+      }),
+    ]);
+    if (change !== this.coverChanges || this.isDestroyed) return;
+    const stills: LayoutStills = { items: itemShots.filter((shot) => shot !== null), layer: layerShot };
+    this.sendStills(stills);
+    // Hidden before their pictures are on screen, the canvas would show empty for a frame.
+    if (stills.items.length || stills.layer) await this.stillsAreShown();
+    if (change !== this.coverChanges || this.isDestroyed) return;
+    this.frozen = true;
+    this.showViews();
+  }
+
+  private thaw(change: number): void {
+    this.frozen = false;
+    this.showViews();
+    // The stills go once the pages are back and have had a moment to draw.
+    setTimeout(() => {
+      if (change === this.coverChanges && !this.isDestroyed) this.sendStills(NO_STILLS);
+    }, STILLS_LINGER_MS);
+  }
+
+  private showViews(): void {
+    for (const entry of this.items.values()) entry.view.setVisible(entry.wanted && !this.frozen);
+    this.layer.setVisible(this.layerWanted && !this.frozen);
+  }
+
+  private sendStills(stills: LayoutStills): void {
+    if (!this.window.webContents.isDestroyed()) this.window.webContents.send("layout:stills", stills);
+  }
+
+  /** Resolves once the shell says the stills are on screen, or after a cap. */
+  private stillsAreShown(): Promise<void> {
+    this.stillsOnScreen?.();
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        if (this.stillsOnScreen === done) this.stillsOnScreen = null;
+        resolve();
+      };
+      const timer = setTimeout(done, STILLS_SHOWN_CAP_MS);
+      this.stillsOnScreen = done;
+    });
+  }
+
+  /** The shell says the stills it was sent are on screen. */
+  stillsShown(): void {
+    this.stillsOnScreen?.();
   }
 
   private createItem(frame: LayoutFrame): ItemView {
@@ -185,6 +278,7 @@ export class OverlayLayoutWindow implements LayoutWindow {
     const session = lockedSession(`overlay-layout-${name}`, (url) => url.startsWith(`${GAME_OVERLAY_ORIGIN}/`));
     const entry: ItemView = {
       view: new WebContentsView({ webPreferences: { ...LOCKED, session } }),
+      wanted: false,
       source: frame.source,
       zoom: 1,
       opacity: 1,
