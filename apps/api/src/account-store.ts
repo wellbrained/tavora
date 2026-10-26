@@ -177,6 +177,14 @@ const keyRequestOf = (row: KeyRequestRow): KeyRequest => ({
   declinedAt: row.declined_at,
 });
 
+/** What the admin panel shows about accounts: counts only. */
+export interface AccountCounts {
+  total: number;
+  perDay: { day: string; count: number }[];
+  active7: number;
+  active30: number;
+}
+
 export class AccountStore {
   private readonly db: DatabaseSync;
 
@@ -547,6 +555,26 @@ export class AccountStore {
   publisherName(fingerprint: string): string | null {
     const row = this.db.prepare("select d.name from publisher_keys k join developers d on d.account_id = k.account_id where k.fingerprint = ?").get(fingerprint) as { name: string } | undefined;
     return row?.name ?? null;
+  }
+
+  // ── Counts for the admin panel ─────────────────────────────────────────
+
+  /**
+   * Numbers only, for the admin panel: accounts in total, made per day (the last 30 UTC days, oldest first),
+   * and how many accounts have a sign-in used in the last 7 and 30 days. No address, name or id leaves here.
+   */
+  counts(now: number): AccountCounts {
+    const total = (this.db.prepare("select count(*) as n from accounts").get() as { n: number }).n;
+    const first = Date.parse(`${new Date(now).toISOString().slice(0, 10)}T00:00:00Z`) - 29 * DAY_MS;
+    const made = this.db.prepare("select created_at from accounts where created_at >= ?").all(first) as unknown as { created_at: number }[];
+    const perDay = Array.from({ length: 30 }, (_, index) => ({ day: new Date(first + index * DAY_MS).toISOString().slice(0, 10), count: 0 }));
+    for (const { created_at } of made) {
+      const slot = perDay[Math.floor((created_at - first) / DAY_MS)];
+      if (slot) slot.count++;
+    }
+    const active = (days: number) =>
+      (this.db.prepare("select count(distinct account_id) as n from sessions where last_used_at >= ?").get(now - days * DAY_MS) as { n: number }).n;
+    return { total, perDay, active7: active(7), active30: active(30) };
   }
 
   // ── Mail sent per day ──────────────────────────────────────────────────

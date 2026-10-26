@@ -6,7 +6,9 @@ import { createHash, generateKeyPairSync } from "node:crypto";
 import { signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { createAdminApp } from "./admin-app.ts";
 import { CatalogStore } from "./catalog.ts";
-import { ADMIN_JS } from "./admin-page.ts";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { AccountStore } from "./account-store.ts";
+import type { Probes } from "./admin-probes.ts";
 import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
 import { encodePng } from "./png.ts";
@@ -15,6 +17,14 @@ import { createSubmissions } from "./submissions.ts";
 const TOKEN = "t0ken-".repeat(5);
 const png = (seed: number) => encodePng(32, 32, Uint8Array.from({ length: 32 * 32 * 4 }, (_, i) => (i % 4 === 3 ? 255 : (i * seed) % 256)));
 const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
+
+// A stand-in for the built panel (apps/admin/dist).
+const panel = mkdtempSync(path.join(tmpdir(), "tavora-admin-panel-"));
+mkdirSync(path.join(panel, "assets"));
+writeFileSync(path.join(panel, "index.html"), "<!doctype html><title>Tavora Admin</title>");
+writeFileSync(path.join(panel, "favicon.svg"), "<svg xmlns='http://www.w3.org/2000/svg'/>");
+for (const name of ["panel-abc123.js", "panel-abc123.css", "inter.woff2"]) writeFileSync(path.join(panel, "assets", name), "x");
+writeFileSync(path.join(path.dirname(panel), "secret.txt"), "secret");
 
 let state: IconState;
 let submissions: ReturnType<typeof createSubmissions>;
@@ -29,7 +39,7 @@ beforeEach(() => {
   const store = createHostedStore(seed, state);
   const names: Record<string, string> = { "diablo-iv": "Diablo IV", "hades-2": "Hades II" };
   submissions = createSubmissions({ state, store, gameName: (id) => names[id] ?? null, gamesNamed: () => [] });
-  app = createAdminApp({ token: TOKEN, submissions, state, store });
+  app = createAdminApp({ token: TOKEN, submissions, state, store, adminDir: panel });
 });
 
 const call = (path: string, init: { method?: string; token?: string | null; body?: unknown; contentType?: string } = {}) =>
@@ -45,11 +55,11 @@ const post = (path: string, body: unknown) => call(path, { method: "POST", body 
 const offer = (over: Record<string, unknown> = {}, sender = "account-1") => submissions.submit({ id: "diablo-iv", name: "Diablo 4", source: "installed", icon: b64(png(3)), ...over }, sender);
 
 describe("the page", () => {
-  it("is served without a token, with a strict content security policy and no outside resources", async () => {
-    for (const path of ["/", "/admin.js", "/admin.css", "/inter.woff2"]) {
+  it("serves the built panel without a token, with a strict content security policy", async () => {
+    for (const path of ["/", "/assets/panel-abc123.js", "/assets/panel-abc123.css", "/assets/inter.woff2", "/favicon.svg"]) {
       const response = await call(path, { token: null });
       expect(response.status).toBe(200);
-      expect(response.headers.get("cache-control")).toBe(path === "/inter.woff2" ? "public, max-age=31536000, immutable" : "no-store");
+      expect(response.headers.get("cache-control")).toBe(path.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-store");
       const policy = response.headers.get("content-security-policy")!;
       expect(policy).toContain("default-src 'none'");
       expect(policy).toContain("script-src 'self'");
@@ -58,28 +68,15 @@ describe("the page", () => {
       expect(policy).toContain("frame-ancestors 'none'");
       expect(policy).toContain("font-src 'self'");
     }
-    const html = await (await call("/", { token: null })).text();
-    expect(html).not.toMatch(/https?:\/\//);
-    expect(html).not.toMatch(/<script>|onclick=|style=/);
+    expect((await call("/", { token: null })).headers.get("content-type")).toContain("text/html");
+    expect((await call("/assets/panel-abc123.js", { token: null })).headers.get("content-type")).toContain("text/javascript");
   });
 
-  it("has three tabs, opens on the ones to review, and has no token button", async () => {
-    const html = await (await call("/", { token: null })).text();
-    expect(html).toContain('data-tab="pending"');
-    expect(html).toContain('data-tab="hosted"');
-    expect(html).toContain('data-tab="reports"');
-    expect(html).toMatch(/id="panel-reports"[^>]*hidden/);
-    expect(html).toMatch(/id="panel-hosted"[^>]*hidden/);
-    expect(html).not.toMatch(/id="panel-pending"[^>]*hidden/);
-    expect(html).toContain('id="search"');
-    expect(html).not.toContain("Forget token");
-    expect(ADMIN_JS).not.toContain("forget");
-    expect(() => new Function(ADMIN_JS)).not.toThrow();
-  });
-
-  it("puts nothing a player sent into the page as markup", () => {
-    expect(ADMIN_JS).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(/);
-    expect(ADMIN_JS).toContain("textContent");
+  it("says it is not built when there is no panel folder, and serves nothing outside the folder", async () => {
+    const bare = createAdminApp({ token: TOKEN, submissions, state, store: createHostedStore({ list: () => [], file: () => null }, state), adminDir: path.join(panel, "missing") });
+    expect((await bare.request("http://admin.test/")).status).toBe(503);
+    expect((await call("/assets/..%2f..%2fsecret.txt", { token: null })).status).toBe(404);
+    expect((await call("/assets/nothing.js", { token: null })).status).toBe(404);
   });
 });
 
