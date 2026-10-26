@@ -1,6 +1,7 @@
 // Preload for the trusted host UI. Exposes a small, fixed API; the main
 // process still checks that every call comes from the host window.
 import { contextBridge, ipcRenderer } from "electron";
+import type { LayoutView } from "../shared/layout-view";
 import type { AccountView, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, PairingView, PublishView, HostShortcut, HostViewState, ModuleMenu, TavoraHostApi } from "../shared/host-api";
 
 const api: TavoraHostApi = {
@@ -20,6 +21,13 @@ const api: TavoraHostApi = {
   setPanelBounds: (bounds) => ipcRenderer.send("host:panel-bounds", bounds),
   setWorkspaceBounds: (bounds) => ipcRenderer.send("host:workspace-bounds", bounds),
   setOverlay: (open) => ipcRenderer.send("host:overlay", open),
+  layout: {
+    getState: () => ipcRenderer.invoke("layout:get-state"),
+    onState: (listener) => {
+      ipcRenderer.on("layout:state", (_event, view: LayoutView) => listener(view));
+    },
+    send: (message) => ipcRenderer.send("layout:message", message),
+  },
   setDimmed: (dimmed) => ipcRenderer.send("host:dimmed", dimmed),
   onState: (listener) => {
     ipcRenderer.on("host:state", (_event, state: HostViewState) => listener(state));

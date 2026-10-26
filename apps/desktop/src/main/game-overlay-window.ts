@@ -26,6 +26,8 @@ export interface OverlayPanel {
   setBounds(rect: Rect): void;
   setVisible(visible: boolean): void;
   setGameOpacity(opacity: Opacity): void;
+  /** Content scales with the game window's height while the panel is over the game (1 is its natural size). */
+  setGameZoom(factor: number): void;
   suspend(): void;
   resume(): void;
 }
@@ -44,10 +46,12 @@ export interface GameOverlayWindowOptions {
   moved(rect: Rect): void;
   /** The player pressed the frame's close button. */
   closeRequested(): void;
+  /** The player pressed the frame's Overlay layout button. */
+  layoutRequested(): void;
   /** The window or its page is gone (the page crashed). */
   ended(): void;
   /** The name and the close button's label the frame shows. */
-  frameText(): { name: string; closeLabel: string };
+  frameText(): { name: string; closeLabel: string; layoutLabel: string };
   /** A panel to hold instead of an overlay page. */
   panel?: OverlayPanel;
   /** The window let go of its panel; the host puts it back in its workspace slot (unless the panel itself is going). */
@@ -82,6 +86,7 @@ export class GameOverlayWindow {
   private readonly frame: WebContentsView;
   private opacityCss: string | undefined;
   private opacity: Opacity = 100;
+  private zoom = 1;
   private arranging = false;
   private drag: { rect: Rect; cursor: { x: number; y: number }; edges: Edges | null } | null = null;
   private destroyed = false;
@@ -125,7 +130,11 @@ export class GameOverlayWindow {
     const contents = window.webContents;
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
     contents.on("will-navigate", (event) => event.preventDefault());
-    contents.on("did-finish-load", () => void this.applyOpacity());
+    contents.on("did-finish-load", () => {
+      void this.applyOpacity();
+      // The page keeps the zoom it was given, but a load may reset it.
+      if (!this.options.panel && !contents.isDestroyed() && contents.getZoomFactor() !== this.zoom) contents.setZoomFactor(this.zoom);
+    });
     contents.once("render-process-gone", () => this.end());
     // A window holding a panel is never closed by the player (Alt+F4 while arranging): that would strand the panel.
     // Closing the layer (or Stop showing in game) is how it leaves. Tavora's own destroy() does not go through this.
@@ -167,6 +176,7 @@ export class GameOverlayWindow {
     frame.on("did-finish-load", () => this.sendFrameText());
     void frame.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(GAME_OVERLAY_FRAME_DOCUMENT)}`).catch(() => {});
     frame.ipc.on("game-overlay:close", () => this.arranging && options.closeRequested());
+    frame.ipc.on("game-overlay:layout", () => this.arranging && options.layoutRequested());
     frame.ipc.on("game-overlay:drag", (_event, phase: unknown, edge: unknown) => this.onDrag(phase, edge));
   }
 
@@ -186,8 +196,8 @@ export class GameOverlayWindow {
 
   private sendFrameText(): void {
     if (this.isDestroyed || this.frame.webContents.isDestroyed()) return;
-    const { name, closeLabel } = this.options.frameText();
-    this.frame.webContents.send("game-overlay:frame", name, closeLabel);
+    const { name, closeLabel, layoutLabel } = this.options.frameText();
+    this.frame.webContents.send("game-overlay:frame", name, closeLabel, layoutLabel);
   }
 
   /** Puts the window at `rect` (screen coordinates, in DIPs). */
@@ -261,6 +271,16 @@ export class GameOverlayWindow {
     this.opacity = opacity;
     if (this.options.panel) this.options.panel.setGameOpacity(opacity);
     else void this.applyOpacity();
+  }
+
+  /**
+   * Scales the page with the game window's height (contentScale): the page's own zoom for an overlay page, which has a
+   * session of its own; a style on the page for a panel, whose session is shared with the module's other panels.
+   */
+  setZoom(factor: number): void {
+    this.zoom = factor;
+    if (this.options.panel) return this.options.panel.setGameZoom(factor);
+    if (!this.isDestroyed && !this.window.webContents.isDestroyed()) this.window.webContents.setZoomFactor(factor);
   }
 
   /** Fades the page by a style of Tavora's own, so the frame on top stays clear. */

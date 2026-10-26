@@ -44,6 +44,8 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "remove-game-overlay", owner: "official", moduleId: "tavora.clock-counter", gameId: "poe2", key: "item-1" }],
   [{ type: "set-overlay-key" }],
   [{ type: "set-game-overlays-hidden", hidden: true }],
+  [{ type: "open-overlay-layout" }],
+  [{ type: "open-overlay-layout", gameId: "poe2" }],
   [{ type: "preview-overlay", owner: "official", moduleId: "tavora.clock-counter", gameId: "poe2", key: "item-1" }],
   [{ type: "set-overlay-key", gameId: "poe2", owner: "official", moduleId: "tavora.clock-counter", key: "item-1" }],
   [{ type: "reset-overlay-links" }],

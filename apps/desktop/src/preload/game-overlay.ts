@@ -6,7 +6,7 @@ import { ipcRenderer } from "electron";
 type Edge = "l" | "r" | "t" | "b" | "tl" | "tr" | "bl" | "br";
 const EDGES: Edge[] = ["l", "r", "t", "b", "tl", "tr", "bl", "br"];
 
-function build(name: string, closeLabel: string) {
+function build(name: string, closeLabel: string, layoutLabel: string) {
   const frame = document.getElementById("frame")!;
   frame.replaceChildren();
   const label = document.createElement("span");
@@ -19,6 +19,17 @@ function build(name: string, closeLabel: string) {
   close.addEventListener("pointerdown", (event) => event.stopPropagation());
   close.addEventListener("click", () => ipcRenderer.send("game-overlay:close"));
   frame.append(label, close);
+  // A small button to the Overlay layout window; panels in game have none.
+  if (layoutLabel) {
+    const layout = document.createElement("button");
+    layout.id = "layout";
+    layout.textContent = "\u229E";
+    layout.title = layoutLabel;
+    layout.setAttribute("aria-label", layoutLabel);
+    layout.addEventListener("pointerdown", (event) => event.stopPropagation());
+    layout.addEventListener("click", () => ipcRenderer.send("game-overlay:layout"));
+    frame.append(layout);
+  }
   for (const edge of EDGES) {
     const handle = document.createElement("i");
     handle.className = "edge";
@@ -45,6 +56,6 @@ function build(name: string, closeLabel: string) {
   frame.addEventListener("pointercancel", end);
 }
 
-ipcRenderer.on("game-overlay:frame", (_event, name: unknown, closeLabel: unknown) => {
-  if (typeof name === "string" && typeof closeLabel === "string") build(name, closeLabel);
+ipcRenderer.on("game-overlay:frame", (_event, name: unknown, closeLabel: unknown, layoutLabel: unknown) => {
+  if (typeof name === "string" && typeof closeLabel === "string" && typeof layoutLabel === "string") build(name, closeLabel, layoutLabel);
 });

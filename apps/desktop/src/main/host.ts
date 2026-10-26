@@ -12,6 +12,7 @@ import {
   app,
   BrowserWindow,
   clipboard,
+  desktopCapturer,
   dialog,
   globalShortcut,
   ipcMain,
@@ -114,6 +115,10 @@ import { GameOverlayWindow } from "./game-overlay-window";
 import { GameVeilWindow } from "./game-veil-window";
 import { GameOverlays, layerBinding, toggleBinding, type OverlayWindowRequest } from "./game-overlay-service";
 import { scopeForKind } from "./game-overlays";
+import { OverlayLayout } from "./overlay-layout";
+import { OverlayLayoutWindow } from "./overlay-layout-window";
+import { LayoutPictures, MAX_PICTURE_BYTES, MAX_PICTURE_WIDTH, PICTURES_FOLDER, sourceForHandle } from "./layout-pictures";
+import { LAYOUT_ACTIONS, parseLayoutMessage, requestForWindow } from "../shared/layout-view";
 import { OverlayPreviews } from "./overlay-previews";
 import { OverlayPreviewWindow } from "./overlay-preview-window";
 import { GameWatcher } from "./game-watch";
@@ -180,7 +185,7 @@ import {
 } from "./workspace";
 import type { PanelContent, PanelLaunch } from "./panel-content";
 import type { PanelOpenResult } from "@tavora/sdk/protocol";
-import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
+import { initialBounds, initialLayoutBounds, MIN_SIZE, type WindowState } from "./window-state";
 import { layoutKey, ON_SCREEN_MS, OpenTimes, PanelCover } from "./panel-cover";
 
 interface Rect {
@@ -383,6 +388,15 @@ export class Host {
   private gameOverlays!: GameOverlays;
   /** The preview windows of overlays (overlay-previews.ts). */
   private previews!: OverlayPreviews;
+  /** The Overlay layout window and what it shows (overlay-layout.ts). */
+  private layout!: OverlayLayout;
+  private layoutWindow: OverlayLayoutWindow | null = null;
+  /** True while an action from the Overlay layout window runs, so what it opens (the hotkey dialog) is for that window. */
+  private actionFromLayout = false;
+  /** The hotkey dialog asked for by the Overlay layout (its request id): it shows there only, not in the main window. */
+  private layoutKeyRequest: number | null = null;
+  /** True while a hotkey dialog is being opened for the Overlay layout, so the layout comes forward, not the main window. */
+  private focusLayout = false;
   /** Modules in the player's folder whose zip Tavora blocked: not loaded, data kept. */
   private blockedModules = new Map<string, InstalledModule>();
   /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
@@ -625,6 +639,7 @@ export class Host {
         "game-icons": path.join(userData, "game-icons"),
         "steam-icons": path.join(userData, "steam-icons"),
         profile: path.join(userData, "profile"),
+        [PICTURES_FOLDER]: path.join(userData, PICTURES_FOLDER),
       },
       options.devServer,
     );
@@ -666,6 +681,7 @@ export class Host {
     host.streaming = await Host.streamingService(host);
     host.gameOverlays = await Host.gameOverlayService(host);
     host.previews = Host.previewService(host);
+    host.layout = Host.layoutService(host);
     host.safetyLists = safetyLists;
     host.blockedModules = blockedModules;
     await host.moveAiUsagePanelData();
@@ -1539,13 +1555,20 @@ export class Host {
     const fromHost = (event: IpcMainInvokeEvent | IpcMainEvent) =>
       event.sender.id === this.window.webContents.id && event.senderFrame?.parent === null;
 
-    ipcMain.handle("host:get-state", (event) => (fromHost(event) ? this.viewState() : null));
+    // The Overlay layout window's page with the list may ask for the host's state and for the few actions it needs.
+    const layoutPage = (event: IpcMainInvokeEvent | IpcMainEvent) => this.layoutWindow?.kindOf(event.sender.id, event.senderFrame?.parent === null) ?? null;
+    const fromLayout = (event: IpcMainInvokeEvent | IpcMainEvent) => layoutPage(event) === "shell";
+    // Both pages read the state (the theme and language); only the one with the list may act.
+    ipcMain.handle("host:get-state", (event) => (fromHost(event) ? this.viewState() : layoutPage(event) !== null ? this.viewState("layout") : null));
     const handlers = this.actionHandlers();
     ipcMain.handle("host:action", async (event, raw: unknown): Promise<ActionResult> => {
-      if (!fromHost(event)) return { ok: false, error: translate(this.language, "error.notAllowed") };
+      const layoutOnly = !fromHost(event) && fromLayout(event);
+      if (!fromHost(event) && !layoutOnly) return { ok: false, error: translate(this.language, "error.notAllowed") };
       const action = parseAction(raw);
       if (!action) return { ok: false, error: translate(this.language, "error.notUnderstood") };
+      if (layoutOnly && !LAYOUT_ACTIONS.has(action.type)) return { ok: false, error: translate(this.language, "error.notAllowed") };
       try {
+        this.actionFromLayout = layoutOnly;
         return await runAction(handlers, action);
       } catch (error) {
         if (error instanceof PlayerError) {
@@ -1556,6 +1579,14 @@ export class Host {
       } finally {
         this.pushState();
       }
+    });
+    // The Overlay layout window's two pages: the shell and the layer on the canvas.
+    const layoutSender = (event: IpcMainInvokeEvent | IpcMainEvent) => this.layoutWindow?.kindOf(event.sender.id, event.senderFrame?.parent === null) ?? null;
+    ipcMain.handle("layout:get-state", (event) => (layoutSender(event) ? this.layout.view() : null));
+    ipcMain.on("layout:message", (event, raw: unknown) => {
+      const kind = layoutSender(event);
+      const message = kind ? parseLayoutMessage(raw) : null;
+      if (kind && message) this.layout.handle(message, kind === "shell");
     });
     ipcMain.handle("host:get-discord", (event) => (fromHost(event) ? this.discord.view() : null));
     ipcMain.handle("host:get-ai-usage", (event) => (fromHost(event) ? this.aiUsage.view() : null));
@@ -1940,6 +1971,7 @@ export class Host {
         this.library.overlaysStay = action.enabled;
         this.gameOverlays.tick();
       }),
+      "open-overlay-layout": (action) => this.layout.open(action.gameId ?? this.game?.id ?? null),
       "set-game-overlays-hidden": (action) => {
         this.gameOverlays.setHidden(action.hidden);
         this.syncGameWatcher();
@@ -1966,8 +1998,11 @@ export class Host {
         if (overlay && !this.gameOverlays.hasKey(overlay)) return;
         const binding = overlay ? toggleBinding(overlay) : layerBinding();
         const names = this.gameOverlays.dialogNames(binding);
-        // The dialog is answered by hotkey-answer; this action only opens it.
+        // The dialog is answered by hotkey-answer; this action only opens it, in the window that asked.
+        this.focusLayout = this.actionFromLayout;
         void this.streaming.askOverlayKey(binding, names.label, { module: names.module, action: names.action });
+        this.focusLayout = false;
+        this.layoutKeyRequest = this.actionFromLayout ? (this.streaming.request()?.id ?? null) : null;
       },
       "set-overlay-port": (action) => this.streaming.setPort(action.port),
       "reset-overlay-links": () => this.streaming.resetLinks(),
@@ -2297,7 +2332,7 @@ export class Host {
     const source = await this.pickPath("game-image", {
       title: translate(this.language, "dialog.chooseIcon"),
       properties: ["openFile"],
-      filters: [{ name: translate(this.language, "dialog.images"), extensions: ["png", "jpg", "jpeg", "webp"] }],
+      filters: [{ name: translate(this.language, "dialog.images"), extensions: ["png", "jpg", "jpeg"] }],
     });
     if (!source) return;
     const file = await importIcon(this.iconDir, gameId, source);
@@ -2596,6 +2631,7 @@ export class Host {
     this.data.forgetGame(game.id);
     this.streaming.forgetGame(game.id);
     this.gameOverlays.forgetGame(game.id);
+    this.layout.forgetGame(game.id);
     // A folder the player chose can be gone (an unplugged drive): the game still goes, and they are told where its pictures may remain.
     await this.files.noteGameDeleted(game.name, (root) => deleteModuleData(this.options.userData, game.id, root));
     await this.dropIconFile(game.icon);
@@ -2701,6 +2737,8 @@ export class Host {
   private gamesRunning(running: ReadonlySet<string>, initial: boolean): void {
     // The watcher stops when the window closes and reports every game as closed: there is nothing left to switch.
     if (this.windowClosed) return;
+    // Game overlays forget the window of a game that stopped, whatever the switch below says.
+    this.gameOverlays?.gamesRunning(running);
     // With "When a game starts" off the watcher only serves game overlays, which look at the window in front themselves.
     if (this.library.gameStart === "off") {
       this.running = [];
@@ -3486,6 +3524,7 @@ export class Host {
       gameBounds: request.gameBounds,
       moved: request.moved,
       closeRequested: request.closeRequested,
+      layoutRequested: request.layoutRequested,
       ended: request.ended,
       frameText: request.frameText,
       panel: view,
@@ -3750,7 +3789,8 @@ export class Host {
     };
   }
 
-  private viewState(): HostViewState {
+  /** What the host UI shows. `target`: the window it is for; the hotkey dialog is in the one that asked for it only. */
+  private viewState(target: "main" | "layout" = "main"): HostViewState {
     const library = this.library;
     const game = this.game;
     const workspace = game ? this.workspaces.game(game.id) : emptyGameWorkspace();
@@ -3906,7 +3946,7 @@ export class Host {
       streaming: this.streaming.view(),
       gameOverlays: this.gameOverlays.view(),
       pendingConnector: this.pendingConnector && { id: this.pendingConnector.id, moduleId: this.pendingConnector.moduleId, connectors: [this.pendingConnector.connector] },
-      hotkeyRequest: this.streaming.request(),
+      hotkeyRequest: requestForWindow(this.streaming.request(), this.layoutKeyRequest, target),
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
@@ -3963,6 +4003,10 @@ export class Host {
     this.streaming?.sync();
     this.syncConnection();
     if (!this.window.isDestroyed()) this.window.webContents.send("host:state", this.viewState());
+    if (this.layoutWindow) {
+      this.layoutWindow.sendHostState(this.viewState("layout"));
+      this.layout.refresh();
+    }
   }
 
   private statePush: ReturnType<typeof setImmediate> | undefined;
@@ -3987,9 +4031,9 @@ export class Host {
    * that folder is still there. Answers with what was picked, or nothing when cancelled; the caller
    * remembers it (rememberPicked) only once it worked, so a zip that failed to install is not where it opens next.
    */
-  private async pickPath(place: DialogPlace, options: OpenDialogOptions): Promise<string | undefined> {
+  private async pickPath(place: DialogPlace, options: OpenDialogOptions, parent: BrowserWindow = this.window): Promise<string | undefined> {
     const folder = this.library.dialogFolders[place];
-    const picked = await dialog.showOpenDialog(this.window, { ...options, ...(folder && existsSync(folder) ? { defaultPath: folder } : {}) });
+    const picked = await dialog.showOpenDialog(parent, { ...options, ...(folder && existsSync(folder) ? { defaultPath: folder } : {}) });
     const file = picked.filePaths[0];
     return picked.canceled || !file ? undefined : file;
   }
@@ -4170,10 +4214,88 @@ export class Host {
     });
   }
 
+  /** The Overlay layout (overlay-layout.ts): the window where the player arranges the overlays and panels in game. */
+  private static layoutService(host: Host): OverlayLayout {
+    const options = host.options;
+    const pictures = new LayoutPictures(path.join(options.userData, PICTURES_FOLDER));
+    const layout: OverlayLayout = new OverlayLayout({
+      source: host.gameOverlays.layout,
+      pictures,
+      gameName: (gameId) => host.library.games[gameId]?.name ?? null,
+      screen: () => screen.getPrimaryDisplay().workArea,
+      enabled: () => host.library.gameOverlays,
+      language: () => host.language,
+      openWindow: (request) => {
+        const source = host.gameOverlays.layout;
+        const page = options.devServer ? new URL("layout.html", options.devServer) : new URL("layout.html", `${HOST_SCHEME}://app/`);
+        const window = new OverlayLayoutWindow({
+          preload: options.hostPreload,
+          hidden: !!options.hidden,
+          title: translate(host.language, "overlays.layout.title"),
+          icon: options.icon,
+          background: host.currentTheme.colors.background,
+          devTools: options.devTools,
+          bounds: initialLayoutBounds(
+            source.window(),
+            screen.getAllDisplays().map((display) => display.workArea),
+            screen.getPrimaryDisplay().workArea,
+            source.gameWindow(),
+          ),
+          address: (part) => `${page.href.split("#")[0]}#${part}`,
+          boundsChanged: (state) => source.setWindow(state),
+          closed: () => {
+            host.layoutWindow = null;
+            request.closed();
+          },
+        });
+        host.layoutWindow = window;
+        return window;
+      },
+      // Only on the player's click, only the game's own window, with the OS's window capture (as OBS's Window Capture does).
+      capture: async (handle, size) => {
+        if (options.hidden) return null;
+        // The first look asks for no picture at all (a 0 x 0 thumbnail), only for the list: no such window open, nothing to take.
+        const listed = await desktopCapturer.getSources({ types: ["window"], thumbnailSize: { width: 0, height: 0 }, fetchWindowIcons: false });
+        const wanted = sourceForHandle(listed, handle);
+        if (!wanted) return null;
+        // Electron can't capture one window alone: it takes a picture of every open window at this size and hands them all
+        // over. Tavora keeps the game's by its id and lets the rest go at once, unread.
+        const sources = await desktopCapturer.getSources({ types: ["window"], thumbnailSize: size, fetchWindowIcons: false });
+        const found = sources.find((source) => source.id === wanted.id);
+        return found && !found.thumbnail.isEmpty() ? found.thumbnail.toPNG() : null;
+      },
+      choose: async () => {
+        const parent = host.layoutWindow?.browserWindow;
+        const file = await host.pickPath(
+          "layout-picture",
+          {
+            title: translate(host.language, "overlays.layout.chooseTitle"),
+            properties: ["openFile"],
+            filters: [{ name: translate(host.language, "dialog.images"), extensions: ["png", "jpg", "jpeg", "webp"] }],
+          },
+          parent && !parent.isDestroyed() ? parent : host.window,
+        );
+        if (!file) return "cancelled";
+        try {
+          if ((await stat(file)).size > MAX_PICTURE_BYTES) return "bad";
+          let image = nativeImage.createFromBuffer(await readFile(file));
+          if (image.isEmpty()) return "bad";
+          if (image.getSize().width > MAX_PICTURE_WIDTH) image = image.resize({ width: MAX_PICTURE_WIDTH });
+          host.rememberPicked("layout-picture", file);
+          return image.toPNG();
+        } catch {
+          return "bad";
+        }
+      },
+    });
+    return layout;
+  }
+
   /** Closes every window Tavora drew over a game and every preview, at once (quitting, a signal, the process exiting). */
   closeOverlayWindows(): void {
     this.gameOverlays?.closeNow();
     this.previews?.closeAll();
+    this.layout?.close();
   }
 
   /** Game overlays over the game in front, lent what they need of the host. */
@@ -4218,10 +4340,12 @@ export class Host {
           gameBounds: request.gameBounds,
           moved: request.moved,
           closeRequested: request.closeRequested,
+          layoutRequested: request.layoutRequested,
           ended: request.ended,
           frameText: request.frameText,
         }),
       shortcuts: globalShortcut,
+      openLayout: (gameId) => host.layout.open(gameId),
       openSetting: (setting) => {
         host.bringToFront();
         host.window.webContents.send("host:shortcut", `setting:${setting}`);
@@ -4267,6 +4391,12 @@ export class Host {
         host.window.webContents.send("host:shortcut", `setting:${setting}`);
       },
       focus: () => {
+        // The dialog is in the window that asked for it.
+        if (host.focusLayout && host.layoutWindow && !host.layoutWindow.isDestroyed) {
+          host.layoutWindow.focus();
+          host.layoutWindow.browserWindow.webContents.focus();
+          return;
+        }
         host.bringToFront();
         host.window.webContents.focus();
       },

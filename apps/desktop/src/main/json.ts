@@ -24,6 +24,12 @@ export function serializeJson(value: unknown, what: string): string {
   return JSON.stringify(value);
 }
 
+/** Renames a file aside (never overwrites it), so a newer or unreadable file is kept and the store starts empty. */
+export async function setAside(file: string): Promise<void> {
+  await rename(file, `${file}.corrupt-${Date.now()}`);
+  console.error(`[tavora] unreadable file has been set aside: ${file}`);
+}
+
 /**
  * Reads a JSON file. Missing gives null; unreadable JSON is renamed aside
  * (never overwritten) and also gives null.
@@ -39,8 +45,7 @@ export async function readJsonOrSetAside<T>(file: string): Promise<T | null> {
   try {
     return JSON.parse(text) as T;
   } catch {
-    await rename(file, `${file}.corrupt-${Date.now()}`);
-    console.error(`[tavora] unreadable file has been set aside: ${file}`);
+    await setAside(file);
     return null;
   }
 }

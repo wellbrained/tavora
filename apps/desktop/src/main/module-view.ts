@@ -933,14 +933,14 @@ export class ModuleView {
    * with the same bridge; only the look changes (see through, as the player set it) and clicks and keys count as the
    * player's while `arranging()` is true.
    */
-  private overGame: { arranging(): boolean; opacity: Opacity; css: string | undefined } | null = null;
+  private overGame: { arranging(): boolean; opacity: Opacity; zoom: number; css: string | undefined } | null = null;
 
   get isOverGame(): boolean {
     return this.overGame !== null;
   }
 
   enterGame(arranging: () => boolean): void {
-    this.overGame = { arranging, opacity: 100, css: undefined };
+    this.overGame = { arranging, opacity: 100, zoom: 1, css: undefined };
     // Without a colour of its own, so the opacity the player chose lets the game show through.
     this.view.setBackgroundColor("#00000000");
   }
@@ -968,6 +968,14 @@ export class ModuleView {
     void this.applyGameOpacity();
   }
 
+  /** Scales the panel with the game window's height. A style, not the page's zoom: that is shared with the module's other panels of this game. */
+  setGameZoom(factor: number): void {
+    const away = this.overGame;
+    if (!away || away.zoom === factor) return;
+    away.zoom = factor;
+    void this.applyGameOpacity();
+  }
+
   private gameOpacityQueue: Promise<void> = Promise.resolve();
 
   private applyGameOpacity(): Promise<void> {
@@ -977,7 +985,8 @@ export class ModuleView {
       if (contents.isDestroyed() || !away) return;
       try {
         if (away.css) await contents.removeInsertedCSS(away.css);
-        away.css = away.opacity === 100 ? undefined : await contents.insertCSS(`html{opacity:${away.opacity / 100} !important}`, { cssOrigin: "user" });
+        const rules = [away.opacity === 100 ? "" : `opacity:${away.opacity / 100} !important;`, away.zoom === 1 ? "" : `zoom:${away.zoom} !important;`].join("");
+        away.css = rules ? await contents.insertCSS(`html{${rules}}`, { cssOrigin: "user" }) : undefined;
       } catch {
         // The page went away; the next load sets it again.
       }

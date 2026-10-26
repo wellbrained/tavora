@@ -6,8 +6,25 @@
 // (hotkeys.ts), under the action below; so do the keys that toggle overlays.
 import path from "node:path";
 import { LIMITS, OVERLAY_KEY } from "@tavora/sdk/protocol";
+import { DEFAULT_GRID, isGridSetting, type GridSetting } from "../shared/layout-math";
+import {
+  DEFAULT_PANEL_ANCHORED,
+  DEFAULT_RECT,
+  MIN_OVERLAY_SIZE,
+  migrateLegacy,
+  normalizeAnchored,
+  normalizeLegacy,
+  placeAnchored,
+  placeLegacy,
+  type AnchoredRect,
+  type LegacyRect,
+  type Rect,
+} from "../shared/overlay-anchor";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
-import { readJsonOrSetAside } from "./json";
+import { readJsonOrSetAside, setAside } from "./json";
+import type { WindowState } from "./window-state";
+
+export { MIN_OVERLAY_SIZE, type Rect };
 
 export const GAME_OVERLAYS_FILE = "game-overlays.json";
 
@@ -41,35 +58,35 @@ export type OverlayScope = "game" | "all";
 /** The scope for something made in a library entry of this kind. */
 export const scopeForKind = (kind: string | undefined): OverlayScope => (kind === "game" ? "game" : "all");
 
-export interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+/**
+ * The size the fractions kept for older Tavoras (`rect` in the file) are computed on when no window size was seen for
+ * the game, and the Overlay layout's canvas before the game was seen.
+ */
+export const DEFAULT_GAME_SIZE = { width: 1920, height: 1080 } as const;
 
-/** Where an overlay sits in the game's window, as fractions of the window's size, so resolution changes keep it. */
-export type RelativeRect = Rect;
+/** The smallest window that counts as the game's: a launcher or splash screen is smaller, and no position is converted on it. */
+export const MIN_REAL_WINDOW = { width: 640, height: 480 } as const;
 
-/** An overlay can't be smaller than this on screen, so it can always be grabbed. */
-export const MIN_OVERLAY_SIZE = 48;
-/** What a new overlay is given: the top left corner of the game window. */
-export const DEFAULT_RELATIVE_RECT: RelativeRect = { x: 0.02, y: 0.03, width: 0.2, height: 0.16 };
-/** A panel in the game is taller than an overlay page: it is a whole panel, not one number. */
-export const DEFAULT_PANEL_RECT: RelativeRect = { x: 0.02, y: 0.03, width: 0.22, height: 0.4 };
+/** Whether this is the size of a game's real window (not a launcher's or a splash screen's). */
+export const isRealWindow = (size: { width: number; height: number }) => size.width >= MIN_REAL_WINDOW.width && size.height >= MIN_REAL_WINDOW.height;
 
 /**
  * Where a panel or overlay shown in the game starts: in the corner of `usual`, at the size its module prefers (a panel's
- * preferred viewport, an overlay's `overlaySize`) in a window of `area`'s size, so it isn't stretched. Without a
- * preferred size, or before any game window is known, it gets `usual`'s size.
+ * preferred viewport, an overlay's `overlaySize`, both in pixels) in a window of `area`'s size, so it isn't stretched.
+ * Without a preferred size, or before any game window is known, it gets `usual`'s size.
+ *
+ * `area` is the game window in front, else the one seen last, else the main screen (GameOverlays.startArea). Sizes are
+ * kept in units of the window's height, so the preferred pixels are divided by `area.height`: on that window the item
+ * is exactly as big on screen as asked, and on a taller or wider one it keeps its share of the height.
  */
-export function startRect(preferred: { width?: number | undefined; height?: number | undefined } | null, area: Rect | null, usual: RelativeRect = DEFAULT_PANEL_RECT): RelativeRect {
+export function startRect(preferred: { width?: number | undefined; height?: number | undefined } | null, area: Rect | null, usual: AnchoredRect = DEFAULT_PANEL_ANCHORED): AnchoredRect {
   if (!area || area.width <= 0 || area.height <= 0) return { ...usual };
-  const share = (size: number | undefined, of: number, room: number, fallback: number) => (size && size > 0 ? Math.min(room, size / of) : fallback);
+  // What is left of the window after the start offset caps the size (the width in units of height: the window's shape counts).
+  const share = (size: number | undefined, room: number, fallback: number) => (size && size > 0 ? Math.min(room, size / area.height) : fallback);
   return {
     ...usual,
-    width: share(preferred?.width, area.width, 1 - usual.x, usual.width),
-    height: share(preferred?.height, area.height, 1 - usual.y, usual.height),
+    width: share(preferred?.width, area.width / area.height - usual.x, usual.width),
+    height: share(preferred?.height, 1 - usual.y, usual.height),
   };
 }
 
@@ -87,7 +104,12 @@ export interface GameOverlay extends GameOverlaySubject {
   opacity: Opacity;
   /** Whether the window is hidden from screen capture (opt-in; off by default, as some anti-cheats flag it). */
   hideFromCapture: boolean;
-  rect: RelativeRect;
+  rect: AnchoredRect;
+  /**
+   * Set while the position is not converted yet: the fractions of the window an older Tavora saved. The item is placed
+   * the old way (placeItem) until the game's real window size is seen; `rect` is only a stand-in then.
+   */
+  legacy?: LegacyRect;
 }
 
 /** A panel the player chose to show in their game (by its instance id). It is over the game only while the layer is open. */
@@ -98,17 +120,50 @@ export interface InGamePanel {
   gameId: string;
   scope: OverlayScope;
   instanceId: string;
-  rect: RelativeRect;
+  rect: AnchoredRect;
+  /** Set until the position is converted, as on GameOverlay. */
+  legacy?: LegacyRect;
   /** Its live view (the module's overlay page over the game while the layer is closed): always there, or with a key of its own. */
   mode: OverlayMode;
   opacity: Opacity;
   hideFromCapture: boolean;
 }
 
-type GameOverlayFile = { version?: number; exclusiveHintShown?: boolean; overlays: GameOverlay[]; panels: InGamePanel[] };
+/**
+ * The file's version now. Version 3 keeps each position twice: `anchor` (an AnchoredRect) and `rect` (fractions of the
+ * window, as versions 1 and 2 kept them, computed on the last window size seen), so an older Tavora still places things
+ * right. An item without `anchor` is not converted yet. A file of a higher version is never overwritten.
+ */
+export const FILE_VERSION = 3;
+
+/** Where an item sits: placed the old way until it is converted, else anchored to the game window. */
+export function placeItem(item: { rect: AnchoredRect; legacy?: LegacyRect }, game: Rect, min?: number): Rect {
+  return item.legacy ? placeLegacy(item.legacy, game, min) : placeAnchored(item.rect, game, min);
+}
+
+/** The size of a game's window as last seen (DIPs), kept to draw the Overlay layout's canvas and to convert old positions. */
+export interface SeenSize {
+  width: number;
+  height: number;
+}
+
+/** What the file keeps of a position: fractions of the window (for older Tavoras, and all there is until converted) and the anchor. */
+type StoredPosition = { rect: LegacyRect; anchor?: AnchoredRect };
+
+type GameOverlayFile = {
+  version?: number;
+  exclusiveHintShown?: boolean;
+  /** The Overlay layout: the grid setting, the window's place and the last window size seen per game. */
+  layout?: { grid?: GridSetting; window?: WindowState; seen?: Record<string, SeenSize> };
+  overlays: unknown[];
+  panels: unknown[];
+};
 
 /** What the player can change on an existing overlay. */
 export type GameOverlayChange = Partial<Pick<GameOverlay, "mode" | "opacity" | "hideFromCapture" | "rect">>;
+
+/** The most games whose window size is kept. */
+const MAX_SEEN = 200;
 
 export const sameOverlay = (a: GameOverlaySubject, b: GameOverlaySubject) => a.owner === b.owner && a.moduleId === b.moduleId && a.gameId === b.gameId && a.key === b.key;
 
@@ -136,36 +191,6 @@ export const isLive = (panelInGame: boolean, moduleOverlays: number) => panelInG
 // ── Where an overlay sits ──────────────────────────────────────────────
 
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
-
-/** A saved rectangle that makes sense: finite fractions, inside the window, not smaller than a sliver. */
-export function normalizeRelative(rect: unknown): RelativeRect | null {
-  if (typeof rect !== "object" || rect === null) return null;
-  const { x, y, width, height } = rect as Record<string, unknown>;
-  if (![x, y, width, height].every((value) => typeof value === "number" && Number.isFinite(value))) return null;
-  const w = clamp(width as number, 0.02, 1);
-  const h = clamp(height as number, 0.02, 1);
-  return { x: clamp(x as number, 0, 1 - w), y: clamp(y as number, 0, 1 - h), width: w, height: h };
-}
-
-/** Where a relative rectangle lands in the game's window `game` (screen coordinates), always inside it. */
-export function placeRelative(rel: RelativeRect, game: Rect): Rect {
-  const width = Math.min(game.width, Math.max(MIN_OVERLAY_SIZE, Math.round(rel.width * game.width)));
-  const height = Math.min(game.height, Math.max(MIN_OVERLAY_SIZE, Math.round(rel.height * game.height)));
-  const x = clamp(game.x + Math.round(rel.x * game.width), game.x, game.x + game.width - width);
-  const y = clamp(game.y + Math.round(rel.y * game.height), game.y, game.y + game.height - height);
-  return { x, y, width, height };
-}
-
-/** The relative rectangle of a rectangle on screen, for saving what the player dragged. */
-export function relativeTo(rect: Rect, game: Rect): RelativeRect {
-  if (game.width <= 0 || game.height <= 0) return { ...DEFAULT_RELATIVE_RECT };
-  return normalizeRelative({
-    x: (rect.x - game.x) / game.width,
-    y: (rect.y - game.y) / game.height,
-    width: rect.width / game.width,
-    height: rect.height / game.height,
-  })!;
-}
 
 /** The rectangle a drag or resize makes: `rect` moved by (dx, dy), or with the edges in `edges` pulled, kept inside the game window. */
 export function dragRect(rect: Rect, game: Rect, edges: { left?: boolean; right?: boolean; top?: boolean; bottom?: boolean } | null, dx: number, dy: number): Rect {
@@ -251,10 +276,25 @@ export type AddResult = "added" | "exists" | "full";
 
 const INSTANCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const validField = (value: unknown) => typeof value === "string" && value.length > 0 && value.length <= 128;
+/** A window size that is a size: whole numbers, big enough to be a window, not absurd. */
+function validSize(value: unknown): SeenSize | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { width, height } = value as Record<string, unknown>;
+  if (typeof width !== "number" || typeof height !== "number" || !Number.isFinite(width) || !Number.isFinite(height)) return null;
+  const w = Math.round(width);
+  const h = Math.round(height);
+  return w >= 100 && h >= 100 && w <= 20_000 && h <= 20_000 ? { width: w, height: h } : null;
+}
 
 export class GameOverlayStore {
-  /** The file was of an older version; it is written as version 2 from now on. */
+  /** The file was of version 1 (Tavora 0.21.0 and before); it is written as the current version from now on. */
   migrated = false;
+  /** The file was of version 2 or 1: its positions convert as the games' windows are seen, and it is written as version 3 from now on. */
+  upgraded = false;
+  /** The Overlay layout's grid, its window's place and the last window size seen per game. */
+  private gridSetting: GridSetting = DEFAULT_GRID;
+  private windowState: WindowState | null = null;
+  private seen = new Map<string, SeenSize>();
   private readonly queue = new SerialQueue();
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -268,18 +308,43 @@ export class GameOverlayStore {
   /**
    * Loads what was kept. A file of version 1 (Tavora 0.21.0 and before) is migrated: its overlays have no scope, so
    * `scopeOf` tells it from the workspace's kind, and the permanent panels over the game it may hold (keys behind
-   * RESERVED_KEY_PREFIX) are not kept. `migrated` says so. A file of version 2 is taken as it is.
+   * RESERVED_KEY_PREFIX) are not kept. `migrated` says so. Positions of a file of version 2 or 1 were fractions of the
+   * game window and stay so (`legacy`) until the game's real window is seen (convertLegacy), because older Tavoras never
+   * kept its size. `upgraded` says so. A file of a higher version (a newer Tavora wrote it) is set aside, not read.
    */
   static async load(userData: string, scopeOf: (gameId: string) => OverlayScope = () => "game"): Promise<GameOverlayStore> {
     const file = path.join(userData, GAME_OVERLAYS_FILE);
-    const raw = await readJsonOrSetAside<Partial<GameOverlayFile>>(file);
+    const read = await readJsonOrSetAside<Partial<GameOverlayFile>>(file);
+    const newer = typeof read?.version === "number" && read.version > FILE_VERSION;
+    // Written by a newer Tavora: kept for that one, and never written over.
+    if (newer) await setAside(file);
+    const raw = newer ? null : read;
     const store = new GameOverlayStore(file, [], [], raw?.exclusiveHintShown === true);
-    store.migrated = raw !== null && raw !== undefined && raw.version !== 2;
+    const known = raw !== null && raw !== undefined;
+    store.migrated = known && raw.version !== 2 && raw.version !== FILE_VERSION;
+    store.upgraded = known && raw.version !== FILE_VERSION;
+    const layout = typeof raw?.layout === "object" && raw.layout !== null ? raw.layout : {};
+    if (isGridSetting(layout.grid)) store.gridSetting = layout.grid;
+    store.windowState = layout.window && typeof layout.window === "object" ? layout.window : null;
+    for (const [gameId, size] of Object.entries(typeof layout.seen === "object" && layout.seen !== null ? layout.seen : {}).slice(0, MAX_SEEN)) {
+      const valid = validSize(size);
+      if (valid && validField(gameId)) store.seen.set(gameId, valid);
+    }
+    /** A saved position: the anchor when there is one, else the fractions, which wait to be converted. */
+    const positionOf = (entry: object): Pick<GameOverlay, "rect" | "legacy"> | null => {
+      const { rect, anchor } = entry as Partial<Record<keyof StoredPosition, unknown>>;
+      const anchored = normalizeAnchored(anchor);
+      if (anchored) return { rect: anchored };
+      const legacy = normalizeLegacy(rect);
+      // The stand-in is only there because a rectangle must exist; placeItem places the legacy one.
+      return legacy ? { rect: migrateLegacy(legacy, DEFAULT_GAME_SIZE), legacy } : null;
+    };
     for (const entry of Array.isArray(raw?.overlays) ? raw.overlays : []) {
       if (typeof entry !== "object" || entry === null) continue;
-      const { owner, moduleId, gameId, key, scope, mode, opacity, hideFromCapture, rect } = entry as Partial<Record<keyof GameOverlay, unknown>>;
-      const relative = normalizeRelative(rect);
-      if (![owner, moduleId, gameId].every(validField) || typeof key !== "string" || !OVERLAY_KEY.test(key) || (store.migrated && key.startsWith(RESERVED_KEY_PREFIX)) || !relative) continue;
+      const { owner, moduleId, gameId, key, scope, mode, opacity, hideFromCapture } = entry as Partial<Record<keyof GameOverlay, unknown>>;
+      if (![owner, moduleId, gameId].every(validField)) continue;
+      const position = positionOf(entry);
+      if (typeof key !== "string" || !OVERLAY_KEY.test(key) || (store.migrated && key.startsWith(RESERVED_KEY_PREFIX)) || !position) continue;
       const overlay: GameOverlay = {
         owner: owner as string,
         moduleId: moduleId as string,
@@ -289,23 +354,24 @@ export class GameOverlayStore {
         mode: mode === "toggle" ? "toggle" : "always",
         opacity: OPACITIES.find((value) => value === opacity) ?? 100,
         hideFromCapture: hideFromCapture === true,
-        rect: relative,
+        ...position,
       };
       if (store.find(overlay) || store.count(bucketOf(overlay)) >= LIMITS.maxGameOverlays) continue;
       store.overlays.push(overlay);
     }
     for (const entry of Array.isArray(raw?.panels) ? raw.panels : []) {
       if (typeof entry !== "object" || entry === null) continue;
-      const { owner, moduleId, gameId, scope, instanceId, rect, mode, opacity, hideFromCapture } = entry as Partial<Record<keyof InGamePanel, unknown>>;
-      const relative = normalizeRelative(rect);
-      if (![owner, moduleId, gameId].every(validField) || typeof instanceId !== "string" || !INSTANCE_ID.test(instanceId) || !relative) continue;
+      const { owner, moduleId, gameId, scope, instanceId, mode, opacity, hideFromCapture } = entry as Partial<Record<keyof InGamePanel, unknown>>;
+      if (![owner, moduleId, gameId].every(validField)) continue;
+      const position = positionOf(entry);
+      if (typeof instanceId !== "string" || !INSTANCE_ID.test(instanceId) || !position) continue;
       const panel: InGamePanel = {
         owner: owner as string,
         moduleId: moduleId as string,
         gameId: gameId as string,
         scope: scope === "all" || scope === "game" ? scope : scopeOf(gameId as string),
         instanceId,
-        rect: relative,
+        ...position,
         mode: mode === "toggle" ? "toggle" : "always",
         opacity: OPACITIES.find((value) => value === opacity) ?? 100,
         hideFromCapture: hideFromCapture === true,
@@ -347,13 +413,13 @@ export class GameOverlayStore {
   }
 
   /** Where the next one of a bucket starts: below the others, so a second one doesn't hide the first. */
-  private startRect(first: RelativeRect, bucket: string): RelativeRect {
+  private startRect(first: AnchoredRect, bucket: string): AnchoredRect {
     const row = this.count(bucket) % 4;
     return { ...first, y: Math.min(first.y + row * (first.height + 0.02), 1 - first.height) };
   }
 
   /** Adds an overlay with the usual settings, in the corner of the game's window; a game (and the general ones) may have `LIMITS.maxGameOverlays`. */
-  add(subject: GameOverlaySubject, scope: OverlayScope, first: RelativeRect = DEFAULT_RELATIVE_RECT): AddResult {
+  add(subject: GameOverlaySubject, scope: OverlayScope, first: AnchoredRect = DEFAULT_RECT): AddResult {
     if (this.find(subject)) return "exists";
     const bucket = bucketOf({ scope, gameId: subject.gameId });
     if (this.count(bucket) >= LIMITS.maxGameOverlays) return "full";
@@ -363,7 +429,7 @@ export class GameOverlayStore {
   }
 
   /** Marks a panel as shown in the game; it counts toward the same limit as overlays. */
-  addPanel(panel: Omit<InGamePanel, "rect" | "mode" | "opacity" | "hideFromCapture">, first: RelativeRect = DEFAULT_PANEL_RECT): AddResult {
+  addPanel(panel: Omit<InGamePanel, "rect" | "mode" | "opacity" | "hideFromCapture">, first: AnchoredRect = DEFAULT_PANEL_ANCHORED): AddResult {
     if (this.panelOf(panel.instanceId)) return "exists";
     const bucket = bucketOf(panel);
     if (this.count(bucket) >= LIMITS.maxGameOverlays) return "full";
@@ -379,15 +445,23 @@ export class GameOverlayStore {
     if (change.mode) overlay.mode = change.mode;
     if (change.opacity !== undefined && OPACITIES.includes(change.opacity)) overlay.opacity = change.opacity;
     if (change.hideFromCapture !== undefined) overlay.hideFromCapture = change.hideFromCapture;
-    if (change.rect) overlay.rect = normalizeRelative(change.rect) ?? overlay.rect;
+    const rect = change.rect ? normalizeAnchored(change.rect) : null;
+    if (rect) {
+      overlay.rect = rect;
+      delete overlay.legacy;
+    }
     this.saveSoon();
     return true;
   }
 
-  updatePanel(instanceId: string, rect: RelativeRect): boolean {
+  updatePanel(instanceId: string, rect: AnchoredRect): boolean {
     const panel = this.panelOf(instanceId);
     if (!panel) return false;
-    panel.rect = normalizeRelative(rect) ?? panel.rect;
+    const next = normalizeAnchored(rect);
+    if (next) {
+      panel.rect = next;
+      delete panel.legacy;
+    }
     this.saveSoon();
     return true;
   }
@@ -431,6 +505,87 @@ export class GameOverlayStore {
     this.saveSoon();
   }
 
+  // ── The Overlay layout ───────────────────────────────────────────────
+
+  get grid(): GridSetting {
+    return this.gridSetting;
+  }
+
+  setGrid(setting: GridSetting): void {
+    if (!isGridSetting(setting) || setting === this.gridSetting) return;
+    this.gridSetting = setting;
+    this.saveSoon();
+  }
+
+  /** The Overlay layout window's size and place as last saved, or null. */
+  get layoutWindow(): WindowState | null {
+    return this.windowState;
+  }
+
+  setLayoutWindow(state: WindowState): void {
+    this.windowState = state;
+    this.saveSoon();
+  }
+
+  /** The size of the game's window as last seen (DIPs), or undefined when none was. */
+  seenSize(gameId: string): SeenSize | undefined {
+    return this.seen.get(gameId);
+  }
+
+  /** Remembers the game window's size; whether it differs from the one kept. Sizes that aren't plausible are ignored. */
+  setSeen(gameId: string, size: SeenSize): boolean {
+    const valid = validSize(size);
+    if (!valid || !validField(gameId)) return false;
+    const now = this.seen.get(gameId);
+    if (now?.width === valid.width && now.height === valid.height) return false;
+    if (!now && this.seen.size >= MAX_SEEN) this.seen.delete(this.seen.keys().next().value!);
+    this.seen.set(gameId, valid);
+    this.saveSoon();
+    return true;
+  }
+
+  /** A game left the library: its window size goes too. */
+  forgetSeen(gameId: string): void {
+    if (this.seen.delete(gameId)) this.saveSoon();
+  }
+
+  /** Puts the position of an overlay or panel to `rect` (the layout's Reset position); false when there is no such item. */
+  setRect(subject: GameOverlaySubject | { instanceId: string }, rect: AnchoredRect): boolean {
+    const target = "instanceId" in subject ? this.panelOf(subject.instanceId) : this.find(subject);
+    const next = normalizeAnchored(rect);
+    if (!target || !next) return false;
+    target.rect = next;
+    delete target.legacy;
+    this.saveSoon();
+    return true;
+  }
+
+  /**
+   * The game's real window was seen: the positions still kept as fractions of the window (its own, and the general
+   * ones) are converted for this size, so each stays on the very same pixels. Whether any was.
+   */
+  convertLegacy(gameId: string, size: { width: number; height: number }): boolean {
+    if (!isRealWindow(size)) return false;
+    let any = false;
+    for (const item of [...this.overlays, ...this.inGame]) {
+      if (!item.legacy || !appliesTo(item, gameId)) continue;
+      item.rect = migrateLegacy(item.legacy, size);
+      delete item.legacy;
+      any = true;
+    }
+    if (any) this.saveSoon();
+    return any;
+  }
+
+  /** A position as the file keeps it: the anchor, and the fractions of the window for older Tavoras. */
+  private stored(item: { gameId: string; rect: AnchoredRect; legacy?: LegacyRect }): StoredPosition {
+    if (item.legacy) return { rect: item.legacy };
+    const size = this.seen.get(item.gameId) ?? DEFAULT_GAME_SIZE;
+    const placed = placeAnchored(item.rect, { x: 0, y: 0, ...size });
+    const fractions = normalizeLegacy({ x: placed.x / size.width, y: placed.y / size.height, width: placed.width / size.width, height: placed.height / size.height });
+    return { rect: fractions ?? { x: 0, y: 0, width: 1, height: 1 }, anchor: item.rect };
+  }
+
   private saveSoon(): void {
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => void this.save(), SAVE_DELAY_MS);
@@ -440,7 +595,13 @@ export class GameOverlayStore {
   save(): Promise<void> {
     clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
-    const body: GameOverlayFile = { version: 2, exclusiveHintShown: this.hintShown, overlays: this.overlays, panels: this.inGame };
+    const body: GameOverlayFile = {
+      version: FILE_VERSION,
+      exclusiveHintShown: this.hintShown,
+      layout: { grid: this.gridSetting, ...(this.windowState ? { window: this.windowState } : {}), seen: Object.fromEntries(this.seen) },
+      overlays: this.overlays.map(({ rect, legacy, ...item }) => ({ ...item, ...this.stored({ gameId: item.gameId, rect, ...(legacy ? { legacy } : {}) }) })),
+      panels: this.inGame.map(({ rect, legacy, ...item }) => ({ ...item, ...this.stored({ gameId: item.gameId, rect, ...(legacy ? { legacy } : {}) }) })),
+    };
     const text = `${JSON.stringify(body, null, 2)}\n`;
     return this.queue.run(() => writeFileAtomic(this.file, text)).catch((error: unknown) => console.error("[tavora] saving game overlays failed", error));
   }
