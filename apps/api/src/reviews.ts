@@ -10,12 +10,16 @@ import { checkReviewText } from "./review-filter.ts";
 /**
  * Module ratings and reviews (decided 2026-10-21). A signed-in account rates a catalog module once,
  * with 1 to 5 stars and an optional review of at most 500 characters, and can change or delete it.
- * The app offers it only for a module the player has installed; the service cannot know that and
- * does not try. Nobody rates a module of their own: an account that holds the id's prefix, or whose
+ * The app offers it for any listed module, installed or not (decided 2026-10-27); the service never asks.
+ * Nobody rates a module of their own: an account that holds the id's prefix, or whose
  * key owns the module, is refused. Each rating keeps the version it was given on, and every version
  * counts. A review goes live at once, past a word filter (review-filter.ts); anyone can report one,
  * and a person hides it on the admin page. A hidden review's stars still count. Suspending its account hides all of its reviews the same way
  * (hideForSuspension), and unsuspending shows exactly those again.
+ *
+ * Limits (decided 2026-10-27): an account rates at most 10 modules a day (changing a rating is free, deleting and
+ * rating again is not), and only once it is a day old. A module takes 20 new ratings a day; later ones are held for
+ * the maintainer like a filter hit, so a wave of new accounts can't move its average. The per-client hourly limit stays.
  *
  * A review shows its author's profile name and picture, and only there: the profile stays private
  * everywhere else. Reviews live in their own file, keyed by the account id, and go with the account.
@@ -26,6 +30,13 @@ export const MAX_REVIEW_LENGTH = 500;
 export const MIN_RATINGS_SHOWN = 3;
 /** Newest reviews with text one page shows. */
 export const REVIEWS_SHOWN = 100;
+/** New ratings an account may give in 24 hours; changing one is free. */
+export const DAILY_RATINGS = 10;
+/** How old an account must be before it rates anything. */
+export const MIN_ACCOUNT_AGE_MS = 24 * 3_600_000;
+/** New ratings a module takes in 24 hours before further ones are held for the maintainer. */
+export const MODULE_DAILY_RATINGS = 20;
+const DAY_MS = 24 * 3_600_000;
 
 export interface RatingSummary {
   average: number;
@@ -46,6 +57,8 @@ export interface StoredReview {
   hidden: boolean;
   /** Held for the maintainer: the word filter found something, so nobody sees the text or counts the stars until it is approved. */
   held: boolean;
+  /** Held because the module got too many new ratings in a day, not because of its words: editing doesn't release it. */
+  capped: boolean;
   /** Whether the maintainer has looked at it (new ones sit in the admin's queue). */
   seen: boolean;
   reply: { text: string; updatedAt: number } | null;
@@ -69,12 +82,13 @@ interface ReviewSql {
   updated_at: number;
   hidden: number;
   held: number;
+  capped: number;
   reviewed: number;
   reply: string | null;
   reply_at: number | null;
 }
 
-const REVIEW_COLUMNS = "r.id, r.account_id, r.module_id, r.stars, r.text, r.version, r.created_at, r.updated_at, r.hidden, r.held, r.reviewed, p.text as reply, p.updated_at as reply_at";
+const REVIEW_COLUMNS = "r.id, r.account_id, r.module_id, r.stars, r.text, r.version, r.created_at, r.updated_at, r.hidden, r.held, r.capped, r.reviewed, p.text as reply, p.updated_at as reply_at";
 const REVIEW_FROM = "reviews r left join replies p on p.review_id = r.id";
 
 function toReview(row: ReviewSql | undefined): StoredReview | null {
@@ -90,6 +104,7 @@ function toReview(row: ReviewSql | undefined): StoredReview | null {
     updatedAt: row.updated_at,
     hidden: row.hidden === 1,
     held: row.held === 1,
+    capped: row.capped === 1,
     seen: row.reviewed === 1,
     reply: row.reply === null ? null : { text: row.reply, updatedAt: row.reply_at ?? row.updated_at },
   };
@@ -125,6 +140,13 @@ export class ReviewStore {
     if (!columns.includes("held")) this.db.exec("alter table reviews add column held integer not null default 0");
     if (!columns.includes("reviewed")) this.db.exec("alter table reviews add column reviewed integer not null default 1");
     if (!columns.includes("hidden_by_suspend")) this.db.exec("alter table reviews add column hidden_by_suspend integer not null default 0");
+    // Limits (decided 2026-10-27): every new rating is logged, so deleting one and rating again still counts.
+    if (!columns.includes("capped")) this.db.exec("alter table reviews add column capped integer not null default 0");
+    this.db.exec(`
+      create table if not exists rating_log (account_id text not null, module_id text not null, at integer not null);
+      create index if not exists rating_log_account on rating_log (account_id, at);
+      create index if not exists rating_log_module on rating_log (module_id, at);
+    `);
   }
 
   close(): void {
@@ -170,14 +192,26 @@ export class ReviewStore {
     return toReview(this.db.prepare(`select ${REVIEW_COLUMNS} from ${REVIEW_FROM} where r.account_id = ? and r.module_id = ?`).get(accountId, moduleId) as ReviewSql | undefined);
   }
 
+  /** When the account's oldest new rating of the last 24 hours was given, and how many it gave since. */
+  ratedToday(accountId: string, now: number): { count: number; oldest: number | null } {
+    const row = this.db.prepare("select count(*) as n, min(at) as oldest from rating_log where account_id = ? and at > ?").get(accountId, now - DAY_MS) as { n: number; oldest: number | null };
+    return { count: row.n, oldest: row.oldest };
+  }
+
+  /** How many new ratings the module got in the last 24 hours. */
+  moduleRatedToday(moduleId: string, now: number): number {
+    return (this.db.prepare("select count(*) as n from rating_log where module_id = ? and at > ?").get(moduleId, now - DAY_MS) as { n: number }).n;
+  }
+
   /**
    * Sets the account's rating of a module, keeping its id, its reply and whether it is hidden. Taking
    * the text out takes the publisher's reply with it: a reply always answers a text.
    */
-  rate(accountId: string, moduleId: string, input: { stars: number; text: string | null; version: string; held?: boolean }, now: number): StoredReview {
+  rate(accountId: string, moduleId: string, input: { stars: number; text: string | null; version: string; held?: boolean; capped?: boolean }, now: number): StoredReview {
     const current = this.own(accountId, moduleId);
     if (current) {
-      const held = input.held ? 1 : 0;
+      // A rating held for the module's daily cap stays held whatever the new text says.
+      const held = input.held || current.capped ? 1 : 0;
       this.db
         .prepare(
           "update reviews set stars = ?, text = ?, version = ?, updated_at = ?, hidden = case when ? = 1 then 1 when held = 1 then 0 else hidden end, held = ?, reviewed = case when ? is null then 1 else 0 end where id = ?",
@@ -187,9 +221,12 @@ export class ReviewStore {
       return this.review(current.id)!;
     }
     const id = randomBytes(12).toString("base64url");
+    const held = input.held || input.capped ? 1 : 0;
     this.db
-      .prepare("insert into reviews (id, account_id, module_id, stars, text, version, created_at, updated_at, hidden, held, reviewed) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(id, accountId, moduleId, input.stars, input.text, input.version, now, now, input.held ? 1 : 0, input.held ? 1 : 0, input.text === null ? 1 : 0);
+      .prepare("insert into reviews (id, account_id, module_id, stars, text, version, created_at, updated_at, hidden, held, capped, reviewed) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(id, accountId, moduleId, input.stars, input.text, input.version, now, now, held, held, input.capped ? 1 : 0, input.text === null && !held ? 1 : 0);
+    this.db.prepare("delete from rating_log where at <= ?").run(now - 2 * DAY_MS);
+    this.db.prepare("insert into rating_log (account_id, module_id, at) values (?, ?, ?)").run(accountId, moduleId, now);
     return this.review(id)!;
   }
 
@@ -216,7 +253,7 @@ export class ReviewStore {
 
   /** The maintainer lets a held review through: its text shows and its stars count. False when it isn't held. */
   approve(reviewId: string): boolean {
-    return Number(this.db.prepare("update reviews set held = 0, hidden = 0, reviewed = 1, hidden_by_suspend = 0 where id = ? and held = 1").run(reviewId).changes) > 0;
+    return Number(this.db.prepare("update reviews set held = 0, capped = 0, hidden = 0, reviewed = 1, hidden_by_suspend = 0 where id = ? and held = 1").run(reviewId).changes) > 0;
   }
 
   /** The maintainer has looked at these live reviews. Returns how many were new. */
@@ -286,6 +323,7 @@ export class ReviewStore {
   /** Everything an account wrote goes when the account does. */
   forget(accountId: string): void {
     this.db.prepare("delete from reviews where account_id = ?").run(accountId);
+    this.db.prepare("delete from rating_log where account_id = ?").run(accountId);
   }
 }
 
@@ -458,9 +496,22 @@ export function reviewRoutes({ reviews, catalog, accounts, clientKey, writeRateL
     ) {
       return context.json({ error: "Send { stars: 1 to 5, text: at most 500 characters or null, version: a published version }.", reason: "bad-request" }, 400);
     }
+    // Limits on new ratings only; changing one is free. Hours are rounded up so the app never says "0 h".
+    let capped = false;
+    if (!reviews.own(account, id)) {
+      const at = now();
+      const hoursUntil = (time: number) => Math.max(1, Math.ceil((time - at) / 3_600_000));
+      const age = at - Date.parse(context.get("account").createdAt);
+      if (age < MIN_ACCOUNT_AGE_MS) return context.json({ error: "New accounts can rate after a day.", reason: "account-too-new", hours: hoursUntil(at - age + MIN_ACCOUNT_AGE_MS) }, 403);
+      const today = reviews.ratedToday(account, at);
+      if (today.count >= DAILY_RATINGS) {
+        return context.json({ error: `You can rate ${DAILY_RATINGS} modules a day.`, reason: "daily-limit", hours: hoursUntil((today.oldest ?? at) + DAY_MS) }, 429);
+      }
+      capped = reviews.moduleRatedToday(id, at) >= MODULE_DAILY_RATINGS;
+    }
     // The word filter no longer refuses: what it finds waits for the maintainer, and the author sees it is waiting.
     const held = text !== null && checkReviewText(text) !== "ok";
-    const review = reviews.rate(account, id, { stars: input.stars, text, version: input.version, held }, now());
+    const review = reviews.rate(account, id, { stars: input.stars, text, version: input.version, held, capped }, now());
     return context.json({ review: { ...reviewAnswer(review, accounts), hidden: review.hidden, held: review.held, text: review.text } });
   });
   app.delete("/modules/:id/review", (context) => {

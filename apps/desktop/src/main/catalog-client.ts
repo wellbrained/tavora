@@ -194,6 +194,8 @@ const REVIEW_REASONS: Record<string, MessageKey> = {
   "own-module": "error.reviewOwn",
   "review-words": "error.reviewWords",
   "review-link": "error.reviewLink",
+  "account-too-new": "error.reviewTooNew",
+  "daily-limit": "error.reviewDailyLimit",
   "not-publisher": "error.reviewNotPublisher",
   "signed-out": "account.error.signedOut",
   "not-found": "error.catalogNotListed",
@@ -560,7 +562,8 @@ export class CatalogClient {
     const json = (await response.json().catch(() => null)) as Record<string, unknown> | null;
     if (response.ok) return json && typeof json === "object" && !Array.isArray(json) ? json : {};
     const key = typeof json?.reason === "string" ? REVIEW_REASONS[json.reason] : undefined;
-    if (key) throw new CatalogError(key);
+    // The limits say how many hours are left.
+    if (key) throw new CatalogError(key, Number.isInteger(json?.hours) && (json!.hours as number) > 0 ? { hours: json!.hours as number } : undefined);
     if (response.status === 404) throw new CatalogError("error.catalogNotListed");
     if (response.status === 401) throw new CatalogError("account.error.signedOut");
     throwFailure(response.status);
