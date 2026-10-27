@@ -15,6 +15,12 @@
 // `bump: major`) on its own first line, and its pull request needs the
 // `feature-complete` label, which only the maintainer adds.
 //
+// For Tavora Admin, where the maintainer searches the releases, each entry also
+// gets the pull request it came from and a few tags. The tags come from the files
+// the pull request changed (change-tags.json maps paths to tags), plus any the note
+// names on a `tags: cloud-copy, recovery-key` line before its title. Players never
+// see either: the app doesn't show them.
+//
 // Usage:
 //   node change-notes.mjs check <base sha> <true|false>   the Version check on a pull request
 //   node change-notes.mjs apply                           numbers the notes on main (Number workflow)
@@ -27,6 +33,7 @@ import { compareVersions } from "./release-guards.mjs";
 
 export const LABEL = "feature-complete";
 const BUMPS = ["patch", "minor", "major"];
+const TAG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** The note in `text`, or the problems with it. `file` only names it in messages. */
 export function parseChangeNote(text, file) {
@@ -35,14 +42,22 @@ export function parseChangeNote(text, file) {
   let bump = "patch";
   let title = "";
   const notes = [];
+  const tags = [];
   let first = true;
   for (const raw of lines) {
     const line = raw.trim();
     if (line === "") continue;
     const bumpLine = /^bump:\s*(\S+)$/.exec(line);
+    const tagsLine = /^tags:\s*(.*)$/.exec(line);
     if (first && bumpLine) {
       bump = bumpLine[1];
       if (!BUMPS.includes(bump)) problems.push(`${file}: "bump: ${bump}" isn't patch, minor or major.`);
+    } else if (tagsLine && !title) {
+      for (const tag of tagsLine[1].split(",").map((part) => part.trim().toLowerCase()).filter(Boolean)) {
+        if (TAG.test(tag)) tags.push(tag);
+        else problems.push(`${file}: the tag "${tag}" isn't lower-case words joined by hyphens.`);
+      }
+      continue;
     } else if (/^# /.test(line) && !title && notes.length === 0) {
       title = line.slice(2).trim();
     } else if (/^[-*] /.test(line)) {
@@ -58,7 +73,7 @@ export function parseChangeNote(text, file) {
   if (!title) problems.push(`${file}: starts without a "# Title" line.`);
   if (notes.length === 0) problems.push(`${file}: has no "- note" lines.`);
   if (notes.some((note) => note === "")) problems.push(`${file}: has an empty note.`);
-  return problems.length ? { problems } : { note: { bump, title, notes }, problems };
+  return problems.length ? { problems } : { note: { bump, title, notes, tags }, problems };
 }
 
 /** The version after `version` for a `bump`. */
@@ -90,8 +105,8 @@ export function checkPullRequest({ base, head, rootHead, notes, featureComplete 
   return problems;
 }
 
-/** A patch-notes entry as it is written in patch-notes.ts. */
-export function renderEntry({ version, date, title, notes }) {
+/** A patch-notes entry as it is written in patch-notes.ts; `prs` and `tags` only when there are some. */
+export function renderEntry({ version, date, title, notes, prs = [], tags = [] }) {
   return [
     "  {",
     `    version: ${JSON.stringify(version)},`,
@@ -100,8 +115,43 @@ export function renderEntry({ version, date, title, notes }) {
     "    notes: [",
     ...notes.map((note) => `      ${JSON.stringify(note)},`),
     "    ],",
+    ...(prs.length ? ["    prs: [", ...prs.map((pr) => `      { number: ${pr.number}, title: ${JSON.stringify(pr.title)} },`), "    ],"] : []),
+    ...(tags.length ? [`    tags: [${tags.map((tag) => JSON.stringify(tag)).join(", ")}],`] : []),
     "  },",
   ].join("\n");
+}
+
+/** A path pattern as a test: `*` is anything but `/`, `**` is anything at all. */
+function pathPattern(glob) {
+  const source = glob
+    .split("**")
+    .map((part) => part.split("*").map((piece) => piece.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join("[^/]*"))
+    .join(".*");
+  return new RegExp(`^${source}$`);
+}
+
+/** The tags for the files a pull request changed, from rules like { "tag": "overlays", "paths": ["apps/desktop/src/main/*overlay*"] }. */
+export function tagsForFiles(files, rules) {
+  const tags = new Set();
+  for (const rule of rules) {
+    const patterns = rule.paths.map(pathPattern);
+    if (files.some((file) => patterns.some((pattern) => pattern.test(file)))) tags.add(rule.tag);
+  }
+  return [...tags];
+}
+
+/** A note's own tags and the ones from its files, each once, sorted. */
+export const mergeTags = (...lists) => [...new Set(lists.flat())].sort();
+
+/**
+ * The pull request a merge commit brought in, from GitHub's message ("Merge pull request #391 from ...", its title
+ * in the body) or a squash ("Title (#391)"). Null for anything else.
+ */
+export function pullRequestOf(subject, body) {
+  const merged = /^Merge pull request #(\d+) /.exec(subject);
+  if (merged) return { number: Number(merged[1]), title: body.split("\n").map((line) => line.trim()).find(Boolean) ?? "" };
+  const squashed = /^(.*) \(#(\d+)\)$/.exec(subject);
+  return squashed ? { number: Number(squashed[2]), title: squashed[1].trim() } : null;
 }
 
 const START = "export const PATCH_NOTES: readonly PatchNote[] = [\n";
@@ -118,7 +168,7 @@ export function applyNotes(version, source, notes, date) {
   for (const note of notes) {
     version = nextVersion(version, note.bump);
     versions.push(version);
-    entries.unshift(renderEntry({ version, date, title: note.title, notes: note.notes }));
+    entries.unshift(renderEntry({ version, date, title: note.title, notes: note.notes, prs: note.pr ? [note.pr] : [], tags: note.tags ?? [] }));
   }
   const cut = at + START.length;
   return { version, source: source.slice(0, cut) + entries.map((entry) => `${entry}\n`).join("") + source.slice(cut), versions };
@@ -145,6 +195,34 @@ function noteFiles() {
     .sort((a, b) => a.at - b.at || a.name.localeCompare(b.name))
     .map(({ name }) => name);
 }
+
+/** The commits on main's own line that hold `sha`, oldest first: a squash is `sha` itself, a merge comes after it. */
+function mainCommitsWith(sha, tip = "HEAD") {
+  const lines = (...args) => git(...args).split("\n").filter(Boolean);
+  // Every commit that contains `sha`; a branch's merge holds it only through its second parent, so --first-parent
+  // alone would miss it.
+  const holding = new Set([sha, ...lines("log", "--ancestry-path", "--format=%H", `${sha}..${tip}`)]);
+  return lines("log", "--first-parent", "--reverse", "--format=%H", tip).filter((commit) => holding.has(commit));
+}
+
+/**
+ * Where a note came from: the pull request that added it, and the files that pull request changed. It is the first
+ * commit on main's own line that brought the note's file in (a merge, or a squash). Null when there is none, say
+ * for a note pushed to main directly.
+ */
+function originOf(name) {
+  const added = git("log", "--diff-filter=A", "--format=%H", "-1", "--", path.join(changes, name));
+  if (!added) return null;
+  for (const sha of mainCommitsWith(added)) {
+    const pr = pullRequestOf(git("log", "-1", "--format=%s", sha), git("log", "-1", "--format=%b", sha));
+    if (!pr) continue;
+    const files = git("diff", "--name-only", `${sha}^1`, sha).split("\n").filter(Boolean);
+    return { pr, files };
+  }
+  return null;
+}
+
+const tagRules = () => readJson(path.join(desktop, "scripts", "change-tags.json")).tags;
 
 function readNotes() {
   const problems = [];
@@ -182,6 +260,12 @@ function apply() {
     process.exit(1);
   }
   if (notes.length === 0) return;
+  const rules = tagRules();
+  for (const note of notes) {
+    const origin = originOf(note.file);
+    note.pr = origin?.pr ?? null;
+    note.tags = mergeTags(note.tags, origin ? tagsForFiles(origin.files, rules) : []);
+  }
   const appFile = path.join(desktop, "package.json");
   const rootFile = path.join(repo, "package.json");
   const notesFile = path.join(desktop, "src", "shared", "patch-notes.ts");
