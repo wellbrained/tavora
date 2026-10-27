@@ -1079,6 +1079,8 @@ export const en = {
   "error.reviewsUnavailable": "Ratings are off right now.",
   "error.reviewVersion": "Your version isn't from Community modules, so you can't rate it yet.",
   "error.reviewGone": "This review is gone.",
+  "error.reviewTooNew": "New accounts can rate after a day. Try again in {hours} h.",
+  "error.reviewDailyLimit": "You can rate 10 modules a day. Try again in {hours} h.",
   "error.updatesDev": "Updates only work in the installed Tavora, not in a development run.",
   "error.themeGone": "That theme is not installed any more.",
   "error.themeNoMode": "This theme has no {mode} version.",

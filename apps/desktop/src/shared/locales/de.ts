@@ -1081,6 +1081,8 @@ export const de: Record<keyof typeof en, string> = {
   "error.reviewsUnavailable": "Bewertungen sind gerade aus.",
   "error.reviewVersion": "Deine Version stammt nicht von den Community-Modulen, daher kannst du sie noch nicht bewerten.",
   "error.reviewGone": "Diese Bewertung gibt es nicht mehr.",
+  "error.reviewTooNew": "Neue Konten können nach einem Tag bewerten. Versuche es in {hours} Std. erneut.",
+  "error.reviewDailyLimit": "Du kannst 10 Module am Tag bewerten. Versuche es in {hours} Std. erneut.",
   "error.updatesDev": "Updates funktionieren nur im installierten Tavora, nicht in einem Entwicklungslauf.",
   "error.themeGone": "Dieses Design ist nicht mehr installiert.",
   "error.themeNoMode": "Dieses Design hat keine Version „{mode}“.",

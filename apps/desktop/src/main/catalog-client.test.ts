@@ -307,6 +307,10 @@ describe("ratings and reviews", () => {
       const failing = new CatalogClient({ baseUrl: "https://api.test", fetchImpl: fakeFetch(() => json({ reason }, 400)).impl });
       await expect(failing.rate("wellbrained.tracker", "t".repeat(30), { stars: 1, text: "x", version: "1.2.0" })).rejects.toMatchObject({ key });
     }
+    for (const [reason, key, status] of [["account-too-new", "error.reviewTooNew", 403], ["daily-limit", "error.reviewDailyLimit", 429]] as const) {
+      const limited = new CatalogClient({ baseUrl: "https://api.test", fetchImpl: fakeFetch(() => json({ reason, hours: 5 }, status)).impl });
+      await expect(limited.rate("wellbrained.tracker", "t".repeat(30), { stars: 1, text: null, version: "1.2.0" })).rejects.toMatchObject({ key, params: { hours: 5 } });
+    }
   });
 
   it("reads the player's own review, held for the maintainer or hidden after a report", async () => {
