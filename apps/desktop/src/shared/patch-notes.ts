@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.46",
+    date: "2026-10-27",
+    title: "Overlay setups",
+    notes: [
+      "Your overlays are now kept in setups: All games, and one for each game that has its own. Each setup keeps its own spots, so Customize for this game is gone.",
+      "If you had moved a general overlay to its own spot in one game, it's back at its All games spot. Sorry!",
+      "Older Tavora versions can't read your overlays any more. A copy of the old ones is in Tavora's backups.",
+    ],
+    prs: [
+      { number: 411, title: "Overlay setups: data and runtime (step 1)" },
+    ],
+    tags: ["overlay-setups", "overlays", "privacy", "sdk", "website", "workspace"],
+  },
+  {
     version: "0.21.45",
     date: "2026-10-27",
     title: "Overlays in the header",
