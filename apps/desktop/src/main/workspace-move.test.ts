@@ -9,6 +9,9 @@ import { OverlayStore } from "./overlays";
 import { SavedData } from "./saved-data";
 import { BEFORE_WORKSPACES_DIR, MOVED_VERSIONS, moveToWorkspaces } from "./workspace-move";
 
+// A folder a dialog last opened in: absolute on the system the tests run on, as Tavora only keeps absolute ones.
+const PICTURES = process.platform === "win32" ? "C:\\Users\\Player\\Pictures" : "/home/player/Pictures";
+
 // What Tavora 0.21.41 (the last before the Game → Workspace rename) wrote, field for field.
 const NOTES = "aaaaaaaa-0000-4000-8000-000000000001";
 const PLANNER = "aaaaaaaa-0000-4000-8000-000000000002";
@@ -108,7 +111,7 @@ const OLD_LIBRARY = {
   overlaysStay: true,
   moduleFilesFolder: null,
   developmentFolders: [],
-  dialogFolders: { "game-image": "C:\\Users\\Player\\Pictures", "save-picture": "C:\\Users\\Player\\Pictures\\Tavora" },
+  dialogFolders: { "game-image": PICTURES, "save-picture": path.join(PICTURES, "Tavora") },
   moduleFolders: {},
   moduleNotesSeen: { "official:tavora.notes": "1.4.0" },
   steamProfile: null,
@@ -215,7 +218,7 @@ describe("moving saved data to the workspace names", () => {
       { kind: "workspace", id: "local-personal" },
     ]);
     expect(library.folders[FOLDER]).toEqual({ id: FOLDER, name: "Souls", label: null, workspaces: ["elden-ring"] });
-    expect(library.dialogFolders).toEqual({ "workspace-image": "C:\\Users\\Player\\Pictures", "save-picture": "C:\\Users\\Player\\Pictures\\Tavora" });
+    expect(library.dialogFolders).toEqual({ "workspace-image": PICTURES, "save-picture": path.join(PICTURES, "Tavora") });
     expect(Object.keys(library.workspaces)).toEqual(Object.keys(OLD_LIBRARY.games));
     expect(library.workspaces["local-personal"]).toMatchObject({ kind: "personal", lastOpenedAt: "2026-10-27T08:00:00.000Z" });
     expect(library.workspaces["elden-ring"]).toMatchObject({ kind: "game", lastOpenedAt: "2026-10-26T20:00:00.000Z", iconFile: "1245620.ico" });
@@ -241,7 +244,7 @@ describe("moving saved data to the workspace names", () => {
     ]);
     expect(library.folders[FOLDER]!.workspaces).toEqual(["elden-ring"]);
     expect(library).toMatchObject({ startup: "last-workspace", lastWorkspaceId: "local-personal", gameEndWorkspaceId: "local-personal", favorites: ["local-personal"] });
-    expect(library.dialogFolders["workspace-image"]).toBe("C:\\Users\\Player\\Pictures");
+    expect(library.dialogFolders["workspace-image"]).toBe(PICTURES);
 
     const workspace = await saved.loadWorkspace(Object.keys(library.workspaces), () => true);
     expect(workspace.version).toBe(3);
