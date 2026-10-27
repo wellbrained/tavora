@@ -416,6 +416,36 @@ describe("Suspend account", () => {
   });
 });
 
+describe("everything one person wrote", () => {
+  it("lists the account's ratings, hides every text at once (stars stay), and removes them all", async () => {
+    const { get, post, player, catalogCall, reviews, activity } = setup();
+    const mara = player("mara@example.com");
+    const other = player("other@example.com", "Otto");
+    await catalogCall("PUT", "/modules/wellbrained.timer/review", mara.token, { stars: 1, text: "Awful.", version: "1.0.0" });
+    await catalogCall("PUT", "/modules/wellbrained.timer/review", other.token, { stars: 5, text: "Great!", version: "1.0.0" });
+    reviews.report(reviews.own(mara.account.id, "wellbrained.timer")!.id, Date.now());
+
+    const listed = await get(`/api/accounts/${mara.account.id}/reviews`);
+    expect(listed.body.reviews).toEqual([expect.objectContaining({ moduleId: "wellbrained.timer", moduleName: "Timer", stars: 1, text: "Awful.", hidden: false, held: false })]);
+    expect((await get("/api/accounts/nobody/reviews")).status).toBe(404);
+
+    expect(await post("/api/accounts/hide-reviews", { id: mara.account.id })).toMatchObject({ status: 200, body: { hiddenReviews: 1 } });
+    expect(reviews.reports()).toEqual([]);
+    const page = (await (await catalogCall("GET", "/modules/wellbrained.timer/reviews")).json()) as { summary: { count: number }; reviews: { text: string }[] };
+    expect(page.reviews.map((review) => review.text)).toEqual(["Great!"]);
+    expect(page.summary.count).toBe(2);
+    // A person's choice: unsuspending later doesn't bring them back.
+    expect(reviews.own(mara.account.id, "wellbrained.timer")).toMatchObject({ hidden: true });
+
+    expect(await post("/api/accounts/remove-reviews", { id: mara.account.id })).toMatchObject({ status: 200, body: { removedReviews: 1 } });
+    expect(reviews.summary("wellbrained.timer")?.count).toBe(1);
+    expect(activity.list({ kind: "accounts" }).entries.map((entry) => [entry.kind, entry.target?.id])).toEqual([
+      ["accounts/remove-reviews", mara.account.id],
+      ["accounts/hide-reviews", mara.account.id],
+    ]);
+  });
+});
+
 describe("Unsuspend", () => {
   it("lets the person sign in again with a new sign-in, and the old tokens stay dead", async () => {
     const { post, developer, devSession, account, signIn, store, inbox } = setup();
