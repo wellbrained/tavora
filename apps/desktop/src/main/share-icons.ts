@@ -47,8 +47,8 @@ export function isShareCandidate(game: ShareGame): boolean {
 /**
  * The icon file of a game that could be offered right now, or null: the game's
  * own icon found on this PC (never a picture the player chose, a hosted icon or
- * Steam's small one), while the service has no icon for the game and the
- * player's settings allow talking to it.
+ * Steam's small one), while the service has no icon for the game (or one it
+ * marked open for replacements) and the player's settings allow talking to it.
  */
 export function shareableIconFile(
   game: ShareGame,
@@ -56,13 +56,14 @@ export function shareableIconFile(
   list: HostedList | null,
 ): string | null {
   if (!list || !settings.steamIcons || !settings.onlineSearch || !isShareCandidate(game) || settings.iconsOffered.includes(game.id)) return null;
-  return matchHosted(game, list) ? null : game.iconFile;
+  const hosted = matchHosted(game, list);
+  return hosted && hosted.open !== true ? null : game.iconFile;
 }
 
 /**
  * The games of a Steam import whose icon could be offered without adding them:
  * ones the player does not have (`isNew`), with an id the service knows, that
- * were not offered before and that the service has no icon for. Whether this PC
+ * were not offered before and that the service has no icon for (or one open for replacements). Whether this PC
  * has the icon is for the caller to find out.
  */
 export function steamShareGames(
@@ -76,7 +77,8 @@ export function steamShareGames(
   return games.filter((game): game is SteamImportGame & { id: string } => {
     if (game.id === null || game.id.startsWith("local-") || done.has(game.id) || seen.has(game.id) || !isNew(game)) return false;
     seen.add(game.id);
-    return !matchHosted({ id: game.id, name: game.name, catalogId: null }, list);
+    const hosted = matchHosted({ id: game.id, name: game.name, catalogId: null }, list);
+    return !hosted || hosted.open === true;
   });
 }
 

@@ -28,7 +28,7 @@ export type SubmitResult = { status: 202 } | { status: 400 | 409 | 413 | 429 | 5
 
 export interface SubmissionsOptions {
   state: IconState;
-  /** What is served now, to refuse an icon for a game that already has one. */
+  /** What is served now, to refuse an icon for a game that already has one (unless it is open for replacements). */
   store: IconStore;
   /** The name of a game in the dataset, or null when there is no such game. */
   gameName: (id: string) => string | null;
@@ -85,7 +85,7 @@ export function createSubmissions({ state, store, gameName, gamesNamed, now = ()
       const game = gameFor(body.id, name);
       if (game === null) return { status: 400, error: "That game is not known to Tavora." };
       const { id, name: canonicalName } = game;
-      if (store.list().some((entry) => entry.id === id)) return { status: 409, error: "That game already has an icon." };
+      if (store.list().some((entry) => entry.id === id) && !state.isReplaceable(id)) return { status: 409, error: "That game already has an icon." };
 
       const raw = decodeBase64(icon);
       if (!raw) return { status: 400, error: "The icon must be base64." };
@@ -115,12 +115,17 @@ export function createSubmissions({ state, store, gameName, gamesNamed, now = ()
       return { status: 202 };
     },
 
-    /** The waiting offers, with the dataset's name for the game (a custom game's is the name it was offered under). */
-    listPending(): Array<PendingRow & { gameName: string | null; custom: boolean; hasIcon: boolean }> {
+    /**
+     * The waiting offers, with the dataset's name for the game (a custom game's is the name it was offered under).
+     * `replaces`: the game has an icon that is open for replacements, so approving this one replaces it.
+     */
+    listPending(): Array<PendingRow & { gameName: string | null; custom: boolean; hasIcon: boolean; replaces: boolean }> {
       const hosted = new Set(store.list().map((entry) => entry.id));
+      const open = state.replaceableIds();
       return state.listPending().map((row) => {
         const custom = row.id.startsWith(LOCAL_PREFIX);
-        return { ...row, gameName: custom ? row.name : gameName(row.id), custom, hasIcon: hosted.has(row.id) };
+        const hasIcon = hosted.has(row.id);
+        return { ...row, gameName: custom ? row.name : gameName(row.id), custom, hasIcon, replaces: hasIcon && open.has(row.id) };
       });
     },
 
@@ -133,7 +138,9 @@ export function createSubmissions({ state, store, gameName, gamesNamed, now = ()
     approve(sha256: string): { ok: true; id: string } | { ok: false; error: string } {
       const row = state.pending(sha256);
       if (!row) return { ok: false, error: "No such offer." };
-      if (store.list().some((entry) => entry.id === row.id)) return { ok: false, error: "That game already has an icon. Take it down first." };
+      if (store.list().some((entry) => entry.id === row.id) && !state.isReplaceable(row.id)) {
+        return { ok: false, error: "That game already has an icon. Open it for replacements or take it down first." };
+      }
       if (row.id.startsWith(LOCAL_PREFIX)) {
         if (gamesNamed(row.name).length > 0) return { ok: false, error: "A game in the dataset has this name now. Deny it; it can be offered for that game." };
         state.approve(sha256, [row.name], now());
@@ -155,6 +162,13 @@ export function createSubmissions({ state, store, gameName, gamesNamed, now = ()
         return had;
       }
       return state.deletePending(sha256);
+    },
+
+    /** Opens a hosted icon for replacements, or closes it again. False for a game with no hosted icon. */
+    setReplaceable(id: string, open: boolean): boolean {
+      if (!store.list().some((icon) => icon.id === id)) return false;
+      state.setReplaceable(id, open, now());
+      return true;
     },
 
     /** Takes a hosted icon down (a publisher's request): it stops being served at once; blocking also refuses the same file again. */

@@ -143,6 +143,18 @@ describe("submit", () => {
     expect(state.pendingCount()).toBe(0);
   });
 
+  it("takes an icon for a game whose icon is open for replacements, and refuses again once it is closed", () => {
+    seedFiles.set("diablo-iv", { names: ["Diablo IV"], bytes: png(32, 9) });
+    expect(submissions.setReplaceable("diablo-iv", true)).toBe(true);
+    expect(offer()).toEqual({ status: 202 });
+    expect(submissions.listPending()).toEqual([expect.objectContaining({ id: "diablo-iv", hasIcon: true, replaces: true })]);
+    expect(store.list()).toEqual([expect.objectContaining({ id: "diablo-iv", open: true })]);
+    expect(submissions.setReplaceable("diablo-iv", false)).toBe(true);
+    expect(offer({ icon: b64(png(32, 5)) })).toMatchObject({ status: 409 });
+    expect(submissions.listPending()).toEqual([expect.objectContaining({ replaces: false })]);
+    expect(submissions.setReplaceable("no-such-game", true)).toBe(false);
+  });
+
   it("quietly keeps nothing of a blocked file, and answers like any other offer", () => {
     const file = png();
     state.block(sha(file), "denied", now);
@@ -181,6 +193,27 @@ describe("approve, deny and takedown", () => {
     seedFiles.set("diablo-iv", { names: ["Diablo IV"], bytes: png(32, 9) });
     expect(submissions.approve(row.sha256)).toMatchObject({ ok: false });
     expect(store.file("diablo-iv")).toEqual(png(32, 9));
+  });
+
+  it("replaces an approved icon that is open for replacements, and the new one starts closed", () => {
+    offer();
+    submissions.approve(state.listPending()[0]!.sha256);
+    submissions.setReplaceable("diablo-iv", true);
+    offer({ icon: b64(png(32, 5)) });
+    const better = state.listPending()[0]!;
+    expect(submissions.approve(better.sha256)).toEqual({ ok: true, id: "diablo-iv" });
+    expect(store.file("diablo-iv")).toEqual(state.approvedBytes("diablo-iv"));
+    expect(state.approvedList()[0]?.sha256).toBe(better.sha256);
+    expect(state.isReplaceable("diablo-iv")).toBe(false);
+    expect(offer({ icon: b64(png(32, 6)) })).toMatchObject({ status: 409 });
+  });
+
+  it("forgets the mark when the icon is taken down", () => {
+    offer();
+    submissions.approve(state.listPending()[0]!.sha256);
+    submissions.setReplaceable("diablo-iv", true);
+    expect(submissions.takedown("diablo-iv", false)).toBe(true);
+    expect(state.isReplaceable("diablo-iv")).toBe(false);
   });
 
   it("denies an offer, and with blocking never accepts that file again", () => {

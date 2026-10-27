@@ -72,6 +72,7 @@ export class IconState {
         size integer not null, source text not null, approved_at text not null
       );
       create table if not exists hidden (id text primary key, at text not null);
+      create table if not exists replaceable (id text primary key, at text not null);
     `);
     // Offers from before sign-in was needed have no sender.
     const columns = this.db.prepare("pragma table_info(pending)").all() as { name: string }[];
@@ -173,6 +174,8 @@ export class IconState {
         .prepare("insert or replace into approved (id, names, sha256, bytes, size, source, approved_at) values (?, ?, ?, ?, ?, ?, ?)")
         .run(row.id, JSON.stringify(names), sha256, row.bytes, row.size, row.source, at);
       this.db.prepare("delete from pending where id = ?").run(row.id);
+      // The new icon starts closed again: it was just picked to replace the old one.
+      this.db.prepare("delete from replaceable where id = ?").run(row.id);
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
@@ -200,7 +203,27 @@ export class IconState {
   }
 
   removeApproved(id: string): boolean {
+    this.db.prepare("delete from replaceable where id = ?").run(id);
     return Number(this.db.prepare("delete from approved where id = ?").run(id).changes) > 0;
+  }
+
+  // ── Icons open for replacements ────────────────────────────────────────
+
+  /**
+   * Marks a hosted icon open for replacements (or closes it again): players may offer another icon for its game,
+   * and approving one replaces it. It is served as before until then.
+   */
+  setReplaceable(id: string, open: boolean, now: Date): void {
+    if (open) this.db.prepare("insert or replace into replaceable (id, at) values (?, ?)").run(id, now.toISOString());
+    else this.db.prepare("delete from replaceable where id = ?").run(id);
+  }
+
+  isReplaceable(id: string): boolean {
+    return this.db.prepare("select 1 from replaceable where id = ?").get(id) !== undefined;
+  }
+
+  replaceableIds(): Set<string> {
+    return new Set((this.db.prepare("select id from replaceable").all() as { id: string }[]).map((row) => row.id));
   }
 
   // ── Icons taken down ───────────────────────────────────────────────────
