@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.45",
+    date: "2026-10-27",
+    title: "Overlays in the header",
+    notes: [
+      "A new Overlay button sits in the workspace header. It opens your overlay layout.",
+      "Next to it, Live shows whether overlays are on screen, and pauses or resumes them. It replaces Hide all for now in Settings.",
+      "Settings > Overlays keeps the on/off switch, Keep when you switch windows and the key.",
+    ],
+    prs: [
+      { number: 410, title: "Overlay button in the workspace header" },
+    ],
+    tags: ["overlays", "privacy", "settings", "website", "workspace"],
+  },
+  {
     version: "0.21.44",
     date: "2026-10-27",
     title: "Reporting needs a sign-in",
