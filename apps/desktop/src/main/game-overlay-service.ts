@@ -253,6 +253,8 @@ export class GameOverlays {
   /** "Hide all for now": nothing shows until Tavora starts again or the user shows it again. */
   private suspended = false;
   private shownCount = 0;
+  /** Whether any window is shown over the game now (`GameOverlaysView.showing`). */
+  private showing = false;
   /** When each overlay's page crashed lately, and the overlays whose page crashed so often they are left alone. */
   private readonly crashes = new Map<string, number[]>();
   private readonly stopped = new Set<string>();
@@ -829,6 +831,15 @@ export class GameOverlays {
     }
     // A panel that is gone (its window couldn't be made) is no longer in the game either.
     if (gone.length > 0) this.forgetPanels((panel) => gone.includes(panel));
+    this.updateShowing();
+  }
+
+  /** Tells the renderer when whether something shows over a game changed. */
+  private updateShowing(): void {
+    const showing = [...this.open.values()].some((entry) => entry.shown);
+    if (showing === this.showing) return;
+    this.showing = showing;
+    this.options.changed();
   }
 
   /** Content in the game's windows scales with the game window's height (contentScale), from a 1080p reference. */
@@ -961,6 +972,7 @@ export class GameOverlays {
     this.endLayerQuietly();
     for (const entry of this.open.values()) entry.window.destroy();
     this.open.clear();
+    this.updateShowing();
   }
 
   private endLayerQuietly(): void {
@@ -1138,6 +1150,7 @@ export class GameOverlays {
       enabled: this.options.enabled(),
       stay: this.options.stay?.() ?? false,
       hidden: this.suspended,
+      showing: this.showing,
       layerKey: this.options.keyOf(layerBinding()),
     };
   }

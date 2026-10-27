@@ -303,6 +303,21 @@ describe("which window is in front", () => {
     expect(service.frontGame()).toBe("elden");
   });
 
+  it("tells the view whether anything shows now, and says so when that changes", async () => {
+    const { service, world } = await setup();
+    show(service);
+    expect(service.view().showing).toBe(true);
+    const before = world.changes;
+    world.foreground = { program: "C:\\Program Files\\Tavora\\Tavora.exe", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(service.view().showing).toBe(false);
+    expect(world.changes).toBeGreaterThan(before);
+    world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    service.setHidden(true);
+    expect(service.view()).toMatchObject({ hidden: true, showing: false });
+  });
+
   it("keeps it over the game's spot when you switch windows and Keep is on, until the game is minimized; the keys don't stay", async () => {
     const { service, world, live } = await setup();
     world.stay = true;
@@ -431,7 +446,7 @@ describe("modes and settings", () => {
     const { service } = await setup();
     show(service);
     show(service, CLOCK, "elden", "item-2");
-    expect(service.view()).toEqual({ supported: true, enabled: true, stay: false, hidden: false, layerKey: null });
+    expect(service.view()).toEqual({ supported: true, enabled: true, stay: false, hidden: false, showing: true, layerKey: null });
     expect(service.layout.games()).toEqual({ own: ["elden"], general: false });
     expect(service.layout.items("elden")).toMatchObject([
       { name: "Clock & Counter · item-1", mode: "always", scope: "game", source: expect.anything() },

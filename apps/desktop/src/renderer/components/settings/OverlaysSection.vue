@@ -1,8 +1,7 @@
 <script setup lang="ts">
-// Settings > Overlays: what Tavora shows over a game. The master switch, the one key that opens the in-game layer, a
-// button to hide everything for now, and a button to the Overlay layout, the window where the overlays and panels in
-// game are arranged and set up (when they show, their key, how see-through they are). Modules add overlays with "Show
-// over game" and panels get "Show in game" in their menu.
+// Settings > Overlays: what Tavora shows over a game. The master switch and the global options (keep when you switch
+// windows, the one key that opens the in-game layer). Arranging and pausing are in the workspace header's Overlay
+// button; modules add overlays with "Show over game" and panels get "Show in game" in their menu.
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
@@ -60,14 +59,6 @@ function askKey() {
           {{ overlays.layerKey ? t("overlays.key.change") : t("overlays.key.set") }}
         </Button>
       </span>
-    </SettingRow>
-    <SettingRow :label="t('settings.overlay-hide-all.label')" :description="t('settings.overlay-hide-all.description')" setting="overlay-hide-all" :highlighted="highlight === 'overlay-hide-all'">
-      <Button variant="secondary" data-testid="overlay-hide-all" @click="act({ type: 'set-game-overlays-hidden', hidden: !overlays.hidden })">
-        {{ overlays.hidden ? t("overlays.showAgain") : t("overlays.hideAll") }}
-      </Button>
-    </SettingRow>
-    <SettingRow :label="t('settings.overlay-layout.label')" :description="t('settings.overlay-layout.description')" setting="overlay-layout" :highlighted="highlight === 'overlay-layout'">
-      <Button variant="secondary" data-testid="overlay-layout" @click="act({ type: 'open-overlay-layout' })">{{ t("overlays.layout.open") }}</Button>
     </SettingRow>
   </SettingGroup>
 </template>

@@ -673,6 +673,8 @@ export interface GameOverlaysView {
   stay: boolean;
   /** "Hide all for now" is on: nothing shows until Tavora starts again or the user shows it again. */
   hidden: boolean;
+  /** Something shows over a game right now (the header button's Live look). */
+  showing: boolean;
   layerKey: OverlayKeyView | null;
 }
 
