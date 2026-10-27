@@ -13,7 +13,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DevelopmentProblemKind } from "../../../shared/host-api";
 import { problemText, type ModuleProblemValues } from "../../../shared/module-problem";
-import { account, act, confirmAction, developerKeys, developerState, dialog, publishModule, saveModuleZip, showToast, state, submitAction } from "../../host";
+import { account, act, confirmAction, developerKeys, developerState, dialog, publishModule, releaseStatus, saveModuleZip, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleDeveloperSettings from "../developer/ModuleDeveloperSettings.vue";
 import ModuleRow from "./ModuleRow.vue";
@@ -166,7 +166,14 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
                 <span v-if="hasReleaseCopy(moduleById(project.moduleId)!)" class="text-muted-foreground text-xs" :data-testid="`publish-from-release-${project.moduleId}`">{{
                   t("publish.fromRelease")
                 }}</span>
-                <Button v-else variant="secondary" :data-testid="`publish-${project.moduleId}`" @click="publishModule(project.moduleId)">
+                <Button
+                  v-else
+                  variant="secondary"
+                  :disabled="releaseStatus?.[project.moduleId] === 'in-review'"
+                  :title="releaseStatus?.[project.moduleId] === 'in-review' ? t('release.inReviewHint') : undefined"
+                  :data-testid="`publish-${project.moduleId}`"
+                  @click="publishModule(project.moduleId)"
+                >
                   <Upload :stroke-width="1.5" /> {{ t("publish.button") }}
                 </Button>
               </template>

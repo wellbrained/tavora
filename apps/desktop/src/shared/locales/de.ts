@@ -172,6 +172,8 @@ export const de: Record<keyof typeof en, string> = {
   "common.example": "Beispiel",
   "release.newVersion": "Neue Version",
   "release.notPublished": "Noch nicht veröffentlicht",
+  "release.inReview": "In Prüfung",
+  "release.inReviewHint": "Jemand von Tavora schaut sich diese Version kurz an. Wir schreiben dir, sobald sie drin ist.",
   "common.followSystem": "System folgen",
   "common.dark": "Dunkel",
   "common.light": "Hell",

@@ -1649,7 +1649,8 @@ export class Host {
     );
     ipcMain.handle("host:release-statuses", async (event, copies: unknown): Promise<Record<string, ReleaseStatus> | null> => {
       if (!fromHost(event) || !this.library.onlineSearch || !isReleaseCopies(copies)) return null;
-      return releaseStatuses(await this.catalog.index(), copies);
+      const [index, waiting] = await Promise.all([this.catalog.index(), this.account.waitingVersions()]);
+      return releaseStatuses(index, copies, waiting);
     });
     ipcMain.handle("host:catalog-icon", async (event, moduleId: unknown): Promise<string | null> =>
       fromHost(event) && isModuleId(moduleId) && this.library.onlineSearch ? this.catalog.icon(moduleId) : null,

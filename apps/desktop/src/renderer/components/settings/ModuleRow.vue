@@ -2,7 +2,7 @@
 // One module in a Settings list: icon, name, version, who made it, what it
 // does and where it was found (the Official badge says it for Tavora's own; a list
 // that already says it, like a project folder's, hides it). The buttons for it go in the slot.
-import { FileArchive, FolderCode, Package, Store, Upload } from "@lucide/vue";
+import { FileArchive, FolderCode, Hourglass, Package, Store, Upload } from "@lucide/vue";
 import { computed } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -17,9 +17,10 @@ const props = defineProps<{ module: NonNullable<typeof state.value>["modules"][n
 // keeps the gold; Catalog and From file, what users install, stay quiet.
 const kind = computed(() => moduleTag(props.module));
 // A release copy that the catalog does not have yet, or has only in an older version, says so; unknown (offline) says nothing.
+// One whose version was published and waits for a person at Tavora says In review instead.
 const pending = computed(() => {
   const status = kind.value === "release" ? releaseStatus.value?.[props.module.id] : undefined;
-  return status === "new-version" || status === "not-published" ? status : null;
+  return status === "new-version" || status === "not-published" || status === "in-review" ? status : null;
 });
 const tag = computed(() => t(MODULE_TAG_TEXT[kind.value]));
 const tagClass = {
@@ -47,7 +48,17 @@ const tagClass = {
           <Store v-else-if="kind === 'catalog'" aria-hidden="true" />
           <FileArchive v-else-if="kind === 'file'" aria-hidden="true" />{{ tag }}
         </Badge>
-        <Badge v-if="pending" variant="warning" class="border-warning/40 py-0" :data-testid="`module-pending-${module.id}`" :data-status="pending">
+        <Badge
+          v-if="pending === 'in-review'"
+          variant="info"
+          class="border-info/40 py-0"
+          :title="t('release.inReviewHint')"
+          :data-testid="`module-pending-${module.id}`"
+          data-status="in-review"
+        >
+          <Hourglass aria-hidden="true" />{{ t("release.inReview") }}
+        </Badge>
+        <Badge v-else-if="pending" variant="warning" class="border-warning/40 py-0" :data-testid="`module-pending-${module.id}`" :data-status="pending">
           <Upload aria-hidden="true" />{{ pending === "new-version" ? t("release.newVersion") : t("release.notPublished") }}
         </Badge>
         <Badge

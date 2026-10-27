@@ -34,6 +34,21 @@ describe("releaseStatuses", () => {
     expect(releaseStatuses(index, copies)).toEqual({ "wellbrained.a": "new-version", "wellbrained.b": "current", "wellbrained.c": "not-published" });
   });
 
+  it("says in review for a copy whose version waits for review", () => {
+    const index = [listed("wellbrained.a", "1.0.0")];
+    const copies = [
+      { id: "wellbrained.a", version: "1.0.1" },
+      { id: "wellbrained.b", version: "0.1.0" },
+      { id: "wellbrained.c", version: "0.2.0" },
+    ];
+    const waiting = [
+      { id: "wellbrained.a", version: "1.0.1" },
+      { id: "wellbrained.b", version: "0.1.0" },
+      { id: "wellbrained.c", version: "0.1.0" },
+    ];
+    expect(releaseStatuses(index, copies, waiting)).toEqual({ "wellbrained.a": "in-review", "wellbrained.b": "in-review", "wellbrained.c": "not-published" });
+  });
+
   it("is unknown, not a guess, when the catalog could not be reached", () => {
     expect(releaseStatuses(null, [{ id: "wellbrained.a", version: "1.0.0" }])).toBeNull();
   });

@@ -23,9 +23,18 @@ export function releaseStatus(version: string, listed: string | null): ReleaseSt
   return compareModuleVersions(version, listed) > 0 ? "new-version" : "current";
 }
 
-/** The status of each copy against the catalog's index, or null when the catalog could not be reached (never a guess). */
-export function releaseStatuses(index: readonly CatalogEntry[] | null, copies: readonly ReleaseCopy[]): Record<string, ReleaseStatus> | null {
+/**
+ * The status of each copy against the catalog's index, or null when the catalog could not be reached (never a guess).
+ * `waiting` is the developer's own versions waiting for review (empty when signed out): a copy with exactly that version is in review.
+ */
+export function releaseStatuses(index: readonly CatalogEntry[] | null, copies: readonly ReleaseCopy[], waiting: readonly ReleaseCopy[] = []): Record<string, ReleaseStatus> | null {
   if (!index) return null;
   const listed = new Map(index.map((entry) => [entry.id, entry.version]));
-  return Object.fromEntries(copies.map((copy) => [copy.id, releaseStatus(copy.version, listed.get(copy.id) ?? null)]));
+  const inReview = new Set(waiting.map((version) => `${version.id}@${version.version}`));
+  return Object.fromEntries(
+    copies.map((copy) => {
+      const status = releaseStatus(copy.version, listed.get(copy.id) ?? null);
+      return [copy.id, status !== "current" && inReview.has(`${copy.id}@${copy.version}`) ? "in-review" : status];
+    }),
+  );
 }
