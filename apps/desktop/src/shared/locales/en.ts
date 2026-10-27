@@ -170,6 +170,8 @@ export const en = {
   "common.example": "Example",
   "release.newVersion": "New version",
   "release.notPublished": "Not published yet",
+  "release.inReview": "In review",
+  "release.inReviewHint": "Someone at Tavora takes a quick look at this version. We'll email you when it's in.",
   "common.followSystem": "Follow System",
   "common.dark": "Dark",
   "common.light": "Light",

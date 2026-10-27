@@ -876,8 +876,8 @@ export interface CatalogReviews {
   installedVersion: string | null;
 }
 
-/** What a release copy still needs: a first publish, a newer version, or nothing. */
-export type ReleaseStatus = "not-published" | "new-version" | "current";
+/** What a release copy still needs: a first publish, a newer version, or nothing; in-review: this version is published and waits for a person at Tavora. */
+export type ReleaseStatus = "not-published" | "new-version" | "in-review" | "current";
 
 /** A release copy loaded from a development folder: its id and the version in its manifest. */
 export interface ReleaseCopy {

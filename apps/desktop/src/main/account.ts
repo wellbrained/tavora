@@ -522,6 +522,21 @@ export class AccountClient {
     return { id: answer.id, version: answer.version, sha256: answer.sha256, status: answer.status === "waiting" ? "waiting" : "published", reasons: [] };
   }
 
+  /** This account's versions waiting for review; empty when signed out or the catalog can't say (the badges then go by the index alone). */
+  async waitingVersions(): Promise<{ id: string; version: string }[]> {
+    if (!this.saved) return [];
+    try {
+      const answer = await this.call("GET", "/waiting", undefined, true, "/v1/catalog");
+      if (!Array.isArray(answer.waiting)) return [];
+      return (answer.waiting as unknown[]).flatMap((item) => {
+        const { id, version } = (item ?? {}) as { id?: unknown; version?: unknown };
+        return typeof id === "string" && typeof version === "string" ? [{ id, version }] : [];
+      });
+    } catch {
+      return [];
+    }
+  }
+
   // ── Id prefixes ────────────────────────────────────────────────────────
 
   /** What the catalog says about an id prefix for this account; kept as prefixCheck for the screen. */
