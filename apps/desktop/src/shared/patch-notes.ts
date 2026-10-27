@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.50",
+    date: "2026-10-27",
+    title: "Overlay keys fixed",
+    notes: [
+      "When you switch away from your game and your overlays stay on screen, your overlay keys go back to the other app again.",
+    ],
+    prs: [
+      { number: 415, title: "Overlay setups: keys follow the game in front, free keys with a removed setup, undo per setup" },
+    ],
+    tags: ["overlay-setups", "overlays"],
+  },
+  {
     version: "0.21.49",
     date: "2026-10-27",
     title: "In review",
