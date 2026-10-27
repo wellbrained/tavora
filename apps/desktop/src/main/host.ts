@@ -1992,7 +1992,7 @@ export class Host {
         this.library.overlaysStay = action.enabled;
         this.gameOverlays.tick();
       }),
-      "open-overlay-layout": (action) => this.layout.open(action.gameId ?? this.workspace?.id ?? null),
+      "open-overlay-layout": (action) => this.layout.open(action.setup ?? this.workspace?.id ?? null),
       "set-game-overlays-hidden": (action) => {
         this.gameOverlays.setHidden(action.hidden);
         this.syncGameWatcher();
@@ -2005,14 +2005,14 @@ export class Host {
         this.previews.show(subject);
       },
       "set-game-overlay": (action) => {
-        const { owner, moduleId, workspaceId, key, mode, opacity, hideFromCapture } = action;
-        this.gameOverlays.update({ owner, moduleId, workspaceId, key }, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
+        const { setup, owner, moduleId, workspaceId, key, mode, opacity, hideFromCapture } = action;
+        this.gameOverlays.update({ owner, moduleId, workspaceId, key }, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) }, setup);
       },
       "set-panel-view": (action) => {
-        const { instanceId, mode, opacity, hideFromCapture } = action;
-        this.gameOverlays.updatePanelView(instanceId, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
+        const { setup, instanceId, mode, opacity, hideFromCapture } = action;
+        this.gameOverlays.updatePanelView(instanceId, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) }, setup);
       },
-      "remove-game-overlay": (action) => this.gameOverlays.remove(action),
+      "remove-game-overlay": ({ setup, owner, moduleId, workspaceId, key }) => this.gameOverlays.remove({ owner, moduleId, workspaceId, key }, setup),
       "set-overlay-key": (action) => {
         const { workspaceId, owner, moduleId, key } = action;
         const overlay = owner !== undefined && moduleId !== undefined && workspaceId !== undefined && key !== undefined ? { owner, moduleId, workspaceId, key } : null;
@@ -2135,7 +2135,7 @@ export class Host {
       "reload-panel": (action) => this.views.get(action.instanceId)?.reload(),
       "stop-panel": (action) => this.views.get(action.instanceId)?.stop(),
       "show-panel-in-game": (action) => this.showPanelInGame(action.instanceId),
-      "stop-panel-in-game": (action) => this.gameOverlays.stopPanel(action.instanceId),
+      "stop-panel-in-game": (action) => this.gameOverlays.stopPanel(action.instanceId, action.setup),
       "save-layout": (action) => this.workspaces.saveLayout(this.currentWorkspaceId(), action.layout),
       "apply-layout-template": (action) => this.workspaces.applyTemplate(this.currentWorkspaceId(), layoutTemplate(action.templateId)),
       "apply-layout-grid": (action) => this.workspaces.applyTemplate(this.currentWorkspaceId(), gridTemplate(action.columns, action.rows)),
@@ -4367,6 +4367,8 @@ export class Host {
       // Windows reports pixels; windows are placed in DIPs.
       toDip: (rect) => screen.screenToDipRect(null, rect),
       screen: () => screen.getPrimaryDisplay().bounds,
+      // Any of Tavora's windows with the keyboard; the service tells its own overlay windows apart.
+      tavoraInFront: () => BrowserWindow.getFocusedWindow() !== null,
       openWindow: (request) =>
         new GameOverlayWindow({
           preload: path.join(path.dirname(options.modulePreload), "game-overlay.cjs"),
@@ -4381,7 +4383,7 @@ export class Host {
           frameText: request.frameText,
         }),
       shortcuts: globalShortcut,
-      openLayout: (gameId) => host.layout.open(gameId),
+      openLayout: (setupId) => host.layout.open(setupId),
       openSetting: (setting) => {
         host.bringToFront();
         host.window.webContents.send("host:shortcut", `setting:${setting}`);

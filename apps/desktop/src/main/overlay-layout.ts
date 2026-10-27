@@ -1,16 +1,16 @@
-// The Overlay layout: the state behind the window where the user arranges the overlays and panels in game on a
-// canvas shaped like the game's window (overlay-layout-window.ts is the window, the renderer's LayoutApp the pages).
+// The Overlay layout: the state behind the window where the user arranges the items of one overlay setup on a canvas
+// shaped like the game's window (a plain screen-sized one for Everywhere and All games) (overlay-layout-window.ts is the window, the renderer's LayoutApp the pages).
 // This file holds what the window shows (the game, the selection, the grid, undo, the picture) and does what its
 // messages ask: it moves nothing itself, it writes the new position into the overlays (LayoutSource) so the game shows
 // exactly what the canvas shows at once, and it tells the window where to put the live pages.
 import { translate, type Language, type MessageKey } from "../shared/i18n";
 import { UndoStack } from "../shared/layout-history";
 import { canvasFor, gridCell, type Canvas } from "../shared/layout-math";
-import { LAYOUT_ALL_GAMES, type LayoutItemView, type LayoutMessage, type LayoutView } from "../shared/layout-view";
+import { LAYOUT_ALL_GAMES, LAYOUT_EVERYWHERE, type LayoutItemView, type LayoutMessage, type LayoutView } from "../shared/layout-view";
 import { DEFAULT_RECT, MIN_OVERLAY_SIZE, REFERENCE_HEIGHT, anchorOf, contentScale, placeLegacy, type AnchoredRect, type Rect } from "../shared/overlay-anchor";
 import type { GameOverlaySource } from "./game-overlay-page";
 import type { LayoutItemInfo, LayoutSource } from "./game-overlay-service";
-import { DEFAULT_GAME_SIZE, placeItem, type GameLayoutState } from "./game-overlays";
+import { DEFAULT_GAME_SIZE, isGameSetup, placeItem } from "./game-overlays";
 import { captureSize, type LayoutPictures } from "./layout-pictures";
 
 /** A live page on the canvas, as the window puts it: where, how big the content is drawn, how faded, and whether it shows. */
@@ -63,16 +63,15 @@ interface Shape {
 
 const sameRect = (a: AnchoredRect, b: AnchoredRect) => a.h === b.h && a.v === b.v && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 
-type LayoutEdit = { kind: "item"; rect: AnchoredRect } | { kind: "general"; state: GameLayoutState };
-const sameEdit = (a: LayoutEdit, b: LayoutEdit) => JSON.stringify(a) === JSON.stringify(b);
 
 export class OverlayLayout {
   private window: LayoutWindow | null = null;
+  /** The setup shown (its id: Everywhere, All games, or a game's). */
   private gameId = "";
   private selection: string | null = null;
   /** Hidden on the canvas only (the eye in the list); forgotten when the window closes. */
   private readonly hiddenOnCanvas = new Set<string>();
-  private readonly undo = new UndoStack<LayoutEdit>();
+  private readonly undo = new UndoStack<AnchoredRect>();
   private bounds: Rect | null = null;
   private covered = false;
   private notice: string | null = null;
@@ -90,7 +89,7 @@ export class OverlayLayout {
     return this.window !== null;
   }
 
-  /** Opens the window on `gameId` (or the game it showed, or the first of the picker), or brings it forward. */
+  /** Opens the window on a setup (or a workspace: its game's setup, else All games; or the one it showed), or brings it forward. */
   open(gameId?: string | null): void {
     if (gameId) this.gameId = gameId;
     if (this.window) {
@@ -122,12 +121,11 @@ export class OverlayLayout {
 
   // ── What is shown ───────────────────────────────────────────────────
 
-  /** All games, the library games and the game the window was asked to show. */
+  /** The setups: All games, Everywhere while it has something, then the games that have one, in name order. */
   private games(): { id: string; name: string }[] {
-    const { own } = this.options.source.games();
-    const ids = new Set(own);
-    if (this.gameId && this.gameId !== LAYOUT_ALL_GAMES) ids.add(this.gameId);
-    const list = [...ids].map((id) => ({ id, name: this.options.gameName(id) ?? id })).sort((a, b) => a.name.localeCompare(b.name));
+    const setups = this.options.source.setups();
+    const list = setups.filter(isGameSetup).map((id) => ({ id, name: this.options.gameName(id) ?? id })).sort((a, b) => a.name.localeCompare(b.name));
+    if (setups.includes(LAYOUT_EVERYWHERE) && this.itemsOf(LAYOUT_EVERYWHERE).length > 0) list.unshift({ id: LAYOUT_EVERYWHERE, name: this.text("overlays.everywhere") });
     list.unshift({ id: LAYOUT_ALL_GAMES, name: this.text("overlays.allGames") });
     return list;
   }
@@ -136,13 +134,14 @@ export class OverlayLayout {
     return translate(this.options.language(), key);
   }
 
-  /** The game shown: the one asked for if the picker has it, else the first. */
+  /** The setup shown: the one asked for if the picker has it, else All games (what shows over a game without its own). */
   private current(games: { id: string }[]): string {
-    return games.some((game) => game.id === this.gameId) ? this.gameId : (games.find((game) => game.id !== LAYOUT_ALL_GAMES)?.id ?? games[0]?.id ?? this.gameId);
+    return games.some((game) => game.id === this.gameId) ? this.gameId : LAYOUT_ALL_GAMES;
   }
 
+  /** A game's setup takes the shape of the game's window; Everywhere and All games the main screen's. */
   private shape(gameId: string): Shape {
-    const seen = gameId === LAYOUT_ALL_GAMES ? undefined : this.options.source.seenSize(gameId);
+    const seen = isGameSetup(gameId) ? this.options.source.seenSize(gameId) : undefined;
     const size = seen ?? this.screenSize();
     return { canvas: canvasFor(size.width / size.height), gameHeight: size.height, seen: seen !== undefined };
   }
@@ -179,10 +178,9 @@ export class OverlayLayout {
     const gameId = this.current(games);
     const shape = this.shape(gameId);
     const infos = this.itemsOf(gameId);
-    const layout = this.options.source.layoutState(gameId);
     const grid = this.options.source.grid();
     // The game runs and its window was seen (the window in front at some look since it started), whichever window is in front now.
-    const canTakePicture = gameId !== LAYOUT_ALL_GAMES && this.options.source.handleOf(gameId) !== null;
+    const canTakePicture = isGameSetup(gameId) && this.options.source.handleOf(gameId) !== null;
     const items: LayoutItemView[] = infos.map((info) => ({
       id: info.id,
       target: info.ref.kind === "panel" ? { kind: "panel", instanceId: info.ref.instanceId } : { kind: "overlay", ...info.ref.subject },
@@ -190,8 +188,6 @@ export class OverlayLayout {
       name: info.name,
       moduleId: info.moduleId,
       kind: info.ref.kind,
-      general: info.scope === "all",
-      ownPosition: info.scope === "all" && Object.hasOwn(layout.positions, info.id),
       rect: this.rectOf(info, shape),
       placed: this.dragging.get(info.id) ?? this.placed(info, shape),
       mode: info.mode,
@@ -205,8 +201,6 @@ export class OverlayLayout {
     return {
       games,
       gameId,
-      customized: layout.detached,
-      hasOverrides: Object.keys(layout.positions).length > 0,
       canvas: shape.canvas,
       seen: shape.seen,
       grid,
@@ -216,7 +210,7 @@ export class OverlayLayout {
       items,
       picture: this.pictureFor === gameId ? this.picture : null,
       canTakePicture,
-      pictureHint: canTakePicture ? null : gameId !== LAYOUT_ALL_GAMES && this.options.source.gameRunning(gameId) ? "switch" : "start",
+      pictureHint: canTakePicture ? null : isGameSetup(gameId) && this.options.source.gameRunning(gameId) ? "switch" : "start",
       canUndo: this.undo.canUndo,
       canRedo: this.undo.canRedo,
       enabled: this.options.enabled(),
@@ -345,18 +339,6 @@ export class OverlayLayout {
       case "reset-size":
         this.resetSize(message.id);
         break;
-      case "customize":
-      case "follow-all":
-      case "follow-item": {
-        if (!fromShell || this.gameId === LAYOUT_ALL_GAMES) return;
-        if (message.type === "follow-item" && this.info(message.id)?.scope !== "all") return;
-        const before: LayoutEdit = { kind: "general", state: this.options.source.layoutState(this.gameId) };
-        if (message.type === "customize") this.options.source.customize(this.gameId);
-        else this.options.source.follow(this.gameId, message.type === "follow-item" ? message.id : undefined);
-        const after: LayoutEdit = { kind: "general", state: this.options.source.layoutState(this.gameId) };
-        if (!sameEdit(before, after)) this.undo.push({ target: "$layout", before, after });
-        break;
-      }
       case "take-picture":
         if (!fromShell) return;
         void this.takePicture();
@@ -433,18 +415,11 @@ export class OverlayLayout {
     this.change(info, before, { ...before, ...this.options.source.startSize(info.ref, size) });
   }
 
-  /** Keeps `after` as the item's position when it differs from `before`, with an undo step. */
+  /** Keeps `after` as the item's position in the setup shown when it differs from `before`, with an undo step. */
   private change(info: LayoutItemInfo, before: AnchoredRect, after: AnchoredRect): void {
     if (sameRect(before, after)) return;
-    const previous = this.editOf(info);
-    if (!this.options.source.setRect(info.ref, after, this.gameId)) return;
-    this.undo.push({ target: info.scope === "all" && this.gameId !== LAYOUT_ALL_GAMES ? "$layout" : info.id, before: previous, after: this.editOf(this.info(info.id)!) });
-  }
-
-  private editOf(info: LayoutItemInfo): LayoutEdit {
-    return info.scope === "all" && this.gameId !== LAYOUT_ALL_GAMES
-      ? { kind: "general", state: this.options.source.layoutState(this.gameId) }
-      : { kind: "item", rect: this.rectOf(info, this.shape(this.gameId)) };
+    if (!this.options.source.setRect(this.gameId, info.ref, after)) return;
+    this.undo.push({ target: info.id, before, after: this.rectOf(this.info(info.id)!, this.shape(this.gameId)) });
   }
 
   /**
@@ -457,18 +432,8 @@ export class OverlayLayout {
       const step = side === "before" ? this.undo.undo() : this.undo.redo();
       if (!step) return;
       const info = this.info(step.target);
-      const expected = step[from];
-      const next = step[side];
-      if (expected.kind === "general" && next.kind === "general") {
-        if (!sameEdit({ kind: "general", state: this.options.source.layoutState(this.gameId) }, expected)) {
-          this.undo.discard(step);
-          continue;
-        }
-        this.options.source.setLayoutState(this.gameId, next.state);
-        return;
-      }
-      if (info && expected.kind === "item" && next.kind === "item" && sameRect(this.rectOf(info, this.shape(this.current(this.games()))), expected.rect)) {
-        if (this.options.source.setRect(info.ref, next.rect, this.gameId)) this.selection = step.target;
+      if (info && sameRect(this.rectOf(info, this.shape(this.current(this.games()))), step[from])) {
+        if (this.options.source.setRect(this.gameId, info.ref, step[side])) this.selection = step.target;
         return;
       }
       this.undo.discard(step);
@@ -479,7 +444,7 @@ export class OverlayLayout {
 
   private async takePicture(): Promise<void> {
     const gameId = this.gameId;
-    const handle = gameId === LAYOUT_ALL_GAMES ? null : this.options.source.handleOf(gameId);
+    const handle = isGameSetup(gameId) ? this.options.source.handleOf(gameId) : null;
     if (!handle) return this.say("overlays.layout.noGame");
     const seen = this.options.source.seenSize(gameId);
     // The window's own size when it was seen, else the main screen's: the shape the canvas has.

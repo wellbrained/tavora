@@ -4,8 +4,9 @@
 import { GRID_SETTINGS, isGridSetting, type Canvas, type GridSetting } from "./layout-math";
 import type { AnchoredRect, Rect } from "./overlay-anchor";
 
-/** The picker entry for the shared positions of general overlays and panels. */
+/** The picker entries of the All games and Everywhere setups (the others are games, by their workspace id). */
 export const LAYOUT_ALL_GAMES = "$all";
+export const LAYOUT_EVERYWHERE = "$everywhere";
 
 /** What an item's actions are aimed at: an overlay (by its subject) or a panel in game (by its id). */
 export type LayoutTarget =
@@ -22,9 +23,6 @@ export interface LayoutItemView {
   name: string;
   moduleId: string;
   kind: "overlay" | "panel";
-  /** General (shown over every game, with optional per-game positions) or the game's own. */
-  general: boolean;
-  ownPosition: boolean;
   /** The position as saved: an anchor and offsets and a size in units of the game window's height. */
   rect: AnchoredRect;
   /** Where it sits on the canvas, in canvas units (1080 high). */
@@ -51,11 +49,10 @@ export interface LayoutStills {
 }
 
 export interface LayoutView {
-  /** All games first, then the library games in name order. */
+  /** The overlay setups: All games first, Everywhere while it has something, then the games that have one, in name order. */
   games: { id: string; name: string }[];
+  /** The setup shown. */
   gameId: string;
-  customized: boolean;
-  hasOverrides: boolean;
   /** Canvas units: 1080 high, as wide as the game window's shape. */
   canvas: Canvas;
   /** Whether the game window's size was seen; false means the shape of the main screen is used. */
@@ -102,10 +99,7 @@ export type LayoutMessage =
   | { type: "reset"; id: string }
   /** Reset size: back to the size a new item gets, where it is. */
   | { type: "reset-size"; id: string }
-  | { type: "customize" }
-  | { type: "follow-all" }
   | { type: "done" }
-  | { type: "follow-item"; id: string }
   | { type: "take-picture" }
   | { type: "choose-picture" }
   | { type: "remove-picture" }
@@ -152,15 +146,12 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
     case "choose-picture":
     case "remove-picture":
     case "dismiss-notice":
-    case "customize":
-    case "follow-all":
     case "done":
       return { type: raw.type };
     case "canvas-hidden":
       return text(raw.id) && typeof raw.hidden === "boolean" ? { type: "canvas-hidden", id: raw.id, hidden: raw.hidden } : null;
     case "reset":
     case "reset-size":
-    case "follow-item":
       return text(raw.id) ? { type: raw.type, id: raw.id } : null;
     default:
       return null;

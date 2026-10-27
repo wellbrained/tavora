@@ -252,14 +252,16 @@ describe("moving saved data to the workspace names", () => {
     expect(workspace.workspaces["elden-ring"]!.snapshots.map((snapshot) => snapshot.name)).toEqual(["Boss"]);
     expect(workspace.workspaces["local-personal"]!.instances.map((record) => record.instanceId)).toEqual([BOARD, PLANNER]);
 
+    // Then moved on to setups (game-overlays.ts): the general ones in All games, the game's own in its setup with copies of them.
     const overlays = await GameOverlayStore.load(dir, (id) => (library.workspaces[id]?.kind === "personal" ? "all" : "game"));
-    expect(overlays.migrated).toBe(false);
-    expect(overlays.upgraded).toBe(false);
-    expect(overlays.all().map((overlay) => [overlay.workspaceId, overlay.key, overlay.scope, overlay.mode])).toEqual([
-      ["elden-ring", "deaths", "game", "always"],
-      ["local-personal", "timer", "all", "toggle"],
+    expect([overlays.migrated, overlays.moved]).toEqual([false, true]);
+    expect(overlays.overlaysIn("$all").map((overlay) => [overlay.workspaceId, overlay.key, overlay.mode])).toEqual([["local-personal", "timer", "toggle"]]);
+    expect(overlays.overlaysIn("elden-ring").map((overlay) => [overlay.workspaceId, overlay.key, overlay.mode])).toEqual([
+      ["elden-ring", "deaths", "always"],
+      ["local-personal", "timer", "toggle"],
     ]);
-    expect(overlays.panels().map((panel) => [panel.workspaceId, panel.instanceId, panel.scope])).toEqual([["local-personal", PLANNER, "all"]]);
+    expect(overlays.panelsIn("$all").map((panel) => [panel.workspaceId, panel.instanceId])).toEqual([["local-personal", PLANNER]]);
+    expect(overlays.panelsIn("elden-ring").map((panel) => panel.instanceId)).toEqual([PLANNER]);
     // Positions per game window stay by game.
     expect(overlays.seenSize("elden-ring")).toEqual({ width: 2560, height: 1440 });
 
@@ -355,14 +357,14 @@ describe("moving saved data to the workspace names", () => {
 
   it("keeps what an older game overlays file still needs: version 1 and 2 say so in formerVersion until written again", async () => {
     const overlay = { owner: "official", moduleId: "tavora.clock-counter", gameId: "elden-ring", key: "deaths", mode: "always", opacity: 100, rect: fractions };
-    for (const [version, migrated, upgraded] of [[1, true, true], [2, false, true], [3, false, false]] as const) {
+    for (const [version, migrated] of [[1, true], [2, false], [3, false]] as const) {
       await writeOld({ "game-overlays.json": { version, overlays: [overlay], panels: [] } });
       await moveToWorkspaces(dir);
       const moved = await read("game-overlays.json");
       expect(moved.version).toBe(MOVED_VERSIONS["game-overlays.json"]);
       expect(moved.formerVersion).toBe(version === 3 ? undefined : version);
       const store = await GameOverlayStore.load(dir);
-      expect([store.migrated, store.upgraded]).toEqual([migrated, upgraded]);
+      expect([store.migrated, store.moved]).toEqual([migrated, true]);
       expect(store.all().map((item) => item.workspaceId)).toEqual(["elden-ring"]);
       await store.save();
       expect(await read("game-overlays.json")).not.toHaveProperty("formerVersion");

@@ -1,9 +1,11 @@
-// Game overlays: a module's overlay page (the manifest's `overlay`) shown over the user's game in a Tavora window
-// (game-overlay-window.ts), only while that game is in front, plus the panels the user chose to show in their game,
-// which appear over it only while the in-game layer is open. This file holds what the user set for each one, kept in
-// game-overlays.json in the data folder, and the rules that don't need Windows: where an overlay sits relative to the
-// game's window, and when it is shown. The one key that opens the layer lives in hotkeys.json with the other hotkeys
-// (hotkeys.ts), under the action below; so do the keys that toggle overlays.
+// Game overlays: a module's overlay page (the manifest's `overlay`) shown in a Tavora window (game-overlay-window.ts),
+// plus the panels the user chose to show, which appear only while the in-game layer is open. Both are kept in
+// setups (docs/features/overlay-setups.md): Everywhere shows over any app, All games over a game in front that has no
+// setup of its own, and a game's own setup over that game. This file holds the setups, kept in game-overlays.json in
+// the data folder, and the rules that don't need Windows: which setup shows, what may go where, where an item sits
+// relative to its area, and when it is shown. The one key that opens the layer lives in hotkeys.json with the other
+// hotkeys (hotkeys.ts), under the action below; so do the keys that toggle items.
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { LIMITS, OVERLAY_KEY } from "@tavora/sdk/protocol";
 import { DEFAULT_GRID, isGridSetting, type GridSetting } from "../shared/layout-math";
@@ -20,7 +22,8 @@ import {
   type LegacyRect,
   type Rect,
 } from "../shared/overlay-anchor";
-import { SerialQueue, writeFileAtomic } from "./fsutil";
+import { backupsDir } from "./backup";
+import { SerialQueue, keepCopy, writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside, setAside } from "./json";
 import type { WindowState } from "./window-state";
 
@@ -36,8 +39,6 @@ export const OVERLAY_LAYER_ACTION = "$layer";
 export const LEGACY_ARRANGE_ACTION = "$arrange";
 /** Who owns the layer key: Tavora itself. */
 export const LAYER_OWNER = "tavora";
-/** The "workspace" of the layer key: it belongs to none and works over every game. */
-export const ALL_GAMES = "$all";
 
 /**
  * Overlay keys of a module can't start with this: older Tavoras kept panels moved over a game under such keys.
@@ -49,10 +50,10 @@ export const RESERVED_KEY_PREFIX = "panel-";
 export const OPACITIES = [100, 75, 50, 25] as const;
 export type Opacity = (typeof OPACITIES)[number];
 
-/** `always`: shown whenever the game is in front. `toggle`: shown or hidden by the overlay's key. */
+/** `always`: shown whenever its setup shows. `toggle`: shown or hidden by the item's key. */
 export type OverlayMode = "always" | "toggle";
 
-/** `game`: only over the game of the game workspace it was made in. `all`: made in a personal workspace; over every library game in front. */
+/** The kind of workspace an item comes from: `game` (a game workspace) or `all` (a personal workspace, whose items may go into any setup). */
 export type OverlayScope = "game" | "all";
 
 /** The scope for something made in a workspace of this kind. */
@@ -99,8 +100,9 @@ export interface GameOverlaySubject {
   key: string;
 }
 
-export interface GameOverlay extends GameOverlaySubject {
-  scope: OverlayScope;
+/** How an item is set in one setup: each setup that has it keeps its own. */
+export interface ItemSettings {
+  /** Its live view or page: always there, or with a key of its own. */
   mode: OverlayMode;
   opacity: Opacity;
   /** Whether the window is hidden from screen capture (opt-in; off by default, as some anti-cheats flag it). */
@@ -113,32 +115,61 @@ export interface GameOverlay extends GameOverlaySubject {
   legacy?: LegacyRect;
 }
 
-/** A panel the user chose to show in their game (by its instance id). It is over the game only while the layer is open. */
-export interface InGamePanel {
+/** A module's overlay page in one setup. */
+export interface GameOverlay extends GameOverlaySubject, ItemSettings {}
+
+/** A panel the user chose to show in a setup (by its instance id): the panel itself, never a copy. It is over the game only while the layer is open. */
+export interface InGamePanel extends ItemSettings {
   owner: string;
   moduleId: string;
   /** The workspace the panel is in. */
   workspaceId: string;
-  scope: OverlayScope;
   instanceId: string;
-  rect: AnchoredRect;
-  /** Set until the position is converted, as on GameOverlay. */
-  legacy?: LegacyRect;
-  /** Its live view (the module's overlay page over the game while the layer is closed): always there, or with a key of its own. */
-  mode: OverlayMode;
-  opacity: Opacity;
-  hideFromCapture: boolean;
+}
+
+/** Which item: a module overlay (by its subject) or a panel (by its instance id). */
+export type ItemRef = { kind: "overlay"; subject: GameOverlaySubject } | { kind: "panel"; instanceId: string };
+
+// ── Setups ─────────────────────────────────────────────────────────────
+
+/** The setup that shows over any app, with or without a game, except while Tavora's own window is in front. */
+export const EVERYWHERE = "$everywhere";
+/** All games: the setup over a game in front that has no setup of its own. Its id is also the layer key's workspace. */
+export const ALL_GAMES = "$all";
+
+/** Whether a setup is one game's own (its id is the game workspace's). */
+export const isGameSetup = (setupId: string) => setupId !== EVERYWHERE && setupId !== ALL_GAMES;
+
+/** The setup that shows next to Everywhere over this game: its own, else All games. They never stack. */
+export const gameSetupFor = (gameId: string, has: (setupId: string) => boolean): string => (has(gameId) ? gameId : ALL_GAMES);
+
+/** Whether something from this workspace may go into the setup: from a personal workspace into any, from a game workspace only into its game's. */
+export const allowedIn = (setupId: string, workspaceId: string, scope: OverlayScope): boolean => scope === "all" || setupId === workspaceId;
+
+/** Where a module overlay or a panel shown in game lands: its game's setup, or All games when it comes from a personal workspace. */
+export const landingSetup = (workspaceId: string, scope: OverlayScope): string => (scope === "game" ? workspaceId : ALL_GAMES);
+
+/** One setup as the store keeps it: its overlays and panels, in the order they were added. */
+interface Setup {
+  id: string;
+  overlays: GameOverlay[];
+  panels: InGamePanel[];
 }
 
 /**
- * The file's version now. Version 3 keeps each position twice: `anchor` (an AnchoredRect) and `rect` (fractions of the
- * window, as versions 1 and 2 kept them, computed on the last window size seen), so an older Tavora still places things
- * right. An item without `anchor` is not converted yet. Version 4 is version 3 with the workspace names (workspace-move.ts); a
- * file moved from version 1 or 2 says so in `formerVersion` until it is written again. A file of a higher version is never overwritten.
+ * The file's version now. Version 5 keeps setups: Everywhere, All games and one per game, each with its own items
+ * and their own settings. Versions 4 and before kept items with a scope (one game's, or general) and per-game positions
+ * of the general ones; load moves them into setups (moveToSetups) after copying the file to backups/before-overlay-setups.
+ * Version 4 is version 3 with the workspace names (workspace-move.ts); a file moved from version 1 or 2 says so in
+ * `formerVersion`. Version 3 kept each position twice (an anchor and fractions of the window for older Tavoras); an
+ * item without an anchor is not converted yet. A file of a higher version is never overwritten.
  */
-export const FILE_VERSION = 4;
+export const FILE_VERSION = 5;
 
-/** Where an item sits: placed the old way until it is converted, else anchored to the game window. */
+/** The folder in backups/ that keeps game-overlays.json as it was before the setups. Backups never prune it. */
+export const BEFORE_SETUPS_DIR = "before-overlay-setups";
+
+/** Where an item sits: placed the old way until it is converted, else anchored to its area (the game window, or the screen for Everywhere). */
 export function placeItem(item: { rect: AnchoredRect; legacy?: LegacyRect }, game: Rect, min?: number): Rect {
   return item.legacy ? placeLegacy(item.legacy, game, min) : placeAnchored(item.rect, game, min);
 }
@@ -149,23 +180,22 @@ export interface SeenSize {
   height: number;
 }
 
-/** What the file keeps of a position: fractions of the window (for older Tavoras, and all there is until converted) and the anchor. */
-type StoredPosition = { rect: LegacyRect; anchor?: AnchoredRect };
+/** What the file keeps of a position: the anchor, or the fractions of the window while it is not converted. */
+type StoredPosition = { anchor: AnchoredRect } | { rect: LegacyRect };
 
-export interface GameLayoutState {
-  detached: boolean;
-  positions: Record<string, AnchoredRect>;
-}
+type StoredSetup = { id: string; overlays: unknown[]; panels: unknown[] };
 
 type GameOverlayFile = {
   version?: number;
-  /** The version a file had before the workspace names, when it was 1 or 2. */
+  /** The version a file had before the workspace names, when it was 1 or 2. Kept until the moves of start() ran. */
   formerVersion?: number;
   exclusiveHintShown?: boolean;
-  /** The Overlay layout: the grid setting, the window's place and the last window size seen per game. */
-  layout?: { grid?: GridSetting; window?: WindowState; seen?: Record<string, SeenSize>; games?: Record<string, GameLayoutState> };
-  overlays: unknown[];
-  panels: unknown[];
+  /** The Overlay layout: the grid setting, the window's place and the last window size seen per game. Versions 4 and before also had `games`. */
+  layout?: { grid?: GridSetting; window?: WindowState; seen?: Record<string, SeenSize>; games?: unknown };
+  setups?: StoredSetup[];
+  /** Versions 4 and before. */
+  overlays?: unknown[];
+  panels?: unknown[];
 };
 
 /** What the user can change on an existing overlay. */
@@ -185,14 +215,11 @@ export const panelWindowId = (instanceId: string) => `panel\n${instanceId}`;
 /** One text for an in-game panel's live view window. */
 export const liveWindowId = (instanceId: string) => `live\n${instanceId}`;
 
+/** The text an item is named by in the Overlay layout and in undo steps: overlayId, or panelWindowId. */
+export const itemId = (item: GameOverlaySubject | { instanceId: string }) => ("instanceId" in item ? panelWindowId(item.instanceId) : overlayId(item));
+
 /** What the user can change on an in-game panel's live view. */
 export type InGamePanelChange = Partial<Pick<InGamePanel, "mode" | "opacity" | "hideFromCapture">>;
-
-/** Whether something (an overlay or an in-game panel) shows over `gameId`: the game of its workspace, or any game for a general one. */
-export const appliesTo = (item: { scope: OverlayScope; workspaceId: string }, gameId: string) => item.scope === "all" || item.workspaceId === gameId;
-
-/** What limits count together: a game's own, and the general ones. */
-const bucketOf = (item: { scope: OverlayScope; workspaceId: string }) => (item.scope === "all" ? ALL_GAMES : item.workspaceId);
 
 /** The rule of the Live badge on a panel's tab: the panel is in the game, or its module has an overlay that shows over the game. */
 export const isLive = (panelInGame: boolean, moduleOverlays: number) => panelInGame || moduleOverlays > 0;
@@ -242,15 +269,25 @@ export const gestureCounts = (overGame: boolean, layerOpen: boolean) => !overGam
 
 // ── When an overlay shows ──────────────────────────────────────────────
 
+/**
+ * The setups on screen now: Everywhere, unless Tavora's own window is in front, plus for a game (the one in front, or
+ * the one overlays stay over) its own setup or else All games. A game's setup and All games never stack.
+ */
+export function setupsOnScreen(gameId: string | null, tavoraInFront: boolean, has: (setupId: string) => boolean): string[] {
+  const shown = tavoraInFront ? [] : [EVERYWHERE];
+  if (gameId !== null) shown.push(gameSetupFor(gameId, has));
+  return shown;
+}
+
 export interface VisibilityInput {
   /** Game overlays are on, and not hidden for now. */
   enabled: boolean;
-  /** The overlay applies to the game in front. */
+  /** The item's setup is on screen now (setupsOnScreen). */
   gameInFront: boolean;
   mode: OverlayMode;
   /** The overlay's key switched it on (toggle mode). */
   toggledOn: boolean;
-  /** The in-game layer is open: all overlays of the game show, each with its frame, so each can be placed. */
+  /** The in-game layer is open: every item on screen shows, each with its frame, so each can be placed. */
   layerOpen: boolean;
 }
 
@@ -260,8 +297,8 @@ export function overlayVisible({ enabled, gameInFront, mode, toggledOn, layerOpe
 }
 
 /**
- * The game in front, given the games the front window's program belongs to: one that has overlays or panels of its own,
- * else (when something is general) any library game, if the program could belong to several (a launcher folder).
+ * The game in front, given the games the front window's program belongs to: one that has a setup of its own, else
+ * (when All games has something) any library game, if the program could belong to several (a launcher folder).
  */
 export function gameInFront(programGames: ReadonlySet<string>, withItems: ReadonlySet<string>, general: boolean, isGame: (gameId: string) => boolean): string | null {
   for (const id of programGames) if (withItems.has(id)) return id;
@@ -276,15 +313,18 @@ export function looksExclusive(notificationState: number | null): boolean {
   return notificationState === EXCLUSIVE_FULLSCREEN;
 }
 
+
 // ── The store ──────────────────────────────────────────────────────────
 
 /** How long saving waits for more changes, so a drag is written once. */
 const SAVE_DELAY_MS = 250;
 
-export type AddResult = "added" | "exists" | "full";
+/** `refused`: the item may not go into that setup (a game workspace's into another game's, or a setup that isn't there). */
+export type AddResult = "added" | "exists" | "full" | "refused";
 
 const INSTANCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const validField = (value: unknown) => typeof value === "string" && value.length > 0 && value.length <= 128;
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 /** A window size that is a size: whole numbers, big enough to be a window, not absurd. */
 function validSize(value: unknown): SeenSize | null {
   if (typeof value !== "object" || value === null) return null;
@@ -295,32 +335,108 @@ function validSize(value: unknown): SeenSize | null {
   return w >= 100 && h >= 100 && w <= 20_000 && h <= 20_000 ? { width: w, height: h } : null;
 }
 
+/** A saved position: the anchor when there is one, else the fractions, which wait to be converted. */
+function positionOf(entry: Record<string, unknown>): Pick<ItemSettings, "rect" | "legacy"> | null {
+  const anchored = normalizeAnchored(entry.anchor);
+  if (anchored) return { rect: anchored };
+  const legacy = normalizeLegacy(entry.rect);
+  // The stand-in is only there because a rectangle must exist; placeItem places the legacy one.
+  return legacy ? { rect: migrateLegacy(legacy, DEFAULT_GAME_SIZE), legacy } : null;
+}
+
+/** What the user set for an item, with the defaults for what is missing or not understood. */
+function settingsOf(entry: Record<string, unknown>): Omit<ItemSettings, "rect" | "legacy"> {
+  return {
+    mode: entry.mode === "toggle" ? "toggle" : "always",
+    opacity: OPACITIES.find((value) => value === entry.opacity) ?? 100,
+    hideFromCapture: entry.hideFromCapture === true,
+  };
+}
+
+/** A saved overlay, or null when it can't be used. `oldKeys`: a file of version 1, whose `panel-` keys are not kept. */
+function readOverlay(entry: unknown, oldKeys = false): GameOverlay | null {
+  if (!isObject(entry)) return null;
+  const { owner, moduleId, workspaceId, key } = entry;
+  if (![owner, moduleId, workspaceId].every(validField)) return null;
+  if (typeof key !== "string" || !OVERLAY_KEY.test(key) || (oldKeys && key.startsWith(RESERVED_KEY_PREFIX))) return null;
+  const position = positionOf(entry);
+  if (!position) return null;
+  return { owner: owner as string, moduleId: moduleId as string, workspaceId: workspaceId as string, key, ...settingsOf(entry), ...position };
+}
+
+function readPanel(entry: unknown): InGamePanel | null {
+  if (!isObject(entry)) return null;
+  const { owner, moduleId, workspaceId, instanceId } = entry;
+  if (![owner, moduleId, workspaceId].every(validField)) return null;
+  if (typeof instanceId !== "string" || !INSTANCE_ID.test(instanceId)) return null;
+  const position = positionOf(entry);
+  if (!position) return null;
+  return { owner: owner as string, moduleId: moduleId as string, workspaceId: workspaceId as string, instanceId, ...settingsOf(entry), ...position };
+}
+
+/** An item as a file of version 4 or before kept it: with its scope (one game's, or general), before setups. */
+export type OldItem<T> = T & { scope: OverlayScope };
+
+const copyItem = <T extends ItemSettings>(item: T): T => structuredClone(item);
+
+/**
+ * The move to setups (file version 5). General items (made in personal workspaces) go to All games. A game's own items
+ * go to a new setup for that game, and so do copies of the general ones, so what shows over each game stays the same.
+ * Customized per-game positions of the general items (`layout.games`) are not kept: the copies take the All games
+ * place. A setup takes the game's own first, then the general ones, up to LIMITS.maxGameOverlays. Everywhere starts
+ * empty, so nothing shows anywhere new.
+ */
+export function moveToSetups(overlays: readonly OldItem<GameOverlay>[], panels: readonly OldItem<InGamePanel>[]): Setup[] {
+  const strip = <T extends { scope: OverlayScope }>({ scope: _scope, ...item }: T) => item;
+  const general: Setup = { id: ALL_GAMES, overlays: [], panels: [] };
+  for (const overlay of overlays) if (overlay.scope === "all") general.overlays.push(strip(overlay));
+  for (const panel of panels) if (panel.scope === "all") general.panels.push(strip(panel));
+  const games = new Map<string, Setup>();
+  const setupOf = (gameId: string) => {
+    let setup = games.get(gameId);
+    if (!setup) games.set(gameId, (setup = { id: gameId, overlays: [], panels: [] }));
+    return setup;
+  };
+  for (const overlay of overlays) if (overlay.scope === "game") setupOf(overlay.workspaceId).overlays.push(strip(overlay));
+  for (const panel of panels) if (panel.scope === "game") setupOf(panel.workspaceId).panels.push(strip(panel));
+  for (const setup of games.values()) {
+    const room = () => LIMITS.maxGameOverlays - setup.overlays.length - setup.panels.length;
+    for (const overlay of general.overlays) if (room() > 0) setup.overlays.push(copyItem(overlay));
+    for (const panel of general.panels) if (room() > 0) setup.panels.push(copyItem(panel));
+  }
+  return [{ id: EVERYWHERE, overlays: [], panels: [] }, general, ...games.values()];
+}
+
 export class GameOverlayStore {
-  /** The file was of version 1 (Tavora 0.21.0 and before); it is written as the current version from now on. */
+  /** The file was of version 1 (Tavora 0.21.0 and before): start() takes its old keys away, and the file is written as the current version. */
   migrated = false;
-  /** The file was of version 2 or 1: its positions convert as the games' windows are seen, and it is written as the current version from now on. */
-  upgraded = false;
+  /** The file was of version 4 or before: it was moved to setups and is written as the current version at start. */
+  moved = false;
   /** The Overlay layout's grid, its window's place and the last window size seen per game. */
   private gridSetting: GridSetting = DEFAULT_GRID;
   private windowState: WindowState | null = null;
   private seen = new Map<string, SeenSize>();
-  private layouts = new Map<string, GameLayoutState>();
   private readonly queue = new SerialQueue();
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Never write the file this session: it couldn't be backed up before the move to setups, so it stays as it was. */
+  private readOnly = false;
 
   private constructor(
     private readonly file: string,
-    private overlays: GameOverlay[],
-    private inGame: InGamePanel[],
+    private setupList: Setup[],
     private hintShown: boolean,
+    /** Whether a workspace is a game workspace ("game") or a personal one ("all"), for the source rules. */
+    private readonly scopeOf: (workspaceId: string) => OverlayScope,
   ) {}
 
   /**
-   * Loads what was kept. A file of version 1 (Tavora 0.21.0 and before) is migrated: its overlays have no scope, so
-   * `scopeOf` tells it from the workspace's kind, and the permanent panels over the game it may hold (keys behind
-   * RESERVED_KEY_PREFIX) are not kept. `migrated` says so. Positions of a file of version 2 or 1 were fractions of the
-   * game window and stay so (`legacy`) until the game's real window is seen (convertLegacy), because older Tavoras never
-   * kept its size. `upgraded` says so. A file of a higher version (a newer Tavora wrote it) is set aside, not read.
+   * Loads what was kept. A file of version 4 or before is moved to setups (moveToSetups), after a copy of it went to
+   * backups/before-overlay-setups; `moved` says so, and the service writes the move once start() ran (until then, a
+   * start that stops half way does the same move again from the same file). A file of version 1 (Tavora 0.21.0 and
+   * before) also has no scope, so `scopeOf` tells it from the workspace's kind, and the permanent panels over the game
+   * it may hold (keys behind RESERVED_KEY_PREFIX) are not kept; `migrated` says so. Positions of a file of version 2 or
+   * 1 were fractions of the game window and stay so (`legacy`) until the game's real window is seen (convertLegacy). A
+   * file of a higher version (a newer Tavora wrote it) is set aside, not read.
    */
   static async load(userData: string, scopeOf: (workspaceId: string) => OverlayScope = () => "game"): Promise<GameOverlayStore> {
     const file = path.join(userData, GAME_OVERLAYS_FILE);
@@ -328,194 +444,284 @@ export class GameOverlayStore {
     const newer = typeof read?.version === "number" && read.version > FILE_VERSION;
     // Written by a newer Tavora: kept for that one, and never written over.
     if (newer) await setAside(file);
-    const raw = newer ? null : read;
-    const store = new GameOverlayStore(file, [], [], raw?.exclusiveHintShown === true);
-    const known = raw !== null && raw !== undefined;
+    const raw = newer || !isObject(read) ? null : read;
     // A file moved to the workspace names keeps what version it was until it is written again.
-    const version = raw?.version === FILE_VERSION && (raw.formerVersion === 1 || raw.formerVersion === 2) ? raw.formerVersion : raw?.version;
-    store.migrated = known && version !== 2 && version !== 3 && version !== FILE_VERSION;
-    store.upgraded = known && version !== 3 && version !== FILE_VERSION;
-    const layout = typeof raw?.layout === "object" && raw.layout !== null ? raw.layout : {};
+    const version = raw?.version === 4 && (raw.formerVersion === 1 || raw.formerVersion === 2) ? raw.formerVersion : raw?.version;
+    const old = raw !== null && raw.version !== FILE_VERSION;
+    const migrated = old && version !== 2 && version !== 3 && version !== 4;
+    const store = new GameOverlayStore(file, old ? GameOverlayStore.readOld(raw, scopeOf, migrated) : GameOverlayStore.readSetups(raw), raw?.exclusiveHintShown === true, scopeOf);
+    store.migrated = migrated;
+    store.moved = old;
+    const layout = isObject(raw?.layout) ? raw.layout : {};
     if (isGridSetting(layout.grid)) store.gridSetting = layout.grid;
-    store.windowState = layout.window && typeof layout.window === "object" ? layout.window : null;
-    for (const [gameId, size] of Object.entries(typeof layout.seen === "object" && layout.seen !== null ? layout.seen : {}).slice(0, MAX_SEEN)) {
+    store.windowState = isObject(layout.window) ? (layout.window as unknown as WindowState) : null;
+    for (const [gameId, size] of Object.entries(isObject(layout.seen) ? layout.seen : {}).slice(0, MAX_SEEN)) {
       const valid = validSize(size);
       if (valid && validField(gameId)) store.seen.set(gameId, valid);
     }
-    /** A saved position: the anchor when there is one, else the fractions, which wait to be converted. */
-    const positionOf = (entry: object): Pick<GameOverlay, "rect" | "legacy"> | null => {
-      const { rect, anchor } = entry as Partial<Record<keyof StoredPosition, unknown>>;
-      const anchored = normalizeAnchored(anchor);
-      if (anchored) return { rect: anchored };
-      const legacy = normalizeLegacy(rect);
-      // The stand-in is only there because a rectangle must exist; placeItem places the legacy one.
-      return legacy ? { rect: migrateLegacy(legacy, DEFAULT_GAME_SIZE), legacy } : null;
-    };
-    for (const entry of Array.isArray(raw?.overlays) ? raw.overlays : []) {
-      if (typeof entry !== "object" || entry === null) continue;
-      const { owner, moduleId, workspaceId, key, scope, mode, opacity, hideFromCapture } = entry as Partial<Record<keyof GameOverlay, unknown>>;
-      if (![owner, moduleId, workspaceId].every(validField)) continue;
-      const position = positionOf(entry);
-      if (typeof key !== "string" || !OVERLAY_KEY.test(key) || (store.migrated && key.startsWith(RESERVED_KEY_PREFIX)) || !position) continue;
-      const overlay: GameOverlay = {
-        owner: owner as string,
-        moduleId: moduleId as string,
-        workspaceId: workspaceId as string,
-        key,
-        scope: scope === "all" || scope === "game" ? scope : scopeOf(workspaceId as string),
-        mode: mode === "toggle" ? "toggle" : "always",
-        opacity: OPACITIES.find((value) => value === opacity) ?? 100,
-        hideFromCapture: hideFromCapture === true,
-        ...position,
-      };
-      if (store.find(overlay) || store.count(bucketOf(overlay)) >= LIMITS.maxGameOverlays) continue;
-      store.overlays.push(overlay);
-    }
-    for (const entry of Array.isArray(raw?.panels) ? raw.panels : []) {
-      if (typeof entry !== "object" || entry === null) continue;
-      const { owner, moduleId, workspaceId, scope, instanceId, mode, opacity, hideFromCapture } = entry as Partial<Record<keyof InGamePanel, unknown>>;
-      if (![owner, moduleId, workspaceId].every(validField)) continue;
-      const position = positionOf(entry);
-      if (typeof instanceId !== "string" || !INSTANCE_ID.test(instanceId) || !position) continue;
-      const panel: InGamePanel = {
-        owner: owner as string,
-        moduleId: moduleId as string,
-        workspaceId: workspaceId as string,
-        scope: scope === "all" || scope === "game" ? scope : scopeOf(workspaceId as string),
-        instanceId,
-        ...position,
-        mode: mode === "toggle" ? "toggle" : "always",
-        opacity: OPACITIES.find((value) => value === opacity) ?? 100,
-        hideFromCapture: hideFromCapture === true,
-      };
-      if (store.panelOf(instanceId) || store.count(bucketOf(panel)) >= LIMITS.maxGameOverlays) continue;
-      store.inGame.push(panel);
-    }
-    for (const [gameId, state] of Object.entries(layout.games ?? {})) {
-      if (!validField(gameId) || !state || typeof state !== "object") continue;
-      const positions: Record<string, AnchoredRect> = {};
-      for (const item of [...store.overlays, ...store.inGame]) {
-        if (item.scope !== "all") continue;
-        const id = "instanceId" in item ? panelWindowId(item.instanceId) : overlayId(item);
-        const rect = normalizeAnchored(state.positions?.[id]);
-        if (rect) positions[id] = rect;
+    if (old) {
+      try {
+        await keepCopy(path.join(backupsDir(userData), BEFORE_SETUPS_DIR), GAME_OVERLAYS_FILE, await readFile(file));
+      } catch (error) {
+        // Without the copy, the old file is not written over: this start works on the move in memory only.
+        console.error("[tavora] backing up game overlays before the setups failed; the file is left as it was", error);
+        store.readOnly = true;
       }
-      store.layouts.set(gameId, { detached: state.detached === true, positions });
     }
     return store;
   }
 
+  /** The setups of a file of version 5: Everywhere and All games always, a game's at most once; items it can't use are skipped. */
+  private static readSetups(raw: Partial<GameOverlayFile> | null): Setup[] {
+    const setups: Setup[] = [
+      { id: EVERYWHERE, overlays: [], panels: [] },
+      { id: ALL_GAMES, overlays: [], panels: [] },
+    ];
+    const seen = new Set<string>();
+    for (const entry of Array.isArray(raw?.setups) ? raw.setups : []) {
+      if (!isObject(entry) || !validField(entry.id) || seen.has(entry.id as string)) continue;
+      const id = entry.id as string;
+      seen.add(id);
+      let setup = setups.find((item) => item.id === id);
+      if (!setup) setups.push((setup = { id, overlays: [], panels: [] }));
+      const target = setup;
+      const full = () => target.overlays.length + target.panels.length >= LIMITS.maxGameOverlays;
+      for (const item of Array.isArray(entry.overlays) ? entry.overlays : []) {
+        const overlay = readOverlay(item);
+        if (overlay && !full() && !target.overlays.some((other) => sameOverlay(other, overlay))) target.overlays.push(overlay);
+      }
+      for (const item of Array.isArray(entry.panels) ? entry.panels : []) {
+        const panel = readPanel(item);
+        if (panel && !full() && !target.panels.some((other) => other.instanceId === panel.instanceId)) target.panels.push(panel);
+      }
+    }
+    return setups;
+  }
+
+  /** The items of a file of version 4 or before, moved to setups. It kept at most eight of a game's own and eight general ones. */
+  private static readOld(raw: Partial<GameOverlayFile>, scopeOf: (workspaceId: string) => OverlayScope, migrated: boolean): Setup[] {
+    const scoped = (entry: unknown, workspaceId: string): OverlayScope => {
+      const scope = isObject(entry) ? entry.scope : undefined;
+      return scope === "all" || scope === "game" ? scope : scopeOf(workspaceId);
+    };
+    const counts = new Map<string, number>();
+    const fits = (item: { scope: OverlayScope; workspaceId: string }) => {
+      const bucket = item.scope === "all" ? ALL_GAMES : item.workspaceId;
+      const count = counts.get(bucket) ?? 0;
+      if (count >= LIMITS.maxGameOverlays) return false;
+      counts.set(bucket, count + 1);
+      return true;
+    };
+    const overlays: OldItem<GameOverlay>[] = [];
+    for (const entry of Array.isArray(raw.overlays) ? raw.overlays : []) {
+      const overlay = readOverlay(entry, migrated);
+      if (!overlay || overlays.some((other) => sameOverlay(other, overlay))) continue;
+      const item = { ...overlay, scope: scoped(entry, overlay.workspaceId) };
+      if (fits(item)) overlays.push(item);
+    }
+    const panels: OldItem<InGamePanel>[] = [];
+    for (const entry of Array.isArray(raw.panels) ? raw.panels : []) {
+      const panel = readPanel(entry);
+      if (!panel || panels.some((other) => other.instanceId === panel.instanceId)) continue;
+      const item = { ...panel, scope: scoped(entry, panel.workspaceId) };
+      if (fits(item)) panels.push(item);
+    }
+    return moveToSetups(overlays, panels);
+  }
+
+  // ── Setups and their items ───────────────────────────────────────────
+
+  /** Every setup's id: Everywhere, All games, then the games' in the order they were made. */
+  setupIds(): string[] {
+    return this.setupList.map((setup) => setup.id);
+  }
+
+  hasSetup(setupId: string): boolean {
+    return this.setupList.some((setup) => setup.id === setupId);
+  }
+
+  /** The games that have a setup of their own. */
+  gameSetups(): string[] {
+    return this.setupIds().filter(isGameSetup);
+  }
+
+  private setup(setupId: string): Setup | undefined {
+    return this.setupList.find((setup) => setup.id === setupId);
+  }
+
+  overlaysIn(setupId: string): readonly GameOverlay[] {
+    return this.setup(setupId)?.overlays ?? [];
+  }
+
+  panelsIn(setupId: string): readonly InGamePanel[] {
+    return this.setup(setupId)?.panels ?? [];
+  }
+
+  /** How many items a setup has; LIMITS.maxGameOverlays at most. */
+  count(setupId: string): number {
+    const setup = this.setup(setupId);
+    return setup ? setup.overlays.length + setup.panels.length : 0;
+  }
+
+  /** Every overlay in every setup: one in several setups is here once for each. */
   all(): readonly GameOverlay[] {
-    return this.overlays;
+    return this.setupList.flatMap((setup) => setup.overlays);
   }
 
+  /** Every panel in every setup, the same way. */
   panels(): readonly InGamePanel[] {
-    return this.inGame;
+    return this.setupList.flatMap((setup) => setup.panels);
   }
 
-  /** The overlays that show over `gameId`: its own and the general ones. */
-  of(gameId: string): GameOverlay[] {
-    return this.overlays.filter((overlay) => appliesTo(overlay, gameId)).map((item) => this.positioned(item, gameId));
+  /** Whether no setup has anything. */
+  get empty(): boolean {
+    return this.setupList.every((setup) => setup.overlays.length === 0 && setup.panels.length === 0);
   }
 
-  panelsOf(gameId: string): InGamePanel[] {
-    return this.inGame.filter((panel) => appliesTo(panel, gameId)).map((item) => this.positioned(item, gameId));
+  /** The setups an item is in. */
+  setupsWith(ref: ItemRef): string[] {
+    return this.setupList
+      .filter((setup) => (ref.kind === "panel" ? setup.panels.some((panel) => panel.instanceId === ref.instanceId) : setup.overlays.some((overlay) => sameOverlay(overlay, ref.subject))))
+      .map((setup) => setup.id);
   }
 
-  panelOf(instanceId: string): InGamePanel | undefined {
-    return this.inGame.find((panel) => panel.instanceId === instanceId);
+  /** The overlay as one setup has it, or (without a setup) as the first setup that has it does. */
+  find(subject: GameOverlaySubject, setupId?: string): GameOverlay | undefined {
+    const list = setupId === undefined ? this.all() : this.overlaysIn(setupId);
+    return list.find((overlay) => sameOverlay(overlay, subject));
   }
 
-  find(subject: GameOverlaySubject): GameOverlay | undefined {
-    return this.overlays.find((overlay) => sameOverlay(overlay, subject));
+  panelOf(instanceId: string, setupId?: string): InGamePanel | undefined {
+    const list = setupId === undefined ? this.panels() : this.panelsIn(setupId);
+    return list.find((panel) => panel.instanceId === instanceId);
   }
 
-  /** Overlays and panels sharing one limit: a game's own, or the general ones (`ALL_GAMES`). */
-  private count(bucket: string): number {
-    return [...this.overlays, ...this.inGame].filter((item) => bucketOf(item) === bucket).length;
-  }
-
-  /** Where the next one of a bucket starts: below the others, so a second one doesn't hide the first. */
-  private startRect(first: AnchoredRect, bucket: string): AnchoredRect {
-    const row = this.count(bucket) % 4;
+  /** Where a new item of a setup starts: below the others, so a second one doesn't hide the first. */
+  private startRect(first: AnchoredRect, setupId: string): AnchoredRect {
+    const row = this.count(setupId) % 4;
     return { ...first, y: Math.min(first.y + row * (first.height + 0.02), 1 - first.height) };
   }
 
-  /** Adds an overlay with the usual settings, in the corner of the game's window; a game (and the general ones) may have `LIMITS.maxGameOverlays`. */
-  add(subject: GameOverlaySubject, scope: OverlayScope, first: AnchoredRect = DEFAULT_RECT): AddResult {
-    if (this.find(subject)) return "exists";
-    const bucket = bucketOf({ scope, workspaceId: subject.workspaceId });
-    if (this.count(bucket) >= LIMITS.maxGameOverlays) return "full";
-    this.overlays.push({ ...subject, scope, mode: "always", opacity: 100, hideFromCapture: false, rect: this.startRect(first, bucket) });
+  /**
+   * Makes a game's setup; false when it has one. It starts with copies of what All games has (leaving `room` places
+   * free for the item it is made for), so what shows over the game stays the same once it has a setup of its own.
+   */
+  addSetup(gameId: string, room = 0): boolean {
+    if (!isGameSetup(gameId) || !validField(gameId) || this.hasSetup(gameId)) return false;
+    const setup: Setup = { id: gameId, overlays: [], panels: [] };
+    const general = this.setup(ALL_GAMES)!;
+    const free = () => LIMITS.maxGameOverlays - room - setup.overlays.length - setup.panels.length;
+    for (const overlay of general.overlays) if (free() > 0 && allowedIn(gameId, overlay.workspaceId, this.scopeOf(overlay.workspaceId))) setup.overlays.push(copyItem(overlay));
+    for (const panel of general.panels) if (free() > 0 && allowedIn(gameId, panel.workspaceId, this.scopeOf(panel.workspaceId))) setup.panels.push(copyItem(panel));
+    this.setupList.push(setup);
+    this.saveSoon();
+    return true;
+  }
+
+  /** A game's setup goes with what it holds (the workspace left the library); false when it had none. Everywhere and All games stay. */
+  removeSetup(gameId: string): boolean {
+    if (!isGameSetup(gameId) || !this.hasSetup(gameId)) return false;
+    this.setupList = this.setupList.filter((setup) => setup.id !== gameId);
+    this.saveSoon();
+    return true;
+  }
+
+  /** The setup to add to, made first when it is a game's that has none; null when the item may not go there. */
+  private target(setupId: string, workspaceId: string): Setup | null {
+    if (!allowedIn(setupId, workspaceId, this.scopeOf(workspaceId))) return null;
+    if (isGameSetup(setupId)) this.addSetup(setupId, 1);
+    return this.setup(setupId) ?? null;
+  }
+
+  /** Adds an overlay to a setup with the usual settings, in the corner of its area; a setup may have LIMITS.maxGameOverlays items. */
+  add(setupId: string, subject: GameOverlaySubject, first: AnchoredRect = DEFAULT_RECT): AddResult {
+    const setup = this.target(setupId, subject.workspaceId);
+    if (!setup) return "refused";
+    if (setup.overlays.some((overlay) => sameOverlay(overlay, subject))) return "exists";
+    if (this.count(setupId) >= LIMITS.maxGameOverlays) return "full";
+    setup.overlays.push({ ...subject, mode: "always", opacity: 100, hideFromCapture: false, rect: this.startRect(first, setupId) });
     this.saveSoon();
     return "added";
   }
 
-  /** Marks a panel as shown in the game; it counts toward the same limit as overlays. */
-  addPanel(panel: Omit<InGamePanel, "rect" | "mode" | "opacity" | "hideFromCapture">, first: AnchoredRect = DEFAULT_PANEL_ANCHORED): AddResult {
-    if (this.panelOf(panel.instanceId)) return "exists";
-    const bucket = bucketOf(panel);
-    if (this.count(bucket) >= LIMITS.maxGameOverlays) return "full";
-    this.inGame.push({ ...panel, rect: this.startRect(first, bucket), mode: "always", opacity: 100, hideFromCapture: false });
+  /** Adds a panel to a setup; it counts toward the same limit as overlays. */
+  addPanel(setupId: string, panel: Pick<InGamePanel, "owner" | "moduleId" | "workspaceId" | "instanceId">, first: AnchoredRect = DEFAULT_PANEL_ANCHORED): AddResult {
+    const setup = this.target(setupId, panel.workspaceId);
+    if (!setup) return "refused";
+    if (setup.panels.some((other) => other.instanceId === panel.instanceId)) return "exists";
+    if (this.count(setupId) >= LIMITS.maxGameOverlays) return "full";
+    const { owner, moduleId, workspaceId, instanceId } = panel;
+    setup.panels.push({ owner, moduleId, workspaceId, instanceId, rect: this.startRect(first, setupId), mode: "always", opacity: 100, hideFromCapture: false });
     this.saveSoon();
     return "added";
   }
 
-  /** Changes what the user set for an overlay; false when there is no such overlay. */
-  update(subject: GameOverlaySubject, change: GameOverlayChange): boolean {
-    const overlay = this.find(subject);
-    if (!overlay) return false;
-    if (change.mode) overlay.mode = change.mode;
-    if (change.opacity !== undefined && OPACITIES.includes(change.opacity)) overlay.opacity = change.opacity;
-    if (change.hideFromCapture !== undefined) overlay.hideFromCapture = change.hideFromCapture;
+  /** The items a change is for: the one of `setupId`, or without one, the item in every setup that has it. */
+  private targets<T>(list: (setupId: string) => readonly T[], match: (item: T) => boolean, setupId?: string): T[] {
+    const ids = setupId === undefined ? this.setupIds() : [setupId];
+    return ids.flatMap((id) => list(id).filter(match));
+  }
+
+  /** Changes what the user set for an overlay (in one setup, or in all that have it); false when there is no such overlay. */
+  update(subject: GameOverlaySubject, change: GameOverlayChange, setupId?: string): boolean {
+    const overlays = this.targets((id) => this.overlaysIn(id), (overlay) => sameOverlay(overlay, subject), setupId);
+    if (overlays.length === 0) return false;
     const rect = change.rect ? normalizeAnchored(change.rect) : null;
-    if (rect) {
-      overlay.rect = rect;
-      delete overlay.legacy;
+    for (const overlay of overlays) {
+      applySettings(overlay, change);
+      if (rect) {
+        overlay.rect = { ...rect };
+        delete overlay.legacy;
+      }
     }
     this.saveSoon();
     return true;
   }
 
-  updatePanel(instanceId: string, rect: AnchoredRect): boolean {
-    const panel = this.panelOf(instanceId);
-    if (!panel) return false;
+  /** Changes the live view's settings of a panel (in one setup, or in all that have it); false when no setup has the panel. */
+  updatePanelView(instanceId: string, change: InGamePanelChange, setupId?: string): boolean {
+    const panels = this.targets((id) => this.panelsIn(id), (panel) => panel.instanceId === instanceId, setupId);
+    if (panels.length === 0) return false;
+    for (const panel of panels) applySettings(panel, change);
+    this.saveSoon();
+    return true;
+  }
+
+  /** Puts the position of an item in one setup to `rect` (a move in the layer or on the canvas, Reset position); false when the setup hasn't it. */
+  setRect(setupId: string, ref: ItemRef, rect: AnchoredRect): boolean {
+    const target = ref.kind === "panel" ? this.panelOf(ref.instanceId, setupId) : this.find(ref.subject, setupId);
     const next = normalizeAnchored(rect);
-    if (next) {
-      panel.rect = next;
-      delete panel.legacy;
+    if (!target || !next) return false;
+    target.rect = next;
+    delete target.legacy;
+    this.saveSoon();
+    return true;
+  }
+
+  /** Removes the overlays matching `test` from their setups (the user's remove, a deleted workspace, a module that is gone); whether any went. */
+  forget(test: (overlay: GameOverlay, setupId: string) => boolean): boolean {
+    let any = false;
+    for (const setup of this.setupList) {
+      const kept = setup.overlays.filter((overlay) => !test(overlay, setup.id));
+      if (kept.length === setup.overlays.length) continue;
+      setup.overlays = kept;
+      any = true;
     }
-    this.saveSoon();
-    return true;
+    if (any) this.saveSoon();
+    return any;
   }
 
-  /** Changes the live view's settings of a panel in the game; false when the panel isn't in the game. */
-  updatePanelView(instanceId: string, change: InGamePanelChange): boolean {
-    const panel = this.panelOf(instanceId);
-    if (!panel) return false;
-    if (change.mode) panel.mode = change.mode;
-    if (change.opacity !== undefined && OPACITIES.includes(change.opacity)) panel.opacity = change.opacity;
-    if (change.hideFromCapture !== undefined) panel.hideFromCapture = change.hideFromCapture;
-    this.saveSoon();
-    return true;
-  }
-
-  /** Removes the overlays matching `test` (the user's remove, a deleted game, a module that is gone); whether any went. */
-  forget(test: (overlay: GameOverlay) => boolean): boolean {
-    const kept = this.overlays.filter((overlay) => !test(overlay));
-    if (kept.length === this.overlays.length) return false;
-    this.overlays = kept;
-    this.saveSoon();
-    return true;
-  }
-
-  /** The same for panels shown in the game. */
-  forgetPanels(test: (panel: InGamePanel) => boolean): boolean {
-    const kept = this.inGame.filter((panel) => !test(panel));
-    if (kept.length === this.inGame.length) return false;
-    this.inGame = kept;
-    this.saveSoon();
-    return true;
+  /** The same for panels. */
+  forgetPanels(test: (panel: InGamePanel, setupId: string) => boolean): boolean {
+    let any = false;
+    for (const setup of this.setupList) {
+      const kept = setup.panels.filter((panel) => !test(panel, setup.id));
+      if (kept.length === setup.panels.length) continue;
+      setup.panels = kept;
+      any = true;
+    }
+    if (any) this.saveSoon();
+    return any;
   }
 
   /** Whether the hint about exclusive full screen was shown; it is shown once. */
@@ -569,86 +775,19 @@ export class GameOverlayStore {
 
   /** A game left the library: its window size goes too. */
   forgetSeen(gameId: string): void {
-    this.layouts.delete(gameId);
-    this.seen.delete(gameId);
-    this.saveSoon();
-  }
-
-  /** Puts the position of an overlay or panel to `rect` (the layout's Reset position); false when there is no such item. */
-  setRect(subject: GameOverlaySubject | { instanceId: string }, rect: AnchoredRect, gameId?: string): boolean {
-    const target = "instanceId" in subject ? this.panelOf(subject.instanceId) : this.find(subject);
-    const next = normalizeAnchored(rect);
-    if (!target || !next) return false;
-    if (target.scope === "all" && gameId && gameId !== ALL_GAMES) {
-      const state = this.layoutState(gameId);
-      state.positions["instanceId" in target ? panelWindowId(target.instanceId) : overlayId(target)] = next;
-      this.layouts.set(gameId, state);
-      this.saveSoon();
-      return true;
-    }
-    target.rect = next;
-    delete target.legacy;
-    this.saveSoon();
-    return true;
-  }
-
-  layoutState(gameId: string): GameLayoutState {
-    const state = this.layouts.get(gameId);
-    return { detached: state?.detached ?? false, positions: structuredClone(state?.positions ?? {}) };
-  }
-
-  setLayoutState(gameId: string, state: GameLayoutState): void {
-    if (gameId === ALL_GAMES) return;
-    this.layouts.set(gameId, structuredClone(state));
-    this.saveSoon();
-  }
-
-  ownPosition(gameId: string, id: string): boolean {
-    return Object.hasOwn(this.layouts.get(gameId)?.positions ?? {}, id);
-  }
-
-  follow(gameId: string, id?: string): void {
-    if (!id) this.layouts.delete(gameId);
-    else {
-      const state = this.layouts.get(gameId);
-      if (state) {
-        delete state.positions[id];
-        state.detached = false;
-      }
-    }
-    this.saveSoon();
-  }
-
-  customize(gameId: string, size: SeenSize = this.seen.get(gameId) ?? DEFAULT_GAME_SIZE): void {
-    if (gameId === ALL_GAMES) return;
-    const state = this.layoutState(gameId);
-    state.detached = true;
-    for (const item of [...this.overlays, ...this.inGame]) {
-      if (item.scope !== "all") continue;
-      const id = "instanceId" in item ? panelWindowId(item.instanceId) : overlayId(item);
-      state.positions[id] ??= item.legacy ? migrateLegacy(item.legacy, size) : { ...item.rect };
-    }
-    this.setLayoutState(gameId, state);
-  }
-
-  positioned<T extends GameOverlay | InGamePanel>(item: T, gameId: string): T {
-    const id = "instanceId" in item ? panelWindowId(item.instanceId) : overlayId(item);
-    const rect = item.scope === "all" ? this.layouts.get(gameId)?.positions[id] : undefined;
-    if (!rect) return item;
-    const placed = { ...item, rect };
-    delete placed.legacy;
-    return placed;
+    if (this.seen.delete(gameId)) this.saveSoon();
   }
 
   /**
-   * The game's real window was seen: the positions still kept as fractions of the window (its own, and the general
-   * ones) are converted for this size, so each stays on the very same pixels. Whether any was.
+   * The game's real window was seen: the positions still kept as fractions of the window, in the setup that shows over
+   * it, are converted for this size, so each stays on the very same pixels. Whether any was.
    */
   convertLegacy(gameId: string, size: { width: number; height: number }): boolean {
     if (!isRealWindow(size)) return false;
+    const setup = this.setup(gameSetupFor(gameId, (id) => this.hasSetup(id)));
     let any = false;
-    for (const item of [...this.overlays, ...this.inGame]) {
-      if (!item.legacy || !appliesTo(item, gameId)) continue;
+    for (const item of [...(setup?.overlays ?? []), ...(setup?.panels ?? [])]) {
+      if (!item.legacy) continue;
       item.rect = migrateLegacy(item.legacy, size);
       delete item.legacy;
       any = true;
@@ -657,27 +796,7 @@ export class GameOverlayStore {
     return any;
   }
 
-  /** A position as the file keeps it: the anchor, and the fractions of the window for older Tavoras. */
-  private stored(item: { workspaceId: string; rect: AnchoredRect; legacy?: LegacyRect }): StoredPosition {
-    if (item.legacy) return { rect: item.legacy };
-    const size = this.seen.get(item.workspaceId) ?? DEFAULT_GAME_SIZE;
-    const placed = placeAnchored(item.rect, { x: 0, y: 0, ...size });
-    const fractions = normalizeLegacy({ x: placed.x / size.width, y: placed.y / size.height, width: placed.width / size.width, height: placed.height / size.height });
-    return { rect: fractions ?? { x: 0, y: 0, width: 1, height: 1 }, anchor: item.rect };
-  }
-
   private saveSoon(): void {
-    const items = [...this.overlays, ...this.inGame].filter((item) => item.scope === "all");
-    const ids = new Set(items.map((item) => "instanceId" in item ? panelWindowId(item.instanceId) : overlayId(item)));
-    for (const [gameId, state] of this.layouts) {
-      for (const id of Object.keys(state.positions)) if (!ids.has(id)) delete state.positions[id];
-      if (state.detached) {
-        for (const item of items) {
-          const id = "instanceId" in item ? panelWindowId(item.instanceId) : overlayId(item);
-          state.positions[id] ??= item.legacy ? migrateLegacy(item.legacy, this.seen.get(gameId) ?? DEFAULT_GAME_SIZE) : { ...item.rect };
-        }
-      }
-    }
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => void this.save(), SAVE_DELAY_MS);
   }
@@ -686,14 +805,26 @@ export class GameOverlayStore {
   save(): Promise<void> {
     clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
+    if (this.readOnly) return Promise.resolve();
+    const stored = ({ rect, legacy }: Pick<ItemSettings, "rect" | "legacy">): StoredPosition => (legacy ? { rect: legacy } : { anchor: rect });
     const body: GameOverlayFile = {
       version: FILE_VERSION,
       exclusiveHintShown: this.hintShown,
-      layout: { grid: this.gridSetting, ...(this.windowState ? { window: this.windowState } : {}), seen: Object.fromEntries(this.seen), games: Object.fromEntries(this.layouts) },
-      overlays: this.overlays.map(({ rect, legacy, ...item }) => ({ ...item, ...this.stored({ workspaceId: item.workspaceId, rect, ...(legacy ? { legacy } : {}) }) })),
-      panels: this.inGame.map(({ rect, legacy, ...item }) => ({ ...item, ...this.stored({ workspaceId: item.workspaceId, rect, ...(legacy ? { legacy } : {}) }) })),
+      layout: { grid: this.gridSetting, ...(this.windowState ? { window: this.windowState } : {}), seen: Object.fromEntries(this.seen) },
+      setups: this.setupList.map((setup) => ({
+        id: setup.id,
+        overlays: setup.overlays.map(({ rect, legacy, ...item }) => ({ ...item, ...stored({ rect, ...(legacy ? { legacy } : {}) }) })),
+        panels: setup.panels.map(({ rect, legacy, ...item }) => ({ ...item, ...stored({ rect, ...(legacy ? { legacy } : {}) }) })),
+      })),
     };
     const text = `${JSON.stringify(body, null, 2)}\n`;
     return this.queue.run(() => writeFileAtomic(this.file, text)).catch((error: unknown) => console.error("[tavora] saving game overlays failed", error));
   }
+}
+
+/** Sets what a change has that is valid: the mode, an opacity Tavora offers, Hide from capture. */
+function applySettings(item: ItemSettings, change: InGamePanelChange): void {
+  if (change.mode === "always" || change.mode === "toggle") item.mode = change.mode;
+  if (change.opacity !== undefined && OPACITIES.includes(change.opacity)) item.opacity = change.opacity;
+  if (change.hideFromCapture !== undefined) item.hideFromCapture = change.hideFromCapture === true;
 }

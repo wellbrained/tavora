@@ -1,7 +1,7 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { backupsDir } from "./backup";
-import { writeFileAtomic } from "./fsutil";
+import { keepCopy, writeFileAtomic } from "./fsutil";
 import { GAME_OVERLAYS_FILE } from "./game-overlays";
 import { HOTKEYS_FILE } from "./hotkeys";
 import { OVERLAYS_FILE } from "./overlays";
@@ -132,17 +132,4 @@ export async function moveToWorkspaces(userData: string, log: (line: string) => 
   const names = pending.map(({ name }) => name);
   log(`moved ${names.join(", ")} to the workspace names; the files as they were are in backups/${BEFORE_WORKSPACES_DIR}`);
   return names;
-}
-
-/** Copies a file's old content into the backup folder. A copy an earlier start made stays; a different one gets a new name. */
-async function keepCopy(dir: string, name: string, old: Buffer): Promise<void> {
-  for (let n = 1; ; n++) {
-    const target = path.join(dir, n === 1 ? name : `${name}.${n}`);
-    const existing = await stat(target).then(
-      () => readFile(target),
-      () => null,
-    );
-    if (existing?.equals(old)) return;
-    if (existing === null) return writeFileAtomic(target, old);
-  }
 }

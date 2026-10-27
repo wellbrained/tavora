@@ -46,9 +46,9 @@ describe("parseLayoutMessage", () => {
     expect(parseLayoutMessage({ type: "canvas-hidden", id: "a", hidden: true })).toEqual({ type: "canvas-hidden", id: "a", hidden: true });
     expect(parseLayoutMessage({ type: "reset", id: "a" })).toEqual({ type: "reset", id: "a" });
     expect(parseLayoutMessage({ type: "reset-size", id: "a" })).toEqual({ type: "reset-size", id: "a" });
-    expect(parseLayoutMessage({ type: "follow-item", id: "a" })).toEqual({ type: "follow-item", id: "a" });
-    expect(parseLayoutMessage({ type: "follow-item" })).toBeNull();
-    for (const type of ["undo", "redo", "drag-end", "take-picture", "choose-picture", "remove-picture", "dismiss-notice", "customize", "follow-all", "done"]) expect(parseLayoutMessage({ type })).toEqual({ type });
+    for (const type of ["undo", "redo", "drag-end", "take-picture", "choose-picture", "remove-picture", "dismiss-notice", "done"]) expect(parseLayoutMessage({ type })).toEqual({ type });
+    // Gone with per-game positions: each setup has its own.
+    for (const type of ["customize", "follow-all", "follow-item"]) expect(parseLayoutMessage({ type, id: "a" })).toBeNull();
   });
 
   it("refuses what is malformed, unknown or too big", () => {
