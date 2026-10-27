@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.39",
+    date: "2026-10-27",
+    title: "Fairer ratings",
+    notes: [
+      "New accounts can rate modules after a day.",
+      "You can rate up to 10 modules a day. Changing a rating is always fine.",
+    ],
+    prs: [
+      { number: 401, title: "Rating limits: 10 a day per account, a day-old account, 20 a day per module (CoreHub #341)" },
+    ],
+    tags: ["accounts", "catalog", "privacy", "service", "website"],
+  },
+  {
     version: "0.21.38",
     date: "2026-10-27",
     title: "Ratings without installing",
