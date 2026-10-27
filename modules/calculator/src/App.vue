@@ -4,18 +4,23 @@
 // which is laid out like the Windows one, and shows or hides the history; both choices hold in every game.
 // The keypad keeps a calculator size: its keys never shrink below a button nor grow past a big one. The history sits
 // beside it once the panel is wide enough for both, else below; a panel too short for both scrolls.
-// The history lives in the game's module storage, so every panel of the game shares it; a panel reads it again
-// when it shows or gets focus, since storage has no change events.
-import { Check, Copy, Delete, History, Trash2 } from "@lucide/vue";
+// Save as… keeps the result under a name; the Values tab taps it into a sum, where it counts with its number now.
+// The history and the values live in the game's module storage, so every panel of the game shares them; a panel
+// reads them again when it shows or gets focus, since storage has no change events.
+import { BookmarkPlus, Check, Copy, Delete, Ellipsis, History, Pencil, Trash2 } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage, SegmentedControl, serial } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import type { TavoraSDK } from "@tavora/sdk";
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
-import { copyText, EMPTY, evaluate, format, insert, press, pretty, type Entry } from "./calc";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
+import type { JsonValue, TavoraSDK } from "@tavora/sdk";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, type Ref } from "vue";
+import { copyText, EMPTY, evaluate, format, insert, press, pretty, reference, segments, type Entry } from "./calc";
 import { HISTORY_KEY, parseHistory, remember, type Calculation } from "./history";
 import { language, setLanguage, t } from "./i18n";
 import type { en } from "./locales";
 import { DEFAULT_SETTINGS, parseSettings, SETTINGS_KEY, type Mode, type Settings } from "./settings";
+import ValueDialog from "./ValueDialog.vue";
+import { deleteValue, lookup, parseValues, renameValue, saveValue, VALUES_KEY, type Value } from "./values";
 
 type Key = { key: string; label: string; name?: keyof typeof en; kind: "digit" | "op" | "clear" | "equals" };
 
@@ -39,8 +44,12 @@ const BASIC: Key[] = [
   { key: "=", label: "=", name: "calc.equals", kind: "equals" },
 ];
 
-/** Laid out like the Windows calculator, with √, x², ± and ans. */
+/** Laid out like the Windows calculator, with √, x², ± and ans, and a row for big numbers and rounding up. */
 const PLUS: Key[] = [
+  { key: "k", label: "k", name: "calc.thousand", kind: "op" },
+  { key: "m", label: "m", name: "calc.million", kind: "op" },
+  { key: "b", label: "b", name: "calc.billion", kind: "op" },
+  { key: "ceil", label: "⌈x⌉", name: "calc.ceil", kind: "op" },
   { key: "clear", label: "C", name: "calc.clear", kind: "clear" },
   { key: "(", label: "(", name: "calc.open", kind: "op" },
   { key: ")", label: ")", name: "calc.close", kind: "op" },
@@ -62,6 +71,11 @@ const PLUS: Key[] = [
 ];
 
 const VARIANT = { digit: "secondary", op: "outline", clear: "outline", equals: "default" } as const;
+/** The keypad's rows by number of keys; written out so Tailwind finds the classes. */
+const ROWS: Record<number, string> = {
+  20: "grid-rows-[repeat(5,minmax(2rem,1fr))]",
+  28: "grid-rows-[repeat(7,minmax(2rem,1fr))]",
+};
 
 const sdk = shallowRef<TavoraSDK | null>(null);
 const error = ref<string | null>(null);
@@ -72,6 +86,18 @@ const entry = ref<Entry>(EMPTY);
 /** Why the last Equals did not work, until the next key. */
 const problem = ref<string | null>(null);
 const history = ref<Calculation[]>([]);
+const values = ref<Value[]>([]);
+const lookupValue = computed(() => lookup(values.value));
+const tab = ref<"history" | "values">("history");
+/** The lists' open tab: only Values while the history is hidden. */
+const shownTab = computed({
+  get: () => (settings.value.history ? tab.value : "values"),
+  set: (value: string | number) => void (tab.value = value === "values" ? "values" : "history"),
+});
+/** The value dialog that is open: Save as…, or Rename for a value's name. */
+const valueDialog = ref<{ renaming?: string } | null>(null);
+/** Delete asked for this value, waiting for the player to confirm. */
+const deleting = ref<string | null>(null);
 /** Copy just worked: its button shows a tick for a moment. */
 const copied = ref(false);
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;
@@ -101,12 +127,14 @@ const comma = computed(() => language.value.toLowerCase().startsWith("de"));
 const show = (text: string) => pretty(text, comma.value);
 const keyLabel = (key: Key) => (key.key === "." && comma.value ? "," : key.label);
 
+const outcome = computed(() => evaluate(entry.value.text, lookupValue.value));
+/** A value in the sum was deleted. */
+const missing = computed(() => !outcome.value.ok && outcome.value.reason === "missing");
+
 /** The result so far, shown under the sum while typing. */
 const preview = computed(() => {
-  if (entry.value.fresh) return "";
-  const outcome = evaluate(entry.value.text);
-  if (!outcome.ok) return "";
-  const result = format(outcome.value);
+  if (entry.value.fresh || !outcome.value.ok) return "";
+  const result = format(outcome.value.value);
   return result === entry.value.text ? "" : result;
 });
 
@@ -118,7 +146,9 @@ function key(name: string): void {
 }
 
 /** The result as Copy writes it, or null while there is none. */
-const copyable = computed(() => copyText(entry.value, comma.value));
+const copyable = computed(() => copyText(entry.value, comma.value, lookupValue.value));
+/** The result as Save as… keeps it, or null while there is none. */
+const savable = computed(() => (outcome.value.ok ? format(outcome.value.value) : null));
 
 async function copy(): Promise<void> {
   const text = copyable.value;
@@ -136,12 +166,12 @@ async function copy(): Promise<void> {
 function equals(): void {
   const text = entry.value.text;
   if (!text || entry.value.fresh) return;
-  const outcome = evaluate(text);
-  if (!outcome.ok) {
-    problem.value = t(`error.${outcome.reason}`);
+  const worked = outcome.value;
+  if (!worked.ok) {
+    problem.value = t(`error.${worked.reason}`);
     return;
   }
-  const result = format(outcome.value);
+  const result = format(worked.value);
   entry.value = { text: result, fresh: true };
   if (result !== text) save((items) => remember(items, { expression: text, result }));
 }
@@ -151,23 +181,57 @@ function use(calculation: Calculation): void {
   entry.value = insert(entry.value, calculation.result);
 }
 
-// ── History ──────────────────────────────────────────────────────────
+// ── History and values ───────────────────────────────────────────────
 
-/** Reads the newest history, changes it and writes it back, one save at a time. */
-function save(change: (items: Calculation[]) => Calculation[]): void {
-  history.value = change(history.value);
+/** Reads the newest list from the game's storage, changes it and writes it back, one save at a time. */
+function update<T extends Calculation | Value>(
+  key: string,
+  list: Ref<T[]>,
+  parse: (raw: JsonValue | null) => T[],
+  failure: "saveError" | "valuesError",
+  change: (items: T[]) => T[],
+): void {
+  list.value = change(list.value);
   void queue(async () => {
     const connected = sdk.value;
     if (!connected) return;
     try {
-      const next = change(parseHistory(await connected.storage.get(HISTORY_KEY)));
-      await connected.storage.set(HISTORY_KEY, next.map((item) => ({ ...item })));
-      history.value = next;
+      const next = change(parse(await connected.storage.get(key)));
+      await connected.storage.set(key, next.map((item) => ({ ...item })));
+      list.value = next;
       saveError.value = null;
     } catch (reason) {
-      saveError.value = t("saveError", { error: errorMessage(reason) });
+      saveError.value = t(failure, { error: errorMessage(reason) });
     }
   });
+}
+
+const save = (change: (items: Calculation[]) => Calculation[]) => update(HISTORY_KEY, history, parseHistory, "saveError", change);
+const saveValues = (change: (items: Value[]) => Value[]) => update(VALUES_KEY, values, parseValues, "valuesError", change);
+
+/** Saves the current result under a name, or renames a value, from the value dialog. */
+function submitValue(name: string): void {
+  const renaming = valueDialog.value?.renaming;
+  valueDialog.value = null;
+  if (renaming !== undefined) return saveValues((items) => renameValue(items, renaming, name) ?? items);
+  const number = savable.value;
+  if (number === null) return;
+  saveValues((items) => saveValue(items, { name, value: number }) ?? items);
+  tab.value = "values";
+}
+
+function confirmDelete(): void {
+  const name = deleting.value;
+  deleting.value = null;
+  if (name !== null) saveValues((items) => deleteValue(items, name));
+}
+
+/** Opens a dialog from the item menu once the menu has closed, so the dialog keeps the focus. */
+const later = (open: () => void) => setTimeout(open, 120);
+
+function tap(value: Value): void {
+  problem.value = null;
+  entry.value = reference(entry.value, value.name);
 }
 
 function confirmClear(): void {
@@ -179,6 +243,8 @@ function reload(): void {
   void queue(async () => {
     const stored = await sdk.value?.storage.get(HISTORY_KEY).catch(() => undefined);
     if (stored !== undefined) history.value = parseHistory(stored);
+    const storedValues = await sdk.value?.storage.get(VALUES_KEY).catch(() => undefined);
+    if (storedValues !== undefined) values.value = parseValues(storedValues);
   });
 }
 
@@ -199,16 +265,26 @@ const KEYBOARD: Record<string, string> = {
   q: "square",
   Q: "square",
   F9: "negate",
+  k: "k",
+  K: "k",
+  m: "m",
+  M: "m",
+  b: "b",
+  B: "b",
 };
 
+/** Whether a key or paste is meant for a text field or a dialog rather than the calculator. */
+const elsewhere = (target: EventTarget | null) => target instanceof HTMLElement && !!target.closest("input, textarea, [role='dialog']");
+
 function onKeydown(event: KeyboardEvent): void {
+  if (elsewhere(event.target)) return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c" && !window.getSelection()?.toString()) {
     event.preventDefault();
     return void copy();
   }
   if (event.ctrlKey || event.metaKey || event.altKey) return;
   // A focused button or option keeps its own Enter, so the keyboard can still press it; a dialog keeps its keys.
-  const focused = event.target instanceof HTMLElement && event.target.closest("button, [role='radio'], [role='dialog']");
+  const focused = event.target instanceof HTMLElement && event.target.closest("button, [role='radio'], [role='tab']");
   if (focused && (event.key === "Enter" || event.key === "Escape" || event.key === "Backspace" || event.key === "Delete")) return;
   const name = KEYBOARD[event.key] ?? (/^[\d.+\-*/%()]$/.test(event.key) ? event.key : null);
   if (!name) return;
@@ -217,12 +293,13 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 function onPaste(event: ClipboardEvent): void {
+  if (elsewhere(event.target)) return;
   const text = event.clipboardData?.getData("text") ?? "";
   if (!text) return;
   event.preventDefault();
   problem.value = null;
-  for (const char of text.replace(/×/g, "*").replace(/÷/g, "/").replace(/−/g, "-").replace(/,/g, ".")) {
-    if (/^[\d.+\-*/%()]$/.test(char)) entry.value = press(entry.value, char);
+  for (const char of text.replace(/×/g, "*").replace(/÷/g, "/").replace(/−/g, "-").replace(/,/g, ".").toLowerCase()) {
+    if (/^[\d.+\-*/%()kmb]$/.test(char)) entry.value = press(entry.value, char);
   }
 }
 
@@ -240,6 +317,7 @@ onMounted(async () => {
   try {
     const connected = await connectModule(setLanguage);
     history.value = parseHistory(await connected.storage.get(HISTORY_KEY));
+    values.value = parseValues(await connected.storage.get(VALUES_KEY));
     settings.value = parseSettings(await connected.storage.app.get(SETTINGS_KEY));
     cleanup.push(connected.lifecycle.onResume(reload));
     sdk.value = connected;
@@ -283,14 +361,48 @@ onBeforeUnmount(() => {
       <section class="flex w-full max-w-sm flex-[0_1_26rem] flex-col gap-2 @min-[36rem]:h-full @min-[36rem]:max-h-[26rem] @min-[36rem]:min-h-min @min-[36rem]:w-80 @min-[36rem]:flex-none">
         <div class="bg-muted/40 flex flex-none items-start gap-1 rounded-lg border px-3 py-2">
           <div class="min-w-0 flex-1 text-right">
-            <p class="truncate font-mono text-3xl tabular-nums" role="group" :aria-label="t('calc.display')" data-testid="display">{{ show(entry.text) || "0" }}</p>
-            <p class="h-5 truncate text-sm" :class="problem ? 'text-destructive' : 'text-muted-foreground'" role="status" aria-live="polite" data-testid="preview">
-              {{ problem ?? (preview ? `= ${show(preview)}` : "") }}
+            <p class="truncate font-mono text-3xl tabular-nums" role="group" :aria-label="t('calc.display')" data-testid="display">
+              <template v-if="entry.text">
+                <span
+                  v-for="(segment, index) in segments(entry.text, comma)"
+                  :key="index"
+                  :class="segment.name !== undefined && (lookupValue(segment.name) === undefined ? 'text-destructive' : 'text-primary')"
+                >{{ segment.text }}</span>
+              </template>
+              <template v-else>0</template>
+            </p>
+            <p
+              class="h-5 truncate text-sm"
+              :class="problem || missing ? 'text-destructive' : 'text-muted-foreground'"
+              role="status"
+              aria-live="polite"
+              data-testid="preview"
+            >
+              {{ problem ?? (missing ? t("error.missing") : preview ? `= ${show(preview)}` : "") }}
             </p>
           </div>
-          <div class="flex flex-none flex-col">
-            <Button variant="ghost" size="icon-sm" :aria-label="t('calc.back')" :title="t('calc.back')" :disabled="!entry.text" @click="key('back')">
+          <div class="grid flex-none grid-cols-2">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="col-start-2"
+              :aria-label="t('calc.back')"
+              :title="t('calc.back')"
+              :disabled="!entry.text"
+              @click="key('back')"
+            >
               <Delete :stroke-width="1.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              :aria-label="t('calc.saveAs')"
+              :title="t('calc.saveAs')"
+              :disabled="savable === null"
+              data-testid="save-value"
+              @click="valueDialog = {}"
+            >
+              <BookmarkPlus :stroke-width="1.5" />
             </Button>
             <Button
               variant="ghost"
@@ -306,13 +418,7 @@ onBeforeUnmount(() => {
             </Button>
           </div>
         </div>
-        <div
-          class="grid flex-1 grid-cols-4 gap-1.5"
-          :class="keys.length > 20 ? 'grid-rows-[repeat(6,minmax(2rem,1fr))]' : 'grid-rows-[repeat(5,minmax(2rem,1fr))]'"
-          data-testid="keypad"
-          role="group"
-          :aria-label="t('calc.keypad')"
-        >
+        <div class="grid flex-1 grid-cols-4 gap-1.5" :class="ROWS[keys.length]" data-testid="keypad" role="group" :aria-label="t('calc.keypad')">
           <Button
             v-for="item in keys"
             :key="item.key"
@@ -331,39 +437,88 @@ onBeforeUnmount(() => {
       </section>
 
       <section
-        v-if="settings.history"
-        class="flex min-h-40 w-full max-w-sm flex-1 flex-col gap-1 @min-[36rem]:h-full @min-[36rem]:max-h-[26rem]"
+        v-if="settings.history || values.length"
+        class="flex min-h-40 w-full max-w-sm flex-1 flex-col @min-[36rem]:h-full @min-[36rem]:max-h-[26rem]"
         data-testid="history"
       >
-        <header class="flex h-8 flex-none items-center gap-1">
-          <h2 class="text-muted-foreground min-w-0 flex-1 truncate text-sm font-medium">{{ t("history.title") }}</h2>
-          <Button
-            v-if="history.length"
-            variant="ghost"
-            size="icon-sm"
-            :aria-label="t('history.clear')"
-            :title="t('history.clear')"
-            data-testid="clear-history"
-            @click="clearing = true"
-          >
-            <Trash2 :stroke-width="1.5" />
-          </Button>
-        </header>
-        <p v-if="!history.length" class="text-muted-foreground py-2 text-sm">{{ t("history.empty") }}</p>
-        <ol v-else class="min-h-0 flex-1 overflow-y-auto">
-          <li v-for="(item, index) in history" :key="`${index}:${item.expression}`">
+        <Tabs v-model="shownTab" class="min-h-0 flex-1 gap-1">
+          <div class="flex h-8 flex-none items-center gap-1 border-b">
+            <TabsList class="border-b-0">
+              <TabsTrigger v-if="settings.history" value="history" data-testid="tab-history">{{ t("history.title") }}</TabsTrigger>
+              <TabsTrigger value="values" data-testid="tab-values">{{ t("values.title") }}</TabsTrigger>
+            </TabsList>
+            <span class="flex-1" />
             <Button
+              v-if="shownTab === 'history' && history.length"
               variant="ghost"
-              class="block h-auto w-full px-2 py-1 text-right font-normal"
-              :title="t('history.use', { result: show(item.result) })"
-              data-testid="history-item"
-              @click="use(item)"
+              size="icon-sm"
+              :aria-label="t('history.clear')"
+              :title="t('history.clear')"
+              data-testid="clear-history"
+              @click="clearing = true"
             >
-              <span class="text-muted-foreground block truncate font-mono text-sm">{{ show(item.expression) }} =</span>
-              <span class="block truncate font-mono text-lg tabular-nums">{{ show(item.result) }}</span>
+              <Trash2 :stroke-width="1.5" />
             </Button>
-          </li>
-        </ol>
+          </div>
+          <TabsContent value="history" class="flex min-h-0 flex-col" data-testid="history-list">
+            <p v-if="!history.length" class="text-muted-foreground py-2 text-sm">{{ t("history.empty") }}</p>
+            <ol v-else class="min-h-0 flex-1 overflow-y-auto">
+              <li v-for="(item, index) in history" :key="`${index}:${item.expression}`">
+                <Button
+                  variant="ghost"
+                  class="block h-auto w-full px-2 py-1 text-right font-normal"
+                  :title="t('history.use', { result: show(item.result) })"
+                  data-testid="history-item"
+                  @click="use(item)"
+                >
+                  <span class="text-muted-foreground block truncate font-mono text-sm">{{ show(item.expression) }} =</span>
+                  <span class="block truncate font-mono text-lg tabular-nums">{{ show(item.result) }}</span>
+                </Button>
+              </li>
+            </ol>
+          </TabsContent>
+          <TabsContent value="values" class="flex min-h-0 flex-col" data-testid="values-list">
+            <p v-if="!values.length" class="text-muted-foreground py-2 text-sm">{{ t("values.empty") }}</p>
+            <ul v-else class="min-h-0 flex-1 overflow-y-auto">
+              <li v-for="item in values" :key="item.name" class="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  class="h-auto min-w-0 flex-1 justify-between gap-3 px-2 py-1 font-normal"
+                  :title="t('values.use', { name: item.name })"
+                  data-testid="value-item"
+                  @click="tap(item)"
+                >
+                  <span class="text-primary truncate text-sm">{{ item.name }}</span>
+                  <span class="truncate font-mono text-lg tabular-nums">{{ show(item.value) }}</span>
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger as-child>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      class="text-muted-foreground flex-none"
+                      :aria-label="t('values.more', { name: item.name })"
+                      :title="t('values.more', { name: item.name })"
+                      data-testid="value-menu"
+                    >
+                      <Ellipsis :stroke-width="1.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem data-testid="value-rename" @select="later(() => (valueDialog = { renaming: item.name }))">
+                      <Pencil :stroke-width="1.5" />
+                      {{ t("values.rename") }}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem variant="destructive" data-testid="value-delete" @select="later(() => (deleting = item.name))">
+                      <Trash2 :stroke-width="1.5" />
+                      {{ t("values.delete") }}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </li>
+            </ul>
+          </TabsContent>
+        </Tabs>
       </section>
     </div>
     <ConfirmDialog
@@ -374,6 +529,23 @@ onBeforeUnmount(() => {
       :cancel="t('cancel')"
       @confirm="confirmClear"
       @cancel="clearing = false"
+    />
+    <ConfirmDialog
+      v-if="deleting !== null"
+      :title="t('values.deleteTitle', { name: deleting })"
+      :description="t('values.deleteText')"
+      :confirm="t('values.delete')"
+      :cancel="t('cancel')"
+      @confirm="confirmDelete"
+      @cancel="deleting = null"
+    />
+    <ValueDialog
+      v-if="valueDialog && (valueDialog.renaming !== undefined || savable !== null)"
+      :values="values"
+      :renaming="valueDialog.renaming"
+      :shown="valueDialog.renaming === undefined && savable !== null ? show(savable) : undefined"
+      @submit="submitValue"
+      @cancel="valueDialog = null"
     />
   </div>
 </template>

@@ -1,11 +1,11 @@
 // The last results, newest first, kept in the game's module storage so every panel of the game shows them.
 import type { JsonValue } from "@tavora/sdk";
 
-export interface Calculation {
+export type Calculation = {
   /** What was typed, in plain signs. */
   expression: string;
   result: string;
-}
+};
 
 export const HISTORY_KEY = "history";
 export const MAX_HISTORY = 10;

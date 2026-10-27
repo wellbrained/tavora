@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.1.5",
+    "date": "2026-10-27",
+    "notes": [
+      "Save as… keeps a result under a name, like iron. Tap it under Values to use it in a sum.",
+      "A sum counts with the value as it is now; if you delete it, the sum tells you.",
+      "Plus has a new row: k, m and b for thousands, millions and billions, and ⌈x⌉ to round up. You can type k, m and b in Basic too."
+    ]
+  },
+  {
     "version": "0.1.4",
     "date": "2026-10-25",
     "notes": [
