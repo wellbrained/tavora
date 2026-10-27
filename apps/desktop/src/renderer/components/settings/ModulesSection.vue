@@ -110,16 +110,7 @@ function deleteData(entry: { owner: string; moduleId: string }) {
 }
 
 function report(module: ModuleView) {
-  confirmAction({
-    title: t("settings.modules.reportTitle", { name: module.name }),
-    message: t("settings.modules.reportMessage"),
-    confirm: t("settings.modules.report"),
-    run: async () => {
-      const error = await submitAction({ type: "report-catalog-module", moduleId: module.id });
-      if (!error) showToast(t("settings.modules.reported", { name: module.name }));
-      return error;
-    },
-  });
+  dialog.value = { kind: "report-module", moduleId: module.id, name: module.name };
 }
 
 function remove(module: ModuleView) {

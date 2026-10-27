@@ -12,6 +12,7 @@ import { account, act, confirmAction, developerKeys, showToast, submitAction } f
 import { formatDate, t } from "../../i18n";
 import SettingGroup from "../settings/SettingGroup.vue";
 import SettingRow from "../settings/SettingRow.vue";
+import ContactSettings from "./ContactSettings.vue";
 import PrefixClaim from "./PrefixClaim.vue";
 
 defineProps<{ highlight: string | null }>();
@@ -158,6 +159,8 @@ function removeToken(token: AccountPublishToken) {
       </div>
     </div>
   </SettingGroup>
+
+  <ContactSettings />
 
   <SettingGroup>
     <SettingRow :label="t('settings.publish-ci.label')" :description="t('settings.publish-ci.description')" setting="publish-ci" :highlighted="highlight === 'publish-ci'">

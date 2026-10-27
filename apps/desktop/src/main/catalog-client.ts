@@ -450,7 +450,7 @@ export class CatalogClient {
    * Reports a zip to Tavora, only after the user pressed Report: the module id, its key's
    * fingerprint and the zip's hash, and nothing else (C12). Throws a CatalogError the user can read.
    */
-  async report(report: { id: string; owner: string; sha256: string }, token?: string): Promise<void> {
+  async report(report: { id: string; owner: string; sha256: string }, token?: string, why: { reason: string; note: string | null } = { reason: "other", note: null }): Promise<void> {
     if (!isModuleId(report.id) || !FINGERPRINT.test(report.owner) || !SHA256.test(report.sha256)) throw new CatalogError("error.catalogNotListed");
     let response: Response;
     try {
@@ -458,7 +458,7 @@ export class CatalogClient {
         ...REQUEST,
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ id: report.id, owner: report.owner, sha256: report.sha256 }),
+        body: JSON.stringify({ id: report.id, owner: report.owner, sha256: report.sha256, reason: why.reason, ...(why.note?.trim() ? { note: why.note.trim().slice(0, 500) } : {}) }),
         signal: AbortSignal.timeout(this.listTimeoutMs),
       });
     } catch {
@@ -466,6 +466,7 @@ export class CatalogClient {
     }
     if (response.status === 404) throw new CatalogError("error.catalogNotListed");
     if (response.status === 401) throw new CatalogError("error.reportSignIn");
+    if (response.status === 400) throw new CatalogError("inbox.error.link");
     throwFailure(response.status);
   }
 

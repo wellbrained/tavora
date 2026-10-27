@@ -138,11 +138,9 @@ function add(moduleId: string, panelTypes: string[] = []) {
   addModule(moduleId, (dialog.value as AddModuleRequest).slot ?? null, panelTypes, { stay: panelTypes.length > 0 });
 }
 
-/** The module whose page is open, and the report being sent from it (the catalog ones). */
+/** The module whose page is open. */
 const info = ref<ModuleView | null>(null);
 const infoError = ref<string | undefined>();
-const reporting = ref(false);
-const reported = ref<Set<string>>(new Set());
 
 function openInfo(module: ModuleView) {
   infoError.value = undefined;
@@ -155,13 +153,6 @@ function addFromInfo(module: ModuleView) {
   info.value = null;
 }
 
-async function report(module: ModuleView) {
-  reporting.value = true;
-  const outcome = await act({ type: "report-catalog-module", moduleId: module.id }, { quiet: true });
-  reporting.value = false;
-  if (outcome.ok) reported.value = new Set([...reported.value, module.id]);
-  else infoError.value = outcome.error;
-}
 
 function manage() {
   dialog.value = null;
@@ -387,8 +378,8 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
           </div>
         </div>
       </div>
-      <CatalogModuleDialog v-if="info" :module="pageModule(info)" :local="info" installed :installing="false" :error="infoError" :reporting="reporting" :reported="reported.has(info.id)"
-        @close="info = null" @add="addFromInfo(info)" @report="report(info)"
+      <CatalogModuleDialog v-if="info" :module="pageModule(info)" :local="info" installed :installing="false" :error="infoError"
+        @close="info = null" @add="addFromInfo(info)"
       />
     </DialogContent>
   </Dialog>

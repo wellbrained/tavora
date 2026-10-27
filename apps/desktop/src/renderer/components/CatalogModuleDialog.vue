@@ -22,11 +22,15 @@ import CatalogReviews from "./CatalogReviews.vue";
 import ModuleIcon from "./ModuleIcon.vue";
 import ModuleDescription from "./ModuleDescription.vue";
 import ModuleVersions from "./ModuleVersions.vue";
+import ContactDeveloperDialog from "./messages/ContactDeveloperDialog.vue";
+import ReportModuleDialog from "./messages/ReportModuleDialog.vue";
 
-const props = defineProps<{ module: CatalogModuleView; installed: boolean; installing: boolean; size?: string; error?: string; reporting: boolean; reported: boolean; atReviews?: boolean; local?: InstalledModule }>();
-const emit = defineEmits<{ close: []; install: []; add: []; report: [] }>();
-/** Report asks once more before anything is sent. */
-const reportAsk = ref(false);
+const props = defineProps<{ module: CatalogModuleView; installed: boolean; installing: boolean; size?: string; error?: string; atReviews?: boolean; local?: InstalledModule }>();
+const emit = defineEmits<{ close: []; install: []; add: [] }>();
+/** The two ways to reach out: Contact the developer (a conversation) and Report to Tavora (the admin queue). */
+const contacting = ref(false);
+const reporting = ref(false);
+const reported = ref(false);
 
 const page = ref<CatalogPageResult | null>(null);
 const shown = ref(0);
@@ -207,23 +211,23 @@ async function openHomepage() {
               <p class="text-muted-foreground mt-1.5">{{ t("catalog.supportHint") }}</p>
             </section>
 
+            <section v-if="catalogParts" data-testid="catalog-info-contact">
+              <Button size="sm" variant="outline" :aria-label="t('contact.label', { name: module.name })" :data-testid="`catalog-contact-${module.id}`" @click="contacting = true">{{ t("contact.button") }}</Button>
+              <p class="text-muted-foreground mt-1.5">{{ t("contact.hint") }}</p>
+            </section>
+
             <section v-if="catalogParts" data-testid="catalog-info-report">
               <p v-if="reported" class="text-muted-foreground" role="status" :data-testid="`catalog-reported-${module.id}`">{{ t("catalog.reported") }}</p>
-              <div v-else-if="reportAsk" class="bg-muted/40 flex flex-wrap items-center gap-2 rounded-md p-3" :data-testid="`catalog-report-ask-${module.id}`">
-                <p class="w-full">{{ t("catalog.reportAsk", { name: module.name }) }}</p>
-                <Button size="sm" variant="secondary" :disabled="reporting" :data-testid="`catalog-report-send-${module.id}`" @click="emit('report')">
-                  {{ reporting ? t("catalog.reporting") : t("catalog.reportSend") }}
-                </Button>
-                <Button size="sm" variant="ghost" :disabled="reporting" @click="reportAsk = false">{{ t("common.cancel") }}</Button>
-              </div>
               <Button v-else size="sm" variant="ghost" class="text-muted-foreground -ml-2" :data-testid="`catalog-report-${module.id}`"
-                :aria-label="t('catalog.reportLabel', { name: module.name })" @click="reportAsk = true"
+                :aria-label="t('catalog.reportLabel', { name: module.name })" @click="reporting = true"
               >{{ t("catalog.report") }}</Button>
-              <p v-if="!reported && !reportAsk" class="text-muted-foreground mt-0.5">{{ t("catalog.reportHint") }}</p>
+              <p v-if="!reported" class="text-muted-foreground mt-0.5">{{ t("catalog.reportHint") }}</p>
             </section>
           </aside>
         </div>
       </div>
     </DialogContent>
+    <ContactDeveloperDialog v-if="contacting" :module-id="module.id" :module-name="module.name" @close="contacting = false" />
+    <ReportModuleDialog v-if="reporting" :module-id="module.id" :module-name="module.name" @close="reporting = false" @reported="reported = true" />
   </Dialog>
 </template>

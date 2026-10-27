@@ -12,6 +12,7 @@ import type { AccountDevice, HostAction } from "../../../shared/host-api";
 import { account, act, confirmAction, prompt, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import CloudCopySettings from "./CloudCopySettings.vue";
+import MessagesSettings from "./MessagesSettings.vue";
 import RecoveryKeySettings from "./RecoveryKeySettings.vue";
 import SignInForm from "./SignInForm.vue";
 import SettingGroup from "./SettingGroup.vue";
@@ -230,6 +231,8 @@ function startDelete() {
       </form>
 
       </SettingGroup>
+
+      <MessagesSettings />
 
       <RecoveryKeySettings />
 
