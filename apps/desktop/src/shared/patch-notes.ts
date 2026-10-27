@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.42",
+    date: "2026-10-27",
+    title: "Made for everyone",
+    notes: [
+      "Tavora no longer calls you a player: texts about sharing modules now talk about others and everyone.",
+    ],
+    prs: [
+      { number: 406, title: "Say \"user\" instead of \"player\" everywhere" },
+    ],
+    tags: ["accounts", "ai-usage", "catalog", "clock-counter", "cloud-copy", "discord", "games", "hotkeys", "icons", "media", "modules", "notes", "overlays", "privacy", "publishing", "rail", "sdk", "service", "settings", "stats", "system-monitor", "todos", "ui-kit", "updates", "website", "whiteboard", "workspace"],
+  },
+  {
     version: "0.21.41",
     date: "2026-10-27",
     title: "Calculator options",
