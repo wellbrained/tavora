@@ -28,7 +28,7 @@ pnpm --filter @tavora/api dev          # http://127.0.0.1:4010, restarts on chan
 | `MAIL_FROM` | `signin@mytavora.app` | The sender of those emails; its domain is authenticated in Brevo (DKIM `brevo1`/`brevo2._domainkey`, DMARC, the `brevo-code` TXT) |
 | `MAIL_DAILY_LIMIT` | `300` | Emails a day (UTC), Brevo's free plan. The last 20 are kept for changing the address and deleting an account; after that the account routes answer `503 daily-limit` with `retryAt` |
 | `ADMIN_PORT` | `4011` | Tavora Admin's port, always on 127.0.0.1 and never forwarded by the web server |
-| `TAVORA_ADMIN_DIR` | `../../../TavoraAdmin/dist` | The built panel, from its own repo `wellbrained/tavora-admin` (checked out next to this one). On the server it is `/srv/tavora-admin/current`, which that repo's deploy fills; an API release doesn't touch it |
+| `TAVORA_ADMIN_DIR` | `../../../tavora-admin/dist` | The built panel, from its own repo `wellbrained/tavora-admin` (checked out next to this one). On the server it is `/srv/tavora-admin/current`, which that repo's deploy fills; an API release doesn't touch it |
 
 ## API
 
