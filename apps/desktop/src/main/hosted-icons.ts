@@ -23,6 +23,8 @@ export interface HostedIcon {
   names: string[];
   sha256: string;
   size: number;
+  /** The maintainer wants a better icon for this game: the app may offer its own, as if there were none. */
+  open?: boolean;
 }
 
 export interface HostedList {

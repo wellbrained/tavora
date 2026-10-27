@@ -55,6 +55,13 @@ describe("what can be shared", () => {
     expect(shareableIconFile(game({ id: "other", name: "StarCraft 2", iconFile: "exe-other.ico" }), on, list)).toBeNull();
   });
 
+  it("offers the game's own icon when the service's icon is open for replacements", () => {
+    const open: HostedList = { ...list, icons: [{ ...list.icons[0]!, open: true }] };
+    expect(shareableIconFile(game({ id: "starcraft-2", name: "StarCraft II", iconFile: "exe-starcraft-2.ico" }), on, open)).toBe("exe-starcraft-2.ico");
+    expect(steamShareGames([{ appid: 10, id: "starcraft-2", name: "StarCraft II" }], () => true, [], open)).toHaveLength(1);
+    expect(steamShareGames([{ appid: 10, id: "starcraft-2", name: "StarCraft II" }], () => true, [], list)).toHaveLength(0);
+  });
+
   it("never offers a picture the player chose, a hosted icon or Steam's small one", () => {
     for (const iconFile of ["hosted-diablo-iv.png", "1245620.jpg", null]) expect(shareableIconFile(game({ iconFile }), on, list)).toBeNull();
   });

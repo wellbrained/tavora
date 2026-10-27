@@ -122,7 +122,12 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     const approved = new Map(state.approvedList().map((icon) => [icon.id, icon]));
     return context.json({
       pending: submissions.listPending(),
-      hosted: store.list().map((icon) => ({ ...icon, origin: approved.has(icon.id) ? "approved" : "release", source: approved.get(icon.id)?.source ?? null })),
+      hosted: store.list().map((icon) => ({
+        ...icon,
+        origin: approved.has(icon.id) ? "approved" : "release",
+        source: approved.get(icon.id)?.source ?? null,
+        replaceable: icon.open === true,
+      })),
     });
   });
 
@@ -162,6 +167,13 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     const { sha256, block } = await json(context.req.raw);
     if (typeof sha256 !== "string") return context.json({ error: "Send { sha256, block }." }, 400);
     return context.json({ ok: submissions.deny(sha256, block === true) });
+  });
+
+  // Opens a hosted icon for replacements (players may offer another for its game) or closes it again.
+  app.post("/api/replaceable", async (context) => {
+    const { id, replaceable } = await json(context.req.raw);
+    if (typeof id !== "string" || typeof replaceable !== "boolean") return context.json({ error: "Send { id, replaceable }." }, 400);
+    return submissions.setReplaceable(id, replaceable) ? context.json({ ok: true }) : context.json({ error: "No such hosted icon." }, 404);
   });
 
   app.post("/api/takedown", async (context) => {
