@@ -325,7 +325,7 @@ describe("which window is in front", () => {
   });
 
   it("keeps it over the game's spot when you switch windows and Keep is on, until the game is minimized; the keys don't stay", async () => {
-    const { service, world, live } = await setup();
+    const { service, world, live, key } = await setup();
     world.stay = true;
     show(service);
     const window = live()[0]!;
@@ -335,6 +335,13 @@ describe("which window is in front", () => {
     // Where it was over the game, not over the browser.
     expect(window.rect!.x).toBeLessThan(100);
     expect(service.frontGame()).toBeNull();
+    // The keys are the browser's: the layer key is neither taken nor opens anything there.
+    const layer = layerKey(key);
+    expect(service.showing()).toBe(false);
+    expect(service.wants(layer)).toBe(false);
+    service.pressed(layer);
+    expect(service.layerOpen).toBe(false);
+    expect(world.veils).toHaveLength(0);
     world.kept = null;
     service.tick();
     expect(window.shown).toBe(false);
@@ -1776,6 +1783,23 @@ describe("setups on screen", () => {
     expect(service.layerOpen).toBe(false);
   });
 
+  it("opens the layer over the screen with Everywhere only while a game's items stay over its spot", async () => {
+    const { service, world, key } = await setup({ file: file([{ id: "$everywhere", overlays: [item("clock")] }, { id: "elden", panels: [panelItem(PANEL, "elden")] }]) });
+    world.stay = true;
+    service.tick();
+    world.foreground = { program: NOTEPAD, handle: "0x1", bounds: { x: 300, y: 200, width: 800, height: 600 }, notification: 0 };
+    service.tick();
+    const layer = layerKey(key);
+    expect(service.wants(layer)).toBe(true);
+    service.pressed(layer);
+    expect(service.layerOpen).toBe(true);
+    expect(world.veils[0]).toMatchObject({ rect: SCREEN });
+    // Elden Ring's panel isn't brought over the notepad.
+    expect(panelWindows(world)).toHaveLength(0);
+    world.registered.get("Escape")!();
+    expect(service.layerOpen).toBe(false);
+  });
+
   it("closes the layer over the screen when another window, a game or Tavora's own comes in front", async () => {
     const { service, world, key } = await setup({ file: file([{ id: "$everywhere", overlays: [item("clock")] }, { id: "$all", overlays: [item("general")] }]) });
     const layer = layerKey(key);
@@ -1865,6 +1889,17 @@ describe("setups on screen", () => {
     expect(world.removedKeys).toEqual([]);
     service.layout.remove("$everywhere", { kind: "overlay", subject });
     expect(world.removedKeys).toEqual([record]);
+  });
+
+  it("takes the key of an item whose last setup goes with its game workspace", async () => {
+    const { service, world, key } = await setup({ file: file([{ id: "$all", overlays: [item("clock")] }, { id: "elden", overlays: [item("clock")] }]) });
+    const subject = { owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "personal", key: "clock" };
+    const record = key(toggleBinding(subject));
+    service.layout.remove("$all", { kind: "overlay", subject });
+    expect(world.removedKeys).toEqual([]);
+    service.forgetWorkspace("elden");
+    expect(world.removedKeys).toEqual([record]);
+    expect(service.has(subject)).toBe(false);
   });
 
   it("changes an item in the setup the layout shows only", async () => {
