@@ -28,6 +28,22 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.53",
+    date: "2026-10-28",
+    title: "Overlay page",
+    notes: [
+      "The Overlay button now opens a page in Tavora's window, not a separate one.",
+      "Pick Everywhere, All games or a game at the top. Everywhere shows over any app, also on your desktop.",
+      "Add any panel from the list on the right, and change its settings below.",
+      "Right-click a game on the rail to Add overlay or Remove overlay.",
+      "Things from your personal workspaces can move between Everywhere and All games.",
+    ],
+    prs: [
+      { number: 421, title: "Overlay page: setups in the main window (overlay setups step 2)" },
+    ],
+    tags: ["overlays", "privacy", "rail", "website", "workspace"],
+  },
+  {
     version: "0.21.52",
     date: "2026-10-27",
     title: "Fewer modules held for review",
