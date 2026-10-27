@@ -34,6 +34,7 @@ import type { IconTone } from "../shared/icon-tone";
 import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, ModulePageResult, GameView, HostViewState, ModuleMenu, OnlineSearchResult, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
+import { compareModuleVersions } from "../shared/module-version";
 import { PlayerError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
@@ -1324,8 +1325,8 @@ export class Host {
 
   /**
    * A catalog module's ratings and reviews (decided 2026-10-21), with the player's own rating and what
-   * they can do. Rating needs a sign-in and the module installed; the service can't check the second,
-   * so it is checked here. Each reviewer's picture is fetched by its hash and checked like a listed picture.
+   * they can do. Rating needs a sign-in, not the module installed: someone who removed a bad module can
+   * still rate it (decided 2026-10-27). Each reviewer's picture is fetched by its hash and checked like a listed picture.
    */
   private async catalogReviews(moduleId: string): Promise<CatalogReviewsResult> {
     if (!this.library.onlineSearch) return { status: "off" };
@@ -1349,20 +1350,23 @@ export class Host {
       rating: listed.rating,
       reviews: listed.reviews.map((review, index) => ({ ...review, author: { ...review.author, picture: pictures[index] ?? null } })),
       mine: own.mine,
-      can: own.own ? "own" : !token ? "sign-in" : installedVersion === null ? "install" : "rate",
+      can: own.own ? "own" : !token ? "sign-in" : "rate",
       installedVersion,
     };
   }
 
-  /** Rates an installed catalog module on its installed version, which must be one the catalog published. */
+  /**
+   * Rates a catalog module on its installed version, which must be one the catalog published, or on its
+   * newest published version when it isn't installed.
+   */
   private async rateCatalogModule(moduleId: string, stars: number, text: string | null): Promise<void> {
     if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
     const token = this.account.token();
     if (!token) throw new PlayerError("account.error.signedOut");
-    const version = this.modules.get(moduleId)?.manifest.version;
-    if (!version) throw new PlayerError("error.reviewInstall");
+    const installed = this.modules.get(moduleId)?.manifest.version;
     const { versions } = await this.catalog.details(moduleId);
-    if (!versions.some((published) => published.version === version)) throw new PlayerError("error.reviewVersion");
+    const version = installed ?? versions.map((published) => published.version).sort(compareModuleVersions).at(-1);
+    if (!version || !versions.some((published) => published.version === version)) throw new PlayerError("error.reviewVersion");
     await this.catalog.rate(moduleId, token, { stars, text: text?.trim() || null, version });
   }
 

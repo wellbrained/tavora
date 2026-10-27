@@ -853,6 +853,8 @@ export interface CatalogOwnReview {
   text: string | null;
   version: string;
   hidden: boolean;
+  /** The word filter flagged its text: it waits for the maintainer, its text isn't shown and its stars don't count yet. */
+  held: boolean;
 }
 
 /** A catalog module's ratings and reviews, and what the player can do there. */
@@ -863,10 +865,10 @@ export interface CatalogReviews {
   /** The player's own rating; null without one, or signed out. */
   mine: CatalogOwnReview | null;
   /**
-   * `rate`: signed in, with the module installed. `sign-in`: signed out. `install`: not installed.
+   * `rate`: signed in. `sign-in`: signed out.
    * `own`: the player's own module, which they can't rate but can reply under its reviews.
    */
-  can: "rate" | "sign-in" | "install" | "own";
+  can: "rate" | "sign-in" | "own";
   /** The installed version a new rating is given on; null when it isn't installed. */
   installedVersion: string | null;
 }

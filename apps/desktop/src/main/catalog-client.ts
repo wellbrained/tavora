@@ -186,7 +186,7 @@ function parseOwnReview(raw: unknown): CatalogOwnReview | null {
   const review = raw as Record<string, unknown>;
   if (!Number.isInteger(review.stars) || (review.stars as number) < 1 || (review.stars as number) > 5) return null;
   if (typeof review.version !== "string" || !SEMVER.test(review.version) || review.version.length > 64) return null;
-  return { stars: review.stars as number, text: reviewText(review.text), version: review.version, hidden: review.hidden === true };
+  return { stars: review.stars as number, text: reviewText(review.text), version: review.version, hidden: review.hidden === true, held: review.held === true };
 }
 
 /** What the service said went wrong with a rating or reply, as a message for the player. */

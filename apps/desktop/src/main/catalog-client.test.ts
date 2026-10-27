@@ -309,6 +309,13 @@ describe("ratings and reviews", () => {
     }
   });
 
+  it("reads the player's own review, held for the maintainer or hidden after a report", async () => {
+    const own = (fields: Record<string, unknown>) => json({ review: { stars: 4, text: "Nice", version: "1.2.0", ...fields }, own: false });
+    const read = (fields: Record<string, unknown>) => new CatalogClient({ baseUrl: "https://api.test", fetchImpl: fakeFetch(() => own(fields)).impl }).ownReview("wellbrained.tracker", "t".repeat(30));
+    expect((await read({ held: true })).mine).toEqual({ stars: 4, text: "Nice", version: "1.2.0", hidden: false, held: true });
+    expect((await read({ hidden: true })).mine).toMatchObject({ hidden: true, held: false });
+  });
+
   it("reports a review by its id alone", async () => {
     const { impl, calls } = fakeFetch(() => json({ status: "received" }, 202));
     await new CatalogClient({ baseUrl: "https://api.test", fetchImpl: impl }).reportReview("AbCdEfGhIjKlMnOp");
