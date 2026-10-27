@@ -3,14 +3,16 @@
 // game window's shape with a soft square grid and the game's picture dimmed under it), the Sources and the Settings of the
 // selected item on the right. The live pages and the layer that takes the mouse are separate native views over the canvas
 // (main/overlay-canvas.ts); this page only tells the main process where the canvas is.
-import { ChevronLeft, Image as ImageIcon, Redo2, Trash2, Undo2 } from "@lucide/vue";
+import { Image as ImageIcon, Redo2, Trash2, Undo2 } from "@lucide/vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Picker } from "@tavora/official-ui/components/ui/picker";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { GRID_SETTINGS, type GridSetting } from "../../shared/layout-math";
+import { state } from "../host";
 import { t } from "../i18n";
+import OverlayButton from "../components/workspace/OverlayButton.vue";
 import OverlaySettings from "../components/layout/OverlaySettings.vue";
 import OverlaySources from "../components/layout/OverlaySources.vue";
 import { send, stills, useLayoutKeys, view } from "../components/layout/layout-state";
@@ -132,16 +134,14 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
 <template>
   <main class="flex h-full min-w-0 flex-col" data-testid="overlay-page">
     <header class="app-drag flex h-14 flex-none items-center gap-3 pr-[calc(100vw-env(titlebar-area-x,0px)-env(titlebar-area-width,100vw)+1rem)] pl-4">
-      <Button class="app-no-drag" variant="ghost" size="icon-sm" :aria-label="t('overlays.layout.back')" :title="t('overlays.layout.back')" data-testid="layout-done" @click="send({ type: 'done' })">
-        <ChevronLeft :stroke-width="1.5" />
-      </Button>
       <h1 class="min-w-0 truncate text-lg font-semibold">{{ t("overlays.button.open") }}</h1>
       <label v-if="view" class="app-no-drag ml-2 flex items-center gap-2 text-sm">
         <span class="text-muted-foreground">{{ t("overlays.layout.setup") }}</span>
         <Picker v-model="setup" :options="setupOptions" :label="t('overlays.layout.setup')" testid="layout-game" />
       </label>
+      <div class="app-no-drag ml-auto flex flex-none items-center gap-2"><OverlayButton active /></div>
     </header>
-    <div v-if="view" class="flex min-h-0 flex-1 gap-2 px-2 pb-2">
+    <div v-if="view" class="flex min-h-0 flex-1 gap-2 px-2 pb-2" :class="{ 'flex-row-reverse': state?.gameOverlays.sidebar === 'left' }" data-testid="overlay-body">
       <section class="bg-card flex min-w-0 flex-1 flex-col rounded-lg border">
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-3 py-2">
           <div class="flex items-center gap-2 text-sm">

@@ -2026,6 +2026,10 @@ export class Host {
         this.library.overlaysStay = action.enabled;
         this.gameOverlays.tick();
       }),
+      "set-overlay-sidebar": saved((action) => {
+        this.library.overlaySidebar = action.side;
+      }),
+      "leave-overlay-page": () => this.leaveOverlayPage(),
       "open-overlay-page": (action) => this.showOverlayPage(action.setup ?? null),
       "add-game-overlay": (action) => this.addGameSetup(action.workspaceId),
       "remove-game-setup": (action) => this.removeGameSetup(action.workspaceId),
@@ -4422,6 +4426,7 @@ export class Host {
       supported: process.platform === "win32",
       enabled: () => host.library.gameOverlays,
       stay: () => host.library.overlaysStay,
+      sidebar: () => host.library.overlaySidebar,
       module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
       workspaceName: (workspaceId) => host.library.workspaces[workspaceId]?.name ?? null,
       gamesOf: (program) => host.gameWatcher.gamesOf(program),

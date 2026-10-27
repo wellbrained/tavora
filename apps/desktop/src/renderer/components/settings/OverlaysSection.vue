@@ -4,6 +4,7 @@
 // button; modules add overlays with "Show over game" and panels get "Show in game" in their menu.
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
@@ -27,6 +28,15 @@ const stay = computed({
   set: (on: boolean) => void act({ type: "set-overlays-stay", enabled: on }),
 });
 
+const sidebar = computed({
+  get: () => overlays.value.sidebar,
+  set: (side: "left" | "right") => void act({ type: "set-overlay-sidebar", side }),
+});
+const sidebarOptions = computed(() => [
+  { value: "left", label: t("overlays.sidebar.left"), testid: "overlay-sidebar-left" },
+  { value: "right", label: t("overlays.sidebar.right"), testid: "overlay-sidebar-right" },
+]);
+
 function askKey() {
   void act({ type: "set-overlay-key" });
 }
@@ -39,6 +49,9 @@ function askKey() {
     </SettingRow>
     <SettingRow :label="t('settings.overlays-stay.label')" :description="t('settings.overlays-stay.description')" setting="overlays-stay" :highlighted="highlight === 'overlays-stay'">
       <Switch v-model="stay" :disabled="!enabled" :aria-label="t('settings.overlays-stay.label')" data-testid="overlays-stay" />
+    </SettingRow>
+    <SettingRow :label="t('settings.overlay-sidebar.label')" :description="t('settings.overlay-sidebar.description')" setting="overlay-sidebar" :highlighted="highlight === 'overlay-sidebar'">
+      <SegmentedControl v-model="sidebar" :options="sidebarOptions" :label="t('settings.overlay-sidebar.label')" />
     </SettingRow>
     <SettingRow :label="t('settings.overlay-layer-key.label')" :description="t('settings.overlay-layer-key.description')" setting="overlay-layer-key" :highlighted="highlight === 'overlay-layer-key'">
       <template #below>

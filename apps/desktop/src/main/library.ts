@@ -101,6 +101,8 @@ export interface Library {
   gameOverlays: boolean;
   /** Game overlays stay where they are when the user switches to another window, as long as the game window is open. */
   overlaysStay: boolean;
+  /** Which side of the Overlay page the sidebar with the panels sits on. */
+  overlaySidebar: "left" | "right";
   /** Where modules keep their pictures, when the user moved it from the default folder. */
   moduleFilesFolder: string | null;
   /** Module project folders a developer added in Settings > Modules; loaded straight from there (registry.ts). */
@@ -213,6 +215,7 @@ export function emptyLibrary(): Library {
     overlayPort: DEFAULT_OVERLAY_PORT,
     gameOverlays: false,
     overlaysStay: true,
+    overlaySidebar: "right",
     moduleFilesFolder: null,
     developmentFolders: [],
     collapsedDevelopmentFolders: [],
@@ -741,6 +744,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.streamOverlays === "boolean") library.streamOverlays = saved.streamOverlays;
   if (typeof saved.gameOverlays === "boolean") library.gameOverlays = saved.gameOverlays;
   if (typeof saved.overlaysStay === "boolean") library.overlaysStay = saved.overlaysStay;
+  if (saved.overlaySidebar === "left" || saved.overlaySidebar === "right") library.overlaySidebar = saved.overlaySidebar;
   if (Number.isInteger(saved.overlayPort) && (saved.overlayPort as number) >= MIN_OVERLAY_PORT && (saved.overlayPort as number) <= MAX_OVERLAY_PORT) library.overlayPort = saved.overlayPort as number;
   if (typeof saved.moduleFilesFolder === "string" && saved.moduleFilesFolder.length <= 500 && path.isAbsolute(saved.moduleFilesFolder)) library.moduleFilesFolder = saved.moduleFilesFolder;
   if (Array.isArray(saved.developmentFolders)) library.developmentFolders = cleanDevelopmentFolders(saved.developmentFolders);
