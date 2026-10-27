@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.37",
+    date: "2026-10-27",
+    title: "Community modules",
+    notes: [
+      "Modules other people made now live under Community modules in the Add module window, where \"Catalog\" used to be.",
+      "Modules you installed from there are tagged Community, and every message that mentioned the catalog now says Community modules or just Tavora.",
+    ],
+    prs: [
+      { number: 399, title: "Community modules: the catalog's new name in the app" },
+    ],
+  },
+  {
     version: "0.21.36",
     date: "2026-10-27",
     title: "Suspended accounts",
