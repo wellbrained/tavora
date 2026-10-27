@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copyText, EMPTY, evaluate, format, insert, press, pretty, reference, segments, type Entry, type Lookup } from "./calc";
+import { copyText, EMPTY, evaluate, format, insert, press, pretty, reference, rounded, segments, type Entry, type Lookup } from "./calc";
 
 const value = (text: string) => {
   const outcome = evaluate(text);
@@ -212,5 +212,29 @@ describe("saved values", () => {
   it("show by name, without grouping the name's digits", () => {
     expect(pretty("1000*[iron1000]")).toBe("1,000×iron1000");
     expect(segments("2*[iron]")).toEqual([{ text: "2×" }, { text: "iron", name: "iron" }]);
+  });
+});
+
+describe("rounded", () => {
+  it("shows the decimal places picked, keeping auto as it is", () => {
+    expect(rounded("3.14159", "auto", false)).toBe("3.14159");
+    expect(rounded("3.14159", 2, false)).toBe("3.14");
+    expect(rounded("2.5", 2, false)).toBe("2.50");
+    expect(rounded("2.5", 0, false)).toBe("3");
+    expect(rounded("-0.001", 2, false)).toBe("0.00");
+  });
+
+  it("shortens from a million on", () => {
+    expect(rounded("999999", "auto", true)).toBe("999999");
+    expect(rounded("1500000", "auto", true)).toBe("1.5M");
+    expect(rounded("1234567", "auto", true)).toBe("1.23M");
+    expect(rounded("-2000000000", "auto", true)).toBe("-2B");
+    expect(rounded("3100000000000", 1, true)).toBe("3.1T");
+    expect(rounded("1500000", "auto", false)).toBe("1500000");
+  });
+
+  it("leaves anything that isn't one number alone", () => {
+    expect(rounded("", 2, true)).toBe("");
+    expect(rounded("2+3", 2, true)).toBe("2+3");
   });
 });

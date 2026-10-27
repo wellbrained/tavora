@@ -12,6 +12,13 @@ export const en = {
   "mode.basic": "Basic",
   "mode.plus": "Plus",
 
+  "options.title": "Options",
+  "options.decimals": "Decimal places",
+  "options.decimalsAuto": "Auto",
+  "options.short": "Short numbers, like 1.5M",
+  "options.historyLength": "History keeps",
+  "options.results": "{count} results",
+
   "calc.display": "Sum",
   "calc.keypad": "Keypad",
   "calc.equals": "Equals",
@@ -83,6 +90,13 @@ export const de: Record<keyof typeof en, string> = {
   "mode.label": "Tasten",
   "mode.basic": "Einfach",
   "mode.plus": "Plus",
+
+  "options.title": "Optionen",
+  "options.decimals": "Nachkommastellen",
+  "options.decimalsAuto": "Auto",
+  "options.short": "Kurze Zahlen, wie 1,5M",
+  "options.historyLength": "Verlauf behält",
+  "options.results": "{count} Ergebnisse",
 
   "calc.display": "Rechnung",
   "calc.keypad": "Tasten",

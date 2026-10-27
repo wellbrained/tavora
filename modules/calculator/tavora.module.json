@@ -3,7 +3,7 @@
   "id": "tavora.calculator",
   "name": "Calculator",
   "description": "A quick calculator that keeps your last results for this game.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "apiVersion": "1",
   "entry": "dist/index.html",
   "changelog": "changelog.json",

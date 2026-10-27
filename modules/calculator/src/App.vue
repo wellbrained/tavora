@@ -1,24 +1,38 @@
 <script setup lang="ts">
 // Calculator: the sum and its result as you type, a keypad (the keyboard works too, with the Windows shortcuts @ for √,
 // q for x² and F9 for ±), Copy, and the game's last results. The toolbar switches between the Basic keypad and Plus,
-// which is laid out like the Windows one, and shows or hides the history; both choices hold in every game.
+// which is laid out like the Windows one, and shows or hides the history; its ⚙ menu picks the history length, the
+// decimal places and the short form (1.5M) results show with. All of these hold in every game.
 // The keypad keeps a calculator size: its keys never shrink below a button nor grow past a big one. The history sits
 // beside it once the panel is wide enough for both, else below; a panel too short for both scrolls.
 // Save as… keeps the result under a name; the Values tab taps it into a sum, where it counts with its number now.
 // The history and the values live in the game's module storage, so every panel of the game shares them; a panel
 // reads them again when it shows or gets focus, since storage has no change events.
-import { BookmarkPlus, Check, Copy, Delete, Ellipsis, History, Pencil, Trash2 } from "@lucide/vue";
+import { BookmarkPlus, Check, Copy, Delete, Ellipsis, History, Pencil, Settings2, Trash2 } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage, SegmentedControl, serial } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import type { JsonValue, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, type Ref } from "vue";
-import { copyText, EMPTY, evaluate, format, insert, press, pretty, reference, segments, type Entry } from "./calc";
+import { copyText, EMPTY, evaluate, format, insert, press, pretty, reference, rounded, segments, type Entry } from "./calc";
 import { HISTORY_KEY, parseHistory, remember, type Calculation } from "./history";
 import { language, setLanguage, t } from "./i18n";
 import type { en } from "./locales";
-import { DEFAULT_SETTINGS, parseSettings, SETTINGS_KEY, type Mode, type Settings } from "./settings";
+import { DECIMALS, DEFAULT_SETTINGS, HISTORY_LENGTHS, parseSettings, SETTINGS_KEY, type Decimals, type Mode, type Settings } from "./settings";
 import ValueDialog from "./ValueDialog.vue";
 import { deleteValue, lookup, parseValues, renameValue, saveValue, VALUES_KEY, type Value } from "./values";
 
@@ -112,6 +126,27 @@ const mode = computed({ get: () => settings.value.mode, set: (value: Mode) => ch
 
 const keys = computed(() => (settings.value.mode === "basic" ? BASIC : PLUS));
 
+// The ⚙ menu's radio groups hand over strings.
+const historyLength = computed({
+  get: () => String(settings.value.historyLength),
+  set: (value: string) => {
+    const length = HISTORY_LENGTHS.find((option) => String(option) === value);
+    if (!length) return;
+    choose({ historyLength: length });
+    if (history.value.length > length) save((items) => items.slice(0, length));
+  },
+});
+const decimals = computed({
+  get: () => String(settings.value.decimals),
+  set: (value: string) => {
+    const picked = DECIMALS.find((option) => String(option) === value);
+    if (picked !== undefined) choose({ decimals: picked });
+  },
+});
+const decimalsLabel = (option: Decimals) => (option === "auto" ? t("options.decimalsAuto") : String(option));
+/** The history as long as the player picked. */
+const recent = computed(() => history.value.slice(0, settings.value.historyLength));
+
 /** Changes a toolbar choice and keeps it for every game. */
 function choose(change: Partial<Settings>): void {
   settings.value = { ...settings.value, ...change };
@@ -125,6 +160,8 @@ function choose(change: Partial<Settings>): void {
 
 const comma = computed(() => language.value.toLowerCase().startsWith("de"));
 const show = (text: string) => pretty(text, comma.value);
+/** A result as it shows, with the decimal places and short form picked; the number itself keeps every digit. */
+const showResult = (text: string) => show(rounded(text, settings.value.decimals, settings.value.short));
 const keyLabel = (key: Key) => (key.key === "." && comma.value ? "," : key.label);
 
 const outcome = computed(() => evaluate(entry.value.text, lookupValue.value));
@@ -173,7 +210,7 @@ function equals(): void {
   }
   const result = format(worked.value);
   entry.value = { text: result, fresh: true };
-  if (result !== text) save((items) => remember(items, { expression: text, result }));
+  if (result !== text) save((items) => remember(items, { expression: text, result }, settings.value.historyLength));
 }
 
 function use(calculation: Calculation): void {
@@ -352,6 +389,42 @@ onBeforeUnmount(() => {
       >
         <History :stroke-width="1.5" />
       </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" size="icon-sm" :aria-label="t('options.title')" :title="t('options.title')" data-testid="options">
+            <Settings2 :stroke-width="1.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" class="w-56">
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger data-testid="options-decimals">
+              {{ t("options.decimals") }}
+              <span class="text-muted-foreground ml-auto pl-2">{{ decimalsLabel(settings.decimals) }}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuRadioGroup v-model="decimals">
+                <DropdownMenuRadioItem v-for="option in DECIMALS" :key="option" :value="String(option)" :data-testid="`decimals-${option}`">
+                  {{ decimalsLabel(option) }}
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuCheckboxItem
+            :model-value="settings.short"
+            data-testid="options-short"
+            @update:model-value="(on: boolean) => choose({ short: on })"
+          >
+            {{ t("options.short") }}
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>{{ t("options.historyLength") }}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup v-model="historyLength">
+            <DropdownMenuRadioItem v-for="option in HISTORY_LENGTHS" :key="option" :value="String(option)" :data-testid="`history-length-${option}`">
+              {{ t("options.results", { count: option }) }}
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
     <p v-if="saveError" class="text-destructive flex-none px-3 pt-1 text-xs">{{ saveError }}</p>
     <div
@@ -364,7 +437,7 @@ onBeforeUnmount(() => {
             <p class="truncate font-mono text-3xl tabular-nums" role="group" :aria-label="t('calc.display')" data-testid="display">
               <template v-if="entry.text">
                 <span
-                  v-for="(segment, index) in segments(entry.text, comma)"
+                  v-for="(segment, index) in segments(entry.fresh ? rounded(entry.text, settings.decimals, settings.short) : entry.text, comma)"
                   :key="index"
                   :class="segment.name !== undefined && (lookupValue(segment.name) === undefined ? 'text-destructive' : 'text-primary')"
                 >{{ segment.text }}</span>
@@ -378,7 +451,7 @@ onBeforeUnmount(() => {
               aria-live="polite"
               data-testid="preview"
             >
-              {{ problem ?? (missing ? t("error.missing") : preview ? `= ${show(preview)}` : "") }}
+              {{ problem ?? (missing ? t("error.missing") : preview ? `= ${showResult(preview)}` : "") }}
             </p>
           </div>
           <div class="grid flex-none grid-cols-2">
@@ -463,16 +536,16 @@ onBeforeUnmount(() => {
           <TabsContent value="history" class="flex min-h-0 flex-col" data-testid="history-list">
             <p v-if="!history.length" class="text-muted-foreground py-2 text-sm">{{ t("history.empty") }}</p>
             <ol v-else class="min-h-0 flex-1 overflow-y-auto">
-              <li v-for="(item, index) in history" :key="`${index}:${item.expression}`">
+              <li v-for="(item, index) in recent" :key="`${index}:${item.expression}`">
                 <Button
                   variant="ghost"
                   class="block h-auto w-full px-2 py-1 text-right font-normal"
-                  :title="t('history.use', { result: show(item.result) })"
+                  :title="t('history.use', { result: showResult(item.result) })"
                   data-testid="history-item"
                   @click="use(item)"
                 >
                   <span class="text-muted-foreground block truncate font-mono text-sm">{{ show(item.expression) }} =</span>
-                  <span class="block truncate font-mono text-lg tabular-nums">{{ show(item.result) }}</span>
+                  <span class="block truncate font-mono text-lg tabular-nums">{{ showResult(item.result) }}</span>
                 </Button>
               </li>
             </ol>
@@ -489,7 +562,7 @@ onBeforeUnmount(() => {
                   @click="tap(item)"
                 >
                   <span class="text-primary truncate text-sm">{{ item.name }}</span>
-                  <span class="truncate font-mono text-lg tabular-nums">{{ show(item.value) }}</span>
+                  <span class="truncate font-mono text-lg tabular-nums">{{ showResult(item.value) }}</span>
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger as-child>
@@ -543,7 +616,7 @@ onBeforeUnmount(() => {
       v-if="valueDialog && (valueDialog.renaming !== undefined || savable !== null)"
       :values="values"
       :renaming="valueDialog.renaming"
-      :shown="valueDialog.renaming === undefined && savable !== null ? show(savable) : undefined"
+      :shown="valueDialog.renaming === undefined && savable !== null ? showResult(savable) : undefined"
       @submit="submitValue"
       @cancel="valueDialog = null"
     />
