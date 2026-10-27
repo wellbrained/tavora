@@ -1930,6 +1930,22 @@ describe("the Overlay page", () => {
     expect(service.view().gameSetups).toEqual([]);
   });
 
+  it("takes the keys of what only the removed setup held, and keeps those of what other setups have", async () => {
+    const { service, world, key } = await setup();
+    show(service);
+    service.layout.addPanel("$all", { owner: "official", moduleId: TODOS.manifest.id, workspaceId: "personal", instanceId: PANEL });
+    service.addSetup("elden");
+    key(toggleBinding({ owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "elden", key: "item-1" }));
+    key(toggleBinding({ owner: "official", moduleId: TODOS.manifest.id, workspaceId: "personal", key: PANEL }));
+    expect(service.removeSetup("elden")).toBe(true);
+    // The panel is still in All games, so its key stays; the game's own overlay went with its setup.
+    const removed = world.removedKeys.map((record) => record.target);
+    expect(removed).toContain("item-1");
+    expect(removed).not.toContain(PANEL);
+    expect(service.layout.items("$all").map((item) => item.ref.kind)).toEqual(["panel"]);
+    expect(service.layout.setups()).not.toContain("elden");
+  });
+
   it("starts a new game setup with copies of the items All games has", async () => {
     const { service } = await setup();
     service.layout.addPanel("$all", { owner: "official", moduleId: TODOS.manifest.id, workspaceId: "personal", instanceId: PANEL });

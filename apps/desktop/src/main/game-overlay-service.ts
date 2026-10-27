@@ -1212,12 +1212,14 @@ export class GameOverlays {
 
   /** Remove overlay: the game's setup goes with what it holds; over the game, All games shows again. */
   removeSetup(gameId: string): boolean {
-    const removed = this.store.removeSetup(gameId);
-    if (removed) {
-      this.options.changed();
-      this.tick();
-    }
-    return removed;
+    if (!isGameSetup(gameId) || !this.store.hasSetup(gameId)) return false;
+    // What only this setup held loses its key, as when its workspace goes.
+    this.forget((_overlay, setupId) => setupId === gameId);
+    this.forgetPanels((_panel, setupId) => setupId === gameId);
+    this.store.removeSetup(gameId);
+    this.options.changed();
+    this.tick();
+    return true;
   }
 
   hasSetup(gameId: string): boolean {
