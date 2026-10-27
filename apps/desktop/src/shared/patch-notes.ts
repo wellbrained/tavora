@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.38",
+    date: "2026-10-27",
+    title: "Ratings without installing",
+    notes: [
+      "You can rate a Community module even after you removed it.",
+      "A review with words or links Tavora has to check first shows \"Waiting for review\" until it's checked.",
+    ],
+    prs: [
+      { number: 398, title: "Reviews: held for review instead of refused, a queue for the admin, rating without installing" },
+    ],
+    tags: ["catalog", "service"],
+  },
+  {
     version: "0.21.37",
     date: "2026-10-27",
     title: "Community modules",
