@@ -38,7 +38,8 @@ try {
   # The hosted game icons travel with the release. They are only served once TAKEDOWN_CONTACT is set in shared/production.env.
   $icons = Join-Path $api 'data\icons'
   if (Test-Path (Join-Path $icons 'index.json')) { Copy-Item $icons (Join-Path $staging 'icons') -Recurse }
-  & tar.exe -czf $archive -C $staging .
+  # Windows' own tar: from Git Bash, `tar.exe` is GNU tar, which reads C:\... as a remote host.
+  & (Join-Path $env:SystemRoot 'System32\tar.exe') -czf $archive -C $staging .
   if ($LASTEXITCODE -ne 0) { throw 'Archive failed.' }
   $deploy = Join-Path $api 'deploy'
   # Staged in root's own home (mode 0700), never in /tmp, so no other user on the server can swap what root installs.
