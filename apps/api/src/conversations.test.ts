@@ -656,6 +656,11 @@ describe("the editable texts", () => {
     expect(listed.keys).toHaveLength(7);
     expect(listed.placeholders).toEqual(["module", "developer", "days", "reason"]);
     expect(Object.keys(listed.texts)).toEqual(["inbox.appeared.sent"]);
+    // The built-in text of every key comes along, so the admin can compare: the app's notes and the email opening lines.
+    const builtIn = (listed as unknown as { builtIn: Record<string, { en: string; de: string }> }).builtIn;
+    expect(Object.keys(builtIn).sort()).toEqual([...listed.keys].sort());
+    expect(builtIn["inbox.gone"]!.en).toContain("Settings > Account > Messages");
+    expect(builtIn["mail.newRequest"]).toEqual({ en: "You have a new request for {module}.", de: "Du hast eine neue Anfrage zu {module}." });
 
     // Empty English and German delete the override.
     await adminCall("POST", "/api/texts", { key: "inbox.appeared.sent", en: "  ", de: "" });
