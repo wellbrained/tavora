@@ -105,6 +105,8 @@ export interface Library {
   moduleFilesFolder: string | null;
   /** Module project folders a developer added in Settings > Modules; loaded straight from there (registry.ts). */
   developmentFolders: string[];
+  /** Development folders the user closed in Settings > Development, so only their heading shows. */
+  collapsedDevelopmentFolders: string[];
   /** Per system file dialog, the folder the user last picked from in it; the dialog opens there next time. */
   dialogFolders: Partial<Record<DialogPlace, string>>;
   /** Per `owner:module id`, the folder the user last saved a file to or opened one from for that module (files.saveJson, files.openJson). */
@@ -164,6 +166,28 @@ export function cleanDevelopmentFolders(values: unknown[]): string[] {
   return folders;
 }
 
+/** Whether two paths are the same folder (ignoring case on Windows). */
+export function sameFolder(a: string, b: string): boolean {
+  const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
+  return key(a) === key(b);
+}
+
+/** Moves a development folder to `index` in the list, as the user dragged it in Settings > Development. */
+export function moveDevelopmentFolder(library: Library, folder: string, index: number): void {
+  const found = library.developmentFolders.find((item) => sameFolder(item, folder));
+  if (!found) return;
+  const rest = library.developmentFolders.filter((item) => item !== found);
+  rest.splice(clampIndex(index, rest.length), 0, found);
+  library.developmentFolders = rest;
+}
+
+/** Closes or opens a development folder in Settings > Development; a closed one shows only its heading. */
+export function setDevelopmentFolderCollapsed(library: Library, folder: string, collapsed: boolean): void {
+  const found = library.developmentFolders.find((item) => sameFolder(item, folder));
+  const rest = library.collapsedDevelopmentFolders.filter((item) => !sameFolder(item, folder));
+  library.collapsedDevelopmentFolders = collapsed && found ? [...rest, found] : rest;
+}
+
 /** A problem the user caused and should read, e.g. a duplicate game. */
 export class LibraryError extends UserError {}
 
@@ -191,6 +215,7 @@ export function emptyLibrary(): Library {
     overlaysStay: true,
     moduleFilesFolder: null,
     developmentFolders: [],
+    collapsedDevelopmentFolders: [],
     dialogFolders: {},
     moduleFolders: {},
     moduleNotesSeen: {},
@@ -719,6 +744,9 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (Number.isInteger(saved.overlayPort) && (saved.overlayPort as number) >= MIN_OVERLAY_PORT && (saved.overlayPort as number) <= MAX_OVERLAY_PORT) library.overlayPort = saved.overlayPort as number;
   if (typeof saved.moduleFilesFolder === "string" && saved.moduleFilesFolder.length <= 500 && path.isAbsolute(saved.moduleFilesFolder)) library.moduleFilesFolder = saved.moduleFilesFolder;
   if (Array.isArray(saved.developmentFolders)) library.developmentFolders = cleanDevelopmentFolders(saved.developmentFolders);
+  if (Array.isArray(saved.collapsedDevelopmentFolders)) {
+    library.collapsedDevelopmentFolders = cleanDevelopmentFolders(saved.collapsedDevelopmentFolders).filter((folder) => library.developmentFolders.some((item) => sameFolder(item, folder)));
+  }
   const dialogFolders = asRecord(saved.dialogFolders);
   for (const place of DIALOG_PLACES) {
     const folder = dialogFolders[place];

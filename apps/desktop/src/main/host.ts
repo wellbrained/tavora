@@ -60,12 +60,14 @@ import {
   iconFileShared,
   deleteTrashedWorkspace,
   cleanDevelopmentFolders,
+  setDevelopmentFolderCollapsed,
   isLive,
   LibraryError,
   liveWorkspaces,
   MAX_DEVELOPMENT_FOLDERS,
   markOpened,
   openedTimes,
+  moveDevelopmentFolder,
   moveFolder,
   moveWorkspace,
   placeFavorite,
@@ -1104,6 +1106,7 @@ export class Host {
   private async removeDevelopmentFolder(folder: string): Promise<void> {
     const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
     this.library.developmentFolders = this.library.developmentFolders.filter((item) => key(item) !== key(folder));
+    setDevelopmentFolderCollapsed(this.library, folder, false);
     this.saveLibrary();
     const projects = [...this.modules.values()].filter((module) => module.developmentProject !== undefined);
     await this.reloadModules();
@@ -2130,6 +2133,8 @@ export class Host {
       "open-module-problem-folder": (action) => this.openModuleProblemFolder(action.path),
       "add-development-folder": () => this.addDevelopmentFolder(),
       "remove-development-folder": (action) => this.removeDevelopmentFolder(action.folder),
+      "move-development-folder": saved((action) => moveDevelopmentFolder(this.library, action.folder, action.index)),
+      "collapse-development-folder": saved((action) => setDevelopmentFolderCollapsed(this.library, action.folder, action.collapsed)),
       "copy-example": (action) => this.copyExampleModule(action.moduleId, action.name, action.folder),
       "open-example-folder": (action) => this.openExampleFolder(action.moduleId),
       "open-development-project": (action) => this.openDevelopmentProject(action.project),
@@ -3967,6 +3972,7 @@ export class Host {
         }
         return {
           folder,
+          collapsed: this.library.collapsedDevelopmentFolders.includes(folder),
           problem: own?.message ?? null,
           kind: own?.kind ?? null,
           ...(own?.values ? { values: own.values } : {}),

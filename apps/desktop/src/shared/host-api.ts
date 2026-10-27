@@ -584,6 +584,8 @@ export interface HostViewState {
    */
   developmentFolders: {
     folder: string;
+    /** The user closed it: Settings shows only its heading. */
+    collapsed: boolean;
     problem: string | null;
     kind: DevelopmentProblemKind | null;
     values?: ModuleProblemValues;

@@ -222,3 +222,44 @@ test("an example copied into another folder adds its project as a project folder
     await app.close();
   }
 });
+
+test("development folders close, stay closed, and go in the order the developer puts them", async () => {
+  const dir = await project();
+  const missing = path.join(dir, "not-a-module");
+  const userData = await newUserData();
+  await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), developmentFolders: [dir, missing] }));
+  const paths = (page: import("@playwright/test").Page) => page.getByTestId("development-folder-path").evaluateAll((items) => items.map((item) => item.getAttribute("title")));
+  const first = await launch(userData);
+  try {
+    await first.page.getByTestId("rail-settings").click();
+    await first.page.getByTestId("settings-nav-development").click();
+    const folders = first.page.getByTestId("development-folder");
+    // Closing a folder hides its modules and says how many projects it holds.
+    await folders.nth(0).getByTestId("development-folder-toggle").click();
+    await expect(folders.nth(0).getByTestId(`module-${ID}`)).toHaveCount(0);
+    await expect(folders.nth(0).getByTestId("development-folder-count")).toHaveText("1 project");
+    // The arrow keys on the grip move a folder; so does dragging it.
+    await folders.nth(1).getByTestId("move-development-folder").press("ArrowUp");
+    await expect.poll(() => paths(first.page)).toEqual([missing, dir]);
+    await folders.nth(0).getByTestId("move-development-folder").dragTo(folders.nth(1), { targetPosition: { x: 40, y: 50 } });
+    await expect.poll(() => paths(first.page)).toEqual([dir, missing]);
+    await folders.nth(0).getByTestId("move-development-folder").press("ArrowDown");
+    await expect.poll(() => paths(first.page)).toEqual([missing, dir]);
+  } finally {
+    await first.app.close();
+  }
+
+  // Both stay as they were after a restart.
+  const again = await launch(userData);
+  try {
+    await again.page.getByTestId("rail-settings").click();
+    await again.page.getByTestId("settings-nav-development").click();
+    await expect.poll(() => paths(again.page)).toEqual([missing, dir]);
+    const folders = again.page.getByTestId("development-folder");
+    await expect(folders.nth(1)).toHaveAttribute("data-collapsed", "true");
+    await folders.nth(1).getByTestId("development-folder-toggle").click();
+    await expect(folders.nth(1).getByTestId(`module-${ID}`)).toContainText("Tracker");
+  } finally {
+    await again.app.close();
+  }
+});
