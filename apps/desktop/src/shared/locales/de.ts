@@ -1075,6 +1075,7 @@ export const de: Record<keyof typeof en, string> = {
   "error.reportOff": "Schalte in den Einstellungen die Online-Funktionen ein, um ein Modul zu melden.",
   "error.catalogBadZip": "Der Download passt nicht zu dem, was veröffentlicht wurde, deshalb wurde nichts installiert.",
   "error.reviewOwn": "Dein eigenes Modul kannst du nicht bewerten.",
+  "error.reportSignIn": "Melde dich an, um etwas zu melden.",
   "error.reviewWords": "Manche Wörter sind nicht erlaubt. Sag es lieber anders.",
   "error.reviewLink": "Bewertungen dürfen keine Links oder E-Mail-Adressen enthalten.",
   "error.reviewNotPublisher": "Nur der Entwickler des Moduls kann antworten.",

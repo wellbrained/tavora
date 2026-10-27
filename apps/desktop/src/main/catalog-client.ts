@@ -450,14 +450,14 @@ export class CatalogClient {
    * Reports a zip to Tavora, only after the user pressed Report: the module id, its key's
    * fingerprint and the zip's hash, and nothing else (C12). Throws a CatalogError the user can read.
    */
-  async report(report: { id: string; owner: string; sha256: string }): Promise<void> {
+  async report(report: { id: string; owner: string; sha256: string }, token?: string): Promise<void> {
     if (!isModuleId(report.id) || !FINGERPRINT.test(report.owner) || !SHA256.test(report.sha256)) throw new CatalogError("error.catalogNotListed");
     let response: Response;
     try {
       response = await this.fetchImpl(`${this.baseUrl}/v1/catalog/report`, {
         ...REQUEST,
         method: "POST",
-        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        headers: { Accept: "application/json", "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ id: report.id, owner: report.owner, sha256: report.sha256 }),
         signal: AbortSignal.timeout(this.listTimeoutMs),
       });
@@ -465,6 +465,7 @@ export class CatalogClient {
       throw new CatalogError("error.catalogUnreachable");
     }
     if (response.status === 404) throw new CatalogError("error.catalogNotListed");
+    if (response.status === 401) throw new CatalogError("error.reportSignIn");
     throwFailure(response.status);
   }
 
@@ -535,12 +536,13 @@ export class CatalogClient {
     await this.send(text === null ? "DELETE" : "PUT", `/v1/catalog/reviews/${reviewId}/reply`, token, text === null ? undefined : { text });
   }
 
-  /** Reports a review, only after the user pressed Report: its id and nothing else. */
-  async reportReview(reviewId: string): Promise<void> {
+  /** Reports a review, only after the user pressed Report: its id, signed in (decided 2026-10-27). */
+  async reportReview(reviewId: string, token?: string): Promise<void> {
     if (!REVIEW_ID.test(reviewId)) throw new CatalogError("error.reviewGone");
     try {
-      await this.send("POST", `/v1/catalog/reviews/${reviewId}/report`);
+      await this.send("POST", `/v1/catalog/reviews/${reviewId}/report`, token);
     } catch (error) {
+      if (error instanceof CatalogError && error.key === "account.error.signedOut") throw new CatalogError("error.reportSignIn");
       if (error instanceof CatalogError && error.key === "error.catalogNotListed") throw new CatalogError("error.reviewGone");
       throw error;
     }

@@ -40,10 +40,13 @@ function setup(options: { mailer?: Mailer; mailDailyLimit?: number; linked?: boo
     reportRateLimiter: options.reportRateLimiter ?? roomy(),
     accounts: { store, mailer: options.mailer ?? inbox, now: () => clock.now, ...(options.mailDailyLimit === undefined ? {} : { mailDailyLimit: options.mailDailyLimit }) },
   });
-  const report = (body: unknown, type = "application/json") =>
-    app.request("http://tavora.test/v1/catalog/report", { method: "POST", headers: { "content-type": type }, body: typeof body === "string" ? body : JSON.stringify(body) });
+  // Reporting needs a sign-in (decided 2026-10-27).
+  const reporter = store.createAccount({ email: "reporter@example.com" }, clock.now);
+  const token = store.createSession(reporter.id, "windows", clock.now).token;
+  const report = (body: unknown, type = "application/json", as: string | null = token) =>
+    app.request("http://tavora.test/v1/catalog/report", { method: "POST", headers: { "content-type": type, ...(as ? { authorization: `Bearer ${as}` } : {}) }, body: typeof body === "string" ? body : JSON.stringify(body) });
   const of = { id: added.manifest.id, owner: added.owner, sha256: added.sha256 };
-  return { store, catalog, clock, inbox, key, added, of, report };
+  return { store, catalog, clock, inbox, key, added, of, report, reporter, token };
 }
 
 describe("reporting a catalog module", () => {
@@ -60,13 +63,55 @@ describe("reporting a catalog module", () => {
     expect(catalog.index()).toHaveLength(1);
   });
 
-  it("takes exactly id, owner and sha256, so nothing else about the user rides along", async () => {
+  it("needs a sign-in, and keeps who reported (with reason and note) while the report is open", async () => {
+    const { catalog, of, report, reporter, token, store, clock } = setup();
+    const signedOut = await report(of, "application/json", null);
+    expect(signedOut.status).toBe(401);
+    expect(await signedOut.json()).toEqual({ error: "Sign in to report.", reason: "signed-out" });
+    expect((await report(of, "application/json", "x".repeat(30))).status).toBe(401);
+    expect(catalog.reports()).toEqual([]);
+
+    expect((await report({ ...of, reason: "spam", note: "  Copy of another module  " })).status).toBe(202);
+    expect((await report(of)).status).toBe(202);
+    expect(catalog.reporters(of.sha256)).toEqual([
+      { accountId: reporter.id, reason: "spam", note: "Copy of another module", at: clock.now },
+      { accountId: reporter.id, reason: null, note: null, at: clock.now },
+    ]);
+    expect(catalog.reports()[0]!.count).toBe(2);
+
+    // Dismissing the report deletes the senders; deleting the account does too.
+    expect(catalog.dismissReport(of.sha256)).toBe(true);
+    expect(catalog.reporters(of.sha256)).toEqual([]);
+    expect(token).toBeTruthy();
+    await report(of);
+    store.deleteAccount(reporter.id);
+    catalog.forgetReporter(reporter.id);
+    expect(catalog.reporters(of.sha256)).toEqual([]);
+    expect(catalog.reports()[0]!.count).toBe(1);
+  });
+
+  it("clears the senders when the module is taken down", async () => {
+    const { catalog, of, report } = setup();
+    await report(of);
+    catalog.setListed(of.id, false);
+    expect(catalog.reporters(of.sha256)).toEqual([]);
+  });
+
+  it("checks the reason and the note, both optional", async () => {
+    const { catalog, of, report } = setup();
+    for (const extra of [{ reason: "rude" }, { reason: 4 }, { note: "x".repeat(501) }, { note: 5 }]) expect((await report({ ...of, ...extra })).status).toBe(400);
+    for (const reason of ["unsafe", "hateful", "adult", "spam", "broken", "other"]) expect((await report({ ...of, reason })).status).toBe(202);
+    expect((await report({ ...of, note: "x".repeat(500) })).status).toBe(202);
+    expect(catalog.reports()[0]!.count).toBe(7);
+  });
+
+  it("takes only the module, the key and the zip's hash with a reason and note, so nothing else about the user rides along", async () => {
     const { catalog, of, report } = setup();
     for (const body of [{ ...of, user: "me" }, { id: of.id, sha256: of.sha256 }, { ...of, owner: "x" }, { ...of, id: "Not An Id" }, { ...of, sha256: of.sha256.toUpperCase() }, [of], "not json", null]) {
       expect((await report(body)).status).toBe(400);
     }
     expect((await report(of, "text/plain")).status).toBe(415);
-    expect((await report({ ...of, id: "x".repeat(600) })).status).toBe(413);
+    expect((await report({ ...of, id: "x".repeat(4000) })).status).toBe(413);
     expect(catalog.reports()).toEqual([]);
   });
 
@@ -87,6 +132,8 @@ describe("reporting a catalog module", () => {
     expect(inbox.mails()).toHaveLength(1);
     expect(inbox.mails()[0]).toMatchObject({ to: "dev@example.com" });
     expect(inbox.mails()[0]!.text).toContain("Timer (wellbrained.timer)");
+    expect(inbox.mails()[0]!.text).not.toMatch(/reporter@example/);
+    expect(inbox.mails()[0]!.text).toContain("A user pressed Report");
     clock.now += 86_400_001;
     await report(of);
     expect(inbox.mails()).toHaveLength(2);
@@ -115,7 +162,7 @@ describe("reporting a catalog module", () => {
     expect(busy.status).toBe(429);
     expect(busy.headers.get("retry-after")).toBeTruthy();
     const none = createApp({ db, rateLimiter: roomy() });
-    expect((await none.request("http://tavora.test/v1/catalog/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(of) })).status).toBe(503);
+    expect((await none.request("http://tavora.test/v1/catalog/report", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${"a".repeat(30)}` }, body: JSON.stringify(of) })).status).toBe(503);
   });
 });
 

@@ -744,6 +744,11 @@ export class AccountStore {
     );
   }
 
+  /** The account that holds a module id prefix, or null. */
+  prefixHolder(prefix: string): string | null {
+    return (this.db.prepare("select account_id from module_prefixes where prefix = ?").get(prefix) as { account_id: string } | undefined)?.account_id ?? null;
+  }
+
   prefixes(accountId: string): string[] {
     return (this.db.prepare("select prefix from module_prefixes where account_id = ? order by prefix").all(accountId) as unknown as { prefix: string }[]).map((row) => row.prefix);
   }

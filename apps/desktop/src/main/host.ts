@@ -1245,14 +1245,16 @@ export class Host {
    */
   private async reportCatalogModule(moduleId: string): Promise<void> {
     if (!this.library.onlineSearch) throw new UserError("error.reportOff");
+    const token = this.account.token();
+    if (!token) throw new UserError("error.reportSignIn");
     const module = this.catalogModules.has(moduleId) ? (this.modules.get(moduleId) ?? this.blockedModules.get(moduleId)) : undefined;
     const record = module ? (await readOwnerRecords(this.options.userData))[path.basename(module.root)] : undefined;
     if (module && record?.id === moduleId && record.sha256) {
-      await this.catalog.report({ id: moduleId, owner: module.owner, sha256: record.sha256 });
+      await this.catalog.report({ id: moduleId, owner: module.owner, sha256: record.sha256 }, token);
       return;
     }
     const entry = await this.catalog.module(moduleId);
-    await this.catalog.report({ id: entry.id, owner: entry.owner, sha256: entry.zip.sha256 });
+    await this.catalog.report({ id: entry.id, owner: entry.owner, sha256: entry.zip.sha256 }, token);
   }
 
   /**
@@ -2110,7 +2112,9 @@ export class Host {
       "reply-catalog-review": (action) => this.catalogReviewAction((token) => this.catalog.reply(action.reviewId, token, action.text?.trim() || null)),
       "report-catalog-review": (action) => {
         if (!this.library.onlineSearch) throw new UserError("error.reportOff");
-        return this.catalog.reportReview(action.reviewId);
+        const token = this.account.token();
+        if (!token) throw new UserError("error.reportSignIn");
+        return this.catalog.reportReview(action.reviewId, token);
       },
       "apply-module-update": (action) => this.lifecycle.applyUpdate(action.moduleId, action.version),
       "delete-module-data": (action) => this.deleteLeftoverData(action.owner, action.moduleId),

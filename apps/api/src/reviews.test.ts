@@ -161,17 +161,36 @@ describe("rating a catalog module", () => {
     const { user, rate, call, reviews, store, catalog } = setup();
     const mara = user("mara@example.com");
     const { review } = (await (await rate(mara.token, { stars: 1, text: "Mean words", version: "1.0.0" })).json()) as { review: { id: string } };
-    expect((await call("POST", `/reviews/${review.id}/report`)).status).toBe(202);
-    expect((await call("POST", "/reviews/AAAAAAAAAAAAAAAA/report")).status).toBe(404);
+    // Reporting needs a sign-in (decided 2026-10-27); the reporter is kept while the report is open.
+    const signedOut = await call("POST", `/reviews/${review.id}/report`);
+    expect(signedOut.status).toBe(401);
+    expect(await signedOut.json()).toEqual({ error: "Sign in to report.", reason: "signed-out" });
+    const otto = user("otto@example.com", "Otto");
+    expect((await call("POST", `/reviews/${review.id}/report`, otto.token)).status).toBe(202);
+    expect((await call("POST", "/reviews/AAAAAAAAAAAAAAAA/report", otto.token)).status).toBe(404);
     expect(reviews.reports()).toEqual([expect.objectContaining({ count: 1 })]);
+    expect(reviews.reporters(review.id)).toEqual([{ accountId: otto.account.id, at: expect.any(Number) }]);
 
     const admin = createAdminApp({ token: "t".repeat(24), submissions: { listPending: () => [] } as never, state: {} as never, store: { list: () => [] } as never, catalog, accounts: store, reviews });
     const post = (pathname: string, body: unknown) => admin.request(`http://admin.test${pathname}`, { method: "POST", headers: { "x-admin-token": "t".repeat(24), "content-type": "application/json" }, body: JSON.stringify(body) });
     const listed = (await (await admin.request("http://admin.test/api/reviews", { headers: { "x-admin-token": "t".repeat(24) } })).json()) as { reports: { review: Record<string, unknown> }[] };
     expect(listed.reports[0]!.review).toMatchObject({ id: review.id, moduleName: "Timer", stars: 1, text: "Mean words", author: "Mara" });
+    expect((listed.reports[0] as unknown as { reporters: unknown[] }).reporters).toEqual([{ accountId: otto.account.id, name: "Otto", reason: null, note: null, at: expect.any(String) }]);
     expect((await post("/api/reviews/hidden", { id: review.id, hidden: true })).status).toBe(200);
     expect(reviews.reports()).toEqual([]);
+    expect(reviews.reporters(review.id)).toEqual([]);
     expect(await (await call("GET", "/modules/wellbrained.timer/reviews")).json()).toEqual({ summary: { average: 1, count: 1, stars: [1, 0, 0, 0, 0] }, reviews: [] });
+  });
+
+  it("deletes who reported with the reporter's account, keeping the count", async () => {
+    const { user, rate, call, reviews } = setup();
+    const mara = user("mara@example.com");
+    const otto = user("otto@example.com", "Otto");
+    const { review } = (await (await rate(mara.token, { stars: 1, text: "Mean words", version: "1.0.0" })).json()) as { review: { id: string } };
+    await call("POST", `/reviews/${review.id}/report`, otto.token);
+    reviews.forget(otto.account.id);
+    expect(reviews.reporters(review.id)).toEqual([]);
+    expect(reviews.reports()).toEqual([expect.objectContaining({ count: 1 })]);
   });
 
   it("forgets every rating with the account", async () => {

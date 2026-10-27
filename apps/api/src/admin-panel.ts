@@ -8,6 +8,7 @@ import type { CatalogStore } from "./catalog.ts";
 import { PUBLISH_LIMITS } from "./catalog-publish.ts";
 import type { IconStore } from "./icons.ts";
 import type { ReviewStore } from "./reviews.ts";
+import type { ConversationStore } from "./conversations.ts";
 import type { Submissions } from "./submissions.ts";
 
 /**
@@ -21,6 +22,7 @@ export interface PanelOptions {
   catalog?: CatalogStore | undefined;
   accounts?: AccountStore | undefined;
   reviews?: ReviewStore | undefined;
+  conversations?: ConversationStore | undefined;
   probes: Probes;
   /** How many key replacement requests wait for a decision. */
   keysWaiting: () => number;
@@ -63,6 +65,8 @@ export function registerPanelRoutes(app: Hono, options: PanelOptions): void {
     { id: "reports", label: "Reported modules", count: catalog?.reports().length ?? 0, section: "review", tab: "reports" },
     { id: "review-queue", label: "New reviews", count: reviews?.queue().length ?? 0, section: "review", tab: "reviews" },
     { id: "reviews", label: "Reported reviews", count: reviews?.reports().length ?? 0, section: "review", tab: "reviews" },
+    { id: "messages", label: "Unread replies to Tavora", count: options.conversations?.waiting().unreadReplies ?? 0, section: "messages" },
+    { id: "conversation-reports", label: "Reported conversations", count: options.conversations?.waiting().openReports ?? 0, section: "messages", tab: "reported" },
     { id: "keys", label: "Publisher key requests", count: options.keysWaiting(), section: "review", tab: "keys" },
     { id: "blocks", label: "Blocks to sign", count: options.blocksToSign?.() ?? 0, section: "modules" },
     { id: "catalog-full", label: "The module catalog is full", count: catalog?.fullSince() ? 1 : 0, section: "status" },

@@ -133,6 +133,13 @@ export class ReviewStore {
         review_id text primary key references reviews (id) on delete cascade,
         count integer not null, first_at integer not null, last_at integer not null
       );
+      -- Who reported (decided 2026-10-27): one row per report, kept only while the report is open.
+      create table if not exists review_reporters (
+        id integer primary key autoincrement, review_id text not null references reviews (id) on delete cascade,
+        account_id text not null, at integer not null
+      );
+      create index if not exists review_reporters_review on review_reporters (review_id);
+      create index if not exists review_reporters_account on review_reporters (account_id);
     `);
     // Reviews hidden because their account is suspended (decided 2026-10-26), so unsuspending shows exactly these again.
     const columns = (this.db.prepare("pragma table_info(reviews)").all() as unknown as { name: string }[]).map((column) => column.name);
@@ -268,14 +275,20 @@ export class ReviewStore {
     return Number(this.db.prepare("delete from reviews where id = ?").run(reviewId).changes) > 0;
   }
 
-  /** Records that a user pressed Report on a shown review. Nothing about who pressed it is kept. */
-  report(reviewId: string, now: number): boolean {
+  /** Records that a user pressed Report on a shown review. Who pressed it is kept only while the report is open (decided 2026-10-27). */
+  report(reviewId: string, accountId: string, now: number): boolean {
     const review = this.review(reviewId);
     if (!review || review.text === null || review.hidden) return false;
     this.db
       .prepare("insert into review_reports (review_id, count, first_at, last_at) values (?, 1, ?, ?) on conflict (review_id) do update set count = count + 1, last_at = excluded.last_at")
       .run(reviewId, now, now);
+    this.db.prepare("insert into review_reporters (review_id, account_id, at) values (?, ?, ?)").run(reviewId, accountId, now);
     return true;
+  }
+
+  /** Who reported a review while its report is open, oldest first. */
+  reporters(reviewId: string): { accountId: string; at: number }[] {
+    return (this.db.prepare("select account_id, at from review_reporters where review_id = ? order by id").all(reviewId) as unknown as { account_id: string; at: number }[]).map((row) => ({ accountId: row.account_id, at: row.at }));
   }
 
   /** Reported reviews, most reported first, for the admin page. */
@@ -287,6 +300,7 @@ export class ReviewStore {
   }
 
   dismissReport(reviewId: string): boolean {
+    this.db.prepare("delete from review_reporters where review_id = ?").run(reviewId);
     return Number(this.db.prepare("delete from review_reports where review_id = ?").run(reviewId).changes) > 0;
   }
 
@@ -305,6 +319,7 @@ export class ReviewStore {
    * its open reports close. Its stars still count, as for any hidden review. Returns how many were hidden now.
    */
   hideForSuspension(accountId: string): number {
+    this.db.prepare("delete from review_reporters where review_id in (select id from reviews where account_id = ? and hidden = 0)").run(accountId);
     this.db.prepare("delete from review_reports where review_id in (select id from reviews where account_id = ? and hidden = 0)").run(accountId);
     return Number(this.db.prepare("update reviews set hidden = 1, hidden_by_suspend = 1 where account_id = ? and hidden = 0").run(accountId).changes);
   }
@@ -324,6 +339,7 @@ export class ReviewStore {
    * choice, so unsuspending later leaves them hidden. Their open reports close. Returns how many were hidden now.
    */
   hideAllOf(accountId: string): number {
+    this.db.prepare("delete from review_reporters where review_id in (select id from reviews where account_id = ?)").run(accountId);
     this.db.prepare("delete from review_reports where review_id in (select id from reviews where account_id = ?)").run(accountId);
     return Number(this.db.prepare("update reviews set hidden = 1, hidden_by_suspend = 0 where account_id = ? and text is not null and (hidden = 0 or hidden_by_suspend = 1)").run(accountId).changes);
   }
@@ -343,6 +359,8 @@ export class ReviewStore {
   forget(accountId: string): void {
     this.db.prepare("delete from reviews where account_id = ?").run(accountId);
     this.db.prepare("delete from rating_log where account_id = ?").run(accountId);
+    // Reports it sent: the counts stay, who sent them goes.
+    this.db.prepare("delete from review_reporters where account_id = ?").run(accountId);
   }
 }
 
@@ -421,15 +439,16 @@ export function reviewRoutes({ reviews, catalog, accounts, clientKey, writeRateL
     return context.json({ error: "Too many requests. Try again later.", reason: "too-many" }, 429);
   };
 
-  const signedIn = async (context: Context<Env>, next: () => Promise<void>) => {
+  const signedInWith = (message: string) => async (context: Context<Env>, next: () => Promise<void>) => {
     const match = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "");
     const session = match ? accounts.sessionByToken(match[1]!, now()) : null;
     const account = session ? accounts.account(session.accountId) : null;
-    if (!account) return context.json({ error: "Sign in to rate modules.", reason: "signed-out" }, 401);
+    if (!account) return context.json({ error: message, reason: "signed-out" }, 401);
     context.set("account", account);
     context.header("Cache-Control", "no-store");
     await next();
   };
+  const signedIn = signedInWith("Sign in to rate modules.");
   const writes = async (context: Context<Env>, next: () => Promise<void>) => {
     if (context.req.method === "GET") return next();
     const wait = writeLimiter.check(clientKey(context.req.raw));
@@ -474,12 +493,12 @@ export function reviewRoutes({ reviews, catalog, accounts, clientKey, writeRateL
     });
   });
 
-  // Report a review: no body, and nothing about who pressed it.
-  app.post("/reviews/:id/report", async (context) => {
+  // Report a review: no body. It needs a sign-in (decided 2026-10-27); who reported is kept only while the report is open.
+  app.post("/reviews/:id/report", signedInWith("Sign in to report."), async (context) => {
     const wait = writeLimiter.check(clientKey(context.req.raw));
     if (wait > 0) return tooMany(context, wait);
-    const id = context.req.param("id");
-    if (!REVIEW_ID.test(id) || !reviews.report(id, now())) return context.json({ error: "Not found." }, 404);
+    const id = context.req.param("id") ?? "";
+    if (!REVIEW_ID.test(id) || !reviews.report(id, context.get("account").id, now())) return context.json({ error: "Not found." }, 404);
     return context.json({ status: "received" }, 202);
   });
 
