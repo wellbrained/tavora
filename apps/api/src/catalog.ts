@@ -680,6 +680,12 @@ export class CatalogStore {
       : null;
   }
 
+  /** The account that uploaded a module's newest version, or null for one added by hand. */
+  accountOfModule(moduleId: string): string | null {
+    const row = this.db.prepare("select account_id from versions where module_id = ? and account_id is not null order by seq desc limit 1").get(moduleId) as { account_id: string } | undefined;
+    return row?.account_id ?? null;
+  }
+
   /** The language an account's newest upload asked for ("en" or "de"), for emails nobody asked in a request. */
   languageOf(accountId: string): string {
     const row = this.db.prepare("select review from versions where account_id = ? and review is not null order by seq desc limit 1").get(accountId) as { review: string } | undefined;

@@ -532,6 +532,12 @@ export class AccountStore {
   }
 
   /** Whether a key was linked to an account when it was banned: it can never be linked to another account. */
+  /** The account a publisher key is linked to, or null. */
+  accountOfKey(fingerprint: string): string | null {
+    const row = this.db.prepare("select account_id from publisher_keys where fingerprint = ?").get(fingerprint) as { account_id: string } | undefined;
+    return row?.account_id ?? null;
+  }
+
   isBannedKey(fingerprint: string): boolean {
     return this.db.prepare("select 1 from banned_keys where fingerprint = ?").get(fingerprint) !== undefined;
   }
